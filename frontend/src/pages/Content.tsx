@@ -1,0 +1,230 @@
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiClient } from '../lib/api'
+import { ContentCard } from '../components/ContentCard'
+
+export function Content() {
+  const [selectedBrandId, setSelectedBrandId] = useState('')
+  const [generateForm, setGenerateForm] = useState({
+    count: 3,
+    theme: '',
+    style: '',
+  })
+  const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending')
+  
+  const queryClient = useQueryClient()
+  
+  const { data: brandsData } = useQuery({
+    queryKey: ['brands'],
+    queryFn: () => apiClient.getBrands(),
+  })
+
+  const brands = brandsData?.brands || []
+  const activeBrand = brands.find(b => b.id === selectedBrandId) || brands[0]
+
+  const { data: pendingContentData, isLoading: pendingLoading } = useQuery({
+    queryKey: ['pendingContent', activeBrand?.id],
+    queryFn: () => activeBrand ? apiClient.getPendingContent(activeBrand.id) : null,
+    enabled: !!activeBrand,
+  })
+
+  const { data: historyContentData, isLoading: historyLoading } = useQuery({
+    queryKey: ['contentHistory', activeBrand?.id],
+    queryFn: () => activeBrand ? apiClient.getContentHistory(activeBrand.id) : null,
+    enabled: !!activeBrand && activeTab === 'history',
+  })
+
+  const generateContentMutation = useMutation({
+    mutationFn: (data: { brandId: string; count: number; theme?: string; style?: string }) =>
+      apiClient.generateContent(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pendingContent', activeBrand?.id] })
+      setGenerateForm({ count: 3, theme: '', style: '' })
+    },
+  })
+
+  const pendingContent = pendingContentData?.content || []
+  const historyContent = historyContentData?.content || []
+
+  const handleGenerate = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!activeBrand) return
+    
+    generateContentMutation.mutate({
+      brandId: activeBrand.id,
+      ...generateForm,
+    })
+  }
+
+  if (brands.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">No Brands Available</h2>
+        <p className="text-gray-600 mb-6">Create a brand first to start generating content.</p>
+        <a
+          href="/brands"
+          className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+        >
+          Create Brand
+        </a>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Content Management</h1>
+          <p className="text-gray-600">Generate and manage AI-created content for your brands</p>
+        </div>
+        {brands.length > 1 && (
+          <select
+            value={selectedBrandId}
+            onChange={(e) => setSelectedBrandId(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            {brands.map((brand) => (
+              <option key={brand.id} value={brand.id}>
+                {brand.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Generate New Content</h2>
+        <form onSubmit={handleGenerate} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="count" className="block text-sm font-medium text-gray-700">
+                Number of Posts
+              </label>
+              <select
+                id="count"
+                value={generateForm.count}
+                onChange={(e) => setGenerateForm({ ...generateForm, count: parseInt(e.target.value) })}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value={1}>1 post</option>
+                <option value={3}>3 posts</option>
+                <option value={5}>5 posts</option>
+                <option value={10}>10 posts</option>
+              </select>
+            </div>
+            
+            <div>
+              <label htmlFor="theme" className="block text-sm font-medium text-gray-700">
+                Theme (optional)
+              </label>
+              <input
+                type="text"
+                id="theme"
+                value={generateForm.theme}
+                onChange={(e) => setGenerateForm({ ...generateForm, theme: e.target.value })}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="e.g., summer collection, behind the scenes"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="style" className="block text-sm font-medium text-gray-700">
+                Style (optional)
+              </label>
+              <input
+                type="text"
+                id="style"
+                value={generateForm.style}
+                onChange={(e) => setGenerateForm({ ...generateForm, style: e.target.value })}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="e.g., professional, casual, creative"
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={generateContentMutation.isPending || !activeBrand}
+              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            >
+              {generateContentMutation.isPending ? 'Generating...' : 'Generate Content'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="bg-white shadow rounded-lg">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex">
+            <button
+              onClick={() => setActiveTab('pending')}
+              className={`py-2 px-4 border-b-2 font-medium text-sm ${
+                activeTab === 'pending'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Pending Approval ({pendingContent.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`py-2 px-4 border-b-2 font-medium text-sm ${
+                activeTab === 'history'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Content History
+            </button>
+          </nav>
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'pending' ? (
+            pendingLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+              </div>
+            ) : pendingContent.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No pending content. Generate some content to get started!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {pendingContent.map((content) => (
+                  <ContentCard
+                    key={content.id}
+                    content={content}
+                    brandId={activeBrand!.id}
+                  />
+                ))}
+              </div>
+            )
+          ) : (
+            historyLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+              </div>
+            ) : historyContent.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No content history yet.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {historyContent.map((content) => (
+                  <ContentCard
+                    key={content.id}
+                    content={content}
+                    brandId={activeBrand!.id}
+                  />
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

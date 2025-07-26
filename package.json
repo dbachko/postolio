@@ -1,0 +1,44 @@
+{
+  "name": "instagram-ai-agency",
+  "version": "1.0.0",
+  "description": "AI-powered Instagram content generation and management platform",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:db": "docker-compose up -d",
+    "start:all": "npm run dev:db && concurrently \"npm run dev\" \"npm run dev:frontend\"",
+    "test": "node --test --import tsx test/health.test.ts test/auth.test.ts test/brand-analysis.test.ts test/brands-list.test.ts test/content-generation.test.ts test/content-approval.test.ts test/instagram-integration.test.ts",
+    "lint": "eslint src/**/*.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^10.0.1",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/helmet": "^12.0.1",
+    "@fastify/jwt": "^9.0.1",
+    "@prisma/client": "^6.2.0",
+    "axios": "^1.11.0",
+    "bcrypt": "^5.1.1",
+    "fastify": "^5.2.0",
+    "instagram-graph-api": "^7.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.77.3",
+    "prisma": "^6.2.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.10.6",
+    "@typescript-eslint/eslint-plugin": "^8.22.0",
+    "@typescript-eslint/parser": "^8.22.0",
+    "concurrently": "^9.2.0",
+    "eslint": "^9.19.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

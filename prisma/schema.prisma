@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String
+  name              String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  instagramId       String?
+  instagramUsername String?
+  instagramToken    String?
+  subscriptionTier  String   @default("free")
+  brands            Brand[]
+
+  @@map("users")
+}
+
+model Brand {
+  id                   String    @id @default(cuid())
+  name                 String
+  description          String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  instagramHandle      String?
+  styleProfile         Json?
+  preferences          Json?
+  userId               String
+  instagramAccessToken String?
+  instagramPageId      String?
+  instagramProfileData Json?
+  engagementActive     Boolean   @default(false)
+  engagementRules      Json?
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content              Content[]
+
+  @@map("brands")
+}
+
+model Content {
+  id                 String    @id @default(cuid())
+  caption            String
+  imageUrl           String?
+  hashtags           String[]
+  status             String    @default("pending")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  scheduledAt        DateTime?
+  postedAt           DateTime?
+  generationParams   Json?
+  brandId            String
+  instagramPermalink String?
+  instagramPostId    String?
+  analytics          Json?
+  schedulingError    String?
+  brand              Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@map("content")
+}

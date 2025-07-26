@@ -1,0 +1,59 @@
+import { create } from 'zustand'
+import { apiClient, type User } from '../lib/api'
+
+interface AuthState {
+  user: User | null
+  isAuthenticated: boolean
+  isLoading: boolean
+  login: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, name?: string) => Promise<void>
+  logout: () => void
+  checkAuth: () => Promise<void>
+  getToken: () => string | null
+}
+
+export const useAuthStore = create<AuthState>((set) => ({
+  user: null,
+  isAuthenticated: false,
+  isLoading: true,
+
+  login: async (email: string, password: string) => {
+    try {
+      const response = await apiClient.login({ email, password })
+      apiClient.setToken(response.token)
+      set({ user: response.user, isAuthenticated: true })
+    } catch (error) {
+      console.error('Login failed:', error)
+      throw error
+    }
+  },
+
+  register: async (email: string, password: string, name?: string) => {
+    try {
+      const response = await apiClient.register({ email, password, name })
+      apiClient.setToken(response.token)
+      set({ user: response.user, isAuthenticated: true })
+    } catch (error) {
+      console.error('Registration failed:', error)
+      throw error
+    }
+  },
+
+  logout: () => {
+    apiClient.removeToken()
+    set({ user: null, isAuthenticated: false })
+  },
+
+  checkAuth: async () => {
+    try {
+      const response = await apiClient.getProfile()
+      set({ user: response.user, isAuthenticated: true, isLoading: false })
+    } catch (error) {
+      set({ user: null, isAuthenticated: false, isLoading: false })
+    }
+  },
+
+  getToken: () => {
+    return localStorage.getItem('auth_token')
+  },
+}))
