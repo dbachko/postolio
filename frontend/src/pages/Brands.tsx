@@ -12,7 +12,7 @@ export function Brands() {
   })
   
   const queryClient = useQueryClient()
-  const { brands, selectedBrand, setBrands, setSelectedBrand } = useBrandStore()
+  const { brands, selectedBrand, setBrands, setSelectedBrand, initializeSelectedBrand, removeBrand } = useBrandStore()
   
   const { data: brandsData, isLoading } = useQuery({
     queryKey: ['brands'],
@@ -22,12 +22,9 @@ export function Brands() {
   useEffect(() => {
     if (brandsData?.brands) {
       setBrands(brandsData.brands)
-      // Auto-select first brand if none selected
-      if (!selectedBrand && brandsData.brands.length > 0) {
-        setSelectedBrand(brandsData.brands[0])
-      }
+      initializeSelectedBrand(brandsData.brands)
     }
-  }, [brandsData, setBrands, selectedBrand, setSelectedBrand])
+  }, [brandsData, setBrands, initializeSelectedBrand])
 
   const createBrandMutation = useMutation({
     mutationFn: (data: typeof formData) => apiClient.createBrand(data),
@@ -35,6 +32,20 @@ export function Brands() {
       queryClient.invalidateQueries({ queryKey: ['brands'] })
       setIsCreating(false)
       setFormData({ name: '', description: '', instagramHandle: '' })
+    },
+    onError: (error) => {
+      console.error('Brand creation error:', error)
+    },
+  })
+
+  const deleteBrandMutation = useMutation({
+    mutationFn: (brandId: string) => apiClient.deleteBrand(brandId),
+    onSuccess: (data, brandId) => {
+      removeBrand(brandId)
+      queryClient.invalidateQueries({ queryKey: ['brands'] })
+    },
+    onError: (error) => {
+      console.error('Brand deletion error:', error)
     },
   })
 
@@ -45,6 +56,12 @@ export function Brands() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     createBrandMutation.mutate(formData)
+  }
+
+  const handleDeleteBrand = (brand: any) => {
+    if (window.confirm(`Are you sure you want to delete "${brand.name}"? This will also delete all associated content and cannot be undone.`)) {
+      deleteBrandMutation.mutate(brand.id)
+    }
   }
 
   return (
@@ -66,6 +83,22 @@ export function Brands() {
         <div className="bg-white shadow rounded-lg p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Create New Brand</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {createBrandMutation.error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm text-red-800">
+                  {createBrandMutation.error.message || 'Failed to create brand. Please try again.'}
+                </p>
+              </div>
+            )}
+
+            {deleteBrandMutation.error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm text-red-800">
+                  {deleteBrandMutation.error.message || 'Failed to delete brand. Please try again.'}
+                </p>
+              </div>
+            )}
+            
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
                 Brand Name
@@ -164,7 +197,7 @@ export function Brands() {
                       Created {new Date(brand.createdAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <div className="flex space-x-3">
+                  <div className="flex items-center space-x-3">
                     {brand.styleProfile && (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                         Analyzed
@@ -175,16 +208,25 @@ export function Brands() {
                         Selected
                       </span>
                     )}
-                    <button 
-                      onClick={() => handleSelectBrand(brand)}
-                      className={`text-sm font-medium ${
-                        selectedBrand?.id === brand.id 
-                          ? 'text-blue-800 bg-blue-50 px-3 py-1 rounded' 
-                          : 'text-blue-600 hover:text-blue-700'
-                      }`}
-                    >
-                      {selectedBrand?.id === brand.id ? 'Selected' : 'Select'}
-                    </button>
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => handleSelectBrand(brand)}
+                        className={`text-sm font-medium px-3 py-1 rounded ${
+                          selectedBrand?.id === brand.id 
+                            ? 'text-blue-800 bg-blue-50' 
+                            : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
+                        }`}
+                      >
+                        {selectedBrand?.id === brand.id ? 'Selected' : 'Select'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBrand(brand)}
+                        disabled={deleteBrandMutation.isPending}
+                        className="text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1 rounded disabled:opacity-50"
+                      >
+                        {deleteBrandMutation.isPending ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

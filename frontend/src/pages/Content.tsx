@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../lib/api'
 import { ContentCard } from '../components/ContentCard'
+import { useBrandStore } from '../stores/brandStore'
 
 export function Content() {
-  const [selectedBrandId, setSelectedBrandId] = useState('')
   const [generateForm, setGenerateForm] = useState({
     count: 3,
     theme: '',
@@ -13,14 +13,21 @@ export function Content() {
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending')
   
   const queryClient = useQueryClient()
+  const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore()
   
   const { data: brandsData } = useQuery({
     queryKey: ['brands'],
     queryFn: () => apiClient.getBrands(),
   })
 
-  const brands = brandsData?.brands || []
-  const activeBrand = brands.find(b => b.id === selectedBrandId) || brands[0]
+  useEffect(() => {
+    if (brandsData?.brands) {
+      setBrands(brandsData.brands)
+      initializeSelectedBrand(brandsData.brands)
+    }
+  }, [brandsData, setBrands, initializeSelectedBrand])
+
+  const activeBrand = selectedBrand
 
   const { data: pendingContentData, isLoading: pendingLoading } = useQuery({
     queryKey: ['pendingContent', activeBrand?.id],
@@ -40,6 +47,9 @@ export function Content() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingContent', activeBrand?.id] })
       setGenerateForm({ count: 3, theme: '', style: '' })
+    },
+    onError: (error) => {
+      console.error('Content generation error:', error)
     },
   })
 
@@ -77,24 +87,31 @@ export function Content() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Content Management</h1>
           <p className="text-gray-600">Generate and manage AI-created content for your brands</p>
+          {activeBrand && (
+            <p className="text-sm text-gray-500 mt-1">Working with: {activeBrand.name}</p>
+          )}
         </div>
-        {brands.length > 1 && (
-          <select
-            value={selectedBrandId}
-            onChange={(e) => setSelectedBrandId(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          >
-            {brands.map((brand) => (
-              <option key={brand.id} value={brand.id}>
-                {brand.name}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
 
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Generate New Content</h2>
+        
+        {generateContentMutation.error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+            <p className="text-sm text-red-800">
+              {generateContentMutation.error.message || 'Failed to generate content. Please try again.'}
+            </p>
+          </div>
+        )}
+        
+        {activeBrand && !activeBrand.styleProfile && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
+            <p className="text-sm text-yellow-800">
+              This brand needs to be analyzed before generating content. Please analyze your Instagram posts first.
+            </p>
+          </div>
+        )}
+        
         <form onSubmit={handleGenerate} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -146,7 +163,7 @@ export function Content() {
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={generateContentMutation.isPending || !activeBrand}
+              disabled={generateContentMutation.isPending || !activeBrand || !activeBrand.styleProfile}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
               {generateContentMutation.isPending ? 'Generating...' : 'Generate Content'}

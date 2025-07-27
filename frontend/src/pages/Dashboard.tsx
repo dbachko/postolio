@@ -1,18 +1,28 @@
 import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { apiClient } from '../lib/api'
 import { ContentCard } from '../components/ContentCard'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useBrandStore } from '../stores/brandStore'
 
 export function Dashboard() {
+  const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore()
+  
   const { data: brandsData, isLoading: brandsLoading } = useQuery({
     queryKey: ['brands'],
     queryFn: () => apiClient.getBrands(),
   })
 
-  const brands = brandsData?.brands || []
-  const activeBrand = brands[0]
+  useEffect(() => {
+    if (brandsData?.brands) {
+      setBrands(brandsData.brands)
+      initializeSelectedBrand(brandsData.brands)
+    }
+  }, [brandsData, setBrands, initializeSelectedBrand])
+
+  const activeBrand = selectedBrand
 
   const { data: pendingContentData, isLoading: contentLoading } = useQuery({
     queryKey: ['pendingContent', activeBrand?.id],

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { apiClient } from '../lib/api'
 import AnalyticsChart from '../components/AnalyticsChart'
 import SchedulingPanel from '../components/SchedulingPanel'
+import { useBrandStore } from '../stores/brandStore'
 
 interface AnalyticsReport {
   totalPosts: number
@@ -51,8 +52,7 @@ interface ScheduledPost {
 }
 
 export default function Analytics() {
-  const [selectedBrandId, setSelectedBrandId] = useState<string>('')
-  const [brands, setBrands] = useState<any[]>([])
+  const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore()
   const [report, setReport] = useState<AnalyticsReport | null>(null)
   const [schedulingStats, setSchedulingStats] = useState<SchedulingStats | null>(null)
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([])
@@ -65,34 +65,32 @@ export default function Analytics() {
   }, [])
 
   useEffect(() => {
-    if (selectedBrandId) {
+    if (selectedBrand?.id) {
       loadAnalytics()
       loadSchedulingData()
     }
-  }, [selectedBrandId, daysPeriod])
+  }, [selectedBrand?.id, daysPeriod])
 
   const loadBrands = async () => {
     try {
       const response = await apiClient.getBrands()
       setBrands(response.brands)
-      if (response.brands.length > 0) {
-        setSelectedBrandId(response.brands[0].id)
-      }
+      initializeSelectedBrand(response.brands)
     } catch (err) {
       setError('Failed to load brands')
     }
   }
 
   const loadAnalytics = async () => {
-    if (!selectedBrandId) return
+    if (!selectedBrand?.id) return
     
     setLoading(true)
     setError('')
     
     try {
       const [reportResponse, statsResponse] = await Promise.all([
-        apiClient.get<{report: AnalyticsReport}>(`/analytics/report/${selectedBrandId}?days=${daysPeriod}`),
-        apiClient.get<{stats: SchedulingStats}>(`/analytics/stats/${selectedBrandId}`)
+        apiClient.get<{report: AnalyticsReport}>(`/analytics/report/${selectedBrand.id}?days=${daysPeriod}`),
+        apiClient.get<{stats: SchedulingStats}>(`/analytics/stats/${selectedBrand.id}`)
       ])
       
       setReport(reportResponse.report)
@@ -105,10 +103,10 @@ export default function Analytics() {
   }
 
   const loadSchedulingData = async () => {
-    if (!selectedBrandId) return
+    if (!selectedBrand?.id) return
     
     try {
-      const response = await apiClient.get<{scheduledPosts: ScheduledPost[]}>(`/analytics/scheduled/${selectedBrandId}`)
+      const response = await apiClient.get<{scheduledPosts: ScheduledPost[]}>(`/analytics/scheduled/${selectedBrand.id}`)
       setScheduledPosts(response.scheduledPosts)
     } catch (err) {
       console.error('Failed to load scheduled posts:', err)
@@ -164,18 +162,11 @@ export default function Analytics() {
         )}
 
         <div className="mb-6 flex space-x-4">
-          <select
-            value={selectedBrandId}
-            onChange={(e) => setSelectedBrandId(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">Select a brand</option>
-            {brands.map((brand) => (
-              <option key={brand.id} value={brand.id}>
-                {brand.name}
-              </option>
-            ))}
-          </select>
+          {selectedBrand && (
+            <div className="text-sm text-gray-600">
+              Analytics for: <span className="font-medium">{selectedBrand.name}</span>
+            </div>
+          )}
 
           <select
             value={daysPeriod}
@@ -308,7 +299,7 @@ export default function Analytics() {
           </>
         )}
 
-        {!loading && !report && selectedBrandId && (
+        {!loading && !report && selectedBrand && (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
               <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">

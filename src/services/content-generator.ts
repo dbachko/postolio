@@ -5,6 +5,13 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
 
+// Validate OpenAI API key on startup
+if (!process.env.OPENAI_API_KEY) {
+  console.error('WARNING: OPENAI_API_KEY environment variable is not set')
+} else {
+  console.log('OpenAI API key is configured')
+}
+
 export interface ContentGenerationRequest {
   brandId: string
   count: number
@@ -42,12 +49,12 @@ export async function generateInstagramContent(
 
 Brand Profile:
 - Name: ${brandName}
-- Aesthetic: ${styleProfile.aestheticStyle}
-- Themes: ${styleProfile.contentThemes.join(', ')}
-- Tone: ${styleProfile.toneOfVoice}
-- Target Audience: ${styleProfile.targetAudience}
-- Personality: ${styleProfile.brandPersonality.join(', ')}
-- Color Palette: ${styleProfile.colorPalette.join(', ')}
+- Aesthetic: ${styleProfile.aestheticStyle || 'Modern'}
+- Themes: ${Array.isArray(styleProfile.contentThemes) ? styleProfile.contentThemes.join(', ') : 'general content'}
+- Tone: ${styleProfile.toneOfVoice || 'Professional'}
+- Target Audience: ${styleProfile.targetAudience || 'General audience'}
+- Personality: ${Array.isArray(styleProfile.brandPersonality) ? styleProfile.brandPersonality.join(', ') : 'authentic'}
+- Color Palette: ${Array.isArray(styleProfile.colorPalette) ? styleProfile.colorPalette.join(', ') : 'varied colors'}
 
 Generate ${count} unique Instagram posts that:
 1. Match the brand's style and tone
@@ -67,7 +74,14 @@ Return a JSON array with objects containing:
 Ensure content is original, on-brand, and Instagram-optimized.`
 
   try {
-    const completion = await openai.chat.completions.create({
+    console.log('Making OpenAI API call...')
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('OpenAI API call timeout')), 30000) // 30 second timeout
+    })
+    
+    const completionPromise = openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
         {
@@ -80,16 +94,31 @@ Ensure content is original, on-brand, and Instagram-optimized.`
         }
       ],
       temperature: 0.8,
-      max_tokens: 2000
+      max_tokens: 1500  // Reduced to make it faster
     })
+    
+    const completion = await Promise.race([completionPromise, timeoutPromise]) as any
+    console.log('OpenAI API call completed successfully')
 
     const content = completion.choices[0]?.message?.content
     if (!content) {
       throw new Error('No content received from OpenAI')
     }
 
-    // Parse the JSON response
-    const generatedContent = JSON.parse(content) as GeneratedContent[]
+    // Clean and parse the JSON response (remove markdown code blocks if present)
+    let cleanContent = content
+      .replace(/```json\s*/gi, '')
+      .replace(/```\s*$/gi, '')
+      .trim()
+    
+    // Try to extract JSON if it's embedded in other text
+    const jsonMatch = cleanContent.match(/\[[\s\S]*\]/)
+    if (jsonMatch) {
+      cleanContent = jsonMatch[0]
+    }
+    
+    console.log('Cleaned content for parsing:', cleanContent.substring(0, 200) + '...')
+    const generatedContent = JSON.parse(cleanContent) as GeneratedContent[]
     
     // Validate structure
     if (!Array.isArray(generatedContent) || generatedContent.length !== count) {
@@ -116,11 +145,32 @@ Ensure content is original, on-brand, and Instagram-optimized.`
   } catch (error) {
     console.error('Content generation error:', error)
     
-    // Return fallback content
+    // Check for specific OpenAI errors that should fail hard
+    if (error instanceof Error) {
+      if (error.message.includes('API key') || error.message.includes('authentication')) {
+        console.error('OpenAI API key error - check OPENAI_API_KEY environment variable')
+        throw new Error('OpenAI API key configuration error')
+      }
+      if (error.message.includes('insufficient_quota')) {
+        console.error('OpenAI API quota exceeded')
+        throw new Error('OpenAI API quota exceeded')
+      }
+      if (error.message.includes('rate_limit')) {
+        console.error('OpenAI API rate limit exceeded')
+        throw new Error('OpenAI API rate limit exceeded')
+      }
+    }
+    
+    // Return fallback content for other errors
+    console.warn('Falling back to template content due to OpenAI error')
     return Array.from({ length: count }, (_, i) => ({
       caption: `Generated content ${i + 1} for ${brandName}. This engaging post captures the essence of your brand while connecting with your audience. Share your story and inspire your followers! 🌟`,
       hashtags: ['inspiration', 'lifestyle', 'authentic', 'community', 'brand'],
-      imagePrompt: `A beautiful ${styleProfile.aestheticStyle.toLowerCase()} image featuring ${styleProfile.colorPalette[0]} and ${styleProfile.colorPalette[1]} colors`,
+      imagePrompt: `A beautiful ${(styleProfile.aestheticStyle || 'modern').toLowerCase()} image featuring ${
+        Array.isArray(styleProfile.colorPalette) && styleProfile.colorPalette.length >= 2 
+          ? `${styleProfile.colorPalette[0]} and ${styleProfile.colorPalette[1]}` 
+          : 'vibrant'
+      } colors`,
     }))
   }
 }

@@ -96,7 +96,21 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       })
     } catch (error) {
       console.error('Content generation error:', error)
-      return reply.code(500).send({ error: 'Failed to generate content' })
+      
+      // Handle specific OpenAI errors with appropriate status codes
+      if (error instanceof Error) {
+        if (error.message.includes('OpenAI API key configuration error')) {
+          return reply.code(503).send({ error: 'AI service configuration error. Please contact support.' })
+        }
+        if (error.message.includes('OpenAI API quota exceeded')) {
+          return reply.code(503).send({ error: 'AI service quota exceeded. Please try again later.' })
+        }
+        if (error.message.includes('OpenAI API rate limit exceeded')) {
+          return reply.code(429).send({ error: 'AI service rate limit exceeded. Please try again in a moment.' })
+        }
+      }
+      
+      return reply.code(500).send({ error: 'Failed to generate content. Please try again.' })
     }
   })
 

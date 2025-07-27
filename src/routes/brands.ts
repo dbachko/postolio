@@ -27,16 +27,31 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const token = authHeader.substring(7)
-      const decoded = verifyJWT(token)
+      let decoded
+      try {
+        decoded = verifyJWT(token)
+      } catch (jwtError) {
+        console.error('JWT verification error:', jwtError)
+        return reply.code(401).send({ error: 'Invalid authentication token' })
+      }
       const userId = decoded.id
 
       const { name, description, instagramHandle } = request.body
 
+      // Validate required fields
+      if (!name || name.trim().length === 0) {
+        return reply.code(400).send({ error: 'Brand name is required' })
+      }
+
+      if (name.length > 100) {
+        return reply.code(400).send({ error: 'Brand name must be less than 100 characters' })
+      }
+
       const brand = await prisma.brand.create({
         data: {
-          name,
-          description: description || null,
-          instagramHandle: instagramHandle || null,
+          name: name.trim(),
+          description: description?.trim() || null,
+          instagramHandle: instagramHandle?.trim() || null,
           userId
         },
         select: {
@@ -51,7 +66,13 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(201).send({ brand })
     } catch (error) {
       console.error('Brand creation error:', error)
-      return reply.code(500).send({ error: 'Failed to create brand' })
+      
+      // Handle specific Prisma errors
+      if (error instanceof Error && error.message.includes('Unique constraint')) {
+        return reply.code(400).send({ error: 'A brand with this name already exists' })
+      }
+      
+      return reply.code(500).send({ error: 'Failed to create brand. Please try again.' })
     }
   })
 
@@ -177,6 +198,66 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       console.error('Brand details error:', error)
       return reply.code(500).send({ error: 'Failed to retrieve brand details' })
+    }
+  })
+
+  // Delete a brand
+  fastify.delete<{ Params: { id: string } }>('/brand/:id', async (request, reply) => {
+    try {
+      const authHeader = request.headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Authentication required' })
+      }
+
+      const token = authHeader.substring(7)
+      let decoded
+      try {
+        decoded = verifyJWT(token)
+      } catch (jwtError) {
+        console.error('JWT verification error:', jwtError)
+        return reply.code(401).send({ error: 'Invalid authentication token' })
+      }
+      const userId = decoded.id
+
+      const { id } = request.params
+
+      // Check if brand exists and user owns it
+      const brand = await prisma.brand.findFirst({
+        where: { 
+          id,
+          userId 
+        },
+        select: {
+          id: true,
+          name: true,
+          _count: {
+            select: {
+              content: true
+            }
+          }
+        }
+      })
+
+      if (!brand) {
+        return reply.code(404).send({ error: 'Brand not found' })
+      }
+
+      // Delete the brand (cascade will handle related content)
+      await prisma.brand.delete({
+        where: { id }
+      })
+
+      return reply.code(200).send({ 
+        message: 'Brand deleted successfully',
+        deletedBrand: {
+          id: brand.id,
+          name: brand.name,
+          contentCount: brand._count.content
+        }
+      })
+    } catch (error) {
+      console.error('Brand deletion error:', error)
+      return reply.code(500).send({ error: 'Failed to delete brand' })
     }
   })
 }

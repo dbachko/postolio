@@ -90,7 +90,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Generate JWT token
     const token = signJWT({ 
-      userId: user.id, 
+      id: user.id, 
       email: user.email 
     })
 
@@ -113,7 +113,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       const token = authHeader.substring(7)
       const decoded = verifyJWT(token)
-      const userId = decoded.userId || decoded.id
+      const userId = decoded.id
 
       const user = await prisma.user.findUnique({
         where: { id: userId },

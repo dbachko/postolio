@@ -75,42 +75,34 @@ export function Layout({ children }: LayoutProps) {
             <div className="flex items-center space-x-4">
               {/* Brand Selector */}
               {brands.length > 0 && (
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-muted-foreground">Brand:</span>
-                  <Select
-                    value={selectedBrand?.id || ''}
-                    onValueChange={(value) => {
-                      const brand = brands.find(b => b.id === value)
-                      setSelectedBrand(brand || null)
-                    }}
-                  >
-                    <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Select Brand" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {brands.map((brand) => (
-                        <SelectItem key={brand.id} value={brand.id}>
-                          {brand.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Select
+                  value={selectedBrand?.id || ''}
+                  onValueChange={(value) => {
+                    const brand = brands.find(b => b.id === value)
+                    setSelectedBrand(brand || null)
+                  }}
+                >
+                  <SelectTrigger className="w-48 bg-background border-input">
+                    <SelectValue placeholder="Select Brand" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {brands.map((brand) => (
+                      <SelectItem key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
               
               {user && (
-                <>
-                  <span className="text-sm text-foreground">
-                    Welcome, {user.name || user.email}
-                  </span>
-                  <Button
-                    onClick={handleLogout}
-                    variant="default"
-                    size="sm"
-                  >
-                    Logout
-                  </Button>
-                </>
+                <Button
+                  onClick={handleLogout}
+                  variant="default"
+                  size="sm"
+                >
+                  Logout
+                </Button>
               )}
             </div>
           </div>

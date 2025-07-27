@@ -58,8 +58,12 @@ class ApiClient {
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
+    }
+
+    // Only set Content-Type if there's a body
+    if (options.body) {
+      headers['Content-Type'] = 'application/json'
     }
 
     if (this.token) {
@@ -72,8 +76,13 @@ class ApiClient {
     })
 
     if (!response.ok) {
-      const error = await response.text()
-      throw new Error(error || 'Request failed')
+      try {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Request failed')
+      } catch (parseError) {
+        // If JSON parsing fails, just use a generic error message
+        throw new Error(`Request failed with status ${response.status}`)
+      }
     }
 
     return response.json()
@@ -130,6 +139,12 @@ class ApiClient {
     return this.request('/brands/analyze', {
       method: 'POST',
       body: JSON.stringify(data),
+    })
+  }
+
+  async deleteBrand(brandId: string): Promise<{ message: string; deletedBrand: any }> {
+    return this.request(`/brands/brand/${brandId}`, {
+      method: 'DELETE',
     })
   }
 
