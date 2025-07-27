@@ -17,6 +17,12 @@ interface CreateBrandBody {
   instagramHandle?: string
 }
 
+interface UpdateBrandBody {
+  name?: string
+  description?: string
+  instagramHandle?: string
+}
+
 const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   // Create a new brand
   fastify.post<{ Body: CreateBrandBody }>('/create', async (request, reply) => {
@@ -198,6 +204,91 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       console.error('Brand details error:', error)
       return reply.code(500).send({ error: 'Failed to retrieve brand details' })
+    }
+  })
+
+  // Update a brand
+  fastify.put<{ Params: { id: string }; Body: UpdateBrandBody }>('/brand/:id', async (request, reply) => {
+    try {
+      const authHeader = request.headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Authentication required' })
+      }
+
+      const token = authHeader.substring(7)
+      let decoded
+      try {
+        decoded = verifyJWT(token)
+      } catch (jwtError) {
+        console.error('JWT verification error:', jwtError)
+        return reply.code(401).send({ error: 'Invalid authentication token' })
+      }
+      const userId = decoded.id
+
+      const { id } = request.params
+      const { name, description, instagramHandle } = request.body
+
+      // Validate at least one field is provided
+      if (!name && description === undefined && instagramHandle === undefined) {
+        return reply.code(400).send({ error: 'At least one field must be provided for update' })
+      }
+
+      // Validate name if provided
+      if (name !== undefined) {
+        if (!name || name.trim().length === 0) {
+          return reply.code(400).send({ error: 'Brand name cannot be empty' })
+        }
+        if (name.length > 100) {
+          return reply.code(400).send({ error: 'Brand name must be less than 100 characters' })
+        }
+      }
+
+      // Check if brand exists and user owns it
+      const existingBrand = await prisma.brand.findFirst({
+        where: { 
+          id,
+          userId 
+        }
+      })
+
+      if (!existingBrand) {
+        return reply.code(404).send({ error: 'Brand not found' })
+      }
+
+      // Prepare update data
+      const updateData: any = {}
+      if (name !== undefined) updateData.name = name.trim()
+      if (description !== undefined) updateData.description = description?.trim() || null
+      if (instagramHandle !== undefined) updateData.instagramHandle = instagramHandle?.trim() || null
+
+      // Update the brand
+      const updatedBrand = await prisma.brand.update({
+        where: { id },
+        data: updateData,
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          instagramHandle: true,
+          styleProfile: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      })
+
+      return reply.code(200).send({ 
+        message: 'Brand updated successfully',
+        brand: updatedBrand
+      })
+    } catch (error) {
+      console.error('Brand update error:', error)
+      
+      // Handle specific Prisma errors
+      if (error instanceof Error && error.message.includes('Unique constraint')) {
+        return reply.code(400).send({ error: 'A brand with this name already exists' })
+      }
+      
+      return reply.code(500).send({ error: 'Failed to update brand' })
     }
   })
 

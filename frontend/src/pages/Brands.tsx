@@ -5,6 +5,7 @@ import { useBrandStore } from '../stores/brandStore'
 
 export function Brands() {
   const [isCreating, setIsCreating] = useState(false)
+  const [editingBrand, setEditingBrand] = useState<any>(null)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -12,7 +13,7 @@ export function Brands() {
   })
   
   const queryClient = useQueryClient()
-  const { brands, selectedBrand, setBrands, setSelectedBrand, initializeSelectedBrand, removeBrand } = useBrandStore()
+  const { brands, selectedBrand, setBrands, setSelectedBrand, initializeSelectedBrand, removeBrand, updateBrand } = useBrandStore()
   
   const { data: brandsData, isLoading } = useQuery({
     queryKey: ['brands'],
@@ -40,12 +41,26 @@ export function Brands() {
 
   const deleteBrandMutation = useMutation({
     mutationFn: (brandId: string) => apiClient.deleteBrand(brandId),
-    onSuccess: (data, brandId) => {
+    onSuccess: (_, brandId) => {
       removeBrand(brandId)
       queryClient.invalidateQueries({ queryKey: ['brands'] })
     },
     onError: (error) => {
       console.error('Brand deletion error:', error)
+    },
+  })
+
+  const updateBrandMutation = useMutation({
+    mutationFn: ({ brandId, data }: { brandId: string; data: typeof formData }) => 
+      apiClient.updateBrand(brandId, data),
+    onSuccess: (response) => {
+      updateBrand(response.brand)
+      queryClient.invalidateQueries({ queryKey: ['brands'] })
+      setEditingBrand(null)
+      setFormData({ name: '', description: '', instagramHandle: '' })
+    },
+    onError: (error) => {
+      console.error('Brand update error:', error)
     },
   })
 
@@ -55,7 +70,27 @@ export function Brands() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    createBrandMutation.mutate(formData)
+    if (editingBrand) {
+      updateBrandMutation.mutate({ brandId: editingBrand.id, data: formData })
+    } else {
+      createBrandMutation.mutate(formData)
+    }
+  }
+
+  const handleEditBrand = (brand: any) => {
+    setEditingBrand(brand)
+    setFormData({
+      name: brand.name,
+      description: brand.description || '',
+      instagramHandle: brand.instagramHandle || '',
+    })
+    setIsCreating(true)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingBrand(null)
+    setIsCreating(false)
+    setFormData({ name: '', description: '', instagramHandle: '' })
   }
 
   const handleDeleteBrand = (brand: any) => {
@@ -72,7 +107,7 @@ export function Brands() {
           <p className="text-gray-600">Create and manage your brand profiles for AI content generation</p>
         </div>
         <button
-          onClick={() => setIsCreating(!isCreating)}
+          onClick={() => editingBrand ? handleCancelEdit() : setIsCreating(!isCreating)}
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
         >
           {isCreating ? 'Cancel' : 'Create Brand'}
@@ -81,12 +116,15 @@ export function Brands() {
 
       {isCreating && (
         <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Create New Brand</h2>
+          <h2 className="text-lg font-medium text-gray-900 mb-4">
+            {editingBrand ? 'Edit Brand' : 'Create New Brand'}
+          </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {createBrandMutation.error && (
+            {(createBrandMutation.error || updateBrandMutation.error) && (
               <div className="bg-red-50 border border-red-200 rounded-md p-3">
                 <p className="text-sm text-red-800">
-                  {createBrandMutation.error.message || 'Failed to create brand. Please try again.'}
+                  {(createBrandMutation.error?.message || updateBrandMutation.error?.message) || 
+                   `Failed to ${editingBrand ? 'update' : 'create'} brand. Please try again.`}
                 </p>
               </div>
             )}
@@ -144,17 +182,20 @@ export function Brands() {
             <div className="flex justify-end space-x-3">
               <button
                 type="button"
-                onClick={() => setIsCreating(false)}
+                onClick={handleCancelEdit}
                 className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={createBrandMutation.isPending}
+                disabled={createBrandMutation.isPending || updateBrandMutation.isPending}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
-                {createBrandMutation.isPending ? 'Creating...' : 'Create Brand'}
+                {editingBrand 
+                  ? (updateBrandMutation.isPending ? 'Updating...' : 'Update Brand')
+                  : (createBrandMutation.isPending ? 'Creating...' : 'Create Brand')
+                }
               </button>
             </div>
           </form>
@@ -218,6 +259,12 @@ export function Brands() {
                         }`}
                       >
                         {selectedBrand?.id === brand.id ? 'Selected' : 'Select'}
+                      </button>
+                      <button
+                        onClick={() => handleEditBrand(brand)}
+                        className="text-sm font-medium text-gray-600 hover:text-gray-700 hover:bg-gray-50 px-3 py-1 rounded"
+                      >
+                        Edit
                       </button>
                       <button
                         onClick={() => handleDeleteBrand(brand)}

@@ -148,6 +148,17 @@ class ApiClient {
     })
   }
 
+  async updateBrand(brandId: string, data: {
+    name?: string
+    description?: string
+    instagramHandle?: string
+  }): Promise<{ message: string; brand: Brand }> {
+    return this.request(`/brands/brand/${brandId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
   // Content endpoints
   async generateContent(data: {
     brandId: string

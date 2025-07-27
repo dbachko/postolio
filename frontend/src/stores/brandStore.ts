@@ -19,6 +19,7 @@ interface BrandState {
   setLoading: (loading: boolean) => void
   initializeSelectedBrand: (brands: Brand[]) => void
   removeBrand: (brandId: string) => void
+  updateBrand: (updatedBrand: Brand) => void
 }
 
 export const useBrandStore = create<BrandState>()(
@@ -70,6 +71,24 @@ export const useBrandStore = create<BrandState>()(
         let newSelectedBrand = current.selectedBrand
         if (current.selectedBrand?.id === brandId) {
           newSelectedBrand = updatedBrands.length > 0 ? updatedBrands[0] : null
+        }
+        
+        set({ 
+          brands: updatedBrands, 
+          selectedBrand: newSelectedBrand 
+        })
+      },
+
+      updateBrand: (updatedBrand) => {
+        const current = get()
+        const updatedBrands = current.brands.map(b => 
+          b.id === updatedBrand.id ? updatedBrand : b
+        )
+        
+        // Update selected brand if it's the one being updated
+        let newSelectedBrand = current.selectedBrand
+        if (current.selectedBrand?.id === updatedBrand.id) {
+          newSelectedBrand = updatedBrand
         }
         
         set({ 
