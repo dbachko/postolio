@@ -8,6 +8,7 @@ import { Register } from './pages/Register'
 import { Brands } from './pages/Brands'
 import { Content } from './pages/Content'
 import Analytics from './pages/Analytics'
+import InstagramAnalytics from './pages/InstagramAnalytics'
 import Engagement from './pages/Engagement'
 import { Growth } from './pages/Growth'
 import { AIFeatures } from './pages/AIFeatures'
@@ -74,6 +75,13 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Analytics />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/instagram-analytics" element={
+            <ProtectedRoute>
+              <Layout>
+                <InstagramAnalytics />
               </Layout>
             </ProtectedRoute>
           } />

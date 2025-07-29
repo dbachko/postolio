@@ -10,6 +10,7 @@ import brandsRoutes from './routes/brands.js'
 import contentRoutes from './routes/content.js'
 import instagramRoutes from './routes/instagram.js'
 import analyticsRoutes from './routes/analytics.js'
+import instagramAnalyticsRoutes from './routes/instagram-analytics.js'
 import engagementRoutes from './routes/engagement.js'
 import growthRoutes from './routes/growth.js'
 import aiRoutes from './routes/ai.js'
@@ -66,6 +67,7 @@ export function buildFastify(): FastifyInstance {
   app.register(contentRoutes, { prefix: '/content' })
   app.register(instagramRoutes, { prefix: '/instagram' })
   app.register(analyticsRoutes, { prefix: '/analytics' })
+  app.register(instagramAnalyticsRoutes, { prefix: '/instagram-analytics' })
   app.register(engagementRoutes, { prefix: '/engagement' })
   app.register(growthRoutes, { prefix: '/growth' })
   app.register(aiRoutes, { prefix: '/ai' })

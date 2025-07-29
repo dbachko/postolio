@@ -45,6 +45,11 @@ export function Layout({ children }: LayoutProps) {
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
+                    <Link to="/instagram-analytics" className={navigationMenuTriggerStyle()}>
+                      Instagram Analytics
+                    </Link>
+                  </NavigationMenuItem>
+                  <NavigationMenuItem>
                     <Link to="/engagement" className={navigationMenuTriggerStyle()}>
                       Engagement
                     </Link>

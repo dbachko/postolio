@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { redisService } from './redis.js'
 import crypto from 'crypto'
+import { analyticsCache } from './analytics-cache.js'
 
 export interface InstagramPost {
   id: string
@@ -37,6 +38,40 @@ export interface PublishMediaResult {
   id: string
   permalink: string
   published: boolean
+}
+
+export interface AccountInsights {
+  followers: number
+  impressions: number
+  reach: number
+  profile_views?: number
+  website_clicks?: number
+}
+
+export interface MediaInsights {
+  impressions: number
+  reach: number
+  engagement: number
+  saves?: number
+  video_views?: number
+}
+
+export interface AnalyticsOverview {
+  data: AccountInsights
+  lastUpdated: string
+  fromCache: boolean
+}
+
+export interface PostPerformance {
+  posts: Array<{
+    id: string
+    caption: string
+    impressions: number
+    engagement: number
+    media_url: string
+    posted_at: string
+  }>
+  lastUpdated: string
 }
 
 interface BrandData {
@@ -289,6 +324,228 @@ class InstagramService {
       console.error('Failed to fetch media insights:', error)
       throw new Error(`Failed to fetch media insights: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
+  }
+
+  /**
+   * Get account insights with caching
+   */
+  async getAccountInsights(brand: BrandData, timeRange: '7d' | '30d' | '90d' = '7d'): Promise<AnalyticsOverview> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not configured for this brand')
+    }
+
+    const today = new Date().toISOString().split('T')[0]
+    const cacheKey = `${brand.instagramAccountId}_${timeRange}`
+    
+    // Check cache first
+    const cachedData = await analyticsCache.getAccountInsights(cacheKey, today)
+    if (cachedData) {
+      return {
+        data: cachedData,
+        lastUpdated: new Date().toISOString(),
+        fromCache: true
+      }
+    }
+
+    // Check rate limit before API call
+    const canMakeRequest = await this.checkRateLimit(brand.instagramAccountId!)
+    if (!canMakeRequest) {
+      throw new Error('Rate limit exceeded for Instagram API')
+    }
+
+    try {
+      // Increment rate limit counter
+      await analyticsCache.incrementRateLimit(cacheKey)
+
+      // Calculate date range
+      const endDate = new Date()
+      const startDate = new Date()
+      const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90
+      startDate.setDate(endDate.getDate() - days)
+
+      // Get follower count (lifetime metric)
+      const followerUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}?fields=followers_count&access_token=${brand.instagramAccessToken}`
+      const followerResponse = await axios.get(followerUrl)
+      
+      // Get insights for the time range
+      const metricsUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/insights?metric=impressions,reach,profile_views&period=day&since=${startDate.toISOString().split('T')[0]}&until=${endDate.toISOString().split('T')[0]}&access_token=${brand.instagramAccessToken}`
+      const insightsResponse = await axios.get(metricsUrl)
+
+      // Process insights data
+      const insights = insightsResponse.data.data
+      const processedData: AccountInsights = {
+        followers: followerResponse.data.followers_count || 0,
+        impressions: this.aggregateInsightValues(insights, 'impressions'),
+        reach: this.aggregateInsightValues(insights, 'reach'),
+        profile_views: this.aggregateInsightValues(insights, 'profile_views')
+      }
+
+      // Cache the result
+      await analyticsCache.setAccountInsights(cacheKey, today, processedData)
+
+      return {
+        data: processedData,
+        lastUpdated: new Date().toISOString(),
+        fromCache: false
+      }
+    } catch (error) {
+      console.error('Failed to fetch account insights:', error)
+      throw new Error(`Failed to fetch account insights: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Get recent posts with performance data
+   */
+  async getRecentPostsPerformance(brand: BrandData, limit: number = 10): Promise<PostPerformance> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not configured for this brand')
+    }
+
+    // Check cache first
+    const cachedPosts = await analyticsCache.getRecentPosts(brand.instagramAccountId!)
+    if (cachedPosts) {
+      return {
+        posts: cachedPosts.posts.slice(0, limit) as any,
+        lastUpdated: new Date().toISOString()
+      }
+    }
+
+    // Check rate limit
+    const canMakeRequest = await this.checkRateLimit(brand.instagramAccountId!)
+    if (!canMakeRequest) {
+      throw new Error('Rate limit exceeded for Instagram API')
+    }
+
+    try {
+      // Get recent media
+      const mediaUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/media?fields=id,caption,media_type,media_url,permalink,timestamp&limit=${limit}&access_token=${brand.instagramAccessToken}`
+      const mediaResponse = await axios.get(mediaUrl)
+
+      const posts = []
+      
+      // Get insights for each media item
+      for (const media of mediaResponse.data.data) {
+        try {
+          const insightsUrl = `https://graph.facebook.com/v23.0/${media.id}/insights?metric=impressions,reach,engagement&access_token=${brand.instagramAccessToken}`
+          const insightsResponse = await axios.get(insightsUrl)
+          
+          const insights = insightsResponse.data.data
+          posts.push({
+            id: media.id,
+            caption: media.caption || '',
+            impressions: this.getInsightValue(insights, 'impressions'),
+            engagement: this.getInsightValue(insights, 'engagement'),
+            media_url: media.media_url,
+            posted_at: media.timestamp
+          })
+        } catch (insightError) {
+          // If insights fail for individual post, include it without metrics
+          posts.push({
+            id: media.id,
+            caption: media.caption || '',
+            impressions: 0,
+            engagement: 0,
+            media_url: media.media_url,
+            posted_at: media.timestamp
+          })
+        }
+      }
+
+      // Cache the results
+      await analyticsCache.setRecentPosts(brand.instagramAccountId!, { posts })
+
+      return {
+        posts,
+        lastUpdated: new Date().toISOString()
+      }
+    } catch (error) {
+      console.error('Failed to fetch recent posts performance:', error)
+      throw new Error(`Failed to fetch recent posts performance: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Force refresh analytics data (bypass cache)
+   */
+  async refreshAnalyticsData(brand: BrandData): Promise<{ success: boolean; message: string; nextRefreshAllowed: string }> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not configured for this brand')
+    }
+
+    // Check if user is within rate limits
+    const rateLimitCount = await analyticsCache.getRateLimit(brand.instagramAccountId!)
+    if (rateLimitCount >= 180) { // Leave some buffer before 200 limit
+      const nextRefresh = new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
+      return {
+        success: false,
+        message: 'Rate limit nearly exceeded. Please wait before refreshing again.',
+        nextRefreshAllowed: nextRefresh.toISOString()
+      }
+    }
+
+    try {
+      // Clear existing cache for this brand
+      const today = new Date().toISOString().split('T')[0]
+      await analyticsCache.clear() // This clears all analytics cache - in production you'd be more selective
+
+      // Force fresh data fetch
+      await this.getAccountInsights(brand, '7d')
+      await this.getRecentPostsPerformance(brand, 10)
+
+      return {
+        success: true,
+        message: 'Analytics data refreshed successfully',
+        nextRefreshAllowed: new Date(Date.now() + 15 * 60 * 1000).toISOString() // 15 minutes
+      }
+    } catch (error) {
+      console.error('Failed to refresh analytics data:', error)
+      return {
+        success: false,
+        message: `Failed to refresh data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        nextRefreshAllowed: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      }
+    }
+  }
+
+  /**
+   * Get analytics cache status
+   */
+  async getAnalyticsCacheStatus(brand: BrandData): Promise<{
+    lastUpdated: string | null
+    cacheAge: number
+    rateLimitRemaining: number
+  }> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not configured for this brand')
+    }
+
+    const status = await analyticsCache.getCacheStatus(brand.instagramAccountId!)
+    const rateLimitCount = await analyticsCache.getRateLimit(brand.instagramAccountId!)
+    
+    return {
+      lastUpdated: status.lastUpdated,
+      cacheAge: status.accountDataAge,
+      rateLimitRemaining: Math.max(0, 200 - rateLimitCount)
+    }
+  }
+
+  /**
+   * Helper method to aggregate insight values across time periods
+   */
+  private aggregateInsightValues(insights: any[], metricName: string): number {
+    const metric = insights.find(insight => insight.name === metricName)
+    if (!metric || !metric.values) return 0
+    
+    return metric.values.reduce((sum: number, value: any) => sum + (value.value || 0), 0)
+  }
+
+  /**
+   * Helper method to get single insight value
+   */
+  private getInsightValue(insights: any[], metricName: string): number {
+    const metric = insights.find(insight => insight.name === metricName)
+    return metric?.values?.[0]?.value || 0
   }
 
   /**
