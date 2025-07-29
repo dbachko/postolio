@@ -29,7 +29,7 @@ export default defineConfig({
       } catch (error) {
         console.log('No SSL certificates found, running on HTTP')
       }
-      return false
+      return undefined
     })()
   }
 })

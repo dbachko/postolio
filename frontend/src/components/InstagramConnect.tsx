@@ -27,7 +27,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
   const queryClient = useQueryClient()
 
   // Check Instagram connection status
-  const { data: connectionStatus, isLoading, refetch } = useQuery({
+  const { data: connectionStatus, isLoading } = useQuery({
     queryKey: ['instagram-status', brand.id],
     queryFn: () => apiClient.getInstagramConnectionStatus(brand.id),
     refetchOnWindowFocus: true
@@ -160,16 +160,23 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
                 />
                 <div>
                   <h3 className="font-medium">{profile.name}</h3>
-                  <p className="text-sm text-gray-600">@{profile.username}</p>
+                  <a 
+                    href={`https://instagram.com/${profile.username}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    @{profile.username}
+                  </a>
                   <div className="flex items-center space-x-4 mt-1">
-                    {profile.followers_count && (
+                    {profile.followers_count !== undefined && profile.followers_count !== null && (
                       <span className="text-xs text-gray-500">
                         {profile.followers_count.toLocaleString()} followers
                       </span>
                     )}
-                    {profile.media_count && (
+                    {profile.media_count !== undefined && profile.media_count !== null && (
                       <span className="text-xs text-gray-500">
-                        {profile.media_count} posts
+                        {profile.media_count === 0 ? 'No posts yet' : `${profile.media_count} posts`}
                       </span>
                     )}
                   </div>
