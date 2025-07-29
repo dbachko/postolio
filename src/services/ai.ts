@@ -27,14 +27,13 @@ export interface BrandAnalysisResult {
 
 export async function analyzeBrandStyle(
   posts: PostAnalysis[],
-  brandName: string,
-  instagramHandle: string
+  brandName: string
 ): Promise<BrandAnalysisResult> {
   const postsText = posts.map(post => 
     `Caption: ${post.caption}\nHashtags: ${post.hashtags.join(', ')}`
   ).join('\n\n')
 
-  const prompt = `Analyze the following Instagram posts for brand "${brandName}" (${instagramHandle}) and create a comprehensive brand style profile:
+  const prompt = `Analyze the following Instagram posts for brand "${brandName}" and create a comprehensive brand style profile:
 
 ${postsText}
 

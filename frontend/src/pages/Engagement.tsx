@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '../lib/api'
 import EngagementSettings from '../components/EngagementSettings'
-import { useBrandStore } from '../stores/brandStore'
 
 interface EngagementStatus {
   configured: boolean

@@ -5,7 +5,6 @@ export interface Brand {
   id: string
   name: string
   description: string | null
-  instagramHandle: string | null
   styleProfile: any
   createdAt: string
 }

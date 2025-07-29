@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../lib/api'
 import { useBrandStore } from '../stores/brandStore'
+import { InstagramConnect } from '../components/InstagramConnect'
 
 export function Brands() {
   const [isCreating, setIsCreating] = useState(false)
@@ -9,7 +10,6 @@ export function Brands() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    instagramHandle: '',
   })
   
   const queryClient = useQueryClient()
@@ -32,7 +32,7 @@ export function Brands() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brands'] })
       setIsCreating(false)
-      setFormData({ name: '', description: '', instagramHandle: '' })
+      setFormData({ name: '', description: '' })
     },
     onError: (error) => {
       console.error('Brand creation error:', error)
@@ -57,7 +57,7 @@ export function Brands() {
       updateBrand(response.brand)
       queryClient.invalidateQueries({ queryKey: ['brands'] })
       setEditingBrand(null)
-      setFormData({ name: '', description: '', instagramHandle: '' })
+      setFormData({ name: '', description: '' })
     },
     onError: (error) => {
       console.error('Brand update error:', error)
@@ -82,7 +82,6 @@ export function Brands() {
     setFormData({
       name: brand.name,
       description: brand.description || '',
-      instagramHandle: brand.instagramHandle || '',
     })
     setIsCreating(true)
   }
@@ -165,19 +164,6 @@ export function Brands() {
               />
             </div>
             
-            <div>
-              <label htmlFor="instagramHandle" className="block text-sm font-medium text-gray-700">
-                Instagram Handle
-              </label>
-              <input
-                type="text"
-                id="instagramHandle"
-                value={formData.instagramHandle}
-                onChange={(e) => setFormData({ ...formData, instagramHandle: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="@yourbrand"
-              />
-            </div>
             
             <div className="flex justify-end space-x-3">
               <button
@@ -231,9 +217,6 @@ export function Brands() {
                     {brand.description && (
                       <p className="text-gray-600 mt-1">{brand.description}</p>
                     )}
-                    {brand.instagramHandle && (
-                      <p className="text-blue-600 text-sm mt-2">{brand.instagramHandle}</p>
-                    )}
                     <p className="text-xs text-gray-500 mt-2">
                       Created {new Date(brand.createdAt).toLocaleDateString()}
                     </p>
@@ -275,6 +258,11 @@ export function Brands() {
                       </button>
                     </div>
                   </div>
+                </div>
+                
+                {/* Instagram Connection Section */}
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <InstagramConnect brand={brand} />
                 </div>
               </div>
             ))}

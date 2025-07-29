@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { instagramService, mockInstagramService } from './instagram.js'
+import { instagramService } from './instagram.js'
 
 const prisma = new PrismaClient()
 
@@ -230,26 +230,23 @@ class EngagementService {
         return
       }
 
-      // Initialize Instagram service
-      const service = instagramService.isConfigured() ? instagramService : mockInstagramService
-      if (instagramService.isConfigured()) {
-        instagramService.initializeClient(
-          brand.instagramAccessToken,
-          brand.instagramPageId
-        )
+      // Check if Instagram service is configured for this brand
+      if (!instagramService.isConfigured(brand)) {
+        console.log(`Instagram not configured for brand ${brand.id}`)
+        return
       }
 
       // Process different engagement types
       if (rules.autoLike.enabled) {
-        await this.processAutoLikes(brand, rules, service, recentActions.length)
+        await this.processAutoLikes(brand, rules, recentActions.length)
       }
 
       if (rules.autoComment.enabled) {
-        await this.processAutoComments(brand, rules, service, recentActions.length)
+        await this.processAutoComments(brand, rules, recentActions.length)
       }
 
       if (rules.autoFollow.enabled) {
-        await this.processAutoFollows(brand, rules, service, recentActions.length)
+        await this.processAutoFollows(brand, rules, recentActions.length)
       }
 
     } catch (error) {
@@ -260,7 +257,7 @@ class EngagementService {
   /**
    * Process automatic likes based on hashtags
    */
-  private async processAutoLikes(brand: any, rules: EngagementRules, service: any, currentActionCount: number): Promise<void> {
+  private async processAutoLikes(brand: any, rules: EngagementRules, currentActionCount: number): Promise<void> {
     const likesThisHour = currentActionCount // Simplified for this implementation
     const remainingLikes = rules.autoLike.maxLikesPerHour - likesThisHour
 
@@ -295,7 +292,7 @@ class EngagementService {
   /**
    * Process automatic comments
    */
-  private async processAutoComments(brand: any, rules: EngagementRules, service: any, currentActionCount: number): Promise<void> {
+  private async processAutoComments(brand: any, rules: EngagementRules, currentActionCount: number): Promise<void> {
     const commentsThisHour = currentActionCount // Simplified
     const remainingComments = rules.autoComment.maxCommentsPerHour - commentsThisHour
 
@@ -330,7 +327,7 @@ class EngagementService {
   /**
    * Process automatic follows
    */
-  private async processAutoFollows(brand: any, rules: EngagementRules, service: any, currentActionCount: number): Promise<void> {
+  private async processAutoFollows(brand: any, rules: EngagementRules, currentActionCount: number): Promise<void> {
     const followsThisHour = currentActionCount // Simplified
     const remainingFollows = rules.autoFollow.maxFollowsPerHour - followsThisHour
 

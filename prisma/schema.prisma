@@ -29,12 +29,12 @@ model Brand {
   description          String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
-  instagramHandle      String?
   styleProfile         Json?
   preferences          Json?
   userId               String
   instagramAccessToken String?
   instagramPageId      String?
+  instagramAccountId   String?
   instagramProfileData Json?
   engagementActive     Boolean   @default(false)
   engagementRules      Json?

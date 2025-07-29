@@ -1,5 +1,6 @@
-import { Client } from 'instagram-graph-api'
 import axios from 'axios'
+import { redisService } from './redis.js'
+import crypto from 'crypto'
 
 export interface InstagramPost {
   id: string
@@ -38,340 +39,272 @@ export interface PublishMediaResult {
   published: boolean
 }
 
+interface BrandData {
+  instagramAccessToken?: string | null
+  instagramAccountId?: string | null
+  instagramPageId?: string | null
+}
+
 class InstagramService {
-  private client: Client | null = null
-  private accessToken: string | null = null
-  private pageId: string | null = null
+  private rateLimitWindow: Map<string, number> = new Map()
 
   constructor() {
-    // Initialize with environment variables if available
-    const token = process.env.INSTAGRAM_ACCESS_TOKEN
-    const pageId = process.env.INSTAGRAM_PAGE_ID
+    // No initialization needed - we'll get tokens from database per request
+  }
+
+  /**
+   * Check if a brand has Instagram connected
+   */
+  isConfigured(brand: BrandData): boolean {
+    return !!(brand.instagramAccessToken && brand.instagramAccountId)
+  }
+
+  /**
+   * Get default profile picture URL when none is available
+   */
+  private getDefaultProfilePicture(): string {
+    return 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150'
+  }
+
+  /**
+   * Check rate limiting for Instagram API calls
+   */
+  private async checkRateLimit(identifier: string): Promise<boolean> {
+    const key = `instagram_rate_limit:${identifier}`
     
-    if (token && pageId) {
-      this.initializeClient(token, pageId)
+    if (redisService.isConnected()) {
+      const count = await redisService.increment(key, 3600)
+      return count ? count <= 200 : true
+    } else {
+      // Fallback to in-memory rate limiting
+      const now = Date.now()
+      const windowStart = Math.floor(now / (60 * 60 * 1000)) * (60 * 60 * 1000)
+      const windowKey = `${identifier}_${windowStart}`
+      
+      const currentCount = this.rateLimitWindow.get(windowKey) || 0
+      if (currentCount >= 200) {
+        return false
+      }
+      
+      this.rateLimitWindow.set(windowKey, currentCount + 1)
+      
+      // Clean up old windows
+      for (const [key, _] of this.rateLimitWindow) {
+        const keyTime = parseInt(key.split('_')[1])
+        if (keyTime < windowStart - (60 * 60 * 1000)) {
+          this.rateLimitWindow.delete(key)
+        }
+      }
+      
+      return true
     }
   }
 
   /**
-   * Initialize the Instagram client with access token and page ID
+   * Refresh Instagram access token
    */
-  initializeClient(accessToken: string, pageId: string): void {
-    this.accessToken = accessToken
-    this.pageId = pageId
-    this.client = new Client(accessToken, pageId)
+  async refreshAccessToken(currentToken: string): Promise<{ accessToken: string; expiresAt: string } | null> {
+    try {
+      const url = `https://graph.facebook.com/v23.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.FACEBOOK_APP_ID}&client_secret=${process.env.FACEBOOK_APP_SECRET}&fb_exchange_token=${currentToken}`
+      
+      const response = await axios.get(url)
+      const data = response.data
+      
+      if (data.access_token) {
+        const expiresAt = data.expires_in ? 
+          new Date(Date.now() + data.expires_in * 1000).toISOString() :
+          new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() // 60 days default
+        
+        return {
+          accessToken: data.access_token,
+          expiresAt
+        }
+      }
+      
+      return null
+    } catch (error) {
+      console.error('Token refresh failed:', error)
+      return null
+    }
   }
 
   /**
-   * Check if the service is properly configured
+   * Validate webhook signature
    */
-  isConfigured(): boolean {
-    return !!(this.client && this.accessToken && this.pageId)
+  static validateWebhookSignature(payload: string, signature: string): boolean {
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.FACEBOOK_APP_SECRET || 'test_secret')
+      .update(payload)
+      .digest('hex')
+    
+    const receivedSignature = signature.replace('sha256=', '')
+    return crypto.timingSafeEqual(
+      Buffer.from(expectedSignature, 'hex'),
+      Buffer.from(receivedSignature, 'hex')
+    )
   }
 
   /**
-   * Get user's Instagram profile information
+   * Get Instagram profile information from Graph API
    */
-  async getProfile(): Promise<InstagramProfile> {
-    if (!this.client || !this.pageId) {
-      throw new Error('Instagram client not configured')
+  async getProfile(brand: BrandData): Promise<InstagramProfile> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not connected for this brand')
     }
 
     try {
-      const response = await this.client.newGetInstagramAccountInfoRequest().execute()
+      await this.checkRateLimit(brand.instagramAccountId!)
+
+      const fields = 'id,username,name,biography,followers_count,media_count,profile_picture_url,website'
+      const url = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}?fields=${fields}&access_token=${brand.instagramAccessToken}`
       
-      // Handle response format variations
-      let profile: any
-      if (typeof response.getInstagramAccount === 'function') {
-        profile = response.getInstagramAccount()
-      } else if (response.data) {
-        profile = response.data
-      } else {
-        profile = response
-      }
+      const response = await axios.get(url)
+      const profile = response.data
       
       return {
-        id: profile.id || 'unknown',
-        username: profile.username || 'unknown',
-        account_type: profile.account_type || 'PERSONAL',
+        id: profile.id,
+        username: profile.username,
+        account_type: 'BUSINESS', // Since we're using Instagram Business API, this is always a business account
         media_count: profile.media_count || 0,
         followers_count: profile.followers_count || 0,
         follows_count: profile.follows_count || 0,
         name: profile.name || '',
         biography: profile.biography || '',
         website: profile.website || '',
-        profile_picture_url: profile.profile_picture_url || ''
+        profile_picture_url: profile.profile_picture_url || this.getDefaultProfilePicture()
       }
     } catch (error) {
       console.error('Failed to fetch Instagram profile:', error)
-      // Fall back to mock data if real API fails
-      return {
-        id: 'fallback_profile_id',
-        username: 'fallback_user',
-        account_type: 'BUSINESS',
-        media_count: 0,
-        followers_count: 0,
-        follows_count: 0,
-        name: 'Fallback Profile',
-        biography: 'Profile created as fallback',
-        website: '',
-        profile_picture_url: ''
-      }
+      throw new Error(`Failed to fetch Instagram profile: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   /**
-   * Get recent posts from the user's Instagram account
+   * Get recent posts from Instagram account
    */
-  async getRecentPosts(limit: number = 25): Promise<InstagramPost[]> {
-    if (!this.client) {
-      throw new Error('Instagram client not configured')
+  async getRecentPosts(brand: BrandData, limit: number = 25): Promise<InstagramPost[]> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not connected for this brand')
     }
 
     try {
-      const response = await this.client.newGetPageMediaRequest().withLimit(limit).execute()
-      const mediaItems = response.getMedia()
+      await this.checkRateLimit(brand.instagramAccountId!)
 
-      const posts: InstagramPost[] = []
+      const fields = 'id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count'
+      const url = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/media?fields=${fields}&limit=${limit}&access_token=${brand.instagramAccessToken}`
       
-      for (const media of mediaItems) {
+      const response = await axios.get(url)
+      const mediaData = response.data.data || []
+      
+      return mediaData.map((media: any) => {
         // Extract hashtags from caption
         const caption = media.caption || ''
         const hashtagMatches = caption.match(/#\w+/g) || []
-        const hashtags = hashtagMatches.map(tag => tag.substring(1)) // Remove # symbol
-
-        posts.push({
+        const hashtags = hashtagMatches.map((tag: string) => tag.substring(1))
+        
+        return {
           id: media.id,
           caption: caption,
-          media_type: media.media_type as 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM',
-          media_url: media.media_url || '',
-          permalink: media.permalink || '',
-          timestamp: media.timestamp || '',
+          media_type: media.media_type,
+          media_url: media.media_url,
+          permalink: media.permalink,
+          timestamp: media.timestamp,
           hashtags: hashtags,
           like_count: media.like_count,
           comments_count: media.comments_count
-        })
-      }
-
-      return posts
+        }
+      })
     } catch (error) {
       console.error('Failed to fetch Instagram posts:', error)
-      throw new Error('Failed to fetch Instagram posts')
+      throw new Error(`Failed to fetch Instagram posts: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   /**
-   * Publish a new post to Instagram
-   * Note: This requires Instagram Content Publishing API permissions
+   * Publish media to Instagram
    */
-  async publishPost(request: PublishMediaRequest): Promise<PublishMediaResult> {
-    if (!this.client || !this.pageId || !this.accessToken) {
-      throw new Error('Instagram client not configured')
+  async publishMedia(brand: BrandData, request: PublishMediaRequest): Promise<PublishMediaResult> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not connected for this brand')
     }
 
     try {
-      // Step 1: Create media container
-      const caption = this.formatCaption(request.caption, request.hashtags)
-      
-      const containerResponse = await this.createMediaContainer(
-        request.imageUrl,
-        caption
-      )
-      
-      if (!containerResponse.id) {
-        throw new Error('Failed to create media container')
-      }
+      await this.checkRateLimit(brand.instagramAccountId!)
 
+      // Step 1: Create media container
+      const caption = `${request.caption}\n\n${request.hashtags.map(tag => `#${tag}`).join(' ')}`
+      const containerUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/media`
+      
+      const containerData = {
+        image_url: request.imageUrl,
+        caption: caption,
+        access_token: brand.instagramAccessToken
+      }
+      
+      const containerResponse = await axios.post(containerUrl, containerData)
+      const containerId = containerResponse.data.id
+      
       // Step 2: Publish the media container
-      const publishResponse = await this.publishMediaContainer(containerResponse.id)
+      const publishUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/media_publish`
+      const publishData = {
+        creation_id: containerId,
+        access_token: brand.instagramAccessToken
+      }
+      
+      const publishResponse = await axios.post(publishUrl, publishData)
+      const mediaId = publishResponse.data.id
+      
+      // Step 3: Get the permalink
+      const permalinkUrl = `https://graph.facebook.com/v23.0/${mediaId}?fields=permalink&access_token=${brand.instagramAccessToken}`
+      const permalinkResponse = await axios.get(permalinkUrl)
       
       return {
-        id: publishResponse.id,
-        permalink: `https://www.instagram.com/p/${publishResponse.id}/`,
+        id: mediaId,
+        permalink: permalinkResponse.data.permalink,
         published: true
       }
     } catch (error) {
-      console.error('Failed to publish Instagram post:', error)
-      throw new Error('Failed to publish Instagram post')
+      console.error('Failed to publish Instagram media:', error)
+      throw new Error(`Failed to publish Instagram media: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   /**
-   * Create a media container for publishing
+   * Get media insights for analytics
    */
-  private async createMediaContainer(imageUrl: string, caption: string): Promise<{ id: string }> {
-    if (!this.accessToken || !this.pageId) {
-      throw new Error('Instagram credentials not configured')
+  async getMediaInsights(brand: BrandData, mediaId: string): Promise<any> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not connected for this brand')
     }
 
-    const response = await axios.post(
-      `https://graph.facebook.com/v18.0/${this.pageId}/media`,
-      {
-        image_url: imageUrl,
-        caption: caption,
-        access_token: this.accessToken
-      }
-    )
-
-    return response.data
-  }
-
-  /**
-   * Publish a media container
-   */
-  private async publishMediaContainer(containerId: string): Promise<{ id: string }> {
-    if (!this.accessToken || !this.pageId) {
-      throw new Error('Instagram credentials not configured')
-    }
-
-    const response = await axios.post(
-      `https://graph.facebook.com/v18.0/${this.pageId}/media_publish`,
-      {
-        creation_id: containerId,
-        access_token: this.accessToken
-      }
-    )
-
-    return response.data
-  }
-
-  /**
-   * Format caption with hashtags
-   */
-  private formatCaption(caption: string, hashtags: string[]): string {
-    const formattedHashtags = hashtags.map(tag => `#${tag}`).join(' ')
-    return `${caption}\n\n${formattedHashtags}`
-  }
-
-  /**
-   * Validate that a URL is accessible for Instagram posting
-   */
-  async validateImageUrl(imageUrl: string): Promise<boolean> {
     try {
-      const response = await axios.head(imageUrl)
-      const contentType = response.headers['content-type']
+      await this.checkRateLimit(brand.instagramAccountId!)
+
+      const metrics = 'impressions,reach,engagement,likes,comments,saves,shares'
+      const url = `https://graph.facebook.com/v23.0/${mediaId}/insights?metric=${metrics}&access_token=${brand.instagramAccessToken}`
       
-      // Instagram supports JPEG and PNG images
-      return contentType?.startsWith('image/') && 
-             (contentType.includes('jpeg') || contentType.includes('png'))
-    } catch (error) {
-      console.error('Failed to validate image URL:', error)
-      return false
-    }
-  }
-
-  /**
-   * Get insights for a specific post
-   */
-  async getPostInsights(postId: string): Promise<any> {
-    if (!this.client) {
-      throw new Error('Instagram client not configured')
-    }
-
-    try {
-      // Available metrics for posts: impressions, reach, saved
-      const response = await this.client.newGetSimplePostMediaInsightsRequest(
-        postId,
-        new Set(['impressions', 'reach', 'saved'])
-      ).execute()
-
-      return response.getInsights()
-    } catch (error) {
-      console.error('Failed to fetch post insights:', error)
-      throw new Error('Failed to fetch post insights')
-    }
-  }
-
-  /**
-   * Exchange short-lived token for long-lived token
-   */
-  static async exchangeForLongLivedToken(
-    appId: string,
-    appSecret: string,
-    shortLivedToken: string
-  ): Promise<{ access_token: string; token_type: string; expires_in: number }> {
-    try {
-      const response = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
-        params: {
-          grant_type: 'fb_exchange_token',
-          client_id: appId,
-          client_secret: appSecret,
-          fb_exchange_token: shortLivedToken
-        }
-      })
-
+      const response = await axios.get(url)
       return response.data
     } catch (error) {
-      console.error('Failed to exchange token:', error)
-      throw new Error('Failed to exchange token for long-lived token')
+      console.error('Failed to fetch media insights:', error)
+      throw new Error(`Failed to fetch media insights: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Handle webhook event
+   */
+  async handleWebhookEvent(event: any): Promise<void> {
+    try {
+      // Process Instagram webhook events
+      console.log('Processing Instagram webhook event:', event)
+      
+      // Implementation depends on specific webhook events you want to handle
+      // Common events: media published, comments, mentions, etc.
+    } catch (error) {
+      console.error('Failed to handle webhook event:', error)
     }
   }
 }
 
-// Create singleton instance
 export const instagramService = new InstagramService()
-
-// Fallback service for when Instagram API is not configured
-export class MockInstagramService {
-  async getProfile(): Promise<InstagramProfile> {
-    return {
-      id: 'mock_profile_id',
-      username: 'mock_user',
-      account_type: 'BUSINESS',
-      media_count: 42,
-      followers_count: 1000,
-      follows_count: 500,
-      name: 'Mock Instagram Account',
-      biography: 'This is a mock Instagram profile for testing',
-      website: 'https://example.com',
-      profile_picture_url: 'https://via.placeholder.com/150'
-    }
-  }
-
-  async getRecentPosts(limit: number = 25): Promise<InstagramPost[]> {
-    const mockPosts: InstagramPost[] = []
-    
-    for (let i = 0; i < Math.min(limit, 5); i++) {
-      mockPosts.push({
-        id: `mock_post_${i}`,
-        caption: `Mock post ${i + 1} caption #mockpost #testing`,
-        media_type: 'IMAGE',
-        media_url: `https://via.placeholder.com/400?text=Mock+Post+${i + 1}`,
-        permalink: `https://instagram.com/p/mock_${i}/`,
-        timestamp: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
-        hashtags: ['mockpost', 'testing'],
-        like_count: Math.floor(Math.random() * 100),
-        comments_count: Math.floor(Math.random() * 20)
-      })
-    }
-
-    return mockPosts
-  }
-
-  async publishPost(request: PublishMediaRequest): Promise<PublishMediaResult> {
-    // Simulate successful publication
-    const mockId = `mock_${Date.now()}`
-    
-    return {
-      id: mockId,
-      permalink: `https://instagram.com/p/${mockId}/`,
-      published: true
-    }
-  }
-
-  async validateImageUrl(imageUrl: string): Promise<boolean> {
-    // Simple URL validation for mock
-    return imageUrl.startsWith('http') && 
-           (imageUrl.includes('jpg') || imageUrl.includes('png') || imageUrl.includes('jpeg'))
-  }
-
-  async getPostInsights(postId: string): Promise<any> {
-    return {
-      impressions: Math.floor(Math.random() * 1000),
-      reach: Math.floor(Math.random() * 800),
-      saved: Math.floor(Math.random() * 50)
-    }
-  }
-}
-
-export const mockInstagramService = new MockInstagramService()

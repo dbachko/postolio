@@ -11,7 +11,6 @@ export interface Brand {
   id: string
   name: string
   description: string | null
-  instagramHandle: string | null
   styleProfile: any
   createdAt: string
 }
@@ -33,7 +32,7 @@ export interface AuthResponse {
   user: User
 }
 
-const API_BASE_URL = 'http://localhost:3000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
 
 class ApiClient {
   private token: string | null = null
@@ -119,7 +118,6 @@ class ApiClient {
   async createBrand(data: {
     name: string
     description?: string
-    instagramHandle?: string
   }): Promise<{ brand: Brand }> {
     return this.request('/brands/create', {
       method: 'POST',
@@ -129,7 +127,6 @@ class ApiClient {
 
   async analyzeBrand(data: {
     brandName: string
-    instagramHandle: string
     posts: Array<{
       imageUrl: string
       caption: string
@@ -151,11 +148,34 @@ class ApiClient {
   async updateBrand(brandId: string, data: {
     name?: string
     description?: string
-    instagramHandle?: string
   }): Promise<{ message: string; brand: Brand }> {
     return this.request(`/brands/brand/${brandId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    })
+  }
+
+  // Instagram OAuth endpoints
+  async initializeInstagramOAuth(brandId: string): Promise<{ authUrl: string; state: string }> {
+    return this.request(`/auth/instagram/authorize?brandId=${brandId}`)
+  }
+
+  async getInstagramConnectionStatus(brandId: string, refresh = false): Promise<{ connected: boolean; profile: any }> {
+    const queryParam = refresh ? '?refresh=true' : ''
+    return this.request(`/instagram/status/${brandId}${queryParam}`)
+  }
+
+  async disconnectInstagram(brandId: string): Promise<{ success: boolean }> {
+    return this.request(`/instagram/disconnect`, {
+      method: 'POST',
+      body: JSON.stringify({ brandId }),
+    })
+  }
+
+  async refreshInstagramToken(brandId: string): Promise<{ success: boolean; expiresAt: string }> {
+    return this.request(`/instagram/refresh-token`, {
+      method: 'POST',
+      body: JSON.stringify({ brandId }),
     })
   }
 

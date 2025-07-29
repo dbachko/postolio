@@ -1,7 +1,8 @@
 import { FastifyPluginAsync } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { verifyJWT } from '../services/jwt.js'
-import { instagramService, mockInstagramService } from '../services/instagram.js'
+import { instagramService } from '../services/instagram.js'
+import crypto from 'crypto'
 
 const prisma = new PrismaClient()
 
@@ -22,17 +23,74 @@ function authenticateRequest(request: any, reply: any) {
   }
 }
 
+// Helper function to validate webhook signatures
+function validateWebhookSignature(payload: string, signature: string): boolean {
+  const expectedSignature = crypto
+    .createHmac('sha256', process.env.FACEBOOK_APP_SECRET || 'test_secret')
+    .update(payload)
+    .digest('hex')
+  
+  const receivedSignature = signature.replace('sha256=', '')
+  return crypto.timingSafeEqual(
+    Buffer.from(expectedSignature, 'hex'),
+    Buffer.from(receivedSignature, 'hex')
+  )
+}
+
 const instagram: FastifyPluginAsync = async function (fastify) {
-  // Get Instagram profile information
-  fastify.get('/profile', async function (request, reply) {
+  // Get Instagram connection status and profile
+  fastify.get('/status/:brandId', async function (request, reply) {
     try {
       const user = authenticateRequest(request, reply)
       if (!user) return
       
-      const service = instagramService.isConfigured() ? instagramService : mockInstagramService
-      const profile = await service.getProfile()
+      const { brandId } = request.params as { brandId: string }
+      const { refresh } = request.query as { refresh?: string }
       
-      reply.send({ profile })
+      const brand = await prisma.brand.findFirst({
+        where: {
+          id: brandId,
+          userId: user.id
+        }
+      })
+      
+      if (!brand) {
+        return reply.status(404).send({ error: 'Brand not found' })
+      }
+      
+      const connected = instagramService.isConfigured(brand)
+      let profile = null
+      
+      if (connected) {
+        if (refresh === 'true') {
+          // Fetch fresh profile data from Instagram API
+          try {
+            const freshProfile = await instagramService.getProfile(brand)
+            
+            // Update database with fresh profile data
+            await prisma.brand.update({
+              where: { id: brandId },
+              data: {
+                instagramProfileData: freshProfile
+              }
+            })
+            
+            profile = freshProfile
+          } catch (error) {
+            console.error('Failed to refresh Instagram profile:', error)
+            // Fallback to cached data if refresh fails
+            profile = brand.instagramProfileData
+          }
+        } else {
+          // Use cached profile data
+          profile = brand.instagramProfileData
+        }
+      }
+      
+      reply.send({ 
+        connected,
+        profile
+      })
     } catch (error) {
       reply.status(500).send({ 
         error: 'Failed to fetch Instagram profile',
@@ -41,15 +99,31 @@ const instagram: FastifyPluginAsync = async function (fastify) {
     }
   })
 
-  // Get recent Instagram posts
-  fastify.get('/posts', async function (request, reply) {
+  // Get recent Instagram posts for a brand
+  fastify.get('/posts/:brandId', async function (request, reply) {
     try {
       const user = authenticateRequest(request, reply)
       if (!user) return
 
+      const { brandId } = request.params as { brandId: string }
       const { limit = 25 } = request.query as { limit?: number }
-      const service = instagramService.isConfigured() ? instagramService : mockInstagramService
-      const posts = await service.getRecentPosts(limit)
+      
+      const brand = await prisma.brand.findFirst({
+        where: {
+          id: brandId,
+          userId: user.id
+        }
+      })
+      
+      if (!brand) {
+        return reply.status(404).send({ error: 'Brand not found' })
+      }
+      
+      if (!instagramService.isConfigured(brand)) {
+        return reply.status(400).send({ error: 'Instagram not connected for this brand' })
+      }
+      
+      const posts = await instagramService.getRecentPosts(brand, limit)
       
       reply.send({ posts })
     } catch (error) {
@@ -60,31 +134,22 @@ const instagram: FastifyPluginAsync = async function (fastify) {
     }
   })
 
-  // Connect Instagram account with brand
-  fastify.post('/connect', async function (request, reply) {
+  // Refresh Instagram access token
+  fastify.post('/refresh-token', async function (request, reply) {
     try {
       const user = authenticateRequest(request, reply)
       if (!user) return
 
-      const { brandId, accessToken, pageId } = request.body as {
-        brandId: string
-        accessToken: string
-        pageId: string
+      const { brandId } = request.body as { brandId: string }
+
+      if (!brandId) {
+        return reply.status(400).send({ error: 'brandId is required' })
       }
 
-      if (!brandId || !accessToken || !pageId) {
-        return reply.status(400).send({ 
-          error: 'Missing required fields: brandId, accessToken, pageId' 
-        })
-      }
-
-      const userId = user.userId
-
-      // Verify brand belongs to user
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: userId
+          userId: user.id
         }
       })
 
@@ -92,38 +157,35 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         return reply.status(404).send({ error: 'Brand not found' })
       }
 
-      // Test the Instagram connection
-      const tempService = instagramService
-      tempService.initializeClient(accessToken, pageId)
-      
-      try {
-        const profile = await tempService.getProfile()
-        
-        // Update brand with Instagram connection details
-        const updatedBrand = await prisma.brand.update({
-          where: { id: brandId },
-          data: {
-            instagramHandle: `@${profile.username}`,
-            instagramAccessToken: accessToken,
-            instagramPageId: pageId,
-            instagramProfileData: profile as any
-          }
-        })
-
-        reply.send({ 
-          success: true,
-          brand: updatedBrand,
-          profile 
-        })
-      } catch (connectionError) {
-        reply.status(400).send({
-          error: 'Invalid Instagram credentials',
-          message: connectionError instanceof Error ? connectionError.message : 'Failed to connect'
-        })
+      if (!brand.instagramAccessToken) {
+        return reply.status(400).send({ error: 'No Instagram token to refresh' })
       }
+
+      const refreshResult = await instagramService.refreshAccessToken(brand.instagramAccessToken)
+      
+      if (!refreshResult) {
+        return reply.status(500).send({ error: 'Failed to refresh Instagram token' })
+      }
+
+      // Update brand with new token
+      await prisma.brand.update({
+        where: { id: brandId },
+        data: {
+          instagramAccessToken: refreshResult.accessToken,
+          preferences: {
+            ...((brand.preferences as any) || {}),
+            tokenExpiresAt: refreshResult.expiresAt
+          }
+        }
+      })
+
+      reply.send({ 
+        success: true,
+        expiresAt: refreshResult.expiresAt
+      })
     } catch (error) {
       reply.status(500).send({ 
-        error: 'Failed to connect Instagram account',
+        error: 'Failed to refresh Instagram token',
         message: error instanceof Error ? error.message : 'Unknown error'
       })
     }
@@ -141,14 +203,12 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({ error: 'contentId is required' })
       }
 
-      const userId = user.userId
-
       // Get content and verify ownership
       const content = await prisma.content.findFirst({
         where: {
           id: contentId,
           brand: {
-            userId: userId
+            userId: user.id
           }
         },
         include: {
@@ -165,32 +225,21 @@ const instagram: FastifyPluginAsync = async function (fastify) {
       }
 
       // Check if brand has Instagram connection
-      if (!content.brand.instagramAccessToken || !content.brand.instagramPageId) {
+      if (!instagramService.isConfigured(content.brand)) {
         return reply.status(400).send({ 
           error: 'Instagram account not connected to this brand' 
         })
       }
 
-      // Initialize Instagram service for this brand
-      const service = instagramService
-      service.initializeClient(
-        content.brand.instagramAccessToken, 
-        content.brand.instagramPageId
-      )
-
-      // Validate image URL if present
-      if (content.imageUrl) {
-        const isValidImage = await service.validateImageUrl(content.imageUrl)
-        if (!isValidImage) {
-          return reply.status(400).send({ 
-            error: 'Invalid or inaccessible image URL for Instagram posting' 
-          })
-        }
+      if (!content.imageUrl) {
+        return reply.status(400).send({ 
+          error: 'Image URL is required for Instagram posting' 
+        })
       }
 
       // Publish to Instagram
-      const publishResult = await service.publishPost({
-        imageUrl: content.imageUrl || 'https://via.placeholder.com/400?text=No+Image',
+      const publishResult = await instagramService.publishMedia(content.brand, {
+        imageUrl: content.imageUrl,
         caption: content.caption,
         hashtags: content.hashtags
       })
@@ -220,48 +269,31 @@ const instagram: FastifyPluginAsync = async function (fastify) {
   })
 
   // Get Instagram insights for a post
-  fastify.get('/insights/:postId', async function (request, reply) {
+  fastify.get('/insights/:brandId/:postId', async function (request, reply) {
     try {
       const user = authenticateRequest(request, reply)
       if (!user) return
 
-      const { postId } = request.params as { postId: string }
-      const userId = user.userId
+      const { brandId, postId } = request.params as { brandId: string; postId: string }
 
-      // Verify the post belongs to user's content
-      const content = await prisma.content.findFirst({
+      const brand = await prisma.brand.findFirst({
         where: {
-          instagramPostId: postId,
-          brand: {
-            userId: userId
-          }
-        },
-        include: {
-          brand: true
+          id: brandId,
+          userId: user.id
         }
       })
 
-      if (!content) {
-        return reply.status(404).send({ error: 'Post not found' })
+      if (!brand) {
+        return reply.status(404).send({ error: 'Brand not found' })
       }
 
-      // Check Instagram connection
-      if (!content.brand.instagramAccessToken || !content.brand.instagramPageId) {
+      if (!instagramService.isConfigured(brand)) {
         return reply.status(400).send({ 
           error: 'Instagram account not connected' 
         })
       }
-
-      // Get insights
-      const service = instagramService.isConfigured() ? instagramService : mockInstagramService
-      if (instagramService.isConfigured()) {
-        instagramService.initializeClient(
-          content.brand.instagramAccessToken,
-          content.brand.instagramPageId
-        )
-      }
       
-      const insights = await service.getPostInsights(postId)
+      const insights = await instagramService.getMediaInsights(brand, postId)
 
       reply.send({ insights })
     } catch (error) {
@@ -284,17 +316,16 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({ error: 'brandId is required' })
       }
 
-      const userId = user.userId
-
       // Verify brand ownership and disconnect
       const updatedBrand = await prisma.brand.updateMany({
         where: {
           id: brandId,
-          userId: userId
+          userId: user.id
         },
         data: {
           instagramAccessToken: null,
           instagramPageId: null,
+          instagramAccountId: null,
           instagramProfileData: null
         }
       })
@@ -312,37 +343,33 @@ const instagram: FastifyPluginAsync = async function (fastify) {
     }
   })
 
-  // Get Instagram connection status for a brand
-  fastify.get('/status/:brandId', async function (request, reply) {
+  // Handle Instagram webhooks
+  fastify.get('/webhooks', async function (request, reply) {
+    const mode = request.query['hub.mode']
+    const token = request.query['hub.verify_token']
+    const challenge = request.query['hub.challenge']
+
+    // Verify webhook
+    if (mode === 'subscribe' && token === process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN) {
+      reply.send(challenge)
+    } else {
+      reply.status(403).send('Forbidden')
+    }
+  })
+
+  fastify.post('/webhooks', async function (request, reply) {
+    const signature = request.headers['x-hub-signature-256'] as string
+    const payload = JSON.stringify(request.body)
+
+    if (!signature || !instagramService.validateWebhookSignature || !instagramService.validateWebhookSignature(payload, signature)) {
+      return reply.status(403).send('Forbidden')
+    }
+
     try {
-      const user = authenticateRequest(request, reply)
-      if (!user) return
-
-      const { brandId } = request.params as { brandId: string }
-      const userId = user.userId
-
-      const brand = await prisma.brand.findFirst({
-        where: {
-          id: brandId,
-          userId: userId
-        }
-      })
-
-      if (!brand) {
-        return reply.status(404).send({ error: 'Brand not found' })
-      }
-
-      const isConnected = !!(brand.instagramAccessToken && brand.instagramPageId)
-      
-      reply.send({ 
-        connected: isConnected,
-        profile: isConnected ? brand.instagramProfileData : null
-      })
+      await instagramService.handleWebhookEvent(request.body)
+      reply.send('OK')
     } catch (error) {
-      reply.status(500).send({ 
-        error: 'Failed to check Instagram connection status',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      })
+      reply.status(500).send('Error processing webhook')
     }
   })
 }

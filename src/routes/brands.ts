@@ -7,20 +7,17 @@ const prisma = new PrismaClient()
 
 interface BrandAnalysisBody {
   brandName: string
-  instagramHandle: string
   posts: PostAnalysis[]
 }
 
 interface CreateBrandBody {
   name: string
   description?: string
-  instagramHandle?: string
 }
 
 interface UpdateBrandBody {
   name?: string
   description?: string
-  instagramHandle?: string
 }
 
 const brandsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -42,7 +39,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const userId = decoded.id
 
-      const { name, description, instagramHandle } = request.body
+      const { name, description } = request.body
 
       // Validate required fields
       if (!name || name.trim().length === 0) {
@@ -57,14 +54,12 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         data: {
           name: name.trim(),
           description: description?.trim() || null,
-          instagramHandle: instagramHandle?.trim() || null,
           userId
         },
         select: {
           id: true,
           name: true,
           description: true,
-          instagramHandle: true,
           createdAt: true
         }
       })
@@ -94,20 +89,19 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       const decoded = verifyJWT(token)
       const userId = decoded.id
 
-      const { brandName, instagramHandle, posts } = request.body
+      const { brandName, posts } = request.body
 
       if (!posts || posts.length === 0) {
         return reply.code(400).send({ error: 'At least one post is required for analysis' })
       }
 
       // Perform AI analysis
-      const analysis = await analyzeBrandStyle(posts, brandName, instagramHandle)
+      const analysis = await analyzeBrandStyle(posts, brandName)
 
       // Create brand with analysis results
       const brand = await prisma.brand.create({
         data: {
           name: brandName,
-          instagramHandle,
           styleProfile: analysis.styleProfile as any,
           preferences: {
             recommendations: analysis.recommendations,
@@ -119,7 +113,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           name: true,
-          instagramHandle: true,
           styleProfile: true,
           preferences: true,
           createdAt: true
@@ -151,7 +144,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           name: true,
           description: true,
-          instagramHandle: true,
           styleProfile: true,
           createdAt: true
         },
@@ -188,7 +180,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           name: true,
           description: true,
-          instagramHandle: true,
           styleProfile: true,
           preferences: true,
           createdAt: true,
@@ -226,10 +217,10 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = decoded.id
 
       const { id } = request.params
-      const { name, description, instagramHandle } = request.body
+      const { name, description } = request.body
 
       // Validate at least one field is provided
-      if (!name && description === undefined && instagramHandle === undefined) {
+      if (!name && description === undefined) {
         return reply.code(400).send({ error: 'At least one field must be provided for update' })
       }
 
@@ -259,7 +250,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       const updateData: any = {}
       if (name !== undefined) updateData.name = name.trim()
       if (description !== undefined) updateData.description = description?.trim() || null
-      if (instagramHandle !== undefined) updateData.instagramHandle = instagramHandle?.trim() || null
 
       // Update the brand
       const updatedBrand = await prisma.brand.update({
@@ -269,7 +259,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           name: true,
           description: true,
-          instagramHandle: true,
           styleProfile: true,
           createdAt: true,
           updatedAt: true

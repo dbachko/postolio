@@ -52,7 +52,7 @@ interface ScheduledPost {
 }
 
 export default function Analytics() {
-  const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore()
+  const { selectedBrand } = useBrandStore()
   const [report, setReport] = useState<AnalyticsReport | null>(null)
   const [schedulingStats, setSchedulingStats] = useState<SchedulingStats | null>(null)
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([])
@@ -74,8 +74,8 @@ export default function Analytics() {
   const loadBrands = async () => {
     try {
       const response = await apiClient.getBrands()
-      setBrands(response.brands)
-      initializeSelectedBrand(response.brands)
+      // Brand management is handled by the brand store
+      console.log('Brands loaded:', response.brands)
     } catch (err) {
       setError('Failed to load brands')
     }

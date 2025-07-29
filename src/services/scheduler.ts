@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { analyticsService } from './analytics.js'
-import { instagramService, mockInstagramService } from './instagram.js'
+import { instagramService } from './instagram.js'
 
 const prisma = new PrismaClient()
 
@@ -178,26 +178,14 @@ class SchedulerService {
         return
       }
 
-      // Initialize Instagram service
-      const service = instagramService.isConfigured() ? instagramService : mockInstagramService
-      if (instagramService.isConfigured()) {
-        instagramService.initializeClient(
-          content.brand.instagramAccessToken,
-          content.brand.instagramPageId
-        )
-      }
-
-      // Validate image URL if present
-      if (content.imageUrl) {
-        const isValidImage = await service.validateImageUrl(content.imageUrl)
-        if (!isValidImage) {
-          await this.markContentAsFailed(content.id, 'Invalid or inaccessible image URL')
-          return
-        }
+      // Check if Instagram service is configured for this brand
+      if (!instagramService.isConfigured(content.brand)) {
+        await this.markContentAsFailed(content.id, 'Instagram account not connected')
+        return
       }
 
       // Publish to Instagram
-      const publishResult = await service.publishPost({
+      const publishResult = await instagramService.publishMedia(content.brand, {
         imageUrl: content.imageUrl || 'https://via.placeholder.com/400?text=Scheduled+Post',
         caption: content.caption,
         hashtags: content.hashtags

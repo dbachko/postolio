@@ -1,8 +1,11 @@
 import fastify, { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
+import fs from 'fs'
+import path from 'path'
 import authPlugin from './plugins/auth.js'
 import authRoutes from './routes/auth.js'
+import instagramOAuthRoutes from './routes/instagram-oauth.js'
 import brandsRoutes from './routes/brands.js'
 import contentRoutes from './routes/content.js'
 import instagramRoutes from './routes/instagram.js'
@@ -12,15 +15,45 @@ import growthRoutes from './routes/growth.js'
 import aiRoutes from './routes/ai.js'
 
 export function buildFastify(): FastifyInstance {
+  // HTTPS configuration for local development
+  let httpsOptions = {}
+  
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      // Look for local SSL certificates
+      const certPath = process.env.SSL_CERT_PATH || path.join(process.cwd(), 'certs', 'localhost.crt')
+      const keyPath = process.env.SSL_KEY_PATH || path.join(process.cwd(), 'certs', 'localhost.key')
+      
+      if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+        httpsOptions = {
+          https: {
+            cert: fs.readFileSync(certPath),
+            key: fs.readFileSync(keyPath)
+          }
+        }
+      }
+    } catch (error) {
+      console.log('No SSL certificates found, running on HTTP')
+    }
+  }
+
   const app = fastify({
     logger: {
       level: 'info'
-    }
+    },
+    ...httpsOptions
   })
 
   // Register plugins
   app.register(cors, {
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: [
+      'http://localhost:5173', 
+      'http://127.0.0.1:5173',
+      'https://localhost:5173',
+      'https://localhost:3000',
+      'https://ai.localhost:5173',
+      'https://ai.localhost'
+    ],
     credentials: true
   })
   app.register(helmet)
@@ -28,6 +61,7 @@ export function buildFastify(): FastifyInstance {
 
   // Register routes
   app.register(authRoutes, { prefix: '/auth' })
+  app.register(instagramOAuthRoutes, { prefix: '/auth/instagram' })
   app.register(brandsRoutes, { prefix: '/brands' })
   app.register(contentRoutes, { prefix: '/content' })
   app.register(instagramRoutes, { prefix: '/instagram' })

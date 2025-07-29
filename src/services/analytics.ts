@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { instagramService, mockInstagramService } from './instagram.js'
+import { instagramService } from './instagram.js'
 
 const prisma = new PrismaClient()
 
@@ -67,15 +67,11 @@ class AnalyticsService {
       }
 
       // Get insights from Instagram
-      const service = instagramService.isConfigured() ? instagramService : mockInstagramService
-      if (instagramService.isConfigured() && content.brand.instagramAccessToken && content.brand.instagramPageId) {
-        instagramService.initializeClient(
-          content.brand.instagramAccessToken,
-          content.brand.instagramPageId
-        )
+      if (!instagramService.isConfigured(content.brand)) {
+        return null
       }
 
-      const insights = await service.getPostInsights(content.instagramPostId)
+      const insights = await instagramService.getMediaInsights(content.brand, content.instagramPostId)
       const postedAt = content.postedAt || content.createdAt
 
       const metrics: PostMetrics = {
