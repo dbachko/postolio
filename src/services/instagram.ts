@@ -125,7 +125,7 @@ class InstagramService {
       
       // Clean up old windows
       for (const [key, _] of this.rateLimitWindow) {
-        const keyTime = parseInt(key.split('_')[1])
+        const keyTime = parseInt(key.split('_')[1] || '0')
         if (keyTime < windowStart - (60 * 60 * 1000)) {
           this.rateLimitWindow.delete(key)
         }
@@ -335,7 +335,7 @@ class InstagramService {
     }
 
     const today = new Date().toISOString().split('T')[0]
-    const cacheKey = `${brand.instagramAccountId}_${timeRange}`
+    const cacheKey = `${brand.instagramAccountId || 'unknown'}_${timeRange}`
     
     // Check cache first
     const cachedData = await analyticsCache.getAccountInsights(cacheKey, today)

@@ -11,7 +11,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev:db": "docker-compose up -d",
     "start:all": "npm run dev:db && concurrently \"npm run dev\" \"npm run dev:frontend\"",
-    "test": "node --test --import tsx test/health.test.ts test/auth.test.ts test/brand-analysis.test.ts test/brands-list.test.ts test/content-generation.test.ts test/content-approval.test.ts test/instagram-integration.test.ts",
+    "test": "node --test --import tsx test/health.test.ts test/auth.test.ts test/brand-analysis.test.ts test/brands-list.test.ts test/content-generation.test.ts test/content-approval.test.ts test/instagram-integration.test.ts test/content-publishing.test.ts",
     "lint": "eslint src/**/*.ts",
     "typecheck": "tsc --noEmit"
   },

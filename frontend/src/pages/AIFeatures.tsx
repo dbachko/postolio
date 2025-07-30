@@ -1,93 +1,156 @@
 import { useState } from 'react'
+import type { ChangeEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { apiClient } from '../lib/api'
 import { useBrandStore } from '../stores/brandStore'
 
+// Types for API responses
+type HashtagResults = {
+  optimizedHashtags: string[]
+  relevanceScore: number
+  analytics: {
+    competitionLevel: 'low' | 'medium' | 'high'
+  }
+  suggestions: string[]
+}
+
+type CompetitorInsight = {
+  handle: string
+  followers: number
+  engagementRate: number
+  postFrequency: number
+  topHashtags: string[]
+}
+
+type CompetitorResults = {
+  competitorInsights: CompetitorInsight[]
+  recommendations: string[]
+}
+
+type ContentSuggestion = {
+  title: string
+  contentType: 'post' | 'story' | 'reel'
+  difficulty: 'easy' | 'medium' | 'hard'
+  description: string
+  suggestedHashtags: string[]
+  resources: string[]
+  estimatedEngagement: number
+}
+
+type ScheduleResults = {
+  recommendedTimes: {
+    day: string
+    time: string
+    engagement: number
+    reach: number
+  }[]
+  frequency: {
+    optimal: string
+    daily: number
+  }
+  insights: string[]
+}
+
 export function AIFeatures() {
   const { selectedBrand } = useBrandStore()
+
   const [activeTab, setActiveTab] = useState<'hashtags' | 'competitors' | 'content' | 'schedule'>('hashtags')
 
   // Hashtag optimization state
-  const [content, setContent] = useState('')
-  const [currentHashtags, setCurrentHashtags] = useState('')
-  const [hashtagResults, setHashtagResults] = useState<any>(null)
+  const [content, setContent] = useState<string>('')
+  const [currentHashtags, setCurrentHashtags] = useState<string>('')
+  const [hashtagResults, setHashtagResults] = useState<HashtagResults | null>(null)
 
   // Competitor analysis state
-  const [competitors, setCompetitors] = useState('')
-  const [competitorResults, setCompetitorResults] = useState<any>(null)
+  const [competitors, setCompetitors] = useState<string>('')
+  const [competitorResults, setCompetitorResults] = useState<CompetitorResults | null>(null)
 
   // Content suggestions state
-  const [context, setContext] = useState('')
+  const [context, setContext] = useState<string>('')
   const [contentType, setContentType] = useState<'post' | 'story' | 'reel'>('post')
-  const [contentSuggestions, setContentSuggestions] = useState<any>(null)
+  const [contentSuggestions, setContentSuggestions] = useState<ContentSuggestion[] | null>(null)
 
   // Schedule optimization state
-  const [scheduleResults, setScheduleResults] = useState<any>(null)
+  const [scheduleResults, setScheduleResults] = useState<ScheduleResults | null>(null)
 
-  const hashtagMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiClient.post('/ai/hashtags/optimize', data)
+  const hashtagMutation = useMutation<
+    HashtagResults,
+    unknown,
+    { brandId: string; content: string; currentHashtags: string[] }
+  >({
+    mutationFn: async (data) => {
+      const res = await apiClient.post('/ai/hashtags/optimize', data)
+      return res as HashtagResults
     },
-    onSuccess: (data) => setHashtagResults(data)
+    onSuccess: (data) => setHashtagResults(data),
   })
 
-  const competitorMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiClient.post('/ai/competitors/analyze', data)
+  const competitorMutation = useMutation<CompetitorResults, unknown, { brandId: string; competitors: string[] }>({
+    mutationFn: async (data) => {
+      const res = (await apiClient.post('/ai/competitors/analyze', data)) as { analysis: CompetitorResults }
+      return res.analysis
     },
-    onSuccess: (data: any) => setCompetitorResults(data.analysis)
+    onSuccess: (data) => setCompetitorResults(data),
   })
 
-  const contentMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiClient.post('/ai/content/suggestions', data)
+  const contentMutation = useMutation<
+    ContentSuggestion[],
+    unknown,
+    { brandId: string; context: string; contentType: 'post' | 'story' | 'reel' }
+  >({
+    mutationFn: async (data) => {
+      const res = (await apiClient.post('/ai/content/suggestions', data)) as { suggestions: ContentSuggestion[] }
+      return res.suggestions
     },
-    onSuccess: (data: any) => setContentSuggestions(data.suggestions)
+    onSuccess: (data) => setContentSuggestions(data),
   })
 
-  const scheduleMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiClient.post('/ai/schedule/optimize', data)
+  const scheduleMutation = useMutation<ScheduleResults, unknown, { brandId: string }>({
+    mutationFn: async (data) => {
+      const res = (await apiClient.post('/ai/schedule/optimize', data)) as { optimizedSchedule: ScheduleResults }
+      return res.optimizedSchedule
     },
-    onSuccess: (data: any) => setScheduleResults(data.optimizedSchedule)
+    onSuccess: (data) => setScheduleResults(data),
   })
 
   const handleHashtagOptimization = () => {
     if (!selectedBrand || !content) return
-    
-    const hashtags = currentHashtags.split(',').map(h => h.trim()).filter(h => h)
+    const hashtags = currentHashtags
+      .split(',')
+      .map((h) => h.trim())
+      .filter((h) => h)
     hashtagMutation.mutate({
       brandId: selectedBrand.id,
       content,
-      currentHashtags: hashtags
+      currentHashtags: hashtags,
     })
   }
 
   const handleCompetitorAnalysis = () => {
     if (!selectedBrand || !competitors) return
-    
-    const competitorList = competitors.split(',').map(c => c.trim()).filter(c => c)
+    const competitorList = competitors
+      .split(',')
+      .map((c) => c.trim())
+      .filter((c) => c)
     competitorMutation.mutate({
       brandId: selectedBrand.id,
-      competitors: competitorList
+      competitors: competitorList,
     })
   }
 
   const handleContentSuggestions = () => {
     if (!selectedBrand || !context) return
-    
     contentMutation.mutate({
       brandId: selectedBrand.id,
       context,
-      contentType
+      contentType,
     })
   }
 
   const handleScheduleOptimization = () => {
     if (!selectedBrand) return
-    
     scheduleMutation.mutate({
-      brandId: selectedBrand.id
+      brandId: selectedBrand.id,
     })
   }
 
@@ -110,11 +173,11 @@ export function AIFeatures() {
             { id: 'hashtags', name: 'Hashtag Optimizer' },
             { id: 'competitors', name: 'Competitor Analysis' },
             { id: 'content', name: 'Content Ideas' },
-            { id: 'schedule', name: 'Schedule Optimizer' }
+            { id: 'schedule', name: 'Schedule Optimizer' },
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600'
@@ -131,12 +194,10 @@ export function AIFeatures() {
       {activeTab === 'hashtags' && (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">AI Hashtag Optimizer</h2>
-          
+
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Content Description
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Content Description</label>
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
@@ -144,11 +205,9 @@ export function AIFeatures() {
                 className="w-full border rounded-md px-3 py-2 h-24"
               />
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Current Hashtags (comma-separated)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Current Hashtags (comma-separated)</label>
               <input
                 type="text"
                 value={currentHashtags}
@@ -157,7 +216,7 @@ export function AIFeatures() {
                 className="w-full border rounded-md px-3 py-2"
               />
             </div>
-            
+
             <button
               onClick={handleHashtagOptimization}
               disabled={hashtagMutation.isPending || !content}
@@ -172,14 +231,14 @@ export function AIFeatures() {
               <div>
                 <h3 className="font-medium text-gray-900 mb-2">Optimized Hashtags</h3>
                 <div className="flex flex-wrap gap-2">
-                  {hashtagResults.optimizedHashtags.map((tag: string, index: number) => (
+                  {hashtagResults.optimizedHashtags.map((tag, index) => (
                     <span key={index} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
                       {tag}
                     </span>
                   ))}
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-4 rounded">
                   <h4 className="font-medium mb-2">Relevance Score</h4>
@@ -187,19 +246,24 @@ export function AIFeatures() {
                 </div>
                 <div className="bg-gray-50 p-4 rounded">
                   <h4 className="font-medium mb-2">Competition Level</h4>
-                  <p className={`text-lg font-semibold ${
-                    hashtagResults.analytics.competitionLevel === 'low' ? 'text-green-600' :
-                    hashtagResults.analytics.competitionLevel === 'medium' ? 'text-yellow-600' : 'text-red-600'
-                  }`}>
+                  <p
+                    className={`text-lg font-semibold ${
+                      hashtagResults.analytics.competitionLevel === 'low'
+                        ? 'text-green-600'
+                        : hashtagResults.analytics.competitionLevel === 'medium'
+                        ? 'text-yellow-600'
+                        : 'text-red-600'
+                    }`}
+                  >
                     {hashtagResults.analytics.competitionLevel.toUpperCase()}
                   </p>
                 </div>
               </div>
-              
+
               <div>
                 <h4 className="font-medium mb-2">Additional Suggestions</h4>
                 <div className="flex flex-wrap gap-2">
-                  {hashtagResults.suggestions.map((tag: string, index: number) => (
+                  {hashtagResults.suggestions.map((tag, index) => (
                     <span key={index} className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
                       {tag}
                     </span>
@@ -215,7 +279,7 @@ export function AIFeatures() {
       {activeTab === 'competitors' && (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">Competitor Analysis</h2>
-          
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -229,7 +293,7 @@ export function AIFeatures() {
                 className="w-full border rounded-md px-3 py-2"
               />
             </div>
-            
+
             <button
               onClick={handleCompetitorAnalysis}
               disabled={competitorMutation.isPending || !competitors}
@@ -244,7 +308,7 @@ export function AIFeatures() {
               <div>
                 <h3 className="font-medium text-gray-900 mb-4">Competitor Insights</h3>
                 <div className="space-y-4">
-                  {competitorResults.competitorInsights.map((comp: any, index: number) => (
+                  {competitorResults.competitorInsights.map((comp, index) => (
                     <div key={index} className="border rounded-lg p-4">
                       <h4 className="font-semibold">{comp.handle}</h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
@@ -263,8 +327,10 @@ export function AIFeatures() {
                         <div>
                           <span className="text-sm text-gray-500">Top Hashtags</span>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {comp.topHashtags.slice(0, 3).map((tag: string, i: number) => (
-                              <span key={i} className="text-xs bg-gray-100 px-1 rounded">{tag}</span>
+                            {comp.topHashtags.slice(0, 3).map((tag, i) => (
+                              <span key={i} className="text-xs bg-gray-100 px-1 rounded">
+                                {tag}
+                              </span>
                             ))}
                           </div>
                         </div>
@@ -273,11 +339,11 @@ export function AIFeatures() {
                   ))}
                 </div>
               </div>
-              
+
               <div>
                 <h3 className="font-medium text-gray-900 mb-3">Recommendations</h3>
                 <ul className="space-y-2">
-                  {competitorResults.recommendations.map((rec: string, index: number) => (
+                  {competitorResults.recommendations.map((rec, index) => (
                     <li key={index} className="flex items-start">
                       <span className="text-blue-500 mr-2">•</span>
                       <span className="text-gray-700">{rec}</span>
@@ -294,12 +360,10 @@ export function AIFeatures() {
       {activeTab === 'content' && (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">AI Content Suggestions</h2>
-          
+
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Context/Theme
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Context/Theme</label>
               <input
                 type="text"
                 value={context}
@@ -308,14 +372,14 @@ export function AIFeatures() {
                 className="w-full border rounded-md px-3 py-2"
               />
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Content Type
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Content Type</label>
               <select
                 value={contentType}
-                onChange={(e) => setContentType(e.target.value as any)}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                  setContentType(e.target.value as 'post' | 'story' | 'reel')
+                }
                 className="w-full border rounded-md px-3 py-2"
               >
                 <option value="post">Post</option>
@@ -323,7 +387,7 @@ export function AIFeatures() {
                 <option value="reel">Reel</option>
               </select>
             </div>
-            
+
             <button
               onClick={handleContentSuggestions}
               disabled={contentMutation.isPending || !context}
@@ -335,7 +399,7 @@ export function AIFeatures() {
 
           {contentSuggestions && (
             <div className="mt-6 space-y-4">
-              {contentSuggestions.map((suggestion: any, index: number) => (
+              {contentSuggestions.map((suggestion, index) => (
                 <div key={index} className="border rounded-lg p-4">
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-semibold">{suggestion.title}</h3>
@@ -343,22 +407,26 @@ export function AIFeatures() {
                       <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
                         {suggestion.contentType}
                       </span>
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        suggestion.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
-                        suggestion.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
+                      <span
+                        className={`px-2 py-1 rounded text-xs ${
+                          suggestion.difficulty === 'easy'
+                            ? 'bg-green-100 text-green-800'
+                            : suggestion.difficulty === 'medium'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
                         {suggestion.difficulty}
                       </span>
                     </div>
                   </div>
                   <p className="text-gray-600 mb-3">{suggestion.description}</p>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <h4 className="font-medium text-sm mb-2">Suggested Hashtags</h4>
                       <div className="flex flex-wrap gap-1">
-                        {suggestion.suggestedHashtags.map((tag: string, i: number) => (
+                        {suggestion.suggestedHashtags.map((tag, i) => (
                           <span key={i} className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
                             {tag}
                           </span>
@@ -368,13 +436,13 @@ export function AIFeatures() {
                     <div>
                       <h4 className="font-medium text-sm mb-2">Resources Needed</h4>
                       <ul className="text-sm text-gray-600">
-                        {suggestion.resources.map((resource: string, i: number) => (
+                        {suggestion.resources.map((resource, i) => (
                           <li key={i}>• {resource}</li>
                         ))}
                       </ul>
                     </div>
                   </div>
-                  
+
                   <div className="mt-3 text-sm">
                     <span className="font-medium">Estimated Engagement: </span>
                     <span className="text-green-600 font-semibold">{suggestion.estimatedEngagement}%</span>
@@ -390,7 +458,7 @@ export function AIFeatures() {
       {activeTab === 'schedule' && (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">AI Schedule Optimizer</h2>
-          
+
           <div className="space-y-4">
             <button
               onClick={handleScheduleOptimization}
@@ -406,7 +474,7 @@ export function AIFeatures() {
               <div>
                 <h3 className="font-medium text-gray-900 mb-4">Optimal Posting Times</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {scheduleResults.recommendedTimes.map((time: any, index: number) => (
+                  {scheduleResults.recommendedTimes.map((time, index) => (
                     <div key={index} className="border rounded p-3">
                       <div className="flex justify-between items-center">
                         <span className="font-medium">{time.day}</span>
@@ -419,7 +487,7 @@ export function AIFeatures() {
                   ))}
                 </div>
               </div>
-              
+
               <div>
                 <h3 className="font-medium text-gray-900 mb-3">Frequency Recommendations</h3>
                 <div className="bg-blue-50 p-4 rounded">
@@ -429,11 +497,11 @@ export function AIFeatures() {
                   </p>
                 </div>
               </div>
-              
+
               <div>
                 <h3 className="font-medium text-gray-900 mb-3">AI Insights</h3>
                 <ul className="space-y-2">
-                  {scheduleResults.insights.map((insight: string, index: number) => (
+                  {scheduleResults.insights.map((insight, index) => (
                     <li key={index} className="flex items-start">
                       <span className="text-orange-500 mr-2">💡</span>
                       <span className="text-gray-700">{insight}</span>

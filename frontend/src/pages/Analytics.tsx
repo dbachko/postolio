@@ -76,26 +76,26 @@ export default function Analytics() {
       const response = await apiClient.getBrands()
       // Brand management is handled by the brand store
       console.log('Brands loaded:', response.brands)
-    } catch (err) {
+    } catch {
       setError('Failed to load brands')
     }
   }
 
   const loadAnalytics = async () => {
     if (!selectedBrand?.id) return
-    
+
     setLoading(true)
     setError('')
-    
+
     try {
       const [reportResponse, statsResponse] = await Promise.all([
-        apiClient.get<{report: AnalyticsReport}>(`/analytics/report/${selectedBrand.id}?days=${daysPeriod}`),
-        apiClient.get<{stats: SchedulingStats}>(`/analytics/stats/${selectedBrand.id}`)
+        apiClient.get<{ report: AnalyticsReport }>(`/analytics/report/${selectedBrand.id}?days=${daysPeriod}`),
+        apiClient.get<{ stats: SchedulingStats }>(`/analytics/stats/${selectedBrand.id}`),
       ])
-      
+
       setReport(reportResponse.report)
       setSchedulingStats(statsResponse.stats)
-    } catch (err) {
+    } catch {
       setError('Failed to load analytics data')
     } finally {
       setLoading(false)
@@ -104,9 +104,11 @@ export default function Analytics() {
 
   const loadSchedulingData = async () => {
     if (!selectedBrand?.id) return
-    
+
     try {
-      const response = await apiClient.get<{scheduledPosts: ScheduledPost[]}>(`/analytics/scheduled/${selectedBrand.id}`)
+      const response = await apiClient.get<{ scheduledPosts: ScheduledPost[] }>(
+        `/analytics/scheduled/${selectedBrand.id}`
+      )
       setScheduledPosts(response.scheduledPosts)
     } catch (err) {
       console.error('Failed to load scheduled posts:', err)
@@ -116,13 +118,13 @@ export default function Analytics() {
   const handleCancelPost = async (contentId: string) => {
     try {
       await apiClient.delete(`/analytics/scheduled/${contentId}`)
-      
+
       // Remove from local state
-      setScheduledPosts(prev => prev.filter(post => post.id !== contentId))
-      
+      setScheduledPosts((prev) => prev.filter((post) => post.id !== contentId))
+
       // Reload stats
       loadAnalytics()
-    } catch (err) {
+    } catch {
       setError('Failed to cancel scheduled post')
     }
   }
@@ -131,12 +133,12 @@ export default function Analytics() {
     try {
       await apiClient.put('/analytics/reschedule', {
         contentId,
-        newTime
+        newTime,
       })
-      
+
       // Reload scheduling data
       loadSchedulingData()
-    } catch (err) {
+    } catch {
       setError('Failed to reschedule post')
     }
   }
@@ -155,11 +157,7 @@ export default function Analytics() {
           <p className="text-gray-600">Track performance and manage your posting schedule</p>
         </div>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-            {error}
-          </div>
-        )}
+        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">{error}</div>}
 
         <div className="mb-6 flex space-x-4">
           {selectedBrand && (
@@ -194,17 +192,17 @@ export default function Analytics() {
                 <h3 className="text-sm font-medium text-gray-500">Total Posts</h3>
                 <p className="text-2xl font-bold text-gray-900">{report.totalPosts}</p>
               </div>
-              
+
               <div className="bg-white p-6 rounded-lg shadow-md">
                 <h3 className="text-sm font-medium text-gray-500">Total Impressions</h3>
                 <p className="text-2xl font-bold text-gray-900">{formatNumber(report.totalImpressions)}</p>
               </div>
-              
+
               <div className="bg-white p-6 rounded-lg shadow-md">
                 <h3 className="text-sm font-medium text-gray-500">Total Reach</h3>
                 <p className="text-2xl font-bold text-gray-900">{formatNumber(report.totalReach)}</p>
               </div>
-              
+
               <div className="bg-white p-6 rounded-lg shadow-md">
                 <h3 className="text-sm font-medium text-gray-500">Avg. Engagement Rate</h3>
                 <p className="text-2xl font-bold text-green-600">{report.averageEngagementRate.toFixed(1)}%</p>
@@ -218,17 +216,17 @@ export default function Analytics() {
                   <h3 className="text-sm font-medium text-gray-500">Scheduled</h3>
                   <p className="text-2xl font-bold text-blue-600">{schedulingStats.scheduled}</p>
                 </div>
-                
+
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h3 className="text-sm font-medium text-gray-500">Posted</h3>
                   <p className="text-2xl font-bold text-green-600">{schedulingStats.posted}</p>
                 </div>
-                
+
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h3 className="text-sm font-medium text-gray-500">Failed</h3>
                   <p className="text-2xl font-bold text-red-600">{schedulingStats.failed}</p>
                 </div>
-                
+
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h3 className="text-sm font-medium text-gray-500">Pending</h3>
                   <p className="text-2xl font-bold text-yellow-600">{schedulingStats.pending}</p>
@@ -238,17 +236,9 @@ export default function Analytics() {
 
             {/* Charts and Data */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              <AnalyticsChart
-                title="Engagement Trends"
-                data={report.engagementTrends}
-                type="engagement"
-              />
-              
-              <AnalyticsChart
-                title="Optimal Posting Times"
-                data={report.optimalTimes}
-                type="optimal-times"
-              />
+              <AnalyticsChart title="Engagement Trends" data={report.engagementTrends} type="engagement" />
+
+              <AnalyticsChart title="Optimal Posting Times" data={report.optimalTimes} type="optimal-times" />
             </div>
 
             {/* Top Performing Posts */}
@@ -268,15 +258,9 @@ export default function Analytics() {
                   <tbody>
                     {report.topPerformingPosts.slice(0, 5).map((post, index) => (
                       <tr key={index} className="border-b">
-                        <td className="py-3 px-4 text-sm text-gray-900 truncate max-w-32">
-                          {post.postId}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-900">
-                          {formatNumber(post.impressions)}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-900">
-                          {formatNumber(post.reach)}
-                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900 truncate max-w-32">{post.postId}</td>
+                        <td className="py-3 px-4 text-sm text-gray-900">{formatNumber(post.impressions)}</td>
+                        <td className="py-3 px-4 text-sm text-gray-900">{formatNumber(post.reach)}</td>
                         <td className="py-3 px-4 text-sm text-gray-900">
                           {formatNumber(post.likes + post.comments + post.saves + post.shares)}
                         </td>
@@ -303,7 +287,12 @@ export default function Analytics() {
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
               <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
               </svg>
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No analytics data available</h3>
