@@ -4,7 +4,9 @@ import helmet from '@fastify/helmet'
 import fs from 'fs'
 import path from 'path'
 import authPlugin from './plugins/auth.js'
+import monitoringPlugin from './plugins/monitoring.js'
 import authRoutes from './routes/auth.js'
+import monitoringRoutes from './routes/monitoring.js'
 import instagramOAuthRoutes from './routes/instagram-oauth.js'
 import brandsRoutes from './routes/brands.js'
 import contentRoutes from './routes/content.js'
@@ -58,9 +60,11 @@ export function buildFastify(): FastifyInstance {
     credentials: true
   })
   app.register(helmet)
+  app.register(monitoringPlugin)
   app.register(authPlugin)
 
   // Register routes
+  app.register(monitoringRoutes, { prefix: '/monitoring' })
   app.register(authRoutes, { prefix: '/auth' })
   app.register(instagramOAuthRoutes, { prefix: '/auth/instagram' })
   app.register(brandsRoutes, { prefix: '/brands' })

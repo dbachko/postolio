@@ -192,12 +192,12 @@ const instagram: FastifyPluginAsync = async function (fastify) {
   })
 
   // Publish content to Instagram
-  fastify.post('/publish', async function (request, reply) {
+  fastify.post<{ Params: { contentId: string } }>('/publish/:contentId', async function (request, reply) {
     try {
       const user = authenticateRequest(request, reply)
       if (!user) return
 
-      const { contentId } = request.body as { contentId: string }
+      const { contentId } = request.params
 
       if (!contentId) {
         return reply.status(400).send({ error: 'contentId is required' })
@@ -231,9 +231,28 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         })
       }
 
+      // Enhanced content validation
       if (!content.imageUrl) {
         return reply.status(400).send({ 
-          error: 'Image URL is required for Instagram posting' 
+          error: 'Image URL is required for Instagram posting',
+          details: 'Content must have a valid image before publishing',
+          retryable: false
+        })
+      }
+
+      if (!content.caption || content.caption.trim().length === 0) {
+        return reply.status(400).send({
+          error: 'Caption is required for Instagram posting',
+          details: 'Content must have a non-empty caption',
+          retryable: false
+        })
+      }
+
+      if (!content.hashtags || content.hashtags.length === 0) {
+        return reply.status(400).send({
+          error: 'At least one hashtag is required for Instagram posting',
+          details: 'Content must include hashtags for better reach',
+          retryable: false
         })
       }
 
@@ -261,9 +280,18 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         instagram: publishResult
       })
     } catch (error) {
+      console.error('Instagram publish error:', error)
+      
+      const errorMessage = error instanceof Error ? error.message : 'Failed to publish to Instagram'
+      const isRetryable = !errorMessage.includes('permission') && 
+                         !errorMessage.includes('invalid token') &&
+                         !errorMessage.includes('not found')
+      
       reply.status(500).send({ 
-        error: 'Failed to publish to Instagram',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMessage,
+        retryable: isRetryable,
+        timestamp: new Date().toISOString(),
+        details: 'Check Instagram connection and try again'
       })
     }
   })
