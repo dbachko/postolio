@@ -25,6 +25,8 @@ export interface Content {
   postedAt: string | null
   createdAt: string
   updatedAt: string
+  instagramPostId?: string | null
+  instagramPermalink?: string | null
 }
 
 export interface AuthResponse {
@@ -214,6 +216,12 @@ class ApiClient {
 
   async getContentHistory(brandId: string): Promise<{ content: Content[] }> {
     return this.request(`/content/history/${brandId}`)
+  }
+
+  async publishToInstagram(contentId: string): Promise<{ success: boolean; content: Content; instagramPost?: any }> {
+    return this.request(`/instagram/publish/${contentId}`, {
+      method: 'POST',
+    })
   }
 
   // Analytics endpoints
