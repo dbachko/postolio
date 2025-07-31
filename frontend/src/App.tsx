@@ -115,6 +115,13 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          <Route path="/autopilot/campaign/:campaignId" element={
+            <ProtectedRoute>
+              <Layout>
+                <Autopilot />
+              </Layout>
+            </ProtectedRoute>
+          } />
         </Routes>
         <Toaster position="bottom-left" />
       </Router>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useBrandStore } from '../stores/brandStore'
 import { apiClient, type CampaignConfig, type CampaignPreview, type Content } from '../lib/api'
 import { Input } from '../components/ui/input'
@@ -75,7 +76,9 @@ const commonThemes = [
 ]
 
 export function Autopilot() {
-  const { selectedBrand } = useBrandStore()
+  const { campaignId: urlCampaignId } = useParams()
+  const navigate = useNavigate()
+  const { selectedBrand, setSelectedBrand, brands } = useBrandStore()
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState<CampaignFormData>(initialFormData)
   const [errors, setErrors] = useState<CampaignErrors>({})
@@ -101,6 +104,38 @@ export function Autopilot() {
     queryFn: () => apiClient.listCampaigns(selectedBrand?.id),
     enabled: !!selectedBrand
   })
+
+  // URL-accessed campaign query for auto brand-switching
+  const urlCampaignQuery = useQuery({
+    queryKey: ['urlCampaign', urlCampaignId],
+    queryFn: () => apiClient.getCampaign(urlCampaignId!),
+    enabled: !!urlCampaignId
+  })
+
+  // Auto brand-switching effect when accessing campaign via URL
+  useEffect(() => {
+    if (urlCampaignId && urlCampaignQuery.data?.campaign) {
+      const campaign = urlCampaignQuery.data.campaign
+      const campaignBrandId = campaign.brandId || campaign.brand?.id
+      
+      // Check if we need to switch brands
+      if (campaignBrandId && selectedBrand?.id !== campaignBrandId) {
+        // Find the brand in our brands list
+        const targetBrand = brands.find(brand => brand.id === campaignBrandId)
+        if (targetBrand) {
+          setSelectedBrand(targetBrand)
+          toast.info(`Switched to brand: ${targetBrand.name}`)
+        }
+      }
+      
+      // Set the campaign as selected and navigate to details
+      setSelectedCampaignId(urlCampaignId)
+      setCurrentStep('details')
+      
+      // Update URL to remove campaign ID to avoid conflicts
+      navigate('/autopilot', { replace: true })
+    }
+  }, [urlCampaignId, urlCampaignQuery.data, selectedBrand, brands, setSelectedBrand, navigate])
 
   // Polling effect for campaigns in "creating" status
   useEffect(() => {
@@ -482,6 +517,24 @@ export function Autopilot() {
     return option ? option.label : style
   }
 
+  const getCampaignCardVariant = (status: string) => {
+    switch (status) {
+      case 'preview':
+        return 'preview'
+      case 'active':
+        return 'active'
+      case 'failed':
+        return 'failed'
+      case 'creating':
+      case 'processing':
+        return 'creating'
+      case 'paused':
+        return 'paused'
+      default:
+        return 'default'
+    }
+  }
+
   const handleEditCampaign = (campaign: any) => {
     const config = campaign.config
     if (!config || !config.duration) {
@@ -673,7 +726,7 @@ export function Autopilot() {
               ) : (
                 <div className="space-y-4">
                   {campaignsQuery.data.campaigns.map((campaign: any) => (
-                    <Card key={campaign.id}>
+                    <Card key={campaign.id} variant={getCampaignCardVariant(campaign.status)}>
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -1354,7 +1407,7 @@ export function Autopilot() {
 
             return (
               <>
-                <Card>
+                <Card variant={getCampaignCardVariant(campaign.status)}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>

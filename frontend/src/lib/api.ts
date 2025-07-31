@@ -20,7 +20,7 @@ export interface Content {
   caption: string
   hashtags: string[]
   imageUrl: string | null
-  status: 'pending' | 'approved' | 'rejected' | 'posted'
+  status: 'pending' | 'approved' | 'rejected' | 'posted' | 'scheduled'
   scheduledAt: string | null
   postedAt: string | null
   createdAt: string
