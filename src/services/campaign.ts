@@ -47,8 +47,8 @@ class CampaignService {
       const brand = await prisma.brand.findFirst({
         where: {
           id: config.brandId,
-          userId
-        }
+          userId,
+        },
       })
 
       if (!brand) {
@@ -64,8 +64,8 @@ class CampaignService {
       const today = new Date()
       const todayDateString = today.toISOString().split('T')[0]
       const startDateString = config.duration.start.toISOString().split('T')[0]
-      
-      if (startDateString < todayDateString) {
+
+      if (startDateString && todayDateString && startDateString < todayDateString) {
         throw new Error('Campaign start date cannot be in the past')
       }
 
@@ -73,7 +73,7 @@ class CampaignService {
       const durationDays = Math.ceil(
         (config.duration.end.getTime() - config.duration.start.getTime()) / (1000 * 60 * 60 * 24)
       )
-      
+
       let postsPerWeek = 1
       switch (config.frequency) {
         case 'daily':
@@ -102,25 +102,25 @@ class CampaignService {
           config: {
             duration: {
               start: config.duration.start.toISOString(),
-              end: config.duration.end.toISOString()
+              end: config.duration.end.toISOString(),
             },
             frequency: config.frequency,
             themes: config.themes,
             style: config.style,
             postingTime: config.postingTime,
             estimatedPosts,
-            durationDays
-          }
+            durationDays,
+          },
         },
         include: {
           brand: {
             select: {
               id: true,
               name: true,
-              styleProfile: true
-            }
-          }
-        }
+              styleProfile: true,
+            },
+          },
+        },
       })
 
       // Start async preview generation
@@ -143,18 +143,18 @@ class CampaignService {
         where: {
           id: campaignId,
           brand: {
-            userId
-          }
+            userId,
+          },
         },
         include: {
           brand: {
             select: {
               id: true,
               name: true,
-              styleProfile: true
-            }
-          }
-        }
+              styleProfile: true,
+            },
+          },
+        },
       })
 
       if (!campaign) {
@@ -162,7 +162,7 @@ class CampaignService {
       }
 
       const config = campaign.config as any
-      const styleProfile = campaign.brand.styleProfile as StyleProfile
+      const styleProfile = campaign.brand.styleProfile as unknown as StyleProfile
 
       if (!styleProfile) {
         throw new Error('Brand style profile not found. Please analyze your brand first.')
@@ -173,35 +173,27 @@ class CampaignService {
         brandId: campaign.brandId,
         count: 1,
         theme,
-        style: config.style
+        style: config.style,
       }))
 
       // Take first N themes for preview
       const previewRequests = contentRequests.slice(0, exampleCount)
-      
+
       let examplePosts: GeneratedContent[] = []
-      
+
       for (const request of previewRequests) {
-        const content = await generateInstagramContent(
-          styleProfile,
-          campaign.brand.name,
-          request
-        )
+        const content = await generateInstagramContent(styleProfile, campaign.brand.name, request)
         examplePosts.push(...content)
       }
 
       // If we have fewer posts than requested, generate more with the first theme
       while (examplePosts.length < exampleCount && config.themes.length > 0) {
-        const additionalContent = await generateInstagramContent(
-          styleProfile,
-          campaign.brand.name,
-          {
-            brandId: campaign.brandId,
-            count: 1,
-            theme: config.themes[0],
-            style: config.style
-          }
-        )
+        const additionalContent = await generateInstagramContent(styleProfile, campaign.brand.name, {
+          brandId: campaign.brandId,
+          count: 1,
+          theme: config.themes[0],
+          style: config.style,
+        })
         examplePosts.push(...additionalContent)
       }
 
@@ -213,8 +205,8 @@ class CampaignService {
         where: {
           campaignId: campaignId,
           // Look for posts that are preview posts (not scheduled yet)
-          scheduledAt: null
-        }
+          scheduledAt: null,
+        },
       })
 
       // Delete existing preview posts to replace them with new ones
@@ -222,9 +214,9 @@ class CampaignService {
         await prisma.content.deleteMany({
           where: {
             id: {
-              in: existingPreviews.map(p => p.id)
-            }
-          }
+              in: existingPreviews.map((p) => p.id),
+            },
+          },
         })
       }
 
@@ -245,23 +237,23 @@ class CampaignService {
           data: {
             caption: post.caption,
             hashtags: post.hashtags,
-            imageUrl: post.imageUrl,
+            imageUrl: post.imageUrl ?? null,
             brandId: campaign.brandId,
             campaignId: campaignId,
             status: 'pending', // Preview posts start as pending
             generationParams: {
-              theme: post.generationParams?.theme || 'preview',
+              theme: config.themes?.[0] || 'preview',
               style: config.style,
               campaignGenerated: true,
-              isPreview: true
-            }
-          }
+              isPreview: true,
+            },
+          },
         })
         savedPosts.push({
           ...post,
           id: savedPost.id,
           status: savedPost.status,
-          createdAt: savedPost.createdAt
+          createdAt: savedPost.createdAt,
         })
       }
 
@@ -272,8 +264,8 @@ class CampaignService {
         schedule: {
           frequency: config.frequency,
           duration: config.durationDays,
-          totalPosts: config.estimatedPosts
-        }
+          totalPosts: config.estimatedPosts,
+        },
       }
     } catch (error) {
       console.error('Campaign preview error:', error)
@@ -291,35 +283,35 @@ class CampaignService {
         where: {
           id: campaignId,
           brand: {
-            userId
+            userId,
           },
-          status: 'preview'
+          status: 'preview',
         },
         include: {
           brand: {
             select: {
               id: true,
               name: true,
-              styleProfile: true
-            }
-          }
-        }
+              styleProfile: true,
+            },
+          },
+        },
       })
 
       if (!campaign) {
-        return { 
-          success: false, 
-          error: 'Campaign not found, access denied, or not ready for launch' 
+        return {
+          success: false,
+          error: 'Campaign not found, access denied, or not ready for launch',
         }
       }
 
       const config = campaign.config as any
-      const styleProfile = campaign.brand.styleProfile as StyleProfile
+      const styleProfile = campaign.brand.styleProfile as unknown as StyleProfile
 
       if (!styleProfile) {
-        return { 
-          success: false, 
-          error: 'Brand style profile not found. Please analyze your brand first.' 
+        return {
+          success: false,
+          error: 'Brand style profile not found. Please analyze your brand first.',
         }
       }
 
@@ -335,11 +327,11 @@ class CampaignService {
       const existingPreviews = await prisma.content.findMany({
         where: {
           campaignId: campaignId,
-          scheduledAt: null // Preview posts don't have scheduled dates yet
+          scheduledAt: null, // Preview posts don't have scheduled dates yet
         },
         orderBy: {
-          createdAt: 'asc'
-        }
+          createdAt: 'asc',
+        },
       })
 
       const themes = config.themes as string[]
@@ -354,42 +346,42 @@ class CampaignService {
         if (existingPostIndex < existingPreviews.length) {
           // Use existing preview post
           const existingPost = existingPreviews[existingPostIndex]
-          content = await prisma.content.update({
-            where: { id: existingPost.id },
-            data: {
-              status: 'approved', // Auto-approve campaign content
-              scheduledAt: scheduledDate,
-              generationParams: {
-                ...((existingPost.generationParams as any) || {}),
-                campaignGenerated: true,
-                isPreview: false // No longer a preview
-              }
-            }
-          })
-          existingPostIndex++
+          if (existingPost) {
+            content = await prisma.content.update({
+              where: { id: existingPost.id },
+              data: {
+                status: 'approved', // Auto-approve campaign content
+                scheduledAt: scheduledDate ?? null,
+                generationParams: {
+                  ...((existingPost?.generationParams as any) || {}),
+                  campaignGenerated: true,
+                  isPreview: false, // No longer a preview
+                },
+              },
+            })
+            existingPostIndex++
+          } else {
+            continue
+          }
         } else {
           // Generate new content for remaining slots
           const theme = themes[i % themes.length]
-          
-          const generatedContent = await generateInstagramContent(
-            styleProfile,
-            campaign.brand.name,
-            {
-              brandId: campaign.brandId,
-              count: 1,
-              theme,
-              style: config.style
-            }
-          )
+
+          const generatedContent = await generateInstagramContent(styleProfile, campaign.brand.name, {
+            brandId: campaign.brandId,
+            count: 1,
+            theme,
+            style: config.style,
+          })
 
           const contentData = generatedContent[0]
-          
+
           // Validate generated content before saving
-          if (!contentData.caption || contentData.caption.trim().length === 0) {
+          if (!contentData?.caption || contentData.caption.trim().length === 0) {
             console.error('Generated content has empty caption:', contentData)
             throw new Error('Generated content has empty caption')
           }
-          if (!contentData.hashtags || !Array.isArray(contentData.hashtags)) {
+          if (!contentData?.hashtags || !Array.isArray(contentData.hashtags)) {
             console.error('Generated content has invalid hashtags:', contentData)
             throw new Error('Generated content has invalid hashtags')
           }
@@ -398,17 +390,17 @@ class CampaignService {
             data: {
               caption: contentData.caption,
               hashtags: contentData.hashtags,
-              imageUrl: contentData.imageUrl,
+              imageUrl: contentData.imageUrl ?? null,
               brandId: campaign.brandId,
               campaignId: campaignId,
               status: 'approved', // Auto-approve campaign content
-              scheduledAt: scheduledDate,
+              scheduledAt: scheduledDate ?? null,
               generationParams: {
                 theme,
                 style: config.style,
-                campaignGenerated: true
-              }
-            }
+                campaignGenerated: true,
+              },
+            },
           })
         }
 
@@ -422,20 +414,20 @@ class CampaignService {
         where: { id: campaignId },
         data: {
           status: 'active',
-          startedAt: new Date()
-        }
+          startedAt: new Date(),
+        },
       })
 
       return {
         success: true,
         campaign: updatedCampaign,
-        scheduledPosts: createdContent.length
+        scheduledPosts: createdContent.length,
       }
     } catch (error) {
       console.error('Campaign start error:', error)
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to start campaign'
+        error: error instanceof Error ? error.message : 'Failed to start campaign',
       }
     }
   }
@@ -449,15 +441,15 @@ class CampaignService {
         where: {
           id: campaignId,
           brand: {
-            userId
-          }
+            userId,
+          },
         },
         include: {
           brand: {
             select: {
               id: true,
-              name: true
-            }
+              name: true,
+            },
           },
           content: {
             select: {
@@ -468,18 +460,18 @@ class CampaignService {
               status: true,
               scheduledAt: true,
               postedAt: true,
-              createdAt: true
+              createdAt: true,
             },
             orderBy: {
-              scheduledAt: 'asc'
-            }
+              scheduledAt: 'asc',
+            },
           },
           _count: {
             select: {
-              content: true
-            }
-          }
-        }
+              content: true,
+            },
+          },
+        },
       })
 
       if (!campaign) {
@@ -496,17 +488,12 @@ class CampaignService {
   /**
    * Generate posting schedule based on frequency and duration
    */
-  private generatePostingSchedule(
-    startDate: Date,
-    endDate: Date,
-    frequency: string,
-    postingTime: string
-  ): Date[] {
+  private generatePostingSchedule(startDate: Date, endDate: Date, frequency: string, postingTime: string): Date[] {
     const schedule: Date[] = []
     const [hours, minutes] = postingTime.split(':').map(Number)
 
     const current = new Date(startDate)
-    current.setHours(hours, minutes, 0, 0)
+    current.setHours(hours ?? 0, minutes ?? 0, 0, 0)
 
     while (current <= endDate) {
       schedule.push(new Date(current))
@@ -522,11 +509,14 @@ class CampaignService {
         case '3weekly':
           // Post every 2-3 days (Monday, Wednesday, Friday pattern)
           const dayOfWeek = current.getDay()
-          if (dayOfWeek === 1) { // Monday -> Wednesday
+          if (dayOfWeek === 1) {
+            // Monday -> Wednesday
             current.setDate(current.getDate() + 2)
-          } else if (dayOfWeek === 3) { // Wednesday -> Friday
+          } else if (dayOfWeek === 3) {
+            // Wednesday -> Friday
             current.setDate(current.getDate() + 2)
-          } else { // Friday -> Monday
+          } else {
+            // Friday -> Monday
             current.setDate(current.getDate() + 3)
           }
           break
@@ -541,32 +531,36 @@ class CampaignService {
   /**
    * Update campaign configuration
    */
-  async updateCampaign(campaignId: string, userId: string, updates: {
-    name?: string
-    themes?: string[]
-    style?: string
-    frequency?: string
-    postingTime?: string
-    startDate?: string
-    endDate?: string
-  }): Promise<any> {
+  async updateCampaign(
+    campaignId: string,
+    userId: string,
+    updates: {
+      name?: string
+      themes?: string[]
+      style?: string
+      frequency?: string
+      postingTime?: string
+      startDate?: string
+      endDate?: string
+    }
+  ): Promise<any> {
     try {
       // Get campaign and validate ownership and status
       const campaign = await prisma.campaign.findFirst({
         where: {
           id: campaignId,
           brand: {
-            userId
-          }
+            userId,
+          },
         },
         include: {
           brand: {
             select: {
               id: true,
-              name: true
-            }
-          }
-        }
+              name: true,
+            },
+          },
+        },
       })
 
       if (!campaign) {
@@ -627,14 +621,14 @@ class CampaignService {
         const today = new Date()
         const todayDateString = today.toISOString().split('T')[0]
         const startDateString = startDate.toISOString().split('T')[0]
-        
-        if (campaign.status !== 'active' && startDateString < todayDateString) {
+
+        if (campaign.status !== 'active' && startDateString && todayDateString && startDateString < todayDateString) {
           throw new Error('Start date cannot be in the past')
         }
 
         updatedConfig.duration = {
           start: startDate.toISOString(),
-          end: endDate.toISOString()
+          end: endDate.toISOString(),
         }
 
         // Recalculate estimated posts
@@ -661,14 +655,14 @@ class CampaignService {
         data: {
           name: updates.name !== undefined ? updates.name : campaign.name,
           config: updatedConfig,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         },
         include: {
           brand: {
             select: {
               id: true,
-              name: true
-            }
+              name: true,
+            },
           },
           content: {
             select: {
@@ -679,18 +673,18 @@ class CampaignService {
               status: true,
               scheduledAt: true,
               postedAt: true,
-              createdAt: true
+              createdAt: true,
             },
             orderBy: {
-              scheduledAt: 'asc'
-            }
+              scheduledAt: 'asc',
+            },
           },
           _count: {
             select: {
-              content: true
-            }
-          }
-        }
+              content: true,
+            },
+          },
+        },
       })
 
       console.log(`Campaign ${campaignId} updated successfully`)
@@ -731,8 +725,8 @@ class CampaignService {
     const today = new Date()
     const todayDateString = today.toISOString().split('T')[0] // Get YYYY-MM-DD
     const startDateString = config.duration.start.toISOString().split('T')[0] // Get YYYY-MM-DD
-    
-    if (startDateString < todayDateString) {
+
+    if (startDateString && todayDateString && startDateString < todayDateString) {
       errors.push('Campaign start date cannot be in the past')
     }
 
