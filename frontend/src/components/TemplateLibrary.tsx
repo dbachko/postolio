@@ -39,18 +39,16 @@ export function TemplateLibrary({
     }),
   })
 
-  // Fetch template categories
-  const { data: categoriesData } = useQuery({
-    queryKey: ['template-categories'],
-    queryFn: () => apiClient.getTemplateCategories(),
-  })
-
   const templates = templatesData?.templates || []
-  const categories = categoriesData?.categories || []
+  
+  // Extract categories from templates instead of API call
+  const categories = Array.from(
+    new Set(templates.map(template => template.category).filter(Boolean))
+  ).sort()
 
   // Extract all unique tags from templates for filtering
   const allTags = Array.from(
-    new Set(templates.flatMap(template => template.tags))
+    new Set(templates.flatMap(template => template.tags || []))
   ).sort()
 
   const handleTagToggle = (tag: string) => {

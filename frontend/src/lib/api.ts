@@ -64,19 +64,19 @@ export interface CampaignTemplate {
   name: string
   description: string | null
   category: string
-  config: {
-    duration: { start: string, end: string }
-    frequency: string
-    themes: string[]
-    style: string
-    postingTime: string
+  config?: {
+    duration?: { start: string, end: string }
+    frequency?: string
+    themes?: string[]
+    style?: string
+    postingTime?: string
   }
   exampleContent: Content[]
   usageCount: number
   createdBy: string
   createdAt: string
   updatedAt: string
-  tags: string[]
+  tags?: string[]
   isPublic: boolean
 }
 
@@ -450,9 +450,6 @@ class ApiClient {
     })
   }
 
-  async getTemplateCategories(): Promise<{ success: boolean; categories: string[] }> {
-    return this.request('/templates/categories')
-  }
 
   async saveCampaignAsTemplate(campaignId: string, data: {
     name: string

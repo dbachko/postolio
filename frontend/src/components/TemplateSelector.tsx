@@ -78,6 +78,9 @@ export function TemplateSelector({
   }
 
   const getDurationText = (template: CampaignTemplate) => {
+    if (!template.config?.duration?.start || !template.config?.duration?.end) {
+      return 'Not set'
+    }
     const start = new Date(template.config.duration.start)
     const end = new Date(template.config.duration.end)
     const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
@@ -148,10 +151,10 @@ export function TemplateSelector({
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Clock className="w-4 h-4" />
-                        <span>Frequency: {selectedTemplate.config.frequency}</span>
+                        <span>Frequency: {selectedTemplate.config?.frequency || 'Not set'}</span>
                       </div>
                       <div className="text-sm text-gray-600">
-                        Posting Time: {selectedTemplate.config.postingTime}
+                        Posting Time: {selectedTemplate.config?.postingTime || 'Not set'}
                       </div>
                       <div className="text-sm text-gray-600">
                         {selectedTemplate.usageCount} previous uses
@@ -169,7 +172,7 @@ export function TemplateSelector({
                     <div>
                       <h5 className="font-medium text-sm text-gray-700 mb-2">Content Themes</h5>
                       <div className="flex flex-wrap gap-2">
-                        {selectedTemplate.config.themes.map(theme => (
+                        {(selectedTemplate.config?.themes || []).map(theme => (
                           <Badge key={theme} variant="secondary">{theme}</Badge>
                         ))}
                       </div>
@@ -177,14 +180,14 @@ export function TemplateSelector({
                     
                     <div>
                       <h5 className="font-medium text-sm text-gray-700 mb-2">Content Style</h5>
-                      <Badge variant="outline">{selectedTemplate.config.style}</Badge>
+                      <Badge variant="outline">{selectedTemplate.config?.style || 'Not set'}</Badge>
                     </div>
 
-                    {selectedTemplate.tags.length > 0 && (
+                    {(selectedTemplate.tags || []).length > 0 && (
                       <div>
                         <h5 className="font-medium text-sm text-gray-700 mb-2">Template Tags</h5>
                         <div className="flex flex-wrap gap-2">
-                          {selectedTemplate.tags.map(tag => (
+                          {(selectedTemplate.tags || []).map(tag => (
                             <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
                           ))}
                         </div>

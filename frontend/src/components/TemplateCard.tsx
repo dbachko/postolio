@@ -81,6 +81,9 @@ export function TemplateCard({
   }
 
   const getDurationText = () => {
+    if (!template.config?.duration?.start || !template.config?.duration?.end) {
+      return 'Not set'
+    }
     const start = new Date(template.config.duration.start)
     const end = new Date(template.config.duration.end)
     const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
@@ -116,7 +119,7 @@ export function TemplateCard({
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      <span>{template.config.frequency}</span>
+                      <span>{template.config?.frequency || 'Not set'}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Users className="w-4 h-4" />
@@ -176,18 +179,18 @@ export function TemplateCard({
                 </div>
               </div>
               
-              {template.tags.length > 0 && (
+              {(template.tags || []).length > 0 && (
                 <div className="flex items-center gap-2 mt-3">
                   <Tag className="w-4 h-4 text-gray-400" />
                   <div className="flex flex-wrap gap-1">
-                    {template.tags.slice(0, 3).map(tag => (
+                    {(template.tags || []).slice(0, 3).map(tag => (
                       <Badge key={tag} variant="secondary" className="text-xs">
                         {tag}
                       </Badge>
                     ))}
-                    {template.tags.length > 3 && (
+                    {(template.tags || []).length > 3 && (
                       <Badge variant="secondary" className="text-xs">
-                        +{template.tags.length - 3} more
+                        +{(template.tags || []).length - 3} more
                       </Badge>
                     )}
                   </div>
@@ -265,7 +268,7 @@ export function TemplateCard({
             </div>
             <div className="flex items-center gap-2 text-gray-500">
               <Clock className="w-4 h-4" />
-              <span>{template.config.frequency}</span>
+              <span>{template.config?.frequency || 'Not set'}</span>
             </div>
             <div className="flex items-center gap-2 text-gray-500">
               <Users className="w-4 h-4" />
@@ -277,16 +280,16 @@ export function TemplateCard({
           </div>
 
           {/* Tags */}
-          {template.tags.length > 0 && (
+          {(template.tags || []).length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {template.tags.slice(0, 4).map(tag => (
+              {(template.tags || []).slice(0, 4).map(tag => (
                 <Badge key={tag} variant="secondary" className="text-xs">
                   {tag}
                 </Badge>
               ))}
-              {template.tags.length > 4 && (
+              {(template.tags || []).length > 4 && (
                 <Badge variant="secondary" className="text-xs">
-                  +{template.tags.length - 4}
+                  +{(template.tags || []).length - 4}
                 </Badge>
               )}
             </div>
