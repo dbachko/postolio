@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../lib/api'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -7,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useBrandStore } from '../stores/brandStore'
 
 export function Dashboard() {
-  const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore()
+  const navigate = useNavigate()
+  const { brands, selectedBrand, setBrands, initializeSelectedBrand, setSelectedBrand } = useBrandStore()
   
   const { data: brandsData, isLoading: brandsLoading } = useQuery({
     queryKey: ['brands'],
@@ -61,6 +63,22 @@ export function Dashboard() {
   const activeCampaigns = allCampaigns.filter(campaign => campaign.status === 'active').length
   const scheduledPosts = contentMetrics.scheduled
   const publishedPosts = contentMetrics.published
+
+  // Handle campaign viewing with auto brand-switching
+  const handleViewCampaign = (campaign: any) => {
+    const campaignBrandId = campaign.brandId || campaign.brand?.id
+    
+    // Auto-switch brand if campaign belongs to different brand
+    if (campaignBrandId && selectedBrand?.id !== campaignBrandId) {
+      const targetBrand = brands.find(brand => brand.id === campaignBrandId)
+      if (targetBrand) {
+        setSelectedBrand(targetBrand)
+      }
+    }
+    
+    // Navigate to campaign details
+    navigate(`/autopilot/campaign/${campaign.id}`)
+  }
 
   if (brandsLoading) {
     return (
@@ -148,10 +166,8 @@ export function Dashboard() {
                         </span> • Brand: {campaign.brand?.name}
                       </p>
                     </div>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to="/autopilot">
-                        View
-                      </Link>
+                    <Button variant="outline" size="sm" onClick={() => handleViewCampaign(campaign)}>
+                      View
                     </Button>
                   </div>
                 ))}
