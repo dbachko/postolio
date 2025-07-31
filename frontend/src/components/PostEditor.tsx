@@ -13,7 +13,7 @@ import { Label } from './ui/label'
 import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
 import { Badge } from './ui/badge'
-import { Loader2, Save, CheckCircle2, AlertCircle, Brain, Sparkles } from 'lucide-react'
+import { Loader2, Save, CheckCircle2, AlertCircle, Brain, Sparkles, X } from 'lucide-react'
 
 interface PostEditorProps {
   content: Content | null
@@ -47,7 +47,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
 
   // Initialize form data when content changes
   useEffect(() => {
-    if (content) {
+    if (content && isOpen) {
       setFormData({
         caption: content.caption || '',
         hashtags: content.hashtags || [],
@@ -56,7 +56,44 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       })
       setHashtagInput((content.hashtags || []).join(' '))
     }
-  }, [content])
+  }, [content, isOpen])
+
+  // Reset form data when modal is closed
+  useEffect(() => {
+    if (!isOpen) {
+      console.log('Modal closed - resetting form data')
+      setFormData({
+        caption: '',
+        hashtags: [],
+        imageUrl: '',
+        scheduledAt: ''
+      })
+      setHashtagInput('')
+      setLearningFeedback({ isVisible: false, message: '' })
+      setSaveStatus('idle')
+    }
+  }, [isOpen])
+
+  // Additional safety check: Prevent form data corruption
+  useEffect(() => {
+    if (content && isOpen) {
+      // If we somehow have empty form data but valid content, restore it
+      if ((!formData.caption || formData.caption.trim() === '') && content.caption && content.caption.trim() !== '') {
+        console.warn('CRITICAL: Form data appears corrupted, restoring from content', {
+          contentId: content.id,
+          contentCaption: content.caption.substring(0, 50) + '...',
+          formCaption: formData.caption
+        })
+        setFormData({
+          caption: content.caption || '',
+          hashtags: content.hashtags || [],
+          imageUrl: content.imageUrl || '',
+          scheduledAt: content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
+        })
+        setHashtagInput((content.hashtags || []).join(' '))
+      }
+    }
+  }, [content, isOpen, formData.caption])
 
   // Debounced form data for auto-save
   const debouncedFormData = useDebounce(formData, 500)
@@ -68,7 +105,25 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       hashtags?: string[]
       imageUrl?: string
       scheduledAt?: string
-    }) => apiClient.updateContent(data),
+    }) => {
+      // Critical logging before mutation
+      console.log('MUTATION CALL:', {
+        contentId: data.contentId,
+        caption: data.caption,
+        captionLength: data.caption?.length || 0,
+        hashtags: data.hashtags,
+        imageUrl: data.imageUrl,
+        scheduledAt: data.scheduledAt
+      })
+      
+      // Final safety check before API call
+      if (!data.caption || data.caption.trim().length === 0) {
+        console.error('CRITICAL ERROR: Attempting to call API with empty caption!', data)
+        throw new Error('Cannot update content with empty caption')
+      }
+      
+      return apiClient.updateContent(data)
+    },
     onMutate: () => {
       setSaveStatus('saving')
     },
@@ -83,11 +138,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
           message: response.learning.message || 'AI is learning from your edits...',
           appliedToFuturePosts: response.learning.appliedToFuturePosts
         })
-        
-        // Hide learning feedback after 4 seconds
-        setTimeout(() => {
-          setLearningFeedback({ isVisible: false, message: '' })
-        }, 4000)
+        // Note: Notification will persist until user manually closes it
       }
       
       // Update the content in all relevant queries
@@ -136,16 +187,59 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
 
   // Auto-save when debounced form data changes
   useEffect(() => {
-    if (!content || !isOpen) return
+    if (!content || !isOpen) {
+      console.log('Skipping autosave: content or modal not available', { contentId: content?.id, isOpen })
+      return
+    }
+
+    // Critical safety check: NEVER autosave if caption is empty
+    if (!debouncedFormData.caption || debouncedFormData.caption.trim().length === 0) {
+      console.warn('CRITICAL: Skipping autosave - Caption is empty or undefined', { 
+        contentId: content.id, 
+        caption: debouncedFormData.caption,
+        formDataKeys: Object.keys(debouncedFormData)
+      })
+      return
+    }
+
+    // Additional safety check: ensure we have meaningful form data
+    if (debouncedFormData.caption === '' && debouncedFormData.hashtags.length === 0 && debouncedFormData.imageUrl === '') {
+      console.log('Skipping autosave: Form data appears to be empty initial state')
+      return
+    }
 
     // Check if form data has actually changed from original content
+    const originalCaption = content.caption || ''
+    const originalHashtags = content.hashtags || []
+    const originalImageUrl = content.imageUrl || ''
+    const originalScheduledAt = content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
+
     const hasChanges = 
-      debouncedFormData.caption !== (content.caption || '') ||
-      JSON.stringify(debouncedFormData.hashtags) !== JSON.stringify(content.hashtags || []) ||
-      debouncedFormData.imageUrl !== (content.imageUrl || '') ||
-      debouncedFormData.scheduledAt !== (content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : '')
+      debouncedFormData.caption !== originalCaption ||
+      JSON.stringify(debouncedFormData.hashtags) !== JSON.stringify(originalHashtags) ||
+      debouncedFormData.imageUrl !== originalImageUrl ||
+      debouncedFormData.scheduledAt !== originalScheduledAt
 
     if (hasChanges) {
+      // Final validation before mutation
+      if (!debouncedFormData.caption || debouncedFormData.caption.trim().length === 0) {
+        console.error('CRITICAL ERROR: About to autosave with empty caption!', {
+          contentId: content.id,
+          originalCaption,
+          newCaption: debouncedFormData.caption,
+          hasChanges,
+          formData: debouncedFormData
+        })
+        return
+      }
+
+      console.log('Autosaving content:', { 
+        contentId: content.id, 
+        originalCaption: originalCaption.substring(0, 30) + '...', 
+        newCaption: debouncedFormData.caption.substring(0, 30) + '...',
+        imageUrl: debouncedFormData.imageUrl 
+      })
+
       updateContentMutation.mutate({
         contentId: content.id,
         caption: debouncedFormData.caption,
@@ -250,6 +344,13 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
                   </div>
                 )}
               </div>
+              <button
+                onClick={() => setLearningFeedback({ isVisible: false, message: '' })}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Dismiss learning notification"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}

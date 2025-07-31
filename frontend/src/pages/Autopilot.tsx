@@ -81,11 +81,13 @@ export function Autopilot() {
   const [selectedPost, setSelectedPost] = useState<Content | null>(null)
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false)
   const [pollingCampaigns, setPollingCampaigns] = useState<Set<string>>(new Set())
+  const [isEditingCampaign, setIsEditingCampaign] = useState(false)
+  const [editFormData, setEditFormData] = useState<CampaignFormData>(initialFormData)
   
   // Campaign list query
   const campaignsQuery = useQuery({
     queryKey: ['campaigns', selectedBrand?.id],
-    queryFn: () => apiClient.listCampaigns(),
+    queryFn: () => apiClient.listCampaigns(selectedBrand?.id),
     enabled: !!selectedBrand
   })
 
@@ -189,11 +191,27 @@ export function Autopilot() {
       toast.error('Failed to delete campaign. Please try again.')
     }
   })
+
+  // Update campaign mutation
+  const updateCampaignMutation = useMutation({
+    mutationFn: ({ campaignId, updates }: { campaignId: string; updates: any }) => 
+      apiClient.updateCampaign(campaignId, updates),
+    onSuccess: () => {
+      toast.success('Campaign updated successfully')
+      setIsEditingCampaign(false)
+      campaignsQuery.refetch()
+      campaignDetailsQuery.refetch()
+    },
+    onError: (error) => {
+      console.error('Failed to update campaign:', error)
+      toast.error('Failed to update campaign. Please try again.')
+    }
+  })
   
   // Configure campaign mutation
   const configureMutation = useMutation({
     mutationFn: (config: CampaignConfig) => apiClient.configureCampaign(config),
-    onSuccess: (response) => {
+    onSuccess: () => {
       // Campaign created successfully - redirect to list view to show progress
       toast.success('Campaign creation started! You can see the progress in the campaign list.')
       setCurrentStep('list')
@@ -396,6 +414,110 @@ export function Autopilot() {
     return option ? option.label : style
   }
 
+  const handleEditCampaign = (campaign: any) => {
+    const config = campaign.config
+    if (!config || !config.duration) {
+      toast.error('Campaign configuration not available. Please try refreshing the page.')
+      return
+    }
+    
+    setEditFormData({
+      name: campaign.name,
+      startDate: config.duration.start.split('T')[0], // Extract just the date part (YYYY-MM-DD)
+      endDate: config.duration.end.split('T')[0], // Extract just the date part (YYYY-MM-DD)
+      frequency: config.frequency,
+      themes: config.themes || [],
+      style: config.style,
+      postingTime: config.postingTime
+    })
+    setIsEditingCampaign(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!selectedCampaignId || !validateEditForm()) {
+      return
+    }
+
+    const updates = {
+      name: editFormData.name,
+      themes: editFormData.themes,
+      style: editFormData.style,
+      frequency: editFormData.frequency,
+      postingTime: editFormData.postingTime,
+      startDate: editFormData.startDate,
+      endDate: editFormData.endDate
+    }
+
+    updateCampaignMutation.mutate({ campaignId: selectedCampaignId, updates })
+  }
+
+  const handleCancelEdit = () => {
+    setIsEditingCampaign(false)
+    setEditFormData(initialFormData)
+    setErrors({})
+  }
+
+  const validateEditForm = (): boolean => {
+    const newErrors: CampaignErrors = {}
+
+    if (!editFormData.name.trim()) {
+      newErrors.name = 'Campaign name is required'
+    }
+
+    if (!editFormData.startDate) {
+      newErrors.startDate = 'Start date is required'
+    }
+
+    if (!editFormData.endDate) {
+      newErrors.endDate = 'End date is required'
+    }
+
+    if (editFormData.startDate && editFormData.endDate) {
+      const startDate = new Date(editFormData.startDate)
+      const endDate = new Date(editFormData.endDate)
+      if (endDate <= startDate) {
+        newErrors.endDate = 'End date must be after start date'
+      }
+    }
+
+    if (!editFormData.frequency) {
+      newErrors.frequency = 'Posting frequency is required'
+    }
+
+    if (editFormData.themes.length === 0) {
+      newErrors.themes = ['At least one theme is required']
+    }
+
+    if (!editFormData.style) {
+      newErrors.style = 'Style selection is required'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleEditInputChange = (field: keyof CampaignFormData, value: string) => {
+    setEditFormData(prev => ({ ...prev, [field]: value }))
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: undefined }))
+    }
+  }
+
+  const addEditTheme = (theme: string) => {
+    if (theme && !editFormData.themes.includes(theme)) {
+      const updatedThemes = [...editFormData.themes, theme]
+      setEditFormData(prev => ({ ...prev, themes: updatedThemes }))
+      if (errors.themes) {
+        setErrors(prev => ({ ...prev, themes: undefined }))
+      }
+    }
+  }
+
+  const removeEditTheme = (themeToRemove: string) => {
+    const updatedThemes = editFormData.themes.filter(theme => theme !== themeToRemove)
+    setEditFormData(prev => ({ ...prev, themes: updatedThemes }))
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -554,6 +676,21 @@ export function Autopilot() {
                               <Eye className="w-3 h-3" />
                               View
                             </Button>
+                            
+                            {campaign.status === 'preview' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedCampaignId(campaign.id)
+                                  handleEditCampaign(campaign)
+                                }}
+                                className="flex items-center gap-1"
+                              >
+                                <Edit className="w-3 h-3" />
+                                Edit
+                              </Button>
+                            )}
                             
                             {(campaign.status === 'preview' || campaign.status === 'failed' || campaign.status === 'creating') && (
                               <Button
@@ -1046,6 +1183,16 @@ export function Autopilot() {
                   <Button variant="outline" onClick={handleBackToList}>
                     ← Back to Campaigns
                   </Button>
+                  {campaignDetailsQuery.data.campaign.status === 'preview' && (
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handleEditCampaign(campaignDetailsQuery.data.campaign)}
+                      className="flex items-center gap-2"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Edit Campaign
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -1318,6 +1465,218 @@ export function Autopilot() {
             )
           })()}
         </>
+      )}
+
+      {/* Campaign Edit Modal */}
+      {isEditingCampaign && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto m-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold">Edit Campaign</h2>
+                <Button variant="ghost" onClick={handleCancelEdit}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Campaign Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-campaign-name">Campaign Name</Label>
+                  <Input
+                    id="edit-campaign-name"
+                    type="text"
+                    value={editFormData.name}
+                    onChange={(e) => handleEditInputChange('name', e.target.value)}
+                    placeholder="Enter campaign name..."
+                    className={errors.name ? 'border-red-500' : ''}
+                  />
+                  {errors.name && (
+                    <p className="text-sm text-red-600">{errors.name}</p>
+                  )}
+                </div>
+
+                {/* Date Range */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-start-date">Start Date</Label>
+                    <Input
+                      id="edit-start-date"
+                      type="date"
+                      value={editFormData.startDate}
+                      onChange={(e) => handleEditInputChange('startDate', e.target.value)}
+                      min={getTodayDate()}
+                      className={errors.startDate ? 'border-red-500' : ''}
+                    />
+                    {errors.startDate && (
+                      <p className="text-sm text-red-600">{errors.startDate}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-end-date">End Date</Label>
+                    <Input
+                      id="edit-end-date"
+                      type="date"
+                      value={editFormData.endDate}
+                      onChange={(e) => handleEditInputChange('endDate', e.target.value)}
+                      min={editFormData.startDate || getTodayDate()}
+                      className={errors.endDate ? 'border-red-500' : ''}
+                    />
+                    {errors.endDate && (
+                      <p className="text-sm text-red-600">{errors.endDate}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Posting Frequency */}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-frequency">Posting Frequency</Label>
+                  <Select value={editFormData.frequency} onValueChange={(value) => handleEditInputChange('frequency', value)}>
+                    <SelectTrigger className={errors.frequency ? 'border-red-500' : ''}>
+                      <SelectValue placeholder="Select posting frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {frequencyOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.frequency && (
+                    <p className="text-sm text-red-600">{errors.frequency}</p>
+                  )}
+                </div>
+
+                {/* Content Themes */}
+                <div className="space-y-3">
+                  <Label>Content Themes</Label>
+                  
+                  {/* Common themes */}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Select from common themes:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {commonThemes.map(theme => (
+                        <Badge
+                          key={theme}
+                          variant={editFormData.themes.includes(theme) ? "default" : "secondary"}
+                          className="cursor-pointer hover:bg-primary/80"
+                          onClick={() => addEditTheme(theme)}
+                        >
+                          {theme}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Custom theme input */}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Or add custom theme:</p>
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        value={newTheme}
+                        onChange={(e) => setNewTheme(e.target.value)}
+                        placeholder="Enter custom theme..."
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addEditTheme(newTheme.trim()), setNewTheme(''))}
+                      />
+                      <Button type="button" onClick={() => { addEditTheme(newTheme.trim()); setNewTheme('') }} variant="outline">
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Selected themes */}
+                  {editFormData.themes.length > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2">Selected themes:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {editFormData.themes.map(theme => (
+                          <Badge
+                            key={theme}
+                            variant="default"
+                            className="cursor-pointer group"
+                          >
+                            {theme}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeEditTheme(theme)}
+                              className="ml-1 h-auto p-0 text-current hover:bg-transparent"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {errors.themes && (
+                    <p className="text-sm text-red-600">{errors.themes[0]}</p>
+                  )}
+                </div>
+
+                {/* Style Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-style">Content Style</Label>
+                  <Select value={editFormData.style} onValueChange={(value) => handleEditInputChange('style', value)}>
+                    <SelectTrigger className={errors.style ? 'border-red-500' : ''}>
+                      <SelectValue placeholder="Select content style" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {styleOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.style && (
+                    <p className="text-sm text-red-600">{errors.style}</p>
+                  )}
+                </div>
+
+                {/* Posting Time */}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-posting-time">Preferred Posting Time</Label>
+                  <Input
+                    id="edit-posting-time"
+                    type="time"
+                    value={editFormData.postingTime}
+                    onChange={(e) => handleEditInputChange('postingTime', e.target.value)}
+                  />
+                  <p className="text-sm text-gray-500">
+                    Content will be scheduled to post at this time each day
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button variant="outline" onClick={handleCancelEdit}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSaveEdit}
+                    disabled={updateCampaignMutation.isPending}
+                    className="min-w-[120px]"
+                  >
+                    {updateCampaignMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {campaignDetailsQuery.isLoading && currentStep === 'details' && (

@@ -231,6 +231,16 @@ class CampaignService {
       // Save new preview posts to database
       const savedPosts = []
       for (const post of examplePosts) {
+        // Validate post data before saving
+        if (!post.caption || post.caption.trim().length === 0) {
+          console.error('Attempting to save content with empty caption:', post)
+          throw new Error('Cannot save content with empty caption')
+        }
+        if (!post.hashtags || !Array.isArray(post.hashtags)) {
+          console.error('Attempting to save content with invalid hashtags:', post)
+          throw new Error('Cannot save content with invalid hashtags')
+        }
+
         const savedPost = await prisma.content.create({
           data: {
             caption: post.caption,
@@ -373,6 +383,17 @@ class CampaignService {
           )
 
           const contentData = generatedContent[0]
+          
+          // Validate generated content before saving
+          if (!contentData.caption || contentData.caption.trim().length === 0) {
+            console.error('Generated content has empty caption:', contentData)
+            throw new Error('Generated content has empty caption')
+          }
+          if (!contentData.hashtags || !Array.isArray(contentData.hashtags)) {
+            console.error('Generated content has invalid hashtags:', contentData)
+            throw new Error('Generated content has invalid hashtags')
+          }
+
           content = await prisma.content.create({
             data: {
               caption: contentData.caption,
@@ -515,6 +536,169 @@ class CampaignService {
     }
 
     return schedule
+  }
+
+  /**
+   * Update campaign configuration
+   */
+  async updateCampaign(campaignId: string, userId: string, updates: {
+    name?: string
+    themes?: string[]
+    style?: string
+    frequency?: string
+    postingTime?: string
+    startDate?: string
+    endDate?: string
+  }): Promise<any> {
+    try {
+      // Get campaign and validate ownership and status
+      const campaign = await prisma.campaign.findFirst({
+        where: {
+          id: campaignId,
+          brand: {
+            userId
+          }
+        },
+        include: {
+          brand: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      })
+
+      if (!campaign) {
+        throw new Error('Campaign not found or access denied')
+      }
+
+      // Only allow editing campaigns that are not active
+      if (campaign.status === 'active') {
+        throw new Error('Active campaigns cannot be updated. Please pause the campaign first.')
+      }
+
+      // Prepare the updated config
+      const currentConfig = campaign.config as any
+      const updatedConfig = { ...currentConfig }
+
+      // Update basic fields
+      if (updates.name !== undefined) {
+        if (!updates.name.trim()) {
+          throw new Error('Campaign name cannot be empty')
+        }
+      }
+
+      if (updates.themes !== undefined) {
+        if (!Array.isArray(updates.themes) || updates.themes.length === 0) {
+          throw new Error('At least one theme is required')
+        }
+        updatedConfig.themes = updates.themes
+      }
+
+      if (updates.style !== undefined) {
+        updatedConfig.style = updates.style
+      }
+
+      if (updates.frequency !== undefined) {
+        if (!['daily', 'every2days', '3weekly'].includes(updates.frequency)) {
+          throw new Error('Invalid frequency. Must be daily, every2days, or 3weekly')
+        }
+        updatedConfig.frequency = updates.frequency
+      }
+
+      if (updates.postingTime !== undefined) {
+        if (!/^\d{2}:\d{2}$/.test(updates.postingTime)) {
+          throw new Error('Posting time must be in HH:MM format')
+        }
+        updatedConfig.postingTime = updates.postingTime
+      }
+
+      // Update dates if provided
+      if (updates.startDate !== undefined || updates.endDate !== undefined) {
+        const startDate = updates.startDate ? new Date(updates.startDate) : new Date(currentConfig.duration.start)
+        const endDate = updates.endDate ? new Date(updates.endDate) : new Date(currentConfig.duration.end)
+
+        // Validate dates
+        if (endDate <= startDate) {
+          throw new Error('End date must be after start date')
+        }
+
+        const today = new Date()
+        const todayDateString = today.toISOString().split('T')[0]
+        const startDateString = startDate.toISOString().split('T')[0]
+        
+        if (campaign.status !== 'active' && startDateString < todayDateString) {
+          throw new Error('Start date cannot be in the past')
+        }
+
+        updatedConfig.duration = {
+          start: startDate.toISOString(),
+          end: endDate.toISOString()
+        }
+
+        // Recalculate estimated posts
+        const durationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+        let postsPerWeek = 1
+        switch (updatedConfig.frequency) {
+          case 'daily':
+            postsPerWeek = 7
+            break
+          case 'every2days':
+            postsPerWeek = 3.5
+            break
+          case '3weekly':
+            postsPerWeek = 3
+            break
+        }
+        updatedConfig.estimatedPosts = Math.ceil((durationDays / 7) * postsPerWeek)
+        updatedConfig.durationDays = durationDays
+      }
+
+      // Update the campaign
+      const updatedCampaign = await prisma.campaign.update({
+        where: { id: campaignId },
+        data: {
+          name: updates.name !== undefined ? updates.name : campaign.name,
+          config: updatedConfig,
+          updatedAt: new Date()
+        },
+        include: {
+          brand: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          content: {
+            select: {
+              id: true,
+              caption: true,
+              hashtags: true,
+              imageUrl: true,
+              status: true,
+              scheduledAt: true,
+              postedAt: true,
+              createdAt: true
+            },
+            orderBy: {
+              scheduledAt: 'asc'
+            }
+          },
+          _count: {
+            select: {
+              content: true
+            }
+          }
+        }
+      })
+
+      console.log(`Campaign ${campaignId} updated successfully`)
+      return updatedCampaign
+    } catch (error) {
+      console.error('Update campaign error:', error)
+      throw error
+    }
   }
 
   /**

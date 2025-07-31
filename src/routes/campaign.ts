@@ -293,17 +293,86 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // List user's campaigns
-  fastify.get('/list', async (request, reply) => {
+  // Update campaign configuration
+  fastify.put<{ 
+    Params: { id: string },
+    Body: {
+      name?: string
+      themes?: string[]
+      style?: string
+      frequency?: string
+      postingTime?: string
+      startDate?: string
+      endDate?: string
+    }
+  }>('/:id', async (request, reply) => {
     try {
       const userId = await authenticateRequest(request)
+      const { id } = request.params
+      const updates = request.body
 
-      const campaigns = await prisma.campaign.findMany({
-        where: {
-          brand: {
+      if (!id) {
+        return reply.code(400).send({ error: 'Campaign ID is required' })
+      }
+
+      const updatedCampaign = await campaignService.updateCampaign(id, userId, updates)
+
+      return reply.send({
+        success: true,
+        campaign: updatedCampaign
+      })
+    } catch (error) {
+      console.error('Update campaign error:', error)
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          return reply.code(401).send({ error: error.message })
+        }
+        if (error.message.includes('not found') || error.message.includes('access denied')) {
+          return reply.code(404).send({ error: 'Campaign not found or access denied' })
+        }
+        if (error.message.includes('cannot be updated') || error.message.includes('already active')) {
+          return reply.code(400).send({ error: error.message })
+        }
+      }
+      
+      return reply.code(500).send({ 
+        error: 'Failed to update campaign. Please try again.' 
+      })
+    }
+  })
+
+  // List user's campaigns
+  fastify.get<{ Querystring: { brandId?: string } }>('/list', async (request, reply) => {
+    try {
+      const userId = await authenticateRequest(request)
+      const { brandId } = request.query
+
+      // Build where clause - filter by brandId if provided, otherwise show all user's campaigns
+      const whereClause: any = {
+        brand: {
+          userId
+        }
+      }
+
+      if (brandId) {
+        // Verify the user owns this brand before filtering
+        const brand = await prisma.brand.findFirst({
+          where: {
+            id: brandId,
             userId
           }
-        },
+        })
+        
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found or access denied' })
+        }
+        
+        whereClause.brandId = brandId
+      }
+
+      const campaigns = await prisma.campaign.findMany({
+        where: whereClause,
         include: {
           brand: {
             select: {
@@ -330,6 +399,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           status: campaign.status,
           brand: campaign.brand,
           contentCount: campaign._count.content,
+          config: campaign.config,
           createdAt: campaign.createdAt,
           startedAt: campaign.startedAt,
           completedAt: campaign.completedAt
@@ -381,10 +451,11 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Campaign not found or access denied' })
       }
 
-      // Only allow deletion of draft campaigns
-      if (campaign.status !== 'draft') {
+      // Only allow deletion of campaigns that haven't been started
+      const deletableStatuses = ['draft', 'preview', 'creating', 'failed']
+      if (!deletableStatuses.includes(campaign.status)) {
         return reply.code(400).send({ 
-          error: 'Cannot delete campaigns that have been started. Only draft campaigns can be deleted.' 
+          error: `Cannot delete campaigns with status '${campaign.status}'. Only campaigns with status: ${deletableStatuses.join(', ')} can be deleted.` 
         })
       }
 

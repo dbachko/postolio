@@ -342,8 +342,9 @@ class ApiClient {
     })
   }
 
-  async listCampaigns(): Promise<{ success: boolean; campaigns: any[] }> {
-    return this.request('/campaign/list')
+  async listCampaigns(brandId?: string): Promise<{ success: boolean; campaigns: any[] }> {
+    const url = brandId ? `/campaign/list?brandId=${brandId}` : '/campaign/list'
+    return this.request(url)
   }
 
   async getCampaign(campaignId: string): Promise<{ success: boolean; campaign: any }> {
@@ -358,6 +359,21 @@ class ApiClient {
 
   async getCampaignStatus(campaignId: string): Promise<{ success: boolean; status: any }> {
     return this.request(`/campaign/status/${campaignId}`)
+  }
+
+  async updateCampaign(campaignId: string, updates: {
+    name?: string
+    themes?: string[]
+    style?: string
+    frequency?: string
+    postingTime?: string
+    startDate?: string
+    endDate?: string
+  }): Promise<{ success: boolean; campaign: any }> {
+    return this.request(`/campaign/${campaignId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
   }
 
 }

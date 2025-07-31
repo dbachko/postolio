@@ -68,6 +68,16 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       // Save generated content to database
       const contentRecords = await Promise.all(
         generatedContent.map(async (content) => {
+          // Validate content before saving
+          if (!content.caption || content.caption.trim().length === 0) {
+            console.error('Generated content has empty caption:', content)
+            throw new Error('Generated content has empty caption')
+          }
+          if (!content.hashtags || !Array.isArray(content.hashtags)) {
+            console.error('Generated content has invalid hashtags:', content)
+            throw new Error('Generated content has invalid hashtags')
+          }
+
           return prisma.content.create({
             data: {
               caption: content.caption,
@@ -316,7 +326,19 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Build update data - only include fields that are provided
       const updateData: any = {}
-      if (caption !== undefined) updateData.caption = caption
+      if (caption !== undefined) {
+        // Strict validation: caption must be a non-empty string
+        if (!caption || typeof caption !== 'string' || caption.trim().length === 0) {
+          console.error('CRITICAL: Attempt to update content with invalid caption', {
+            contentId,
+            caption,
+            captionType: typeof caption,
+            captionLength: caption?.length || 0
+          })
+          return reply.code(400).send({ error: 'Caption cannot be empty or invalid' })
+        }
+        updateData.caption = caption.trim() // Ensure we store trimmed caption
+      }
       if (hashtags !== undefined) updateData.hashtags = hashtags
       if (imageUrl !== undefined) updateData.imageUrl = imageUrl
       if (scheduledAt !== undefined) {
