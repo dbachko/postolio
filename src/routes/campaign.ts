@@ -17,6 +17,7 @@ interface ConfigureCampaignBody {
   themes: string[]
   style: string
   postingTime: string
+  priority?: number
 }
 
 interface PreviewCampaignBody {
@@ -65,7 +66,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         frequency: body.frequency,
         themes: body.themes,
         style: body.style,
-        postingTime: body.postingTime
+        postingTime: body.postingTime,
+        priority: body.priority
       }
 
       // Validate campaign configuration
@@ -485,6 +487,100 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       
       return reply.code(500).send({ 
         error: 'Failed to delete campaign. Please try again.' 
+      })
+    }
+  })
+
+  // Update campaign priority
+  fastify.put<{ 
+    Params: { id: string },
+    Body: { priority: number }
+  }>('/:id/priority', async (request, reply) => {
+    try {
+      const authHeader = request.headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Authentication required' })
+      }
+
+      const token = authHeader.substring(7)
+      let decoded
+      try {
+        decoded = verifyJWT(token)
+      } catch (jwtError) {
+        console.error('JWT verification error:', jwtError)
+        return reply.code(401).send({ error: 'Invalid authentication token' })
+      }
+
+      const { id } = request.params
+      const { priority } = request.body
+
+      if (!id) {
+        return reply.code(400).send({ error: 'Campaign ID is required' })
+      }
+
+      if (typeof priority !== 'number' || priority < 1 || priority > 10) {
+        return reply.code(400).send({ error: 'Priority must be a number between 1 and 10' })
+      }
+
+      const updatedCampaign = await campaignService.updateCampaignPriority(id, priority, decoded.id)
+
+      return reply.send({
+        success: true,
+        message: 'Campaign priority updated successfully',
+        campaign: updatedCampaign
+      })
+    } catch (error) {
+      console.error('Update campaign priority error:', error)
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication') || error.message.includes('access denied')) {
+          return reply.code(401).send({ error: error.message })
+        }
+        if (error.message.includes('not found')) {
+          return reply.code(404).send({ error: error.message })
+        }
+      }
+      
+      return reply.code(500).send({ 
+        error: 'Failed to update campaign priority. Please try again.' 
+      })
+    }
+  })
+
+  // Get campaign coordination summary
+  fastify.get('/coordination', async (request, reply) => {
+    try {
+      const authHeader = request.headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Authentication required' })
+      }
+
+      const token = authHeader.substring(7)
+      let decoded
+      try {
+        decoded = verifyJWT(token)
+      } catch (jwtError) {
+        console.error('JWT verification error:', jwtError)
+        return reply.code(401).send({ error: 'Invalid authentication token' })
+      }
+
+      const coordination = await campaignService.getCampaignCoordination(decoded.id)
+
+      return reply.send({
+        success: true,
+        coordination
+      })
+    } catch (error) {
+      console.error('Get campaign coordination error:', error)
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          return reply.code(401).send({ error: error.message })
+        }
+      }
+      
+      return reply.code(500).send({ 
+        error: 'Failed to get campaign coordination. Please try again.' 
       })
     }
   })

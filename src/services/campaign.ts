@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client'
 import { generateInstagramContent, type ContentGenerationRequest, type GeneratedContent } from './content-generator.js'
 import { schedulerService } from './scheduler.js'
 import { campaignJobService } from './campaign-jobs.js'
+import { campaignCoordinationService, type CampaignConfigWithPriority } from './campaign-coordination.js'
 import type { StyleProfile } from './ai.js'
 
 const prisma = new PrismaClient()
@@ -17,6 +18,7 @@ export interface CampaignConfig {
   themes: string[]
   style: string
   postingTime: string // HH:MM format
+  priority?: number // 1=highest, 5=normal, 10=lowest
 }
 
 export interface CampaignPreview {
@@ -69,6 +71,35 @@ class CampaignService {
         throw new Error('Campaign start date cannot be in the past')
       }
 
+      // Check for scheduling conflicts with other campaigns
+      const coordinationConfig: CampaignConfigWithPriority = {
+        name: config.name,
+        brandId: config.brandId,
+        config: {
+          duration: {
+            start: config.duration.start.toISOString(),
+            end: config.duration.end.toISOString()
+          },
+          frequency: config.frequency,
+          postingTime: config.postingTime,
+          themes: config.themes
+        },
+        priority: config.priority || 5
+      }
+
+      const conflicts = await campaignCoordinationService.detectSchedulingConflicts(coordinationConfig, userId)
+      
+      // Store conflicts for frontend display but allow campaign creation
+      const conflictSummary = conflicts.length > 0 ? {
+        hasConflicts: true,
+        conflictCount: conflicts.length,
+        conflicts: conflicts.map(c => ({
+          type: c.conflictType,
+          severity: c.severity,
+          details: c.details
+        }))
+      } : { hasConflicts: false, conflictCount: 0, conflicts: [] }
+
       // Calculate estimated post count
       const durationDays = Math.ceil(
         (config.duration.end.getTime() - config.duration.start.getTime()) / (1000 * 60 * 60 * 24)
@@ -97,6 +128,7 @@ class CampaignService {
           name: config.name,
           brandId: config.brandId,
           status: 'creating',
+          priority: config.priority || 5,
           progress: 0,
           previewGenerated: false,
           config: {
@@ -110,6 +142,7 @@ class CampaignService {
             postingTime: config.postingTime,
             estimatedPosts,
             durationDays,
+            conflicts: conflictSummary,
           },
         },
         include: {
@@ -691,6 +724,113 @@ class CampaignService {
       return updatedCampaign
     } catch (error) {
       console.error('Update campaign error:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Update campaign priority and check for new conflicts
+   */
+  async updateCampaignPriority(campaignId: string, newPriority: number, userId: string): Promise<any> {
+    try {
+      // Get the campaign and verify ownership
+      const campaign = await prisma.campaign.findFirst({
+        where: {
+          id: campaignId,
+          brand: { userId }
+        },
+        include: { brand: true }
+      })
+
+      if (!campaign) {
+        throw new Error('Campaign not found or access denied')
+      }
+
+      // Update priority
+      const updatedCampaign = await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { priority: newPriority },
+        include: {
+          brand: true,
+          content: true
+        }
+      })
+
+      // Re-check conflicts with new priority
+      const config = campaign.config as any
+      const coordinationConfig: CampaignConfigWithPriority = {
+        name: campaign.name,
+        brandId: campaign.brandId,
+        config: {
+          duration: config.duration,
+          frequency: config.frequency,
+          postingTime: config.postingTime,
+          themes: config.themes
+        },
+        priority: newPriority
+      }
+
+      const conflicts = await campaignCoordinationService.detectSchedulingConflicts(coordinationConfig, userId)
+      
+      // Update campaign config with new conflict information
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: {
+          config: {
+            ...config,
+            conflicts: conflicts.length > 0 ? {
+              hasConflicts: true,
+              conflictCount: conflicts.length,
+              conflicts: conflicts.map(c => ({
+                type: c.conflictType,
+                severity: c.severity,
+                details: c.details
+              }))
+            } : { hasConflicts: false, conflictCount: 0, conflicts: [] }
+          }
+        }
+      })
+
+      return updatedCampaign
+    } catch (error) {
+      console.error('Update campaign priority error:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get campaign coordination summary for a user
+   */
+  async getCampaignCoordination(userId: string): Promise<any> {
+    try {
+      // Get resource allocation
+      const allocation = await campaignCoordinationService.allocateGenerationResources(userId)
+      
+      // Get active campaigns with priorities
+      const activeCampaigns = await prisma.campaign.findMany({
+        where: {
+          brand: { userId },
+          status: { in: ['active', 'preview'] }
+        },
+        include: { brand: true },
+        orderBy: { priority: 'asc' }
+      })
+
+      return {
+        activeCampaigns: activeCampaigns.length,
+        resourceAllocation: allocation,
+        campaignsByPriority: activeCampaigns.reduce((acc, campaign) => {
+          const priority = campaign.priority || 5
+          acc[priority] = (acc[priority] || 0) + 1
+          return acc
+        }, {} as Record<number, number>),
+        conflicts: activeCampaigns.reduce((total, campaign) => {
+          const config = campaign.config as any
+          return total + (config.conflicts?.conflictCount || 0)
+        }, 0)
+      }
+    } catch (error) {
+      console.error('Get campaign coordination error:', error)
       throw error
     }
   }

@@ -42,6 +42,7 @@ export interface CampaignConfig {
   themes: string[]
   style: string
   postingTime: string
+  priority?: number
 }
 
 export interface CampaignPreview {
@@ -376,6 +377,19 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(updates),
     })
+  }
+
+  // Update campaign priority
+  async updateCampaignPriority(campaignId: string, priority: number): Promise<{ success: boolean; campaign: any }> {
+    return this.request(`/campaign/${campaignId}/priority`, {
+      method: 'PUT',
+      body: JSON.stringify({ priority }),
+    })
+  }
+
+  // Get campaign coordination summary
+  async getCampaignCoordination(): Promise<{ success: boolean; coordination: any }> {
+    return this.request('/campaign/coordination')
   }
 
   // Template endpoints

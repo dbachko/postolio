@@ -23,6 +23,7 @@ interface CampaignFormData {
   themes: string[]
   style: string
   postingTime: string
+  priority: number
 }
 
 interface CampaignErrors {
@@ -33,6 +34,7 @@ interface CampaignErrors {
   themes?: string[]
   style?: string
   postingTime?: string
+  priority?: string
 }
 
 const initialFormData: CampaignFormData = {
@@ -42,7 +44,8 @@ const initialFormData: CampaignFormData = {
   frequency: '',
   themes: [],
   style: '',
-  postingTime: '12:00'
+  postingTime: '12:00',
+  priority: 5
 }
 
 const frequencyOptions = [
@@ -320,13 +323,14 @@ export function Autopilot() {
       frequency: formData.frequency,
       themes: formData.themes,
       style: formData.style,
-      postingTime: formData.postingTime
+      postingTime: formData.postingTime,
+      priority: formData.priority
     }
 
     configureMutation.mutate(campaignConfig)
   }
 
-  const handleInputChange = (field: keyof CampaignFormData, value: string) => {
+  const handleInputChange = (field: keyof CampaignFormData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     // Clear error when user starts typing
     if (errors[field]) {
@@ -429,7 +433,8 @@ export function Autopilot() {
       frequency: templateConfig.frequency || '',
       themes: templateConfig.themes || [],
       style: templateConfig.style || '',
-      postingTime: templateConfig.postingTime || '12:00'
+      postingTime: templateConfig.postingTime || '12:00',
+      priority: templateConfig.priority || 5
     })
     
     setIsTemplateSelectorOpen(false)
@@ -491,7 +496,8 @@ export function Autopilot() {
       frequency: config.frequency,
       themes: config.themes || [],
       style: config.style,
-      postingTime: config.postingTime
+      postingTime: config.postingTime,
+      priority: campaign.priority || 5
     })
     setIsEditingCampaign(true)
   }
@@ -559,7 +565,7 @@ export function Autopilot() {
     return Object.keys(newErrors).length === 0
   }
 
-  const handleEditInputChange = (field: keyof CampaignFormData, value: string) => {
+  const handleEditInputChange = (field: keyof CampaignFormData, value: string | number) => {
     setEditFormData(prev => ({ ...prev, [field]: value }))
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }))
@@ -688,6 +694,18 @@ export function Autopilot() {
                                  campaign.status === 'processing' ? 'processing...' :
                                  campaign.status}
                               </Badge>
+                              {campaign.priority && (
+                                <Badge variant="outline" className="text-xs">
+                                  {campaign.priority === 1 ? '🔴 Urgent' :
+                                   campaign.priority === 2 ? '🟠 High' :
+                                   campaign.priority === 3 ? '🟡 Med-High' :
+                                   campaign.priority === 4 ? '🟢 Medium' :
+                                   campaign.priority === 5 ? '🔵 Normal' :
+                                   campaign.priority === 6 ? '⚪ Low' :
+                                   campaign.priority === 7 ? '⚫ Very Low' :
+                                   `Priority ${campaign.priority}`}
+                                </Badge>
+                              )}
                               {(campaign.status === 'creating' || campaign.status === 'processing') && (
                                 <div className="flex items-center gap-2">
                                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -728,6 +746,9 @@ export function Autopilot() {
                               </div>
                               <div>
                                 <span className="font-medium">Content:</span> {campaign.contentCount} posts
+                              </div>
+                              <div>
+                                <span className="font-medium">Priority:</span> {campaign.priority || 5}
                               </div>
                               <div>
                                 <span className="font-medium">Created:</span> {format(new Date(campaign.createdAt), 'MMM d, yyyy')}
@@ -1027,6 +1048,28 @@ export function Autopilot() {
             />
             <p className="text-sm text-gray-500">
               Content will be scheduled to post at this time each day
+            </p>
+          </div>
+
+          {/* Campaign Priority */}
+          <div className="space-y-2">
+            <Label htmlFor="priority">Campaign Priority</Label>
+            <Select value={formData.priority?.toString() || '5'} onValueChange={(value) => handleInputChange('priority', parseInt(value))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">🔴 Urgent (1)</SelectItem>
+                <SelectItem value="2">🟠 High (2)</SelectItem>
+                <SelectItem value="3">🟡 Medium-High (3)</SelectItem>
+                <SelectItem value="4">🟢 Medium (4)</SelectItem>
+                <SelectItem value="5">🔵 Normal (5)</SelectItem>
+                <SelectItem value="6">⚪ Low (6)</SelectItem>
+                <SelectItem value="7">⚫ Very Low (7)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-gray-500">
+              Higher priority campaigns get preferred scheduling slots when conflicts arise
             </p>
           </div>
 
@@ -1406,6 +1449,19 @@ export function Autopilot() {
                             <span className="font-medium">{config.postingTime}</span>
                           </div>
                           <div className="flex justify-between">
+                            <span className="text-muted-foreground">Priority:</span>
+                            <span className="font-medium">
+                              {campaign.priority === 1 ? '🔴 Urgent (1)' :
+                               campaign.priority === 2 ? '🟠 High (2)' :
+                               campaign.priority === 3 ? '🟡 Medium-High (3)' :
+                               campaign.priority === 4 ? '🟢 Medium (4)' :
+                               campaign.priority === 5 ? '🔵 Normal (5)' :
+                               campaign.priority === 6 ? '⚪ Low (6)' :
+                               campaign.priority === 7 ? '⚫ Very Low (7)' :
+                               `Priority ${campaign.priority || 5}`}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
                             <span className="text-muted-foreground">Created:</span>
                             <span className="font-medium">
                               {format(new Date(campaign.createdAt), 'MMM d, yyyy')}
@@ -1756,6 +1812,28 @@ export function Autopilot() {
                   />
                   <p className="text-sm text-gray-500">
                     Content will be scheduled to post at this time each day
+                  </p>
+                </div>
+
+                {/* Campaign Priority */}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-priority">Campaign Priority</Label>
+                  <Select value={editFormData.priority?.toString() || '5'} onValueChange={(value) => handleEditInputChange('priority', parseInt(value))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">🔴 Urgent (1)</SelectItem>
+                      <SelectItem value="2">🟠 High (2)</SelectItem>
+                      <SelectItem value="3">🟡 Medium-High (3)</SelectItem>
+                      <SelectItem value="4">🟢 Medium (4)</SelectItem>
+                      <SelectItem value="5">🔵 Normal (5)</SelectItem>
+                      <SelectItem value="6">⚪ Low (6)</SelectItem>
+                      <SelectItem value="7">⚫ Very Low (7)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-gray-500">
+                    Higher priority campaigns get preferred scheduling slots when conflicts arise
                   </p>
                 </div>
 

@@ -76,6 +76,7 @@ model Campaign {
   brandId          String
   status           String    @default("creating") // creating, preview, active, paused, completed, failed
   config           Json
+  priority         Int       @default(5) // 1=highest, 5=normal, 10=lowest priority
   previewGenerated Boolean   @default(false)
   errorMessage     String?
   progress         Int       @default(0) // 0-100 percentage
@@ -87,6 +88,9 @@ model Campaign {
   brand   Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
   content Content[]
 
+  @@index([priority])
+  @@index([status])
+  @@index([brandId, status])
   @@map("campaigns")
 }
 
