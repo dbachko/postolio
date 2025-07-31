@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Toaster } from '@/components/ui/sonner'
 import { useAuthStore } from './stores/authStore'
 import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
@@ -12,6 +13,7 @@ import InstagramAnalytics from './pages/InstagramAnalytics'
 import Engagement from './pages/Engagement'
 import { Growth } from './pages/Growth'
 import { AIFeatures } from './pages/AIFeatures'
+import { Autopilot } from './pages/Autopilot'
 import { useEffect } from 'react'
 
 const queryClient = new QueryClient()
@@ -106,7 +108,15 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          <Route path="/autopilot" element={
+            <ProtectedRoute>
+              <Layout>
+                <Autopilot />
+              </Layout>
+            </ProtectedRoute>
+          } />
         </Routes>
+        <Toaster position="bottom-left" />
       </Router>
     </QueryClientProvider>
   )

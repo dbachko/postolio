@@ -16,6 +16,10 @@ import instagramAnalyticsRoutes from './routes/instagram-analytics.js'
 import engagementRoutes from './routes/engagement.js'
 import growthRoutes from './routes/growth.js'
 import aiRoutes from './routes/ai.js'
+import autopilotRoutes from './routes/autopilot.js'
+import campaignRoutes from './routes/campaign.js'
+import { autopilotService } from './services/autopilot.js'
+import { schedulerService } from './services/scheduler.js'
 
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
@@ -75,6 +79,8 @@ export function buildFastify(): FastifyInstance {
   app.register(engagementRoutes, { prefix: '/engagement' })
   app.register(growthRoutes, { prefix: '/growth' })
   app.register(aiRoutes, { prefix: '/ai' })
+  app.register(autopilotRoutes, { prefix: '/autopilot' })
+  app.register(campaignRoutes, { prefix: '/campaign' })
 
   // Health check endpoint
   app.get('/health', async () => {
@@ -94,5 +100,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.exit(1)
     }
     app.log.info(`Server listening at ${address}`)
+    
+    // Start background services
+    schedulerService.start()
+    autopilotService.start()
+    
+    app.log.info('Background services started')
   })
 }

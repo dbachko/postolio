@@ -24,11 +24,11 @@ model User {
 }
 
 model Brand {
-  id                   String    @id @default(cuid())
+  id                   String     @id @default(cuid())
   name                 String
   description          String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
   styleProfile         Json?
   preferences          Json?
   userId               String
@@ -36,31 +36,54 @@ model Brand {
   instagramPageId      String?
   instagramAccountId   String?
   instagramProfileData Json?
-  engagementActive     Boolean   @default(false)
+  engagementActive     Boolean    @default(false)
   engagementRules      Json?
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   content              Content[]
+  campaigns            Campaign[]
 
   @@map("brands")
 }
 
 model Content {
-  id                 String    @id @default(cuid())
+  id                 String     @id @default(cuid())
   caption            String
   imageUrl           String?
   hashtags           String[]
-  status             String    @default("pending")
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  status             String     @default("pending")
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
   scheduledAt        DateTime?
   postedAt           DateTime?
   generationParams   Json?
   brandId            String
+  campaignId         String?
   instagramPermalink String?
   instagramPostId    String?
   analytics          Json?
   schedulingError    String?
-  brand              Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand              Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  campaign           Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@map("content")
+}
+
+model Campaign {
+  id                String    @id @default(cuid())
+  name              String
+  brandId           String
+  status            String    @default("creating") // creating, preview, active, paused, completed, failed
+  config            Json
+  previewGenerated  Boolean   @default(false)
+  errorMessage      String?
+  progress          Int       @default(0) // 0-100 percentage
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  startedAt         DateTime?
+  completedAt       DateTime?
+  
+  brand             Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  content           Content[]
+
+  @@map("campaigns")
 }

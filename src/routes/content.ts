@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client'
 import { verifyJWT } from '../services/jwt.js'
 import { generateInstagramContent, type ContentGenerationRequest } from '../services/content-generator.js'
 import type { StyleProfile } from '../services/ai.js'
+import learningService from '../services/learning.js'
 
 const prisma = new PrismaClient()
 
@@ -10,6 +11,14 @@ interface GenerateContentBody extends ContentGenerationRequest {}
 
 interface ApproveContentBody {
   contentId: string
+  scheduledAt?: string
+}
+
+interface UpdateContentBody {
+  contentId: string
+  caption?: string
+  hashtags?: string[]
+  imageUrl?: string
   scheduledAt?: string
 }
 
@@ -266,6 +275,120 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       console.error('Content rejection error:', error)
       return reply.code(500).send({ error: 'Failed to reject content' })
+    }
+  })
+
+  // Update content
+  fastify.put<{ Body: UpdateContentBody }>('/update', async (request, reply) => {
+    try {
+      const authHeader = request.headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Authentication required' })
+      }
+
+      const token = authHeader.substring(7)
+      const decoded = verifyJWT(token)
+      const userId = decoded.id
+
+      const { contentId, caption, hashtags, imageUrl, scheduledAt } = request.body
+
+      // Verify user owns the content through brand ownership
+      const content = await prisma.content.findFirst({
+        where: { id: contentId },
+        include: {
+          brand: {
+            select: { userId: true, id: true }
+          }
+        }
+      })
+
+      if (!content || content.brand.userId !== userId) {
+        return reply.code(404).send({ error: 'Content not found' })
+      }
+
+      // Store original content for learning analysis
+      const originalContent = {
+        caption: content.caption,
+        hashtags: content.hashtags,
+        imageUrl: content.imageUrl || undefined,
+        scheduledAt: content.scheduledAt?.toISOString()
+      }
+
+      // Build update data - only include fields that are provided
+      const updateData: any = {}
+      if (caption !== undefined) updateData.caption = caption
+      if (hashtags !== undefined) updateData.hashtags = hashtags
+      if (imageUrl !== undefined) updateData.imageUrl = imageUrl
+      if (scheduledAt !== undefined) {
+        updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null
+      }
+
+      // Update content
+      const updatedContent = await prisma.content.update({
+        where: { id: contentId },
+        data: updateData,
+        select: {
+          id: true,
+          caption: true,
+          hashtags: true,
+          imageUrl: true,
+          status: true,
+          scheduledAt: true,
+          postedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          brandId: true
+        }
+      })
+
+      // Apply AI learning if there were changes
+      let learningResults = null
+      const hasChanges = 
+        (caption !== undefined && caption !== originalContent.caption) ||
+        (hashtags !== undefined && JSON.stringify(hashtags) !== JSON.stringify(originalContent.hashtags)) ||
+        (imageUrl !== undefined && imageUrl !== originalContent.imageUrl) ||
+        (scheduledAt !== undefined && scheduledAt !== originalContent.scheduledAt)
+
+      if (hasChanges) {
+        try {
+          const editedContent = {
+            caption: updatedContent.caption,
+            hashtags: updatedContent.hashtags,
+            imageUrl: updatedContent.imageUrl || undefined,
+            scheduledAt: updatedContent.scheduledAt?.toISOString()
+          }
+
+          // Analyze the edit and apply learning (async, don't block response)
+          learningService.analyzeUserEdit(content.brand.id, originalContent, editedContent)
+            .then(editAnalysis => learningService.applyLearningToStyleProfile(content.brand.id, editAnalysis))
+            .then(results => {
+              console.log(`Learning applied for brand ${content.brand.id}:`, {
+                insights: results.insights.length,
+                profileUpdates: results.profileUpdates.length,
+                appliedToFuturePosts: results.appliedToFuturePosts
+              })
+            })
+            .catch(error => {
+              console.error('Learning application error:', error)
+            })
+
+          // Provide immediate feedback about learning
+          learningResults = {
+            learningActive: true,
+            message: 'AI is learning from your edits...'
+          }
+        } catch (error) {
+          console.error('Learning analysis error:', error)
+        }
+      }
+
+      return { 
+        content: updatedContent,
+        learning: learningResults
+      }
+    } catch (error) {
+      console.error('Content update error:', error)
+      return reply.code(500).send({ error: 'Failed to update content' })
     }
   })
 

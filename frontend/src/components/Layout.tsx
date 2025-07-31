@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { useBrandStore } from '../stores/brandStore'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { NavigationMenu, NavigationMenuItem, NavigationMenuList, navigationMenuTriggerStyle } from '@/components/ui/navigation-menu'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -15,10 +15,15 @@ export function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuthStore()
   const { selectedBrand, brands, setSelectedBrand } = useBrandStore()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const handleLogout = () => {
     logout()
     navigate('/login')
+  }
+
+  const isActiveRoute = (path: string) => {
+    return location.pathname === path
   }
 
   return (
@@ -35,32 +40,72 @@ export function Layout({ children }: LayoutProps) {
               <NavigationMenu className="ml-6">
                 <NavigationMenuList>
                   <NavigationMenuItem>
-                    <Link to="/content" className={navigationMenuTriggerStyle()}>
+                    <Link 
+                      to="/autopilot" 
+                      className={`${navigationMenuTriggerStyle()} ${
+                        isActiveRoute('/autopilot') ? 'bg-accent text-accent-foreground' : ''
+                      }`}
+                    >
+                      Autopilot
+                    </Link>
+                  </NavigationMenuItem>
+                  <NavigationMenuItem>
+                    <Link 
+                      to="/content" 
+                      className={`${navigationMenuTriggerStyle()} ${
+                        isActiveRoute('/content') ? 'bg-accent text-accent-foreground' : ''
+                      }`}
+                    >
                       Content
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link to="/analytics" className={navigationMenuTriggerStyle()}>
+                    <Link 
+                      to="/analytics" 
+                      className={`${navigationMenuTriggerStyle()} ${
+                        isActiveRoute('/analytics') ? 'bg-accent text-accent-foreground' : ''
+                      }`}
+                    >
                       Analytics
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link to="/instagram-analytics" className={navigationMenuTriggerStyle()}>
+                    <Link 
+                      to="/instagram-analytics" 
+                      className={`${navigationMenuTriggerStyle()} ${
+                        isActiveRoute('/instagram-analytics') ? 'bg-accent text-accent-foreground' : ''
+                      }`}
+                    >
                       Instagram Analytics
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link to="/engagement" className={navigationMenuTriggerStyle()}>
+                    <Link 
+                      to="/engagement" 
+                      className={`${navigationMenuTriggerStyle()} ${
+                        isActiveRoute('/engagement') ? 'bg-accent text-accent-foreground' : ''
+                      }`}
+                    >
                       Engagement
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link to="/growth" className={navigationMenuTriggerStyle()}>
+                    <Link 
+                      to="/growth" 
+                      className={`${navigationMenuTriggerStyle()} ${
+                        isActiveRoute('/growth') ? 'bg-accent text-accent-foreground' : ''
+                      }`}
+                    >
                       Growth
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link to="/ai-features" className={navigationMenuTriggerStyle()}>
+                    <Link 
+                      to="/ai-features" 
+                      className={`${navigationMenuTriggerStyle()} ${
+                        isActiveRoute('/ai-features') ? 'bg-accent text-accent-foreground' : ''
+                      }`}
+                    >
                       AI Features
                     </Link>
                   </NavigationMenuItem>

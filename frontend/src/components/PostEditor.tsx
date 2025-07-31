@@ -1,0 +1,360 @@
+import { useState, useEffect } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { format } from 'date-fns'
+import { apiClient, type Content } from '../lib/api'
+import { useDebounce } from '../hooks/useDebounce'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog'
+import { Label } from './ui/label'
+import { Input } from './ui/input'
+import { Textarea } from './ui/textarea'
+import { Badge } from './ui/badge'
+import { Loader2, Save, CheckCircle2, AlertCircle, Brain, Sparkles } from 'lucide-react'
+
+interface PostEditorProps {
+  content: Content | null
+  isOpen: boolean
+  onClose: () => void
+}
+
+interface FormData {
+  caption: string
+  hashtags: string[]
+  imageUrl: string
+  scheduledAt: string
+}
+
+export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
+  const queryClient = useQueryClient()
+  const [formData, setFormData] = useState<FormData>({
+    caption: '',
+    hashtags: [],
+    imageUrl: '',
+    scheduledAt: ''
+  })
+  const [hashtagInput, setHashtagInput] = useState('')
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [learningFeedback, setLearningFeedback] = useState<{
+    isVisible: boolean
+    message: string
+    appliedToFuturePosts?: number
+  }>({ isVisible: false, message: '' })
+
+  // Initialize form data when content changes
+  useEffect(() => {
+    if (content) {
+      setFormData({
+        caption: content.caption || '',
+        hashtags: content.hashtags || [],
+        imageUrl: content.imageUrl || '',
+        scheduledAt: content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
+      })
+      setHashtagInput((content.hashtags || []).join(' '))
+    }
+  }, [content])
+
+  // Debounced form data for auto-save
+  const debouncedFormData = useDebounce(formData, 500)
+
+  const updateContentMutation = useMutation({
+    mutationFn: (data: {
+      contentId: string
+      caption?: string
+      hashtags?: string[]
+      imageUrl?: string
+      scheduledAt?: string
+    }) => apiClient.updateContent(data),
+    onMutate: () => {
+      setSaveStatus('saving')
+    },
+    onSuccess: (response) => {
+      setSaveStatus('saved')
+      setLastSaved(new Date())
+      
+      // Show learning feedback if AI learned from edits
+      if (response.learning?.learningActive) {
+        setLearningFeedback({
+          isVisible: true,
+          message: response.learning.message || 'AI is learning from your edits...',
+          appliedToFuturePosts: response.learning.appliedToFuturePosts
+        })
+        
+        // Hide learning feedback after 4 seconds
+        setTimeout(() => {
+          setLearningFeedback({ isVisible: false, message: '' })
+        }, 4000)
+      }
+      
+      // Update the content in all relevant queries
+      queryClient.setQueryData(['pendingContent', response.content.id], (oldData: any) => {
+        if (oldData?.content) {
+          return {
+            ...oldData,
+            content: oldData.content.map((item: Content) =>
+              item.id === response.content.id ? response.content : item
+            )
+          }
+        }
+        return oldData
+      })
+      
+      queryClient.setQueryData(['contentHistory', response.content.id], (oldData: any) => {
+        if (oldData?.content) {
+          return {
+            ...oldData,
+            content: oldData.content.map((item: Content) =>
+              item.id === response.content.id ? response.content : item
+            )
+          }
+        }
+        return oldData
+      })
+
+      // Invalidate queries to refresh calendar
+      queryClient.invalidateQueries({ queryKey: ['pendingContent'] })
+      queryClient.invalidateQueries({ queryKey: ['contentHistory'] })
+      
+      // Show "AI is learning" message briefly
+      setTimeout(() => {
+        setSaveStatus('idle')
+      }, 2000)
+    },
+    onError: (error) => {
+      setSaveStatus('error')
+      console.error('Failed to update content:', error)
+      
+      setTimeout(() => {
+        setSaveStatus('idle')
+      }, 3000)
+    }
+  })
+
+  // Auto-save when debounced form data changes
+  useEffect(() => {
+    if (!content || !isOpen) return
+
+    // Check if form data has actually changed from original content
+    const hasChanges = 
+      debouncedFormData.caption !== (content.caption || '') ||
+      JSON.stringify(debouncedFormData.hashtags) !== JSON.stringify(content.hashtags || []) ||
+      debouncedFormData.imageUrl !== (content.imageUrl || '') ||
+      debouncedFormData.scheduledAt !== (content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : '')
+
+    if (hasChanges) {
+      updateContentMutation.mutate({
+        contentId: content.id,
+        caption: debouncedFormData.caption,
+        hashtags: debouncedFormData.hashtags,
+        imageUrl: debouncedFormData.imageUrl || undefined,
+        scheduledAt: debouncedFormData.scheduledAt || undefined
+      })
+    }
+  }, [debouncedFormData, content, isOpen])
+
+  const handleCaptionChange = (value: string) => {
+    setFormData(prev => ({ ...prev, caption: value }))
+  }
+
+  const handleImageUrlChange = (value: string) => {
+    setFormData(prev => ({ ...prev, imageUrl: value }))
+  }
+
+  const handleScheduledAtChange = (value: string) => {
+    setFormData(prev => ({ ...prev, scheduledAt: value }))
+  }
+
+  const handleHashtagInputChange = (value: string) => {
+    setHashtagInput(value)
+    
+    // Parse hashtags from input
+    const hashtags = value
+      .split(/\s+/)
+      .filter(tag => tag.trim().length > 0)
+      .map(tag => tag.startsWith('#') ? tag : `#${tag}`)
+      .filter(tag => tag.length > 1)
+    
+    setFormData(prev => ({ ...prev, hashtags }))
+  }
+
+  const removeHashtag = (index: number) => {
+    const newHashtags = formData.hashtags.filter((_, i) => i !== index)
+    setFormData(prev => ({ ...prev, hashtags: newHashtags }))
+    setHashtagInput(newHashtags.join(' '))
+  }
+
+  const handleClose = () => {
+    setSaveStatus('idle')
+    setLastSaved(null)
+    onClose()
+  }
+
+  const getSaveStatusIcon = () => {
+    switch (saveStatus) {
+      case 'saving':
+        return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+      case 'saved':
+        return <CheckCircle2 className="w-4 h-4 text-green-500" />
+      case 'error':
+        return <AlertCircle className="w-4 h-4 text-red-500" />
+      default:
+        return <Save className="w-4 h-4 text-gray-400" />
+    }
+  }
+
+  const getSaveStatusText = () => {
+    switch (saveStatus) {
+      case 'saving':
+        return 'Saving...'
+      case 'saved':
+        return 'AI is learning from your edits and improving future content...'
+      case 'error':
+        return 'Failed to save'
+      default:
+        return lastSaved ? `Last saved: ${format(lastSaved, 'HH:mm:ss')}` : 'Auto-save enabled'
+    }
+  }
+
+  if (!content) return null
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Post</DialogTitle>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            {getSaveStatusIcon()}
+            <span>{getSaveStatusText()}</span>
+          </div>
+        </DialogHeader>
+
+        {/* Learning Feedback Banner */}
+        {learningFeedback.isVisible && (
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mb-4 animate-in slide-in-from-top duration-300">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Brain className="w-5 h-5 text-blue-600" />
+                <Sparkles className="w-4 h-4 text-purple-600" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-900">
+                  {learningFeedback.message}
+                </div>
+                {learningFeedback.appliedToFuturePosts && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    Improvements applied to ~{learningFeedback.appliedToFuturePosts} future posts
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-6">
+          {/* Caption */}
+          <div className="space-y-2">
+            <Label htmlFor="caption">Caption</Label>
+            <Textarea
+              id="caption"
+              value={formData.caption}
+              onChange={(e) => handleCaptionChange(e.target.value)}
+              placeholder="Write your caption..."
+              className="min-h-32 resize-none"
+            />
+            <div className="text-xs text-gray-500 text-right">
+              {formData.caption.length} characters
+            </div>
+          </div>
+
+          {/* Hashtags */}
+          <div className="space-y-2">
+            <Label htmlFor="hashtags">Hashtags</Label>
+            <Input
+              id="hashtags"
+              value={hashtagInput}
+              onChange={(e) => handleHashtagInputChange(e.target.value)}
+              placeholder="Add hashtags separated by spaces (e.g., #fashion #style #ootd)"
+            />
+            {formData.hashtags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {formData.hashtags.map((hashtag, index) => (
+                  <Badge
+                    key={index}
+                    variant="secondary"
+                    className="cursor-pointer hover:bg-red-100 hover:text-red-800"
+                    onClick={() => removeHashtag(index)}
+                  >
+                    {hashtag} ×
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Image URL */}
+          <div className="space-y-2">
+            <Label htmlFor="imageUrl">Image URL</Label>
+            <Input
+              id="imageUrl"
+              value={formData.imageUrl}
+              onChange={(e) => handleImageUrlChange(e.target.value)}
+              placeholder="https://example.com/image.jpg"
+              type="url"
+            />
+            {formData.imageUrl && (
+              <div className="mt-2">
+                <img
+                  src={formData.imageUrl}
+                  alt="Preview"
+                  className="max-w-xs max-h-48 object-cover rounded-lg border"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Scheduled Time */}
+          <div className="space-y-2">
+            <Label htmlFor="scheduledAt">Scheduled Time</Label>
+            <Input
+              id="scheduledAt"
+              type="datetime-local"
+              value={formData.scheduledAt}
+              onChange={(e) => handleScheduledAtChange(e.target.value)}
+            />
+            {formData.scheduledAt && (
+              <div className="text-xs text-gray-500">
+                Scheduled for: {format(new Date(formData.scheduledAt), 'EEEE, MMMM d, yyyy \'at\' h:mm a')}
+              </div>
+            )}
+          </div>
+
+          {/* Post Status */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="text-sm font-medium text-gray-700 mb-2">Post Status</div>
+            <div className="flex items-center gap-2">
+              <Badge 
+                variant={
+                  content.status === 'pending' ? 'secondary' :
+                  content.status === 'approved' ? 'default' :
+                  content.status === 'posted' ? 'secondary' : 'destructive'
+                }
+              >
+                {content.status.charAt(0).toUpperCase() + content.status.slice(1)}
+              </Badge>
+              <span className="text-xs text-gray-500">
+                Created: {format(new Date(content.createdAt), 'MMM d, yyyy \'at\' h:mm a')}
+              </span>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

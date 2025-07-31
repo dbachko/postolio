@@ -34,6 +34,31 @@ export interface AuthResponse {
   user: User
 }
 
+export interface CampaignConfig {
+  name: string
+  brandId: string
+  duration: { start: Date, end: Date }
+  frequency: string
+  themes: string[]
+  style: string
+  postingTime: string
+}
+
+export interface CampaignPreview {
+  campaignId: string
+  configId: string
+  examplePosts: Content[]
+  campaignPlan: {
+    name: string
+    duration: { start: string, end: string }
+    estimatedTotalPosts: number
+    postingSchedule: string
+    themes: string[]
+    style: string
+    postingTime: string
+  }
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
 
 class ApiClient {
@@ -224,6 +249,41 @@ class ApiClient {
     })
   }
 
+  async updateContent(data: {
+    contentId: string
+    caption?: string
+    hashtags?: string[]
+    imageUrl?: string
+    scheduledAt?: string
+  }): Promise<{ content: Content; learning?: { learningActive: boolean; message: string; appliedToFuturePosts?: number } }> {
+    return this.request('/content/update', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  // AI Learning endpoints
+  async getLearningAnalytics(brandId: string): Promise<{
+    analytics: {
+      totalEditsAnalyzed: number
+      profileUpdatesCount: number
+      learningConfidence: number
+      topInsights: Array<{
+        category: string
+        pattern: string
+        frequency: number
+        lastDetected: Date
+      }>
+      improvementMetrics: {
+        editFrequencyReduction: number
+        contentAcceptanceRate: number
+        styleBoundaryRefinement: number
+      }
+    }
+  }> {
+    return this.request(`/ai/learning-stats/${brandId}`)
+  }
+
   // Analytics endpoints
   async get<T>(endpoint: string, options?: RequestInit): Promise<T> {
     return this.request(endpoint, { ...options, method: 'GET' })
@@ -248,6 +308,58 @@ class ApiClient {
   async delete<T>(endpoint: string, options?: RequestInit): Promise<T> {
     return this.request(endpoint, { ...options, method: 'DELETE' })
   }
+
+  // Campaign endpoints
+  async configureCampaign(config: CampaignConfig): Promise<{ success: boolean; campaign: any }> {
+    return this.request('/campaign/configure', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: config.name,
+        brandId: config.brandId,
+        duration: {
+          start: config.duration.start.toISOString(),
+          end: config.duration.end.toISOString()
+        },
+        frequency: config.frequency,
+        themes: config.themes,
+        style: config.style,
+        postingTime: config.postingTime
+      }),
+    })
+  }
+
+  async previewCampaign(campaignId: string, exampleCount = 3): Promise<{ success: boolean; preview: any }> {
+    return this.request('/campaign/preview', {
+      method: 'POST',
+      body: JSON.stringify({ configId: campaignId, exampleCount }),
+    })
+  }
+
+  async startCampaign(campaignId: string): Promise<{ success: boolean; message: string }> {
+    return this.request('/campaign/start', {
+      method: 'POST',
+      body: JSON.stringify({ campaignId }),
+    })
+  }
+
+  async listCampaigns(): Promise<{ success: boolean; campaigns: any[] }> {
+    return this.request('/campaign/list')
+  }
+
+  async getCampaign(campaignId: string): Promise<{ success: boolean; campaign: any }> {
+    return this.request(`/campaign/${campaignId}`)
+  }
+
+  async deleteCampaign(campaignId: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/campaign/${campaignId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async getCampaignStatus(campaignId: string): Promise<{ success: boolean; status: any }> {
+    return this.request(`/campaign/status/${campaignId}`)
+  }
+
 }
 
 export const apiClient = new ApiClient()

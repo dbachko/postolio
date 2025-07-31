@@ -14,17 +14,21 @@ Specialized Instagram AI agent platform providing fully automated content creati
 
 ## Core Features
 
-- FEAT-1: Content Creation Agent — AI-generated posts, stories, reels with brand style consistency + approval workflow
+- FEAT-1: Content Creation Agent — AI-generated posts, stories, reels with brand style consistency, single optimized version per slot
 - FEAT-2: Scheduling & Analytics Agent — Optimal posting times, performance tracking, strategy adjustments
 - FEAT-3: Engagement Agent — Automated comments, DMs, and follower interaction management
 - FEAT-4: Growth Strategy Agent — Hashtag research, competitor analysis, audience targeting
-- FEAT-5: Approval Workflow — Multiple content/strategy versions for customer selection (daily/weekly/monthly)
+- FEAT-5: Autopilot Publishing — Fully automated posting with real-time editing capability for any scheduled content
+- FEAT-6: Campaign Autopilot — Dedicated campaign configuration with preview-then-commit workflow and automatic execution
+- FEAT-7: Campaign Monitoring — Content page redesigned for campaign oversight and individual post management
+- FEAT-8: Campaign Management — Template system and multi-campaign coordination with performance optimization
 
 ## Jobs To Be Done
 
-- When I'm too busy to post consistently, I want an AI agent to maintain my Instagram presence, so I can focus on my business while staying visible
-- When I lack design skills, I want an agent to create professional-looking posts in my brand style, so I can compete with larger accounts
-- When I don't understand Instagram algorithms, I want an agent to optimize my posting strategy, so I can grow my following organically
+- When I have a specific marketing campaign (sale, launch, event), I want to configure it once and let AI handle all the posting, so I can focus on execution while maintaining consistent messaging
+- When I want to see what Autopilot plans to do, I want to preview examples and understand the full commitment before starting, so I feel confident about the campaign direction
+- When a campaign is running, I want to monitor progress and make quick adjustments, so I maintain control without micromanaging every post
+- When I see content that could be better, I want to edit it immediately and have AI learn from my changes, so future campaigns automatically improve
 
 ## Constraints
 
@@ -46,12 +50,16 @@ Specialized Instagram AI agent platform providing fully automated content creati
 
 ## Traceability
 
-| Feature | Tasks | Status  |
-| ------- | ----- | ------- |
-| FEAT-1  | TBD   | Planned |
-| FEAT-2  | TBD   | Planned |
-| FEAT-3  | TBD   | Planned |
-| FEAT-4  | TBD   | Planned |
+<!--sync-from-plan-->
+| Feature | Implementation Plan Tasks | Status |
+| ------- | ------------------------ | ------ |
+| FEAT-1 (Content Creation) | TASK-1,2,3 (OAuth, Service, UI) | ✅ Complete |
+| FEAT-2 (Analytics) | TASK-6,7,8,9,10,11 (Cache, Service, Routes, UI, Status) | ✅ Complete |
+| FEAT-5A (Content Calendar) | NEW: Autopilot calendar view | 🔄 Next |
+| FEAT-5B (Real-time Editing) | NEW: Click-to-edit with auto-save | 🔄 Next |
+| FEAT-5C (Auto-Publishing) | TASK-4 (Enhanced publishing) | ✅ Complete |
+| FEAT-1A (AI Learning) | NEW: Edit preference tracking | 📋 Planned |
+| FEAT-3,4 (Engagement, Growth) | Existing AI routes foundation | 📋 Future |
 
 ## Pricing Tiers
 
@@ -69,11 +77,107 @@ Specialized Instagram AI agent platform providing fully automated content creati
 
 - **Existing Accounts**: Analyze last 50-100 posts for style, tone, colors, hashtags, posting patterns
 - **New Accounts**: Onboarding questionnaire + style selection wizard (minimalist, bold, professional, etc.)
-- **Learning Timeline**: 7-14 days for style adaptation, continuous improvement based on engagement
+- **Learning Timeline**: Immediate adaptation from user edits, continuous real-time improvement based on engagement and modifications
 
-## User Experience
+## User Experience Flow
 
-- **Approval Interface**: Web dashboard with daily/weekly content previews and one-click approval
-- **Onboarding**: Instagram account connection → brand analysis → style preferences → first batch approval
+### **Dedicated Autopilot Page (Primary)**
+- **Campaign Configuration**: Set post style, frequency, themes, and duration for focused campaigns
+- **Preview Generation**: Generate and show examples (first 3 posts) without creating full campaign
+- **Plan Overview**: Clear summary of what Autopilot will do over campaign duration
+- **Individual Editing**: Modify specific posts in preview - change time, text, image, or regenerate pieces
+- **One-Click Start**: Approve plan and let Autopilot schedule everything automatically
 
-**SPECIFICATION COMPLETE** ✅
+### **Autopilot Interface Structure**
+```
+🎯 AUTOPILOT CONFIGURATION
+├── Campaign: [Holiday Sale 2025] Duration: [Dec 1-15]
+├── Style: [Product-focused] Frequency: [Daily 10 AM]
+├── Themes: [Discounts, Testimonials, Behind-scenes]
+└── [Generate Preview] [Load Saved Campaign]
+
+📋 CAMPAIGN PREVIEW (First Week Examples)
+├── Dec 1: "New sale launches today! 🎉" [Edit] [Regenerate]
+├── Dec 3: "Customer love story with Sarah..." [Edit] [Regenerate]  
+├── Dec 5: "Behind the scenes: packing orders" [Edit] [Regenerate]
+└── "...and 12 more posts following this pattern"
+
+🚀 APPROVAL & LAUNCH
+├── ✓ Campaign will post 15 times over 15 days
+├── ✓ All posts follow your brand style and themes
+├── [Edit Plan] [Start Campaign] [Save as Template]
+```
+
+### **Content Calendar (Monitoring)**
+- **Read-Only Schedule**: View all scheduled content from active campaigns
+- **Campaign Grouping**: Posts organized by campaign with clear labeling
+- **Quick Actions**: Pause campaign, edit individual posts, view performance
+- **Status Monitoring**: Campaign progress, next post timing, AI learning updates
+
+### **Post Editor (Individual Override)**
+- **In-Campaign Editing**: Modify any scheduled post without disrupting campaign
+- **Regeneration Options**: "Make similar" or "Try different approach" 
+- **Auto-save**: Changes apply immediately to campaign schedule
+- **Learning Integration**: Edits improve future campaign generation
+
+## UX Design Principles
+
+### **Campaign-Centric Design**
+- **Primary State**: Configure campaign parameters, preview examples, approve and launch
+- **Secondary State**: Monitor scheduled content and make individual adjustments when needed
+- **Visual Hierarchy**: Emphasize campaign overview and approval, de-emphasize individual post management
+
+### **Preview-Then-Commit Workflow**
+- **Configuration First**: Set all campaign parameters before any content generation
+- **Smart Previews**: Show representative examples (first 3 posts) not full campaign
+- **Batch Approval**: Single "Start Campaign" decision instead of per-post approvals
+- **Continuous Generation**: AI creates remaining posts following approved pattern
+
+### **Simplified Decision Making**
+- **No Choice Paralysis**: Single AI-generated version per post, edit if needed
+- **Campaign Templates**: Save successful configurations for reuse
+- **Clear Commitments**: Exactly what Autopilot will do over campaign duration
+
+## Implementation Guidelines
+
+### **UX Specifications** ✅
+- **Primary Platform**: Desktop web interface (mobile later)
+- **Edit Flexibility**: No cutoff time - users can edit posts until moment of publishing
+- **Failure Handling**: Log errors and continue with available content, notify user via dashboard
+- **Learning Application**: All user edits apply globally to future content generation
+
+### **Technical Requirements**
+- **Auto-Publishing**: Maintain current Instagram API integration for automated posting
+- **Real-time Editing**: Content modification system with immediate save
+- **Error Recovery**: Robust logging and graceful degradation for posting failures
+- **Learning Engine**: User edit tracking and preference application system
+
+### **Content Pipeline Architecture**
+```
+AI Generation → 2-Week Schedule → Auto-Publish
+     ↑                ↑              ↑
+User Learning    Real-time Edit   Error Logs
+```
+
+## Next Development Priorities
+
+### **Phase 1: Dedicated Autopilot Page**
+- **FEAT-6A**: Campaign configuration interface with style, frequency, and theme selection
+- **FEAT-6B**: Preview generation showing first 3 posts as examples
+- **FEAT-6C**: Campaign plan overview with clear commitment summary
+- **FEAT-6D**: Individual post editing within campaign preview
+- **FEAT-6E**: One-click campaign start with automatic scheduling
+
+### **Phase 2: Content Page Redesign**
+- **FEAT-7A**: Remove Generate Content button from current Content page
+- **FEAT-7B**: Transform Content page to campaign monitoring view
+- **FEAT-7C**: Campaign grouping and status indicators
+- **FEAT-7D**: Quick actions for pause/edit/performance viewing
+
+### **Phase 3: Campaign Management**
+- **FEAT-8A**: Campaign templates and reusable configurations
+- **FEAT-8B**: Multi-campaign management and scheduling conflicts
+- **FEAT-8C**: Campaign performance analytics and optimization
+- **FEAT-8D**: Automated campaign continuation and renewal
+
+**SPECIFICATION READY FOR IMPLEMENTATION** 🚀
