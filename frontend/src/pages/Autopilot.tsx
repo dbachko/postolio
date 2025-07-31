@@ -12,7 +12,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Badge } from '../components/ui/badge'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { PostEditor } from '../components/PostEditor'
-import { Loader2, Edit, Calendar, Users, TrendingUp, X, AlertCircle, Plus, List, Eye, Pause, Play, Trash2 } from 'lucide-react'
+import { TemplateSelector } from '../components/TemplateSelector'
+import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal'
+import { Loader2, Edit, Calendar, Users, TrendingUp, X, AlertCircle, Plus, List, Eye, Pause, Play, Trash2, FileText, Bookmark } from 'lucide-react'
 interface CampaignFormData {
   name: string
   startDate: string
@@ -83,6 +85,12 @@ export function Autopilot() {
   const [pollingCampaigns, setPollingCampaigns] = useState<Set<string>>(new Set())
   const [isEditingCampaign, setIsEditingCampaign] = useState(false)
   const [editFormData, setEditFormData] = useState<CampaignFormData>(initialFormData)
+  const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false)
+  const [templateSelectorMode, setTemplateSelectorMode] = useState<'create' | 'configure'>('create')
+  const [isSaveAsTemplateOpen, setIsSaveAsTemplateOpen] = useState(false)
+  const [saveAsTemplateCampaignId, setSaveAsTemplateCampaignId] = useState<string | null>(null)
+  const [isFormPrefilledFromTemplate, setIsFormPrefilledFromTemplate] = useState(false)
+  const [usedTemplateName, setUsedTemplateName] = useState<string | null>(null)
   
   // Campaign list query
   const campaignsQuery = useQuery({
@@ -368,12 +376,67 @@ export function Autopilot() {
     setCampaignPreview(null)
     setFormData(initialFormData)
     setErrors({})
+    setIsFormPrefilledFromTemplate(false)
+    setUsedTemplateName(null)
   }
 
   const handleCreateNewCampaign = () => {
     setCurrentStep('configure')
     setFormData(initialFormData)
     setErrors({})
+    setIsFormPrefilledFromTemplate(false)
+    setUsedTemplateName(null)
+  }
+
+  const handleUseTemplate = () => {
+    setTemplateSelectorMode('create')
+    setIsTemplateSelectorOpen(true)
+  }
+
+  const handleUseTemplateForConfig = () => {
+    setTemplateSelectorMode('configure')
+    setIsTemplateSelectorOpen(true)
+  }
+
+  const handleTemplateSelected = (_campaignId: string) => {
+    setIsTemplateSelectorOpen(false)
+    setCurrentStep('list')
+    // Refresh campaigns to show the new template-based campaign
+    campaignsQuery.refetch()
+    toast.success('Campaign created from template successfully!')
+  }
+
+  const handleSaveAsTemplate = (campaignId: string) => {
+    setSaveAsTemplateCampaignId(campaignId)
+    setIsSaveAsTemplateOpen(true)
+  }
+
+  const handleTemplateSaved = () => {
+    setIsSaveAsTemplateOpen(false)
+    setSaveAsTemplateCampaignId(null)
+  }
+
+  const handleTemplateForConfiguration = (template: any) => {
+    // Pre-fill form with template data
+    const templateConfig = template.config
+    const today = getTodayDate()
+    const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+    
+    setFormData({
+      name: `${template.name} Campaign`,
+      startDate: today,
+      endDate: format(endDate, 'yyyy-MM-dd'),
+      frequency: templateConfig.frequency || '',
+      themes: templateConfig.themes || [],
+      style: templateConfig.style || '',
+      postingTime: templateConfig.postingTime || '12:00'
+    })
+    
+    setIsTemplateSelectorOpen(false)
+    setCurrentStep('configure')
+    setIsFormPrefilledFromTemplate(true)
+    setUsedTemplateName(template.name)
+    toast.success(`Campaign form pre-filled with "${template.name}" template settings!`)
   }
 
   const handleDeleteCampaign = (campaignId: string, campaignName: string) => {
@@ -546,10 +609,16 @@ export function Autopilot() {
                     View and manage your automated content campaigns
                   </CardDescription>
                 </div>
-                <Button onClick={handleCreateNewCampaign} className="flex items-center gap-2">
-                  <Plus className="w-4 h-4" />
-                  Create New Campaign
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={handleUseTemplate} className="flex items-center gap-2 bg-blue-50 border-blue-200 hover:bg-blue-100">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    Use FileText
+                  </Button>
+                  <Button onClick={handleCreateNewCampaign} className="flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    Create New Campaign
+                  </Button>
+                </div>
               </div>
             </CardHeader>
           </Card>
@@ -584,10 +653,16 @@ export function Autopilot() {
                   <p className="text-gray-600 mb-4">
                     Create your first automated content campaign to get started.
                   </p>
-                  <Button onClick={handleCreateNewCampaign} className="flex items-center gap-2 mx-auto">
-                    <Plus className="w-4 h-4" />
-                    Create New Campaign
-                  </Button>
+                  <div className="flex gap-2 justify-center">
+                    <Button variant="outline" onClick={handleUseTemplate} className="flex items-center gap-2 bg-blue-50 border-blue-200 hover:bg-blue-100">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                      Use FileText
+                    </Button>
+                    <Button onClick={handleCreateNewCampaign} className="flex items-center gap-2">
+                      <Plus className="w-4 h-4" />
+                      Create New Campaign
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -754,12 +829,33 @@ export function Autopilot() {
                   Set up your automated content generation and posting campaign
                 </CardDescription>
               </div>
-              <Button variant="outline" onClick={handleBackToList}>
-                ← Back to Campaigns
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleBackToList}>
+                  ← Back to Campaigns
+                </Button>
+                <Button variant="outline" onClick={handleUseTemplateForConfig} className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Use FileText Instead
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
+            {/* FileText Pre-fill Indicator */}
+            {isFormPrefilledFromTemplate && usedTemplateName && (
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <p className="font-medium text-blue-900">Form pre-filled from template</p>
+                    <p className="text-sm text-blue-700">
+                      Using settings from "{usedTemplateName}" template. You can modify any field before creating your campaign.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
           {/* Campaign Name */}
           <div className="space-y-2">
@@ -1183,16 +1279,26 @@ export function Autopilot() {
                   <Button variant="outline" onClick={handleBackToList}>
                     ← Back to Campaigns
                   </Button>
-                  {campaignDetailsQuery.data.campaign.status === 'preview' && (
+                  <div className="flex gap-2">
+                    {campaignDetailsQuery.data.campaign.status === 'preview' && (
+                      <Button 
+                        variant="outline" 
+                        onClick={() => handleEditCampaign(campaignDetailsQuery.data.campaign)}
+                        className="flex items-center gap-2"
+                      >
+                        <Edit className="w-4 h-4" />
+                        Edit Campaign
+                      </Button>
+                    )}
                     <Button 
                       variant="outline" 
-                      onClick={() => handleEditCampaign(campaignDetailsQuery.data.campaign)}
+                      onClick={() => handleSaveAsTemplate(campaignDetailsQuery.data.campaign.id)}
                       className="flex items-center gap-2"
                     >
-                      <Edit className="w-4 h-4" />
-                      Edit Campaign
+                      <Bookmark className="w-4 h-4" />
+                      Save as FileText
                     </Button>
-                  )}
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -1706,6 +1812,28 @@ export function Autopilot() {
           setSelectedPost(null)
         }}
       />
+
+      {/* Template Selector Modal */}
+      {selectedBrand && (
+        <TemplateSelector
+          open={isTemplateSelectorOpen}
+          onOpenChange={setIsTemplateSelectorOpen}
+          brandId={selectedBrand.id}
+          onTemplateSelected={handleTemplateSelected}
+          onTemplateForConfiguration={handleTemplateForConfiguration}
+          mode={templateSelectorMode}
+        />
+      )}
+
+      {/* Save as Template Modal */}
+      {saveAsTemplateCampaignId && (
+        <SaveAsTemplateModal
+          open={isSaveAsTemplateOpen}
+          onOpenChange={setIsSaveAsTemplateOpen}
+          campaignId={saveAsTemplateCampaignId}
+          onTemplateSaved={handleTemplateSaved}
+        />
+      )}
     </div>
   )
 }
