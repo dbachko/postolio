@@ -71,7 +71,7 @@ export interface CampaignTemplate {
     style?: string
     postingTime?: string
   }
-  exampleContent: Content[]
+  exampleContent?: Content[]
   usageCount: number
   createdBy: string
   createdAt: string

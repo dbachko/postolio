@@ -198,12 +198,12 @@ export function TemplateSelector({
               </Card>
 
               {/* Example Content Preview */}
-              {selectedTemplate.exampleContent.length > 0 && (
+              {(selectedTemplate.exampleContent || []).length > 0 && (
                 <Card>
                   <CardContent className="p-6">
-                    <h4 className="font-semibold mb-4">Example Content ({selectedTemplate.exampleContent.length} samples)</h4>
+                    <h4 className="font-semibold mb-4">Example Content ({(selectedTemplate.exampleContent || []).length} samples)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {selectedTemplate.exampleContent.slice(0, 3).map(content => (
+                      {(selectedTemplate.exampleContent || []).slice(0, 3).map(content => (
                         <div key={content.id} className="border rounded-lg p-4 bg-gray-50">
                           {content.imageUrl && (
                             <div className="w-full h-32 bg-gray-200 rounded mb-3 flex items-center justify-center">
@@ -234,9 +234,9 @@ export function TemplateSelector({
                         </div>
                       ))}
                     </div>
-                    {selectedTemplate.exampleContent.length > 3 && (
+                    {(selectedTemplate.exampleContent || []).length > 3 && (
                       <p className="text-sm text-gray-500 mt-3">
-                        And {selectedTemplate.exampleContent.length - 3} more example posts...
+                        And {(selectedTemplate.exampleContent || []).length - 3} more example posts...
                       </p>
                     )}
                   </CardContent>
