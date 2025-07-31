@@ -438,14 +438,18 @@ class ApiClient {
     brandId: string
     duration?: { start: Date, end: Date }
   }): Promise<{ success: boolean; campaign: any }> {
-    return this.request(`/templates/${templateId}/use`, {
+    return this.request(`/templates/${templateId}/apply`, {
       method: 'POST',
       body: JSON.stringify({
-        ...data,
+        name: data.name,
+        brandId: data.brandId,
         duration: data.duration ? {
           start: data.duration.start.toISOString(),
           end: data.duration.end.toISOString()
-        } : undefined
+        } : {
+          start: new Date().toISOString(),
+          end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
+        }
       }),
     })
   }
