@@ -369,6 +369,7 @@ class ApiClient {
     postingTime?: string
     startDate?: string
     endDate?: string
+    status?: string
   }): Promise<{ success: boolean; campaign: any }> {
     return this.request(`/campaign/${campaignId}`, {
       method: 'PUT',
