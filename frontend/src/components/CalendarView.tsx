@@ -3,7 +3,7 @@ import { Calendar, dateFnsLocalizer, type View } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay, addDays, subDays, isToday } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import type { Content } from '../lib/api'
-import { ChevronLeft, ChevronRight, Clock, Play, CheckCircle, XCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Play, CheckCircle, XCircle } from 'lucide-react'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import './CalendarView.css'
 
@@ -77,22 +77,22 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
   const EventComponent = ({ event }: { event: CalendarEvent }) => {
     const content = event.resource
     const statusColors = {
-      pending: 'bg-yellow-100 border-yellow-400 text-yellow-800',
       approved: 'bg-blue-100 border-blue-400 text-blue-800',
       posted: 'bg-green-100 border-green-400 text-green-800',
       rejected: 'bg-red-100 border-red-400 text-red-800',
     }
 
-    const StatusIcon = {
-      pending: Clock,
+    const statusIcons = {
       approved: Play,
       posted: CheckCircle,
       rejected: XCircle,
-    }[content.status]
+    }
+
+    const StatusIcon = statusIcons[content.status as keyof typeof statusIcons] || Play
 
     return (
       <div
-        className={`p-1 rounded border-l-2 ${statusColors[content.status]} cursor-pointer hover:opacity-80 transition-opacity`}
+        className={`p-1 rounded border-l-2 ${statusColors[content.status as keyof typeof statusColors] || statusColors.approved} cursor-pointer hover:opacity-80 transition-opacity`}
         onClick={() => onContentClick?.(content)}
       >
         <div className="flex items-center gap-1 text-xs">
@@ -126,9 +126,6 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">
                 {content.filter(c => c.status === 'approved').length} posts scheduled
-              </div>
-              <div className="text-xs text-gray-500">
-                {content.filter(c => c.status === 'pending').length} pending approval
               </div>
             </div>
           </div>
@@ -195,10 +192,6 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
 
         {/* Status Legend */}
         <div className="flex items-center gap-6 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-yellow-400 rounded-sm"></div>
-            <span className="text-gray-600">Pending ({content.filter(c => c.status === 'pending').length})</span>
-          </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-blue-400 rounded-sm"></div>
             <span className="text-gray-600">Scheduled ({content.filter(c => c.status === 'approved').length})</span>

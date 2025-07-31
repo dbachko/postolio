@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { apiClient } from '../lib/api'
-import { ContentCard } from '../components/ContentCard'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,13 +23,44 @@ export function Dashboard() {
 
   const activeBrand = selectedBrand
 
-  const { data: pendingContentData, isLoading: contentLoading } = useQuery({
-    queryKey: ['pendingContent', activeBrand?.id],
-    queryFn: () => activeBrand ? apiClient.getPendingContent(activeBrand.id) : null,
-    enabled: !!activeBrand,
+  // Get comprehensive metrics across all brands
+  const { data: allCampaignsData } = useQuery({
+    queryKey: ['allCampaigns'],
+    queryFn: () => apiClient.listCampaigns(), // Get campaigns for all brands
+    enabled: brands.length > 0,
   })
 
-  const pendingContent = pendingContentData?.content || []
+  // Get content metrics from all user's brands
+  const { data: contentMetricsData } = useQuery({
+    queryKey: ['contentMetrics', brands.map(b => b.id)],
+    queryFn: async () => {
+      if (brands.length === 0) return { scheduled: 0, published: 0 }
+      
+      // Get content from all brands
+      const promises = brands.map(brand => apiClient.getContentHistory(brand.id))
+      const results = await Promise.all(promises)
+      
+      const allContent = results.flatMap(result => result?.content || [])
+      
+      return {
+        scheduled: allContent.filter(content => 
+          content.status === 'approved' && 
+          content.scheduledAt && 
+          new Date(content.scheduledAt) > new Date()
+        ).length,
+        published: allContent.filter(content => content.status === 'posted').length
+      }
+    },
+    enabled: brands.length > 0,
+  })
+
+  const allCampaigns = allCampaignsData?.campaigns || []
+  const contentMetrics = contentMetricsData || { scheduled: 0, published: 0 }
+  
+  // Calculate campaign-focused metrics
+  const activeCampaigns = allCampaigns.filter(campaign => campaign.status === 'active').length
+  const scheduledPosts = contentMetrics.scheduled
+  const publishedPosts = contentMetrics.published
 
   if (brandsLoading) {
     return (
@@ -69,6 +99,11 @@ export function Dashboard() {
               Manage Brands
             </Link>
           </Button>
+          <Button variant="outline" asChild>
+            <Link to="/autopilot">
+              Campaigns
+            </Link>
+          </Button>
           <Button asChild>
             <Link to="/content">
               Generate Content
@@ -77,52 +112,61 @@ export function Dashboard() {
         </div>
       </div>
 
-      {activeBrand && (
+      {allCampaigns.length > 0 && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>
-                Pending Content Approval ({pendingContent.length})
+                All Campaigns ({allCampaigns.length})
               </CardTitle>
-              {pendingContent.length > 0 && (
-                <Button variant="link" asChild className="text-primary hover:underline text-sm">
-                  <Link to="/content">
-                    View All →
-                  </Link>
-                </Button>
-              )}
+              <Button variant="link" asChild className="text-primary hover:underline text-sm">
+                <Link to="/autopilot">
+                  View All →
+                </Link>
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
-            {contentLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-foreground"></div>
-              </div>
-            ) : pendingContent.length === 0 ? (
+            {allCampaigns.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-muted-foreground mb-4">No pending content to approve.</p>
+                <p className="text-muted-foreground mb-4">No campaigns created yet.</p>
                 <Button asChild>
-                  <Link to="/content">
-                    Generate New Content
+                  <Link to="/autopilot">
+                    Create Campaign
                   </Link>
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {pendingContent.slice(0, 6).map((content) => (
-                  <ContentCard
-                    key={content.id}
-                    content={content}
-                    brandId={activeBrand.id}
-                  />
+              <div className="space-y-4">
+                {allCampaigns.slice(0, 3).map((campaign) => (
+                  <div key={campaign.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <h4 className="font-medium">{campaign.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Status: <span className={`capitalize ${campaign.status === 'active' ? 'text-green-600' : 'text-gray-600'}`}>
+                          {campaign.status}
+                        </span> • Brand: {campaign.brand?.name}
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to="/autopilot">
+                        View
+                      </Link>
+                    </Button>
+                  </div>
                 ))}
+                {allCampaigns.length > 3 && (
+                  <p className="text-sm text-muted-foreground text-center pt-2">
+                    And {allCampaigns.length - 3} more campaigns...
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Total Brands</CardTitle>
@@ -134,19 +178,28 @@ export function Dashboard() {
         
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Pending Approval</CardTitle>
+            <CardTitle className="text-lg">Active Campaigns</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-yellow-600">{pendingContent.length}</p>
+            <p className="text-3xl font-bold text-green-600">{activeCampaigns}</p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Active Brand</CardTitle>
+            <CardTitle className="text-lg">Scheduled Posts</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-lg text-muted-foreground">{activeBrand?.name || 'None'}</p>
+            <p className="text-3xl font-bold text-blue-600">{scheduledPosts}</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Published Posts</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-purple-600">{publishedPosts}</p>
           </CardContent>
         </Card>
       </div>

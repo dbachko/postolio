@@ -219,26 +219,6 @@ class ApiClient {
     })
   }
 
-  async getPendingContent(brandId: string): Promise<{ content: Content[] }> {
-    return this.request(`/content/pending/${brandId}`)
-  }
-
-  async approveContent(data: {
-    contentId: string
-    scheduledAt?: string
-  }): Promise<{ content: Content }> {
-    return this.request('/content/approve', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async rejectContent(contentId: string): Promise<{ content: Content }> {
-    return this.request(`/content/reject/${contentId}`, {
-      method: 'POST',
-    })
-  }
-
   async getContentHistory(brandId: string): Promise<{ content: Content[] }> {
     return this.request(`/content/history/${brandId}`)
   }

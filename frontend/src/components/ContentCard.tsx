@@ -8,33 +8,13 @@ interface ContentCardProps {
 }
 
 export function ContentCard({ content, brandId }: ContentCardProps) {
-  const [showScheduleModal, setShowScheduleModal] = useState(false)
-  const [scheduledDate, setScheduledDate] = useState('')
   const [publishError, setPublishError] = useState<string | null>(null)
   const queryClient = useQueryClient()
-
-  const approveMutation = useMutation({
-    mutationFn: (data: { contentId: string; scheduledAt?: string }) =>
-      apiClient.approveContent(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pendingContent', brandId] })
-      setShowScheduleModal(false)
-      setScheduledDate('')
-    },
-  })
-
-  const rejectMutation = useMutation({
-    mutationFn: (contentId: string) => apiClient.rejectContent(contentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pendingContent', brandId] })
-    },
-  })
 
   const publishMutation = useMutation({
     mutationFn: (contentId: string) => apiClient.publishToInstagram(contentId),
     onSuccess: () => {
       setPublishError(null)
-      queryClient.invalidateQueries({ queryKey: ['pendingContent', brandId] })
       queryClient.invalidateQueries({ queryKey: ['contentHistory', brandId] })
     },
     onError: (error: any) => {
@@ -42,25 +22,6 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
       setPublishError(errorMessage)
     },
   })
-
-  const handleApprove = () => {
-    if (scheduledDate) {
-      approveMutation.mutate({
-        contentId: content.id,
-        scheduledAt: new Date(scheduledDate).toISOString(),
-      })
-    } else {
-      approveMutation.mutate({ contentId: content.id })
-    }
-  }
-
-  const handleReject = () => {
-    rejectMutation.mutate(content.id)
-  }
-
-  const handleSchedule = () => {
-    setShowScheduleModal(true)
-  }
 
   const handlePublish = () => {
     setPublishError(null)
@@ -114,31 +75,6 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
             {content.status.charAt(0).toUpperCase() + content.status.slice(1)}
           </span>
 
-          {content.status === 'pending' && (
-            <div className="flex space-x-2">
-              <button
-                onClick={handleSchedule}
-                className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-                disabled={approveMutation.isPending}
-              >
-                Schedule
-              </button>
-              <button
-                onClick={handleApprove}
-                className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
-                disabled={approveMutation.isPending}
-              >
-                Approve Now
-              </button>
-              <button
-                onClick={handleReject}
-                className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
-                disabled={rejectMutation.isPending}
-              >
-                Reject
-              </button>
-            </div>
-          )}
 
           {content.status === 'approved' && (
             <div className="flex flex-col space-y-2">
@@ -197,43 +133,6 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
         )}
       </div>
 
-      {/* Schedule Modal */}
-      {showScheduleModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96">
-            <h3 className="text-lg font-medium mb-4">Schedule Content</h3>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Schedule Date & Time
-              </label>
-              <input
-                type="datetime-local"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-                min={new Date().toISOString().slice(0, 16)}
-              />
-            </div>
-
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowScheduleModal(false)}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApprove}
-                disabled={!scheduledDate || approveMutation.isPending}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                {approveMutation.isPending ? 'Scheduling...' : 'Schedule'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

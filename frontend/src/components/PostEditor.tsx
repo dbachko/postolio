@@ -141,19 +141,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         // Note: Notification will persist until user manually closes it
       }
       
-      // Update the content in all relevant queries
-      queryClient.setQueryData(['pendingContent', response.content.id], (oldData: any) => {
-        if (oldData?.content) {
-          return {
-            ...oldData,
-            content: oldData.content.map((item: Content) =>
-              item.id === response.content.id ? response.content : item
-            )
-          }
-        }
-        return oldData
-      })
-      
+      // Update the content in relevant queries
       queryClient.setQueryData(['contentHistory', response.content.id], (oldData: any) => {
         if (oldData?.content) {
           return {
@@ -167,7 +155,6 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       })
 
       // Invalidate queries to refresh calendar
-      queryClient.invalidateQueries({ queryKey: ['pendingContent'] })
       queryClient.invalidateQueries({ queryKey: ['contentHistory'] })
       
       // Show "AI is learning" message briefly
