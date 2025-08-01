@@ -2,15 +2,27 @@ import OpenAI from 'openai'
 import type { StyleProfile } from './ai.js'
 import { generateMidjourneyImage } from './midjourney.js'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+// Import mocks for testing
+const isTestEnvironment = process.env.NODE_ENV === 'test'
+let openai: any
 
-// Validate OpenAI API key on startup
-if (!process.env.OPENAI_API_KEY) {
-  console.error('WARNING: OPENAI_API_KEY environment variable is not set')
+if (isTestEnvironment) {
+  // Use mock OpenAI in test environment
+  const { mockOpenAI } = await import('../../test/mocks/openai.mock.js')
+  openai = mockOpenAI
+  console.log('🧪 Using OpenAI mock for testing')
 } else {
-  console.log('OpenAI API key is configured')
+  // Use real OpenAI in non-test environments
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  })
+  
+  // Validate OpenAI API key on startup
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('WARNING: OPENAI_API_KEY environment variable is not set')
+  } else {
+    console.log('OpenAI API key is configured')
+  }
 }
 
 export interface ContentGenerationRequest {

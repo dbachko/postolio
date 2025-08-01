@@ -27,8 +27,8 @@ describe('Engagement Automation', () => {
       payload: {
         email: 'engagement@test.com',
         password: 'password123',
-        name: 'Engagement Test User'
-      }
+        name: 'Engagement Test User',
+      },
     })
 
     const registerData = JSON.parse(registerResponse.body)
@@ -40,12 +40,12 @@ describe('Engagement Automation', () => {
       method: 'POST',
       url: '/brands/create',
       headers: {
-        authorization: `Bearer ${userToken}`
+        authorization: `Bearer ${userToken}`,
       },
       payload: {
         name: 'Test Engagement Brand',
-        description: 'Brand for engagement testing'
-      }
+        description: 'Brand for engagement testing',
+      },
     })
 
     const brandData = JSON.parse(brandResponse.body)
@@ -57,7 +57,7 @@ describe('Engagement Automation', () => {
       method: 'POST',
       url: '/engagement/rules',
       headers: {
-        authorization: `Bearer ${userToken}`
+        authorization: `Bearer ${userToken}`,
       },
       payload: {
         brandId: brandId,
@@ -65,34 +65,34 @@ describe('Engagement Automation', () => {
           autoLike: {
             enabled: true,
             targetHashtags: ['#photography', '#art'],
-            maxLikesPerHour: 30
+            maxLikesPerHour: 30,
           },
           autoComment: {
             enabled: true,
             templates: ['Great shot! 📸', 'Love this! ❤️'],
-            maxCommentsPerHour: 10
+            maxCommentsPerHour: 10,
           },
           autoFollow: {
             enabled: false,
-            maxFollowsPerHour: 5
+            maxFollowsPerHour: 5,
           },
           autoUnfollow: {
             enabled: false,
             maxUnfollowsPerHour: 5,
-            unfollowAfterDays: 7
+            unfollowAfterDays: 7,
           },
           safetyLimits: {
             maxActionsPerHour: 50,
             minDelayBetweenActions: 60,
-            respectBusinessHours: true
-          }
-        }
-      }
+            respectBusinessHours: true,
+          },
+        },
+      },
     })
 
     assert.strictEqual(response.statusCode, 201)
     const data = JSON.parse(response.body)
-    
+
     assert.ok(data.success)
     assert.ok(data.rules)
     assert.strictEqual(data.rules.brandId, brandId)
@@ -107,13 +107,13 @@ describe('Engagement Automation', () => {
       method: 'GET',
       url: `/engagement/rules/${brandId}`,
       headers: {
-        authorization: `Bearer ${userToken}`
-      }
+        authorization: `Bearer ${userToken}`,
+      },
     })
 
     assert.strictEqual(response.statusCode, 200)
     const data = JSON.parse(response.body)
-    
+
     assert.ok(data.rules)
     assert.strictEqual(data.rules.brandId, brandId)
     assert.strictEqual(data.rules.autoLike.enabled, true)
@@ -124,7 +124,7 @@ describe('Engagement Automation', () => {
       method: 'POST',
       url: '/engagement/rules',
       headers: {
-        authorization: `Bearer ${userToken}`
+        authorization: `Bearer ${userToken}`,
       },
       payload: {
         brandId: brandId,
@@ -132,29 +132,29 @@ describe('Engagement Automation', () => {
           autoLike: {
             enabled: true,
             targetHashtags: ['#test'],
-            maxLikesPerHour: 100 // Too high
+            maxLikesPerHour: 100, // Too high
           },
           autoComment: {
             enabled: false,
             templates: [],
-            maxCommentsPerHour: 0
+            maxCommentsPerHour: 0,
           },
           autoFollow: {
             enabled: false,
-            maxFollowsPerHour: 0
+            maxFollowsPerHour: 0,
           },
           autoUnfollow: {
             enabled: false,
             maxUnfollowsPerHour: 0,
-            unfollowAfterDays: 1
+            unfollowAfterDays: 1,
           },
           safetyLimits: {
             maxActionsPerHour: 50,
             minDelayBetweenActions: 60,
-            respectBusinessHours: true
-          }
-        }
-      }
+            respectBusinessHours: true,
+          },
+        },
+      },
     })
 
     assert.strictEqual(response.statusCode, 400)
@@ -168,13 +168,13 @@ describe('Engagement Automation', () => {
       method: 'GET',
       url: `/engagement/status/${brandId}`,
       headers: {
-        authorization: `Bearer ${userToken}`
-      }
+        authorization: `Bearer ${userToken}`,
+      },
     })
 
     assert.strictEqual(response.statusCode, 200)
     const data = JSON.parse(response.body)
-    
+
     assert.ok(data.status)
     assert.strictEqual(data.status.configured, true)
     assert.strictEqual(data.status.active, false)
@@ -186,13 +186,13 @@ describe('Engagement Automation', () => {
       method: 'GET',
       url: `/engagement/stats/${brandId}?days=7`,
       headers: {
-        authorization: `Bearer ${userToken}`
-      }
+        authorization: `Bearer ${userToken}`,
+      },
     })
 
     assert.strictEqual(response.statusCode, 200)
     const data = JSON.parse(response.body)
-    
+
     assert.ok(data.stats)
     assert.ok(typeof data.stats.totalActions === 'number')
     assert.ok(typeof data.stats.likes === 'number')
@@ -209,18 +209,21 @@ describe('Engagement Automation', () => {
       { method: 'GET', url: `/engagement/stats/${brandId}` },
       { method: 'POST', url: `/engagement/start/${brandId}` },
       { method: 'POST', url: `/engagement/stop/${brandId}` },
-      { method: 'GET', url: `/engagement/status/${brandId}` }
+      { method: 'GET', url: `/engagement/status/${brandId}` },
     ]
 
     for (const endpoint of endpoints) {
       const response = await app.inject({
         method: endpoint.method,
         url: endpoint.url,
-        payload: endpoint.method === 'POST' || endpoint.method === 'PUT' ? {} : undefined
+        payload: endpoint.method === 'POST' || endpoint.method === 'PUT' ? {} : undefined,
       })
 
-      assert.strictEqual(response.statusCode, 401, 
-        `Endpoint ${endpoint.method} ${endpoint.url} should require authentication`)
+      assert.strictEqual(
+        response.statusCode,
+        401,
+        `Endpoint ${endpoint.method} ${endpoint.url} should require authentication`
+      )
     }
   })
 
@@ -228,7 +231,10 @@ describe('Engagement Automation', () => {
     await prisma.content.deleteMany()
     await prisma.brand.deleteMany()
     await prisma.user.deleteMany()
-    
+
     await app.close()
+
+    // Force process exit after all tests complete
+    process.exit(0)
   })
 })

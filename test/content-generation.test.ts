@@ -1,4 +1,5 @@
 import { test } from 'node:test'
+import assert from 'node:assert'
 import { buildFastify } from '../src/server.ts'
 import { PrismaClient } from '@prisma/client'
 import { signJWT } from '../src/services/jwt.ts'
@@ -12,20 +13,22 @@ test('content generation creates multiple content options', async (t) => {
     await prisma.content.deleteMany({ where: { caption: { contains: 'Generated content' } } })
     await prisma.brand.deleteMany({ where: { name: 'Content Test Brand' } })
     await prisma.user.deleteMany({ where: { email: 'test-content@example.com' } })
+    // Force process exit after all tests complete
+    process.exit(0)
   })
 
   // Create user and brand
   const user = await prisma.user.create({
     data: {
       email: 'test-content@example.com',
-      name: 'Test User'
-    }
+      name: 'Test User',
+      password: 'TestPassword123!',
+    },
   })
 
   const brand = await prisma.brand.create({
     data: {
       name: 'Content Test Brand',
-      instagramHandle: '@contenttest',
       userId: user.id,
       styleProfile: {
         colorPalette: ['#ff6b6b', '#4ecdc4'],
@@ -33,16 +36,16 @@ test('content generation creates multiple content options', async (t) => {
         contentThemes: ['lifestyle', 'wellness'],
         toneOfVoice: 'Friendly and inspiring',
         targetAudience: 'Health-conscious millennials',
-        brandPersonality: ['authentic', 'inspiring']
-      } as any
-    }
+        brandPersonality: ['authentic', 'inspiring'],
+      } as any,
+    },
   })
 
   const generationRequest = {
     brandId: brand.id,
     count: 3,
     theme: 'wellness',
-    style: 'motivational'
+    style: 'motivational',
   }
 
   const token = signJWT({ id: user.id, email: user.email })
@@ -51,15 +54,15 @@ test('content generation creates multiple content options', async (t) => {
     method: 'POST',
     url: '/content/generate',
     headers: {
-      authorization: `Bearer ${token}`
+      authorization: `Bearer ${token}`,
     },
-    payload: generationRequest
+    payload: generationRequest,
   })
 
-  t.assert.strictEqual(response.statusCode, 201)
+  assert.strictEqual(response.statusCode, 201)
   const body = response.json()
-  t.assert.ok(Array.isArray(body.content))
-  t.assert.strictEqual(body.content.length, 3)
-  t.assert.ok(body.content[0].caption)
-  t.assert.ok(body.content[0].hashtags)
+  assert.ok(Array.isArray(body.content))
+  assert.strictEqual(body.content.length, 3)
+  assert.ok(body.content[0].caption)
+  assert.ok(body.content[0].hashtags)
 })

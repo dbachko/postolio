@@ -32,7 +32,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
 
       const { brandId } = request.params as { brandId: string }
       const { days = 30 } = request.query as { days?: number }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
@@ -64,7 +64,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { brandId } = request.params as { brandId: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
@@ -103,7 +103,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
 
       const { brandId } = request.params as { brandId: string }
       const { timezone = 'UTC' } = request.query as { timezone?: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
@@ -143,7 +143,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({ error: 'contentId is required' })
       }
 
-      const userId = user.userId
+      const userId = user.id
 
       // Verify content ownership
       const content = await prisma.content.findFirst({
@@ -192,7 +192,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { brandId } = request.params as { brandId: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
@@ -224,7 +224,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { contentId } = request.params as { contentId: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify content ownership
       const content = await prisma.content.findFirst({
@@ -270,7 +270,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({ error: 'contentId and newTime are required' })
       }
 
-      const userId = user.userId
+      const userId = user.id
 
       // Verify content ownership
       const content = await prisma.content.findFirst({
@@ -319,7 +319,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({ error: 'contentIds array is required' })
       }
 
-      const userId = user.userId
+      const userId = user.id
 
       // Verify all content ownership
       const contents = await prisma.content.findMany({
@@ -357,7 +357,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { brandId } = request.params as { brandId: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
@@ -389,7 +389,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { contentId } = request.params as { contentId: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify content ownership
       const content = await prisma.content.findFirst({

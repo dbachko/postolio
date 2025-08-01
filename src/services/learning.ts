@@ -3,9 +3,22 @@ import OpenAI from 'openai'
 import type { StyleProfile } from './ai.js'
 
 const prisma = new PrismaClient()
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+
+// Import mocks for testing
+const isTestEnvironment = process.env.NODE_ENV === 'test'
+let openai: any
+
+if (isTestEnvironment) {
+  // Use mock OpenAI in test environment
+  const { mockOpenAI } = await import('../../test/mocks/openai.mock.js')
+  openai = mockOpenAI
+  console.log('🧪 Using OpenAI mock for learning service testing')
+} else {
+  // Use real OpenAI in non-test environments
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  })
+}
 
 export interface EditAnalysis {
   captionChanges: {

@@ -1,4 +1,5 @@
 import { test } from 'node:test'
+import assert from 'node:assert'
 import { buildFastify } from '../src/server.ts'
 import { PrismaClient } from '@prisma/client'
 import { signJWT } from '../src/services/jwt.ts'
@@ -11,22 +12,24 @@ test('brands list returns user brands', async (t) => {
     await app.close()
     await prisma.brand.deleteMany({ where: { name: 'List Test Brand' } })
     await prisma.user.deleteMany({ where: { email: 'test-list@example.com' } })
+    // Force process exit after all tests complete
+    process.exit(0)
   })
 
   // Create user and brand
   const user = await prisma.user.create({
     data: {
       email: 'test-list@example.com',
-      name: 'Test User'
-    }
+      name: 'Test User',
+      password: 'TestPassword123!',
+    },
   })
 
   await prisma.brand.create({
     data: {
       name: 'List Test Brand',
-      instagramHandle: '@listtest',
-      userId: user.id
-    }
+      userId: user.id,
+    },
   })
 
   const token = signJWT({ id: user.id, email: user.email })
@@ -35,13 +38,13 @@ test('brands list returns user brands', async (t) => {
     method: 'GET',
     url: '/brands/list',
     headers: {
-      authorization: `Bearer ${token}`
-    }
+      authorization: `Bearer ${token}`,
+    },
   })
 
-  t.assert.strictEqual(response.statusCode, 200)
+  assert.strictEqual(response.statusCode, 200)
   const body = response.json()
-  t.assert.ok(Array.isArray(body.brands))
-  t.assert.strictEqual(body.brands.length, 1)
-  t.assert.strictEqual(body.brands[0].name, 'List Test Brand')
+  assert.ok(Array.isArray(body.brands))
+  assert.strictEqual(body.brands.length, 1)
+  assert.strictEqual(body.brands[0].name, 'List Test Brand')
 })

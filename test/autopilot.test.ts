@@ -21,8 +21,8 @@ describe('Autopilot Content Generation', () => {
       data: {
         email: 'autopilot-test@example.com',
         password: 'hashedpassword',
-        name: 'Autopilot Test User'
-      }
+        name: 'Autopilot Test User',
+      },
     })
     testUserId = testUser.id
 
@@ -44,15 +44,15 @@ describe('Autopilot Content Generation', () => {
           toneOfVoice: 'Friendly',
           targetAudience: 'Young professionals',
           brandPersonality: ['authentic', 'innovative'],
-          colorPalette: ['blue', 'white']
+          colorPalette: ['blue', 'white'],
         },
         preferences: {
           contentStrategy: {
             themes: ['lifestyle', 'inspiration', 'behind-the-scenes'],
-            postingFrequency: 'daily'
-          }
-        }
-      }
+            postingFrequency: 'daily',
+          },
+        },
+      },
     })
     testBrandId = testBrand.id
   })
@@ -60,16 +60,18 @@ describe('Autopilot Content Generation', () => {
   after(async () => {
     // Cleanup test data
     await prisma.content.deleteMany({
-      where: { brandId: testBrandId }
+      where: { brandId: testBrandId },
     })
     await prisma.brand.deleteMany({
-      where: { id: testBrandId }
+      where: { id: testBrandId },
     })
     await prisma.user.deleteMany({
-      where: { id: testUserId }
+      where: { id: testUserId },
     })
     await prisma.$disconnect()
     await app.close()
+    // Force process exit after all tests complete
+    process.exit(0)
   })
 
   test('should trigger manual autopilot generation', async () => {
@@ -77,12 +79,12 @@ describe('Autopilot Content Generation', () => {
       method: 'POST',
       url: '/autopilot/trigger',
       headers: {
-        authorization: `Bearer ${authToken}`
-      }
+        authorization: `Bearer ${authToken}`,
+      },
     })
 
     assert.strictEqual(response.statusCode, 200)
-    
+
     const result = JSON.parse(response.payload)
     assert.strictEqual(result.success, true)
     assert.ok(result.data.generated >= 0)
@@ -95,12 +97,12 @@ describe('Autopilot Content Generation', () => {
       method: 'GET',
       url: '/autopilot/status',
       headers: {
-        authorization: `Bearer ${authToken}`
-      }
+        authorization: `Bearer ${authToken}`,
+      },
     })
 
     assert.strictEqual(response.statusCode, 200)
-    
+
     const result = JSON.parse(response.payload)
     assert.strictEqual(result.success, true)
     assert.ok(result.data.brandStatuses)
@@ -113,18 +115,18 @@ describe('Autopilot Content Generation', () => {
       method: 'GET',
       url: '/autopilot/gaps',
       headers: {
-        authorization: `Bearer ${authToken}`
-      }
+        authorization: `Bearer ${authToken}`,
+      },
     })
 
     assert.strictEqual(response.statusCode, 200)
-    
+
     const result = JSON.parse(response.payload)
     assert.strictEqual(result.success, true)
     assert.ok(result.data.analysis)
     assert.ok(Array.isArray(result.data.analysis))
     assert.ok(result.data.summary)
-    
+
     // Check that our test brand appears in the analysis
     const brandAnalysis = result.data.analysis.find((b: any) => b.brandId === testBrandId)
     assert.ok(brandAnalysis)
@@ -141,9 +143,9 @@ describe('Autopilot Content Generation', () => {
         postingFrequency: 'every-other-day' as const,
         optimalTimes: [
           { hour: 9, minute: 0 },
-          { hour: 18, minute: 30 }
-        ]
-      }
+          { hour: 18, minute: 30 },
+        ],
+      },
     }
 
     const response = await app.inject({
@@ -151,13 +153,13 @@ describe('Autopilot Content Generation', () => {
       url: `/autopilot/brands/${testBrandId}/config`,
       headers: {
         authorization: `Bearer ${authToken}`,
-        'content-type': 'application/json'
+        'content-type': 'application/json',
       },
-      payload: JSON.stringify(config)
+      payload: JSON.stringify(config),
     })
 
     assert.strictEqual(response.statusCode, 200)
-    
+
     const result = JSON.parse(response.payload)
     assert.strictEqual(result.success, true)
     assert.ok(result.message)
@@ -168,18 +170,18 @@ describe('Autopilot Content Generation', () => {
       method: 'GET',
       url: `/autopilot/brands/${testBrandId}/config`,
       headers: {
-        authorization: `Bearer ${authToken}`
-      }
+        authorization: `Bearer ${authToken}`,
+      },
     })
 
     assert.strictEqual(response.statusCode, 200)
-    
+
     const result = JSON.parse(response.payload)
     assert.strictEqual(result.success, true)
     assert.strictEqual(result.data.brandId, testBrandId)
     assert.strictEqual(result.data.brandName, 'Autopilot Test Brand')
     assert.ok(result.data.config)
-    
+
     // Verify updated config
     const config = result.data.config
     assert.strictEqual(config.enabled, true)
@@ -195,15 +197,15 @@ describe('Autopilot Content Generation', () => {
       data: {
         email: 'other-user@example.com',
         password: 'hashedpassword',
-        name: 'Other User'
-      }
+        name: 'Other User',
+      },
     })
 
     const otherBrand = await prisma.brand.create({
       data: {
         name: 'Other Brand',
-        userId: otherUser.id
-      }
+        userId: otherUser.id,
+      },
     })
 
     // Try to access other brand's config
@@ -211,12 +213,12 @@ describe('Autopilot Content Generation', () => {
       method: 'GET',
       url: `/autopilot/brands/${otherBrand.id}/config`,
       headers: {
-        authorization: `Bearer ${authToken}`
-      }
+        authorization: `Bearer ${authToken}`,
+      },
     })
 
     assert.strictEqual(response.statusCode, 404)
-    
+
     const result = JSON.parse(response.payload)
     assert.strictEqual(result.success, false)
     assert.ok(result.message.includes('not found'))
@@ -229,7 +231,7 @@ describe('Autopilot Content Generation', () => {
   test('should require authentication', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: '/autopilot/status'
+      url: '/autopilot/status',
     })
 
     assert.strictEqual(response.statusCode, 401)

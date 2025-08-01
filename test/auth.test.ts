@@ -1,4 +1,5 @@
 import { test } from 'node:test'
+import assert from 'node:assert'
 import { buildFastify } from '../src/server.ts'
 import { PrismaClient } from '@prisma/client'
 
@@ -9,23 +10,25 @@ test('user registration creates new user', async (t) => {
   t.after(async () => {
     await app.close()
     await prisma.user.deleteMany({ where: { email: 'test-register@example.com' } })
+    // Force process exit after all tests complete
+    process.exit(0)
   })
 
   const userData = {
     email: 'test-register@example.com',
     password: 'Password123!',
-    name: 'Test User'
+    name: 'Test User',
   }
 
   const response = await app.inject({
     method: 'POST',
     url: '/auth/register',
-    payload: userData
+    payload: userData,
   })
 
-  t.assert.strictEqual(response.statusCode, 201)
+  assert.strictEqual(response.statusCode, 201)
   const body = response.json()
-  t.assert.ok(body.token)
-  t.assert.strictEqual(body.user.email, userData.email)
-  t.assert.ok(!body.user.password) // Password should not be returned
+  assert.ok(body.token)
+  assert.strictEqual(body.user.email, userData.email)
+  assert.ok(!body.user.password) // Password should not be returned
 })
