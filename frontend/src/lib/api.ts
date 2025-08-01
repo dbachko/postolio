@@ -481,6 +481,114 @@ class ApiClient {
     })
   }
 
+  // Campaign Analytics Methods
+  async getCampaignMetrics(campaignId: string): Promise<{
+    success: boolean
+    data: {
+      totalPosts: number
+      totalImpressions: number
+      totalEngagement: number
+      averageEngagementRate: number
+      reach: number
+      postsScheduled: number
+      postsPosted: number
+      postsApproved: number
+      campaignDuration: number
+      postingFrequency: number
+      topHashtags: Array<{ tag: string; count: number; avgEngagement: number }>
+      performanceByDate: Array<{ date: string; impressions: number; engagement: number }>
+    }
+    lastUpdated: string
+    fromCache: boolean
+  }> {
+    return this.request(`/api/campaign/analytics/${campaignId}`)
+  }
+
+  async compareCampaigns(campaignIds: string[]): Promise<{
+    success: boolean
+    data: {
+      campaigns: Array<{
+        id: string
+        name: string
+        metrics: any
+        performance: 'high' | 'medium' | 'low'
+      }>
+      summary: {
+        totalCampaigns: number
+        avgEngagementRate: number
+        bestPerformingMetric: string
+        improvementOpportunity: string
+      }
+      topPerformer: string
+    }
+    lastUpdated: string
+  }> {
+    return this.request('/api/campaign/analytics/compare', {
+      method: 'POST',
+      body: JSON.stringify({ campaignIds }),
+    })
+  }
+
+  async getCampaignRecommendations(campaignId: string): Promise<{
+    success: boolean
+    data: Array<{
+      type: 'frequency' | 'content' | 'timing' | 'hashtags' | 'themes'
+      message: string
+      priority: 'high' | 'medium' | 'low'
+      impact: string
+      actionable: boolean
+      data?: any
+    }>
+    count: number
+    lastUpdated: string
+  }> {
+    return this.request(`/api/campaign/analytics/${campaignId}/recommendations`)
+  }
+
+  async getCampaignROI(campaignId: string): Promise<{
+    success: boolean
+    data: {
+      estimatedValue: number
+      engagementValue: number
+      reachValue: number
+      breakdown: {
+        costPerEngagement: number
+        estimatedReach: number
+        valuePerImpression: number
+      }
+      methodology: string
+    }
+    lastUpdated: string
+  }> {
+    return this.request(`/api/campaign/analytics/${campaignId}/roi`)
+  }
+
+  async getBrandAnalyticsSummary(brandId: string): Promise<{
+    success: boolean
+    data: {
+      totalCampaigns: number
+      summary: {
+        totalPosts: number
+        totalImpressions: number
+        totalEngagement: number
+        averageEngagementRate: number
+      }
+      topPerformingCampaign: {
+        id: string
+        name: string
+        engagementRate: number
+      } | null
+      campaignBreakdown: Array<{
+        campaignId: string
+        campaignName: string
+        metrics: any
+      }>
+    }
+    lastUpdated: string
+  }> {
+    return this.request(`/api/brand/${brandId}/analytics/summary`)
+  }
+
 }
 
 export const apiClient = new ApiClient()

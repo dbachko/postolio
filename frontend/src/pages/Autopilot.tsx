@@ -15,7 +15,9 @@ import { Alert, AlertDescription } from '../components/ui/alert'
 import { PostEditor } from '../components/PostEditor'
 import { TemplateSelector } from '../components/TemplateSelector'
 import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal'
-import { Loader2, Edit, Calendar, Users, TrendingUp, X, AlertCircle, Plus, List, Eye, Pause, Play, Trash2, FileText, Bookmark } from 'lucide-react'
+import { CampaignAnalytics } from '../components/CampaignAnalytics'
+import { CampaignComparison } from '../components/CampaignComparison'
+import { Loader2, Edit, Calendar, Users, TrendingUp, X, AlertCircle, Plus, List, Eye, Pause, Play, Trash2, FileText, Bookmark, BarChart3 } from 'lucide-react'
 interface CampaignFormData {
   name: string
   startDate: string
@@ -97,6 +99,7 @@ export function Autopilot() {
   const [saveAsTemplateCampaignId, setSaveAsTemplateCampaignId] = useState<string | null>(null)
   const [isFormPrefilledFromTemplate, setIsFormPrefilledFromTemplate] = useState(false)
   const [usedTemplateName, setUsedTemplateName] = useState<string | null>(null)
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false)
   
   // Campaign list query
   const campaignsQuery = useQuery({
@@ -669,6 +672,15 @@ export function Autopilot() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsComparisonOpen(true)}
+                    disabled={!campaignsQuery.data?.campaigns?.length || campaignsQuery.data.campaigns.filter(c => ['active', 'completed', 'paused'].includes(c.status)).length < 2}
+                    className="flex items-center gap-2"
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    Compare Campaigns
+                  </Button>
                   <Button variant="outline" onClick={handleUseTemplate} className="flex items-center gap-2 bg-blue-50 border-blue-200 hover:bg-blue-100">
                     <FileText className="w-4 h-4 text-blue-600" />
                     Use FileText
@@ -1577,6 +1589,14 @@ export function Autopilot() {
                   </Card>
                 )}
 
+                {/* Campaign Analytics */}
+                {(campaign.status === 'active' || campaign.status === 'completed' || campaign.status === 'paused') && (
+                  <CampaignAnalytics 
+                    campaignId={campaign.id} 
+                    campaignName={campaign.name} 
+                  />
+                )}
+
                 {/* Campaign Content */}
                 <Card>
                   <CardHeader>
@@ -1965,6 +1985,13 @@ export function Autopilot() {
           onTemplateSaved={handleTemplateSaved}
         />
       )}
+
+      {/* Campaign Comparison Modal */}
+      <CampaignComparison
+        campaigns={campaignsQuery.data?.campaigns || []}
+        isOpen={isComparisonOpen}
+        onClose={() => setIsComparisonOpen(false)}
+      />
     </div>
   )
 }

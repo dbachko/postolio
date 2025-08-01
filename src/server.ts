@@ -19,6 +19,7 @@ import aiRoutes from './routes/ai.js'
 import autopilotRoutes from './routes/autopilot.js'
 import campaignRoutes from './routes/campaign.js'
 import campaignTemplatesRoutes from './routes/campaign-templates.js'
+import { campaignAnalyticsRoutes } from './routes/campaign-analytics.js'
 import { autopilotService } from './services/autopilot.js'
 import { schedulerService } from './services/scheduler.js'
 
@@ -83,6 +84,7 @@ export function buildFastify(): FastifyInstance {
   app.register(autopilotRoutes, { prefix: '/autopilot' })
   app.register(campaignRoutes, { prefix: '/campaign' })
   app.register(campaignTemplatesRoutes, { prefix: '/templates' })
+  app.register(campaignAnalyticsRoutes, { prefix: '/api' })
 
   // Health check endpoint
   app.get('/health', async () => {
