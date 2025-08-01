@@ -414,6 +414,24 @@ export function Autopilot() {
     return option ? option.label : style
   }
 
+  const getCampaignCardVariant = (status: string) => {
+    switch (status) {
+      case 'preview':
+        return 'preview'
+      case 'active':
+        return 'active'
+      case 'failed':
+        return 'failed'
+      case 'creating':
+      case 'processing':
+        return 'creating'
+      case 'paused':
+        return 'paused'
+      default:
+        return 'default'
+    }
+  }
+
   const handleEditCampaign = (campaign: any) => {
     const config = campaign.config
     if (!config || !config.duration) {
@@ -592,7 +610,7 @@ export function Autopilot() {
               ) : (
                 <div className="space-y-4">
                   {campaignsQuery.data.campaigns.map((campaign: any) => (
-                    <Card key={campaign.id}>
+                    <Card key={campaign.id} variant={getCampaignCardVariant(campaign.status)}>
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -1205,7 +1223,7 @@ export function Autopilot() {
 
             return (
               <>
-                <Card>
+                <Card variant={getCampaignCardVariant(campaign.status)}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
