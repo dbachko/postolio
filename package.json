@@ -13,7 +13,10 @@
     "start:all": "npm run dev:db && concurrently \"npm run dev\" \"npm run dev:frontend\"",
     "test": "NODE_ENV=test node --test --import tsx --test-concurrency=1 test/auth.test.ts test/brand-analysis.test.ts test/brands-list.test.ts test/content-generation.test.ts test/content-approval.test.ts test/instagram-integration.test.ts test/content-publishing.test.ts test/autopilot.test.ts test/analytics.test.ts",
     "lint": "eslint src/**/*.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy:aws:dev": "./scripts/deploy-aws.sh dev",
+    "deploy:aws:prod": "./scripts/deploy-aws.sh prod",
+    "deploy:aws:destroy": "./scripts/deploy-aws.sh prod destroy"
   },
   "dependencies": {
     "@fastify/cookie": "^10.0.1",

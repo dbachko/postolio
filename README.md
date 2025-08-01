@@ -369,7 +369,47 @@ npm run test:coverage
 
 ## Production Deployment
 
-### Environment Variables
+### AWS Deployment (Recommended)
+
+The application is designed for deployment on AWS using a modern containerized architecture. See the complete [AWS Deployment Strategy](docs/AWS_DEPLOYMENT_STRATEGY.md) for detailed information.
+
+#### Quick AWS Deployment
+
+1. **Prerequisites**
+   - AWS CLI configured with appropriate permissions
+   - Docker installed and running
+   - Node.js 20+ installed
+
+2. **One-command deployment**
+   ```bash
+   ./scripts/quick-start-aws.sh
+   ```
+
+3. **Manual deployment**
+   ```bash
+   # Deploy to development
+   ./scripts/deploy-aws.sh dev
+   
+   # Deploy to production
+   ./scripts/deploy-aws.sh prod
+   ```
+
+4. **Configure secrets** (after deployment)
+   - Update AWS Secrets Manager with your API keys
+   - OpenAI API Key
+   - Facebook/Meta App credentials
+
+#### AWS Architecture
+- **ECS Fargate**: Serverless container orchestration
+- **RDS PostgreSQL**: Managed database with automated backups
+- **ElastiCache Redis**: In-memory caching
+- **CloudFront + S3**: Global CDN for frontend
+- **Application Load Balancer**: SSL termination and load balancing
+- **Secrets Manager**: Secure credential storage
+
+### Alternative Deployment Options
+
+#### Environment Variables
 
 Set the following environment variables in production:
 
@@ -381,7 +421,7 @@ NODE_ENV=production
 PORT=3000
 ```
 
-### Build and Deploy
+#### Build and Deploy
 
 ```bash
 # Build backend
@@ -395,7 +435,7 @@ npm run build
 npm start
 ```
 
-### Docker Deployment
+#### Docker Deployment
 
 ```bash
 # Build and run with Docker Compose
