@@ -1,7 +1,8 @@
-import { FastifyRequest, FastifyReply } from 'fastify'
+import { FastifyPluginAsync } from 'fastify'
+import { verifyJWT } from '../services/jwt.js'
 import { campaignAnalyticsService } from '../services/campaign-analytics.js'
 
-interface CampaignMetricsRequest extends FastifyRequest {
+interface CampaignMetricsRequest {
   params: {
     campaignId: string
   }
@@ -10,32 +11,48 @@ interface CampaignMetricsRequest extends FastifyRequest {
   }
 }
 
-interface CompareCampaignsRequest extends FastifyRequest {
+interface CompareCampaignsRequest {
   body: {
     campaignIds: string[]
   }
 }
 
-interface OptimizationRequest extends FastifyRequest {
+interface OptimizationRequest {
   params: {
     campaignId: string
   }
 }
 
-interface ROIRequest extends FastifyRequest {
+interface ROIRequest {
   params: {
     campaignId: string
   }
 }
 
-export async function campaignAnalyticsRoutes(fastify: any) {
-  // Get campaign performance metrics
-  fastify.get('/campaign/analytics/:campaignId', {
-    preHandler: [fastify.authenticate]
-  }, async (request: CampaignMetricsRequest, reply: FastifyReply) => {
+const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
+  // Helper function to authenticate and get user ID
+  const authenticateRequest = async (request: any) => {
+    const authHeader = request.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new Error('Authentication required')
+    }
+
+    const token = authHeader.substring(7)
+    let decoded
     try {
+      decoded = verifyJWT(token)
+    } catch (jwtError) {
+      console.error('JWT verification error:', jwtError)
+      throw new Error('Invalid authentication token')
+    }
+
+    return decoded.id
+  }
+  // Get campaign performance metrics
+  fastify.get<CampaignMetricsRequest>('/campaign/analytics/:campaignId', async (request, reply) => {
+    try {
+      const userId = await authenticateRequest(request)
       const { campaignId } = request.params
-      const userId = request.user.userId
       
       const metrics = await campaignAnalyticsService.getCampaignMetrics(campaignId, userId)
       
@@ -55,12 +72,10 @@ export async function campaignAnalyticsRoutes(fastify: any) {
   })
 
   // Compare multiple campaigns
-  fastify.post('/campaign/analytics/compare', {
-    preHandler: [fastify.authenticate]
-  }, async (request: CompareCampaignsRequest, reply: FastifyReply) => {
+  fastify.post<CompareCampaignsRequest>('/campaign/analytics/compare', async (request, reply) => {
     try {
+      const userId = await authenticateRequest(request)
       const { campaignIds } = request.body
-      const userId = request.user.userId
 
       if (!Array.isArray(campaignIds) || campaignIds.length === 0) {
         reply.status(400).send({
@@ -95,12 +110,10 @@ export async function campaignAnalyticsRoutes(fastify: any) {
   })
 
   // Get optimization recommendations
-  fastify.get('/campaign/analytics/:campaignId/recommendations', {
-    preHandler: [fastify.authenticate]
-  }, async (request: OptimizationRequest, reply: FastifyReply) => {
+  fastify.get<OptimizationRequest>('/campaign/analytics/:campaignId/recommendations', async (request, reply) => {
     try {
+      const userId = await authenticateRequest(request)
       const { campaignId } = request.params
-      const userId = request.user.userId
       
       const recommendations = await campaignAnalyticsService.getOptimizationRecommendations(campaignId, userId)
       
@@ -120,12 +133,10 @@ export async function campaignAnalyticsRoutes(fastify: any) {
   })
 
   // Calculate campaign ROI
-  fastify.get('/campaign/analytics/:campaignId/roi', {
-    preHandler: [fastify.authenticate]
-  }, async (request: ROIRequest, reply: FastifyReply) => {
+  fastify.get<ROIRequest>('/campaign/analytics/:campaignId/roi', async (request, reply) => {
     try {
+      const userId = await authenticateRequest(request)
       const { campaignId } = request.params
-      const userId = request.user.userId
       
       const roi = await campaignAnalyticsService.calculateROI(campaignId, userId)
       
@@ -144,12 +155,10 @@ export async function campaignAnalyticsRoutes(fastify: any) {
   })
 
   // Get analytics summary for all campaigns of a brand
-  fastify.get('/brand/:brandId/analytics/summary', {
-    preHandler: [fastify.authenticate]
-  }, async (request: FastifyRequest<{ Params: { brandId: string } }>, reply: FastifyReply) => {
+  fastify.get<{ Params: { brandId: string } }>('/brand/:brandId/analytics/summary', async (request, reply) => {
     try {
+      const userId = await authenticateRequest(request)
       const { brandId } = request.params
-      const userId = request.user.userId
       
       // Get all campaigns for the brand
       const { PrismaClient } = await import('@prisma/client')
@@ -244,3 +253,5 @@ export async function campaignAnalyticsRoutes(fastify: any) {
     }
   })
 }
+
+export default campaignAnalyticsRoutes
