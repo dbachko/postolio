@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import { FastifyInstance } from 'fastify'
 import { verifyJWT } from '../services/jwt.js'
 import growthService from '../services/growth.js'
 
@@ -19,31 +19,9 @@ function authenticateRequest(request: any, reply: any) {
   }
 }
 
-interface AnalyzeRequest extends FastifyRequest {
-  body: {
-    brandId: string
-  }
-}
-
-interface StrategiesRequest extends FastifyRequest {
-  body: {
-    brandId: string
-    focus?: string
-  }
-}
-
-interface MetricsRequest extends FastifyRequest {
-  params: {
-    brandId: string
-  }
-  query: {
-    period?: string
-  }
-}
-
 export default async function growthRoutes(fastify: FastifyInstance) {
   // Analyze growth opportunities
-  fastify.post('/analyze', async function (request: AnalyzeRequest, reply: FastifyReply) {
+  fastify.post<{ Body: { brandId: string } }>('/analyze', async function (request, reply) {
     const user = authenticateRequest(request, reply)
     if (!user) return
 
@@ -55,10 +33,10 @@ export default async function growthRoutes(fastify: FastifyInstance) {
       }
 
       const analysis = await growthService.analyzeGrowthOpportunities(brandId)
-      
+
       reply.send({
         success: true,
-        analysis
+        analysis,
       })
     } catch (error) {
       console.error('Growth analysis error:', error)
@@ -67,7 +45,7 @@ export default async function growthRoutes(fastify: FastifyInstance) {
   })
 
   // Generate growth strategies
-  fastify.post('/strategies', async function (request: StrategiesRequest, reply: FastifyReply) {
+  fastify.post<{ Body: { brandId: string; focus?: string } }>('/strategies', async function (request, reply) {
     const user = authenticateRequest(request, reply)
     if (!user) return
 
@@ -79,10 +57,10 @@ export default async function growthRoutes(fastify: FastifyInstance) {
       }
 
       const strategies = await growthService.generateGrowthStrategies(brandId, focus)
-      
+
       reply.send({
         success: true,
-        strategies
+        strategies,
       })
     } catch (error) {
       console.error('Growth strategies error:', error)
@@ -91,23 +69,26 @@ export default async function growthRoutes(fastify: FastifyInstance) {
   })
 
   // Get growth metrics
-  fastify.get('/metrics/:brandId', async function (request: MetricsRequest, reply: FastifyReply) {
-    const user = authenticateRequest(request, reply)
-    if (!user) return
+  fastify.get<{ Params: { brandId: string }; Querystring: { period?: string } }>(
+    '/metrics/:brandId',
+    async function (request, reply) {
+      const user = authenticateRequest(request, reply)
+      if (!user) return
 
-    try {
-      const { brandId } = request.params
-      const period = parseInt(request.query.period || '30')
+      try {
+        const { brandId } = request.params
+        const period = parseInt(request.query.period ?? '30')
 
-      const metrics = await growthService.getGrowthMetrics(brandId, period)
-      
-      reply.send({
-        success: true,
-        metrics
-      })
-    } catch (error) {
-      console.error('Growth metrics error:', error)
-      reply.code(500).send({ error: 'Failed to get growth metrics' })
+        const metrics = await growthService.getGrowthMetrics(brandId, period)
+
+        reply.send({
+          success: true,
+          metrics,
+        })
+      } catch (error) {
+        console.error('Growth metrics error:', error)
+        reply.code(500).send({ error: 'Failed to get growth metrics' })
+      }
     }
-  })
+  )
 }

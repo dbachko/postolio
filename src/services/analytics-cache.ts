@@ -29,14 +29,16 @@ export class AnalyticsCache {
   private redis: Redis
 
   constructor() {
-    this.redis = new Redis({
+    const redisOptions: any = {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
-      retryDelayOnFailover: 100,
       enableReadyCheck: false,
       maxRetriesPerRequest: null,
-    })
+    }
+    if (process.env.REDIS_PASSWORD) {
+      redisOptions.password = process.env.REDIS_PASSWORD
+    }
+    this.redis = new Redis(redisOptions)
   }
 
   // Account insights (TTL: 1 hour)
@@ -90,12 +92,12 @@ export class AnalyticsCache {
   async incrementRateLimit(brandId: string): Promise<number> {
     const key = `analytics:ratelimit:${brandId}`
     const result = await this.redis.incr(key)
-    
+
     // Set TTL on first increment
     if (result === 1) {
       await this.redis.expire(key, 3600) // 1 hour TTL
     }
-    
+
     return result
   }
 
@@ -118,7 +120,7 @@ export class AnalyticsCache {
   // Check if data exists and is fresh
   async isDataFresh(brandId: string, type: 'account' | 'media' | 'posts', identifier?: string): Promise<boolean> {
     let key: string
-    
+
     switch (type) {
       case 'account':
         const today = new Date().toISOString().split('T')[0]
@@ -134,7 +136,7 @@ export class AnalyticsCache {
       default:
         return false
     }
-    
+
     const ttl = await this.redis.ttl(key)
     return ttl > 0
   }
@@ -149,18 +151,18 @@ export class AnalyticsCache {
     const today = new Date().toISOString().split('T')[0]
     const accountKey = `analytics:account:${brandId}:${today}`
     const postsKey = `analytics:posts:${brandId}:recent`
-    
+
     const [accountTTL, postsTTL, rateLimitCount] = await Promise.all([
       this.redis.ttl(accountKey),
       this.redis.ttl(postsKey),
-      this.getRateLimit(brandId)
+      this.getRateLimit(brandId),
     ])
-    
+
     return {
       lastUpdated: accountTTL > 0 ? new Date(Date.now() - (3600 - accountTTL) * 1000).toISOString() : null,
       accountDataAge: accountTTL > 0 ? 3600 - accountTTL : -1,
       postsDataAge: postsTTL > 0 ? 1800 - postsTTL : -1,
-      rateLimitCount
+      rateLimitCount,
     }
   }
 }

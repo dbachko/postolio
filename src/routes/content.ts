@@ -39,15 +39,15 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Verify user owns the brand
       const brand = await prisma.brand.findFirst({
-        where: { 
+        where: {
           id: brandId,
-          userId 
+          userId,
         },
         select: {
           id: true,
           name: true,
-          styleProfile: true
-        }
+          styleProfile: true,
+        },
       })
 
       if (!brand) {
@@ -89,8 +89,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
                 theme,
                 style,
                 imagePrompt: content.imagePrompt,
-                generatedAt: new Date().toISOString()
-              } as any
+                generatedAt: new Date().toISOString(),
+              } as any,
             },
             select: {
               id: true,
@@ -98,24 +98,24 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
               hashtags: true,
               imageUrl: true,
               status: true,
-              createdAt: true
-            }
+              createdAt: true,
+            },
           })
         })
       )
 
-      return reply.code(201).send({ 
+      return reply.code(201).send({
         content: contentRecords,
         metadata: {
           brandId,
           count: contentRecords.length,
           theme,
-          style
-        }
+          style,
+        },
       })
     } catch (error) {
       console.error('Content generation error:', error)
-      
+
       // Handle specific OpenAI errors with appropriate status codes
       if (error instanceof Error) {
         if (error.message.includes('OpenAI API key configuration error')) {
@@ -128,7 +128,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(429).send({ error: 'AI service rate limit exceeded. Please try again in a moment.' })
         }
       }
-      
+
       return reply.code(500).send({ error: 'Failed to generate content. Please try again.' })
     }
   })
@@ -149,10 +149,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Verify user owns the brand
       const brand = await prisma.brand.findFirst({
-        where: { 
+        where: {
           id: brandId,
-          userId 
-        }
+          userId,
+        },
       })
 
       if (!brand) {
@@ -162,7 +162,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       const pendingContent = await prisma.content.findMany({
         where: {
           brandId,
-          status: 'pending'
+          status: 'pending',
         },
         select: {
           id: true,
@@ -171,9 +171,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           imageUrl: true,
           status: true,
           createdAt: true,
-          generationParams: true
+          generationParams: true,
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
       })
 
       return { content: pendingContent }
@@ -202,9 +202,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: contentId },
         include: {
           brand: {
-            select: { userId: true }
-          }
-        }
+            select: { userId: true },
+          },
+        },
       })
 
       if (!content || content.brand.userId !== userId) {
@@ -220,7 +220,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: contentId },
         data: {
           status: 'approved',
-          scheduledAt: scheduledAt ? new Date(scheduledAt) : null
+          scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         },
         select: {
           id: true,
@@ -229,8 +229,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           imageUrl: true,
           status: true,
           scheduledAt: true,
-          updatedAt: true
-        }
+          updatedAt: true,
+        },
       })
 
       return { content: updatedContent }
@@ -259,9 +259,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: contentId },
         include: {
           brand: {
-            select: { userId: true }
-          }
-        }
+            select: { userId: true },
+          },
+        },
       })
 
       if (!content || content.brand.userId !== userId) {
@@ -272,13 +272,13 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       const updatedContent = await prisma.content.update({
         where: { id: contentId },
         data: {
-          status: 'rejected'
+          status: 'rejected',
         },
         select: {
           id: true,
           status: true,
-          updatedAt: true
-        }
+          updatedAt: true,
+        },
       })
 
       return { content: updatedContent }
@@ -307,9 +307,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: contentId },
         include: {
           brand: {
-            select: { userId: true, id: true }
-          }
-        }
+            select: { userId: true, id: true },
+          },
+        },
       })
 
       if (!content || content.brand.userId !== userId) {
@@ -317,11 +317,16 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Store original content for learning analysis
-      const originalContent = {
+      const originalContent: {
+        caption: string
+        hashtags: string[]
+        imageUrl?: string
+        scheduledAt?: string
+      } = {
         caption: content.caption,
         hashtags: content.hashtags,
-        imageUrl: content.imageUrl || undefined,
-        scheduledAt: content.scheduledAt?.toISOString()
+        ...(content.imageUrl ? { imageUrl: content.imageUrl } : {}),
+        ...(content.scheduledAt ? { scheduledAt: content.scheduledAt.toISOString() } : {}),
       }
 
       // Build update data - only include fields that are provided
@@ -333,7 +338,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             contentId,
             caption,
             captionType: typeof caption,
-            captionLength: caption?.length || 0
+            captionLength: caption?.length || 0,
           })
           return reply.code(400).send({ error: 'Caption cannot be empty or invalid' })
         }
@@ -359,13 +364,13 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           postedAt: true,
           createdAt: true,
           updatedAt: true,
-          brandId: true
-        }
+          brandId: true,
+        },
       })
 
       // Apply AI learning if there were changes
       let learningResults = null
-      const hasChanges = 
+      const hasChanges =
         (caption !== undefined && caption !== originalContent.caption) ||
         (hashtags !== undefined && JSON.stringify(hashtags) !== JSON.stringify(originalContent.hashtags)) ||
         (imageUrl !== undefined && imageUrl !== originalContent.imageUrl) ||
@@ -373,40 +378,46 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (hasChanges) {
         try {
-          const editedContent = {
+          const editedContent: {
+            caption: string
+            hashtags: string[]
+            imageUrl?: string
+            scheduledAt?: string
+          } = {
             caption: updatedContent.caption,
             hashtags: updatedContent.hashtags,
-            imageUrl: updatedContent.imageUrl || undefined,
-            scheduledAt: updatedContent.scheduledAt?.toISOString()
+            ...(updatedContent.imageUrl ? { imageUrl: updatedContent.imageUrl } : {}),
+            ...(updatedContent.scheduledAt ? { scheduledAt: updatedContent.scheduledAt.toISOString() } : {}),
           }
 
           // Analyze the edit and apply learning (async, don't block response)
-          learningService.analyzeUserEdit(content.brand.id, originalContent, editedContent)
-            .then(editAnalysis => learningService.applyLearningToStyleProfile(content.brand.id, editAnalysis))
-            .then(results => {
+          learningService
+            .analyzeUserEdit(content.brand.id, originalContent, editedContent)
+            .then((editAnalysis) => learningService.applyLearningToStyleProfile(content.brand.id, editAnalysis))
+            .then((results) => {
               console.log(`Learning applied for brand ${content.brand.id}:`, {
                 insights: results.insights.length,
                 profileUpdates: results.profileUpdates.length,
-                appliedToFuturePosts: results.appliedToFuturePosts
+                appliedToFuturePosts: results.appliedToFuturePosts,
               })
             })
-            .catch(error => {
+            .catch((error) => {
               console.error('Learning application error:', error)
             })
 
           // Provide immediate feedback about learning
           learningResults = {
             learningActive: true,
-            message: 'AI is learning from your edits...'
+            message: 'AI is learning from your edits...',
           }
         } catch (error) {
           console.error('Learning analysis error:', error)
         }
       }
 
-      return { 
+      return {
         content: updatedContent,
-        learning: learningResults
+        learning: learningResults,
       }
     } catch (error) {
       console.error('Content update error:', error)
@@ -430,10 +441,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Verify user owns the brand
       const brand = await prisma.brand.findFirst({
-        where: { 
+        where: {
           id: brandId,
-          userId 
-        }
+          userId,
+        },
       })
 
       if (!brand) {
@@ -443,7 +454,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       const contentHistory = await prisma.content.findMany({
         where: {
           brandId,
-          status: { in: ['approved', 'posted', 'rejected', 'scheduled'] }
+          status: { in: ['approved', 'posted', 'rejected', 'scheduled'] },
         },
         select: {
           id: true,
@@ -454,10 +465,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           scheduledAt: true,
           postedAt: true,
           createdAt: true,
-          updatedAt: true
+          updatedAt: true,
         },
         orderBy: { updatedAt: 'desc' },
-        take: 50 // Limit to last 50 items
+        take: 50, // Limit to last 50 items
       })
 
       return { content: contentHistory }

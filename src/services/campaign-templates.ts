@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import type { CampaignConfig } from './campaign.js'
 
 const prisma = new PrismaClient()
@@ -103,9 +103,9 @@ class CampaignTemplatesService {
       const template = await prisma.campaignTemplate.create({
         data: {
           name: data.name.trim(),
-          description: data.description?.trim() || null,
+          description: data.description !== undefined ? data.description?.trim() || null : null,
           isPublic: data.isPublic || false,
-          templateConfig: data.templateConfig,
+          templateConfig: data.templateConfig as unknown as Prisma.InputJsonValue,
           createdById: userId,
           brandId: data.brandId || null,
         },
@@ -137,7 +137,10 @@ class CampaignTemplatesService {
   /**
    * Get templates with filtering options
    */
-  async getTemplates(userId: string, filters: TemplateFilters = {}): Promise<{
+  async getTemplates(
+    userId: string,
+    filters: TemplateFilters = {}
+  ): Promise<{
     templates: any[]
     total: number
   }> {
@@ -292,15 +295,17 @@ class CampaignTemplatesService {
         }
       }
 
+      // Only include fields that are defined
+      const updateData: any = { updatedAt: new Date() }
+      if (updates.name !== undefined) updateData.name = updates.name.trim()
+      if (updates.description !== undefined) updateData.description = updates.description?.trim() || null
+      if (updates.isPublic !== undefined) updateData.isPublic = updates.isPublic
+      if (updates.templateConfig !== undefined)
+        updateData.templateConfig = updates.templateConfig as unknown as Prisma.InputJsonValue
+
       const updatedTemplate = await prisma.campaignTemplate.update({
         where: { id: templateId },
-        data: {
-          name: updates.name !== undefined ? updates.name.trim() : undefined,
-          description: updates.description !== undefined ? (updates.description?.trim() || null) : undefined,
-          isPublic: updates.isPublic !== undefined ? updates.isPublic : undefined,
-          templateConfig: updates.templateConfig !== undefined ? updates.templateConfig : undefined,
-          updatedAt: new Date(),
-        },
+        data: updateData,
         include: {
           createdBy: {
             select: {
@@ -383,9 +388,9 @@ class CampaignTemplatesService {
 
       const today = new Date()
       const todayDateString = today.toISOString().split('T')[0]
-      const startDateString = data.duration.start.toISOString().split('T')[0]
+      const startDateString = data.duration.start?.toISOString().split('T')[0]
 
-      if (startDateString < todayDateString) {
+      if (startDateString && todayDateString && startDateString < todayDateString) {
         throw new Error('Campaign start date cannot be in the past')
       }
 
@@ -470,7 +475,7 @@ class CampaignTemplatesService {
       const template = await this.createTemplate(
         {
           name: templateData.name,
-          description: templateData.description,
+          description: templateData.description !== undefined ? templateData.description : '',
           isPublic: templateData.isPublic || false,
           templateConfig,
           brandId: campaign.brandId,
@@ -540,10 +545,7 @@ class CampaignTemplatesService {
             },
           },
         },
-        orderBy: [
-          { usageCount: 'desc' },
-          { createdAt: 'desc' },
-        ],
+        orderBy: [{ usageCount: 'desc' }, { createdAt: 'desc' }],
         take: limit,
       })
     } catch (error) {
@@ -569,10 +571,7 @@ class CampaignTemplatesService {
             },
           },
         },
-        orderBy: [
-          { usageCount: 'desc' },
-          { createdAt: 'desc' },
-        ],
+        orderBy: [{ usageCount: 'desc' }, { createdAt: 'desc' }],
         take: limit,
       })
     } catch (error) {

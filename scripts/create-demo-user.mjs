@@ -8,27 +8,22 @@ const prisma = new PrismaClient()
 async function createDemoUser() {
   try {
     console.log('🚀 Creating demo user and brands...')
-    
+
+    // Always delete the demo user if it exists
+    await prisma.user.deleteMany({ where: { email: 'demo@example.com' } })
     // Hash the password
     const hashedPassword = await bcrypt.hash('password123', 10)
-    
-    // Create or update the demo user
-    const user = await prisma.user.upsert({
-      where: { email: 'demo@example.com' },
-      update: {
-        password: hashedPassword,
-        name: 'Demo User'
-      },
-      create: {
+    // Create the demo user
+    const user = await prisma.user.create({
+      data: {
         email: 'demo@example.com',
         password: hashedPassword,
         name: 'Demo User',
-        subscriptionTier: 'premium'
-      }
+        subscriptionTier: 'premium',
+      },
     })
-    
-    console.log(`✅ Created/updated user: ${user.email}`)
-    
+    console.log(`✅ Created user: ${user.email}`)
+
     // Define brand data with AI, robots, cyberpunk themes
     const brandsData = [
       {
@@ -42,8 +37,8 @@ async function createDemoUser() {
           contentTypes: ['tech demos', 'AI breakthroughs', 'futuristic concepts'],
           targetAudience: 'tech enthusiasts, developers, futurists',
           brandPersonality: 'innovative, mysterious, cutting-edge',
-          visualStyle: 'dark backgrounds with neon accents, holographic effects'
-        }
+          visualStyle: 'dark backgrounds with neon accents, holographic effects',
+        },
       },
       {
         name: 'RoboForge Labs',
@@ -56,8 +51,8 @@ async function createDemoUser() {
           contentTypes: ['robot demonstrations', 'behind the scenes', 'tech tutorials'],
           targetAudience: 'engineers, manufacturers, tech consumers',
           brandPersonality: 'helpful, innovative, trustworthy',
-          visualStyle: 'clean industrial design, metallic textures, bright lighting'
-        }
+          visualStyle: 'clean industrial design, metallic textures, bright lighting',
+        },
       },
       {
         name: 'NeuroLink Digital',
@@ -70,8 +65,8 @@ async function createDemoUser() {
           contentTypes: ['scientific breakthroughs', 'concept art', 'research updates'],
           targetAudience: 'researchers, investors, early adopters',
           brandPersonality: 'visionary, scientific, boundary-pushing',
-          visualStyle: 'minimalist with neural network patterns, brain imagery'
-        }
+          visualStyle: 'minimalist with neural network patterns, brain imagery',
+        },
       },
       {
         name: 'Quantum Rebellion',
@@ -84,12 +79,13 @@ async function createDemoUser() {
           contentTypes: ['fashion shoots', 'lifestyle content', 'urban photography'],
           targetAudience: 'gamers, cyberpunk enthusiasts, alternative fashion lovers',
           brandPersonality: 'rebellious, edgy, underground',
-          visualStyle: 'dark urban environments, neon lighting, glitch effects'
-        }
+          visualStyle: 'dark urban environments, neon lighting, glitch effects',
+        },
       },
       {
         name: 'Synthetic Minds Studio',
-        description: 'AI art collective creating digital consciousness through generative algorithms and machine creativity',
+        description:
+          'AI art collective creating digital consciousness through generative algorithms and machine creativity',
         styleProfile: {
           tone: 'artistic and philosophical',
           style: 'digital art',
@@ -98,21 +94,21 @@ async function createDemoUser() {
           contentTypes: ['AI-generated art', 'creative process', 'philosophical discussions'],
           targetAudience: 'artists, AI researchers, digital art collectors',
           brandPersonality: 'creative, philosophical, experimental',
-          visualStyle: 'abstract digital art, flowing algorithms, colorful data visualizations'
-        }
-      }
+          visualStyle: 'abstract digital art, flowing algorithms, colorful data visualizations',
+        },
+      },
     ]
-    
+
     // Create brands for the user
     for (const brandData of brandsData) {
       // Check if brand already exists for this user
       const existingBrand = await prisma.brand.findFirst({
         where: {
           name: brandData.name,
-          userId: user.id
-        }
+          userId: user.id,
+        },
       })
-      
+
       let brand
       if (existingBrand) {
         // Update existing brand
@@ -120,8 +116,8 @@ async function createDemoUser() {
           where: { id: existingBrand.id },
           data: {
             description: brandData.description,
-            styleProfile: brandData.styleProfile
-          }
+            styleProfile: brandData.styleProfile,
+          },
         })
       } else {
         // Create new brand
@@ -130,14 +126,14 @@ async function createDemoUser() {
             name: brandData.name,
             description: brandData.description,
             styleProfile: brandData.styleProfile,
-            userId: user.id
-          }
+            userId: user.id,
+          },
         })
       }
-      
+
       console.log(`✅ Created/updated brand: ${brand.name}`)
     }
-    
+
     console.log('\n🎉 Demo user setup complete!')
     console.log('\n📋 Login Details:')
     console.log('Email: demo@example.com')
@@ -146,7 +142,6 @@ async function createDemoUser() {
     brandsData.forEach((brand, index) => {
       console.log(`${index + 1}. ${brand.name} - ${brand.description}`)
     })
-    
   } catch (error) {
     console.error('❌ Error creating demo user:', error)
   } finally {

@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import { FastifyInstance } from 'fastify'
 import { verifyJWT } from '../services/jwt.js'
 import aiService from '../services/ai-features.js'
 import learningService from '../services/learning.js'
@@ -20,62 +20,51 @@ function authenticateRequest(request: any, reply: any) {
   }
 }
 
-interface HashtagOptimizeRequest extends FastifyRequest {
-  body: {
-    brandId: string
-    content: string
-    currentHashtags: string[]
+// Define body/params types for each route
+interface HashtagOptimizeBody {
+  brandId: string
+  content: string
+  currentHashtags: string[]
+}
+
+interface CompetitorAnalysisBody {
+  brandId: string
+  competitors: string[]
+}
+
+interface ContentSuggestionsBody {
+  brandId: string
+  context: string
+  contentType: 'post' | 'story' | 'reel'
+}
+
+interface ScheduleOptimizeBody {
+  brandId: string
+}
+
+interface ApplyLearningBody {
+  brandId: string
+  originalContent: {
+    caption: string
+    hashtags: string[]
+    imageUrl?: string
+    scheduledAt?: string
+  }
+  editedContent: {
+    caption: string
+    hashtags: string[]
+    imageUrl?: string
+    scheduledAt?: string
   }
 }
 
-interface CompetitorAnalysisRequest extends FastifyRequest {
-  body: {
-    brandId: string
-    competitors: string[]
-  }
-}
-
-interface ContentSuggestionsRequest extends FastifyRequest {
-  body: {
-    brandId: string
-    context: string
-    contentType: 'post' | 'story' | 'reel'
-  }
-}
-
-interface ScheduleOptimizeRequest extends FastifyRequest {
-  body: {
-    brandId: string
-  }
-}
-
-interface ApplyLearningRequest extends FastifyRequest {
-  body: {
-    brandId: string
-    originalContent: {
-      caption: string
-      hashtags: string[]
-      imageUrl?: string
-      scheduledAt?: string
-    }
-    editedContent: {
-      caption: string
-      hashtags: string[]
-      imageUrl?: string
-      scheduledAt?: string
-    }
-  }
-}
-
-interface LearningStatsRequest extends FastifyRequest {
-  params: {
-    brandId: string
-  }
+interface LearningStatsParams {
+  brandId: string
 }
 
 export default async function aiRoutes(fastify: FastifyInstance) {
   // Optimize hashtags with AI
-  fastify.post('/hashtags/optimize', async function (request: HashtagOptimizeRequest, reply: FastifyReply) {
+  fastify.post<{ Body: HashtagOptimizeBody }>('/hashtags/optimize', async function (request, reply) {
     const user = authenticateRequest(request, reply)
     if (!user) return
 
@@ -87,10 +76,10 @@ export default async function aiRoutes(fastify: FastifyInstance) {
       }
 
       const optimization = await aiService.optimizeHashtags(brandId, content, currentHashtags)
-      
+
       reply.send({
         success: true,
-        ...optimization
+        ...optimization,
       })
     } catch (error) {
       console.error('Hashtag optimization error:', error)
@@ -99,7 +88,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
   })
 
   // Analyze competitors
-  fastify.post('/competitors/analyze', async function (request: CompetitorAnalysisRequest, reply: FastifyReply) {
+  fastify.post<{ Body: CompetitorAnalysisBody }>('/competitors/analyze', async function (request, reply) {
     const user = authenticateRequest(request, reply)
     if (!user) return
 
@@ -111,10 +100,10 @@ export default async function aiRoutes(fastify: FastifyInstance) {
       }
 
       const result = await aiService.analyzeCompetitors(brandId, competitors)
-      
+
       reply.send({
         success: true,
-        ...result
+        ...result,
       })
     } catch (error) {
       console.error('Competitor analysis error:', error)
@@ -123,7 +112,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
   })
 
   // Suggest content ideas
-  fastify.post('/content/suggestions', async function (request: ContentSuggestionsRequest, reply: FastifyReply) {
+  fastify.post<{ Body: ContentSuggestionsBody }>('/content/suggestions', async function (request, reply) {
     const user = authenticateRequest(request, reply)
     if (!user) return
 
@@ -135,10 +124,10 @@ export default async function aiRoutes(fastify: FastifyInstance) {
       }
 
       const result = await aiService.suggestContentIdeas(brandId, context, contentType)
-      
+
       reply.send({
         success: true,
-        ...result
+        ...result,
       })
     } catch (error) {
       console.error('Content suggestions error:', error)
@@ -147,7 +136,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
   })
 
   // Optimize posting schedule
-  fastify.post('/schedule/optimize', async function (request: ScheduleOptimizeRequest, reply: FastifyReply) {
+  fastify.post<{ Body: ScheduleOptimizeBody }>('/schedule/optimize', async function (request, reply) {
     const user = authenticateRequest(request, reply)
     if (!user) return
 
@@ -159,10 +148,10 @@ export default async function aiRoutes(fastify: FastifyInstance) {
       }
 
       const result = await aiService.optimizeSchedule(brandId)
-      
+
       reply.send({
         success: true,
-        ...result
+        ...result,
       })
     } catch (error) {
       console.error('Schedule optimization error:', error)
@@ -171,7 +160,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
   })
 
   // Apply learning from user edits
-  fastify.post('/apply-learning', async function (request: ApplyLearningRequest, reply: FastifyReply) {
+  fastify.post<{ Body: ApplyLearningBody }>('/apply-learning', async function (request, reply) {
     const user = authenticateRequest(request, reply)
     if (!user) return
 
@@ -184,16 +173,16 @@ export default async function aiRoutes(fastify: FastifyInstance) {
 
       // Analyze the edit patterns
       const editAnalysis = await learningService.analyzeUserEdit(brandId, originalContent, editedContent)
-      
+
       // Apply learning to style profile
       const results = await learningService.applyLearningToStyleProfile(brandId, editAnalysis)
-      
+
       reply.send({
         success: true,
         insights: results.insights,
         profileUpdates: results.profileUpdates,
         appliedToFuturePosts: results.appliedToFuturePosts,
-        message: `AI learned from your edits and applied insights to ${results.appliedToFuturePosts} future posts`
+        message: `AI learned from your edits and applied insights to ${results.appliedToFuturePosts} future posts`,
       })
     } catch (error) {
       console.error('Learning application error:', error)
@@ -202,7 +191,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
   })
 
   // Get learning analytics and stats
-  fastify.get('/learning-stats/:brandId', async function (request: LearningStatsRequest, reply: FastifyReply) {
+  fastify.get<{ Params: LearningStatsParams }>('/learning-stats/:brandId', async function (request, reply) {
     const user = authenticateRequest(request, reply)
     if (!user) return
 
@@ -214,10 +203,10 @@ export default async function aiRoutes(fastify: FastifyInstance) {
       }
 
       const analytics = await learningService.getLearningAnalytics(brandId)
-      
+
       reply.send({
         success: true,
-        analytics
+        analytics,
       })
     } catch (error) {
       console.error('Learning analytics error:', error)

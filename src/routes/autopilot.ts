@@ -17,24 +17,24 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
   /**
    * Manual trigger for autopilot content generation
    */
-  fastify.post('/trigger', async (request, reply) => {
+  fastify.post('/trigger', async (_request, reply) => {
     try {
       const result = await autopilotService.triggerManual()
-      
+
       reply.send({
         success: result.success,
         message: result.message,
         data: {
           generated: result.generated,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       })
     } catch (error) {
       console.error('Autopilot trigger error:', error)
       reply.status(500).send({
         success: false,
         message: 'Failed to trigger autopilot generation',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -42,20 +42,20 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
   /**
    * Get autopilot status for all brands
    */
-  fastify.get('/status', async (request, reply) => {
+  fastify.get('/status', async (_request, reply) => {
     try {
       const status = await autopilotService.getAutopilotStatus()
-      
+
       reply.send({
         success: true,
-        data: status
+        data: status,
       })
     } catch (error) {
       console.error('Autopilot status error:', error)
       reply.status(500).send({
         success: false,
         message: 'Failed to get autopilot status',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -63,161 +63,169 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
   /**
    * Update autopilot configuration for a specific brand
    */
-  fastify.patch('/brands/:brandId/config', {
-    schema: {
-      params: {
-        type: 'object',
-        properties: {
-          brandId: { type: 'string' }
+  fastify.patch(
+    '/brands/:brandId/config',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: {
+            brandId: { type: 'string' },
+          },
+          required: ['brandId'],
         },
-        required: ['brandId']
-      },
-      body: {
-        type: 'object',
-        properties: {
-          enabled: { type: 'boolean' },
-          minDaysAhead: { type: 'number', minimum: 7, maximum: 30 },
-          maxContentPerGeneration: { type: 'number', minimum: 1, maximum: 10 },
-          contentStrategy: {
-            type: 'object',
-            properties: {
-              themes: {
-                type: 'array',
-                items: { type: 'string' }
-              },
-              postingFrequency: {
-                type: 'string',
-                enum: ['daily', 'every-other-day', 'weekly']
-              },
-              optimalTimes: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    hour: { type: 'number', minimum: 0, maximum: 23 },
-                    minute: { type: 'number', minimum: 0, maximum: 59 }
+        body: {
+          type: 'object',
+          properties: {
+            enabled: { type: 'boolean' },
+            minDaysAhead: { type: 'number', minimum: 7, maximum: 30 },
+            maxContentPerGeneration: { type: 'number', minimum: 1, maximum: 10 },
+            contentStrategy: {
+              type: 'object',
+              properties: {
+                themes: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+                postingFrequency: {
+                  type: 'string',
+                  enum: ['daily', 'every-other-day', 'weekly'],
+                },
+                optimalTimes: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      hour: { type: 'number', minimum: 0, maximum: 23 },
+                      minute: { type: 'number', minimum: 0, maximum: 59 },
+                    },
+                    required: ['hour', 'minute'],
                   },
-                  required: ['hour', 'minute']
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }, async (request, reply) => {
-    try {
-      const { brandId } = request.params as { brandId: string }
-      const config = request.body as any
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { brandId } = request.params as { brandId: string }
+        const config = request.body as any
 
-      // Verify user owns this brand
-      const userId = (request.user as any).id
-      const brand = await prisma.brand.findFirst({
-        where: {
-          id: brandId,
-          userId: userId
-        }
-      })
-
-      if (!brand) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Brand not found or access denied'
+        // Verify user owns this brand
+        const userId = (request.user as any).id
+        const brand = await prisma.brand.findFirst({
+          where: {
+            id: brandId,
+            userId: userId,
+          },
         })
-      }
 
-      const success = await autopilotService.updateBrandConfig(brandId, config)
-      
-      if (success) {
-        reply.send({
-          success: true,
-          message: 'Autopilot configuration updated successfully'
-        })
-      } else {
+        if (!brand) {
+          return reply.status(404).send({
+            success: false,
+            message: 'Brand not found or access denied',
+          })
+        }
+
+        const success = await autopilotService.updateBrandConfig(brandId, config)
+
+        if (success) {
+          reply.send({
+            success: true,
+            message: 'Autopilot configuration updated successfully',
+          })
+        } else {
+          reply.status(500).send({
+            success: false,
+            message: 'Failed to update autopilot configuration',
+          })
+        }
+      } catch (error) {
+        console.error('Autopilot config update error:', error)
         reply.status(500).send({
           success: false,
-          message: 'Failed to update autopilot configuration'
+          message: 'Failed to update autopilot configuration',
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
-    } catch (error) {
-      console.error('Autopilot config update error:', error)
-      reply.status(500).send({
-        success: false,
-        message: 'Failed to update autopilot configuration',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      })
     }
-  })
+  )
 
   /**
    * Get autopilot configuration for a specific brand
    */
-  fastify.get('/brands/:brandId/config', {
-    schema: {
-      params: {
-        type: 'object',
-        properties: {
-          brandId: { type: 'string' }
+  fastify.get(
+    '/brands/:brandId/config',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: {
+            brandId: { type: 'string' },
+          },
+          required: ['brandId'],
         },
-        required: ['brandId']
-      }
-    }
-  }, async (request, reply) => {
-    try {
-      const { brandId } = request.params as { brandId: string }
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { brandId } = request.params as { brandId: string }
 
-      // Verify user owns this brand
-      const userId = (request.user as any).id
-      const brand = await prisma.brand.findFirst({
-        where: {
-          id: brandId,
-          userId: userId
-        },
-        select: {
-          id: true,
-          name: true,
-          preferences: true
+        // Verify user owns this brand
+        const userId = (request.user as any).id
+        const brand = await prisma.brand.findFirst({
+          where: {
+            id: brandId,
+            userId: userId,
+          },
+          select: {
+            id: true,
+            name: true,
+            preferences: true,
+          },
+        })
+
+        if (!brand) {
+          return reply.status(404).send({
+            success: false,
+            message: 'Brand not found or access denied',
+          })
         }
-      })
 
-      if (!brand) {
-        return reply.status(404).send({
+        const autopilotConfig = (brand.preferences as any)?.autopilot || {
+          enabled: false,
+          minDaysAhead: 14,
+          maxContentPerGeneration: 5,
+          contentStrategy: {
+            themes: ['lifestyle', 'inspiration'],
+            postingFrequency: 'daily',
+            optimalTimes: [
+              { hour: 9, minute: 0 },
+              { hour: 18, minute: 0 },
+            ],
+          },
+        }
+
+        reply.send({
+          success: true,
+          data: {
+            brandId: brand.id,
+            brandName: brand.name,
+            config: autopilotConfig,
+          },
+        })
+      } catch (error) {
+        console.error('Autopilot config fetch error:', error)
+        reply.status(500).send({
           success: false,
-          message: 'Brand not found or access denied'
+          message: 'Failed to get autopilot configuration',
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
-
-      const autopilotConfig = (brand.preferences as any)?.autopilot || {
-        enabled: false,
-        minDaysAhead: 14,
-        maxContentPerGeneration: 5,
-        contentStrategy: {
-          themes: ['lifestyle', 'inspiration'],
-          postingFrequency: 'daily',
-          optimalTimes: [
-            { hour: 9, minute: 0 },
-            { hour: 18, minute: 0 }
-          ]
-        }
-      }
-
-      reply.send({
-        success: true,
-        data: {
-          brandId: brand.id,
-          brandName: brand.name,
-          config: autopilotConfig
-        }
-      })
-    } catch (error) {
-      console.error('Autopilot config fetch error:', error)
-      reply.status(500).send({
-        success: false,
-        message: 'Failed to get autopilot configuration',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      })
     }
-  })
+  )
 
   /**
    * Get content gaps analysis for all user's brands
@@ -225,7 +233,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
   fastify.get('/gaps', async (request, reply) => {
     try {
       const userId = (request.user as any).id
-      
+
       // Get user's brands
       const brands = await prisma.brand.findMany({
         where: { userId },
@@ -233,12 +241,12 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
           content: {
             where: {
               status: { in: ['approved', 'scheduled', 'posted'] },
-              scheduledAt: { not: null }
+              scheduledAt: { not: null },
             },
             orderBy: { scheduledAt: 'desc' },
-            take: 5
-          }
-        }
+            take: 5,
+          },
+        },
       })
 
       // Analyze gaps for each brand
@@ -246,15 +254,15 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
         brands.map(async (brand) => {
           const now = new Date()
           const futureDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-          
+
           const scheduledCount = await prisma.content.count({
             where: {
               brandId: brand.id,
               scheduledAt: {
                 gte: now,
-                lte: futureDate
-              }
-            }
+                lte: futureDate,
+              },
+            },
           })
 
           const expectedPosts = 14 // Assuming daily posting
@@ -268,12 +276,12 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
             contentGap: gap,
             needsGeneration: gap > 0,
             lastScheduled: brand.content[0]?.scheduledAt || null,
-            recentContent: brand.content.map(c => ({
+            recentContent: brand.content.map((c) => ({
               id: c.id,
               caption: c.caption.substring(0, 100) + '...',
               scheduledAt: c.scheduledAt,
-              status: c.status
-            }))
+              status: c.status,
+            })),
           }
         })
       )
@@ -284,17 +292,17 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
           analysis: gapsAnalysis,
           summary: {
             totalBrands: brands.length,
-            brandsNeedingContent: gapsAnalysis.filter(g => g.needsGeneration).length,
-            totalGap: gapsAnalysis.reduce((sum, g) => sum + g.contentGap, 0)
-          }
-        }
+            brandsNeedingContent: gapsAnalysis.filter((g) => g.needsGeneration).length,
+            totalGap: gapsAnalysis.reduce((sum, g) => sum + g.contentGap, 0),
+          },
+        },
       })
     } catch (error) {
       console.error('Autopilot gaps analysis error:', error)
       reply.status(500).send({
         success: false,
         message: 'Failed to analyze content gaps',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })

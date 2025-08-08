@@ -8,7 +8,7 @@ let openai: any
 
 if (isTestEnvironment) {
   // Use mock OpenAI in test environment
-  const { mockOpenAI } = await import('../../test/mocks/openai.mock.js')
+  const { mockOpenAI } = await import('../test/mocks/openai.mock.js')
   openai = mockOpenAI
   console.log('🧪 Using OpenAI mock for testing')
 } else {
@@ -16,7 +16,7 @@ if (isTestEnvironment) {
   openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   })
-  
+
   // Validate OpenAI API key on startup
   if (!process.env.OPENAI_API_KEY) {
     console.error('WARNING: OPENAI_API_KEY environment variable is not set')

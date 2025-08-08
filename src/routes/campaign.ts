@@ -11,7 +11,7 @@ interface ConfigureCampaignBody {
   brandId: string
   duration: {
     start: string // ISO date string
-    end: string   // ISO date string
+    end: string // ISO date string
   }
   frequency: string
   themes: string[]
@@ -61,22 +61,22 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         brandId: body.brandId,
         duration: {
           start: new Date(body.duration.start),
-          end: new Date(body.duration.end)
+          end: new Date(body.duration.end),
         },
         frequency: body.frequency,
         themes: body.themes,
         style: body.style,
         postingTime: body.postingTime,
-        priority: body.priority
+        ...(body.priority !== undefined ? { priority: body.priority } : {}),
       }
 
       // Validate campaign configuration
       const validationErrors = campaignService.validateCampaignConfig(config)
-      
+
       if (validationErrors.length > 0) {
-        return reply.code(400).send({ 
+        return reply.code(400).send({
           error: 'Validation failed',
-          details: validationErrors
+          details: validationErrors,
         })
       }
 
@@ -92,12 +92,12 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           status: campaign.status,
           config: campaign.config,
           createdAt: campaign.createdAt,
-          brand: campaign.brand
-        }
+          brand: campaign.brand,
+        },
       })
     } catch (error) {
       console.error('Campaign configuration error:', error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message })
@@ -109,9 +109,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send({ error: error.message })
         }
       }
-      
-      return reply.code(500).send({ 
-        error: 'Failed to configure campaign. Please try again.' 
+
+      return reply.code(500).send({
+        error: 'Failed to configure campaign. Please try again.',
       })
     }
   })
@@ -128,7 +128,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Get campaign status from job service
       const status = await campaignJobService.getCampaignStatus(id)
-      
+
       if (!status) {
         return reply.code(404).send({ error: 'Campaign not found' })
       }
@@ -138,9 +138,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         where: {
           id,
           brand: {
-            userId
-          }
-        }
+            userId,
+          },
+        },
       })
 
       if (!campaign) {
@@ -155,20 +155,20 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           progress: status.progress,
           errorMessage: status.errorMessage,
           previewGenerated: status.previewGenerated,
-          isRunning: campaignJobService.isJobRunning(id)
-        }
+          isRunning: campaignJobService.isJobRunning(id),
+        },
       })
     } catch (error) {
       console.error('Get campaign status error:', error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message })
         }
       }
-      
-      return reply.code(500).send({ 
-        error: 'Failed to get campaign status. Please try again.' 
+
+      return reply.code(500).send({
+        error: 'Failed to get campaign status. Please try again.',
       })
     }
   })
@@ -187,19 +187,15 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'Example count must be between 1 and 10' })
       }
 
-      const preview = await campaignService.generateCampaignPreview(
-        configId, 
-        userId, 
-        exampleCount
-      )
+      const preview = await campaignService.generateCampaignPreview(configId, userId, exampleCount)
 
       return reply.send({
         success: true,
-        preview
+        preview,
       })
     } catch (error) {
       console.error('Campaign preview error:', error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message })
@@ -211,9 +207,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send({ error: error.message })
         }
       }
-      
-      return reply.code(500).send({ 
-        error: 'Failed to generate campaign preview. Please try again.' 
+
+      return reply.code(500).send({
+        error: 'Failed to generate campaign preview. Please try again.',
       })
     }
   })
@@ -244,19 +240,19 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         success: true,
         campaign: result.campaign,
         scheduledPosts: result.scheduledPosts,
-        message: `Campaign started successfully. ${result.scheduledPosts} posts have been scheduled.`
+        message: `Campaign started successfully. ${result.scheduledPosts} posts have been scheduled.`,
       })
     } catch (error) {
       console.error('Campaign start error:', error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message })
         }
       }
-      
-      return reply.code(500).send({ 
-        error: 'Failed to start campaign. Please try again.' 
+
+      return reply.code(500).send({
+        error: 'Failed to start campaign. Please try again.',
       })
     }
   })
@@ -275,11 +271,11 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.send({
         success: true,
-        campaign
+        campaign,
       })
     } catch (error) {
       console.error('Get campaign error:', error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message })
@@ -288,16 +284,16 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: 'Campaign not found or access denied' })
         }
       }
-      
-      return reply.code(500).send({ 
-        error: 'Failed to retrieve campaign details. Please try again.' 
+
+      return reply.code(500).send({
+        error: 'Failed to retrieve campaign details. Please try again.',
       })
     }
   })
 
   // Update campaign configuration
-  fastify.put<{ 
-    Params: { id: string },
+  fastify.put<{
+    Params: { id: string }
     Body: {
       name?: string
       themes?: string[]
@@ -321,11 +317,11 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.send({
         success: true,
-        campaign: updatedCampaign
+        campaign: updatedCampaign,
       })
     } catch (error) {
       console.error('Update campaign error:', error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message })
@@ -337,9 +333,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send({ error: error.message })
         }
       }
-      
-      return reply.code(500).send({ 
-        error: 'Failed to update campaign. Please try again.' 
+
+      return reply.code(500).send({
+        error: 'Failed to update campaign. Please try again.',
       })
     }
   })
@@ -353,8 +349,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       // Build where clause - filter by brandId if provided, otherwise show all user's campaigns
       const whereClause: any = {
         brand: {
-          userId
-        }
+          userId,
+        },
       }
 
       if (brandId) {
@@ -362,14 +358,14 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const brand = await prisma.brand.findFirst({
           where: {
             id: brandId,
-            userId
-          }
+            userId,
+          },
         })
-        
+
         if (!brand) {
           return reply.code(404).send({ error: 'Brand not found or access denied' })
         }
-        
+
         whereClause.brandId = brandId
       }
 
@@ -379,23 +375,23 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           brand: {
             select: {
               id: true,
-              name: true
-            }
+              name: true,
+            },
           },
           _count: {
             select: {
-              content: true
-            }
-          }
+              content: true,
+            },
+          },
         },
         orderBy: {
-          createdAt: 'desc'
-        }
+          createdAt: 'desc',
+        },
       })
 
       return reply.send({
         success: true,
-        campaigns: campaigns.map(campaign => ({
+        campaigns: campaigns.map((campaign) => ({
           id: campaign.id,
           name: campaign.name,
           status: campaign.status,
@@ -404,20 +400,20 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           config: campaign.config,
           createdAt: campaign.createdAt,
           startedAt: campaign.startedAt,
-          completedAt: campaign.completedAt
-        }))
+          completedAt: campaign.completedAt,
+        })),
       })
     } catch (error) {
       console.error('List campaigns error:', error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message })
         }
       }
-      
-      return reply.code(500).send({ 
-        error: 'Failed to retrieve campaigns. Please try again.' 
+
+      return reply.code(500).send({
+        error: 'Failed to retrieve campaigns. Please try again.',
       })
     }
   })
@@ -437,16 +433,16 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         where: {
           id,
           brand: {
-            userId
-          }
+            userId,
+          },
         },
         include: {
           _count: {
             select: {
-              content: true
-            }
-          }
-        }
+              content: true,
+            },
+          },
+        },
       })
 
       if (!campaign) {
@@ -456,14 +452,14 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       // Only allow deletion of campaigns that haven't been started
       const deletableStatuses = ['draft', 'preview', 'creating', 'failed']
       if (!deletableStatuses.includes(campaign.status)) {
-        return reply.code(400).send({ 
-          error: `Cannot delete campaigns with status '${campaign.status}'. Only campaigns with status: ${deletableStatuses.join(', ')} can be deleted.` 
+        return reply.code(400).send({
+          error: `Cannot delete campaigns with status '${campaign.status}'. Only campaigns with status: ${deletableStatuses.join(', ')} can be deleted.`,
         })
       }
 
       // Delete the campaign (this will also delete related content due to cascade)
       await prisma.campaign.delete({
-        where: { id }
+        where: { id },
       })
 
       return reply.send({
@@ -473,27 +469,27 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           id: campaign.id,
           name: campaign.name,
           status: campaign.status,
-          contentCount: campaign._count.content
-        }
+          contentCount: campaign._count.content,
+        },
       })
     } catch (error) {
       console.error('Delete campaign error:', error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message })
         }
       }
-      
-      return reply.code(500).send({ 
-        error: 'Failed to delete campaign. Please try again.' 
+
+      return reply.code(500).send({
+        error: 'Failed to delete campaign. Please try again.',
       })
     }
   })
 
   // Update campaign priority
-  fastify.put<{ 
-    Params: { id: string },
+  fastify.put<{
+    Params: { id: string }
     Body: { priority: number }
   }>('/:id/priority', async (request, reply) => {
     try {
@@ -527,11 +523,11 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({
         success: true,
         message: 'Campaign priority updated successfully',
-        campaign: updatedCampaign
+        campaign: updatedCampaign,
       })
     } catch (error) {
       console.error('Update campaign priority error:', error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication') || error.message.includes('access denied')) {
           return reply.code(401).send({ error: error.message })
@@ -540,9 +536,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: error.message })
         }
       }
-      
-      return reply.code(500).send({ 
-        error: 'Failed to update campaign priority. Please try again.' 
+
+      return reply.code(500).send({
+        error: 'Failed to update campaign priority. Please try again.',
       })
     }
   })
@@ -568,19 +564,19 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.send({
         success: true,
-        coordination
+        coordination,
       })
     } catch (error) {
       console.error('Get campaign coordination error:', error)
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message })
         }
       }
-      
-      return reply.code(500).send({ 
-        error: 'Failed to get campaign coordination. Please try again.' 
+
+      return reply.code(500).send({
+        error: 'Failed to get campaign coordination. Please try again.',
       })
     }
   })

@@ -88,11 +88,13 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
   // Refresh Instagram status with fresh API data
   const refreshStatusMutation = useMutation({
     mutationFn: () => apiClient.getInstagramConnectionStatus(brand.id, true),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['instagram-status', brand.id] })
+    onSuccess: (data) => {
+      // Update the query cache with the fresh data instead of just invalidating
+      queryClient.setQueryData(['instagram-status', brand.id], data)
     },
     onError: (error) => {
       console.error('Instagram status refresh failed:', error)
+      // Don't invalidate the cache on error to prevent undefined state
     }
   })
 
@@ -120,7 +122,8 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
     )
   }
 
-  const isConnected = connectionStatus?.connected
+  // Handle undefined connectionStatus gracefully
+  const isConnected = connectionStatus?.connected ?? false
   const profile = connectionStatus?.profile as InstagramProfile | null
 
   return (

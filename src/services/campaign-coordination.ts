@@ -32,7 +32,7 @@ export interface CampaignConfigWithPriority {
   name: string
   brandId: string
   config: {
-    duration: { start: string, end: string }
+    duration: { start: string; end: string }
     frequency: string
     postingTime: string
     themes?: string[]
@@ -45,7 +45,7 @@ export class CampaignCoordinationService {
    * Detect scheduling conflicts between a new campaign and existing active campaigns
    */
   async detectSchedulingConflicts(
-    newCampaignConfig: CampaignConfigWithPriority, 
+    newCampaignConfig: CampaignConfigWithPriority,
     userId: string
   ): Promise<SchedulingConflict[]> {
     const conflicts: SchedulingConflict[] = []
@@ -54,9 +54,9 @@ export class CampaignCoordinationService {
     const activeCampaigns = await prisma.campaign.findMany({
       where: {
         brand: { userId },
-        status: { in: ['active', 'preview'] }
+        status: { in: ['active', 'preview'] },
       },
-      include: { brand: true }
+      include: { brand: true },
     })
 
     const newStartDate = new Date(newCampaignConfig.config.duration.start)
@@ -70,21 +70,18 @@ export class CampaignCoordinationService {
       const existingPostingTime = existingConfig.postingTime
 
       // Check for time overlap
-      const hasTimeOverlap = (newStartDate <= existingEndDate) && (newEndDate >= existingStartDate)
+      const hasTimeOverlap = newStartDate <= existingEndDate && newEndDate >= existingStartDate
       const hasSamePostingTime = newPostingTime === existingPostingTime
 
       if (hasTimeOverlap && hasSamePostingTime) {
-        const conflictingDates = this.getOverlappingPostDates(
-          newCampaignConfig.config,
-          existingConfig
-        )
+        const conflictingDates = this.getOverlappingPostDates(newCampaignConfig.config, existingConfig)
 
         conflicts.push({
           conflictingCampaignId: existingCampaign.id,
           conflictType: 'time_overlap',
           conflictingTimes: conflictingDates,
           severity: this.calculateConflictSeverity(conflictingDates.length),
-          details: `Posting time conflict with "${existingCampaign.name}" at ${existingPostingTime}`
+          details: `Posting time conflict with "${existingCampaign.name}" at ${existingPostingTime}`,
         })
       }
 
@@ -95,7 +92,7 @@ export class CampaignCoordinationService {
           conflictType: 'brand_overlap',
           conflictingTimes: [],
           severity: 'high',
-          details: `Same brand already has active campaign "${existingCampaign.name}"`
+          details: `Same brand already has active campaign "${existingCampaign.name}"`,
         })
       }
     }
@@ -117,14 +114,14 @@ export class CampaignCoordinationService {
       return {
         strategy: 'adjust_lower_priority',
         adjustedPostingTime: this.suggestAlternativeTime(conflictingCampaign.config.postingTime),
-        message: `Higher priority campaign detected. Suggest adjusting existing campaign posting time.`
+        message: `Higher priority campaign detected. Suggest adjusting existing campaign posting time.`,
       }
     } else {
       // New campaign has lower priority - suggest adjustment
       return {
         strategy: 'suggest_alternative_time',
         adjustedPostingTime: this.suggestAlternativeTime(newCampaign.config.postingTime),
-        message: `Conflict detected. Suggested alternative posting time to avoid overlap.`
+        message: `Conflict detected. Suggested alternative posting time to avoid overlap.`,
       }
     }
   }
@@ -136,10 +133,10 @@ export class CampaignCoordinationService {
     const activeCampaigns = await prisma.campaign.findMany({
       where: {
         brand: { userId },
-        status: 'active'
+        status: 'active',
       },
       include: { brand: true },
-      orderBy: { priority: 'asc' } // Lower number = higher priority
+      orderBy: { priority: 'asc' }, // Lower number = higher priority
     })
 
     const totalCapacity = 100 // Max posts per hour
@@ -148,25 +145,25 @@ export class CampaignCoordinationService {
     const campaignAllocations = activeCampaigns.map((campaign, index) => {
       const config = campaign.config as any
       const baseAllocation = Math.max(10, Math.floor(totalCapacity / activeCampaigns.length))
-      
+
       // Give priority campaigns extra allocation
       const priorityBonus = campaign.priority === 1 ? 20 : campaign.priority === 2 ? 10 : 0
       const finalAllocation = Math.min(baseAllocation + priorityBonus, totalCapacity - allocatedCapacity)
-      
+
       allocatedCapacity += finalAllocation
 
       return {
         campaignId: campaign.id,
         priority: campaign.priority || 999,
         allocatedSlots: finalAllocation,
-        estimatedGenerationTime: finalAllocation * 0.5 // 0.5 minutes per post
+        estimatedGenerationTime: finalAllocation * 0.5, // 0.5 minutes per post
       }
     })
 
     return {
       campaigns: campaignAllocations,
       totalCapacity,
-      utilizationRate: allocatedCapacity / totalCapacity
+      utilizationRate: allocatedCapacity / totalCapacity,
     }
   }
 
@@ -175,7 +172,7 @@ export class CampaignCoordinationService {
    */
   private getOverlappingPostDates(config1: any, config2: any): Date[] {
     const overlappingDates: Date[] = []
-    
+
     // For simplicity, assume daily frequency creates posts every day at posting time
     const start1 = new Date(config1.duration.start)
     const end1 = new Date(config1.duration.end)
@@ -208,7 +205,10 @@ export class CampaignCoordinationService {
    * Suggest an alternative posting time to avoid conflicts
    */
   private suggestAlternativeTime(originalTime: string): string {
-    const [hours, minutes] = originalTime.split(':').map(Number)
+    let [hours, minutes] = originalTime.split(':').map(Number)
+    // Fallbacks for invalid input
+    if (typeof hours !== 'number' || isNaN(hours)) hours = 12
+    if (typeof minutes !== 'number' || isNaN(minutes)) minutes = 0
     let newHours = hours
 
     // Try 2 hours later, then 2 hours earlier

@@ -62,12 +62,15 @@ class CampaignService {
         throw new Error('Campaign start date must be before end date')
       }
 
-      // Allow today's date as valid start date - simple date string comparison
+      // Allow today's date as valid start date - compare in local timezone
       const today = new Date()
-      const todayDateString = today.toISOString().split('T')[0]
-      const startDateString = config.duration.start.toISOString().split('T')[0]
+      const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      
+      // Get the start date components from UTC and create a local date for comparison
+      const startUTC = config.duration.start
+      const startLocal = new Date(startUTC.getUTCFullYear(), startUTC.getUTCMonth(), startUTC.getUTCDate())
 
-      if (startDateString && todayDateString && startDateString < todayDateString) {
+      if (startLocal < todayLocal) {
         throw new Error('Campaign start date cannot be in the past')
       }
 
@@ -861,13 +864,23 @@ class CampaignService {
       errors.push('Campaign start date must be before end date')
     }
 
-    // Simple date comparison - compare just the date part in YYYY-MM-DD format
-    const today = new Date()
-    const todayDateString = today.toISOString().split('T')[0] // Get YYYY-MM-DD
-    const startDateString = config.duration.start.toISOString().split('T')[0] // Get YYYY-MM-DD
+    // Date comparison - allow campaigns to start from today onwards
+    // Parse dates properly handling UTC vs local timezone
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // Today at 00:00 local
+    
+    // Parse the start date and extract just the date part (ignore time/timezone)
+    const startDateStr = config.duration.start.toISOString().split('T')[0] // "2025-08-07"
+    if (startDateStr) {
+      const dateParts = startDateStr.split('-').map(Number)
+      if (dateParts.length === 3 && dateParts.every(part => !isNaN(part))) {
+        const [year, month, day] = dateParts as [number, number, number]
+        const startDateLocal = new Date(year, month - 1, day) // Create local date (month is 0-based)
 
-    if (startDateString && todayDateString && startDateString < todayDateString) {
-      errors.push('Campaign start date cannot be in the past')
+        if (startDateLocal < today) {
+          errors.push('Campaign start date cannot be in the past')
+        }
+      }
     }
 
     if (!['daily', 'every2days', '3weekly'].includes(config.frequency)) {

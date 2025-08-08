@@ -11,9 +11,8 @@ class RedisService {
     try {
       const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
       this.client = new Redis(redisUrl, {
-        retryDelayOnFailover: 100,
         enableReadyCheck: true,
-        lazyConnect: true
+        lazyConnect: true,
       })
 
       this.client.on('error', (err) => {

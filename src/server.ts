@@ -1,3 +1,4 @@
+import './dotenv-init.js'
 import fastify, { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
@@ -26,19 +27,19 @@ import { schedulerService } from './services/scheduler.js'
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
   let httpsOptions = {}
-  
+
   if (process.env.NODE_ENV === 'development') {
     try {
       // Look for local SSL certificates
       const certPath = process.env.SSL_CERT_PATH || path.join(process.cwd(), 'certs', 'localhost.crt')
       const keyPath = process.env.SSL_KEY_PATH || path.join(process.cwd(), 'certs', 'localhost.key')
-      
+
       if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
         httpsOptions = {
           https: {
             cert: fs.readFileSync(certPath),
-            key: fs.readFileSync(keyPath)
-          }
+            key: fs.readFileSync(keyPath),
+          },
         }
       }
     } catch (error) {
@@ -48,22 +49,21 @@ export function buildFastify(): FastifyInstance {
 
   const app = fastify({
     logger: {
-      level: 'info'
+      level: 'info',
     },
-    ...httpsOptions
+    ...httpsOptions,
   })
 
   // Register plugins
   app.register(cors, {
     origin: [
+      'http://ai.localhost:5173',
+      'https://ai.localhost:5173', 
+      'https://ai.localhost',
       'http://localhost:5173', 
-      'http://127.0.0.1:5173',
-      'https://localhost:5173',
-      'https://localhost:3000',
-      'https://ai.localhost:5173',
-      'https://ai.localhost'
+      'http://127.0.0.1:5173'
     ],
-    credentials: true
+    credentials: true,
   })
   app.register(helmet)
   app.register(monitoringPlugin)
@@ -97,18 +97,18 @@ export function buildFastify(): FastifyInstance {
 // Start server if this file is run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   const app = buildFastify()
-  
+
   app.listen({ port: 3000, host: '0.0.0.0' }, (err, address) => {
     if (err) {
       app.log.error(err)
       process.exit(1)
     }
     app.log.info(`Server listening at ${address}`)
-    
+
     // Start background services
     schedulerService.start()
     autopilotService.start()
-    
+
     app.log.info('Background services started')
   })
 }

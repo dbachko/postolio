@@ -2,31 +2,23 @@ import { FastifyPluginAsync } from 'fastify'
 import { verifyJWT } from '../services/jwt.js'
 import { campaignAnalyticsService } from '../services/campaign-analytics.js'
 
-interface CampaignMetricsRequest {
-  params: {
-    campaignId: string
-  }
-  query: {
-    timeRange?: '7d' | '30d' | '90d'
-  }
+interface CampaignMetricsParams {
+  campaignId: string
+}
+interface CampaignMetricsQuery {
+  timeRange?: '7d' | '30d' | '90d'
 }
 
-interface CompareCampaignsRequest {
-  body: {
-    campaignIds: string[]
-  }
+interface CompareCampaignsBody {
+  campaignIds: string[]
 }
 
-interface OptimizationRequest {
-  params: {
-    campaignId: string
-  }
+interface OptimizationParams {
+  campaignId: string
 }
 
-interface ROIRequest {
-  params: {
-    campaignId: string
-  }
+interface ROIParams {
+  campaignId: string
 }
 
 const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -49,30 +41,33 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     return decoded.id
   }
   // Get campaign performance metrics
-  fastify.get<CampaignMetricsRequest>('/campaign/analytics/:campaignId', async (request, reply) => {
-    try {
-      const userId = await authenticateRequest(request)
-      const { campaignId } = request.params
-      
-      const metrics = await campaignAnalyticsService.getCampaignMetrics(campaignId, userId)
-      
-      reply.send({
-        success: true,
-        data: metrics,
-        lastUpdated: new Date().toISOString(),
-        fromCache: false
-      })
-    } catch (error) {
-      console.error('Get campaign metrics error:', error)
-      reply.status(500).send({
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to get campaign metrics'
-      })
+  fastify.get<{ Params: CampaignMetricsParams; Querystring: CampaignMetricsQuery }>(
+    '/campaign/analytics/:campaignId',
+    async (request, reply) => {
+      try {
+        const userId = await authenticateRequest(request)
+        const { campaignId } = request.params
+
+        const metrics = await campaignAnalyticsService.getCampaignMetrics(campaignId, userId)
+
+        reply.send({
+          success: true,
+          data: metrics,
+          lastUpdated: new Date().toISOString(),
+          fromCache: false,
+        })
+      } catch (error) {
+        console.error('Get campaign metrics error:', error)
+        reply.status(500).send({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get campaign metrics',
+        })
+      }
     }
-  })
+  )
 
   // Compare multiple campaigns
-  fastify.post<CompareCampaignsRequest>('/campaign/analytics/compare', async (request, reply) => {
+  fastify.post<{ Body: CompareCampaignsBody }>('/campaign/analytics/compare', async (request, reply) => {
     try {
       const userId = await authenticateRequest(request)
       const { campaignIds } = request.body
@@ -80,7 +75,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
       if (!Array.isArray(campaignIds) || campaignIds.length === 0) {
         reply.status(400).send({
           success: false,
-          error: 'campaignIds array is required and cannot be empty'
+          error: 'campaignIds array is required and cannot be empty',
         })
         return
       }
@@ -88,68 +83,71 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
       if (campaignIds.length > 10) {
         reply.status(400).send({
           success: false,
-          error: 'Cannot compare more than 10 campaigns at once'
+          error: 'Cannot compare more than 10 campaigns at once',
         })
         return
       }
 
       const comparison = await campaignAnalyticsService.compareCampaigns(campaignIds, userId)
-      
+
       reply.send({
         success: true,
         data: comparison,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       })
     } catch (error) {
       console.error('Compare campaigns error:', error)
       reply.status(500).send({
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to compare campaigns'
+        error: error instanceof Error ? error.message : 'Failed to compare campaigns',
       })
     }
   })
 
   // Get optimization recommendations
-  fastify.get<OptimizationRequest>('/campaign/analytics/:campaignId/recommendations', async (request, reply) => {
-    try {
-      const userId = await authenticateRequest(request)
-      const { campaignId } = request.params
-      
-      const recommendations = await campaignAnalyticsService.getOptimizationRecommendations(campaignId, userId)
-      
-      reply.send({
-        success: true,
-        data: recommendations,
-        count: recommendations.length,
-        lastUpdated: new Date().toISOString()
-      })
-    } catch (error) {
-      console.error('Get optimization recommendations error:', error)
-      reply.status(500).send({
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to get optimization recommendations'
-      })
+  fastify.get<{ Params: OptimizationParams }>(
+    '/campaign/analytics/:campaignId/recommendations',
+    async (request, reply) => {
+      try {
+        const userId = await authenticateRequest(request)
+        const { campaignId } = request.params
+
+        const recommendations = await campaignAnalyticsService.getOptimizationRecommendations(campaignId, userId)
+
+        reply.send({
+          success: true,
+          data: recommendations,
+          count: recommendations.length,
+          lastUpdated: new Date().toISOString(),
+        })
+      } catch (error) {
+        console.error('Get optimization recommendations error:', error)
+        reply.status(500).send({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get optimization recommendations',
+        })
+      }
     }
-  })
+  )
 
   // Calculate campaign ROI
-  fastify.get<ROIRequest>('/campaign/analytics/:campaignId/roi', async (request, reply) => {
+  fastify.get<{ Params: ROIParams }>('/campaign/analytics/:campaignId/roi', async (request, reply) => {
     try {
       const userId = await authenticateRequest(request)
       const { campaignId } = request.params
-      
+
       const roi = await campaignAnalyticsService.calculateROI(campaignId, userId)
-      
+
       reply.send({
         success: true,
         data: roi,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       })
     } catch (error) {
       console.error('Calculate ROI error:', error)
       reply.status(500).send({
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to calculate ROI'
+        error: error instanceof Error ? error.message : 'Failed to calculate ROI',
       })
     }
   })
@@ -159,18 +157,18 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const userId = await authenticateRequest(request)
       const { brandId } = request.params
-      
+
       // Get all campaigns for the brand
       const { PrismaClient } = await import('@prisma/client')
       const prisma = new PrismaClient()
-      
+
       const campaigns = await prisma.campaign.findMany({
         where: {
           brandId,
           brand: { userId },
-          status: { in: ['active', 'completed'] }
+          status: { in: ['active', 'completed'] },
         },
-        select: { id: true, name: true, status: true }
+        select: { id: true, name: true, status: true },
       })
 
       if (campaigns.length === 0) {
@@ -182,10 +180,10 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
               totalPosts: 0,
               totalImpressions: 0,
               totalEngagement: 0,
-              averageEngagementRate: 0
+              averageEngagementRate: 0,
             },
-            topPerformingCampaign: null
-          }
+            topPerformingCampaign: null,
+          },
         })
         return
       }
@@ -201,7 +199,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           campaignMetrics.push({
             campaignId: campaign.id,
             campaignName: campaign.name,
-            metrics
+            metrics,
           })
 
           if (metrics.averageEngagementRate > bestEngagementRate) {
@@ -209,7 +207,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
             bestPerformingCampaign = {
               id: campaign.id,
               name: campaign.name,
-              engagementRate: metrics.averageEngagementRate
+              engagementRate: metrics.averageEngagementRate,
             }
           }
         } catch (error) {
@@ -218,21 +216,23 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Calculate summary
-      const summary = campaignMetrics.reduce((acc, { metrics }) => ({
-        totalPosts: acc.totalPosts + metrics.totalPosts,
-        totalImpressions: acc.totalImpressions + metrics.totalImpressions,
-        totalEngagement: acc.totalEngagement + metrics.totalEngagement,
-        averageEngagementRate: acc.averageEngagementRate + metrics.averageEngagementRate
-      }), {
-        totalPosts: 0,
-        totalImpressions: 0,
-        totalEngagement: 0,
-        averageEngagementRate: 0
-      })
+      const summary = campaignMetrics.reduce(
+        (acc, { metrics }) => ({
+          totalPosts: acc.totalPosts + metrics.totalPosts,
+          totalImpressions: acc.totalImpressions + metrics.totalImpressions,
+          totalEngagement: acc.totalEngagement + metrics.totalEngagement,
+          averageEngagementRate: acc.averageEngagementRate + metrics.averageEngagementRate,
+        }),
+        {
+          totalPosts: 0,
+          totalImpressions: 0,
+          totalEngagement: 0,
+          averageEngagementRate: 0,
+        }
+      )
 
-      summary.averageEngagementRate = campaignMetrics.length > 0 
-        ? summary.averageEngagementRate / campaignMetrics.length 
-        : 0
+      summary.averageEngagementRate =
+        campaignMetrics.length > 0 ? summary.averageEngagementRate / campaignMetrics.length : 0
 
       reply.send({
         success: true,
@@ -240,15 +240,15 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           totalCampaigns: campaigns.length,
           summary,
           topPerformingCampaign: bestPerformingCampaign,
-          campaignBreakdown: campaignMetrics
+          campaignBreakdown: campaignMetrics,
         },
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       })
     } catch (error) {
       console.error('Get brand analytics summary error:', error)
       reply.status(500).send({
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to get brand analytics summary'
+        error: error instanceof Error ? error.message : 'Failed to get brand analytics summary',
       })
     }
   })

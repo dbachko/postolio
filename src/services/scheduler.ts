@@ -32,11 +32,11 @@ class SchedulerService {
       const content = await prisma.content.findFirst({
         where: {
           id: contentId,
-          status: 'approved'
+          status: 'approved',
         },
         include: {
-          brand: true
-        }
+          brand: true,
+        },
       })
 
       if (!content) {
@@ -62,19 +62,19 @@ class SchedulerService {
         where: { id: contentId },
         data: {
           status: 'scheduled' as any, // Add this status to the enum
-          scheduledAt: scheduledTime
-        }
+          scheduledAt: scheduledTime,
+        },
       })
 
       return {
         success: true,
-        scheduledPost
+        scheduledPost,
       }
     } catch (error) {
       console.error('Failed to schedule content:', error)
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       }
     }
   }
@@ -91,7 +91,7 @@ class SchedulerService {
       brandId,
       scheduledTime,
       status: 'pending',
-      retryCount: 0
+      retryCount: 0,
     }
   }
 
@@ -138,19 +138,19 @@ class SchedulerService {
   private async processScheduledPosts(): Promise<void> {
     try {
       const now = new Date()
-      
+
       // Find content scheduled for posting within the next 5 minutes
       const readyContent = await prisma.content.findMany({
         where: {
           status: 'approved',
           scheduledAt: {
-            lte: new Date(now.getTime() + 5 * 60 * 1000) // Next 5 minutes
-          }
+            lte: new Date(now.getTime() + 5 * 60 * 1000), // Next 5 minutes
+          },
         },
         include: {
-          brand: true
+          brand: true,
         },
-        take: 10 // Process in batches
+        take: 10, // Process in batches
       })
 
       for (const content of readyContent) {
@@ -159,7 +159,6 @@ class SchedulerService {
 
       // Also process any failed posts for retry
       await this.retryFailedPosts()
-
     } catch (error) {
       console.error('Error processing scheduled posts:', error)
     }
@@ -188,7 +187,7 @@ class SchedulerService {
       const publishResult = await instagramService.publishMedia(content.brand, {
         imageUrl: content.imageUrl || 'https://via.placeholder.com/400?text=Scheduled+Post',
         caption: content.caption,
-        hashtags: content.hashtags
+        hashtags: content.hashtags,
       })
 
       // Update content status
@@ -198,17 +197,19 @@ class SchedulerService {
           status: 'posted',
           postedAt: new Date(),
           instagramPostId: publishResult.id,
-          instagramPermalink: publishResult.permalink
-        }
+          instagramPermalink: publishResult.permalink,
+        },
       })
 
       console.log(`Successfully published content: ${content.id}`)
 
       // Schedule metrics collection for later
-      setTimeout(async () => {
-        await analyticsService.collectPostMetrics(content.id)
-      }, 60 * 60 * 1000) // Collect metrics after 1 hour
-
+      setTimeout(
+        async () => {
+          await analyticsService.collectPostMetrics(content.id)
+        },
+        60 * 60 * 1000
+      ) // Collect metrics after 1 hour
     } catch (error) {
       console.error(`Failed to publish scheduled content ${content.id}:`, error)
       await this.markContentAsFailed(content.id, error instanceof Error ? error.message : 'Unknown error')
@@ -225,8 +226,8 @@ class SchedulerService {
         data: {
           status: 'failed' as any, // Add this status to the enum
           schedulingError: errorMessage,
-          scheduledAt: null
-        }
+          scheduledAt: null,
+        },
       })
     } catch (error) {
       console.error('Failed to mark content as failed:', error)
@@ -243,13 +244,13 @@ class SchedulerService {
         where: {
           status: 'failed' as any,
           scheduledAt: {
-            gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
-          }
+            gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+          },
         },
         include: {
-          brand: true
+          brand: true,
         },
-        take: 5 // Limit retries
+        take: 5, // Limit retries
       })
 
       for (const content of failedContent) {
@@ -257,9 +258,10 @@ class SchedulerService {
         const metadata = content.generationParams as any
         const retryCount = metadata?.retryCount || 0
 
-        if (retryCount < 3) { // Max 3 retries
+        if (retryCount < 3) {
+          // Max 3 retries
           console.log(`Retrying failed content: ${content.id} (attempt ${retryCount + 1})`)
-          
+
           // Update retry count
           await prisma.content.update({
             where: { id: content.id },
@@ -267,9 +269,9 @@ class SchedulerService {
               status: 'approved',
               generationParams: {
                 ...metadata,
-                retryCount: retryCount + 1
-              }
-            }
+                retryCount: retryCount + 1,
+              },
+            },
           })
 
           // Try to publish again
@@ -290,20 +292,20 @@ class SchedulerService {
         where: {
           brandId: brandId,
           status: 'approved',
-          scheduledAt: { not: null }
+          scheduledAt: { not: null },
         },
         orderBy: {
-          scheduledAt: 'asc'
-        }
+          scheduledAt: 'asc',
+        },
       })
 
-      return scheduledContent.map(content => ({
+      return scheduledContent.map((content) => ({
         id: content.id,
         caption: content.caption,
         imageUrl: content.imageUrl,
         hashtags: content.hashtags,
         scheduledTime: content.scheduledAt,
-        status: 'pending'
+        status: 'pending',
       }))
     } catch (error) {
       console.error('Failed to get scheduled posts:', error)
@@ -320,8 +322,8 @@ class SchedulerService {
         where: { id: contentId },
         data: {
           status: 'approved',
-          scheduledAt: null
-        }
+          scheduledAt: null,
+        },
       })
       return true
     } catch (error) {
@@ -338,8 +340,8 @@ class SchedulerService {
       await prisma.content.update({
         where: { id: contentId },
         data: {
-          scheduledAt: newTime
-        }
+          scheduledAt: newTime,
+        },
       })
 
       return { success: true }
@@ -347,7 +349,7 @@ class SchedulerService {
       console.error('Failed to reschedule post:', error)
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       }
     }
   }
@@ -360,22 +362,22 @@ class SchedulerService {
       const stats = await prisma.content.groupBy({
         by: ['status'],
         where: { brandId },
-        _count: { status: true }
+        _count: { status: true },
       })
 
       const scheduled = await prisma.content.count({
         where: {
           brandId,
           status: 'approved',
-          scheduledAt: { not: null }
-        }
+          scheduledAt: { not: null },
+        },
       })
 
       return {
         scheduled,
-        posted: stats.find(s => s.status === 'posted')?._count.status || 0,
-        failed: stats.find(s => s.status === 'failed')?._count.status || 0,
-        pending: stats.find(s => s.status === 'pending')?._count.status || 0
+        posted: stats.find((s) => s.status === 'posted')?._count.status || 0,
+        failed: stats.find((s) => s.status === 'failed')?._count.status || 0,
+        pending: stats.find((s) => s.status === 'pending')?._count.status || 0,
       }
     } catch (error) {
       console.error('Failed to get scheduling stats:', error)
@@ -393,7 +395,7 @@ class SchedulerService {
     for (const contentId of contentIds) {
       const content = await prisma.content.findFirst({
         where: { id: contentId },
-        include: { brand: true }
+        include: { brand: true },
       })
 
       if (!content) {
@@ -403,11 +405,16 @@ class SchedulerService {
 
       // Get optimal times for this brand
       const optimalTimes = await analyticsService.analyzeOptimalTimes(content.brandId)
-      
-      // Find next optimal time after currentTime
+
       let nextOptimalTime = new Date(currentTime)
-      nextOptimalTime.setHours(optimalTimes[0].hour, 0, 0, 0)
-      
+      const firstSlot = optimalTimes[0]
+      if (firstSlot && typeof firstSlot.hour === 'number') {
+        nextOptimalTime.setHours(firstSlot.hour, 0, 0, 0)
+      } else {
+        // Fallback to 11:00 AM
+        nextOptimalTime.setHours(11, 0, 0, 0)
+      }
+
       // If the optimal time for today has passed, move to next day
       if (nextOptimalTime <= currentTime) {
         nextOptimalTime.setDate(nextOptimalTime.getDate() + 1)
