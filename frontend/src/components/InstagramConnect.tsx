@@ -30,7 +30,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
   const { data: connectionStatus, isLoading } = useQuery({
     queryKey: ['instagram-status', brand.id],
     queryFn: () => apiClient.getInstagramConnectionStatus(brand.id),
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: true,
   })
 
   // Initialize OAuth flow
@@ -38,11 +38,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
     mutationFn: () => apiClient.initializeInstagramOAuth(brand.id),
     onSuccess: (data) => {
       // Open OAuth popup
-      const popup = window.open(
-        data.authUrl,
-        'instagram-oauth',
-        'width=600,height=700,scrollbars=yes,resizable=yes'
-      )
+      const popup = window.open(data.authUrl, 'instagram-oauth', 'width=600,height=700,scrollbars=yes,resizable=yes')
 
       // Listen for success message from popup
       const handleMessage = (event: MessageEvent) => {
@@ -71,7 +67,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
     onError: (error) => {
       console.error('OAuth initialization failed:', error)
       setIsConnecting(false)
-    }
+    },
   })
 
   // Disconnect Instagram
@@ -82,7 +78,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
     },
     onError: (error) => {
       console.error('Instagram disconnect failed:', error)
-    }
+    },
   })
 
   // Refresh Instagram status with fresh API data
@@ -95,7 +91,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
     onError: (error) => {
       console.error('Instagram status refresh failed:', error)
       // Don't invalidate the cache on error to prevent undefined state
-    }
+    },
   })
 
   const handleConnect = () => {
@@ -103,7 +99,9 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
   }
 
   const handleDisconnect = () => {
-    if (window.confirm('Are you sure you want to disconnect your Instagram account? This will stop content publishing.')) {
+    if (
+      window.confirm('Are you sure you want to disconnect your Instagram account? This will stop content publishing.')
+    ) {
       disconnectMutation.mutate()
     }
   }
@@ -130,22 +128,16 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
     <Card>
       <CardHeader>
         <CardTitle>Instagram Connection</CardTitle>
-        <CardDescription>
-          Connect your Instagram Business account to enable content publishing
-        </CardDescription>
+        <CardDescription>Connect your Instagram Business account to enable content publishing</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Connection Status */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-300'}`} />
-            <span className="text-sm font-medium">
-              {isConnected ? 'Connected' : 'Not Connected'}
-            </span>
+            <span className="text-sm font-medium">{isConnected ? 'Connected' : 'Not Connected'}</span>
           </div>
-          <Badge variant={isConnected ? 'default' : 'secondary'}>
-            {isConnected ? 'Active' : 'Inactive'}
-          </Badge>
+          <Badge variant={isConnected ? 'default' : 'secondary'}>{isConnected ? 'Active' : 'Inactive'}</Badge>
         </div>
 
         {/* Connected Profile */}
@@ -154,16 +146,20 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-3">
                 <img
-                  src={profile.profile_picture_url || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150'}
+                  src={
+                    profile.profile_picture_url ||
+                    'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150'
+                  }
                   alt={`@${profile.username}`}
                   className="w-12 h-12 rounded-full bg-gray-200"
                   onError={(e) => {
-                    e.currentTarget.src = 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150'
+                    e.currentTarget.src =
+                      'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150'
                   }}
                 />
                 <div>
                   <h3 className="font-medium">{profile.name}</h3>
-                  <a 
+                  <a
                     href={`https://instagram.com/${profile.username}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -186,19 +182,16 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
                 </div>
               </div>
               {profile.account_type && (
-                <Badge 
-                  variant={profile.account_type === 'BUSINESS' ? 'default' : 'secondary'} 
-                  className="ml-2"
-                >
-                  {profile.account_type === 'BUSINESS' ? 'Business' : 
-                   profile.account_type === 'CREATOR' ? 'Creator' : 
-                   profile.account_type}
+                <Badge variant={profile.account_type === 'BUSINESS' ? 'default' : 'secondary'} className="ml-2">
+                  {profile.account_type === 'BUSINESS'
+                    ? 'Business'
+                    : profile.account_type === 'CREATOR'
+                      ? 'Creator'
+                      : profile.account_type}
                 </Badge>
               )}
             </div>
-            {profile.biography && (
-              <p className="text-sm text-gray-600 mt-3">{profile.biography}</p>
-            )}
+            {profile.biography && <p className="text-sm text-gray-600 mt-3">{profile.biography}</p>}
           </div>
         )}
 
@@ -231,11 +224,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
         <div className="flex justify-end space-x-2">
           {isConnected ? (
             <>
-              <Button 
-                variant="outline" 
-                onClick={handleDisconnect}
-                disabled={disconnectMutation.isPending}
-              >
+              <Button variant="outline" onClick={handleDisconnect} disabled={disconnectMutation.isPending}>
                 {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
               </Button>
               <Button
@@ -247,7 +236,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
               </Button>
             </>
           ) : (
-            <Button 
+            <Button
               onClick={handleConnect}
               disabled={connectMutation.isPending || isConnecting}
               className="w-full sm:w-auto"
@@ -261,8 +250,8 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
         {!isConnected && (
           <Alert>
             <AlertDescription className="text-sm">
-              <strong>Requirements:</strong> You need an Instagram Business or Creator account linked to a Facebook Page. 
-              Personal accounts cannot be used for automated posting.
+              <strong>Requirements:</strong> You need an Instagram Business or Creator account linked to a Facebook
+              Page. Personal accounts cannot be used for automated posting.
             </AlertDescription>
           </Alert>
         )}

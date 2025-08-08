@@ -200,10 +200,17 @@ class AnalyticsService {
       for (const [key, data] of timeSlotMap.entries()) {
         if (data.count < 2) continue // Need at least 2 posts for reliability
 
-        const [dayOfWeek, hour] = key.split('-').map(Number)
+        const keyParts = key.split('-')
+        if (keyParts.length !== 2 || !keyParts[0] || !keyParts[1]) continue // Skip malformed keys
+        
+        const dayOfWeek = parseInt(keyParts[0], 10)
+        const hour = parseInt(keyParts[1], 10)
+        
+        if (isNaN(dayOfWeek) || isNaN(hour)) continue // Skip invalid entries
+        
         optimalTimes.push({
-          dayOfWeek: typeof dayOfWeek === 'number' && !isNaN(dayOfWeek) ? dayOfWeek : 0,
-          hour: typeof hour === 'number' && !isNaN(hour) ? hour : 0,
+          dayOfWeek,
+          hour,
           engagementScore: data.total / data.count,
           sampleSize: data.count,
         })

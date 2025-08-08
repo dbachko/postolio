@@ -1,5 +1,5 @@
 import { test, expect, describe, beforeAll, afterAll } from 'vitest'
-import { buildFastify } from '../server.js'
+import { buildFastify } from '../src/server.js'
 import { FastifyInstance } from 'fastify'
 
 describe('Advanced AI Features', () => {

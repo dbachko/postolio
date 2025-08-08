@@ -65,7 +65,7 @@ class CampaignService {
       // Allow today's date as valid start date - compare in local timezone
       const today = new Date()
       const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-      
+
       // Get the start date components from UTC and create a local date for comparison
       const startUTC = config.duration.start
       const startLocal = new Date(startUTC.getUTCFullYear(), startUTC.getUTCMonth(), startUTC.getUTCDate())
@@ -81,27 +81,30 @@ class CampaignService {
         config: {
           duration: {
             start: config.duration.start.toISOString(),
-            end: config.duration.end.toISOString()
+            end: config.duration.end.toISOString(),
           },
           frequency: config.frequency,
           postingTime: config.postingTime,
-          themes: config.themes
+          themes: config.themes,
         },
-        priority: config.priority || 5
+        priority: config.priority || 5,
       }
 
       const conflicts = await campaignCoordinationService.detectSchedulingConflicts(coordinationConfig, userId)
-      
+
       // Store conflicts for frontend display but allow campaign creation
-      const conflictSummary = conflicts.length > 0 ? {
-        hasConflicts: true,
-        conflictCount: conflicts.length,
-        conflicts: conflicts.map(c => ({
-          type: c.conflictType,
-          severity: c.severity,
-          details: c.details
-        }))
-      } : { hasConflicts: false, conflictCount: 0, conflicts: [] }
+      const conflictSummary =
+        conflicts.length > 0
+          ? {
+              hasConflicts: true,
+              conflictCount: conflicts.length,
+              conflicts: conflicts.map((c) => ({
+                type: c.conflictType,
+                severity: c.severity,
+                details: c.details,
+              })),
+            }
+          : { hasConflicts: false, conflictCount: 0, conflicts: [] }
 
       // Calculate estimated post count
       const durationDays = Math.ceil(
@@ -740,9 +743,9 @@ class CampaignService {
       const campaign = await prisma.campaign.findFirst({
         where: {
           id: campaignId,
-          brand: { userId }
+          brand: { userId },
         },
-        include: { brand: true }
+        include: { brand: true },
       })
 
       if (!campaign) {
@@ -755,8 +758,8 @@ class CampaignService {
         data: { priority: newPriority },
         include: {
           brand: true,
-          content: true
-        }
+          content: true,
+        },
       })
 
       // Re-check conflicts with new priority
@@ -768,30 +771,33 @@ class CampaignService {
           duration: config.duration,
           frequency: config.frequency,
           postingTime: config.postingTime,
-          themes: config.themes
+          themes: config.themes,
         },
-        priority: newPriority
+        priority: newPriority,
       }
 
       const conflicts = await campaignCoordinationService.detectSchedulingConflicts(coordinationConfig, userId)
-      
+
       // Update campaign config with new conflict information
       await prisma.campaign.update({
         where: { id: campaignId },
         data: {
           config: {
             ...config,
-            conflicts: conflicts.length > 0 ? {
-              hasConflicts: true,
-              conflictCount: conflicts.length,
-              conflicts: conflicts.map(c => ({
-                type: c.conflictType,
-                severity: c.severity,
-                details: c.details
-              }))
-            } : { hasConflicts: false, conflictCount: 0, conflicts: [] }
-          }
-        }
+            conflicts:
+              conflicts.length > 0
+                ? {
+                    hasConflicts: true,
+                    conflictCount: conflicts.length,
+                    conflicts: conflicts.map((c) => ({
+                      type: c.conflictType,
+                      severity: c.severity,
+                      details: c.details,
+                    })),
+                  }
+                : { hasConflicts: false, conflictCount: 0, conflicts: [] },
+          },
+        },
       })
 
       return updatedCampaign
@@ -808,29 +814,32 @@ class CampaignService {
     try {
       // Get resource allocation
       const allocation = await campaignCoordinationService.allocateGenerationResources(userId)
-      
+
       // Get active campaigns with priorities
       const activeCampaigns = await prisma.campaign.findMany({
         where: {
           brand: { userId },
-          status: { in: ['active', 'preview'] }
+          status: { in: ['active', 'preview'] },
         },
         include: { brand: true },
-        orderBy: { priority: 'asc' }
+        orderBy: { priority: 'asc' },
       })
 
       return {
         activeCampaigns: activeCampaigns.length,
         resourceAllocation: allocation,
-        campaignsByPriority: activeCampaigns.reduce((acc, campaign) => {
-          const priority = campaign.priority || 5
-          acc[priority] = (acc[priority] || 0) + 1
-          return acc
-        }, {} as Record<number, number>),
+        campaignsByPriority: activeCampaigns.reduce(
+          (acc, campaign) => {
+            const priority = campaign.priority || 5
+            acc[priority] = (acc[priority] || 0) + 1
+            return acc
+          },
+          {} as Record<number, number>
+        ),
         conflicts: activeCampaigns.reduce((total, campaign) => {
           const config = campaign.config as any
           return total + (config.conflicts?.conflictCount || 0)
-        }, 0)
+        }, 0),
       }
     } catch (error) {
       console.error('Get campaign coordination error:', error)
@@ -868,12 +877,12 @@ class CampaignService {
     // Parse dates properly handling UTC vs local timezone
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // Today at 00:00 local
-    
+
     // Parse the start date and extract just the date part (ignore time/timezone)
     const startDateStr = config.duration.start.toISOString().split('T')[0] // "2025-08-07"
     if (startDateStr) {
       const dateParts = startDateStr.split('-').map(Number)
-      if (dateParts.length === 3 && dateParts.every(part => !isNaN(part))) {
+      if (dateParts.length === 3 && dateParts.every((part) => !isNaN(part))) {
         const [year, month, day] = dateParts as [number, number, number]
         const startDateLocal = new Date(year, month - 1, day) // Create local date (month is 0-based)
 
