@@ -10,13 +10,13 @@ let openai: any
 
 if (isTestEnvironment) {
   // Use mock OpenAI in test environment
-  const { mockOpenAI } = await import('../../test/mocks/openai.mock.js')
+  const { mockOpenAI } = await import('../test/mocks/openai.mock.js')
   openai = mockOpenAI
   console.log('🧪 Using OpenAI mock for learning service testing')
 } else {
   // Use real OpenAI in non-test environments
   openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+    apiKey: process.env.OPENAI_API_KEY,
   })
 }
 
@@ -86,7 +86,7 @@ export class AILearningService {
       captionChanges: await this.analyzeCaptionChanges(originalContent.caption, editedContent.caption),
       hashtagChanges: await this.analyzeHashtagChanges(originalContent.hashtags, editedContent.hashtags),
       imageChanges: this.analyzeImageChanges(originalContent.imageUrl, editedContent.imageUrl),
-      timingChanges: this.analyzeTimingChanges(originalContent.scheduledAt, editedContent.scheduledAt)
+      timingChanges: this.analyzeTimingChanges(originalContent.scheduledAt, editedContent.scheduledAt),
     }
 
     console.log('Edit analysis completed:', analysis)
@@ -110,7 +110,7 @@ export class AILearningService {
     // Get current brand and style profile
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
-      select: { id: true, name: true, styleProfile: true, userId: true }
+      select: { id: true, name: true, styleProfile: true, userId: true },
     })
 
     if (!brand) {
@@ -127,20 +127,26 @@ export class AILearningService {
       insights.push(toneInsight)
 
       if (toneInsight.confidence > 0.7) {
-        const newToneOfVoice = this.adjustToneOfVoice(currentProfile.toneOfVoice, editAnalysis.captionChanges.toneChange)
+        const newToneOfVoice = this.adjustToneOfVoice(
+          currentProfile.toneOfVoice,
+          editAnalysis.captionChanges.toneChange
+        )
         profileUpdates.push({
           field: 'toneOfVoice',
           oldValue: currentProfile.toneOfVoice,
           newValue: newToneOfVoice,
           confidence: toneInsight.confidence,
-          reasoning: `User consistently edits content to be ${editAnalysis.captionChanges.toneChange.replace('_', ' ')}`
+          reasoning: `User consistently edits content to be ${editAnalysis.captionChanges.toneChange.replace('_', ' ')}`,
         })
         currentProfile.toneOfVoice = newToneOfVoice
       }
     }
 
     // Analyze hashtag preferences
-    if (editAnalysis.hashtagChanges.addedCategories.length > 0 || editAnalysis.hashtagChanges.removedCategories.length > 0) {
+    if (
+      editAnalysis.hashtagChanges.addedCategories.length > 0 ||
+      editAnalysis.hashtagChanges.removedCategories.length > 0
+    ) {
       const hashtagInsight = await this.generateHashtagInsight(editAnalysis.hashtagChanges, currentProfile)
       insights.push(hashtagInsight)
 
@@ -156,7 +162,7 @@ export class AILearningService {
             oldValue: currentProfile.contentThemes,
             newValue: updatedThemes,
             confidence: hashtagInsight.confidence,
-            reasoning: `User preferences detected: added ${editAnalysis.hashtagChanges.addedCategories.join(', ')}, removed ${editAnalysis.hashtagChanges.removedCategories.join(', ')}`
+            reasoning: `User preferences detected: added ${editAnalysis.hashtagChanges.addedCategories.join(', ')}, removed ${editAnalysis.hashtagChanges.removedCategories.join(', ')}`,
           })
           currentProfile.contentThemes = updatedThemes
         }
@@ -165,7 +171,10 @@ export class AILearningService {
 
     // Analyze personality adjustments
     if (editAnalysis.captionChanges.personalityShift.length > 0) {
-      const personalityInsight = await this.generatePersonalityInsight(editAnalysis.captionChanges.personalityShift, currentProfile)
+      const personalityInsight = await this.generatePersonalityInsight(
+        editAnalysis.captionChanges.personalityShift,
+        currentProfile
+      )
       insights.push(personalityInsight)
 
       if (personalityInsight.confidence > 0.6) {
@@ -179,7 +188,7 @@ export class AILearningService {
             oldValue: currentProfile.brandPersonality,
             newValue: updatedPersonality,
             confidence: personalityInsight.confidence,
-            reasoning: `Brand personality refined based on user edit patterns: ${editAnalysis.captionChanges.personalityShift.join(', ')}`
+            reasoning: `Brand personality refined based on user edit patterns: ${editAnalysis.captionChanges.personalityShift.join(', ')}`,
           })
           currentProfile.brandPersonality = updatedPersonality
         }
@@ -189,19 +198,21 @@ export class AILearningService {
     // Save updated profile to database
     await prisma.brand.update({
       where: { id: brandId },
-      data: { styleProfile: currentProfile as any }
+      data: { styleProfile: currentProfile as any },
     })
 
     // Estimate how many future posts this will affect
     const appliedToFuturePosts = await this.estimateFuturePostImpact(brandId, profileUpdates)
 
-    console.log(`Learning applied: ${insights.length} insights, ${profileUpdates.length} profile updates, affecting ~${appliedToFuturePosts} future posts`)
+    console.log(
+      `Learning applied: ${insights.length} insights, ${profileUpdates.length} profile updates, affecting ~${appliedToFuturePosts} future posts`
+    )
 
     return {
       updatedProfile: currentProfile,
       insights,
       profileUpdates,
-      appliedToFuturePosts
+      appliedToFuturePosts,
     }
   }
 
@@ -228,7 +239,7 @@ export class AILearningService {
     // For now, we'll provide simulated analytics based on current profile
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
-      include: { content: { orderBy: { createdAt: 'desc' }, take: 50 } }
+      include: { content: { orderBy: { createdAt: 'desc' }, take: 50 } },
     })
 
     if (!brand) {
@@ -240,26 +251,26 @@ export class AILearningService {
     return {
       totalEditsAnalyzed: Math.floor(totalContent * 0.3), // Simulate 30% edit rate
       profileUpdatesCount: Math.floor(totalContent * 0.1), // Simulate 10% of edits leading to updates
-      learningConfidence: Math.min(0.95, 0.5 + (totalContent * 0.02)), // Increases with content volume
+      learningConfidence: Math.min(0.95, 0.5 + totalContent * 0.02), // Increases with content volume
       topInsights: [
         {
           category: 'Tone Preferences',
           pattern: 'User prefers more conversational tone',
           frequency: Math.floor(totalContent * 0.4),
-          lastDetected: new Date()
+          lastDetected: new Date(),
         },
         {
           category: 'Hashtag Strategy',
           pattern: 'Favors niche-specific hashtags over popular ones',
           frequency: Math.floor(totalContent * 0.6),
-          lastDetected: new Date()
-        }
+          lastDetected: new Date(),
+        },
       ],
       improvementMetrics: {
         editFrequencyReduction: Math.min(0.5, totalContent * 0.01), // Fewer edits needed over time
-        contentAcceptanceRate: Math.min(0.95, 0.7 + (totalContent * 0.01)), // Higher acceptance rate
-        styleBoundaryRefinement: Math.min(0.9, 0.6 + (totalContent * 0.015)) // Better style understanding
-      }
+        contentAcceptanceRate: Math.min(0.95, 0.7 + totalContent * 0.01), // Higher acceptance rate
+        styleBoundaryRefinement: Math.min(0.9, 0.6 + totalContent * 0.015), // Better style understanding
+      },
     }
   }
 
@@ -273,7 +284,7 @@ export class AILearningService {
         toneChange: 'no_change',
         emojiChange: 'no_change',
         callToActionChange: 'no_change',
-        personalityShift: []
+        personalityShift: [],
       }
     }
 
@@ -298,7 +309,7 @@ Focus on significant changes only. Return only JSON.`
         model: 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
-        max_tokens: 300
+        max_tokens: 300,
       })
 
       const analysis = JSON.parse(response.choices[0]?.message?.content || '{}')
@@ -308,7 +319,7 @@ Focus on significant changes only. Return only JSON.`
         toneChange: analysis.toneChange || 'no_change',
         emojiChange: analysis.emojiChange || 'no_change',
         callToActionChange: analysis.callToActionChange || 'no_change',
-        personalityShift: analysis.personalityShift || []
+        personalityShift: analysis.personalityShift || [],
       }
     } catch (error) {
       console.error('Caption analysis error:', error)
@@ -317,7 +328,7 @@ Focus on significant changes only. Return only JSON.`
         toneChange: 'no_change',
         emojiChange: 'no_change',
         callToActionChange: 'no_change',
-        personalityShift: []
+        personalityShift: [],
       }
     }
   }
@@ -329,8 +340,8 @@ Focus on significant changes only. Return only JSON.`
     const originalSet = new Set(original)
     const editedSet = new Set(edited)
 
-    const added = edited.filter(tag => !originalSet.has(tag))
-    const removed = original.filter(tag => !editedSet.has(tag))
+    const added = edited.filter((tag) => !originalSet.has(tag))
+    const removed = original.filter((tag) => !editedSet.has(tag))
     const countChange = edited.length - original.length
 
     // Categorize hashtags using AI
@@ -342,7 +353,7 @@ Focus on significant changes only. Return only JSON.`
         countChange,
         addedCategories,
         removedCategories,
-        popularityShift: this.analyzePopularityShift(added, removed)
+        popularityShift: this.analyzePopularityShift(added, removed),
       }
     } catch (error) {
       console.error('Hashtag analysis error:', error)
@@ -350,7 +361,7 @@ Focus on significant changes only. Return only JSON.`
         countChange,
         addedCategories: [],
         removedCategories: [],
-        popularityShift: 'no_change'
+        popularityShift: 'no_change',
       }
     }
   }
@@ -362,13 +373,13 @@ Focus on significant changes only. Return only JSON.`
     const urlChanged = originalUrl !== editedUrl
 
     const changes: EditAnalysis['imageChanges'] = {
-      urlChanged
+      urlChanged,
     }
-    
+
     if (urlChanged) {
       changes.styleDirection = 'user_preference_detected'
     }
-    
+
     return changes
   }
 
@@ -380,14 +391,14 @@ Focus on significant changes only. Return only JSON.`
       return {
         timeShift: 0,
         dayShift: 0,
-        schedulingPattern: 'no_change'
+        schedulingPattern: 'no_change',
       }
     }
 
     const originalDate = new Date(originalScheduled)
     const editedDate = new Date(editedScheduled)
 
-    const timeShift = (editedDate.getHours() - originalDate.getHours())
+    const timeShift = editedDate.getHours() - originalDate.getHours()
     const dayShift = Math.floor((editedDate.getTime() - originalDate.getTime()) / (1000 * 60 * 60 * 24))
 
     let schedulingPattern = 'no_change'
@@ -401,7 +412,7 @@ Focus on significant changes only. Return only JSON.`
     return {
       timeShift,
       dayShift,
-      schedulingPattern
+      schedulingPattern,
     }
   }
 
@@ -422,7 +433,7 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
         model: 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
-        max_tokens: 200
+        max_tokens: 200,
       })
 
       const categories = JSON.parse(response.choices[0]?.message?.content || '[]')
@@ -437,14 +448,23 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
    * Analyze if hashtag changes indicate popularity preference shift
    */
   private analyzePopularityShift(added: string[], removed: string[]): 'more_popular' | 'more_niche' | 'no_change' {
-    const popularHashtags = ['love', 'instagood', 'photooftheday', 'beautiful', 'happy', 'follow', 'like4like', 'followme']
-    
-    const addedPopular = added.filter(tag => 
-      popularHashtags.some(popular => tag.toLowerCase().includes(popular))
+    const popularHashtags = [
+      'love',
+      'instagood',
+      'photooftheday',
+      'beautiful',
+      'happy',
+      'follow',
+      'like4like',
+      'followme',
+    ]
+
+    const addedPopular = added.filter((tag) =>
+      popularHashtags.some((popular) => tag.toLowerCase().includes(popular))
     ).length
 
-    const removedPopular = removed.filter(tag => 
-      popularHashtags.some(popular => tag.toLowerCase().includes(popular))
+    const removedPopular = removed.filter((tag) =>
+      popularHashtags.some((popular) => tag.toLowerCase().includes(popular))
     ).length
 
     if (addedPopular > removedPopular) return 'more_popular'
@@ -455,7 +475,10 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
   /**
    * Generate learning insights for different edit patterns
    */
-  private async generateToneInsight(captionChanges: EditAnalysis['captionChanges'], _profile: StyleProfile): Promise<LearningInsight> {
+  private async generateToneInsight(
+    captionChanges: EditAnalysis['captionChanges'],
+    _profile: StyleProfile
+  ): Promise<LearningInsight> {
     const confidence = captionChanges.toneChange !== 'no_change' ? 0.8 : 0.1
 
     return {
@@ -463,12 +486,16 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
       confidence,
       category: 'caption_style',
       recommendation: `Generate content with ${captionChanges.toneChange === 'more_casual' ? 'more conversational' : 'more professional'} tone`,
-      appliedToFuturePosts: confidence > 0.7 ? Math.floor(Math.random() * 10 + 5) : 0
+      appliedToFuturePosts: confidence > 0.7 ? Math.floor(Math.random() * 10 + 5) : 0,
     }
   }
 
-  private async generateHashtagInsight(hashtagChanges: EditAnalysis['hashtagChanges'], _profile: StyleProfile): Promise<LearningInsight> {
-    const hasSignificantChange = hashtagChanges.addedCategories.length > 0 || hashtagChanges.removedCategories.length > 0
+  private async generateHashtagInsight(
+    hashtagChanges: EditAnalysis['hashtagChanges'],
+    _profile: StyleProfile
+  ): Promise<LearningInsight> {
+    const hasSignificantChange =
+      hashtagChanges.addedCategories.length > 0 || hashtagChanges.removedCategories.length > 0
     const confidence = hasSignificantChange ? 0.7 : 0.1
 
     return {
@@ -476,11 +503,14 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
       confidence,
       category: 'hashtag_preference',
       recommendation: `Focus on ${hashtagChanges.addedCategories.join(' and ')} content themes`,
-      appliedToFuturePosts: confidence > 0.6 ? Math.floor(Math.random() * 8 + 3) : 0
+      appliedToFuturePosts: confidence > 0.6 ? Math.floor(Math.random() * 8 + 3) : 0,
     }
   }
 
-  private async generatePersonalityInsight(personalityShift: string[], _profile: StyleProfile): Promise<LearningInsight> {
+  private async generatePersonalityInsight(
+    personalityShift: string[],
+    _profile: StyleProfile
+  ): Promise<LearningInsight> {
     const confidence = personalityShift.length > 0 ? 0.6 : 0.1
 
     return {
@@ -488,7 +518,7 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
       confidence,
       category: 'caption_style',
       recommendation: `Emphasize ${personalityShift[0] || 'authentic'} brand personality in content`,
-      appliedToFuturePosts: confidence > 0.6 ? Math.floor(Math.random() * 12 + 6) : 0
+      appliedToFuturePosts: confidence > 0.6 ? Math.floor(Math.random() * 12 + 6) : 0,
     }
   }
 
@@ -509,18 +539,22 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
     }
   }
 
-  private adjustContentThemes(currentThemes: string[], addedCategories: string[], removedCategories: string[]): string[] {
+  private adjustContentThemes(
+    currentThemes: string[],
+    addedCategories: string[],
+    removedCategories: string[]
+  ): string[] {
     const themes = [...currentThemes]
-    
+
     // Add new themes that aren't already present
-    addedCategories.forEach(category => {
+    addedCategories.forEach((category) => {
       if (!themes.includes(category)) {
         themes.push(category)
       }
     })
 
     // Remove themes that user consistently removes
-    const filteredThemes = themes.filter(theme => !removedCategories.includes(theme))
+    const filteredThemes = themes.filter((theme) => !removedCategories.includes(theme))
 
     // Keep maximum of 6 themes for focus
     return filteredThemes.slice(0, 6)
@@ -528,9 +562,9 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
 
   private adjustBrandPersonality(currentPersonality: string[], personalityShifts: string[]): string[] {
     const personality = [...currentPersonality]
-    
+
     // Add new personality traits
-    personalityShifts.forEach(trait => {
+    personalityShifts.forEach((trait) => {
       if (!personality.includes(trait)) {
         personality.push(trait)
       }
@@ -548,9 +582,9 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
       where: {
         brandId,
         createdAt: {
-          gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
-        }
-      }
+          gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+        },
+      },
     })
 
     const dailyAverage = recentContent / 30
@@ -567,7 +601,7 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
       contentThemes: ['lifestyle', 'brand'],
       toneOfVoice: 'Professional and friendly',
       targetAudience: 'General audience',
-      brandPersonality: ['authentic', 'approachable']
+      brandPersonality: ['authentic', 'approachable'],
     }
   }
 }

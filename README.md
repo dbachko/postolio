@@ -208,8 +208,9 @@ For production deployment:
 
 1. **Update Redirect URIs** in your Meta App:
    ```
-   https://yourdomain.com/auth/instagram/callback
+   https://postolio.example/auth/instagram/callback
    ```
+   (Or your custom domain if different)
 
 2. **Submit for App Review**:
    - Instagram Graph API requires app review for most permissions
@@ -369,7 +370,110 @@ npm run test:coverage
 
 ## Production Deployment
 
-### Environment Variables
+### AWS Deployment (Recommended)
+
+The application is designed for deployment on AWS using a modern containerized architecture. See the complete [AWS Deployment Strategy](docs/AWS_DEPLOYMENT_STRATEGY.md) for detailed information.
+
+#### Quick AWS Deployment
+
+1. **Prerequisites**
+   - AWS CLI configured with appropriate permissions
+   - Docker installed and running
+   - Node.js 20+ installed
+
+2. **One-command deployment**
+   ```bash
+   ./scripts/quick-start-aws.sh
+   ```
+
+3. **Production deployment with custom domain (postolio.example)**
+   ```bash
+   # Set your hosted zone ID first
+   export HOSTED_ZONE_ID="YOUR_HOSTED_ZONE_ID"
+   
+   # Deploy to production with custom domain
+   ./scripts/deploy-postol-io.sh
+   ```
+
+4. **Manual deployment**
+   ```bash
+   # Deploy to development (default CloudFront domain)
+   ./scripts/deploy-aws.sh dev
+   
+   # Deploy to production (default CloudFront domain)
+   ./scripts/deploy-aws.sh prod
+   
+   # Deploy with custom domain
+   export DOMAIN_NAME="postolio.example"
+   export HOSTED_ZONE_ID="YOUR_HOSTED_ZONE_ID"
+   ./scripts/deploy-aws.sh prod
+   ```
+
+5. **Configure secrets** (after deployment)
+   - Update AWS Secrets Manager with your API keys
+   - OpenAI API Key
+   - Facebook/Meta App credentials
+
+#### Custom Domain Configuration
+
+The infrastructure supports custom domains with two DNS setup options:
+
+##### Option 1: Route 53 (AWS DNS) - Automatic Setup
+For domains hosted on Route 53 (like postolio.example):
+
+1. **Create Route 53 hosted zone** for postolio.example (if not exists)
+2. **Point domain nameservers** to Route 53
+3. **Deploy with domain configuration**:
+   ```bash
+   export HOSTED_ZONE_ID="YOUR_HOSTED_ZONE_ID"
+   ./scripts/deploy-postol-io.sh
+   ```
+4. **SSL certificate** is automatically requested and validated
+5. **DNS records** are automatically created
+
+##### Option 2: External DNS Provider - Manual Setup
+For domains hosted elsewhere (Cloudflare, Namecheap, GoDaddy, etc.):
+
+1. **Deploy with external DNS flag**:
+   ```bash
+   export DOMAIN_NAME="postolio.example"
+   ./scripts/deploy-external-dns.sh prod
+   ```
+2. **Validate SSL certificate** via email (admin@/webmaster@postolio.example)
+3. **Create DNS record** with your provider:
+   ```
+   Type: CNAME
+   Name: postolio.example  
+   Value: [CloudFront domain from deployment output]
+   ```
+
+**Production URL**: https://postolio.example (after deployment and DNS propagation)
+
+For the Instagram redirect URI in your Meta App settings, use:
+```
+https://postolio.example/auth/instagram/callback
+```
+
+#### GitHub Actions Setup
+
+For automated deployments, configure these GitHub Secrets in your repository settings:
+- `AWS_ACCESS_KEY_ID` - IAM user access key for deployment
+- `AWS_SECRET_ACCESS_KEY` - IAM user secret key
+- `AWS_ACCOUNT_ID` - Your 12-digit AWS account ID
+
+See the [AWS Deployment Strategy](docs/AWS_DEPLOYMENT_STRATEGY.md#github-actions-cicd-setup) for detailed IAM user setup instructions.
+
+#### AWS Architecture
+- **ECS Fargate**: Serverless container orchestration
+- **RDS PostgreSQL**: Managed database with automated backups
+- **ElastiCache Redis**: In-memory caching
+- **CloudFront + S3**: Global CDN for frontend
+- **Application Load Balancer**: SSL termination and load balancing
+- **Secrets Manager**: Secure credential storage
+
+### Alternative Deployment Options
+
+#### Environment Variables
 
 Set the following environment variables in production:
 
@@ -381,7 +485,7 @@ NODE_ENV=production
 PORT=3000
 ```
 
-### Build and Deploy
+#### Build and Deploy
 
 ```bash
 # Build backend
@@ -395,7 +499,7 @@ npm run build
 npm start
 ```
 
-### Docker Deployment
+#### Docker Deployment
 
 ```bash
 # Build and run with Docker Compose

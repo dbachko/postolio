@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { instagramService } from './instagram.js'
 
 const prisma = new PrismaClient()
@@ -55,11 +55,11 @@ class AnalyticsService {
         where: {
           id: contentId,
           status: 'posted',
-          instagramPostId: { not: null }
+          instagramPostId: { not: null },
         },
         include: {
-          brand: true
-        }
+          brand: true,
+        },
       })
 
       if (!content || !content.instagramPostId) {
@@ -80,7 +80,7 @@ class AnalyticsService {
           engagementRate: 8.4,
           timestamp: postedAt,
           dayOfWeek: postedAt.getDay(),
-          hourOfDay: postedAt.getHours()
+          hourOfDay: postedAt.getHours(),
         }
 
         // Store mock metrics in database
@@ -107,7 +107,7 @@ class AnalyticsService {
         engagementRate: this.calculateEngagementRate(insights),
         timestamp: postedAt,
         dayOfWeek: postedAt.getDay(),
-        hourOfDay: postedAt.getHours()
+        hourOfDay: postedAt.getHours(),
       }
 
       // Store metrics in database
@@ -124,10 +124,11 @@ class AnalyticsService {
    * Calculate engagement rate from insights
    */
   private calculateEngagementRate(insights: any): number {
-    const totalEngagements = (insights.likes || insights.like_count || 0) + 
-                           (insights.comments || insights.comments_count || 0) + 
-                           (insights.saves || insights.saved || 0) + 
-                           (insights.shares || 0)
+    const totalEngagements =
+      (insights.likes || insights.like_count || 0) +
+      (insights.comments || insights.comments_count || 0) +
+      (insights.saves || insights.saved || 0) +
+      (insights.shares || 0)
     const reach = insights.reach || insights.impressions || 1
     return (totalEngagements / reach) * 100
   }
@@ -143,9 +144,9 @@ class AnalyticsService {
         data: {
           analytics: {
             ...metrics,
-            lastUpdated: new Date()
-          } as any
-        }
+            lastUpdated: new Date(),
+          } as any,
+        },
       })
     } catch (error) {
       console.error('Failed to store metrics:', error)
@@ -161,12 +162,12 @@ class AnalyticsService {
         where: {
           brandId: brandId,
           status: 'posted',
-          analytics: { not: null }
+          analytics: { not: (Prisma as any).JsonNull },
         },
         orderBy: {
-          postedAt: 'desc'
+          postedAt: 'desc',
         },
-        take: 100 // Analyze last 100 posts
+        take: 100, // Analyze last 100 posts
       })
 
       if (contents.length < 5) {
@@ -175,7 +176,7 @@ class AnalyticsService {
       }
 
       // Group by day of week and hour
-      const timeSlotMap = new Map<string, { total: number, count: number }>()
+      const timeSlotMap = new Map<string, { total: number; count: number }>()
 
       for (const content of contents) {
         const analytics = content.analytics as any
@@ -189,30 +190,34 @@ class AnalyticsService {
         const existing = timeSlotMap.get(key) || { total: 0, count: 0 }
         timeSlotMap.set(key, {
           total: existing.total + analytics.engagementRate,
-          count: existing.count + 1
+          count: existing.count + 1,
         })
       }
 
       // Calculate average engagement for each time slot
       const optimalTimes: OptimalTimeSlot[] = []
-      
+
       for (const [key, data] of timeSlotMap.entries()) {
         if (data.count < 2) continue // Need at least 2 posts for reliability
 
-        const [dayOfWeek, hour] = key.split('-').map(Number)
+        const keyParts = key.split('-')
+        if (keyParts.length !== 2 || !keyParts[0] || !keyParts[1]) continue // Skip malformed keys
+        
+        const dayOfWeek = parseInt(keyParts[0], 10)
+        const hour = parseInt(keyParts[1], 10)
+        
+        if (isNaN(dayOfWeek) || isNaN(hour)) continue // Skip invalid entries
+        
         optimalTimes.push({
           dayOfWeek,
           hour,
           engagementScore: data.total / data.count,
-          sampleSize: data.count
+          sampleSize: data.count,
         })
       }
 
       // Sort by engagement score and return top 10
-      return optimalTimes
-        .sort((a, b) => b.engagementScore - a.engagementScore)
-        .slice(0, 10)
-
+      return optimalTimes.sort((a, b) => b.engagementScore - a.engagementScore).slice(0, 10)
     } catch (error) {
       console.error('Failed to analyze optimal times:', error)
       return this.getDefaultOptimalTimes()
@@ -230,7 +235,7 @@ class AnalyticsService {
       { dayOfWeek: 1, hour: 13, engagementScore: 7.8, sampleSize: 0 }, // Monday 1 PM
       { dayOfWeek: 5, hour: 15, engagementScore: 7.5, sampleSize: 0 }, // Friday 3 PM
       { dayOfWeek: 0, hour: 12, engagementScore: 7.2, sampleSize: 0 }, // Sunday 12 PM
-      { dayOfWeek: 6, hour: 10, engagementScore: 6.8, sampleSize: 0 }  // Saturday 10 AM
+      { dayOfWeek: 6, hour: 10, engagementScore: 6.8, sampleSize: 0 }, // Saturday 10 AM
     ]
   }
 
@@ -246,50 +251,52 @@ class AnalyticsService {
 
       // Find next optimal time
       const nextRecommendations: Date[] = []
-      
-      for (let dayOffset = 0; dayOffset < 14; dayOffset++) { // Look ahead 2 weeks
-        for (const timeSlot of optimalTimes) {
-          const targetDate = new Date(now)
-          targetDate.setDate(now.getDate() + dayOffset)
-          
-          // Adjust to target day of week
-          const dayDiff = (timeSlot.dayOfWeek - targetDate.getDay() + 7) % 7
-          targetDate.setDate(targetDate.getDate() + dayDiff)
-          targetDate.setHours(timeSlot.hour, 0, 0, 0)
-
-          // Only suggest future times
-          if (targetDate > now) {
-            nextRecommendations.push(targetDate)
+      if (optimalTimes.length > 0) {
+        for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
+          // Look ahead 2 weeks
+          for (const timeSlot of optimalTimes) {
+            const targetDate = new Date(now)
+            targetDate.setDate(now.getDate() + dayOffset)
+            // Adjust to target day of week
+            const dayDiff = (timeSlot.dayOfWeek - targetDate.getDay() + 7) % 7
+            targetDate.setDate(targetDate.getDate() + dayDiff)
+            targetDate.setHours(timeSlot.hour, 0, 0, 0)
+            // Only suggest future times
+            if (targetDate > now) {
+              nextRecommendations.push(targetDate)
+            }
           }
         }
       }
 
       // Sort by date and take the best options
       nextRecommendations.sort((a, b) => a.getTime() - b.getTime())
-      
-      const primaryRecommendation = nextRecommendations[0]
+
+      const primaryRecommendation = nextRecommendations[0] || new Date(now.getTime() + 24 * 60 * 60 * 1000)
       const alternativeTimes = nextRecommendations.slice(1, 4)
 
       // Determine confidence based on sample size
       const topTimeSlot = optimalTimes[0]
-      const confidence = Math.min(95, Math.max(60, topTimeSlot.sampleSize * 10))
-
+      let confidence = 60
       let reason = 'Based on optimal engagement patterns for your brand'
-      if (topTimeSlot.sampleSize === 0) {
-        reason = 'Based on general Instagram best practices (not enough brand data yet)'
-      } else if (topTimeSlot.sampleSize < 5) {
-        reason = 'Based on limited brand data and general best practices'
+      if (topTimeSlot) {
+        confidence = Math.min(95, Math.max(60, topTimeSlot.sampleSize * 10))
+        if (topTimeSlot.sampleSize === 0) {
+          reason = 'Based on general Instagram best practices (not enough brand data yet)'
+        } else if (topTimeSlot.sampleSize < 5) {
+          reason = 'Based on limited brand data and general best practices'
+        }
       }
 
       return {
         recommendedTime: primaryRecommendation,
         confidence,
         reason,
-        alternativeTimes
+        alternativeTimes,
       }
     } catch (error) {
       console.error('Failed to generate scheduling recommendation:', error)
-      
+
       // Fallback recommendation
       const tomorrow = new Date()
       tomorrow.setDate(tomorrow.getDate() + 1)
@@ -299,7 +306,7 @@ class AnalyticsService {
         recommendedTime: tomorrow,
         confidence: 60,
         reason: 'Default recommendation due to analysis error',
-        alternativeTimes: []
+        alternativeTimes: [],
       }
     }
   }
@@ -317,11 +324,11 @@ class AnalyticsService {
           brandId: brandId,
           status: 'posted',
           postedAt: { gte: cutoffDate },
-          analytics: { not: null }
+          analytics: { not: (Prisma as any).JsonNull },
         },
         orderBy: {
-          postedAt: 'desc'
-        }
+          postedAt: 'desc',
+        },
       })
 
       if (contents.length === 0) {
@@ -332,7 +339,7 @@ class AnalyticsService {
       let totalReach = 0
       let totalEngagements = 0
       const postMetrics: PostMetrics[] = []
-      const dailyEngagement: { [key: string]: { total: number, count: number } } = {}
+      const dailyEngagement: { [key: string]: { total: number; count: number } } = {}
 
       for (const content of contents) {
         const analytics = content.analytics as any
@@ -340,15 +347,17 @@ class AnalyticsService {
 
         totalImpressions += analytics.impressions || 0
         totalReach += analytics.reach || 0
-        totalEngagements += (analytics.likes || 0) + (analytics.comments || 0) + (analytics.saves || 0) + (analytics.shares || 0)
+        totalEngagements +=
+          (analytics.likes || 0) + (analytics.comments || 0) + (analytics.saves || 0) + (analytics.shares || 0)
 
         const postedAt = content.postedAt || content.createdAt
+        if (!postedAt) continue // skip if no date
         const dateKey = postedAt.toISOString().split('T')[0]
-        
-        const daily = dailyEngagement[dateKey] || { total: 0, count: 0 }
-        dailyEngagement[dateKey] = {
+
+        const daily = dailyEngagement[dateKey as string] || { total: 0, count: 0 }
+        dailyEngagement[dateKey as string] = {
           total: daily.total + (analytics.engagementRate || 0),
-          count: daily.count + 1
+          count: daily.count + 1,
         }
 
         postMetrics.push({
@@ -362,20 +371,20 @@ class AnalyticsService {
           engagementRate: analytics.engagementRate || 0,
           timestamp: postedAt,
           dayOfWeek: postedAt.getDay(),
-          hourOfDay: postedAt.getHours()
+          hourOfDay: postedAt.getHours(),
         })
       }
 
       const averageEngagementRate = totalReach > 0 ? (totalEngagements / totalReach) * 100 : 0
       const optimalTimes = await this.analyzeOptimalTimes(brandId)
-      const topPerformingPosts = postMetrics
-        .sort((a, b) => b.engagementRate - a.engagementRate)
-        .slice(0, 10)
+      const topPerformingPosts = postMetrics.sort((a, b) => b.engagementRate - a.engagementRate).slice(0, 10)
 
-      const engagementTrends = Object.entries(dailyEngagement).map(([date, data]) => ({
-        date,
-        engagementRate: data.total / data.count
-      })).sort((a, b) => a.date.localeCompare(b.date))
+      const engagementTrends = Object.entries(dailyEngagement)
+        .map(([date, data]) => ({
+          date,
+          engagementRate: data.total / data.count,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date))
 
       return {
         totalPosts: contents.length,
@@ -385,7 +394,7 @@ class AnalyticsService {
         averageEngagementRate,
         optimalTimes,
         topPerformingPosts,
-        engagementTrends
+        engagementTrends,
       }
     } catch (error) {
       console.error('Failed to generate analytics report:', error)
@@ -405,7 +414,7 @@ class AnalyticsService {
       averageEngagementRate: 0,
       optimalTimes: this.getDefaultOptimalTimes(),
       topPerformingPosts: [],
-      engagementTrends: []
+      engagementTrends: [],
     }
   }
 
@@ -421,16 +430,16 @@ class AnalyticsService {
           // Only collect for posts that are at least 1 hour old and less than 30 days old
           postedAt: {
             gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
-            lte: new Date(Date.now() - 60 * 60 * 1000) // 1 hour ago
-          }
+            lte: new Date(Date.now() - 60 * 60 * 1000), // 1 hour ago
+          },
         },
-        take: 50 // Process in batches to avoid rate limiting
+        take: 50, // Process in batches to avoid rate limiting
       })
 
       for (const content of postedContents) {
         await this.collectPostMetrics(content.id)
         // Add delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await new Promise((resolve) => setTimeout(resolve, 1000))
       }
 
       console.log(`Collected metrics for ${postedContents.length} posts`)
@@ -444,7 +453,7 @@ class AnalyticsService {
    */
   getDayName(dayOfWeek: number): string {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-    return days[dayOfWeek]
+    return days[dayOfWeek] ?? 'Unknown'
   }
 
   /**

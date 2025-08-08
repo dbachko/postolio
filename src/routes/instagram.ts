@@ -29,12 +29,9 @@ function validateWebhookSignature(payload: string, signature: string): boolean {
     .createHmac('sha256', process.env.FACEBOOK_APP_SECRET || 'test_secret')
     .update(payload)
     .digest('hex')
-  
+
   const receivedSignature = signature.replace('sha256=', '')
-  return crypto.timingSafeEqual(
-    Buffer.from(expectedSignature, 'hex'),
-    Buffer.from(receivedSignature, 'hex')
-  )
+  return crypto.timingSafeEqual(Buffer.from(expectedSignature, 'hex'), Buffer.from(receivedSignature, 'hex'))
 }
 
 const instagram: FastifyPluginAsync = async function (fastify) {
@@ -43,38 +40,38 @@ const instagram: FastifyPluginAsync = async function (fastify) {
     try {
       const user = authenticateRequest(request, reply)
       if (!user) return
-      
+
       const { brandId } = request.params as { brandId: string }
       const { refresh } = request.query as { refresh?: string }
-      
+
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: user.id
-        }
+          userId: user.id,
+        },
       })
-      
+
       if (!brand) {
         return reply.status(404).send({ error: 'Brand not found' })
       }
-      
+
       const connected = instagramService.isConfigured(brand)
       let profile = null
-      
+
       if (connected) {
         if (refresh === 'true') {
           // Fetch fresh profile data from Instagram API
           try {
             const freshProfile = await instagramService.getProfile(brand)
-            
+
             // Update database with fresh profile data
-            await prisma.brand.update({
+            const updatedBrand = await prisma.brand.update({
               where: { id: brandId },
               data: {
-                instagramProfileData: freshProfile
-              }
+                instagramProfileData: freshProfile as any,
+              },
             })
-            
+
             profile = freshProfile
           } catch (error) {
             console.error('Failed to refresh Instagram profile:', error)
@@ -86,15 +83,15 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           profile = brand.instagramProfileData
         }
       }
-      
-      reply.send({ 
+
+      reply.send({
         connected,
-        profile
+        profile,
       })
     } catch (error) {
-      reply.status(500).send({ 
+      reply.status(500).send({
         error: 'Failed to fetch Instagram profile',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -107,29 +104,29 @@ const instagram: FastifyPluginAsync = async function (fastify) {
 
       const { brandId } = request.params as { brandId: string }
       const { limit = 25 } = request.query as { limit?: number }
-      
+
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: user.id
-        }
+          userId: user.id,
+        },
       })
-      
+
       if (!brand) {
         return reply.status(404).send({ error: 'Brand not found' })
       }
-      
+
       if (!instagramService.isConfigured(brand)) {
         return reply.status(400).send({ error: 'Instagram not connected for this brand' })
       }
-      
+
       const posts = await instagramService.getRecentPosts(brand, limit)
-      
+
       reply.send({ posts })
     } catch (error) {
-      reply.status(500).send({ 
+      reply.status(500).send({
         error: 'Failed to fetch Instagram posts',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -149,8 +146,8 @@ const instagram: FastifyPluginAsync = async function (fastify) {
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: user.id
-        }
+          userId: user.id,
+        },
       })
 
       if (!brand) {
@@ -162,7 +159,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
       }
 
       const refreshResult = await instagramService.refreshAccessToken(brand.instagramAccessToken)
-      
+
       if (!refreshResult) {
         return reply.status(500).send({ error: 'Failed to refresh Instagram token' })
       }
@@ -174,19 +171,19 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           instagramAccessToken: refreshResult.accessToken,
           preferences: {
             ...((brand.preferences as any) || {}),
-            tokenExpiresAt: refreshResult.expiresAt
-          }
-        }
+            tokenExpiresAt: refreshResult.expiresAt,
+          },
+        },
       })
 
-      reply.send({ 
+      reply.send({
         success: true,
-        expiresAt: refreshResult.expiresAt
+        expiresAt: refreshResult.expiresAt,
       })
     } catch (error) {
-      reply.status(500).send({ 
+      reply.status(500).send({
         error: 'Failed to refresh Instagram token',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -208,12 +205,12 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         where: {
           id: contentId,
           brand: {
-            userId: user.id
-          }
+            userId: user.id,
+          },
         },
         include: {
-          brand: true
-        }
+          brand: true,
+        },
       })
 
       if (!content) {
@@ -226,17 +223,17 @@ const instagram: FastifyPluginAsync = async function (fastify) {
 
       // Check if brand has Instagram connection
       if (!instagramService.isConfigured(content.brand)) {
-        return reply.status(400).send({ 
-          error: 'Instagram account not connected to this brand' 
+        return reply.status(400).send({
+          error: 'Instagram account not connected to this brand',
         })
       }
 
       // Enhanced content validation
       if (!content.imageUrl) {
-        return reply.status(400).send({ 
+        return reply.status(400).send({
           error: 'Image URL is required for Instagram posting',
           details: 'Content must have a valid image before publishing',
-          retryable: false
+          retryable: false,
         })
       }
 
@@ -244,7 +241,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({
           error: 'Caption is required for Instagram posting',
           details: 'Content must have a non-empty caption',
-          retryable: false
+          retryable: false,
         })
       }
 
@@ -252,7 +249,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({
           error: 'At least one hashtag is required for Instagram posting',
           details: 'Content must include hashtags for better reach',
-          retryable: false
+          retryable: false,
         })
       }
 
@@ -260,7 +257,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
       const publishResult = await instagramService.publishMedia(content.brand, {
         imageUrl: content.imageUrl,
         caption: content.caption,
-        hashtags: content.hashtags
+        hashtags: content.hashtags,
       })
 
       // Update content status
@@ -270,28 +267,29 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           status: 'posted',
           postedAt: new Date(),
           instagramPostId: publishResult.id,
-          instagramPermalink: publishResult.permalink
-        }
+          instagramPermalink: publishResult.permalink,
+        },
       })
 
-      reply.send({ 
+      reply.send({
         success: true,
         content: updatedContent,
-        instagram: publishResult
+        instagram: publishResult,
       })
     } catch (error) {
       console.error('Instagram publish error:', error)
-      
+
       const errorMessage = error instanceof Error ? error.message : 'Failed to publish to Instagram'
-      const isRetryable = !errorMessage.includes('permission') && 
-                         !errorMessage.includes('invalid token') &&
-                         !errorMessage.includes('not found')
-      
-      reply.status(500).send({ 
+      const isRetryable =
+        !errorMessage.includes('permission') &&
+        !errorMessage.includes('invalid token') &&
+        !errorMessage.includes('not found')
+
+      reply.status(500).send({
         error: errorMessage,
         retryable: isRetryable,
         timestamp: new Date().toISOString(),
-        details: 'Check Instagram connection and try again'
+        details: 'Check Instagram connection and try again',
       })
     }
   })
@@ -307,8 +305,8 @@ const instagram: FastifyPluginAsync = async function (fastify) {
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: user.id
-        }
+          userId: user.id,
+        },
       })
 
       if (!brand) {
@@ -316,18 +314,18 @@ const instagram: FastifyPluginAsync = async function (fastify) {
       }
 
       if (!instagramService.isConfigured(brand)) {
-        return reply.status(400).send({ 
-          error: 'Instagram account not connected' 
+        return reply.status(400).send({
+          error: 'Instagram account not connected',
         })
       }
-      
+
       const insights = await instagramService.getMediaInsights(brand, postId)
 
       reply.send({ insights })
     } catch (error) {
-      reply.status(500).send({ 
+      reply.status(500).send({
         error: 'Failed to fetch Instagram insights',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -348,14 +346,14 @@ const instagram: FastifyPluginAsync = async function (fastify) {
       const updatedBrand = await prisma.brand.updateMany({
         where: {
           id: brandId,
-          userId: user.id
+          userId: user.id,
         },
         data: {
           instagramAccessToken: null,
           instagramPageId: null,
           instagramAccountId: null,
-          instagramProfileData: null
-        }
+          instagramProfileData: { set: null },
+        },
       })
 
       if (updatedBrand.count === 0) {
@@ -364,32 +362,35 @@ const instagram: FastifyPluginAsync = async function (fastify) {
 
       reply.send({ success: true })
     } catch (error) {
-      reply.status(500).send({ 
+      reply.status(500).send({
         error: 'Failed to disconnect Instagram account',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
 
   // Handle Instagram webhooks
-  fastify.get('/webhooks', async function (request, reply) {
-    const mode = request.query['hub.mode']
-    const token = request.query['hub.verify_token']
-    const challenge = request.query['hub.challenge']
+  fastify.get<{ Querystring: { 'hub.mode'?: string; 'hub.verify_token'?: string; 'hub.challenge'?: string } }>(
+    '/webhooks',
+    async function (request, reply) {
+      const mode = request.query['hub.mode']
+      const token = request.query['hub.verify_token']
+      const challenge = request.query['hub.challenge']
 
-    // Verify webhook
-    if (mode === 'subscribe' && token === process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN) {
-      reply.send(challenge)
-    } else {
-      reply.status(403).send('Forbidden')
+      // Verify webhook
+      if (mode === 'subscribe' && token === process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN) {
+        reply.send(challenge)
+      } else {
+        reply.status(403).send('Forbidden')
+      }
     }
-  })
+  )
 
   fastify.post('/webhooks', async function (request, reply) {
     const signature = request.headers['x-hub-signature-256'] as string
     const payload = JSON.stringify(request.body)
 
-    if (!signature || !instagramService.validateWebhookSignature || !instagramService.validateWebhookSignature(payload, signature)) {
+    if (!signature || !validateWebhookSignature(payload, signature)) {
       return reply.status(403).send('Forbidden')
     }
 

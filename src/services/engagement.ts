@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { instagramService } from './instagram.js'
 
 const prisma = new PrismaClient()
@@ -65,14 +65,13 @@ class EngagementService {
       const brand = await prisma.brand.update({
         where: { id: rules.brandId },
         data: {
-          engagementRules: rules as any
-        }
+          engagementRules: rules as any,
+        },
       })
 
       return {
         id: brand.id,
-        brandId: rules.brandId,
-        ...rules
+        ...rules,
       }
     } catch (error) {
       console.error('Failed to set engagement rules:', error)
@@ -86,7 +85,7 @@ class EngagementService {
   async getEngagementRules(brandId: string): Promise<EngagementRules | null> {
     try {
       const brand = await prisma.brand.findFirst({
-        where: { id: brandId }
+        where: { id: brandId },
       })
 
       if (!brand || !brand.engagementRules) {
@@ -95,8 +94,7 @@ class EngagementService {
 
       return {
         id: brand.id,
-        brandId,
-        ...(brand.engagementRules as any)
+        ...(brand.engagementRules as any),
       }
     } catch (error) {
       console.error('Failed to get engagement rules:', error)
@@ -127,9 +125,8 @@ class EngagementService {
       throw new Error(`Max follows per hour cannot exceed ${MAX_FOLLOWS_PER_HOUR}`)
     }
 
-    const totalActions = rules.autoLike.maxLikesPerHour + 
-                        rules.autoComment.maxCommentsPerHour + 
-                        rules.autoFollow.maxFollowsPerHour
+    const totalActions =
+      rules.autoLike.maxLikesPerHour + rules.autoComment.maxCommentsPerHour + rules.autoFollow.maxFollowsPerHour
 
     if (totalActions > MAX_TOTAL_ACTIONS_PER_HOUR) {
       throw new Error(`Total actions per hour cannot exceed ${MAX_TOTAL_ACTIONS_PER_HOUR}`)
@@ -163,9 +160,12 @@ class EngagementService {
     console.log('Starting engagement automation service...')
 
     // Check for engagement actions every 2 minutes
-    this.intervalId = setInterval(() => {
-      this.processEngagementActions()
-    }, 2 * 60 * 1000)
+    this.intervalId = setInterval(
+      () => {
+        this.processEngagementActions()
+      },
+      2 * 60 * 1000
+    )
 
     // Also run immediately
     this.processEngagementActions()
@@ -195,9 +195,9 @@ class EngagementService {
       // Get all brands with engagement rules enabled
       const brands = await prisma.brand.findMany({
         where: {
-          engagementRules: { not: null },
-          instagramAccessToken: { not: null }
-        }
+          engagementRules: { not: Prisma.JsonNull },
+          instagramAccessToken: { not: null },
+        },
       })
 
       for (const brand of brands) {
@@ -248,7 +248,6 @@ class EngagementService {
       if (rules.autoFollow.enabled) {
         await this.processAutoFollows(brand, rules, recentActions.length)
       }
-
     } catch (error) {
       console.error(`Error processing engagement for brand ${brand.id}:`, error)
     }
@@ -281,7 +280,7 @@ class EngagementService {
           targetId: post.id,
           targetType: 'post',
           scheduledAt: new Date(),
-          metadata: { hashtags: post.hashtags }
+          metadata: { hashtags: post.hashtags },
         })
       }
     } catch (error) {
@@ -306,9 +305,7 @@ class EngagementService {
         if (Math.random() > probability) continue
 
         // Select random comment template
-        const template = rules.autoComment.templates[
-          Math.floor(Math.random() * rules.autoComment.templates.length)
-        ]
+        const template = rules.autoComment.templates[Math.floor(Math.random() * rules.autoComment.templates.length)]
 
         await this.scheduleEngagementAction({
           brandId: brand.id,
@@ -316,7 +313,7 @@ class EngagementService {
           targetId: post.id,
           targetType: 'post',
           scheduledAt: new Date(),
-          metadata: { comment: template }
+          metadata: { comment: template },
         })
       }
     } catch (error) {
@@ -334,7 +331,10 @@ class EngagementService {
     if (remainingFollows <= 0) return
 
     try {
-      const usersToFollow = await this.findUsersToFollow(rules.autoFollow.targetAccounts || [], Math.min(remainingFollows, 2))
+      const usersToFollow = await this.findUsersToFollow(
+        rules.autoFollow.targetAccounts || [],
+        Math.min(remainingFollows, 2)
+      )
 
       for (const user of usersToFollow) {
         const probability = rules.autoFollow.followProbability || 0.05
@@ -346,7 +346,7 @@ class EngagementService {
           targetId: user.id,
           targetType: 'user',
           scheduledAt: new Date(),
-          metadata: { username: user.username }
+          metadata: { username: user.username },
         })
       }
     } catch (error) {
@@ -360,12 +360,12 @@ class EngagementService {
   private async scheduleEngagementAction(action: Omit<EngagementAction, 'id' | 'status'>): Promise<void> {
     // Store in database (simplified - you'd want a proper engagement_actions table)
     console.log(`Scheduled ${action.type} action for brand ${action.brandId}`)
-    
+
     // For testing, we'll simulate execution immediately
     await this.executeEngagementAction({
       ...action,
       id: `action_${Date.now()}`,
-      status: 'pending'
+      status: 'pending',
     })
   }
 
@@ -375,12 +375,12 @@ class EngagementService {
   private async executeEngagementAction(action: EngagementAction): Promise<void> {
     try {
       console.log(`Executing ${action.type} action: ${action.id}`)
-      
+
       // In a real implementation, you'd call Instagram API here
       // For testing, we'll just log the action
-      
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate API call
-      
+
+      await new Promise((resolve) => setTimeout(resolve, 1000)) // Simulate API call
+
       console.log(`Completed ${action.type} action: ${action.id}`)
     } catch (error) {
       console.error(`Failed to execute ${action.type} action:`, error)
@@ -413,7 +413,7 @@ class EngagementService {
     // Mock implementation - in reality, you'd search Instagram
     return Array.from({ length: Math.min(limit, 3) }, (_, i) => ({
       id: `post_${Date.now()}_${i}`,
-      hashtags: hashtags.slice(0, 2)
+      hashtags: hashtags.slice(0, 2),
     }))
   }
 
@@ -422,7 +422,7 @@ class EngagementService {
    */
   private async findPostsForComments(limit: number): Promise<any[]> {
     return Array.from({ length: Math.min(limit, 2) }, (_, i) => ({
-      id: `post_comment_${Date.now()}_${i}`
+      id: `post_comment_${Date.now()}_${i}`,
     }))
   }
 
@@ -432,7 +432,7 @@ class EngagementService {
   private async findUsersToFollow(targetAccounts: string[], limit: number): Promise<any[]> {
     return Array.from({ length: Math.min(limit, 1) }, (_, i) => ({
       id: `user_${Date.now()}_${i}`,
-      username: `target_user_${i}`
+      username: `target_user_${i}`,
     }))
   }
 
@@ -450,7 +450,7 @@ class EngagementService {
       comments: 0,
       follows: 0,
       successRate: 0,
-      averageActionsPerDay: 0
+      averageActionsPerDay: 0,
     }
   }
 }

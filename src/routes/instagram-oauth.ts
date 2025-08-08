@@ -47,7 +47,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { brandId } = request.query
-      
+
       if (!brandId) {
         return reply.status(400).send({ error: 'brandId is required' })
       }
@@ -58,8 +58,8 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: userId
-        }
+          userId: userId,
+        },
       })
 
       if (!brand) {
@@ -68,7 +68,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
 
       // Generate secure state parameter
       const state = crypto.randomBytes(32).toString('hex')
-      
+
       // Store state in database temporarily (expires in 10 minutes)
       await prisma.brand.update({
         where: { id: brandId },
@@ -76,20 +76,17 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           preferences: {
             ...((brand.preferences as any) || {}),
             oauthState: state,
-            oauthStateExpires: new Date(Date.now() + 10 * 60 * 1000).toISOString()
-          }
-        }
+            oauthStateExpires: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          },
+        },
       })
 
       // Build Facebook OAuth URL for Instagram Graph API permissions
       // Note: Instagram Graph API uses Pages API permissions
-      const scopes = [
-        'pages_show_list',
-        'pages_read_engagement',
-        'business_management'
-      ].join(',')
+      const scopes = ['pages_show_list', 'pages_read_engagement', 'business_management'].join(',')
 
-      const authUrl = `https://www.facebook.com/dialog/oauth?` +
+      const authUrl =
+        `https://www.facebook.com/dialog/oauth?` +
         `client_id=${FACEBOOK_APP_ID}&` +
         `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
         `scope=${encodeURIComponent(scopes)}&` +
@@ -98,13 +95,13 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
 
       reply.send({
         authUrl,
-        state
+        state,
       })
     } catch (error) {
       fastify.log.error('OAuth authorization error:', error)
-      reply.status(500).send({ 
+      reply.status(500).send({
         error: 'Failed to initiate OAuth authorization',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -114,9 +111,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
     try {
       // Handle OAuth errors first
       if (request.query.error) {
-        return reply.status(400).send({ 
+        return reply.status(400).send({
           error: request.query.error,
-          error_description: request.query.error_description 
+          error_description: request.query.error_description,
         })
       }
 
@@ -131,9 +128,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         where: {
           preferences: {
             path: ['oauthState'],
-            equals: state
-          }
-        }
+            equals: state,
+          },
+        },
       })
 
       if (!brand) {
@@ -141,7 +138,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       }
 
       const preferences = brand.preferences as any
-      
+
       // Check if state has expired
       if (preferences?.oauthStateExpires && new Date(preferences.oauthStateExpires) < new Date()) {
         return reply.status(400).send({ error: 'OAuth state has expired' })
@@ -153,47 +150,52 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         client_id: FACEBOOK_APP_ID,
         client_secret: FACEBOOK_APP_SECRET,
         redirect_uri: REDIRECT_URI,
-        code: code
+        code: code,
       })
 
       const tokenResponse = await fetch(`${tokenExchangeUrl}?${tokenParams}`, {
-        method: 'GET'
+        method: 'GET',
       })
 
       if (!tokenResponse.ok) {
         const error = await tokenResponse.text()
         fastify.log.error('Token exchange failed:', error)
-        return reply.status(400).send({ 
+        return reply.status(400).send({
           error: 'Failed to exchange authorization code for token',
-          details: error
+          details: error,
         })
       }
 
-      const tokenData = await tokenResponse.json()
+      const tokenData = (await tokenResponse.json()) as {
+        access_token: string
+        expires_in?: number
+      }
       const accessToken = tokenData.access_token
 
       // Get user's Facebook pages (required for Instagram Business accounts)
       const pagesUrl = `https://graph.facebook.com/v23.0/me/accounts?access_token=${accessToken}&fields=id,name,access_token,instagram_business_account`
       const pagesResponse = await fetch(pagesUrl)
-      
+
       if (!pagesResponse.ok) {
         const error = await pagesResponse.text()
         fastify.log.error('Failed to get pages:', error)
-        return reply.status(400).send({ 
+        return reply.status(400).send({
           error: 'Failed to get Facebook pages',
-          details: error
+          details: error,
         })
       }
 
-      const pagesData = await pagesResponse.json()
-      
+      const pagesData = (await pagesResponse.json()) as {
+        data?: Array<any>
+      }
+
       // Find a page with an Instagram Business account
       const pageWithInstagram = pagesData.data?.find((page: any) => page.instagram_business_account)
-      
+
       if (!pageWithInstagram) {
-        return reply.status(400).send({ 
+        return reply.status(400).send({
           error: 'No Instagram Business account found',
-          message: 'Please connect an Instagram Business or Creator account to one of your Facebook pages'
+          message: 'Please connect an Instagram Business or Creator account to one of your Facebook pages',
         })
       }
 
@@ -207,33 +209,34 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       if (!instagramResponse.ok) {
         const error = await instagramResponse.text()
         fastify.log.error('Failed to get Instagram profile:', error)
-        return reply.status(400).send({ 
+        return reply.status(400).send({
           error: 'Failed to get Instagram profile',
-          details: error
+          details: error,
         })
       }
 
-      const instagramProfile = await instagramResponse.json()
-      
+      const instagramProfile = (await instagramResponse.json()) as Record<string, any>
+
       // Add account type since it's not returned by the API
       instagramProfile.account_type = 'BUSINESS'
 
       // Update brand with real Instagram connection
-      const updatedBrand = await prisma.brand.update({
+      await prisma.brand.update({
         where: { id: brand.id },
         data: {
           instagramAccessToken: pageAccessToken,
           instagramPageId: pageWithInstagram.id,
           instagramAccountId: instagramAccountId,
-          instagramProfileData: instagramProfile,
+          instagramProfileData: instagramProfile as any,
           preferences: {
             ...preferences,
             oauthState: null,
             oauthStateExpires: null,
-            tokenExpiresAt: tokenData.expires_in ? 
-              new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null
-          }
-        }
+            tokenExpiresAt: tokenData.expires_in
+              ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
+              : null,
+          },
+        },
       })
 
       // Return HTML that closes the popup and notifies the parent
@@ -258,9 +261,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       return reply.type('text/html').send(html)
     } catch (error) {
       fastify.log.error('OAuth callback error:', error)
-      reply.status(500).send({ 
+      reply.status(500).send({
         error: 'Failed to process OAuth callback',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })

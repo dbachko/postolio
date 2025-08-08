@@ -21,8 +21,8 @@ export interface ContentGap {
   brandId: string
   brandName: string
   missingDays: number
-  nextScheduledDate?: Date
-  lastScheduledDate?: Date
+  nextScheduledDate: Date | null
+  lastScheduledDate: Date | null
 }
 
 class AutopilotService {
@@ -76,14 +76,14 @@ class AutopilotService {
       return {
         success: true,
         message: 'Autopilot generation completed successfully',
-        generated: result.totalGenerated
+        generated: result.totalGenerated,
       }
     } catch (error) {
       console.error('Manual autopilot trigger failed:', error)
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',
-        generated: 0
+        generated: 0,
       }
     }
   }
@@ -129,20 +129,17 @@ class AutopilotService {
       // Get all brands that have Instagram integration
       const brands = await prisma.brand.findMany({
         where: {
-          OR: [
-            { instagramAccessToken: { not: null } },
-            { instagramPageId: { not: null } }
-          ]
+          OR: [{ instagramAccessToken: { not: null } }, { instagramPageId: { not: null } }],
         },
         include: {
           content: {
             where: {
               status: { in: ['approved', 'scheduled', 'posted'] },
-              scheduledAt: { not: null }
+              scheduledAt: { not: null },
             },
-            orderBy: { scheduledAt: 'desc' }
-          }
-        }
+            orderBy: { scheduledAt: 'desc' },
+          },
+        },
       })
 
       for (const brand of brands) {
@@ -169,7 +166,7 @@ class AutopilotService {
     // Get brand's content strategy or default
     const strategy = brand.preferences?.contentStrategy || {
       postingFrequency: 'daily',
-      themes: ['lifestyle', 'inspiration', 'behind-the-scenes']
+      themes: ['lifestyle', 'inspiration', 'behind-the-scenes'],
     }
 
     // Calculate expected posts based on frequency
@@ -189,9 +186,9 @@ class AutopilotService {
         status: { in: ['approved', 'scheduled', 'posted'] },
         scheduledAt: {
           gte: now,
-          lte: targetDate
-        }
-      }
+          lte: targetDate,
+        },
+      },
     })
 
     const missingPosts = Math.max(0, expectedTotalPosts - scheduledContent)
@@ -200,26 +197,26 @@ class AutopilotService {
     const lastScheduled = await prisma.content.findFirst({
       where: {
         brandId: brand.id,
-        scheduledAt: { not: null }
+        scheduledAt: { not: null },
       },
-      orderBy: { scheduledAt: 'desc' }
+      orderBy: { scheduledAt: 'desc' },
     })
 
     // Find next scheduled date after now
     const nextScheduled = await prisma.content.findFirst({
       where: {
         brandId: brand.id,
-        scheduledAt: { gte: now }
+        scheduledAt: { gte: now },
       },
-      orderBy: { scheduledAt: 'asc' }
+      orderBy: { scheduledAt: 'asc' },
     })
 
     return {
       brandId: brand.id,
       brandName: brand.name,
       missingDays: missingPosts,
-      lastScheduledDate: lastScheduled?.scheduledAt || undefined,
-      nextScheduledDate: nextScheduled?.scheduledAt || undefined
+      lastScheduledDate: lastScheduled?.scheduledAt ?? null,
+      nextScheduledDate: nextScheduled?.scheduledAt ?? null,
     }
   }
 
@@ -230,7 +227,7 @@ class AutopilotService {
     try {
       const brand = await prisma.brand.findUnique({
         where: { id: gap.brandId },
-        include: { user: true }
+        include: { user: true },
       })
 
       if (!brand) {
@@ -244,17 +241,17 @@ class AutopilotService {
         console.log(`Generating style profile for brand: ${brand.name}`)
         const analysisResult = await analyzeBrandStyle([], brand.name)
         styleProfile = analysisResult.styleProfile
-        
+
         await prisma.brand.update({
           where: { id: brand.id },
-          data: { styleProfile }
+          data: { styleProfile },
         })
       }
 
       // Get content strategy
       const strategy = (brand.preferences as any)?.contentStrategy || {
         themes: ['lifestyle', 'inspiration', 'behind-the-scenes'],
-        postingFrequency: 'daily'
+        postingFrequency: 'daily',
       }
 
       // Generate content requests
@@ -267,7 +264,7 @@ class AutopilotService {
           brandId: gap.brandId,
           count: 1,
           theme,
-          style: styleProfile.aestheticStyle || 'modern'
+          style: styleProfile.aestheticStyle || 'modern',
         })
       }
 
@@ -275,18 +272,14 @@ class AutopilotService {
       let totalGenerated = 0
       for (const request of contentRequests) {
         try {
-          const generatedContent = await generateInstagramContent(
-            styleProfile,
-            brand.name,
-            request
-          )
+          const generatedContent = await generateInstagramContent(styleProfile, brand.name, request)
 
           // Save generated content to database
           for (const content of generatedContent) {
             await prisma.content.create({
               data: {
                 caption: content.caption,
-                imageUrl: content.imageUrl,
+                imageUrl: content.imageUrl ?? null,
                 hashtags: content.hashtags,
                 status: 'approved', // Auto-approve autopilot content
                 brandId: gap.brandId,
@@ -294,9 +287,9 @@ class AutopilotService {
                   source: 'autopilot',
                   theme: request.theme,
                   style: request.style,
-                  generatedAt: new Date().toISOString()
-                }
-              }
+                  generatedAt: new Date().toISOString(),
+                },
+              },
             })
             totalGenerated++
           }
@@ -330,10 +323,10 @@ class AutopilotService {
           scheduledAt: null,
           generationParams: {
             path: ['source'],
-            equals: 'autopilot'
-          }
+            equals: 'autopilot',
+          },
         },
-        orderBy: { createdAt: 'asc' }
+        orderBy: { createdAt: 'asc' },
       })
 
       if (unscheduledContent.length === 0) {
@@ -354,7 +347,7 @@ class AutopilotService {
       // Schedule each piece of content
       for (const content of unscheduledContent) {
         await schedulerService.scheduleContent(content.id, nextScheduleTime)
-        
+
         // Move to next slot
         nextScheduleTime = new Date(nextScheduleTime.getTime() + hoursInterval * 60 * 60 * 1000)
       }
@@ -378,9 +371,9 @@ class AutopilotService {
     const lastScheduled = await prisma.content.findFirst({
       where: {
         brandId,
-        scheduledAt: { gte: now }
+        scheduledAt: { gte: now },
       },
-      orderBy: { scheduledAt: 'desc' }
+      orderBy: { scheduledAt: 'desc' },
     })
 
     if (!lastScheduled?.scheduledAt) {
@@ -403,53 +396,53 @@ class AutopilotService {
       brandId: string
       brandName: string
       scheduledCount: number
-      nextPost?: Date
+      nextPost: Date | null
       gapDays: number
     }>
   }> {
     try {
       const brands = await prisma.brand.findMany({
         where: {
-          OR: [
-            { instagramAccessToken: { not: null } },
-            { instagramPageId: { not: null } }
-          ]
+          OR: [{ instagramAccessToken: { not: null } }, { instagramPageId: { not: null } }],
         },
         include: {
           content: {
             where: {
-              scheduledAt: { gte: new Date() }
+              scheduledAt: { gte: new Date() },
             },
-            orderBy: { scheduledAt: 'asc' }
-          }
-        }
+            orderBy: { scheduledAt: 'asc' },
+          },
+        },
       })
 
       const brandStatuses = await Promise.all(
         brands.map(async (brand) => {
           const gap = await this.analyzeContentGap(brand, 14)
-          const nextPost = brand.content[0]?.scheduledAt
-          
+          const nextPost = brand.content[0]?.scheduledAt ?? null
+
           return {
             brandId: brand.id,
             brandName: brand.name,
             scheduledCount: brand.content.length,
             nextPost,
-            gapDays: gap.missingDays
+            gapDays: gap.missingDays,
           }
         })
       )
 
-      return {
+      const result: any = {
         running: this.isRunning,
-        nextRun: this.cronJob ? new Date() : undefined,
-        brandStatuses
+        brandStatuses,
       }
+      if (this.cronJob) {
+        result.nextRun = new Date()
+      }
+      return result
     } catch (error) {
       console.error('Error getting autopilot status:', error)
       return {
         running: this.isRunning,
-        brandStatuses: []
+        brandStatuses: [],
       }
     }
   }
@@ -461,20 +454,20 @@ class AutopilotService {
     try {
       const currentPrefs = await prisma.brand.findUnique({
         where: { id: brandId },
-        select: { preferences: true }
+        select: { preferences: true },
       })
 
       const updatedPrefs = {
         ...((currentPrefs?.preferences as any) || {}),
         autopilot: {
           ...((currentPrefs?.preferences as any)?.autopilot || {}),
-          ...config
-        }
+          ...config,
+        },
       }
 
       await prisma.brand.update({
         where: { id: brandId },
-        data: { preferences: updatedPrefs }
+        data: { preferences: updatedPrefs },
       })
 
       return true

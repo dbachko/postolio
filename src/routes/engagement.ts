@@ -38,14 +38,14 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({ error: 'brandId and rules are required' })
       }
 
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: userId
-        }
+          userId: userId,
+        },
       })
 
       if (!brand) {
@@ -57,23 +57,22 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         brandId,
         ...rules,
         safetyLimits: {
-          maxActionsPerHour: 50,
-          minDelayBetweenActions: 60,
-          respectBusinessHours: true,
-          ...rules.safetyLimits
-        }
+          maxActionsPerHour: rules.safetyLimits?.maxActionsPerHour ?? 50,
+          minDelayBetweenActions: rules.safetyLimits?.minDelayBetweenActions ?? 60,
+          respectBusinessHours: rules.safetyLimits?.respectBusinessHours ?? true,
+        },
       }
 
       const savedRules = await engagementService.setEngagementRules(engagementRules)
 
       reply.status(201).send({
         success: true,
-        rules: savedRules
+        rules: savedRules,
       })
     } catch (error) {
       reply.status(400).send({
         error: 'Failed to create engagement rules',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -85,14 +84,14 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { brandId } = request.params as { brandId: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: userId
-        }
+          userId: userId,
+        },
       })
 
       if (!brand) {
@@ -104,7 +103,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       if (!rules) {
         return reply.send({
           rules: null,
-          message: 'No engagement rules configured'
+          message: 'No engagement rules configured',
         })
       }
 
@@ -112,7 +111,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
     } catch (error) {
       reply.status(500).send({
         error: 'Failed to get engagement rules',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -130,14 +129,14 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({ error: 'rules are required' })
       }
 
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: userId
-        }
+          userId: userId,
+        },
       })
 
       if (!brand) {
@@ -146,19 +145,19 @@ const engagement: FastifyPluginAsync = async function (fastify) {
 
       const engagementRules: EngagementRules = {
         brandId,
-        ...rules
+        ...rules,
       }
 
       const updatedRules = await engagementService.setEngagementRules(engagementRules)
 
       reply.send({
         success: true,
-        rules: updatedRules
+        rules: updatedRules,
       })
     } catch (error) {
       reply.status(400).send({
         error: 'Failed to update engagement rules',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -170,14 +169,14 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { brandId } = request.params as { brandId: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: userId
-        }
+          userId: userId,
+        },
       })
 
       if (!brand) {
@@ -188,15 +187,15 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       await prisma.brand.update({
         where: { id: brandId },
         data: {
-          engagementRules: null
-        }
+          engagementRules: { set: null },
+        },
       })
 
       reply.send({ success: true })
     } catch (error) {
       reply.status(500).send({
         error: 'Failed to delete engagement rules',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -209,14 +208,14 @@ const engagement: FastifyPluginAsync = async function (fastify) {
 
       const { brandId } = request.params as { brandId: string }
       const { days = 7 } = request.query as { days?: number }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: userId
-        }
+          userId: userId,
+        },
       })
 
       if (!brand) {
@@ -229,7 +228,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
     } catch (error) {
       reply.status(500).send({
         error: 'Failed to get engagement statistics',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -241,14 +240,14 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { brandId } = request.params as { brandId: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: userId
-        }
+          userId: userId,
+        },
       })
 
       if (!brand) {
@@ -270,18 +269,18 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       await prisma.brand.update({
         where: { id: brandId },
         data: {
-          engagementActive: true
-        }
+          engagementActive: true,
+        },
       })
 
       reply.send({
         success: true,
-        message: 'Engagement automation started'
+        message: 'Engagement automation started',
       })
     } catch (error) {
       reply.status(500).send({
         error: 'Failed to start engagement automation',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -293,14 +292,14 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { brandId } = request.params as { brandId: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: userId
-        }
+          userId: userId,
+        },
       })
 
       if (!brand) {
@@ -311,18 +310,18 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       await prisma.brand.update({
         where: { id: brandId },
         data: {
-          engagementActive: false
-        }
+          engagementActive: false,
+        },
       })
 
       reply.send({
         success: true,
-        message: 'Engagement automation stopped'
+        message: 'Engagement automation stopped',
       })
     } catch (error) {
       reply.status(500).send({
         error: 'Failed to stop engagement automation',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })
@@ -334,14 +333,14 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       if (!user) return
 
       const { brandId } = request.params as { brandId: string }
-      const userId = user.userId
+      const userId = user.id
 
       // Verify brand ownership
       const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: userId
-        }
+          userId: userId,
+        },
       })
 
       if (!brand) {
@@ -358,13 +357,13 @@ const engagement: FastifyPluginAsync = async function (fastify) {
           active: isActive,
           instagramConnected: hasInstagram,
           canStart: !!rules && hasInstagram && !isActive,
-          canStop: isActive
-        }
+          canStop: isActive,
+        },
       })
     } catch (error) {
       reply.status(500).send({
         error: 'Failed to get engagement status',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   })

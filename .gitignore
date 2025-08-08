@@ -1,6 +1,9 @@
+# Local SSL certificates
+certs/
 # Dependencies
 node_modules/
 frontend/node_modules/
+aws-infrastructure/node_modules/
 
 # Environment variables
 .env
@@ -14,6 +17,15 @@ dist/
 frontend/dist/
 build/
 .next/
+
+# AWS CDK
+aws-infrastructure/cdk.out/
+aws-infrastructure/*.js
+aws-infrastructure/*.d.ts
+aws-infrastructure/lib/**/*.js
+aws-infrastructure/lib/**/*.d.ts
+aws-infrastructure/bin/*.js
+aws-infrastructure/bin/*.d.ts
 
 # Logs
 *.log

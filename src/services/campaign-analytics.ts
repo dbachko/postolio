@@ -63,13 +63,13 @@ export class CampaignAnalyticsService {
     const campaign = await prisma.campaign.findFirst({
       where: {
         id: campaignId,
-        brand: { userId }
+        brand: { userId },
       },
       include: {
         content: {
-          orderBy: { createdAt: 'asc' }
-        }
-      }
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     })
 
     if (!campaign) {
@@ -81,9 +81,9 @@ export class CampaignAnalyticsService {
 
     // Calculate basic metrics
     const totalPosts = content.length
-    const postsPosted = content.filter(c => c.status === 'posted').length
-    const postsScheduled = content.filter(c => c.status === 'scheduled' || c.scheduledAt).length
-    const postsApproved = content.filter(c => c.status === 'approved').length
+    const postsPosted = content.filter((c) => c.status === 'posted').length
+    const postsScheduled = content.filter((c) => c.status === 'scheduled' || c.scheduledAt).length
+    const postsApproved = content.filter((c) => c.status === 'approved').length
 
     // Extract performance metrics from generationParams
     let totalImpressions = 0
@@ -93,7 +93,7 @@ export class CampaignAnalyticsService {
     const performanceByDate: Array<{ date: string; impressions: number; engagement: number }> = []
     const hashtagCounts: Record<string, { count: number; totalEngagement: number }> = {}
 
-    content.forEach(post => {
+    content.forEach((post) => {
       const params = post.generationParams as any
       if (params) {
         const impressions = params.impressions || 0
@@ -106,12 +106,13 @@ export class CampaignAnalyticsService {
 
         // Track performance by date
         if (post.postedAt) {
-          const date = post.postedAt.toISOString().split('T')[0]
+          const iso = post.postedAt.toISOString()
+          const date: string = (iso && iso.split('T')[0]) || 'unknown-date'
           performanceByDate.push({ date, impressions, engagement })
         }
 
         // Track hashtag performance
-        post.hashtags.forEach(tag => {
+        post.hashtags.forEach((tag) => {
           if (!hashtagCounts[tag]) {
             hashtagCounts[tag] = { count: 0, totalEngagement: 0 }
           }
@@ -128,7 +129,7 @@ export class CampaignAnalyticsService {
     const startDate = config.duration?.start ? new Date(config.duration.start) : campaign.createdAt
     const endDate = config.duration?.end ? new Date(config.duration.end) : new Date()
     const campaignDuration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-    
+
     const postingFrequency = campaignDuration > 0 ? totalPosts / campaignDuration : 0
 
     // Top hashtags
@@ -136,7 +137,7 @@ export class CampaignAnalyticsService {
       .map(([tag, data]) => ({
         tag,
         count: data.count,
-        avgEngagement: data.count > 0 ? data.totalEngagement / data.count : 0
+        avgEngagement: data.count > 0 ? data.totalEngagement / data.count : 0,
       }))
       .sort((a, b) => b.avgEngagement - a.avgEngagement)
       .slice(0, 10)
@@ -153,7 +154,7 @@ export class CampaignAnalyticsService {
       campaignDuration,
       postingFrequency,
       topHashtags,
-      performanceByDate
+      performanceByDate,
     }
   }
 
@@ -171,19 +172,19 @@ export class CampaignAnalyticsService {
       const campaign = await prisma.campaign.findFirst({
         where: {
           id: campaignId,
-          brand: { userId }
-        }
+          brand: { userId },
+        },
       })
 
       if (campaign) {
         const metrics = await this.getCampaignMetrics(campaignId, userId)
         const performance = this.classifyPerformance(metrics.averageEngagementRate)
-        
+
         campaigns.push({
           id: campaignId,
           name: campaign.name,
           metrics,
-          performance
+          performance,
         })
 
         totalEngagement += metrics.totalEngagement
@@ -199,9 +200,9 @@ export class CampaignAnalyticsService {
     const avgEngagementRate = totalImpressions > 0 ? (totalEngagement / totalImpressions) * 100 : 0
 
     // Analyze performance patterns
-    const engagementRates = campaigns.map(c => c.metrics.averageEngagementRate)
+    const engagementRates = campaigns.map((c) => c.metrics.averageEngagementRate)
     const avgRate = engagementRates.reduce((sum, rate) => sum + rate, 0) / engagementRates.length
-    
+
     let bestPerformingMetric = 'engagement'
     let improvementOpportunity = 'frequency'
 
@@ -217,7 +218,7 @@ export class CampaignAnalyticsService {
 
     if (avgRate < 2) {
       improvementOpportunity = 'content quality'
-    } else if (campaigns.some(c => c.metrics.postingFrequency < 0.5)) {
+    } else if (campaigns.some((c) => c.metrics.postingFrequency < 0.5)) {
       improvementOpportunity = 'posting frequency'
     }
 
@@ -227,9 +228,9 @@ export class CampaignAnalyticsService {
         totalCampaigns: campaigns.length,
         avgEngagementRate,
         bestPerformingMetric,
-        improvementOpportunity
+        improvementOpportunity,
       },
-      topPerformer: bestPerformer
+      topPerformer: bestPerformer,
     }
   }
 
@@ -248,7 +249,7 @@ export class CampaignAnalyticsService {
         priority: 'high',
         impact: 'Could increase engagement by 50-100%',
         actionable: true,
-        data: { currentRate: metrics.averageEngagementRate, targetRate: 2.5 }
+        data: { currentRate: metrics.averageEngagementRate, targetRate: 2.5 },
       })
     }
 
@@ -260,21 +261,22 @@ export class CampaignAnalyticsService {
         priority: 'medium',
         impact: 'Consistent posting can improve visibility by 30%',
         actionable: true,
-        data: { currentFrequency: metrics.postingFrequency, recommendedFrequency: 0.5 }
+        data: { currentFrequency: metrics.postingFrequency, recommendedFrequency: 0.5 },
       })
     }
 
     // Hashtag optimization
     if (metrics.topHashtags.length > 0) {
-      const avgHashtagEngagement = metrics.topHashtags.reduce((sum, h) => sum + h.avgEngagement, 0) / metrics.topHashtags.length
-      if (avgHashtagEngagement < metrics.totalEngagement / metrics.totalPosts * 0.8) {
+      const avgHashtagEngagement =
+        metrics.topHashtags.reduce((sum, h) => sum + h.avgEngagement, 0) / metrics.topHashtags.length
+      if (avgHashtagEngagement < (metrics.totalEngagement / metrics.totalPosts) * 0.8) {
         recommendations.push({
           type: 'hashtags',
           message: 'Hashtag performance is below campaign average. Research trending hashtags in your niche.',
           priority: 'medium',
           impact: 'Better hashtags can increase discoverability by 25%',
           actionable: true,
-          data: { topPerformingTags: metrics.topHashtags.slice(0, 3) }
+          data: { topPerformingTags: metrics.topHashtags.slice(0, 3) },
         })
       }
     }
@@ -284,7 +286,7 @@ export class CampaignAnalyticsService {
     if (recentPosts.length >= 3) {
       const recentAvgEngagement = recentPosts.reduce((sum, p) => sum + p.engagement, 0) / recentPosts.length
       const overallAvgEngagement = metrics.totalEngagement / metrics.totalPosts
-      
+
       if (recentAvgEngagement < overallAvgEngagement * 0.8) {
         recommendations.push({
           type: 'timing',
@@ -292,7 +294,7 @@ export class CampaignAnalyticsService {
           priority: 'medium',
           impact: 'Optimal timing can improve engagement by 20%',
           actionable: true,
-          data: { recentTrend: 'declining', analysisNeeded: true }
+          data: { recentTrend: 'declining', analysisNeeded: true },
         })
       }
     }
@@ -305,7 +307,7 @@ export class CampaignAnalyticsService {
         priority: 'low',
         impact: 'Maintaining quality while scaling',
         actionable: true,
-        data: { currentRate: metrics.averageEngagementRate, status: 'excellent' }
+        data: { currentRate: metrics.averageEngagementRate, status: 'excellent' },
       })
     }
 
@@ -322,9 +324,9 @@ export class CampaignAnalyticsService {
     const metrics = await this.getCampaignMetrics(campaignId, userId)
 
     // Industry standard values (adjustable based on niche)
-    const COST_PER_ENGAGEMENT = 0.05  // $0.05 per engagement (typical social media value)
-    const VALUE_PER_IMPRESSION = 0.001  // $0.001 per impression (CPM-based value)
-    const REACH_MULTIPLIER = 1.5  // Reach is typically 1.5x more valuable than impressions
+    const COST_PER_ENGAGEMENT = 0.05 // $0.05 per engagement (typical social media value)
+    const VALUE_PER_IMPRESSION = 0.001 // $0.001 per impression (CPM-based value)
+    const REACH_MULTIPLIER = 1.5 // Reach is typically 1.5x more valuable than impressions
 
     // Calculate estimated value
     const engagementValue = metrics.totalEngagement * COST_PER_ENGAGEMENT
@@ -340,9 +342,10 @@ export class CampaignAnalyticsService {
       breakdown: {
         costPerEngagement: COST_PER_ENGAGEMENT,
         estimatedReach: metrics.reach,
-        valuePerImpression: VALUE_PER_IMPRESSION
+        valuePerImpression: VALUE_PER_IMPRESSION,
       },
-      methodology: 'Based on industry standard CPM and engagement values. Actual ROI may vary by industry and audience quality.'
+      methodology:
+        'Based on industry standard CPM and engagement values. Actual ROI may vary by industry and audience quality.',
     }
   }
 

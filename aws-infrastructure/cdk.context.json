@@ -1,0 +1,15 @@
+{
+  "environments": {
+    "prod": {
+      "domainName": "postolio.example",
+      "hostedZoneId": "HOSTED_ZONE_ID_TO_BE_SET",
+      "comment": "Production environment with custom domain postolio.example"
+    },
+    "dev": {
+      "comment": "Development environment using default CloudFront domain"
+    },
+    "staging": {
+      "comment": "Staging environment using default CloudFront domain"
+    }
+  }
+}
