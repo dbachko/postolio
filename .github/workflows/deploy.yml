@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: ai-agency
+  ECR_REPOSITORY: postolio
   NODE_VERSION: '20'
 
 jobs:
@@ -154,7 +154,7 @@ jobs:
       - name: Deploy infrastructure
         run: |
           cd aws-infrastructure
-          npm run cdk -- deploy AiAgency-prod --require-approval never
+          npm run cdk -- deploy Postolio-prod --require-approval never
         env:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
@@ -180,7 +180,7 @@ jobs:
           cd frontend
           npm ci
           # Update the API URL to point to the production backend
-          echo "VITE_API_URL=https://$(aws cloudformation describe-stacks --stack-name AiAgency-prod --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' --output text)" > .env.production
+          echo "VITE_API_URL=https://$(aws cloudformation describe-stacks --stack-name Postolio-prod --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' --output text)" > .env.production
           npm run build
 
       - name: Configure AWS credentials
@@ -192,11 +192,11 @@ jobs:
 
       - name: Deploy frontend to S3
         run: |
-          BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name AiAgency-prod --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' --output text)
+          BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-prod --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' --output text)
           aws s3 sync frontend/dist s3://$BUCKET_NAME --delete
           
           # Invalidate CloudFront cache
-          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='AiAgency-prod/FrontendDistribution'].Id" --output text)
+          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='Postolio-prod/FrontendDistribution'].Id" --output text)
           aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
 
   notify:

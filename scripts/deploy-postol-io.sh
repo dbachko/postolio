@@ -11,7 +11,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}🚀 Deploying AI Agency to postolio.example${NC}"
+echo -e "${GREEN}🚀 Deploying Postolio to postolio.example${NC}"
 echo
 
 # Check if hosted zone ID is provided
@@ -41,7 +41,7 @@ echo "AWS Region: $AWS_REGION"
 echo
 
 # Confirm deployment
-echo -e "${YELLOW}This will deploy the AI Agency application to production with the following:${NC}"
+echo -e "${YELLOW}This will deploy the Postolio application to production with the following:${NC}"
 echo "• Custom domain: $DOMAIN_NAME"
 echo "• SSL certificate (automatically provisioned)"
 echo "• Production infrastructure (RDS, ECS, CloudFront, etc.)"

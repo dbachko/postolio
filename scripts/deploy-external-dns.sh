@@ -11,7 +11,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}🚀 Deploying AI Agency with External DNS Provider${NC}"
+echo -e "${GREEN}🚀 Deploying Postolio with External DNS Provider${NC}"
 echo
 
 # Check if domain name is provided
@@ -45,7 +45,7 @@ echo "4. DNS propagation can take up to 48 hours"
 echo
 
 # Confirm deployment
-echo -e "${YELLOW}This will deploy the AI Agency application with:${NC}"
+echo -e "${YELLOW}This will deploy the Postolio application with:${NC}"
 echo "• Custom domain: $DOMAIN_NAME (external DNS)"
 echo "• SSL certificate (email validation required)"
 echo "• Production infrastructure (RDS, ECS, CloudFront, etc.)"

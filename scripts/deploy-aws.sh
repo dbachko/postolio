@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AWS Infrastructure Deployment Scripts for AI Agency
+# AWS Infrastructure Deployment Scripts for Postolio
 
 set -e
 
@@ -83,7 +83,7 @@ bootstrap_cdk() {
 setup_ecr() {
     echo -e "${YELLOW}Setting up ECR repository...${NC}"
     
-    REPO_NAME="ai-agency"
+    REPO_NAME="postolio"
     
     if ! aws ecr describe-repositories --repository-names $REPO_NAME --region $AWS_REGION &> /dev/null; then
         echo -e "${YELLOW}Creating ECR repository: $REPO_NAME${NC}"
@@ -128,11 +128,11 @@ build_and_push_image() {
     
     # Build image
     ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-    IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-agency:latest"
+    IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/postolio:latest"
     
     echo -e "${YELLOW}Building image: $IMAGE_URI${NC}"
-    docker build -t ai-agency:latest .
-    docker tag ai-agency:latest $IMAGE_URI
+    docker build -t postolio:latest .
+    docker tag postolio:latest $IMAGE_URI
     
     # Push image
     echo -e "${YELLOW}Pushing image to ECR...${NC}"
@@ -165,7 +165,7 @@ deploy_infrastructure() {
     fi
     
     # Deploy the stack
-    npx cdk deploy AiAgency-$ENVIRONMENT \
+    npx cdk deploy Postolio-$ENVIRONMENT \
         --context environment=$ENVIRONMENT \
         --context account=$(aws sts get-caller-identity --query Account --output text) \
         --context region=$AWS_REGION \
@@ -187,7 +187,7 @@ deploy_frontend() {
     
     # Get the load balancer DNS name from the stack
     LOAD_BALANCER_DNS=$(aws cloudformation describe-stacks \
-        --stack-name AiAgency-$ENVIRONMENT \
+        --stack-name Postolio-$ENVIRONMENT \
         --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
         --output text \
         --region $AWS_REGION)
@@ -200,7 +200,7 @@ deploy_frontend() {
     
     # Get S3 bucket name from the stack
     BUCKET_NAME=$(aws cloudformation describe-stacks \
-        --stack-name AiAgency-$ENVIRONMENT \
+        --stack-name Postolio-$ENVIRONMENT \
         --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' \
         --output text \
         --region $AWS_REGION)
@@ -211,7 +211,7 @@ deploy_frontend() {
     
     # Invalidate CloudFront cache
     DISTRIBUTION_ID=$(aws cloudfront list-distributions \
-        --query "DistributionList.Items[?Comment=='AiAgency-$ENVIRONMENT/FrontendDistribution'].Id" \
+        --query "DistributionList.Items[?Comment=='Postolio-$ENVIRONMENT/FrontendDistribution'].Id" \
         --output text)
     
     if [ -n "$DISTRIBUTION_ID" ] && [ "$DISTRIBUTION_ID" != "None" ]; then
@@ -230,7 +230,7 @@ show_deployment_info() {
     
     # Get stack outputs
     OUTPUTS=$(aws cloudformation describe-stacks \
-        --stack-name AiAgency-$ENVIRONMENT \
+        --stack-name Postolio-$ENVIRONMENT \
         --query 'Stacks[0].Outputs' \
         --output table \
         --region $AWS_REGION)
@@ -239,7 +239,7 @@ show_deployment_info() {
     
     # Get application URL
     APP_URL=$(aws cloudformation describe-stacks \
-        --stack-name AiAgency-$ENVIRONMENT \
+        --stack-name Postolio-$ENVIRONMENT \
         --query 'Stacks[0].Outputs[?OutputKey==`ApplicationURL`].OutputValue' \
         --output text \
         --region $AWS_REGION)
@@ -259,7 +259,7 @@ show_deployment_info() {
         elif [ "$USE_EXTERNAL_DNS" = "true" ]; then
             echo "2. Configure DNS record with your DNS provider:"
             CLOUDFRONT_DOMAIN=$(aws cloudformation describe-stacks \
-                --stack-name AiAgency-$ENVIRONMENT \
+                --stack-name Postolio-$ENVIRONMENT \
                 --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionDomain`].OutputValue' \
                 --output text \
                 --region $AWS_REGION)
@@ -281,7 +281,7 @@ update_secrets() {
     echo -e "${YELLOW}Updating application secrets...${NC}"
     
     SECRET_ARN=$(aws cloudformation describe-stacks \
-        --stack-name AiAgency-$ENVIRONMENT \
+        --stack-name Postolio-$ENVIRONMENT \
         --query 'Stacks[0].Outputs[?OutputKey==`AppSecretsArn`].OutputValue' \
         --output text \
         --region $AWS_REGION)
@@ -302,7 +302,7 @@ update_secrets() {
 
 # Main deployment function
 main() {
-    echo -e "${GREEN}🏗️  AI Agency AWS Deployment${NC}"
+    echo -e "${GREEN}🏗️  Postolio AWS Deployment${NC}"
     echo "Environment: $ENVIRONMENT"
     echo "Region: $AWS_REGION"
     echo
@@ -318,7 +318,7 @@ main() {
     update_secrets
     
     echo
-    echo -e "${GREEN}✨ Deployment complete! Your AI Agency is now running on AWS.${NC}"
+    echo -e "${GREEN}✨ Deployment complete! Your Postolio is now running on AWS.${NC}"
 }
 
 # Handle script arguments
@@ -332,7 +332,7 @@ case "${2:-deploy}" in
         read -r confirmation
         if [ "$confirmation" = "yes" ]; then
             cd "$PROJECT_ROOT/aws-infrastructure"
-            npx cdk destroy AiAgency-$ENVIRONMENT --force
+            npx cdk destroy Postolio-$ENVIRONMENT --force
             echo -e "${GREEN}✅ Infrastructure destroyed${NC}"
         else
             echo "Destruction cancelled."

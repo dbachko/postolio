@@ -10,13 +10,13 @@ async function createTestUser() {
     
     // Create or find user
     let user = await prisma.user.findUnique({
-      where: { email: 'test@instagram-agency.com' }
+      where: { email: 'test@postolio.example' }
     })
     
     if (!user) {
       user = await prisma.user.create({
         data: {
-          email: 'test@instagram-agency.com',
+          email: 'test@postolio.example',
           password: hashedPassword,
           name: 'Test User'
         }

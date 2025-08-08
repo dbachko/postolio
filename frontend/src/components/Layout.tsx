@@ -3,8 +3,20 @@ import { useAuthStore } from '../stores/authStore'
 import { useBrandStore } from '../stores/brandStore'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { NavigationMenu, NavigationMenuItem, NavigationMenuList, navigationMenuTriggerStyle } from '@/components/ui/navigation-menu'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  NavigationMenu,
+  NavigationMenuItem,
+  NavigationMenuList,
+  navigationMenuTriggerStyle,
+} from '@/components/ui/navigation-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { ChevronDown, Settings, LogOut, Check } from 'lucide-react'
 
 interface LayoutProps {
@@ -33,15 +45,13 @@ export function Layout({ children }: LayoutProps) {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <Link to="/dashboard" className="flex-shrink-0">
-                <h1 className="text-xl font-bold text-foreground">
-                  Instagram AI Agency
-                </h1>
+                <h1 className="text-xl font-bold text-foreground">Postolio</h1>
               </Link>
               <NavigationMenu className="ml-6">
                 <NavigationMenuList>
                   <NavigationMenuItem>
-                    <Link 
-                      to="/autopilot" 
+                    <Link
+                      to="/autopilot"
                       className={`${navigationMenuTriggerStyle()} ${
                         isActiveRoute('/autopilot') ? 'bg-accent text-accent-foreground' : ''
                       }`}
@@ -50,8 +60,8 @@ export function Layout({ children }: LayoutProps) {
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link 
-                      to="/content" 
+                    <Link
+                      to="/content"
                       className={`${navigationMenuTriggerStyle()} ${
                         isActiveRoute('/content') ? 'bg-accent text-accent-foreground' : ''
                       }`}
@@ -60,8 +70,8 @@ export function Layout({ children }: LayoutProps) {
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link 
-                      to="/analytics" 
+                    <Link
+                      to="/analytics"
                       className={`${navigationMenuTriggerStyle()} ${
                         isActiveRoute('/analytics') ? 'bg-accent text-accent-foreground' : ''
                       }`}
@@ -70,8 +80,8 @@ export function Layout({ children }: LayoutProps) {
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link 
-                      to="/instagram-analytics" 
+                    <Link
+                      to="/instagram-analytics"
                       className={`${navigationMenuTriggerStyle()} ${
                         isActiveRoute('/instagram-analytics') ? 'bg-accent text-accent-foreground' : ''
                       }`}
@@ -80,8 +90,8 @@ export function Layout({ children }: LayoutProps) {
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link 
-                      to="/engagement" 
+                    <Link
+                      to="/engagement"
                       className={`${navigationMenuTriggerStyle()} ${
                         isActiveRoute('/engagement') ? 'bg-accent text-accent-foreground' : ''
                       }`}
@@ -90,8 +100,8 @@ export function Layout({ children }: LayoutProps) {
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link 
-                      to="/growth" 
+                    <Link
+                      to="/growth"
                       className={`${navigationMenuTriggerStyle()} ${
                         isActiveRoute('/growth') ? 'bg-accent text-accent-foreground' : ''
                       }`}
@@ -100,8 +110,8 @@ export function Layout({ children }: LayoutProps) {
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link 
-                      to="/ai-features" 
+                    <Link
+                      to="/ai-features"
                       className={`${navigationMenuTriggerStyle()} ${
                         isActiveRoute('/ai-features') ? 'bg-accent text-accent-foreground' : ''
                       }`}
@@ -112,7 +122,7 @@ export function Layout({ children }: LayoutProps) {
                 </NavigationMenuList>
               </NavigationMenu>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               {/* User Profile Dropdown */}
               {user && (
@@ -133,7 +143,7 @@ export function Layout({ children }: LayoutProps) {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    
+
                     {/* Brand Switching Section */}
                     {brands.length > 0 && (
                       <>
@@ -148,24 +158,22 @@ export function Layout({ children }: LayoutProps) {
                           >
                             <div className="flex items-center justify-between w-full">
                               <span>{brand.name}</span>
-                              {selectedBrand?.id === brand.id && (
-                                <Check className="w-4 h-4 text-blue-600" />
-                              )}
+                              {selectedBrand?.id === brand.id && <Check className="w-4 h-4 text-blue-600" />}
                             </div>
                           </DropdownMenuItem>
                         ))}
                         <DropdownMenuSeparator />
                       </>
                     )}
-                    
+
                     {/* Brand Management */}
                     <DropdownMenuItem onClick={() => navigate('/brands')}>
                       <Settings className="w-4 h-4 mr-2" />
                       Manage Brands
                     </DropdownMenuItem>
-                    
+
                     <DropdownMenuSeparator />
-                    
+
                     {/* Logout */}
                     <DropdownMenuItem onClick={handleLogout} className="text-red-600">
                       <LogOut className="w-4 h-4 mr-2" />
@@ -179,9 +187,7 @@ export function Layout({ children }: LayoutProps) {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {children}
-      </main>
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">{children}</main>
     </div>
   )
 }

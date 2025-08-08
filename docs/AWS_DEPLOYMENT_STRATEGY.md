@@ -1,10 +1,10 @@
-# AWS Deployment Strategy for AI Agency
+# AWS Deployment Strategy for Postolio
 
-This document outlines the complete AWS deployment strategy for the AI Agency application, including infrastructure architecture, deployment process, and operational considerations.
+This document outlines the complete AWS deployment strategy for the Postolio application, including infrastructure architecture, deployment process, and operational considerations.
 
 ## Architecture Overview
 
-The AI Agency application is deployed on AWS using a containerized microservices architecture with the following components:
+The Postolio application is deployed on AWS using a containerized microservices architecture with the following components:
 
 ### AWS Services Used
 
@@ -268,7 +268,7 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
 
 1. **Go to IAM Console**: https://console.aws.amazon.com/iam/
 2. **Create User**:
-   - User name: `ai-agency-github-actions`
+   - User name: `postolio-github-actions`
    - Select "Programmatic access"
 3. **Attach Permissions**:
    - Create and attach the following IAM policy:
@@ -508,16 +508,16 @@ INSTAGRAM_REDIRECT_URI  # Auto-configured with CloudFront domain
 
 ```bash
 # View application logs
-aws logs tail /aws/ecs/ai-agency --follow
+aws logs tail /aws/ecs/postolio --follow
 
 # Check ECS service status
-aws ecs describe-services --cluster AiAgency-prod --services AiAgencyService
+aws ecs describe-services --cluster Postolio-prod --services PostolioService
 
 # View CloudFormation stack events
-aws cloudformation describe-stack-events --stack-name AiAgency-prod
+aws cloudformation describe-stack-events --stack-name Postolio-prod
 
 # Connect to database (with bastion host)
-psql postgresql://username:password@db-endpoint:5432/aiagency
+psql postgresql://username:password@db-endpoint:5432/postolio
 ```
 
 ## Future Improvements

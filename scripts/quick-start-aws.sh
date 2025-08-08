@@ -2,7 +2,7 @@
 # Quick start script for local AWS deployment testing
 set -e
 
-echo "🚀 AI Agency - Quick AWS Setup"
+echo "🚀 Postolio - Quick AWS Setup"
 echo "================================"
 
 # Colors for output
@@ -50,7 +50,7 @@ show_required_secrets() {
 
 # Main setup
 main() {
-    echo "This script will help you deploy AI Agency to AWS."
+    echo "This script will help you deploy Postolio to AWS."
     echo "Make sure you have Docker running and AWS CLI configured."
     echo
     

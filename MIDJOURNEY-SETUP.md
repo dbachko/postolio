@@ -1,6 +1,6 @@
 # Midjourney Integration Setup Guide
 
-This guide explains how to set up Midjourney integration for higher quality image generation in the Instagram AI Agency platform.
+This guide explains how to set up Midjourney integration for higher quality image generation in the Postolio platform.
 
 ## Overview
 

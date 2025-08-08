@@ -1,9 +1,9 @@
 {
-  "name": "ai-agency-infrastructure",
+  "name": "postolio-infrastructure",
   "version": "1.0.0",
-  "description": "AWS CDK infrastructure for AI Agency application",
+  "description": "AWS CDK infrastructure for Postolio application",
   "bin": {
-    "ai-agency-infrastructure": "bin/app.js"
+    "postolio-infrastructure": "bin/app.js"
   },
   "scripts": {
     "build": "tsc",

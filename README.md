@@ -1,4 +1,4 @@
-# Instagram AI Agency
+# Postolio
 
 A full-stack application for automated Instagram content generation and management using AI. The platform analyzes brand styles, generates personalized content, and provides an approval workflow for social media managers.
 
@@ -38,7 +38,7 @@ A full-stack application for automated Instagram content generation and manageme
 
 ```bash
 git clone <repository-url>
-cd ai-agency
+cd postolio
 
 # Install backend dependencies
 npm install
@@ -129,7 +129,7 @@ To enable Instagram publishing and OAuth authentication, you need to create a Me
 2. Click **"My Apps"** → **"Create App"**
 3. Choose **"Business"** as the app type
 4. Fill in your app details:
-   - **App Name**: "AI Agency Instagram Integration" (or your preferred name)
+   - **App Name**: "Postolio" (or your preferred name)
    - **Contact Email**: Your email address
    - **Business Account**: Create or select an existing one
 
@@ -509,7 +509,7 @@ docker-compose -f docker-compose.prod.yml up -d
 ## Project Structure
 
 ```
-ai-agency/
+postolio/
 ├── src/                    # Backend source code
 │   ├── routes/            # API route handlers
 │   │   ├── auth.ts        # User authentication endpoints

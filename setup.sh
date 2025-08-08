@@ -1,8 +1,9 @@
 #!/bin/bash
 
-# Instagram AI Agency - Quick Setup Script
+#!/bin/bash
+# Postolio - Quick Setup Script
 
-echo "🚀 Setting up Instagram AI Agency..."
+echo "🚀 Setting up Postolio..."
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then

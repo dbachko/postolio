@@ -1,6 +1,6 @@
-# Instagram AI Agency - Frontend
+# Postolio - Frontend
 
-React TypeScript frontend for the Instagram AI Agency platform. Provides a modern web interface for content generation, brand management, and approval workflows.
+React TypeScript frontend for the Postolio platform. Provides a modern web interface for content generation, brand management, and approval workflows.
 
 ## Tech Stack
 
