@@ -122,10 +122,11 @@ export class AnalyticsCache {
     let key: string
 
     switch (type) {
-      case 'account':
+      case 'account': {
         const today = new Date().toISOString().split('T')[0]
         key = `analytics:account:${brandId}:${today}`
         break
+      }
       case 'media':
         if (!identifier) return false
         key = `analytics:media:${brandId}:${identifier}`

@@ -545,7 +545,7 @@ class CampaignService {
         case 'every2days':
           current.setDate(current.getDate() + 2)
           break
-        case '3weekly':
+        case '3weekly': {
           // Post every 2-3 days (Monday, Wednesday, Friday pattern)
           const dayOfWeek = current.getDay()
           if (dayOfWeek === 1) {
@@ -559,6 +559,7 @@ class CampaignService {
             current.setDate(current.getDate() + 3)
           }
           break
+        }
         default:
           current.setDate(current.getDate() + 7)
       }
