@@ -120,7 +120,11 @@ build_and_push_image() {
     cd "$PROJECT_ROOT"
     
     # Get ECR login token
-    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query Account --output text).dkr.ecr.$AWS_REGION.amazonaws.com
+    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    ECR_REGISTRY_URL="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+    
+    echo -e "${YELLOW}Logging in to ECR registry: $ECR_REGISTRY_URL${NC}"
+    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY_URL
     
     # Build image
     ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)

@@ -1,7 +1,5 @@
-# Quick start script for local AWS deployment testing
-
 #!/bin/bash
-
+# Quick start script for local AWS deployment testing
 set -e
 
 echo "🚀 AI Agency - Quick AWS Setup"

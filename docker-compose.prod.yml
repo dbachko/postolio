@@ -7,13 +7,13 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/aiagency
-      - JWT_SECRET=your-jwt-secret-here
-      - OPENAI_API_KEY=your-openai-key-here
-      - FACEBOOK_APP_ID=your-facebook-app-id
-      - FACEBOOK_APP_SECRET=your-facebook-app-secret
+    env_file:
+      - .env
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FACEBOOK_APP_ID=${FACEBOOK_APP_ID}
+      - FACEBOOK_APP_SECRET=${FACEBOOK_APP_SECRET}
       - REDIS_URL=redis://redis:6379
       - PORT=3000
     depends_on:
