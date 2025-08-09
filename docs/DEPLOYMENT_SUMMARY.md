@@ -115,15 +115,20 @@ docs/
 - Pull requests run tests and builds without deployment
 - Requires AWS credentials in GitHub Secrets
 
+**Setting up GitHub Actions Credentials:**
+1. Create IAM user with deployment permissions (see detailed guide in [AWS_DEPLOYMENT_STRATEGY.md](AWS_DEPLOYMENT_STRATEGY.md#github-actions-cicd-setup))
+2. Add secrets to GitHub repository: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ACCOUNT_ID`
+3. Push to `main` branch to trigger deployment
+
 ## 🔧 Prerequisites
 
 1. **AWS CLI**: Configured with appropriate permissions
 2. **Docker**: For container building and testing
 3. **Node.js 20+**: For CDK and application builds
 4. **GitHub Secrets** (for CI/CD):
-   - `AWS_ACCESS_KEY_ID`
-   - `AWS_SECRET_ACCESS_KEY`
-   - `AWS_ACCOUNT_ID`
+   - `AWS_ACCESS_KEY_ID` - IAM user access key
+   - `AWS_SECRET_ACCESS_KEY` - IAM user secret key  
+   - `AWS_ACCOUNT_ID` - Your 12-digit AWS account ID
 
 ## 🔑 Post-Deployment Configuration
 

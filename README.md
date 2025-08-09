@@ -399,6 +399,15 @@ The application is designed for deployment on AWS using a modern containerized a
    - OpenAI API Key
    - Facebook/Meta App credentials
 
+#### GitHub Actions Setup
+
+For automated deployments, configure these GitHub Secrets in your repository settings:
+- `AWS_ACCESS_KEY_ID` - IAM user access key for deployment
+- `AWS_SECRET_ACCESS_KEY` - IAM user secret key
+- `AWS_ACCOUNT_ID` - Your 12-digit AWS account ID
+
+See the [AWS Deployment Strategy](docs/AWS_DEPLOYMENT_STRATEGY.md#github-actions-cicd-setup) for detailed IAM user setup instructions.
+
 #### AWS Architecture
 - **ECS Fargate**: Serverless container orchestration
 - **RDS PostgreSQL**: Managed database with automated backups

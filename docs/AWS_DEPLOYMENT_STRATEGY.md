@@ -113,6 +113,100 @@ For manual deployments or local testing:
 ./scripts/deploy-aws.sh prod update-secrets
 ```
 
+## GitHub Actions CI/CD Setup
+
+To enable the automated deployment pipeline, you need to configure AWS credentials in your GitHub repository secrets. The pipeline requires specific IAM permissions to deploy infrastructure and manage AWS resources.
+
+### 1. Create IAM User for CI/CD
+
+Create a dedicated IAM user with programmatic access for the GitHub Actions pipeline:
+
+1. **Go to IAM Console**: https://console.aws.amazon.com/iam/
+2. **Create User**:
+   - User name: `ai-agency-github-actions`
+   - Select "Programmatic access"
+3. **Attach Permissions**:
+   - Create and attach the following IAM policy:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "sts:AssumeRole",
+                "iam:*",
+                "ec2:*",
+                "ecs:*",
+                "ecr:*",
+                "rds:*",
+                "elasticache:*",
+                "elasticloadbalancing:*",
+                "cloudformation:*",
+                "s3:*",
+                "cloudfront:*",
+                "secretsmanager:*",
+                "logs:*",
+                "application-autoscaling:*",
+                "ssm:*"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+4. **Save Credentials**: Copy the Access Key ID and Secret Access Key
+
+### 2. Configure GitHub Secrets
+
+In your GitHub repository, go to **Settings > Secrets and variables > Actions** and add the following secrets:
+
+| Secret Name | Description | How to Find |
+|-------------|-------------|-------------|
+| `AWS_ACCESS_KEY_ID` | IAM user access key | From IAM user creation step above |
+| `AWS_SECRET_ACCESS_KEY` | IAM user secret key | From IAM user creation step above |
+| `AWS_ACCOUNT_ID` | Your AWS account ID | Go to AWS Console > Account menu (top right) > Account |
+
+### 3. Verify Setup
+
+To verify your credentials are working:
+
+1. **Push to main branch** - This triggers the deployment workflow
+2. **Check Actions tab** - Monitor the workflow progress
+3. **Review logs** - If there are issues, check the action logs for details
+
+### 4. Security Best Practices
+
+- **Principle of Least Privilege**: The IAM policy above grants broad permissions. For production, consider creating more restrictive policies based on your specific needs.
+- **Key Rotation**: Regularly rotate the IAM user's access keys
+- **Monitoring**: Enable CloudTrail to monitor API usage
+- **Environment Separation**: Consider using separate AWS accounts for dev/staging/prod
+
+### 5. Alternative: OIDC Provider (Recommended for Production)
+
+For enhanced security, consider using GitHub's OIDC provider instead of long-lived credentials:
+
+1. **Create OIDC Identity Provider** in AWS IAM
+2. **Create IAM Role** with trust relationship to GitHub
+3. **Update GitHub Actions** to use `aws-actions/configure-aws-credentials@v4` with `role-to-assume`
+
+See [AWS documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html) for detailed OIDC setup.
+
+### Common Issues
+
+**"Credentials could not be loaded" Error**:
+- Verify all three secrets are set in GitHub repository settings
+- Check that the IAM user has the correct permissions
+- Ensure there are no typos in the secret values
+- Confirm the AWS account ID is correct (12-digit number)
+
+**"Access Denied" Errors**:
+- Review the IAM policy and add missing permissions
+- Check if the region specified in the workflow matches your AWS setup
+- Verify that the IAM user has permissions for the specific AWS services being used
+
 ## Environment Configuration
 
 ### Development Environment
