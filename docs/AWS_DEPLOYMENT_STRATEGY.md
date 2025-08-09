@@ -652,13 +652,17 @@ The IAM policy above follows AWS security best practices and addresses validatio
 
 ### 5. Alternative: OIDC Provider (Recommended for Production)
 
+### 4. Enhanced Security with OIDC (Optional)
+
 For enhanced security, consider using GitHub's OIDC provider instead of long-lived credentials:
 
 1. **Create OIDC Identity Provider** in AWS IAM
 2. **Create IAM Role** with trust relationship to GitHub
 3. **Update GitHub Actions** to use `aws-actions/configure-aws-credentials@v4` with `role-to-assume`
 
-See [AWS documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html) for detailed OIDC setup.
+This eliminates the need for long-lived AWS access keys and provides better security with temporary credentials.
+
+**See detailed setup instructions**: [OIDC Setup Guide](./OIDC_SETUP.md)
 
 ### Common Issues
 
