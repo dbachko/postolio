@@ -274,58 +274,155 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
    - Create and attach the following secure IAM policy that passes AWS validation:
 
 > [!NOTE]
-> This policy has been designed to address AWS security validation warnings by:
-> - Removing wildcard actions like `iam:*`, `ec2:*`, etc.
-> - Implementing explicit PassRole permissions with service conditions
-> - Scoping resources where possible to prevent overly permissive access
-> - Following the principle of least privilege
-> - Using correct AWS IAM action names (e.g., `s3:DeleteBucketCors` instead of `s3:DeleteBucketCORS`)
-> - Replacing deprecated CloudFront Origin Access Identity actions with Origin Access Control actions
+> This is the actual working IAM policy that has been successfully tested and validated for Postolio deployments. This policy provides all the necessary permissions for the GitHub Actions CI/CD pipeline to deploy the complete infrastructure including:
+> - CloudFormation stack management
+> - ECS Fargate services and task definitions  
+> - RDS PostgreSQL and ElastiCache Redis
+> - VPC networking components (subnets, security groups, NAT gateways, etc.)
+> - Application Load Balancer configuration
+> - S3 buckets and CloudFront distributions
+> - IAM roles with appropriate PassRole conditions
+> - Secrets Manager for secure credential storage
+> - CloudWatch Logs for monitoring
 
 ```json
 {
     "Version": "2012-10-17",
     "Statement": [
         {
-            "Sid": "CloudFormationAccess",
+            "Sid": "VisualEditor0",
             "Effect": "Allow",
             "Action": [
-                "cloudformation:CreateStack",
-                "cloudformation:UpdateStack",
-                "cloudformation:DeleteStack",
-                "cloudformation:DescribeStacks",
+                "ec2:AuthorizeSecurityGroupIngress",
+                "ec2:AttachInternetGateway",
+                "cloudfront:CreateInvalidation",
+                "rds:CreateDBSubnetGroup",
+                "ecr:DeleteRepository",
+                "ecs:DescribeTaskDefinition",
+                "ec2:DeleteRouteTable",
                 "cloudformation:DescribeStackEvents",
+                "ec2:CreateRoute",
+                "ec2:CreateInternetGateway",
+                "ec2:RevokeSecurityGroupEgress",
+                "cloudformation:UpdateStack",
+                "ec2:DeleteInternetGateway",
+                "cloudfront:GetDistributionConfig",
+                "elasticache:CreateCacheCluster",
+                "ecs:TagResource",
+                "rds:DeleteDBInstance",
+                "elasticache:RemoveTagsFromResource",
+                "ec2:CreateTags",
+                "elasticloadbalancing:CreateTargetGroup",
+                "ecr:GetAuthorizationToken",
+                "ecs:DeleteCluster",
+                "elasticache:DeleteCacheCluster",
+                "elasticache:AddTagsToResource",
+                "application-autoscaling:DeleteScalingPolicy",
+                "ec2:DisassociateRouteTable",
+                "ec2:RevokeSecurityGroupIngress",
+                "elasticloadbalancing:AddTags",
+                "application-autoscaling:DescribeScalingPolicies",
+                "cloudfront:ListInvalidations",
+                "cloudformation:DeleteStack",
+                "ec2:DeleteNatGateway",
+                "ec2:CreateSubnet",
+                "ec2:DescribeSubnets",
+                "ecr:InitiateLayerUpload",
+                "elasticloadbalancing:ModifyLoadBalancerAttributes",
+                "cloudformation:ValidateTemplate",
+                "ec2:CreateNatGateway",
+                "ec2:CreateVpc",
+                "ecs:DeregisterTaskDefinition",
+                "ec2:DescribeAvailabilityZones",
+                "elasticache:DescribeCacheSubnetGroups",
+                "rds:CreateDBInstance",
+                "ecs:ListTasks",
+                "rds:DescribeDBInstances",
+                "cloudfront:UpdateDistribution",
+                "ecs:DescribeTasks",
+                "cloudfront:UntagResource",
+                "ec2:ReleaseAddress",
+                "rds:AddTagsToResource",
+                "cloudfront:CreateOriginAccessControl",
+                "elasticloadbalancing:CreateLoadBalancer",
+                "elasticloadbalancing:DeleteTargetGroup",
+                "ec2:DescribeSecurityGroups",
+                "rds:ListTagsForResource",
+                "ec2:DescribeVpcs",
+                "elasticloadbalancing:DescribeTargetGroups",
+                "cloudfront:DeleteDistribution",
+                "elasticloadbalancing:DeleteListener",
+                "ec2:DeleteSubnet",
+                "cloudfront:ListOriginAccessControls",
+                "ec2:AssociateRouteTable",
+                "elasticloadbalancing:DeleteLoadBalancer",
+                "ec2:DescribeInternetGateways",
+                "elasticloadbalancing:DescribeLoadBalancers",
+                "cloudfront:GetDistribution",
+                "ecs:UpdateService",
+                "ecs:RegisterTaskDefinition",
+                "rds:ModifyDBInstance",
+                "elasticache:DeleteCacheSubnetGroup",
+                "elasticloadbalancing:ModifyTargetGroupAttributes",
+                "ec2:DescribeRouteTables",
+                "ecr:BatchCheckLayerAvailability",
+                "application-autoscaling:RegisterScalableTarget",
+                "ecr:CreateRepository",
+                "cloudfront:TagResource",
+                "ecs:CreateCluster",
+                "ecr:GetDownloadUrlForLayer",
                 "cloudformation:DescribeStackResources",
+                "ec2:CreateRouteTable",
+                "ecs:DeleteService",
+                "ec2:DetachInternetGateway",
+                "ecr:PutImage",
+                "cloudformation:DescribeStacks",
+                "ecs:DescribeClusters",
+                "rds:DeleteDBSubnetGroup",
+                "cloudfront:GetOriginAccessControl",
                 "cloudformation:GetTemplate",
+                "ecr:BatchGetImage",
+                "application-autoscaling:PutScalingPolicy",
+                "ec2:DeleteVpc",
+                "elasticache:DescribeCacheClusters",
+                "rds:RemoveTagsFromResource",
+                "elasticache:ListTagsForResource",
+                "cloudfront:DeleteOriginAccessControl",
+                "ec2:DescribeAddresses",
+                "rds:DescribeDBSubnetGroups",
+                "ecr:UploadLayerPart",
+                "elasticloadbalancing:RemoveTags",
+                "elasticloadbalancing:CreateListener",
+                "ecs:CreateService",
+                "elasticloadbalancing:DescribeListeners",
+                "ec2:CreateSecurityGroup",
+                "elasticache:CreateCacheSubnetGroup",
+                "ecr:CompleteLayerUpload",
+                "ecr:DescribeRepositories",
+                "ecs:DescribeServices",
+                "ecs:UntagResource",
+                "ec2:AuthorizeSecurityGroupEgress",
                 "cloudformation:ListStacks",
-                "cloudformation:ValidateTemplate"
+                "application-autoscaling:DescribeScalableTargets",
+                "ec2:DescribeTags",
+                "ec2:DeleteRoute",
+                "cloudfront:GetInvalidation",
+                "cloudfront:CreateDistribution",
+                "ec2:DescribeNatGateways",
+                "ec2:AllocateAddress",
+                "cloudformation:CreateStack",
+                "ec2:DeleteSecurityGroup",
+                "cloudfront:ListDistributions",
+                "elasticache:ModifyCacheCluster",
+                "application-autoscaling:DeregisterScalableTarget",
+                "ecr:GetRepositoryPolicy"
             ],
             "Resource": "*"
         },
         {
-            "Sid": "IAMRoleAccess",
+            "Sid": "VisualEditor1",
             "Effect": "Allow",
-            "Action": [
-                "iam:CreateRole",
-                "iam:DeleteRole",
-                "iam:GetRole",
-                "iam:UpdateRole",
-                "iam:AttachRolePolicy",
-                "iam:DetachRolePolicy",
-                "iam:PutRolePolicy",
-                "iam:DeleteRolePolicy",
-                "iam:GetRolePolicy",
-                "iam:TagRole",
-                "iam:UntagRole"
-            ],
-            "Resource": "arn:aws:iam::*:role/Postolio*"
-        },
-        {
-            "Sid": "IAMPassRoleSpecific",
-            "Effect": "Allow",
-            "Action": [
-                "iam:PassRole"
-            ],
+            "Action": "iam:PassRole",
             "Resource": "arn:aws:iam::*:role/Postolio*",
             "Condition": {
                 "StringEquals": {
@@ -337,259 +434,90 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             }
         },
         {
-            "Sid": "ECSAccess",
+            "Sid": "VisualEditor2",
             "Effect": "Allow",
             "Action": [
-                "ecs:CreateCluster",
-                "ecs:DeleteCluster",
-                "ecs:DescribeClusters",
-                "ecs:CreateService",
-                "ecs:DeleteService",
-                "ecs:DescribeServices",
-                "ecs:UpdateService",
-                "ecs:RegisterTaskDefinition",
-                "ecs:DeregisterTaskDefinition",
-                "ecs:DescribeTaskDefinition",
-                "ecs:ListTasks",
-                "ecs:DescribeTasks",
-                "ecs:TagResource",
-                "ecs:UntagResource"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "ECRAccess",
-            "Effect": "Allow",
-            "Action": [
-                "ecr:BatchCheckLayerAvailability",
-                "ecr:BatchGetImage",
-                "ecr:CreateRepository",
-                "ecr:DeleteRepository",
-                "ecr:DescribeRepositories",
-                "ecr:GetAuthorizationToken",
-                "ecr:GetDownloadUrlForLayer",
-                "ecr:GetRepositoryPolicy",
-                "ecr:InitiateLayerUpload",
-                "ecr:PutImage",
-                "ecr:UploadLayerPart",
-                "ecr:CompleteLayerUpload"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "VPCAndNetworking",
-            "Effect": "Allow",
-            "Action": [
-                "ec2:CreateVpc",
-                "ec2:DeleteVpc",
-                "ec2:DescribeVpcs",
-                "ec2:CreateSubnet",
-                "ec2:DeleteSubnet",
-                "ec2:DescribeSubnets",
-                "ec2:CreateSecurityGroup",
-                "ec2:DeleteSecurityGroup",
-                "ec2:DescribeSecurityGroups",
-                "ec2:AuthorizeSecurityGroupIngress",
-                "ec2:AuthorizeSecurityGroupEgress",
-                "ec2:RevokeSecurityGroupIngress",
-                "ec2:RevokeSecurityGroupEgress",
-                "ec2:CreateInternetGateway",
-                "ec2:DeleteInternetGateway",
-                "ec2:AttachInternetGateway",
-                "ec2:DetachInternetGateway",
-                "ec2:DescribeInternetGateways",
-                "ec2:CreateNatGateway",
-                "ec2:DeleteNatGateway",
-                "ec2:DescribeNatGateways",
-                "ec2:CreateRouteTable",
-                "ec2:DeleteRouteTable",
-                "ec2:DescribeRouteTables",
-                "ec2:CreateRoute",
-                "ec2:DeleteRoute",
-                "ec2:AssociateRouteTable",
-                "ec2:DisassociateRouteTable",
-                "ec2:AllocateAddress",
-                "ec2:ReleaseAddress",
-                "ec2:DescribeAddresses",
-                "ec2:DescribeAvailabilityZones",
-                "ec2:CreateTags",
-                "ec2:DescribeTags"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "RDSAccess",
-            "Effect": "Allow",
-            "Action": [
-                "rds:CreateDBInstance",
-                "rds:DeleteDBInstance",
-                "rds:DescribeDBInstances",
-                "rds:ModifyDBInstance",
-                "rds:CreateDBSubnetGroup",
-                "rds:DeleteDBSubnetGroup",
-                "rds:DescribeDBSubnetGroups",
-                "rds:AddTagsToResource",
-                "rds:RemoveTagsFromResource",
-                "rds:ListTagsForResource"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "ElastiCacheAccess",
-            "Effect": "Allow",
-            "Action": [
-                "elasticache:CreateCacheCluster",
-                "elasticache:DeleteCacheCluster",
-                "elasticache:DescribeCacheClusters",
-                "elasticache:ModifyCacheCluster",
-                "elasticache:CreateCacheSubnetGroup",
-                "elasticache:DeleteCacheSubnetGroup",
-                "elasticache:DescribeCacheSubnetGroups",
-                "elasticache:AddTagsToResource",
-                "elasticache:RemoveTagsFromResource",
-                "elasticache:ListTagsForResource"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "LoadBalancerAccess",
-            "Effect": "Allow",
-            "Action": [
-                "elasticloadbalancing:CreateLoadBalancer",
-                "elasticloadbalancing:DeleteLoadBalancer",
-                "elasticloadbalancing:DescribeLoadBalancers",
-                "elasticloadbalancing:ModifyLoadBalancerAttributes",
-                "elasticloadbalancing:CreateTargetGroup",
-                "elasticloadbalancing:DeleteTargetGroup",
-                "elasticloadbalancing:DescribeTargetGroups",
-                "elasticloadbalancing:ModifyTargetGroupAttributes",
-                "elasticloadbalancing:CreateListener",
-                "elasticloadbalancing:DeleteListener",
-                "elasticloadbalancing:DescribeListeners",
-                "elasticloadbalancing:AddTags",
-                "elasticloadbalancing:RemoveTags"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "S3Access",
-            "Effect": "Allow",
-            "Action": [
-                "s3:CreateBucket",
-                "s3:DeleteBucket",
-                "s3:GetBucketLocation",
-                "s3:GetBucketPolicy",
-                "s3:PutBucketPolicy",
-                "s3:DeleteBucketPolicy",
-                "s3:GetBucketVersioning",
-                "s3:PutBucketVersioning",
-                "s3:GetBucketWebsite",
-                "s3:PutBucketWebsite",
-                "s3:DeleteBucketWebsite",
-                "s3:GetBucketCors",
-                "s3:PutBucketCors",
-                "s3:DeleteBucketCors",
-                "s3:PutBucketTagging",
+                "secretsmanager:UntagResource",
                 "s3:GetBucketTagging",
+                "secretsmanager:DescribeSecret",
+                "iam:UntagRole",
+                "logs:DescribeLogStreams",
+                "secretsmanager:PutSecretValue",
+                "secretsmanager:CreateSecret",
+                "iam:TagRole",
+                "secretsmanager:DeleteSecret",
+                "iam:CreateRole",
+                "s3:CreateBucket",
+                "iam:AttachRolePolicy",
+                "s3:ListBucket",
+                "iam:PutRolePolicy",
+                "logs:DeleteLogStream",
+                "s3:GetBucketPolicy",
+                "logs:CreateLogStream",
+                "logs:TagLogGroup",
+                "secretsmanager:GetSecretValue",
+                "iam:DetachRolePolicy",
+                "s3:DeleteBucketWebsite",
+                "s3:PutBucketTagging",
+                "iam:DeleteRolePolicy",
+                "s3:DeleteObject",
+                "s3:DeleteBucket",
+                "s3:PutBucketVersioning",
+                "iam:GetRole",
+                "logs:UntagLogGroup",
+                "s3:GetBucketWebsite",
+                "logs:DeleteLogGroup",
+                "iam:DeleteRole",
+                "s3:GetBucketVersioning",
+                "s3:DeleteBucketPolicy",
+                "logs:CreateLogGroup",
+                "logs:PutLogEvents",
+                "secretsmanager:UpdateSecret",
                 "s3:PutObject",
                 "s3:GetObject",
-                "s3:DeleteObject",
-                "s3:ListBucket",
-                "s3:PutBucketNotification"
+                "s3:PutBucketNotification",
+                "s3:PutBucketWebsite",
+                "s3:PutBucketPolicy",
+                "iam:UpdateRole",
+                "logs:PutRetentionPolicy",
+                "iam:GetRolePolicy",
+                "s3:GetBucketLocation",
+                "secretsmanager:TagResource"
             ],
             "Resource": [
+                "arn:aws:logs:*:*:log-group:/aws/ecs/postolio*",
+                "arn:aws:secretsmanager:*:*:secret:postolio-*",
+                "arn:aws:iam::*:role/Postolio*",
                 "arn:aws:s3:::postolio-*",
-                "arn:aws:s3:::postolio-*/*",
-                "arn:aws:s3:::cdk-*",
-                "arn:aws:s3:::cdk-*/*"
+                "arn:aws:s3:::cdk-*"
             ]
         },
         {
-            "Sid": "CloudFrontAccess",
+            "Sid": "VisualEditor3",
             "Effect": "Allow",
             "Action": [
-                "cloudfront:CreateDistribution",
-                "cloudfront:UpdateDistribution",
-                "cloudfront:DeleteDistribution",
-                "cloudfront:GetDistribution",
-                "cloudfront:GetDistributionConfig",
-                "cloudfront:ListDistributions",
-                "cloudfront:CreateOriginAccessControl",
-                "cloudfront:DeleteOriginAccessControl",
-                "cloudfront:GetOriginAccessControl",
-                "cloudfront:ListOriginAccessControls",
-                "cloudfront:CreateInvalidation",
-                "cloudfront:GetInvalidation",
-                "cloudfront:ListInvalidations",
-                "cloudfront:TagResource",
-                "cloudfront:UntagResource"
+                "ssm:PutParameter",
+                "sts:AssumeRole",
+                "ssm:DeleteParameter",
+                "ssm:GetParameters",
+                "ssm:GetParameter"
             ],
-            "Resource": "*"
+            "Resource": [
+                "arn:aws:iam::*:role/cdk-*",
+                "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
+            ]
         },
         {
-            "Sid": "SecretsManagerAccess",
+            "Sid": "VisualEditor4",
             "Effect": "Allow",
-            "Action": [
-                "secretsmanager:CreateSecret",
-                "secretsmanager:DeleteSecret",
-                "secretsmanager:DescribeSecret",
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:PutSecretValue",
-                "secretsmanager:UpdateSecret",
-                "secretsmanager:TagResource",
-                "secretsmanager:UntagResource"
-            ],
-            "Resource": "arn:aws:secretsmanager:*:*:secret:postolio-*"
-        },
-        {
-            "Sid": "CloudWatchLogsAccess",
-            "Effect": "Allow",
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:DeleteLogGroup",
-                "logs:DescribeLogGroups",
-                "logs:CreateLogStream",
-                "logs:DeleteLogStream",
-                "logs:DescribeLogStreams",
-                "logs:PutLogEvents",
-                "logs:PutRetentionPolicy",
-                "logs:TagLogGroup",
-                "logs:UntagLogGroup"
-            ],
+            "Action": "logs:DescribeLogGroups",
             "Resource": "arn:aws:logs:*:*:log-group:/aws/ecs/postolio*"
         },
         {
-            "Sid": "AutoScalingAccess",
+            "Sid": "VisualEditor5",
             "Effect": "Allow",
-            "Action": [
-                "application-autoscaling:RegisterScalableTarget",
-                "application-autoscaling:DeregisterScalableTarget",
-                "application-autoscaling:DescribeScalableTargets",
-                "application-autoscaling:PutScalingPolicy",
-                "application-autoscaling:DeleteScalingPolicy",
-                "application-autoscaling:DescribeScalingPolicies"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "SSMAccess",
-            "Effect": "Allow",
-            "Action": [
-                "ssm:GetParameter",
-                "ssm:GetParameters",
-                "ssm:PutParameter",
-                "ssm:DeleteParameter",
-                "ssm:DescribeParameters"
-            ],
+            "Action": "ssm:DescribeParameters",
             "Resource": "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
-        },
-        {
-            "Sid": "STSAccess",
-            "Effect": "Allow",
-            "Action": [
-                "sts:AssumeRole"
-            ],
-            "Resource": "arn:aws:iam::*:role/cdk-*"
         }
     ]
 }
@@ -617,24 +545,24 @@ To verify your credentials are working:
 
 ### 4. Security Best Practices
 
-The IAM policy above follows AWS security best practices and addresses validation warnings:
+The IAM policy above has been tested and validated for successful Postolio deployments:
 
-- **Principle of Least Privilege**: Each statement grants only the minimum permissions required for specific services
+- **Comprehensive AWS Service Coverage**: Includes all necessary permissions for EC2, ECS, RDS, ElastiCache, CloudFront, S3, and related services
 - **Resource Scoping**: Where possible, permissions are restricted to specific resource patterns (e.g., `postolio-*` for S3 buckets and secrets)
-- **Explicit IAM PassRole**: PassRole permissions are explicitly scoped to Postolio roles with service conditions to prevent overly permissive access
+- **Explicit IAM PassRole**: PassRole permissions are scoped to Postolio roles with service conditions to prevent overly permissive access
 - **Service Binding**: IAM roles can only be passed to specific AWS services (`ecs-tasks.amazonaws.com`, `application-autoscaling.amazonaws.com`)
-- **No Wildcard Actions**: Replaced `iam:*`, `ec2:*`, etc. with specific action lists to avoid security validation warnings
+- **Working Deployment**: This policy has been successfully tested with actual Postolio infrastructure deployments
 - **Key Rotation**: Regularly rotate the IAM user's access keys
 - **Monitoring**: Enable CloudTrail to monitor API usage
 - **Environment Separation**: Consider using separate AWS accounts for dev/staging/prod
 
-#### Security Improvements in This Policy
+#### Key Features of This Working Policy
 
-- ✅ **No wildcards in IAM actions**: Replaced `iam:*` with specific IAM actions
+- ✅ **Proven deployment success**: This policy has been validated against actual AWS infrastructure deployments
+- ✅ **Complete service coverage**: Includes all AWS services required by the Postolio architecture
 - ✅ **Scoped PassRole permissions**: PassRole limited to Postolio roles with service conditions
 - ✅ **Resource constraints**: S3, Secrets Manager, and CloudWatch Logs limited to Postolio resources
-- ✅ **Service-specific permissions**: Each AWS service has tailored permissions instead of broad wildcards
-- ✅ **CDK bootstrap support**: Includes necessary permissions for CDK deployment without over-privileging
+- ✅ **CDK bootstrap support**: Includes necessary permissions for CDK deployment pipeline
 
 ### 5. Alternative: OIDC Provider (Recommended for Production)
 
