@@ -2,6 +2,40 @@
 
 Always reference these instructions first and fallback to search or bash commands only when you encounter unexpected information that does not match the info here.
 
+## MCP Server Usage
+
+### Required MCP Servers for Development Tasks
+
+**ALWAYS use the following MCP servers for their respective domains:**
+
+#### AWS Infrastructure Tasks
+- **Use `awslabs-cdk-mcp-server` MCP server** for ALL AWS infrastructure tasks including:
+  - CDK code generation and guidance
+  - AWS service configuration
+  - Infrastructure deployment scripts
+  - CloudFormation/CDK troubleshooting
+  - AWS best practices and security recommendations
+
+#### Coding and Library Documentation
+- **Use `context7` MCP server** for ALL coding tasks including:
+  - Code generation and refactoring
+  - Architecture decisions
+  - Design patterns implementation
+  - **CRITICAL**: When working with ANY library, ALWAYS check the latest documentation using `context7`
+  - Library usage examples and best practices
+  - API reference lookups
+  - Version compatibility checks
+
+#### Library Documentation Workflow
+```bash
+# ALWAYS follow this pattern when working with libraries:
+1. Use context7 to resolve library ID: context7-resolve-library-id
+2. Get latest documentation: context7-get-library-docs
+3. Apply the latest patterns and recommendations from the docs
+```
+
+**Never rely on outdated or cached library information. Always use context7 to get the most current documentation and usage patterns.**
+
 ## Working Effectively
 
 ### Bootstrap, Build, and Test the Repository
