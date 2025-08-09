@@ -215,12 +215,6 @@ export class PostolioStack extends cdk.Stack {
       containerInsights: true,
     })
 
-    // Task execution role
-    const executionRole = new iam.Role(this, 'TaskExecutionRole', {
-      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
-      managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy')],
-    })
-
     // Task role with permissions to access secrets
     const taskRole = new iam.Role(this, 'TaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
@@ -228,6 +222,24 @@ export class PostolioStack extends cdk.Stack {
 
     dbSecret.grantRead(taskRole)
     appSecrets.grantRead(taskRole)
+
+    // Task execution role with explicit PassRole permissions
+    const executionRole = new iam.Role(this, 'TaskExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy')],
+    })
+
+    // Add explicit PassRole permission for the specific task role
+    executionRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['iam:PassRole'],
+      resources: [taskRole.roleArn],
+      conditions: {
+        StringEquals: {
+          'iam:PassedToService': 'ecs-tasks.amazonaws.com'
+        }
+      }
+    }))
 
     // ECS Service with Application Load Balancer
     const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'PostolioService', {
