@@ -265,6 +265,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Bootstrap CDK (if needed)
+        run: |
+          cd aws-infrastructure
+          # Bootstrap CDK in the target AWS account/region
+          # This creates the necessary S3 buckets, IAM roles, etc. for CDK deployments
+          # Safe to run multiple times (idempotent operation)
+          npm run cdk -- bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
+        env:
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+
       - name: Deploy infrastructure
         run: |
           cd aws-infrastructure
