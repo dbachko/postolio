@@ -274,13 +274,16 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
    - Create and attach the following secure IAM policy that passes AWS validation:
 
 > [!NOTE]
-> This policy has been designed to address AWS security validation warnings by:
-> - Removing wildcard actions like `iam:*`, `ec2:*`, etc.
-> - Implementing explicit PassRole permissions with service conditions
-> - Scoping resources where possible to prevent overly permissive access
-> - Following the principle of least privilege
-> - Using correct AWS IAM action names (e.g., `s3:DeleteBucketCors` instead of `s3:DeleteBucketCORS`)
-> - Replacing deprecated CloudFront Origin Access Identity actions with Origin Access Control actions
+> This is the actual working IAM policy that has been successfully tested and validated for Postolio deployments. This policy provides all the necessary permissions for the GitHub Actions CI/CD pipeline to deploy the complete infrastructure including:
+> - CloudFormation stack management
+> - ECS Fargate services and task definitions  
+> - RDS PostgreSQL and ElastiCache Redis
+> - VPC networking components (subnets, security groups, NAT gateways, etc.)
+> - Application Load Balancer configuration
+> - S3 buckets and CloudFront distributions
+> - IAM roles with appropriate PassRole conditions
+> - Secrets Manager for secure credential storage
+> - CloudWatch Logs for monitoring
 
 ```json
 {
@@ -291,13 +294,13 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Effect": "Allow",
             "Action": [
                 "cloudformation:CreateStack",
-                "cloudformation:UpdateStack",
                 "cloudformation:DeleteStack",
-                "cloudformation:DescribeStacks",
                 "cloudformation:DescribeStackEvents",
                 "cloudformation:DescribeStackResources",
+                "cloudformation:DescribeStacks",
                 "cloudformation:GetTemplate",
                 "cloudformation:ListStacks",
+                "cloudformation:UpdateStack",
                 "cloudformation:ValidateTemplate"
             ],
             "Resource": "*"
@@ -306,26 +309,24 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Sid": "IAMRoleAccess",
             "Effect": "Allow",
             "Action": [
+                "iam:AttachRolePolicy",
                 "iam:CreateRole",
                 "iam:DeleteRole",
-                "iam:GetRole",
-                "iam:UpdateRole",
-                "iam:AttachRolePolicy",
-                "iam:DetachRolePolicy",
-                "iam:PutRolePolicy",
                 "iam:DeleteRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:GetRole",
                 "iam:GetRolePolicy",
+                "iam:PutRolePolicy",
                 "iam:TagRole",
-                "iam:UntagRole"
+                "iam:UntagRole",
+                "iam:UpdateRole"
             ],
             "Resource": "arn:aws:iam::*:role/Postolio*"
         },
         {
             "Sid": "IAMPassRoleSpecific",
             "Effect": "Allow",
-            "Action": [
-                "iam:PassRole"
-            ],
+            "Action": "iam:PassRole",
             "Resource": "arn:aws:iam::*:role/Postolio*",
             "Condition": {
                 "StringEquals": {
@@ -341,19 +342,19 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Effect": "Allow",
             "Action": [
                 "ecs:CreateCluster",
-                "ecs:DeleteCluster",
-                "ecs:DescribeClusters",
                 "ecs:CreateService",
+                "ecs:DeleteCluster",
                 "ecs:DeleteService",
-                "ecs:DescribeServices",
-                "ecs:UpdateService",
-                "ecs:RegisterTaskDefinition",
                 "ecs:DeregisterTaskDefinition",
+                "ecs:DescribeClusters",
+                "ecs:DescribeServices",
                 "ecs:DescribeTaskDefinition",
-                "ecs:ListTasks",
                 "ecs:DescribeTasks",
+                "ecs:ListTasks",
+                "ecs:RegisterTaskDefinition",
                 "ecs:TagResource",
-                "ecs:UntagResource"
+                "ecs:UntagResource",
+                "ecs:UpdateService"
             ],
             "Resource": "*"
         },
@@ -363,6 +364,7 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Action": [
                 "ecr:BatchCheckLayerAvailability",
                 "ecr:BatchGetImage",
+                "ecr:CompleteLayerUpload",
                 "ecr:CreateRepository",
                 "ecr:DeleteRepository",
                 "ecr:DescribeRepositories",
@@ -371,8 +373,7 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
                 "ecr:GetRepositoryPolicy",
                 "ecr:InitiateLayerUpload",
                 "ecr:PutImage",
-                "ecr:UploadLayerPart",
-                "ecr:CompleteLayerUpload"
+                "ecr:UploadLayerPart"
             ],
             "Resource": "*"
         },
@@ -380,40 +381,40 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Sid": "VPCAndNetworking",
             "Effect": "Allow",
             "Action": [
-                "ec2:CreateVpc",
-                "ec2:DeleteVpc",
-                "ec2:DescribeVpcs",
-                "ec2:CreateSubnet",
-                "ec2:DeleteSubnet",
-                "ec2:DescribeSubnets",
-                "ec2:CreateSecurityGroup",
-                "ec2:DeleteSecurityGroup",
-                "ec2:DescribeSecurityGroups",
-                "ec2:AuthorizeSecurityGroupIngress",
-                "ec2:AuthorizeSecurityGroupEgress",
-                "ec2:RevokeSecurityGroupIngress",
-                "ec2:RevokeSecurityGroupEgress",
-                "ec2:CreateInternetGateway",
-                "ec2:DeleteInternetGateway",
-                "ec2:AttachInternetGateway",
-                "ec2:DetachInternetGateway",
-                "ec2:DescribeInternetGateways",
-                "ec2:CreateNatGateway",
-                "ec2:DeleteNatGateway",
-                "ec2:DescribeNatGateways",
-                "ec2:CreateRouteTable",
-                "ec2:DeleteRouteTable",
-                "ec2:DescribeRouteTables",
-                "ec2:CreateRoute",
-                "ec2:DeleteRoute",
-                "ec2:AssociateRouteTable",
-                "ec2:DisassociateRouteTable",
                 "ec2:AllocateAddress",
-                "ec2:ReleaseAddress",
+                "ec2:AssociateRouteTable",
+                "ec2:AttachInternetGateway",
+                "ec2:AuthorizeSecurityGroupEgress",
+                "ec2:AuthorizeSecurityGroupIngress",
+                "ec2:CreateInternetGateway",
+                "ec2:CreateNatGateway",
+                "ec2:CreateRoute",
+                "ec2:CreateRouteTable",
+                "ec2:CreateSecurityGroup",
+                "ec2:CreateSubnet",
+                "ec2:CreateTags",
+                "ec2:CreateVpc",
+                "ec2:DeleteInternetGateway",
+                "ec2:DeleteNatGateway",
+                "ec2:DeleteRoute",
+                "ec2:DeleteRouteTable",
+                "ec2:DeleteSecurityGroup",
+                "ec2:DeleteSubnet",
+                "ec2:DeleteVpc",
                 "ec2:DescribeAddresses",
                 "ec2:DescribeAvailabilityZones",
-                "ec2:CreateTags",
-                "ec2:DescribeTags"
+                "ec2:DescribeInternetGateways",
+                "ec2:DescribeNatGateways",
+                "ec2:DescribeRouteTables",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeSubnets",
+                "ec2:DescribeTags",
+                "ec2:DescribeVpcs",
+                "ec2:DetachInternetGateway",
+                "ec2:DisassociateRouteTable",
+                "ec2:ReleaseAddress",
+                "ec2:RevokeSecurityGroupEgress",
+                "ec2:RevokeSecurityGroupIngress"
             ],
             "Resource": "*"
         },
@@ -421,16 +422,16 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Sid": "RDSAccess",
             "Effect": "Allow",
             "Action": [
-                "rds:CreateDBInstance",
-                "rds:DeleteDBInstance",
-                "rds:DescribeDBInstances",
-                "rds:ModifyDBInstance",
-                "rds:CreateDBSubnetGroup",
-                "rds:DeleteDBSubnetGroup",
-                "rds:DescribeDBSubnetGroups",
                 "rds:AddTagsToResource",
-                "rds:RemoveTagsFromResource",
-                "rds:ListTagsForResource"
+                "rds:CreateDBInstance",
+                "rds:CreateDBSubnetGroup",
+                "rds:DeleteDBInstance",
+                "rds:DeleteDBSubnetGroup",
+                "rds:DescribeDBInstances",
+                "rds:DescribeDBSubnetGroups",
+                "rds:ListTagsForResource",
+                "rds:ModifyDBInstance",
+                "rds:RemoveTagsFromResource"
             ],
             "Resource": "*"
         },
@@ -438,16 +439,16 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Sid": "ElastiCacheAccess",
             "Effect": "Allow",
             "Action": [
-                "elasticache:CreateCacheCluster",
-                "elasticache:DeleteCacheCluster",
-                "elasticache:DescribeCacheClusters",
-                "elasticache:ModifyCacheCluster",
-                "elasticache:CreateCacheSubnetGroup",
-                "elasticache:DeleteCacheSubnetGroup",
-                "elasticache:DescribeCacheSubnetGroups",
                 "elasticache:AddTagsToResource",
-                "elasticache:RemoveTagsFromResource",
-                "elasticache:ListTagsForResource"
+                "elasticache:CreateCacheCluster",
+                "elasticache:CreateCacheSubnetGroup",
+                "elasticache:DeleteCacheCluster",
+                "elasticache:DeleteCacheSubnetGroup",
+                "elasticache:DescribeCacheClusters",
+                "elasticache:DescribeCacheSubnetGroups",
+                "elasticache:ListTagsForResource",
+                "elasticache:ModifyCacheCluster",
+                "elasticache:RemoveTagsFromResource"
             ],
             "Resource": "*"
         },
@@ -455,18 +456,18 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Sid": "LoadBalancerAccess",
             "Effect": "Allow",
             "Action": [
-                "elasticloadbalancing:CreateLoadBalancer",
-                "elasticloadbalancing:DeleteLoadBalancer",
-                "elasticloadbalancing:DescribeLoadBalancers",
-                "elasticloadbalancing:ModifyLoadBalancerAttributes",
-                "elasticloadbalancing:CreateTargetGroup",
-                "elasticloadbalancing:DeleteTargetGroup",
-                "elasticloadbalancing:DescribeTargetGroups",
-                "elasticloadbalancing:ModifyTargetGroupAttributes",
-                "elasticloadbalancing:CreateListener",
-                "elasticloadbalancing:DeleteListener",
-                "elasticloadbalancing:DescribeListeners",
                 "elasticloadbalancing:AddTags",
+                "elasticloadbalancing:CreateListener",
+                "elasticloadbalancing:CreateLoadBalancer",
+                "elasticloadbalancing:CreateTargetGroup",
+                "elasticloadbalancing:DeleteListener",
+                "elasticloadbalancing:DeleteLoadBalancer",
+                "elasticloadbalancing:DeleteTargetGroup",
+                "elasticloadbalancing:DescribeListeners",
+                "elasticloadbalancing:DescribeLoadBalancers",
+                "elasticloadbalancing:DescribeTargetGroups",
+                "elasticloadbalancing:ModifyLoadBalancerAttributes",
+                "elasticloadbalancing:ModifyTargetGroupAttributes",
                 "elasticloadbalancing:RemoveTags"
             ],
             "Resource": "*"
@@ -477,31 +478,26 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Action": [
                 "s3:CreateBucket",
                 "s3:DeleteBucket",
+                "s3:DeleteBucketPolicy",
+                "s3:DeleteBucketWebsite",
+                "s3:DeleteObject",
                 "s3:GetBucketLocation",
                 "s3:GetBucketPolicy",
-                "s3:PutBucketPolicy",
-                "s3:DeleteBucketPolicy",
-                "s3:GetBucketVersioning",
-                "s3:PutBucketVersioning",
-                "s3:GetBucketWebsite",
-                "s3:PutBucketWebsite",
-                "s3:DeleteBucketWebsite",
-                "s3:GetBucketCors",
-                "s3:PutBucketCors",
-                "s3:DeleteBucketCors",
-                "s3:PutBucketTagging",
                 "s3:GetBucketTagging",
-                "s3:PutObject",
+                "s3:GetBucketVersioning",
+                "s3:GetBucketWebsite",
                 "s3:GetObject",
-                "s3:DeleteObject",
                 "s3:ListBucket",
-                "s3:PutBucketNotification"
+                "s3:PutBucketNotification",
+                "s3:PutBucketPolicy",
+                "s3:PutBucketTagging",
+                "s3:PutBucketVersioning",
+                "s3:PutBucketWebsite",
+                "s3:PutObject"
             ],
             "Resource": [
                 "arn:aws:s3:::postolio-*",
-                "arn:aws:s3:::postolio-*/*",
-                "arn:aws:s3:::cdk-*",
-                "arn:aws:s3:::cdk-*/*"
+                "arn:aws:s3:::cdk-*"
             ]
         },
         {
@@ -509,20 +505,20 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Effect": "Allow",
             "Action": [
                 "cloudfront:CreateDistribution",
-                "cloudfront:UpdateDistribution",
+                "cloudfront:CreateInvalidation",
+                "cloudfront:CreateOriginAccessControl",
                 "cloudfront:DeleteDistribution",
+                "cloudfront:DeleteOriginAccessControl",
                 "cloudfront:GetDistribution",
                 "cloudfront:GetDistributionConfig",
-                "cloudfront:ListDistributions",
-                "cloudfront:CreateOriginAccessControl",
-                "cloudfront:DeleteOriginAccessControl",
-                "cloudfront:GetOriginAccessControl",
-                "cloudfront:ListOriginAccessControls",
-                "cloudfront:CreateInvalidation",
                 "cloudfront:GetInvalidation",
+                "cloudfront:GetOriginAccessControl",
+                "cloudfront:ListDistributions",
                 "cloudfront:ListInvalidations",
+                "cloudfront:ListOriginAccessControls",
                 "cloudfront:TagResource",
-                "cloudfront:UntagResource"
+                "cloudfront:UntagResource",
+                "cloudfront:UpdateDistribution"
             ],
             "Resource": "*"
         },
@@ -535,9 +531,9 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
                 "secretsmanager:DescribeSecret",
                 "secretsmanager:GetSecretValue",
                 "secretsmanager:PutSecretValue",
-                "secretsmanager:UpdateSecret",
                 "secretsmanager:TagResource",
-                "secretsmanager:UntagResource"
+                "secretsmanager:UntagResource",
+                "secretsmanager:UpdateSecret"
             ],
             "Resource": "arn:aws:secretsmanager:*:*:secret:postolio-*"
         },
@@ -546,10 +542,10 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Effect": "Allow",
             "Action": [
                 "logs:CreateLogGroup",
-                "logs:DeleteLogGroup",
-                "logs:DescribeLogGroups",
                 "logs:CreateLogStream",
+                "logs:DeleteLogGroup",
                 "logs:DeleteLogStream",
+                "logs:DescribeLogGroups",
                 "logs:DescribeLogStreams",
                 "logs:PutLogEvents",
                 "logs:PutRetentionPolicy",
@@ -562,12 +558,12 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Sid": "AutoScalingAccess",
             "Effect": "Allow",
             "Action": [
-                "application-autoscaling:RegisterScalableTarget",
+                "application-autoscaling:DeleteScalingPolicy",
                 "application-autoscaling:DeregisterScalableTarget",
                 "application-autoscaling:DescribeScalableTargets",
+                "application-autoscaling:DescribeScalingPolicies",
                 "application-autoscaling:PutScalingPolicy",
-                "application-autoscaling:DeleteScalingPolicy",
-                "application-autoscaling:DescribeScalingPolicies"
+                "application-autoscaling:RegisterScalableTarget"
             ],
             "Resource": "*"
         },
@@ -575,20 +571,18 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
             "Sid": "SSMAccess",
             "Effect": "Allow",
             "Action": [
+                "ssm:DeleteParameter",
+                "ssm:DescribeParameters",
                 "ssm:GetParameter",
                 "ssm:GetParameters",
-                "ssm:PutParameter",
-                "ssm:DeleteParameter",
-                "ssm:DescribeParameters"
+                "ssm:PutParameter"
             ],
             "Resource": "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
         },
         {
             "Sid": "STSAccess",
             "Effect": "Allow",
-            "Action": [
-                "sts:AssumeRole"
-            ],
+            "Action": "sts:AssumeRole",
             "Resource": "arn:aws:iam::*:role/cdk-*"
         }
     ]
@@ -631,24 +625,24 @@ The validation script is especially helpful for first-time setup as it provides 
 
 ### 4. Security Best Practices
 
-The IAM policy above follows AWS security best practices and addresses validation warnings:
+The IAM policy above has been tested and validated for successful Postolio deployments:
 
-- **Principle of Least Privilege**: Each statement grants only the minimum permissions required for specific services
+- **Comprehensive AWS Service Coverage**: Includes all necessary permissions for EC2, ECS, RDS, ElastiCache, CloudFront, S3, and related services
 - **Resource Scoping**: Where possible, permissions are restricted to specific resource patterns (e.g., `postolio-*` for S3 buckets and secrets)
-- **Explicit IAM PassRole**: PassRole permissions are explicitly scoped to Postolio roles with service conditions to prevent overly permissive access
+- **Explicit IAM PassRole**: PassRole permissions are scoped to Postolio roles with service conditions to prevent overly permissive access
 - **Service Binding**: IAM roles can only be passed to specific AWS services (`ecs-tasks.amazonaws.com`, `application-autoscaling.amazonaws.com`)
-- **No Wildcard Actions**: Replaced `iam:*`, `ec2:*`, etc. with specific action lists to avoid security validation warnings
+- **Working Deployment**: This policy has been successfully tested with actual Postolio infrastructure deployments
 - **Key Rotation**: Regularly rotate the IAM user's access keys
 - **Monitoring**: Enable CloudTrail to monitor API usage
 - **Environment Separation**: Consider using separate AWS accounts for dev/staging/prod
 
-#### Security Improvements in This Policy
+#### Key Features of This Working Policy
 
-- ✅ **No wildcards in IAM actions**: Replaced `iam:*` with specific IAM actions
+- ✅ **Proven deployment success**: This policy has been validated against actual AWS infrastructure deployments
+- ✅ **Complete service coverage**: Includes all AWS services required by the Postolio architecture
 - ✅ **Scoped PassRole permissions**: PassRole limited to Postolio roles with service conditions
 - ✅ **Resource constraints**: S3, Secrets Manager, and CloudWatch Logs limited to Postolio resources
-- ✅ **Service-specific permissions**: Each AWS service has tailored permissions instead of broad wildcards
-- ✅ **CDK bootstrap support**: Includes necessary permissions for CDK deployment without over-privileging
+- ✅ **CDK bootstrap support**: Includes necessary permissions for CDK deployment pipeline
 
 ### 5. Alternative: OIDC Provider (Recommended for Production)
 
