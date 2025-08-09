@@ -31,6 +31,79 @@ S3 (Frontend) ←→ ALB ←→ ECS Fargate (Backend)
                     RDS PostgreSQL + ElastiCache Redis
 ```
 
+## Custom Domain Configuration (postolio.example)
+
+The infrastructure supports custom domain configuration for production deployment. For the postolio.example domain:
+
+### Prerequisites
+1. **Domain ownership**: Ensure you own the postolio.example domain
+2. **Route 53 hosted zone**: Create a hosted zone for postolio.example in Route 53
+3. **DNS delegation**: Point your domain's nameservers to Route 53
+
+### Domain Setup Steps
+
+#### 1. Create Route 53 Hosted Zone
+```bash
+# Create hosted zone (if not exists)
+aws route53 create-hosted-zone \
+    --name postolio.example \
+    --caller-reference "postol-io-$(date +%s)"
+
+# Get the hosted zone ID
+HOSTED_ZONE_ID=$(aws route53 list-hosted-zones-by-name \
+    --dns-name postolio.example \
+    --query 'HostedZones[0].Id' \
+    --output text | sed 's|/hostedzone/||')
+
+echo "Hosted Zone ID: $HOSTED_ZONE_ID"
+```
+
+#### 2. Deploy with Custom Domain
+```bash
+# Set environment variables
+export DOMAIN_NAME="postolio.example"
+export HOSTED_ZONE_ID="YOUR_HOSTED_ZONE_ID"
+
+# Deploy production environment
+./scripts/deploy-aws.sh prod
+```
+
+#### 3. DNS Propagation
+- SSL certificate will be automatically requested via ACM
+- DNS validation records will be automatically created
+- Certificate validation may take 5-30 minutes
+- Full DNS propagation can take up to 48 hours
+
+### Configuration Details
+
+The custom domain setup includes:
+- **ACM SSL Certificate**: Automatically provisioned and validated
+- **Route 53 A Record**: Points postolio.example to CloudFront
+- **CloudFront Custom Domain**: Configured with SSL certificate
+- **Instagram Redirect URI**: Updated to use custom domain
+
+### Verification
+
+After deployment:
+```bash
+# Check SSL certificate status
+aws acm list-certificates --region us-east-1 \
+    --query 'CertificateSummaryList[?DomainName==`postolio.example`]'
+
+# Test domain resolution
+nslookup postolio.example
+
+# Test HTTPS connection
+curl -I https://postolio.example
+```
+
+### Default CloudFront Domain Fallback
+
+If custom domain is not configured, the application will use the default CloudFront domain:
+- Format: `d1234567890abc.cloudfront.net`
+- Automatically configured and ready to use
+- Full HTTPS support included
+
 ## Infrastructure as Code
 
 The infrastructure is defined using AWS CDK (Cloud Development Kit) in TypeScript, providing:

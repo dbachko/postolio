@@ -208,8 +208,9 @@ For production deployment:
 
 1. **Update Redirect URIs** in your Meta App:
    ```
-   https://yourdomain.com/auth/instagram/callback
+   https://postolio.example/auth/instagram/callback
    ```
+   (Or your custom domain if different)
 
 2. **Submit for App Review**:
    - Instagram Graph API requires app review for most permissions
@@ -385,19 +386,50 @@ The application is designed for deployment on AWS using a modern containerized a
    ./scripts/quick-start-aws.sh
    ```
 
-3. **Manual deployment**
+3. **Production deployment with custom domain (postolio.example)**
    ```bash
-   # Deploy to development
+   # Set your hosted zone ID first
+   export HOSTED_ZONE_ID="YOUR_HOSTED_ZONE_ID"
+   
+   # Deploy to production with custom domain
+   ./scripts/deploy-postol-io.sh
+   ```
+
+4. **Manual deployment**
+   ```bash
+   # Deploy to development (default CloudFront domain)
    ./scripts/deploy-aws.sh dev
    
-   # Deploy to production
+   # Deploy to production (default CloudFront domain)
+   ./scripts/deploy-aws.sh prod
+   
+   # Deploy with custom domain
+   export DOMAIN_NAME="postolio.example"
+   export HOSTED_ZONE_ID="YOUR_HOSTED_ZONE_ID"
    ./scripts/deploy-aws.sh prod
    ```
 
-4. **Configure secrets** (after deployment)
+5. **Configure secrets** (after deployment)
    - Update AWS Secrets Manager with your API keys
    - OpenAI API Key
    - Facebook/Meta App credentials
+
+#### Custom Domain Configuration (postolio.example)
+
+The infrastructure supports automatic SSL certificate provisioning and custom domain setup:
+
+1. **Create Route 53 hosted zone** for postolio.example (if not exists)
+2. **Point domain nameservers** to Route 53
+3. **Deploy with domain configuration** using the deploy-postol-io.sh script
+4. **SSL certificate** is automatically requested and validated via ACM
+5. **DNS records** are automatically created for the domain
+
+**Production URL**: https://postolio.example (after deployment)
+
+For the Instagram redirect URI in your Meta App settings, use:
+```
+https://postolio.example/auth/instagram/callback
+```
 
 #### GitHub Actions Setup
 

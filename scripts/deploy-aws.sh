@@ -142,11 +142,22 @@ deploy_infrastructure() {
     echo -e "${YELLOW}Deploying infrastructure...${NC}"
     cd "$PROJECT_ROOT/aws-infrastructure"
     
+    # Get domain configuration from environment variables
+    DOMAIN_ARGS=""
+    if [ -n "$DOMAIN_NAME" ]; then
+        DOMAIN_ARGS="--context domainName=$DOMAIN_NAME"
+        if [ -n "$HOSTED_ZONE_ID" ]; then
+            DOMAIN_ARGS="$DOMAIN_ARGS --context hostedZoneId=$HOSTED_ZONE_ID"
+        fi
+        echo -e "${YELLOW}Deploying with custom domain: $DOMAIN_NAME${NC}"
+    fi
+    
     # Deploy the stack
     npx cdk deploy AiAgency-$ENVIRONMENT \
         --context environment=$ENVIRONMENT \
         --context account=$(aws sts get-caller-identity --query Account --output text) \
         --context region=$AWS_REGION \
+        $DOMAIN_ARGS \
         --require-approval never
     
     echo -e "${GREEN}✅ Infrastructure deployed successfully${NC}"
@@ -214,10 +225,27 @@ show_deployment_info() {
     
     echo "$OUTPUTS"
     
+    # Get application URL
+    APP_URL=$(aws cloudformation describe-stacks \
+        --stack-name AiAgency-$ENVIRONMENT \
+        --query 'Stacks[0].Outputs[?OutputKey==`ApplicationURL`].OutputValue' \
+        --output text \
+        --region $AWS_REGION)
+    
+    if [ -n "$APP_URL" ] && [ "$APP_URL" != "None" ]; then
+        echo
+        echo -e "${GREEN}🌐 Application URL: $APP_URL${NC}"
+    fi
+    
     echo
     echo -e "${YELLOW}Next Steps:${NC}"
     echo "1. Update the application secrets in AWS Secrets Manager"
-    echo "2. Configure your domain name (if using custom domain)"
+    if [ -n "$DOMAIN_NAME" ]; then
+        echo "2. Verify DNS propagation for $DOMAIN_NAME"
+        echo "3. Verify SSL certificate validation"
+    else
+        echo "2. Configure your custom domain name (optional)"
+    fi
     echo "3. Set up monitoring and alerting"
     echo "4. Configure backup and disaster recovery"
 }

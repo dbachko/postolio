@@ -9,10 +9,16 @@ const environment = app.node.tryGetContext('environment') || 'dev';
 const account = app.node.tryGetContext('account');
 const region = app.node.tryGetContext('region') || 'us-east-1';
 
+// Custom domain configuration
+const domainName = app.node.tryGetContext('domainName');
+const hostedZoneId = app.node.tryGetContext('hostedZoneId');
+
 new AiAgencyStack(app, `AiAgency-${environment}`, {
   env: {
     account: account,
     region: region,
   },
   environment,
+  domainName,
+  hostedZoneId,
 });

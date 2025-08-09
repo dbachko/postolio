@@ -10,17 +10,22 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 
 export interface AiAgencyStackProps extends cdk.StackProps {
   environment: string;
+  domainName?: string;
+  hostedZoneId?: string;
 }
 
 export class AiAgencyStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AiAgencyStackProps) {
     super(scope, id, props);
 
-    const { environment } = props;
+    const { environment, domainName, hostedZoneId } = props;
 
     // VPC
     const vpc = new ec2.Vpc(this, 'AiAgencyVpc', {
@@ -106,7 +111,7 @@ export class AiAgencyStack extends cdk.Stack {
     // ElastiCache Redis Subnet Group
     const cacheSubnetGroup = new elasticache.CfnSubnetGroup(this, 'CacheSubnetGroup', {
       description: 'Subnet group for ElastiCache',
-      subnetIds: vpc.isolatedSubnets.map(subnet => subnet.subnetId),
+      subnetIds: vpc.isolatedSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId),
     });
 
     // ElastiCache Redis
@@ -120,7 +125,7 @@ export class AiAgencyStack extends cdk.Stack {
 
     // S3 Bucket for frontend assets
     const frontendBucket = new s3.Bucket(this, 'FrontendBucket', {
-      bucketName: `ai-agency-frontend-${environment}-${this.account}`,
+      bucketName: `ai-agency-frontend-${environment}-${cdk.Aws.ACCOUNT_ID}`,
       websiteIndexDocument: 'index.html',
       websiteErrorDocument: 'index.html',
       publicReadAccess: true,
@@ -128,8 +133,27 @@ export class AiAgencyStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
+    // SSL Certificate and Domain Configuration
+    let certificate: acm.Certificate | undefined;
+    let hostedZone: route53.IHostedZone | undefined;
+    
+    if (domainName && hostedZoneId) {
+      // Import existing hosted zone
+      hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
+        hostedZoneId,
+        zoneName: domainName,
+      });
+
+      // Create SSL certificate
+      certificate = new acm.Certificate(this, 'SslCertificate', {
+        domainName,
+        certificateName: `${environment}-ssl-cert`,
+        validation: acm.CertificateValidation.fromDns(hostedZone),
+      });
+    }
+
     // CloudFront Distribution for frontend
-    const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
+    const distributionProps: any = {
       defaultBehavior: {
         origin: new origins.S3Origin(frontendBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -148,7 +172,24 @@ export class AiAgencyStack extends cdk.Stack {
           responsePagePath: '/index.html',
         },
       ],
-    });
+    };
+
+    // Add custom domain configuration if provided
+    if (domainName && certificate) {
+      distributionProps.domainNames = [domainName];
+      distributionProps.certificate = certificate;
+    }
+
+    const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', distributionProps);
+
+    // Create DNS record for custom domain
+    if (domainName && hostedZone) {
+      new route53.ARecord(this, 'DomainARecord', {
+        zone: hostedZone,
+        recordName: domainName,
+        target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
+      });
+    }
 
     // Application secrets
     const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
@@ -200,7 +241,7 @@ export class AiAgencyStack extends cdk.Stack {
           NODE_ENV: 'production',
           PORT: '3000',
           REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,
-          INSTAGRAM_REDIRECT_URI: `https://${distribution.distributionDomainName}/auth/instagram/callback`,
+          INSTAGRAM_REDIRECT_URI: `https://${domainName || distribution.distributionDomainName}/auth/instagram/callback`,
         },
         secrets: {
           DATABASE_URL: ecs.Secret.fromSecretsManager(dbSecret),
@@ -252,6 +293,18 @@ export class AiAgencyStack extends cdk.Stack {
       description: 'Frontend CloudFront distribution domain name',
     });
 
+    if (domainName) {
+      new cdk.CfnOutput(this, 'CustomDomainName', {
+        value: domainName,
+        description: 'Custom domain name for the application',
+      });
+    }
+
+    new cdk.CfnOutput(this, 'ApplicationURL', {
+      value: `https://${domainName || distribution.distributionDomainName}`,
+      description: 'Main application URL',
+    });
+
     new cdk.CfnOutput(this, 'FrontendBucketName', {
       value: frontendBucket.bucketName,
       description: 'Frontend S3 bucket name',
@@ -271,5 +324,12 @@ export class AiAgencyStack extends cdk.Stack {
       value: appSecrets.secretArn,
       description: 'Application secrets ARN for manual configuration',
     });
+
+    if (certificate) {
+      new cdk.CfnOutput(this, 'SslCertificateArn', {
+        value: certificate.certificateArn,
+        description: 'SSL certificate ARN',
+      });
+    }
   }
 }
