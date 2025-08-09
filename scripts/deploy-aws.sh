@@ -31,7 +31,21 @@ check_requirements() {
     # Check if AWS credentials are configured
     if ! aws sts get-caller-identity &> /dev/null; then
         echo -e "${RED}❌ AWS credentials not configured. Please run 'aws configure'.${NC}"
+        echo
+        echo "You'll need:"
+        echo "  - AWS Access Key ID"
+        echo "  - AWS Secret Access Key"
+        echo "  - Default region (recommended: us-east-1)"
+        echo "  - Default output format (recommended: json)"
+        echo
+        echo "For help: ./scripts/validate-aws-setup.sh"
         exit 1
+    else
+        # Show current AWS context
+        AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+        USER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+        echo -e "${GREEN}✅ Using AWS Account: $AWS_ACCOUNT${NC}"
+        echo "User/Role: $USER_ARN"
     fi
     
     # Check if CDK is installed
@@ -62,7 +76,66 @@ setup_infrastructure() {
     echo -e "${GREEN}✅ Infrastructure dependencies ready${NC}"
 }
 
-# Bootstrap CDK if needed
+# Validate bootstrap permissions
+validate_bootstrap_permissions() {
+    echo -e "${YELLOW}Validating CDK bootstrap permissions...${NC}"
+    
+    # Test minimal permissions needed for bootstrap
+    local permissions_valid=true
+    local missing_permissions=()
+    
+    # Test CloudFormation CreateChangeSet permission
+    if ! aws sts get-caller-identity &> /dev/null; then
+        echo -e "${RED}❌ Cannot get caller identity${NC}"
+        return 1
+    fi
+    
+    # Create a test changeset name to check permissions
+    TEST_STACK_NAME="cdk-bootstrap-permission-test-$(date +%s)"
+    
+    # Check if we can at least list CloudFormation stacks
+    if ! aws cloudformation list-stacks --region $AWS_REGION &> /dev/null; then
+        missing_permissions+=("cloudformation:ListStacks")
+        permissions_valid=false
+    fi
+    
+    # Check if we have basic CloudFormation permissions by trying to validate a simple template
+    local test_template='{"AWSTemplateFormatVersion":"2010-09-09","Resources":{}}'
+    if ! echo "$test_template" | aws cloudformation validate-template --template-body file:///dev/stdin &> /dev/null; then
+        missing_permissions+=("cloudformation:ValidateTemplate")
+        permissions_valid=false
+    fi
+    
+    if [ "$permissions_valid" = false ]; then
+        echo -e "${RED}❌ Insufficient permissions for CDK bootstrap${NC}"
+        echo
+        echo "Missing permissions for CDK bootstrap:"
+        for perm in "${missing_permissions[@]}"; do
+            echo "  - $perm"
+        done
+        echo
+        echo "CDK bootstrap requires the following permissions:"
+        echo "  - cloudformation:CreateStack"
+        echo "  - cloudformation:CreateChangeSet"
+        echo "  - cloudformation:DescribeStacks"
+        echo "  - cloudformation:UpdateStack"
+        echo "  - s3:CreateBucket"
+        echo "  - s3:PutBucketPolicy"
+        echo "  - s3:PutBucketVersioning"
+        echo "  - s3:PutEncryptionConfiguration"
+        echo "  - iam:CreateRole"
+        echo "  - iam:AttachRolePolicy"
+        echo "  - iam:PassRole"
+        echo "  - ssm:PutParameter"
+        echo
+        return 1
+    fi
+    
+    echo -e "${GREEN}✅ Bootstrap permissions validated${NC}"
+    return 0
+}
+
+# Bootstrap CDK with enhanced error handling
 bootstrap_cdk() {
     echo -e "${YELLOW}Checking CDK bootstrap...${NC}"
     cd "$PROJECT_ROOT/aws-infrastructure"
@@ -72,8 +145,55 @@ bootstrap_cdk() {
     
     # Check if bootstrap stack exists
     if ! aws cloudformation describe-stacks --stack-name CDKToolkit --region $AWS_REGION &> /dev/null; then
+        echo -e "${YELLOW}CDK is not bootstrapped for account $AWS_ACCOUNT in region $AWS_REGION${NC}"
+        
+        # Validate permissions before attempting bootstrap
+        if ! validate_bootstrap_permissions; then
+            echo -e "${RED}❌ CDK bootstrap failed: Insufficient permissions${NC}"
+            echo
+            echo -e "${YELLOW}Solutions:${NC}"
+            echo "1. Ask your AWS administrator to add the required permissions to your IAM user"
+            echo "2. Use an IAM role with broader permissions: aws sts assume-role ..."
+            echo "3. Ask an administrator to run the bootstrap command:"
+            echo "   cdk bootstrap aws://$AWS_ACCOUNT/$AWS_REGION"
+            echo "4. Use AWS CloudShell (if available) which may have broader default permissions"
+            echo "5. Use the dedicated bootstrap script: ./scripts/bootstrap-cdk.sh"
+            echo
+            echo "For detailed permissions, see: docs/AWS_DEPLOYMENT_STRATEGY.md"
+            echo
+            echo -e "${YELLOW}Alternative: Manual Bootstrap${NC}"
+            echo "If you have access to the AWS Console:"
+            echo "1. Go to CloudFormation service"
+            echo "2. Create a new stack using CDKToolkit template"
+            echo "3. Use this S3 template URL:"
+            echo "   https://s3.us-west-2.amazonaws.com/cdk-assets-us-east-1/toolkit-bootstrap-template.json"
+            echo
+            return 1
+        fi
+        
         echo -e "${YELLOW}Bootstrapping CDK for account $AWS_ACCOUNT in region $AWS_REGION...${NC}"
-        npx cdk bootstrap aws://$AWS_ACCOUNT/$AWS_REGION
+        echo "This may take 2-5 minutes..."
+        
+        # Attempt bootstrap with better error handling
+        if ! npx cdk bootstrap aws://$AWS_ACCOUNT/$AWS_REGION; then
+            echo -e "${RED}❌ CDK bootstrap failed${NC}"
+            echo
+            echo -e "${YELLOW}Common solutions:${NC}"
+            echo "1. Check your IAM permissions (see validate_bootstrap_permissions output above)"
+            echo "2. Verify you're using the correct AWS account and region"
+            echo "3. Check if there's a service limit preventing resource creation"
+            echo "4. Try running with verbose output: npx cdk bootstrap --verbose aws://$AWS_ACCOUNT/$AWS_REGION"
+            echo
+            echo "If the error mentions 'AccessDenied' for CreateChangeSet:"
+            echo "  Your IAM user needs cloudformation:CreateChangeSet permission"
+            echo
+            echo "For help with IAM permissions, see:"
+            echo "  docs/AWS_DEPLOYMENT_STRATEGY.md (section: IAM User for CI/CD)"
+            echo
+            return 1
+        fi
+        
+        echo -e "${GREEN}✅ CDK bootstrap completed successfully${NC}"
     else
         echo -e "${GREEN}✅ CDK already bootstrapped${NC}"
     fi

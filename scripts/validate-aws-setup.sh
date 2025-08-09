@@ -66,9 +66,66 @@ check_aws_credentials() {
     fi
 }
 
+# Check CDK bootstrap permissions specifically
+check_bootstrap_permissions() {
+    echo -e "${YELLOW}🔧 Checking CDK bootstrap permissions...${NC}"
+    
+    local bootstrap_ok=true
+    local missing_permissions=()
+    
+    # Test CloudFormation permissions (required for bootstrap)
+    if ! aws cloudformation list-stacks --region us-east-1 &> /dev/null; then
+        missing_permissions+=("cloudformation:ListStacks")
+        bootstrap_ok=false
+    fi
+    
+    # Test template validation (basic CloudFormation permission)
+    local test_template='{"AWSTemplateFormatVersion":"2010-09-09","Resources":{}}'
+    if ! echo "$test_template" | aws cloudformation validate-template --template-body file:///dev/stdin &> /dev/null; then
+        missing_permissions+=("cloudformation:ValidateTemplate")
+        bootstrap_ok=false
+    fi
+    
+    # Test S3 permissions (CDK needs to create bootstrap bucket)
+    if ! aws s3api list-buckets &> /dev/null; then
+        missing_permissions+=("s3:ListBuckets")
+        bootstrap_ok=false
+    fi
+    
+    # Test IAM permissions (CDK needs to create execution roles)  
+    if ! aws iam list-roles --max-items 1 &> /dev/null; then
+        missing_permissions+=("iam:ListRoles")
+        bootstrap_ok=false
+    fi
+    
+    if [ "$bootstrap_ok" = false ]; then
+        echo -e "${RED}❌ Missing CDK bootstrap permissions${NC}"
+        echo "Missing permissions:"
+        for perm in "${missing_permissions[@]}"; do
+            echo "  - $perm"
+        done
+        echo
+        echo "CDK bootstrap requires these permissions:"
+        echo "  cloudformation:CreateStack, CreateChangeSet, DescribeStacks, UpdateStack"
+        echo "  s3:CreateBucket, PutBucketPolicy, PutBucketVersioning, PutEncryptionConfiguration"
+        echo "  iam:CreateRole, AttachRolePolicy, PassRole"
+        echo "  ssm:PutParameter, GetParameter"
+        echo
+        echo -e "${YELLOW}Solutions:${NC}"
+        echo "1. Ask your AWS admin to grant CDK bootstrap permissions"
+        echo "2. Use AWS CloudShell (may have broader default permissions)"
+        echo "3. Ask admin to run: cdk bootstrap aws://$(aws sts get-caller-identity --query Account --output text)/us-east-1"
+        echo
+        return 1
+    else
+        echo -e "${GREEN}✅ CDK bootstrap permissions look good${NC}"
+        return 0
+    fi
+}
+
 # Check required permissions for deployment
 check_permissions() {
-    echo -e "${YELLOW}🔐 Checking AWS permissions...${NC}"
+    echo -e "${YELLOW}🔐 Checking AWS deployment permissions...${NC}"
     
     # Test basic permissions
     local permissions_ok=true
@@ -103,7 +160,7 @@ check_permissions() {
         echo "Your IAM user needs the policy defined in docs/AWS_DEPLOYMENT_STRATEGY.md"
         return 1
     else
-        echo -e "${GREEN}✅ Required AWS permissions are available${NC}"
+        echo -e "${GREEN}✅ Required AWS deployment permissions are available${NC}"
         return 0
     fi
 }
@@ -149,7 +206,18 @@ check_cdk() {
         echo -e "${GREEN}✅ CDK is bootstrapped for $ACCOUNT_ID in $REGION${NC}"
     else
         echo -e "${YELLOW}⚠️  CDK is not bootstrapped${NC}"
-        echo "Run: cdk bootstrap aws://$ACCOUNT_ID/$REGION"
+        echo "Bootstrap is required before deployment. Options:"
+        echo
+        echo "1. If you have bootstrap permissions:"
+        echo "   cdk bootstrap aws://$ACCOUNT_ID/$REGION"
+        echo
+        echo "2. If you get 'AccessDenied' errors:"
+        echo "   Ask your AWS administrator to run the bootstrap command"
+        echo "   or grant you the necessary CloudFormation/S3/IAM permissions"
+        echo
+        echo "3. Use AWS CloudShell (if available):"
+        echo "   AWS CloudShell may have broader default permissions"
+        echo
         cdk_ok=false
     fi
     
@@ -175,6 +243,9 @@ main() {
     echo
     
     check_permissions || overall_status=1
+    echo
+    
+    check_bootstrap_permissions || overall_status=1
     echo
     
     check_docker || overall_status=1
