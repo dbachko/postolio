@@ -611,9 +611,23 @@ In your GitHub repository, go to **Settings > Secrets and variables > Actions** 
 
 To verify your credentials are working:
 
-1. **Push to main branch** - This triggers the deployment workflow
-2. **Check Actions tab** - Monitor the workflow progress
-3. **Review logs** - If there are issues, check the action logs for details
+1. **Run Local Validation** (recommended):
+   ```bash
+   # Test your AWS configuration locally
+   ./scripts/validate-aws-setup.sh
+   ```
+   This script will:
+   - Check if AWS CLI is installed and configured
+   - Verify your AWS credentials work
+   - Test required AWS permissions
+   - Show you exactly what to configure in GitHub secrets
+   - Check Docker and CDK setup
+
+2. **Push to main branch** - This triggers the deployment workflow
+3. **Check Actions tab** - Monitor the workflow progress  
+4. **Review logs** - If there are issues, check the action logs for details
+
+The validation script is especially helpful for first-time setup as it provides specific guidance on any missing configuration.
 
 ### 4. Security Best Practices
 
@@ -649,10 +663,36 @@ See [AWS documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_role
 ### Common Issues
 
 **"Credentials could not be loaded" Error**:
-- Verify all three secrets are set in GitHub repository settings
-- Check that the IAM user has the correct permissions
-- Ensure there are no typos in the secret values
-- Confirm the AWS account ID is correct (12-digit number)
+This is the most common deployment issue. The GitHub Actions workflow cannot authenticate with AWS. Here's how to fix it:
+
+1. **Missing GitHub Secrets**: The most likely cause is that the required secrets are not configured in your repository.
+   - Go to your GitHub repository
+   - Navigate to Settings > Secrets and variables > Actions
+   - Verify these three secrets exist:
+     - `AWS_ACCESS_KEY_ID`
+     - `AWS_SECRET_ACCESS_KEY` 
+     - `AWS_ACCOUNT_ID`
+
+2. **Verify Secret Values**:
+   - Ensure there are no typos in the secret values
+   - Check that there are no leading/trailing spaces
+   - Confirm the AWS account ID is exactly 12 digits (no hyphens or spaces)
+   - Verify the IAM user credentials are active and not expired
+
+3. **Test Locally First**:
+   ```bash
+   # Run the validation script to test your AWS setup
+   ./scripts/validate-aws-setup.sh
+   ```
+
+4. **Check IAM User Permissions**:
+   - Verify the IAM user has the required permissions policy attached
+   - The user needs permissions for CloudFormation, ECS, ECR, RDS, ElastiCache, S3, and other AWS services
+   - See the detailed IAM policy earlier in this document
+
+5. **Region Configuration**:
+   - Ensure your AWS CLI is configured for the correct region (us-east-1 by default)
+   - The GitHub Actions workflow uses the AWS_REGION environment variable
 
 **"Access Denied" Errors**:
 - Review the IAM policy and add missing permissions
