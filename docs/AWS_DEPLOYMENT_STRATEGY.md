@@ -279,6 +279,8 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
 > - Implementing explicit PassRole permissions with service conditions
 > - Scoping resources where possible to prevent overly permissive access
 > - Following the principle of least privilege
+> - Using correct AWS IAM action names (e.g., `s3:DeleteBucketCors` instead of `s3:DeleteBucketCORS`)
+> - Replacing deprecated CloudFront Origin Access Identity actions with Origin Access Control actions
 
 ```json
 {
@@ -484,12 +486,11 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
                 "s3:GetBucketWebsite",
                 "s3:PutBucketWebsite",
                 "s3:DeleteBucketWebsite",
-                "s3:GetBucketCORS",
-                "s3:PutBucketCORS",
-                "s3:DeleteBucketCORS",
+                "s3:GetBucketCors",
+                "s3:PutBucketCors",
+                "s3:DeleteBucketCors",
                 "s3:PutBucketTagging",
                 "s3:GetBucketTagging",
-                "s3:DeleteBucketTagging",
                 "s3:PutObject",
                 "s3:GetObject",
                 "s3:DeleteObject",
@@ -513,10 +514,10 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
                 "cloudfront:GetDistribution",
                 "cloudfront:GetDistributionConfig",
                 "cloudfront:ListDistributions",
-                "cloudfront:CreateOriginAccessIdentity",
-                "cloudfront:DeleteOriginAccessIdentity",
-                "cloudfront:GetOriginAccessIdentity",
-                "cloudfront:ListOriginAccessIdentities",
+                "cloudfront:CreateOriginAccessControl",
+                "cloudfront:DeleteOriginAccessControl",
+                "cloudfront:GetOriginAccessControl",
+                "cloudfront:ListOriginAccessControls",
                 "cloudfront:CreateInvalidation",
                 "cloudfront:GetInvalidation",
                 "cloudfront:ListInvalidations",
