@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import * as ecs from 'aws-cdk-lib/aws-ecs'
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns'
+import * as ecr from 'aws-cdk-lib/aws-ecr'
 import * as rds from 'aws-cdk-lib/aws-rds'
 import * as elasticache from 'aws-cdk-lib/aws-elasticache'
 import * as s3 from 'aws-cdk-lib/aws-s3'
@@ -27,6 +28,14 @@ export class PostolioStack extends cdk.Stack {
     super(scope, id, props)
 
     const { environment, domainName, hostedZoneId, useExternalDns } = props
+
+    // ECR Repository for backend container images
+    const ecrRepository = new ecr.Repository(this, 'PostolioRepository', {
+      repositoryName: 'postolio',
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      imageTagMutability: ecr.TagMutability.MUTABLE,
+      imageScanOnPush: true,
+    })
 
     // VPC
     const vpc = new ec2.Vpc(this, 'PostolioVpc', {
@@ -248,9 +257,7 @@ export class PostolioStack extends cdk.Stack {
       memoryLimitMiB: 1024,
       desiredCount: environment === 'prod' ? 2 : 1,
       taskImageOptions: {
-        image: ecs.ContainerImage.fromAsset('..', {
-          file: 'Dockerfile',
-        }),
+        image: ecs.ContainerImage.fromEcrRepository(ecrRepository, 'latest'),
         containerPort: 3000,
         executionRole,
         taskRole,
@@ -300,6 +307,11 @@ export class PostolioStack extends cdk.Stack {
     })
 
     // Outputs
+    new cdk.CfnOutput(this, 'ECRRepository', {
+      value: ecrRepository.repositoryUri,
+      description: 'ECR Repository URI for backend container images',
+    })
+
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: fargateService.loadBalancer.loadBalancerDnsName,
       description: 'Load Balancer DNS name',
