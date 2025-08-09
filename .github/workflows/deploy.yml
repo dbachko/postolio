@@ -12,8 +12,76 @@ env:
   NODE_VERSION: '20'
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Validate deployment prerequisites
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check required GitHub secrets
+        run: |
+          echo "🔍 Validating GitHub repository secrets for AWS deployment..."
+          echo
+          
+          # Track if any secrets are missing
+          MISSING_SECRETS=false
+          
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "❌ AWS_ACCESS_KEY_ID secret is missing"
+            MISSING_SECRETS=true
+          else
+            echo "✅ AWS_ACCESS_KEY_ID is configured"
+          fi
+          
+          if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "❌ AWS_SECRET_ACCESS_KEY secret is missing"
+            MISSING_SECRETS=true
+          else
+            echo "✅ AWS_SECRET_ACCESS_KEY is configured"
+          fi
+          
+          if [ -z "${{ secrets.AWS_ACCOUNT_ID }}" ]; then
+            echo "❌ AWS_ACCOUNT_ID secret is missing"
+            MISSING_SECRETS=true
+          else
+            echo "✅ AWS_ACCOUNT_ID is configured"
+          fi
+          
+          if [ "$MISSING_SECRETS" = true ]; then
+            echo
+            echo "🚨 DEPLOYMENT CANNOT PROCEED - Missing AWS credentials"
+            echo
+            echo "To fix this issue:"
+            echo "1. Go to your GitHub repository"
+            echo "2. Navigate to Settings > Secrets and variables > Actions"
+            echo "3. Click 'New repository secret' for each missing secret:"
+            echo
+            echo "   AWS_ACCESS_KEY_ID:"
+            echo "   - Get from AWS Console > IAM > Users > Create User"
+            echo "   - Choose 'Programmatic access'"
+            echo "   - Attach permissions policy (see docs/AWS_DEPLOYMENT_STRATEGY.md)"
+            echo
+            echo "   AWS_SECRET_ACCESS_KEY:"
+            echo "   - Generated when you create the IAM user above"
+            echo "   - Copy the secret access key (shown only once)"
+            echo
+            echo "   AWS_ACCOUNT_ID:"
+            echo "   - Find in AWS Console > Account menu (top right) > Account"
+            echo "   - Should be a 12-digit number"
+            echo
+            echo "📖 See docs/AWS_DEPLOYMENT_STRATEGY.md for detailed setup instructions"
+            echo
+            exit 1
+          fi
+          
+          echo
+          echo "🎉 All required AWS secrets are configured!"
+          echo "✅ Deployment can proceed"
+
   test:
     runs-on: ubuntu-latest
+    needs: validate
     
     services:
       postgres:
@@ -90,6 +158,22 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      - name: Validate AWS credentials
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "❌ Error: AWS_ACCESS_KEY_ID secret is not set"
+            echo "Please configure this secret in your GitHub repository settings:"
+            echo "Go to Settings > Secrets and variables > Actions > New repository secret"
+            exit 1
+          fi
+          if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "❌ Error: AWS_SECRET_ACCESS_KEY secret is not set"
+            echo "Please configure this secret in your GitHub repository settings:"
+            echo "Go to Settings > Secrets and variables > Actions > New repository secret"
+            exit 1
+          fi
+          echo "✅ AWS credentials secrets are configured"
+
       - name: Install dependencies
         run: npm ci
 
@@ -139,6 +223,26 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'aws-infrastructure/package-lock.json'
 
+      - name: Validate AWS deployment credentials
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "❌ Error: AWS_ACCESS_KEY_ID secret is not set"
+            echo "Required for infrastructure deployment to AWS"
+            exit 1
+          fi
+          if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "❌ Error: AWS_SECRET_ACCESS_KEY secret is not set"
+            echo "Required for infrastructure deployment to AWS"
+            exit 1
+          fi
+          if [ -z "${{ secrets.AWS_ACCOUNT_ID }}" ]; then
+            echo "❌ Error: AWS_ACCOUNT_ID secret is not set"
+            echo "Required for CDK deployment context"
+            echo "Find your AWS Account ID: AWS Console > Account menu (top right) > Account"
+            exit 1
+          fi
+          echo "✅ All AWS deployment credentials are configured"
+
       - name: Install CDK dependencies
         run: |
           cd aws-infrastructure
@@ -175,13 +279,19 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'frontend/package-lock.json'
 
-      - name: Build frontend
+      - name: Validate AWS credentials for frontend deployment
         run: |
-          cd frontend
-          npm ci
-          # Update the API URL to point to the production backend
-          echo "VITE_API_URL=https://$(aws cloudformation describe-stacks --stack-name Postolio-prod --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' --output text)" > .env.production
-          npm run build
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "❌ Error: AWS_ACCESS_KEY_ID secret is not set"
+            echo "Required for frontend S3/CloudFront deployment"
+            exit 1
+          fi
+          if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "❌ Error: AWS_SECRET_ACCESS_KEY secret is not set"  
+            echo "Required for frontend S3/CloudFront deployment"
+            exit 1
+          fi
+          echo "✅ AWS credentials configured for frontend deployment"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -189,6 +299,14 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          # Update the API URL to point to the production backend
+          echo "VITE_API_URL=https://$(aws cloudformation describe-stacks --stack-name Postolio-prod --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' --output text)" > .env.production
+          npm run build
 
       - name: Deploy frontend to S3
         run: |

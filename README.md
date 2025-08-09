@@ -461,6 +461,12 @@ For automated deployments, configure these GitHub Secrets in your repository set
 - `AWS_SECRET_ACCESS_KEY` - IAM user secret key
 - `AWS_ACCOUNT_ID` - Your 12-digit AWS account ID
 
+**Important**: Before pushing to GitHub, validate your local AWS setup:
+```bash
+# Test AWS configuration and get GitHub secrets values
+./scripts/validate-aws-setup.sh
+```
+
 See the [AWS Deployment Strategy](docs/AWS_DEPLOYMENT_STRATEGY.md#github-actions-cicd-setup) for detailed IAM user setup instructions.
 
 #### AWS Architecture
