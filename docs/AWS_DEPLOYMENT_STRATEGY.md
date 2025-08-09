@@ -97,6 +97,78 @@ nslookup postolio.example
 curl -I https://postolio.example
 ```
 
+### External DNS Provider Setup (Non-Route 53)
+
+If your domain is **NOT** hosted on Route 53 (e.g., Cloudflare, Namecheap, GoDaddy, etc.), you can still use custom domains with the following setup:
+
+#### Prerequisites
+1. **Domain ownership**: You must own the domain (e.g., postolio.example)
+2. **DNS provider access**: Ability to create DNS records with your provider
+3. **Email access**: Access to admin@/webmaster@ emails for SSL validation
+
+#### Deployment Steps
+
+1. **Deploy with External DNS Flag**:
+```bash
+# Set your custom domain
+export DOMAIN_NAME="postolio.example"
+
+# Deploy using external DNS script
+./scripts/deploy-external-dns.sh prod
+```
+
+2. **SSL Certificate Validation**:
+   - AWS will send validation emails to:
+     - `admin@postolio.example`
+     - `webmaster@postolio.example`
+   - Click the validation link in the email
+   - Certificate will be provisioned automatically
+
+3. **Create DNS Record**:
+After deployment, create this DNS record with your provider:
+```
+Type: CNAME
+Name: postolio.example
+Value: [CloudFront distribution domain from deployment output]
+TTL: 300 (or your provider's minimum)
+```
+
+4. **Wait for Propagation**:
+   - DNS changes can take 5 minutes to 48 hours
+   - Use `nslookup postolio.example` to verify
+
+#### External DNS Deployment Options
+
+```bash
+# Quick deployment with external DNS
+export DOMAIN_NAME="postolio.example"
+./scripts/deploy-external-dns.sh prod
+
+# Manual deployment with external DNS flag
+export DOMAIN_NAME="postolio.example"
+export USE_EXTERNAL_DNS=true
+./scripts/deploy-aws.sh prod
+```
+
+#### Supported External DNS Providers
+- Cloudflare
+- Namecheap
+- GoDaddy
+- Network Solutions
+- Any DNS provider that supports CNAME records
+
+#### Verification Commands
+```bash
+# Check DNS resolution
+nslookup postolio.example
+
+# Test HTTPS connection
+curl -I https://postolio.example
+
+# Check certificate
+openssl s_client -connect postolio.example:443 -servername postolio.example
+```
+
 ### Default CloudFront Domain Fallback
 
 If custom domain is not configured, the application will use the default CloudFront domain:

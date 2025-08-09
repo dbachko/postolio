@@ -19,13 +19,14 @@ export interface AiAgencyStackProps extends cdk.StackProps {
   environment: string;
   domainName?: string;
   hostedZoneId?: string;
+  useExternalDns?: boolean;
 }
 
 export class AiAgencyStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AiAgencyStackProps) {
     super(scope, id, props);
 
-    const { environment, domainName, hostedZoneId } = props;
+    const { environment, domainName, hostedZoneId, useExternalDns } = props;
 
     // VPC
     const vpc = new ec2.Vpc(this, 'AiAgencyVpc', {
@@ -137,19 +138,31 @@ export class AiAgencyStack extends cdk.Stack {
     let certificate: acm.Certificate | undefined;
     let hostedZone: route53.IHostedZone | undefined;
     
-    if (domainName && hostedZoneId) {
-      // Import existing hosted zone
-      hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
-        hostedZoneId,
-        zoneName: domainName,
-      });
+    if (domainName) {
+      if (hostedZoneId && !useExternalDns) {
+        // Route 53 managed domain - automatic DNS validation
+        hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
+          hostedZoneId,
+          zoneName: domainName.split('.').slice(-2).join('.'), // Get root domain (e.g., postolio.example from postolio.example)
+        });
 
-      // Create SSL certificate
-      certificate = new acm.Certificate(this, 'SslCertificate', {
-        domainName,
-        certificateName: `${environment}-ssl-cert`,
-        validation: acm.CertificateValidation.fromDns(hostedZone),
-      });
+        // Create SSL certificate with DNS validation
+        certificate = new acm.Certificate(this, 'SslCertificate', {
+          domainName,
+          certificateName: `${environment}-ssl-cert`,
+          validation: acm.CertificateValidation.fromDns(hostedZone),
+        });
+      } else if (useExternalDns) {
+        // External DNS provider - use email validation
+        const rootDomain = domainName.split('.').slice(-2).join('.');
+        certificate = new acm.Certificate(this, 'SslCertificate', {
+          domainName,
+          certificateName: `${environment}-ssl-cert`,
+          validation: acm.CertificateValidation.fromEmail({
+            [domainName]: `admin@${rootDomain}`,
+          }),
+        });
+      }
     }
 
     // CloudFront Distribution for frontend
@@ -182,8 +195,8 @@ export class AiAgencyStack extends cdk.Stack {
 
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', distributionProps);
 
-    // Create DNS record for custom domain
-    if (domainName && hostedZone) {
+    // Create DNS record for custom domain (only if using Route 53)
+    if (domainName && hostedZone && !useExternalDns) {
       new route53.ARecord(this, 'DomainARecord', {
         zone: hostedZone,
         recordName: domainName,
@@ -329,6 +342,19 @@ export class AiAgencyStack extends cdk.Stack {
       new cdk.CfnOutput(this, 'SslCertificateArn', {
         value: certificate.certificateArn,
         description: 'SSL certificate ARN',
+      });
+    }
+
+    // Output DNS configuration for external DNS providers
+    if (domainName && useExternalDns) {
+      new cdk.CfnOutput(this, 'CloudFrontDistributionDomain', {
+        value: distribution.distributionDomainName,
+        description: 'CloudFront distribution domain - Create CNAME record for your domain pointing to this',
+      });
+
+      new cdk.CfnOutput(this, 'ExternalDnsInstructions', {
+        value: `Create CNAME record: ${domainName} -> ${distribution.distributionDomainName}`,
+        description: 'DNS record to create with your external DNS provider',
       });
     }
   }

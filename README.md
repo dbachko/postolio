@@ -414,17 +414,40 @@ The application is designed for deployment on AWS using a modern containerized a
    - OpenAI API Key
    - Facebook/Meta App credentials
 
-#### Custom Domain Configuration (postolio.example)
+#### Custom Domain Configuration
 
-The infrastructure supports automatic SSL certificate provisioning and custom domain setup:
+The infrastructure supports custom domains with two DNS setup options:
+
+##### Option 1: Route 53 (AWS DNS) - Automatic Setup
+For domains hosted on Route 53 (like postolio.example):
 
 1. **Create Route 53 hosted zone** for postolio.example (if not exists)
 2. **Point domain nameservers** to Route 53
-3. **Deploy with domain configuration** using the deploy-postol-io.sh script
-4. **SSL certificate** is automatically requested and validated via ACM
-5. **DNS records** are automatically created for the domain
+3. **Deploy with domain configuration**:
+   ```bash
+   export HOSTED_ZONE_ID="YOUR_HOSTED_ZONE_ID"
+   ./scripts/deploy-postol-io.sh
+   ```
+4. **SSL certificate** is automatically requested and validated
+5. **DNS records** are automatically created
 
-**Production URL**: https://postolio.example (after deployment)
+##### Option 2: External DNS Provider - Manual Setup
+For domains hosted elsewhere (Cloudflare, Namecheap, GoDaddy, etc.):
+
+1. **Deploy with external DNS flag**:
+   ```bash
+   export DOMAIN_NAME="postolio.example"
+   ./scripts/deploy-external-dns.sh prod
+   ```
+2. **Validate SSL certificate** via email (admin@/webmaster@postolio.example)
+3. **Create DNS record** with your provider:
+   ```
+   Type: CNAME
+   Name: postolio.example  
+   Value: [CloudFront domain from deployment output]
+   ```
+
+**Production URL**: https://postolio.example (after deployment and DNS propagation)
 
 For the Instagram redirect URI in your Meta App settings, use:
 ```

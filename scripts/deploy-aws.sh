@@ -148,8 +148,16 @@ deploy_infrastructure() {
         DOMAIN_ARGS="--context domainName=$DOMAIN_NAME"
         if [ -n "$HOSTED_ZONE_ID" ]; then
             DOMAIN_ARGS="$DOMAIN_ARGS --context hostedZoneId=$HOSTED_ZONE_ID"
+            echo -e "${YELLOW}Deploying with custom domain: $DOMAIN_NAME (Route 53 managed)${NC}"
+        elif [ "$USE_EXTERNAL_DNS" = "true" ]; then
+            DOMAIN_ARGS="$DOMAIN_ARGS --context useExternalDns=true"
+            echo -e "${YELLOW}Deploying with custom domain: $DOMAIN_NAME (External DNS provider)${NC}"
+        else
+            echo -e "${RED}❌ DOMAIN_NAME specified but neither HOSTED_ZONE_ID nor USE_EXTERNAL_DNS is set${NC}"
+            echo "For Route 53: set HOSTED_ZONE_ID"
+            echo "For external DNS: set USE_EXTERNAL_DNS=true"
+            exit 1
         fi
-        echo -e "${YELLOW}Deploying with custom domain: $DOMAIN_NAME${NC}"
     fi
     
     # Deploy the stack
@@ -241,13 +249,27 @@ show_deployment_info() {
     echo -e "${YELLOW}Next Steps:${NC}"
     echo "1. Update the application secrets in AWS Secrets Manager"
     if [ -n "$DOMAIN_NAME" ]; then
-        echo "2. Verify DNS propagation for $DOMAIN_NAME"
-        echo "3. Verify SSL certificate validation"
+        if [ -n "$HOSTED_ZONE_ID" ]; then
+            echo "2. Verify DNS propagation for $DOMAIN_NAME"
+            echo "3. Verify SSL certificate validation"
+        elif [ "$USE_EXTERNAL_DNS" = "true" ]; then
+            echo "2. Configure DNS record with your DNS provider:"
+            CLOUDFRONT_DOMAIN=$(aws cloudformation describe-stacks \
+                --stack-name AiAgency-$ENVIRONMENT \
+                --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionDomain`].OutputValue' \
+                --output text \
+                --region $AWS_REGION)
+            if [ -n "$CLOUDFRONT_DOMAIN" ] && [ "$CLOUDFRONT_DOMAIN" != "None" ]; then
+                echo "   Create CNAME: $DOMAIN_NAME -> $CLOUDFRONT_DOMAIN"
+            fi
+            echo "3. Verify SSL certificate validation via email"
+            echo "4. Wait for DNS propagation (up to 48 hours)"
+        fi
     else
         echo "2. Configure your custom domain name (optional)"
     fi
-    echo "3. Set up monitoring and alerting"
-    echo "4. Configure backup and disaster recovery"
+    echo "$([ -n "$DOMAIN_NAME" ] && [ -n "$HOSTED_ZONE_ID" ] && echo "4" || [ -n "$DOMAIN_NAME" ] && [ "$USE_EXTERNAL_DNS" = "true" ] && echo "5" || echo "3"). Set up monitoring and alerting"
+    echo "$([ -n "$DOMAIN_NAME" ] && [ -n "$HOSTED_ZONE_ID" ] && echo "5" || [ -n "$DOMAIN_NAME" ] && [ "$USE_EXTERNAL_DNS" = "true" ] && echo "6" || echo "4"). Configure backup and disaster recovery"
 }
 
 # Update secrets
