@@ -469,6 +469,27 @@ For automated deployments, configure these GitHub Secrets in your repository set
 
 See the [AWS Deployment Strategy](docs/AWS_DEPLOYMENT_STRATEGY.md#github-actions-cicd-setup) for detailed IAM user setup instructions.
 
+#### AWS Deployment Troubleshooting
+
+**CDK Bootstrap AccessDenied Errors**:
+If you encounter bootstrap permission errors like:
+```
+AccessDenied: User is not authorized to perform: cloudformation:CreateChangeSet
+```
+
+Solutions (choose one):
+1. **Use the bootstrap helper script**: `./scripts/bootstrap-cdk.sh`
+2. **Request admin help**: Ask AWS admin to run `cdk bootstrap aws://ACCOUNT-ID/us-east-1`
+3. **Use AWS CloudShell**: Bootstrap through the AWS Console CloudShell
+4. **Manual console bootstrap**: Use CloudFormation console with CDK template
+
+See the [CDK Bootstrap Troubleshooting Guide](docs/CDK_BOOTSTRAP_TROUBLESHOOTING.md) for detailed solutions.
+
+**General AWS Issues**:
+- Always run `./scripts/validate-aws-setup.sh` before deployment
+- Ensure proper IAM permissions as documented in AWS_DEPLOYMENT_STRATEGY.md
+- Check that Docker is running before attempting deployment
+
 #### AWS Architecture
 - **ECS Fargate**: Serverless container orchestration
 - **RDS PostgreSQL**: Managed database with automated backups
