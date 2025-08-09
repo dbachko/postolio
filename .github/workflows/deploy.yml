@@ -268,7 +268,10 @@ jobs:
       - name: Deploy infrastructure
         run: |
           cd aws-infrastructure
-          npm run cdk -- deploy Postolio-prod --require-approval never
+          # Note: The -c environment=prod parameter is critical for the stack name
+          # The CDK app creates stacks with name "Postolio-${environment}" where
+          # environment defaults to 'dev' if not specified via context
+          npm run cdk -- deploy Postolio-prod --require-approval never -c environment=prod
         env:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
