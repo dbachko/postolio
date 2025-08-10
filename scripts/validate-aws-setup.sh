@@ -14,6 +14,7 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}🔍 Postolio AWS Setup Validation${NC}"
 echo "================================"
+echo "Validates AWS configuration for secure infrastructure deployment"
 echo
 
 # Check if AWS CLI is installed
@@ -66,60 +67,95 @@ check_aws_credentials() {
     fi
 }
 
-# Check CDK bootstrap permissions specifically
+# Check CDK bootstrap status and permissions
 check_bootstrap_permissions() {
-    echo -e "${YELLOW}🔧 Checking CDK bootstrap permissions...${NC}"
+    echo -e "${YELLOW}🔧 Checking CDK bootstrap status...${NC}"
     
-    local bootstrap_ok=true
-    local missing_permissions=()
+    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    REGION=$(aws configure get region || echo "us-east-1")
     
-    # Test CloudFormation permissions (required for bootstrap)
-    if ! aws cloudformation list-stacks --region us-east-1 &> /dev/null; then
-        missing_permissions+=("cloudformation:ListStacks")
-        bootstrap_ok=false
+    # First check if already bootstrapped
+    if aws cloudformation describe-stacks --stack-name CDKToolkit --region $REGION &> /dev/null; then
+        echo -e "${GREEN}✅ CDK is already bootstrapped for $ACCOUNT_ID in $REGION${NC}"
+        return 0
     fi
     
-    # Test template validation (basic CloudFormation permission)
-    local test_template='{"AWSTemplateFormatVersion":"2010-09-09","Resources":{}}'
-    if ! echo "$test_template" | aws cloudformation validate-template --template-body file:///dev/stdin &> /dev/null; then
-        missing_permissions+=("cloudformation:ValidateTemplate")
-        bootstrap_ok=false
+    echo -e "${YELLOW}⚠️  CDK is not bootstrapped yet${NC}"
+    echo "Testing bootstrap permissions..."
+    
+    local can_bootstrap=true
+    local permission_issues=()
+    
+    # Test CloudFormation permissions (most critical)
+    echo -n "Testing CloudFormation permissions... "
+    if aws cloudformation describe-stacks --region $REGION &> /dev/null || aws cloudformation list-stacks --max-items 1 --region $REGION &> /dev/null; then
+        echo "✓"
+    else
+        echo "✗"
+        permission_issues+=("CloudFormation: Cannot list/describe stacks - likely missing cloudformation:* permissions")
+        can_bootstrap=false
     fi
     
-    # Test S3 permissions (CDK needs to create bootstrap bucket)
-    if ! aws s3api list-buckets &> /dev/null; then
-        missing_permissions+=("s3:ListBuckets")
-        bootstrap_ok=false
+    # Test S3 permissions
+    echo -n "Testing S3 permissions... "
+    if aws s3api list-buckets &> /dev/null; then
+        echo "✓"
+    else
+        echo "✗"
+        permission_issues+=("S3: Cannot list buckets - likely missing s3:* permissions")
+        can_bootstrap=false
     fi
     
-    # Test IAM permissions (CDK needs to create execution roles)  
-    if ! aws iam list-roles --max-items 1 &> /dev/null; then
-        missing_permissions+=("iam:ListRoles")
-        bootstrap_ok=false
+    # Test IAM permissions
+    echo -n "Testing IAM permissions... "
+    if aws iam list-roles --max-items 1 &> /dev/null; then
+        echo "✓"
+    else
+        echo "✗" 
+        permission_issues+=("IAM: Cannot list roles - likely missing iam:* permissions")
+        can_bootstrap=false
     fi
     
-    if [ "$bootstrap_ok" = false ]; then
-        echo -e "${RED}❌ Missing CDK bootstrap permissions${NC}"
-        echo "Missing permissions:"
-        for perm in "${missing_permissions[@]}"; do
-            echo "  - $perm"
+    # Test SSM permissions (CDK stores bootstrap version here)
+    echo -n "Testing SSM permissions... "
+    if aws ssm describe-parameters --max-items 1 --region $REGION &> /dev/null; then
+        echo "✓"
+    else
+        echo "✗"
+        permission_issues+=("SSM: Cannot describe parameters - likely missing ssm:* permissions") 
+        can_bootstrap=false
+    fi
+    
+    echo
+    
+    if [ "$can_bootstrap" = true ]; then
+        echo -e "${GREEN}✅ You appear to have sufficient permissions for CDK bootstrap${NC}"
+        echo -e "${YELLOW}💡 To bootstrap now, run:${NC}"
+        echo "   cdk bootstrap aws://$ACCOUNT_ID/$REGION"
+        echo
+        echo "Or let the deployment script handle it automatically."
+        return 0
+    else
+        echo -e "${RED}❌ Missing permissions for CDK bootstrap${NC}"
+        echo
+        echo "Issues found:"
+        for issue in "${permission_issues[@]}"; do
+            echo "  • $issue"
         done
         echo
-        echo "CDK bootstrap requires these permissions:"
-        echo "  cloudformation:CreateStack, CreateChangeSet, DescribeStacks, UpdateStack"
-        echo "  s3:CreateBucket, PutBucketPolicy, PutBucketVersioning, PutEncryptionConfiguration"
-        echo "  iam:CreateRole, AttachRolePolicy, PassRole"
-        echo "  ssm:PutParameter, GetParameter"
+        echo -e "${YELLOW}💡 Solutions:${NC}"
+        echo "1. 🏢 Ask your AWS administrator to:"
+        echo "   • Grant you the IAM policy from docs/AWS_DEPLOYMENT_STRATEGY.md"
+        echo "   • Or run: cdk bootstrap aws://$ACCOUNT_ID/$REGION"
         echo
-        echo -e "${YELLOW}Solutions:${NC}"
-        echo "1. Ask your AWS admin to grant CDK bootstrap permissions"
-        echo "2. Use AWS CloudShell (may have broader default permissions)"
-        echo "3. Ask admin to run: cdk bootstrap aws://$(aws sts get-caller-identity --query Account --output text)/us-east-1"
+        echo "2. 🌩️  Try AWS CloudShell (may have broader permissions):"
+        echo "   • Open CloudShell in AWS Console"
+        echo "   • Run: npm install -g aws-cdk && cdk bootstrap"
+        echo
+        echo "3. 📧 Use GitHub Actions (if properly configured):"
+        echo "   • The CI/CD pipeline will handle bootstrap automatically"
         echo
         return 1
-    else
-        echo -e "${GREEN}✅ CDK bootstrap permissions look good${NC}"
-        return 0
     fi
 }
 
@@ -127,40 +163,76 @@ check_bootstrap_permissions() {
 check_permissions() {
     echo -e "${YELLOW}🔐 Checking AWS deployment permissions...${NC}"
     
-    # Test basic permissions
+    REGION=$(aws configure get region || echo "us-east-1")
     local permissions_ok=true
+    local permission_issues=()
     
     # Test CloudFormation permissions
-    if ! aws cloudformation list-stacks --region us-east-1 &> /dev/null; then
-        echo -e "${RED}❌ No CloudFormation permissions${NC}"
-        permissions_ok=false
+    echo -n "Testing CloudFormation permissions... "
+    if aws cloudformation list-stacks --region $REGION &> /dev/null; then
+        echo "✓"
     else
-        echo -e "${GREEN}✅ CloudFormation permissions${NC}"
+        echo "✗"
+        permission_issues+=("CloudFormation: Missing cloudformation:* permissions")
+        permissions_ok=false
     fi
     
-    # Test ECR permissions
-    if ! aws ecr describe-repositories --region us-east-1 &> /dev/null; then
-        echo -e "${RED}❌ No ECR permissions${NC}"
-        permissions_ok=false
+    # Test ECR permissions  
+    echo -n "Testing ECR permissions... "
+    if aws ecr describe-repositories --region $REGION &> /dev/null; then
+        echo "✓"
     else
-        echo -e "${GREEN}✅ ECR permissions${NC}"
+        echo "✗"
+        permission_issues+=("ECR: Missing ecr:* permissions")
+        permissions_ok=false
     fi
     
     # Test ECS permissions
-    if ! aws ecs list-clusters --region us-east-1 &> /dev/null; then
-        echo -e "${RED}❌ No ECS permissions${NC}"
-        permissions_ok=false
+    echo -n "Testing ECS permissions... "
+    if aws ecs list-clusters --region $REGION &> /dev/null; then
+        echo "✓"
     else
-        echo -e "${GREEN}✅ ECS permissions${NC}"
+        echo "✗"
+        permission_issues+=("ECS: Missing ecs:* permissions")
+        permissions_ok=false
     fi
     
+    # Test VPC/EC2 permissions (for secure infrastructure)
+    echo -n "Testing VPC/EC2 permissions... "
+    if aws ec2 describe-vpcs --max-items 1 --region $REGION &> /dev/null; then
+        echo "✓"
+    else
+        echo "✗"
+        permission_issues+=("EC2/VPC: Missing ec2:* permissions for secure networking")
+        permissions_ok=false
+    fi
+    
+    # Test RDS permissions
+    echo -n "Testing RDS permissions... "
+    if aws rds describe-db-instances --max-items 1 --region $REGION &> /dev/null; then
+        echo "✓"
+    else
+        echo "✗"
+        permission_issues+=("RDS: Missing rds:* permissions")
+        permissions_ok=false
+    fi
+    
+    echo
+    
     if [ "$permissions_ok" = false ]; then
+        echo -e "${RED}❌ Missing required AWS deployment permissions${NC}"
         echo
-        echo -e "${RED}❌ Missing required AWS permissions${NC}"
-        echo "Your IAM user needs the policy defined in docs/AWS_DEPLOYMENT_STRATEGY.md"
+        echo "Permission issues found:"
+        for issue in "${permission_issues[@]}"; do
+            echo "  • $issue"
+        done
+        echo
+        echo -e "${YELLOW}💡 Solution:${NC}"
+        echo "Your IAM user needs the complete policy from docs/AWS_DEPLOYMENT_STRATEGY.md"
+        echo "This includes permissions for: CloudFormation, ECS, ECR, RDS, VPC, S3, CloudFront, etc."
         return 1
     else
-        echo -e "${GREEN}✅ Required AWS deployment permissions are available${NC}"
+        echo -e "${GREEN}✅ AWS deployment permissions look good${NC}"
         return 0
     fi
 }
@@ -183,47 +255,22 @@ check_docker() {
     return 0
 }
 
-# Check CDK installation and bootstrap
+# Check CDK installation
 check_cdk() {
-    local cdk_ok=true
+    echo -e "${YELLOW}📦 Checking CDK installation...${NC}"
     
     # Check if CDK is available globally or locally
     if command -v cdk &> /dev/null; then
         echo -e "${GREEN}✅ CDK is installed globally${NC}"
         cdk --version
+        return 0
     elif [ -f "aws-infrastructure/node_modules/.bin/cdk" ]; then
         echo -e "${GREEN}✅ CDK is available locally${NC}"
         cd aws-infrastructure && npx cdk --version && cd ..
+        return 0
     else
-        echo -e "${YELLOW}⚠️  CDK not found globally, will use local installation${NC}"
-    fi
-    
-    # Check CDK bootstrap
-    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-    REGION=$(aws configure get region || echo "us-east-1")
-    
-    if aws cloudformation describe-stacks --stack-name CDKToolkit --region $REGION &> /dev/null; then
-        echo -e "${GREEN}✅ CDK is bootstrapped for $ACCOUNT_ID in $REGION${NC}"
-    else
-        echo -e "${YELLOW}⚠️  CDK is not bootstrapped${NC}"
-        echo "Bootstrap is required before deployment. Options:"
-        echo
-        echo "1. If you have bootstrap permissions:"
-        echo "   cdk bootstrap aws://$ACCOUNT_ID/$REGION"
-        echo
-        echo "2. If you get 'AccessDenied' errors:"
-        echo "   Ask your AWS administrator to run the bootstrap command"
-        echo "   or grant you the necessary CloudFormation/S3/IAM permissions"
-        echo
-        echo "3. Use AWS CloudShell (if available):"
-        echo "   AWS CloudShell may have broader default permissions"
-        echo
-        cdk_ok=false
-    fi
-    
-    if [ "$cdk_ok" = false ]; then
-        return 1
-    else
+        echo -e "${YELLOW}⚠️  CDK not found globally, will install locally during deployment${NC}"
+        echo "The deployment script will handle CDK installation automatically."
         return 0
     fi
 }
@@ -258,7 +305,8 @@ main() {
     if [ $overall_status -eq 0 ]; then
         echo -e "${GREEN}🎉 All validations passed!${NC}"
         echo
-        echo "✅ Your AWS setup is ready for Postolio deployment"
+        echo "✅ Your AWS setup is ready for secure Postolio deployment"
+        echo "🛡️  Features: VPC Flow Logs, encrypted storage, CDK Nag validation"
         echo
         echo "Next steps:"
         echo "1. Configure the GitHub repository secrets shown above"

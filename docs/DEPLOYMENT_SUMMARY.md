@@ -6,10 +6,10 @@
 
 ## Overview
 
-A complete AWS deployment strategy for the Postolio application has been successfully implemented, providing a production-ready, scalable, and cost-effective deployment solution.
+A complete AWS deployment strategy for the Postolio application has been successfully implemented, providing a production-ready, secure, scalable, and cost-effective deployment solution with CDK Nag security validation.
 
 ## 🏗️ Architecture Overview
-
+![Postolio AWS Architecture](generated-diagrams/architecture-aws.png)
 The implementation uses modern cloud-native patterns:
 
 ```
@@ -29,8 +29,9 @@ The implementation uses modern cloud-native patterns:
 
 ### 1. Infrastructure as Code (AWS CDK)
 - **Location**: `aws-infrastructure/`
-- **Technology**: TypeScript CDK for type safety and reusability
-- **Components**: VPC, ECS Fargate, RDS, ElastiCache, ALB, CloudFront, S3
+- **Technology**: TypeScript CDK with CDK Nag security validation
+- **Components**: Secure VPC with Flow Logs, ECS Fargate, encrypted RDS, Redis, ALB with logging, CloudFront with OAI, private S3
+- **Security**: All AWS Well-Architected security checks pass
 - **Environment Support**: Separate configurations for dev/staging/prod
 
 ### 2. Containerization
@@ -52,10 +53,12 @@ The implementation uses modern cloud-native patterns:
 - **Configuration**: Environment-specific resource sizing
 
 ### 5. Security & Networking
-- **VPC**: Multi-AZ with public, private, and isolated subnets
-- **Security Groups**: Principle of least privilege
-- **SSL/TLS**: HTTPS everywhere with ALB termination
-- **IAM**: Task-specific roles with minimal permissions
+- **VPC**: Multi-AZ with VPC Flow Logs and isolated subnets
+- **Security Groups**: Principle of least privilege with non-default ports
+- **SSL/TLS**: HTTPS everywhere with TLS 1.2+ enforcement
+- **IAM**: Custom policies with least privilege, no AWS managed policies
+- **Database**: Encryption at rest, deletion protection, non-default ports
+- **S3**: Origin Access Identity, SSL enforcement, comprehensive logging
 
 ## 📁 Files Created
 

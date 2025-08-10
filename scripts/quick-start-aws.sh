@@ -2,8 +2,8 @@
 # Quick start script for local AWS deployment testing
 set -e
 
-echo "🚀 Postolio - Quick AWS Setup"
-echo "================================"
+echo "🚀 Postolio - Quick Secure AWS Setup"
+echo "====================================="
 
 # Colors for output
 RED='\033[0;31m'
@@ -50,7 +50,8 @@ show_required_secrets() {
 
 # Main setup
 main() {
-    echo "This script will help you deploy Postolio to AWS."
+    echo "This script will help you deploy Postolio to AWS with enhanced security."
+    echo "Features: VPC Flow Logs, database encryption, CDK Nag validation, non-default ports."
     echo "Make sure you have Docker running and AWS CLI configured."
     echo
     

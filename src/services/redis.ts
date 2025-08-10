@@ -10,9 +10,12 @@ class RedisService {
   private connect() {
     try {
       const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
+      console.log(`Attempting Redis connection to: ${redisUrl.replace(/\/\/.*@/, '//***@')}`)
+      
       this.client = new Redis(redisUrl, {
         enableReadyCheck: true,
         lazyConnect: true,
+        maxRetriesPerRequest: 3,
       })
 
       this.client.on('error', (err) => {
@@ -20,7 +23,7 @@ class RedisService {
       })
 
       this.client.on('connect', () => {
-        console.log('Connected to Redis')
+        console.log(`Successfully connected to Redis at ${redisUrl.replace(/\/\/.*@/, '//***@')}`)
       })
     } catch (error) {
       console.warn('Redis connection failed, falling back to in-memory storage:', error)

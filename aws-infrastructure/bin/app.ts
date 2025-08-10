@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib'
+import { AwsSolutionsChecks } from 'cdk-nag'
 import { PostolioStack } from '../lib/stacks/postolio-stack'
 
 const app = new cdk.App()
@@ -13,7 +14,7 @@ const region = app.node.tryGetContext('region') || 'us-east-1'
 const domainName = app.node.tryGetContext('domainName')
 const hostedZoneId = app.node.tryGetContext('hostedZoneId')
 
-new PostolioStack(app, `Postolio-${environment}`, {
+const stack = new PostolioStack(app, `Postolio-${environment}`, {
   env: {
     account: account,
     region: region,
@@ -22,3 +23,8 @@ new PostolioStack(app, `Postolio-${environment}`, {
   domainName,
   hostedZoneId,
 })
+
+// Apply CDK Nag security checks only for production
+if (environment === 'prod') {
+  cdk.Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }))
+}

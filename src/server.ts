@@ -55,39 +55,53 @@ export function buildFastify(): FastifyInstance {
   })
 
   // Register plugins
+  // CORS configuration for same-origin setup
+  const corsOrigins = [
+    // Local development origins
+    'http://ai.localhost:5173',
+    'https://ai.localhost:5173',
+    'https://ai.localhost',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    // Production same-domain origin (postolio.example)
+    'https://postolio.example',
+  ]
+
+  // Add CloudFront domain for backward compatibility
+  if (process.env.CORS_ORIGIN) {
+    corsOrigins.push(`https://${process.env.CORS_ORIGIN}`)
+  }
+
   app.register(cors, {
-    origin: [
-      'http://ai.localhost:5173',
-      'https://ai.localhost:5173',
-      'https://ai.localhost',
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-    ],
+    origin: corsOrigins,
     credentials: true,
   })
   app.register(helmet)
   app.register(monitoringPlugin)
   app.register(authPlugin)
 
-  // Register routes
-  app.register(monitoringRoutes, { prefix: '/monitoring' })
-  app.register(authRoutes, { prefix: '/auth' })
-  app.register(instagramOAuthRoutes, { prefix: '/auth/instagram' })
-  app.register(brandsRoutes, { prefix: '/brands' })
-  app.register(contentRoutes, { prefix: '/content' })
-  app.register(instagramRoutes, { prefix: '/instagram' })
-  app.register(analyticsRoutes, { prefix: '/analytics' })
-  app.register(instagramAnalyticsRoutes, { prefix: '/instagram-analytics' })
-  app.register(engagementRoutes, { prefix: '/engagement' })
-  app.register(growthRoutes, { prefix: '/growth' })
-  app.register(aiRoutes, { prefix: '/ai' })
-  app.register(autopilotRoutes, { prefix: '/autopilot' })
-  app.register(campaignRoutes, { prefix: '/campaign' })
-  app.register(campaignTemplatesRoutes, { prefix: '/templates' })
-  app.register(campaignAnalyticsRoutes, { prefix: '/api' })
+  // Register routes with /api prefix for unified domain architecture
+  app.register(monitoringRoutes, { prefix: '/api/monitoring' })
+  app.register(authRoutes, { prefix: '/api/auth' })
+  app.register(instagramOAuthRoutes, { prefix: '/api/auth/instagram' })
+  app.register(brandsRoutes, { prefix: '/api/brands' })
+  app.register(contentRoutes, { prefix: '/api/content' })
+  app.register(instagramRoutes, { prefix: '/api/instagram' })
+  app.register(analyticsRoutes, { prefix: '/api/analytics' })
+  app.register(instagramAnalyticsRoutes, { prefix: '/api/instagram-analytics' })
+  app.register(engagementRoutes, { prefix: '/api/engagement' })
+  app.register(growthRoutes, { prefix: '/api/growth' })
+  app.register(aiRoutes, { prefix: '/api/ai' })
+  app.register(autopilotRoutes, { prefix: '/api/autopilot' })
+  app.register(campaignRoutes, { prefix: '/api/campaign' })
+  app.register(campaignTemplatesRoutes, { prefix: '/api/templates' })
+  app.register(campaignAnalyticsRoutes, { prefix: '/api' }) // This was already /api
 
-  // Health check endpoint
+  // Health check endpoint (both with and without /api for compatibility)
   app.get('/health', async () => {
+    return { status: 'ok', timestamp: new Date().toISOString() }
+  })
+  app.get('/api/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() }
   })
 

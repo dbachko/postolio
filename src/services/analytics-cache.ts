@@ -29,16 +29,11 @@ export class AnalyticsCache {
   private redis: Redis
 
   constructor() {
-    const redisOptions: any = {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
+    this.redis = new Redis(redisUrl, {
       enableReadyCheck: false,
       maxRetriesPerRequest: null,
-    }
-    if (process.env.REDIS_PASSWORD) {
-      redisOptions.password = process.env.REDIS_PASSWORD
-    }
-    this.redis = new Redis(redisOptions)
+    })
   }
 
   // Account insights (TTL: 1 hour)

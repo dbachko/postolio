@@ -372,6 +372,9 @@ npm run test:coverage
 
 ### AWS Deployment (Recommended)
 
+#### Architecture Diagram
+![Postolio AWS Architecture](docs/generated-diagrams/architecture-aws.png)
+
 The application is designed for deployment on AWS using a modern containerized architecture. See the complete [AWS Deployment Strategy](docs/AWS_DEPLOYMENT_STRATEGY.md) for detailed information.
 
 #### Quick AWS Deployment

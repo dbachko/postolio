@@ -50,7 +50,7 @@ This document provides instructions for setting up OIDC (OpenID Connect) authent
 }
 ```
 
-7. Attach the same permissions policy as defined in [AWS_DEPLOYMENT_STRATEGY.md](./AWS_DEPLOYMENT_STRATEGY.md)
+7. Attach the enhanced secure permissions policy as defined in [AWS_DEPLOYMENT_STRATEGY.md](./AWS_DEPLOYMENT_STRATEGY.md#github-actions-cicd-setup)
 8. Name the role: `postolio-github-actions-oidc`
 9. Copy the role ARN
 
