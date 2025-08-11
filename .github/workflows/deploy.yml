@@ -284,13 +284,19 @@ jobs:
           BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-dev --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' --output text)
           aws s3 sync frontend/dist s3://$BUCKET_NAME --delete
           
-          # Invalidate CloudFront cache
-          DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name Postolio-dev --query 'Stacks[0].Outputs[?OutputKey==`FrontendDistributionId`].OutputValue' --output text)
-          if [ -n "$DISTRIBUTION_ID" ] && [ "$DISTRIBUTION_ID" != "None" ]; then
-            echo "Invalidating CloudFront distribution: $DISTRIBUTION_ID"
-            aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+          # Invalidate CloudFront cache - get distribution domain name then find ID
+          DISTRIBUTION_DOMAIN=$(aws cloudformation describe-stacks --stack-name Postolio-dev --query 'Stacks[0].Outputs[?OutputKey==`FrontendDistributionDomainName`].OutputValue' --output text)
+          if [ -n "$DISTRIBUTION_DOMAIN" ] && [ "$DISTRIBUTION_DOMAIN" != "None" ]; then
+            echo "Found CloudFront distribution domain: $DISTRIBUTION_DOMAIN"
+            DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?DomainName=='$DISTRIBUTION_DOMAIN'].Id" --output text)
+            if [ -n "$DISTRIBUTION_ID" ]; then
+              echo "Invalidating CloudFront distribution: $DISTRIBUTION_ID"
+              aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+            else
+              echo "Warning: Could not find distribution ID for domain $DISTRIBUTION_DOMAIN"
+            fi
           else
-            echo "Warning: CloudFront distribution ID not found in stack outputs, skipping cache invalidation"
+            echo "Warning: CloudFront distribution domain not found in stack outputs, skipping cache invalidation"
           fi
 
   notify:
