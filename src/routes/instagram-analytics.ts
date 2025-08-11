@@ -30,7 +30,7 @@ function authenticateRequest(request: any, reply: any) {
 
 const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
   /**
-   * GET /api/instagram-analytics/overview/:brandId
+   * GET /instagram-analytics/overview/:brandId (accessed via CloudFront /api/instagram-analytics/overview/:brandId)
    * Get account-level analytics overview
    */
   fastify.get<{
@@ -92,7 +92,7 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
   })
 
   /**
-   * GET /api/instagram-analytics/posts/:brandId
+   * GET /instagram-analytics/posts/:brandId (accessed via CloudFront /api/instagram-analytics/posts/:brandId)
    * Get recent posts performance data
    */
   fastify.get<{
@@ -154,7 +154,7 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
   })
 
   /**
-   * POST /api/instagram-analytics/refresh/:brandId
+   * POST /instagram-analytics/refresh/:brandId (accessed via CloudFront /api/instagram-analytics/refresh/:brandId)
    * Force refresh analytics data (bypass cache)
    */
   fastify.post<{
@@ -216,7 +216,7 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
   })
 
   /**
-   * GET /api/instagram-analytics/status/:brandId
+   * GET /instagram-analytics/status/:brandId (accessed via CloudFront /api/instagram-analytics/status/:brandId)
    * Get cache status and rate limit information
    */
   fastify.get<{

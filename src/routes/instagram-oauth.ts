@@ -22,7 +22,7 @@ interface CallbackQuery {
 // Environment variables for Meta App
 const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || 'test_app_id'
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || 'test_app_secret'
-const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI || 'http://localhost:3000/auth/instagram/callback'
+const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI || 'http://localhost:3000/api/auth/instagram/callback'
 
 // Helper function to verify authentication
 function authenticateRequest(request: any, reply: any) {
