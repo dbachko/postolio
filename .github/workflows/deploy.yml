@@ -282,7 +282,8 @@ jobs:
           # Note: The -c environment=dev parameter is used for development deployments
           # The CDK app creates stacks with name "Postolio-${environment}" where
           # environment defaults to 'dev' if not specified via context
-          npm run cdk -- deploy Postolio-dev --require-approval never -c environment=dev
+          # CRITICAL: useEcrImage=true ensures the deployed task uses the ECR image instead of base Node.js image
+          npm run cdk -- deploy Postolio-dev --require-approval never -c environment=dev -c useEcrImage=true
         env:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
@@ -328,8 +329,10 @@ jobs:
         run: |
           cd frontend
           npm ci
-          # Update the API URL to point to the development backend
-          echo "VITE_API_URL=https://$(aws cloudformation describe-stacks --stack-name Postolio-dev --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' --output text)" > .env.production
+          # Use unified domain architecture - frontend and backend share the same domain
+          # Frontend: postolio.example/* -> CloudFront -> S3  
+          # Backend API: postolio.example/api/* -> CloudFront -> ALB -> ECS
+          echo "VITE_API_URL=https://postolio.example/api" > .env.production
           npm run build
 
       - name: Deploy frontend to S3
