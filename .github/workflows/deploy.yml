@@ -9,7 +9,7 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: postolio
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
 
 jobs:
   validate:

@@ -1,5 +1,5 @@
 # Multi-stage build for production
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install necessary packages for building native dependencies
 RUN apk add --no-cache python3 make g++ openssl
@@ -34,7 +34,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # Production image, copy all the files and run next
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 # Install runtime dependencies

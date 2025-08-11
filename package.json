@@ -4,6 +4,10 @@
   "description": "AI-powered Instagram content generation and management platform",
   "type": "module",
   "main": "dist/server.js",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
