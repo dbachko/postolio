@@ -40,7 +40,7 @@ test('brand analysis analyzes Instagram posts and creates profile', async (t) =>
 
   const response = await app.inject({
     method: 'POST',
-    url: '/brands/analyze',
+    url: '/api/brands/analyze',
     headers: {
       authorization: `Bearer ${token}`,
     },

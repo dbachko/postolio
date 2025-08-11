@@ -48,7 +48,7 @@ test('content approval workflow works correctly', async (t) => {
   // Test content approval
   const approvalResponse = await app.inject({
     method: 'POST',
-    url: '/content/approve',
+    url: '/api/content/approve',
     headers: {
       authorization: `Bearer ${token}`,
     },
@@ -66,7 +66,7 @@ test('content approval workflow works correctly', async (t) => {
   // Test getting pending content (should be empty now)
   const pendingResponse = await app.inject({
     method: 'GET',
-    url: `/content/pending/${brand.id}`,
+    url: `/api/content/pending/${brand.id}`,
     headers: {
       authorization: `Bearer ${token}`,
     },

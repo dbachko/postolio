@@ -52,7 +52,7 @@ test('content generation creates multiple content options', async (t) => {
 
   const response = await app.inject({
     method: 'POST',
-    url: '/content/generate',
+    url: '/api/content/generate',
     headers: {
       authorization: `Bearer ${token}`,
     },

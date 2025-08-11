@@ -23,7 +23,7 @@ describe('Instagram Integration', () => {
     // Create test user
     const registerResponse = await app.inject({
       method: 'POST',
-      url: '/auth/register',
+      url: '/api/auth/register',
       payload: {
         email: 'instagram@test.com',
         password: 'password123',
@@ -38,7 +38,7 @@ describe('Instagram Integration', () => {
     // Create test brand
     const brandResponse = await app.inject({
       method: 'POST',
-      url: '/brands/create',
+      url: '/api/brands/create',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -56,7 +56,7 @@ describe('Instagram Integration', () => {
   test('should get Instagram status (mock)', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: `/instagram/status/${brandId}`,
+      url: `/api/instagram/status/${brandId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -75,7 +75,7 @@ describe('Instagram Integration', () => {
   test('should get Instagram posts (mock)', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: `/instagram/posts/${brandId}?limit=10`,
+      url: `/api/instagram/posts/${brandId}?limit=10`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -107,7 +107,7 @@ describe('Instagram Integration', () => {
   test('should get Instagram OAuth authorization URL', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: `/auth/instagram/authorize?brandId=${brandId}`,
+      url: `/api/auth/instagram/authorize?brandId=${brandId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -125,7 +125,7 @@ describe('Instagram Integration', () => {
   test('should handle OAuth callback errors', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: '/auth/instagram/callback?error=access_denied&error_description=User+denied+request',
+      url: '/api/auth/instagram/callback?error=access_denied&error_description=User+denied+request',
     })
 
     assert.strictEqual(response.statusCode, 400)
@@ -137,7 +137,7 @@ describe('Instagram Integration', () => {
   test('should check Instagram connection status again', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: `/instagram/status/${brandId}`,
+      url: `/api/instagram/status/${brandId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -155,7 +155,7 @@ describe('Instagram Integration', () => {
   test('should create content for publishing', async () => {
     const response = await app.inject({
       method: 'POST',
-      url: '/content/generate',
+      url: '/api/content/generate',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -185,7 +185,7 @@ describe('Instagram Integration', () => {
     // Get pending content
     const pendingResponse = await app.inject({
       method: 'GET',
-      url: `/content/pending/${brandId}`,
+      url: `/api/content/pending/${brandId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -210,7 +210,7 @@ describe('Instagram Integration', () => {
       // Approve the test content
       const approveResponse = await app.inject({
         method: 'POST',
-        url: '/content/approve',
+        url: '/api/content/approve',
         headers: {
           authorization: `Bearer ${userToken}`,
         },
@@ -230,7 +230,7 @@ describe('Instagram Integration', () => {
     // Approve content
     const approveResponse = await app.inject({
       method: 'POST',
-      url: '/content/approve',
+      url: '/api/content/approve',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -248,7 +248,7 @@ describe('Instagram Integration', () => {
     // Get approved content
     const historyResponse = await app.inject({
       method: 'GET',
-      url: `/content/history/${brandId}`,
+      url: `/api/content/history/${brandId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -260,7 +260,7 @@ describe('Instagram Integration', () => {
     if (approvedContent) {
       const response = await app.inject({
         method: 'POST',
-        url: `/instagram/publish/${approvedContent.id}`,
+        url: `/api/instagram/publish/${approvedContent.id}`,
         headers: {
           authorization: `Bearer ${userToken}`,
         },
@@ -290,7 +290,7 @@ describe('Instagram Integration', () => {
     // Get posted content
     const historyResponse = await app.inject({
       method: 'GET',
-      url: `/content/history/${brandId}`,
+      url: `/api/content/history/${brandId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -302,7 +302,7 @@ describe('Instagram Integration', () => {
     if (postedContent && postedContent.instagramPostId) {
       const response = await app.inject({
         method: 'GET',
-        url: `/instagram/insights/${brandId}/${postedContent.instagramPostId}`,
+        url: `/api/instagram/insights/${brandId}/${postedContent.instagramPostId}`,
         headers: {
           authorization: `Bearer ${userToken}`,
         },
@@ -321,7 +321,7 @@ describe('Instagram Integration', () => {
   test('should disconnect Instagram from brand', async () => {
     const response = await app.inject({
       method: 'POST',
-      url: '/instagram/disconnect',
+      url: '/api/instagram/disconnect',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -338,7 +338,7 @@ describe('Instagram Integration', () => {
     // Verify disconnection
     const statusResponse = await app.inject({
       method: 'GET',
-      url: `/instagram/status/${brandId}`,
+      url: `/api/instagram/status/${brandId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -350,12 +350,12 @@ describe('Instagram Integration', () => {
 
   test('should require authentication for all endpoints', async () => {
     const endpoints = [
-      { method: 'GET', url: `/instagram/status/${brandId}` },
-      { method: 'GET', url: `/instagram/posts/${brandId}` },
-      { method: 'POST', url: `/instagram/publish/test-content-id` },
-      { method: 'GET', url: `/instagram/insights/${brandId}/test` },
-      { method: 'POST', url: '/instagram/disconnect' },
-      { method: 'GET', url: `/auth/instagram/authorize?brandId=${brandId}` },
+      { method: 'GET', url: `/api/instagram/status/${brandId}` },
+      { method: 'GET', url: `/api/instagram/posts/${brandId}` },
+      { method: 'POST', url: `/api/instagram/publish/test-content-id` },
+      { method: 'GET', url: `/api/instagram/insights/${brandId}/test` },
+      { method: 'POST', url: '/api/instagram/disconnect' },
+      { method: 'GET', url: `/api/auth/instagram/authorize?brandId=${brandId}` },
     ]
 
     for (const endpoint of endpoints) {
@@ -377,7 +377,7 @@ describe('Instagram Integration', () => {
     // Test OAuth authorize endpoint
     const authorizeResponse = await app.inject({
       method: 'GET',
-      url: '/auth/instagram/authorize',
+      url: '/api/auth/instagram/authorize',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -388,7 +388,7 @@ describe('Instagram Integration', () => {
     // Test publish endpoint with invalid content ID
     const publishResponse = await app.inject({
       method: 'POST',
-      url: '/instagram/publish/invalid-content-id',
+      url: '/api/instagram/publish/invalid-content-id',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -399,7 +399,7 @@ describe('Instagram Integration', () => {
     // Test disconnect endpoint
     const disconnectResponse = await app.inject({
       method: 'POST',
-      url: '/instagram/disconnect',
+      url: '/api/instagram/disconnect',
       headers: {
         authorization: `Bearer ${userToken}`,
       },

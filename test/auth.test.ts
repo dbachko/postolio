@@ -22,7 +22,7 @@ test('user registration creates new user', async (t) => {
 
   const response = await app.inject({
     method: 'POST',
-    url: '/auth/register',
+    url: '/api/auth/register',
     payload: userData,
   })
 
