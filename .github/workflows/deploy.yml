@@ -285,8 +285,13 @@ jobs:
           aws s3 sync frontend/dist s3://$BUCKET_NAME --delete
           
           # Invalidate CloudFront cache
-          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='Postolio-dev/FrontendDistribution'].Id" --output text)
-          aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name Postolio-dev --query 'Stacks[0].Outputs[?OutputKey==`FrontendDistributionId`].OutputValue' --output text)
+          if [ -n "$DISTRIBUTION_ID" ] && [ "$DISTRIBUTION_ID" != "None" ]; then
+            echo "Invalidating CloudFront distribution: $DISTRIBUTION_ID"
+            aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+          else
+            echo "Warning: CloudFront distribution ID not found in stack outputs, skipping cache invalidation"
+          fi
 
   notify:
     runs-on: ubuntu-latest
