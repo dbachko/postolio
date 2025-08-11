@@ -28,7 +28,7 @@ describe('Analytics Service', () => {
     // Create test user
     const registerResponse = await app.inject({
       method: 'POST',
-      url: '/auth/register',
+      url: '/api/auth/register',
       payload: {
         email: testUserEmail,
         password: 'password123',
@@ -43,7 +43,7 @@ describe('Analytics Service', () => {
     // Create test brand with Instagram connection
     const brandResponse = await app.inject({
       method: 'POST',
-      url: '/brands/create',
+      url: '/api/brands/create',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -94,7 +94,7 @@ describe('Analytics Service', () => {
   test('should get analytics report for brand', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: `/analytics/report/${brandId}?days=30`,
+      url: `/api/analytics/report/${brandId}?days=30`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -115,7 +115,7 @@ describe('Analytics Service', () => {
   test('should get optimal posting times for brand', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: `/analytics/optimal-times/${brandId}`,
+      url: `/api/analytics/optimal-times/${brandId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -140,7 +140,7 @@ describe('Analytics Service', () => {
   test('should get scheduling recommendation', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: `/analytics/schedule-recommendation/${brandId}?timezone=UTC`,
+      url: `/api/analytics/schedule-recommendation/${brandId}?timezone=UTC`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -173,7 +173,7 @@ describe('Analytics Service', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/analytics/schedule',
+      url: '/api/analytics/schedule',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -205,7 +205,7 @@ describe('Analytics Service', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/analytics/schedule',
+      url: '/api/analytics/schedule',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -222,7 +222,7 @@ describe('Analytics Service', () => {
   test('should get scheduled posts for brand', async () => {
     const response = await app.inject({
       method: 'GET',
-      url: `/analytics/scheduled/${brandId}`,
+      url: `/api/analytics/scheduled/${brandId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -247,7 +247,7 @@ describe('Analytics Service', () => {
     if (scheduledContent) {
       const response = await app.inject({
         method: 'DELETE',
-        url: `/analytics/scheduled/${scheduledContent.id}`,
+        url: `/api/analytics/scheduled/${scheduledContent.id}`,
         headers: {
           authorization: `Bearer ${userToken}`,
         },
@@ -277,7 +277,7 @@ describe('Analytics Service', () => {
 
     const response = await app.inject({
       method: 'PUT',
-      url: '/analytics/reschedule',
+      url: '/api/analytics/reschedule',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -313,7 +313,7 @@ describe('Analytics Service', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: '/analytics/bulk-schedule',
+      url: '/api/analytics/bulk-schedule',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -347,7 +347,7 @@ describe('Analytics Service', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: `/analytics/stats/${brandId}`,
+      url: `/api/analytics/stats/${brandId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -379,7 +379,7 @@ describe('Analytics Service', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/analytics/collect-metrics/${contentId}`,
+      url: `/api/analytics/collect-metrics/${contentId}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -423,7 +423,7 @@ describe('Analytics Service', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/analytics/collect-metrics/${testContent.id}`,
+      url: `/api/analytics/collect-metrics/${testContent.id}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -436,16 +436,16 @@ describe('Analytics Service', () => {
 
   test('should require authentication for all analytics endpoints', async () => {
     const endpoints = [
-      { method: 'GET', url: `/analytics/report/${brandId}` },
-      { method: 'GET', url: `/analytics/optimal-times/${brandId}` },
-      { method: 'GET', url: `/analytics/schedule-recommendation/${brandId}` },
-      { method: 'POST', url: '/analytics/schedule' },
-      { method: 'GET', url: `/analytics/scheduled/${brandId}` },
-      { method: 'DELETE', url: `/analytics/scheduled/${contentId}` },
-      { method: 'PUT', url: '/analytics/reschedule' },
-      { method: 'POST', url: '/analytics/bulk-schedule' },
-      { method: 'GET', url: `/analytics/stats/${brandId}` },
-      { method: 'POST', url: `/analytics/collect-metrics/${contentId}` },
+      { method: 'GET', url: `/api/analytics/report/${brandId}` },
+      { method: 'GET', url: `/api/analytics/optimal-times/${brandId}` },
+      { method: 'GET', url: `/api/analytics/schedule-recommendation/${brandId}` },
+      { method: 'POST', url: '/api/analytics/schedule' },
+      { method: 'GET', url: `/api/analytics/scheduled/${brandId}` },
+      { method: 'DELETE', url: `/api/analytics/scheduled/${contentId}` },
+      { method: 'PUT', url: '/api/analytics/reschedule' },
+      { method: 'POST', url: '/api/analytics/bulk-schedule' },
+      { method: 'GET', url: `/api/analytics/stats/${brandId}` },
+      { method: 'POST', url: `/api/analytics/collect-metrics/${contentId}` },
     ]
 
     for (const endpoint of endpoints) {
@@ -493,7 +493,7 @@ describe('Analytics Service', () => {
     // Try to access other user's brand with current user token
     const response = await app.inject({
       method: 'GET',
-      url: `/analytics/report/${otherBrandData.brand.id}`,
+      url: `/api/analytics/report/${otherBrandData.brand.id}`,
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -506,7 +506,7 @@ describe('Analytics Service', () => {
     // Test missing contentId
     const response1 = await app.inject({
       method: 'POST',
-      url: '/analytics/schedule',
+      url: '/api/analytics/schedule',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -518,7 +518,7 @@ describe('Analytics Service', () => {
     // Test missing required fields for reschedule
     const response2 = await app.inject({
       method: 'PUT',
-      url: '/analytics/reschedule',
+      url: '/api/analytics/reschedule',
       headers: {
         authorization: `Bearer ${userToken}`,
       },
@@ -533,7 +533,7 @@ describe('Analytics Service', () => {
     // Test missing contentIds for bulk schedule
     const response3 = await app.inject({
       method: 'POST',
-      url: '/analytics/bulk-schedule',
+      url: '/api/analytics/bulk-schedule',
       headers: {
         authorization: `Bearer ${userToken}`,
       },

@@ -67,7 +67,7 @@ test('Monitoring system integration', async (t) => {
     
     const response = await app.inject({
       method: 'GET',
-      url: '/monitoring/metrics'
+      url: '/api/monitoring/metrics'
     })
     
     assert.strictEqual(response.statusCode, 200)
