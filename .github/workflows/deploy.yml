@@ -276,7 +276,8 @@ jobs:
           # Use unified domain architecture - frontend and backend share the same domain
           # Frontend: postolio.example/* -> CloudFront -> S3  
           # Backend API: postolio.example/api/* -> CloudFront -> ALB -> ECS
-          echo "VITE_API_BASE_URL=https://postolio.example/api" > .env.production
+          # Note: VITE_API_BASE_URL should NOT include /api since frontend routes already include /api/
+          echo "VITE_API_BASE_URL=https://postolio.example" > .env.production
           npm run build
 
       - name: Deploy frontend to S3
