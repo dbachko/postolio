@@ -36,7 +36,7 @@ test('brands list returns user brands', async (t) => {
 
   const response = await app.inject({
     method: 'GET',
-    url: '/brands/list',
+    url: '/api/brands/list',
     headers: {
       authorization: `Bearer ${token}`,
     },

@@ -9,7 +9,7 @@ describe('Instagram Analytics Routes', () => {
     app = buildFastify()
     const response = await app.inject({
       method: 'GET',
-      url: '/instagram-analytics/overview/test-brand-123',
+      url: '/api/instagram-analytics/overview/test-brand-123',
     })
     assert.strictEqual(response.statusCode, 401)
     const body = response.json()
@@ -21,7 +21,7 @@ describe('Instagram Analytics Routes', () => {
     app = buildFastify()
     const response = await app.inject({
       method: 'GET',
-      url: '/instagram-analytics/overview/nonexistent-brand',
+      url: '/api/instagram-analytics/overview/nonexistent-brand',
       headers: {
         authorization: 'Bearer invalid-token',
       },
@@ -33,9 +33,9 @@ describe('Instagram Analytics Routes', () => {
   test('should handle missing brand', async () => {
     app = buildFastify()
     const endpoints = [
-      '/instagram-analytics/overview/nonexistent',
-      '/instagram-analytics/posts/nonexistent',
-      '/instagram-analytics/status/nonexistent',
+      '/api/instagram-analytics/overview/nonexistent',
+      '/api/instagram-analytics/posts/nonexistent',
+      '/api/instagram-analytics/status/nonexistent',
     ]
     for (const endpoint of endpoints) {
       const response = await app.inject({
@@ -54,7 +54,7 @@ describe('Instagram Analytics Routes', () => {
     app = buildFastify()
     const response = await app.inject({
       method: 'POST',
-      url: '/instagram-analytics/refresh/test-brand',
+      url: '/api/instagram-analytics/refresh/test-brand',
       headers: {
         authorization: 'Bearer invalid-token',
       },
@@ -67,7 +67,7 @@ describe('Instagram Analytics Routes', () => {
     app = buildFastify()
     const response = await app.inject({
       method: 'GET',
-      url: '/instagram-analytics/overview/test-brand?timeRange=30d',
+      url: '/api/instagram-analytics/overview/test-brand?timeRange=30d',
       headers: {
         authorization: 'Bearer invalid-token',
       },
