@@ -467,7 +467,7 @@ describe('Analytics Service', () => {
     // Create another user and brand
     const otherUser = await app.inject({
       method: 'POST',
-      url: '/auth/register',
+      url: '/api/auth/register',
       payload: {
         email: 'other@test.com',
         password: 'password123',
@@ -478,7 +478,7 @@ describe('Analytics Service', () => {
     const otherUserData = JSON.parse(otherUser.body)
     const otherBrand = await app.inject({
       method: 'POST',
-      url: '/brands/create',
+      url: '/api/brands/create',
       headers: {
         authorization: `Bearer ${otherUserData.token}`,
       },
