@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+
 import { autopilotService } from '../services/autopilot.js'
 
-const prisma = new PrismaClient()
+import { getDatabaseClient } from '../config/database.js'
+
+const prisma = getDatabaseClient()
 
 export default async function autopilotRoutes(fastify: FastifyInstance) {
   // Authentication hook for all autopilot routes

@@ -72,7 +72,7 @@ See the [API Setup Guide](#api-setup-guide) below for detailed instructions.
 
 ```bash
 # Terminal 1: Start PostgreSQL database
-docker-compose up -d
+docker compose up -d
 
 # Terminal 2: Start backend server
 npm run dev
@@ -533,7 +533,7 @@ npm start
 
 ```bash
 # Build and run with Docker Compose
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 ## Project Structure

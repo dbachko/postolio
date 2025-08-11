@@ -1,10 +1,12 @@
 import { FastifyPluginAsync } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+
 import { verifyJWT } from '../services/jwt.js'
 import { instagramService } from '../services/instagram.js'
 import crypto from 'crypto'
 
-const prisma = new PrismaClient()
+import { getDatabaseClient } from '../config/database.js'
+
+const prisma = getDatabaseClient()
 
 // Helper function to verify authentication
 function authenticateRequest(request: any, reply: any) {

@@ -1,10 +1,12 @@
 import { FastifyPluginAsync } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+
 import { verifyJWT } from '../services/jwt.js'
 import { analyticsService } from '../services/analytics.js'
 import { schedulerService } from '../services/scheduler.js'
 
-const prisma = new PrismaClient()
+import { getDatabaseClient } from '../config/database.js'
+
+const prisma = getDatabaseClient()
 
 // Helper function to verify authentication
 function authenticateRequest(request: any, reply: any) {

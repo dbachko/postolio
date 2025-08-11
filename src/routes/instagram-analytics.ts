@@ -1,9 +1,11 @@
 import { FastifyPluginAsync } from 'fastify'
 import { instagramService } from '../services/instagram.js'
-import { PrismaClient } from '@prisma/client'
+
 import { verifyJWT } from '../services/jwt.js'
 
-const prisma = new PrismaClient()
+import { getDatabaseClient } from '../config/database.js'
+
+const prisma = getDatabaseClient()
 
 interface AnalyticsParams {
   brandId: string

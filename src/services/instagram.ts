@@ -82,47 +82,8 @@ interface BrandData {
 
 class InstagramService {
   private rateLimitWindow: Map<string, number> = new Map()
-  private isTestEnvironment: boolean
-
   constructor() {
-    this.isTestEnvironment = process.env.NODE_ENV === 'test'
-    if (this.isTestEnvironment) {
-      console.log('🧪 Using Instagram service mocks for testing')
-    }
-  }
-
-  /**
-   * Mock data for test environment
-   */
-  private getMockAccountInsights(): AccountInsights {
-    return {
-      followers: 2540,
-      impressions: 12500,
-      reach: 8900,
-      profile_views: 450,
-      website_clicks: 23,
-    }
-  }
-
-  private getMockPostsPerformance(): any[] {
-    return [
-      {
-        id: 'mock_post_1',
-        caption: 'Mock Instagram post for testing',
-        impressions: 1200,
-        engagement: 156,
-        media_url: 'https://via.placeholder.com/400x400?text=Mock+Post+1',
-        posted_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: 'mock_post_2',
-        caption: 'Another mock post with hashtags #testing #mock',
-        impressions: 890,
-        engagement: 102,
-        media_url: 'https://via.placeholder.com/400x400?text=Mock+Post+2',
-        posted_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-      },
-    ]
+    // Instagram service initialization
   }
 
   /**
@@ -369,17 +330,6 @@ class InstagramService {
       throw new Error('Instagram not configured for this brand')
     }
 
-    // Return mock data in test environment
-    if (this.isTestEnvironment) {
-      // Simulate some async delay
-      await new Promise((resolve) => setTimeout(resolve, 10))
-
-      return {
-        data: this.getMockAccountInsights(),
-        lastUpdated: new Date().toISOString(),
-        fromCache: false,
-      }
-    }
 
     const today = new Date().toISOString().split('T')[0]
     const cacheKey = `${brand.instagramAccountId || 'unknown'}_${timeRange}`
@@ -449,17 +399,6 @@ class InstagramService {
       throw new Error('Instagram not configured for this brand')
     }
 
-    // Return mock data in test environment
-    if (this.isTestEnvironment) {
-      // Simulate some async delay
-      await new Promise((resolve) => setTimeout(resolve, 10))
-
-      const mockPosts = this.getMockPostsPerformance().slice(0, limit)
-      return {
-        posts: mockPosts,
-        lastUpdated: new Date().toISOString(),
-      }
-    }
 
     // Check cache first
     const cachedPosts = await analyticsCache.getRecentPosts(brand.instagramAccountId!)

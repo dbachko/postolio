@@ -2,24 +2,9 @@ import { Midjourney } from 'midjourney'
 import OpenAI from 'openai'
 import type { StyleProfile } from './ai.js'
 
-// Import mocks for testing
-const isTestEnvironment = process.env.NODE_ENV === 'test'
-let openai: any
-let midjourney: any
-
-if (isTestEnvironment) {
-  // Use mocks in test environment
-  const { mockOpenAI } = await import('../test/mocks/openai.mock.js')
-  const { mockMidjourney } = await import('../test/mocks/midjourney.mock.js')
-  openai = mockOpenAI
-  midjourney = mockMidjourney
-  console.log('🧪 Using OpenAI and Midjourney mocks for testing')
-} else {
-  // Use real APIs in non-test environments
-  openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  })
-}
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
 
 // Midjourney client configuration
 interface MidjourneyConfig {
@@ -71,22 +56,15 @@ export class MidjourneyService {
     }
 
     try {
-      if (isTestEnvironment) {
-        // Use mock Midjourney client in test environment
-        this.client = midjourney
-        console.log('🧪 Using Midjourney mock client')
-      } else {
-        // Use real Midjourney client in non-test environments
-        this.client = new Midjourney({
-          SalaiToken: this.config.salaiToken,
-          ServerId: this.config.serverId,
-          ChannelId: this.config.channelId,
-          Debug: this.config.debug || false,
-          Ws: this.config.ws || true,
-        })
+      this.client = new Midjourney({
+        SalaiToken: this.config.salaiToken,
+        ServerId: this.config.serverId,
+        ChannelId: this.config.channelId,
+        Debug: this.config.debug || false,
+        Ws: this.config.ws || true,
+      })
 
-        await this.client.init()
-      }
+      await this.client.init()
       this.initialized = true
       console.log('Midjourney client initialized successfully')
       return true

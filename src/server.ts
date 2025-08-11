@@ -23,6 +23,7 @@ import campaignTemplatesRoutes from './routes/campaign-templates.js'
 import campaignAnalyticsRoutes from './routes/campaign-analytics.js'
 import { autopilotService } from './services/autopilot.js'
 import { schedulerService } from './services/scheduler.js'
+import { ensureDatabaseSchema } from './config/database-setup.js'
 
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
@@ -112,17 +113,25 @@ export function buildFastify(): FastifyInstance {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const app = buildFastify()
 
-  app.listen({ port: 3000, host: '0.0.0.0' }, (err, address) => {
+  app.listen({ port: 3000, host: '0.0.0.0' }, async (err, address) => {
     if (err) {
       app.log.error(err)
       process.exit(1)
     }
     app.log.info(`Server listening at ${address}`)
 
-    // Start background services
-    schedulerService.start()
-    autopilotService.start()
+    // Ensure database schema is ready before starting background services
+    try {
+      await ensureDatabaseSchema()
+      
+      // Start background services only after database is ready
+      schedulerService.start()
+      autopilotService.start()
 
-    app.log.info('Background services started')
+      app.log.info('Background services started')
+    } catch (dbError) {
+      app.log.error('Failed to initialize database:', dbError)
+      app.log.info('Server running but background services disabled until database is ready')
+    }
   })
 }

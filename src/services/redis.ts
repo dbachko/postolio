@@ -1,5 +1,8 @@
 import { Redis } from 'ioredis'
 
+// Global Redis client instance
+let redisInstance: Redis | null = null
+
 class RedisService {
   private client: Redis | null = null
 
@@ -8,6 +11,12 @@ class RedisService {
   }
 
   private connect() {
+    // Use singleton pattern for Redis connection
+    if (redisInstance) {
+      this.client = redisInstance
+      return
+    }
+
     try {
       const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
       console.log(`Attempting Redis connection to: ${redisUrl.replace(/\/\/.*@/, '//***@')}`)
@@ -25,9 +34,12 @@ class RedisService {
       this.client.on('connect', () => {
         console.log(`Successfully connected to Redis at ${redisUrl.replace(/\/\/.*@/, '//***@')}`)
       })
+
+      redisInstance = this.client
     } catch (error) {
       console.warn('Redis connection failed, falling back to in-memory storage:', error)
       this.client = null
+      redisInstance = null
     }
   }
 
@@ -104,5 +116,6 @@ class RedisService {
     }
   }
 }
+
 
 export const redisService = new RedisService()

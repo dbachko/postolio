@@ -26,23 +26,29 @@ interface PostsListData {
 }
 
 export class AnalyticsCache {
-  private redis: Redis
+  private redis: Redis | null = null
 
   constructor() {
     const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
     this.redis = new Redis(redisUrl, {
       enableReadyCheck: false,
-      maxRetriesPerRequest: null,
+      maxRetriesPerRequest: 1,
+    })
+
+    this.redis.on('error', (err: any) => {
+      console.error('AnalyticsCache Redis error:', err)
     })
   }
 
   // Account insights (TTL: 1 hour)
   async setAccountInsights(brandId: string, date: string, data: AccountInsights): Promise<void> {
+    if (!this.redis) return
     const key = `analytics:account:${brandId}:${date}`
     await this.redis.setex(key, 3600, JSON.stringify(data)) // 1 hour TTL
   }
 
   async getAccountInsights(brandId: string, date: string): Promise<AccountInsights | null> {
+    if (!this.redis) return null
     const key = `analytics:account:${brandId}:${date}`
     const data = await this.redis.get(key)
     return data ? JSON.parse(data) : null
@@ -50,11 +56,13 @@ export class AnalyticsCache {
 
   // Media insights (TTL: 6 hours)
   async setMediaInsights(brandId: string, mediaId: string, data: MediaInsights): Promise<void> {
+    if (!this.redis) return
     const key = `analytics:media:${brandId}:${mediaId}`
     await this.redis.setex(key, 21600, JSON.stringify(data)) // 6 hours TTL
   }
 
   async getMediaInsights(brandId: string, mediaId: string): Promise<MediaInsights | null> {
+    if (!this.redis) return null
     const key = `analytics:media:${brandId}:${mediaId}`
     const data = await this.redis.get(key)
     return data ? JSON.parse(data) : null
@@ -62,11 +70,13 @@ export class AnalyticsCache {
 
   // Recent posts list (TTL: 30 minutes)
   async setRecentPosts(brandId: string, data: PostsListData): Promise<void> {
+    if (!this.redis) return
     const key = `analytics:posts:${brandId}:recent`
     await this.redis.setex(key, 1800, JSON.stringify(data)) // 30 minutes TTL
   }
 
   async getRecentPosts(brandId: string): Promise<PostsListData | null> {
+    if (!this.redis) return null
     const key = `analytics:posts:${brandId}:recent`
     const data = await this.redis.get(key)
     return data ? JSON.parse(data) : null
@@ -74,17 +84,20 @@ export class AnalyticsCache {
 
   // Rate limit tracking (TTL: 1 hour)
   async setRateLimit(brandId: string, callCount: number): Promise<void> {
+    if (!this.redis) return
     const key = `analytics:ratelimit:${brandId}`
     await this.redis.setex(key, 3600, callCount.toString()) // 1 hour TTL
   }
 
   async getRateLimit(brandId: string): Promise<number> {
+    if (!this.redis) return 0
     const key = `analytics:ratelimit:${brandId}`
     const data = await this.redis.get(key)
     return data ? parseInt(data) : 0
   }
 
   async incrementRateLimit(brandId: string): Promise<number> {
+    if (!this.redis) return 0
     const key = `analytics:ratelimit:${brandId}`
     const result = await this.redis.incr(key)
 
@@ -98,10 +111,12 @@ export class AnalyticsCache {
 
   // Utility methods
   async getTTL(key: string): Promise<number> {
+    if (!this.redis) return -1
     return await this.redis.ttl(key)
   }
 
   async clear(): Promise<void> {
+    if (!this.redis) return
     const keys = await this.redis.keys('analytics:*')
     if (keys.length > 0) {
       await this.redis.del(...keys)
@@ -109,6 +124,7 @@ export class AnalyticsCache {
   }
 
   async disconnect(): Promise<void> {
+    if (!this.redis) return
     await this.redis.disconnect()
   }
 
@@ -133,6 +149,7 @@ export class AnalyticsCache {
         return false
     }
 
+    if (!this.redis) return false
     const ttl = await this.redis.ttl(key)
     return ttl > 0
   }
@@ -149,8 +166,8 @@ export class AnalyticsCache {
     const postsKey = `analytics:posts:${brandId}:recent`
 
     const [accountTTL, postsTTL, rateLimitCount] = await Promise.all([
-      this.redis.ttl(accountKey),
-      this.redis.ttl(postsKey),
+      this.redis ? this.redis.ttl(accountKey) : -1,
+      this.redis ? this.redis.ttl(postsKey) : -1,
       this.getRateLimit(brandId),
     ])
 

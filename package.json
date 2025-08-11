@@ -13,9 +13,8 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "dev:frontend": "cd frontend && npm run dev",
-    "dev:db": "docker-compose up -d",
-    "start:all": "npm run dev:db && concurrently \"npm run dev\" \"npm run dev:frontend\"",
-    "test": "NODE_ENV=test node --test --import tsx --test-concurrency=1 test/auth.test.ts test/brand-analysis.test.ts test/brands-list.test.ts test/content-generation.test.ts test/content-approval.test.ts test/instagram-integration.test.ts test/content-publishing.test.ts test/autopilot.test.ts test/analytics.test.ts",
+    "dev:db": "docker compose up -d",
+    "start:all": "npm run dev:db && sleep 3 && concurrently \"npm run dev\" \"npm run dev:frontend\"",
     "lint": "eslint src/**/*.ts",
     "typecheck": "tsc --noEmit",
     "deploy:aws:dev": "./scripts/deploy-aws.sh dev",
@@ -56,7 +55,6 @@
     "globals": "^16.3.0",
     "prettier": "^3.6.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3",
-    "vitest": "^3.2.4"
+    "typescript": "^5.7.3"
   }
 }

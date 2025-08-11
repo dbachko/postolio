@@ -1,11 +1,13 @@
 import { FastifyPluginAsync } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+
 import { verifyJWT } from '../services/jwt.js'
 import { generateInstagramContent, type ContentGenerationRequest } from '../services/content-generator.js'
 import type { StyleProfile } from '../services/ai.js'
 import learningService from '../services/learning.js'
 
-const prisma = new PrismaClient()
+import { getDatabaseClient } from '../config/database.js'
+
+const prisma = getDatabaseClient()
 
 interface GenerateContentBody extends ContentGenerationRequest {}
 

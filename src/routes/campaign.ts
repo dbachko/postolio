@@ -1,10 +1,12 @@
 import { FastifyPluginAsync } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+
 import { verifyJWT } from '../services/jwt.js'
 import { campaignService, type CampaignConfig } from '../services/campaign.js'
 import { campaignJobService } from '../services/campaign-jobs.js'
 
-const prisma = new PrismaClient()
+import { getDatabaseClient } from '../config/database.js'
+
+const prisma = getDatabaseClient()
 
 interface ConfigureCampaignBody {
   name: string

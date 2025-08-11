@@ -44,7 +44,7 @@ fi
 
 # Start PostgreSQL database
 echo "🐘 Starting PostgreSQL database..."
-docker-compose up -d
+docker compose up -d
 
 # Wait for database to be ready
 echo "⏳ Waiting for database to be ready..."

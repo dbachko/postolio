@@ -1,20 +1,8 @@
 import OpenAI from 'openai'
 
-// Import mocks for testing
-const isTestEnvironment = process.env.NODE_ENV === 'test'
-let openai: any
-
-if (isTestEnvironment) {
-  // Use mock OpenAI in test environment
-  const { mockOpenAI } = await import('../test/mocks/openai.mock.js')
-  openai = mockOpenAI
-  console.log('🧪 Using OpenAI mock for AI service testing')
-} else {
-  // Use real OpenAI in non-test environments
-  openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  })
-}
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
 
 export interface PostAnalysis {
   imageUrl: string

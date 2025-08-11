@@ -1,9 +1,9 @@
 import { FastifyPluginAsync } from 'fastify'
 import bcrypt from 'bcrypt'
-import { PrismaClient } from '@prisma/client'
 import { signJWT, verifyJWT } from '../services/jwt.js'
+import { getDatabaseClient } from '../config/database.js'
 
-const prisma = new PrismaClient()
+const prisma = getDatabaseClient()
 
 interface RegisterBody {
   email: string

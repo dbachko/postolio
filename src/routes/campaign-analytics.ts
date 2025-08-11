@@ -1,6 +1,9 @@
 import { FastifyPluginAsync } from 'fastify'
 import { verifyJWT } from '../services/jwt.js'
 import { campaignAnalyticsService } from '../services/campaign-analytics.js'
+import { getDatabaseClient } from '../config/database.js'
+
+const prisma = getDatabaseClient()
 
 interface CampaignMetricsParams {
   campaignId: string
@@ -159,9 +162,6 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
       const { brandId } = request.params
 
       // Get all campaigns for the brand
-      const { PrismaClient } = await import('@prisma/client')
-      const prisma = new PrismaClient()
-
       const campaigns = await prisma.campaign.findMany({
         where: {
           brandId,

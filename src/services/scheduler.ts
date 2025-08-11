@@ -160,6 +160,11 @@ class SchedulerService {
       // Also process any failed posts for retry
       await this.retryFailedPosts()
     } catch (error) {
+      // Handle database connection/schema errors gracefully
+      if (error instanceof Error && error.message.includes('does not exist')) {
+        console.log('⏸️  Database tables not ready yet, skipping scheduled posts processing...')
+        return
+      }
       console.error('Error processing scheduled posts:', error)
     }
   }

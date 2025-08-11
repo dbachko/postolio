@@ -142,33 +142,33 @@ class ApiClient {
     password: string
     name?: string
   }): Promise<AuthResponse> {
-    return this.request('/auth/register', {
+    return this.request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
   async login(data: { email: string; password: string }): Promise<AuthResponse> {
-    return this.request('/auth/login', {
+    return this.request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
   async getProfile(): Promise<{ user: User }> {
-    return this.request('/auth/me')
+    return this.request('/api/auth/me')
   }
 
   // Brand endpoints
   async getBrands(): Promise<{ brands: Brand[] }> {
-    return this.request('/brands/list')
+    return this.request('/api/brands/list')
   }
 
   async createBrand(data: {
     name: string
     description?: string
   }): Promise<{ brand: Brand }> {
-    return this.request('/brands/create', {
+    return this.request('/api/brands/create', {
       method: 'POST',
       body: JSON.stringify(data),
     })
@@ -182,14 +182,14 @@ class ApiClient {
       hashtags: string[]
     }>
   }): Promise<{ brand: Brand; analysis: any }> {
-    return this.request('/brands/analyze', {
+    return this.request('/api/brands/analyze', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
   async deleteBrand(brandId: string): Promise<{ message: string; deletedBrand: any }> {
-    return this.request(`/brands/brand/${brandId}`, {
+    return this.request(`/api/brands/brand/${brandId}`, {
       method: 'DELETE',
     })
   }
@@ -198,7 +198,7 @@ class ApiClient {
     name?: string
     description?: string
   }): Promise<{ message: string; brand: Brand }> {
-    return this.request(`/brands/brand/${brandId}`, {
+    return this.request(`/api/brands/brand/${brandId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     })
@@ -206,23 +206,23 @@ class ApiClient {
 
   // Instagram OAuth endpoints
   async initializeInstagramOAuth(brandId: string): Promise<{ authUrl: string; state: string }> {
-    return this.request(`/auth/instagram/authorize?brandId=${brandId}`)
+    return this.request(`/api/auth/instagram/authorize?brandId=${brandId}`)
   }
 
   async getInstagramConnectionStatus(brandId: string, refresh = false): Promise<{ connected: boolean; profile: any }> {
     const queryParam = refresh ? '?refresh=true' : ''
-    return this.request(`/instagram/status/${brandId}${queryParam}`)
+    return this.request(`/api/instagram/status/${brandId}${queryParam}`)
   }
 
   async disconnectInstagram(brandId: string): Promise<{ success: boolean }> {
-    return this.request(`/instagram/disconnect`, {
+    return this.request(`/api/instagram/disconnect`, {
       method: 'POST',
       body: JSON.stringify({ brandId }),
     })
   }
 
   async refreshInstagramToken(brandId: string): Promise<{ success: boolean; expiresAt: string }> {
-    return this.request(`/instagram/refresh-token`, {
+    return this.request(`/api/instagram/refresh-token`, {
       method: 'POST',
       body: JSON.stringify({ brandId }),
     })
@@ -235,18 +235,18 @@ class ApiClient {
     theme?: string
     style?: string
   }): Promise<{ content: Content[]; metadata: any }> {
-    return this.request('/content/generate', {
+    return this.request('/api/content/generate', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
   async getContentHistory(brandId: string): Promise<{ content: Content[] }> {
-    return this.request(`/content/history/${brandId}`)
+    return this.request(`/api/content/history/${brandId}`)
   }
 
   async publishToInstagram(contentId: string): Promise<{ success: boolean; content: Content; instagramPost?: any }> {
-    return this.request(`/instagram/publish/${contentId}`, {
+    return this.request(`/api/instagram/publish/${contentId}`, {
       method: 'POST',
     })
   }
@@ -258,7 +258,7 @@ class ApiClient {
     imageUrl?: string
     scheduledAt?: string
   }): Promise<{ content: Content; learning?: { learningActive: boolean; message: string; appliedToFuturePosts?: number } }> {
-    return this.request('/content/update', {
+    return this.request('/api/content/update', {
       method: 'PUT',
       body: JSON.stringify(data),
     })
@@ -283,7 +283,7 @@ class ApiClient {
       }
     }
   }> {
-    return this.request(`/ai/learning-stats/${brandId}`)
+    return this.request(`/api/ai/learning-stats/${brandId}`)
   }
 
   // Analytics endpoints
@@ -313,7 +313,7 @@ class ApiClient {
 
   // Campaign endpoints
   async configureCampaign(config: CampaignConfig): Promise<{ success: boolean; campaign: any }> {
-    return this.request('/campaign/configure', {
+    return this.request('/api/campaign/configure', {
       method: 'POST',
       body: JSON.stringify({
         name: config.name,
@@ -331,36 +331,36 @@ class ApiClient {
   }
 
   async previewCampaign(campaignId: string, exampleCount = 3): Promise<{ success: boolean; preview: any }> {
-    return this.request('/campaign/preview', {
+    return this.request('/api/campaign/preview', {
       method: 'POST',
       body: JSON.stringify({ configId: campaignId, exampleCount }),
     })
   }
 
   async startCampaign(campaignId: string): Promise<{ success: boolean; message: string }> {
-    return this.request('/campaign/start', {
+    return this.request('/api/campaign/start', {
       method: 'POST',
       body: JSON.stringify({ campaignId }),
     })
   }
 
   async listCampaigns(brandId?: string): Promise<{ success: boolean; campaigns: any[] }> {
-    const url = brandId ? `/campaign/list?brandId=${brandId}` : '/campaign/list'
+    const url = brandId ? `/api/campaign/list?brandId=${brandId}` : '/api/campaign/list'
     return this.request(url)
   }
 
   async getCampaign(campaignId: string): Promise<{ success: boolean; campaign: any }> {
-    return this.request(`/campaign/${campaignId}`)
+    return this.request(`/api/campaign/${campaignId}`)
   }
 
   async deleteCampaign(campaignId: string): Promise<{ success: boolean; message: string }> {
-    return this.request(`/campaign/${campaignId}`, {
+    return this.request(`/api/campaign/${campaignId}`, {
       method: 'DELETE',
     })
   }
 
   async getCampaignStatus(campaignId: string): Promise<{ success: boolean; status: any }> {
-    return this.request(`/campaign/status/${campaignId}`)
+    return this.request(`/api/campaign/status/${campaignId}`)
   }
 
   async updateCampaign(campaignId: string, updates: {
@@ -373,7 +373,7 @@ class ApiClient {
     endDate?: string
     status?: string
   }): Promise<{ success: boolean; campaign: any }> {
-    return this.request(`/campaign/${campaignId}`, {
+    return this.request(`/api/campaign/${campaignId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     })
@@ -381,7 +381,7 @@ class ApiClient {
 
   // Update campaign priority
   async updateCampaignPriority(campaignId: string, priority: number): Promise<{ success: boolean; campaign: any }> {
-    return this.request(`/campaign/${campaignId}/priority`, {
+    return this.request(`/api/campaign/${campaignId}/priority`, {
       method: 'PUT',
       body: JSON.stringify({ priority }),
     })
@@ -389,7 +389,7 @@ class ApiClient {
 
   // Get campaign coordination summary
   async getCampaignCoordination(): Promise<{ success: boolean; coordination: any }> {
-    return this.request('/campaign/coordination')
+    return this.request('/api/campaign/coordination')
   }
 
   // Template endpoints
@@ -405,12 +405,12 @@ class ApiClient {
     if (filters?.search) params.append('search', filters.search)
     if (filters?.isPublic !== undefined) params.append('isPublic', filters.isPublic.toString())
     
-    const url = '/templates' + (params.toString() ? `?${params.toString()}` : '')
+    const url = '/api/templates' + (params.toString() ? `?${params.toString()}` : '')
     return this.request(url)
   }
 
   async getTemplate(templateId: string): Promise<{ success: boolean; template: CampaignTemplate }> {
-    return this.request(`/templates/${templateId}`)
+    return this.request(`/api/templates/${templateId}`)
   }
 
   async createTemplate(data: {
@@ -422,7 +422,7 @@ class ApiClient {
     tags?: string[]
     isPublic?: boolean
   }): Promise<{ success: boolean; template: CampaignTemplate }> {
-    return this.request('/templates', {
+    return this.request('/api/templates', {
       method: 'POST',
       body: JSON.stringify(data),
     })
@@ -435,14 +435,14 @@ class ApiClient {
     tags?: string[]
     isPublic?: boolean
   }): Promise<{ success: boolean; template: CampaignTemplate }> {
-    return this.request(`/templates/${templateId}`, {
+    return this.request(`/api/templates/${templateId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     })
   }
 
   async deleteTemplate(templateId: string): Promise<{ success: boolean; message: string }> {
-    return this.request(`/templates/${templateId}`, {
+    return this.request(`/api/templates/${templateId}`, {
       method: 'DELETE',
     })
   }
@@ -452,7 +452,7 @@ class ApiClient {
     brandId: string
     duration?: { start: Date, end: Date }
   }): Promise<{ success: boolean; campaign: any }> {
-    return this.request(`/templates/${templateId}/apply`, {
+    return this.request(`/api/templates/${templateId}/apply`, {
       method: 'POST',
       body: JSON.stringify({
         name: data.name,
@@ -475,7 +475,7 @@ class ApiClient {
     isPublic?: boolean
     brandId?: string
   }): Promise<{ success: boolean; template: CampaignTemplate }> {
-    return this.request(`/templates/campaigns/${campaignId}/save-template`, {
+    return this.request(`/api/templates/campaigns/${campaignId}/save-template`, {
       method: 'POST',
       body: JSON.stringify(data),
     })

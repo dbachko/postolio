@@ -1,3 +1,10 @@
+/**
+ * Database Configuration
+ * Centralized database client management with test support
+ */
+
+import { PrismaClient } from '@prisma/client'
+
 export function getDatabaseUrl(): string {
   const {
     DB_USERNAME,
@@ -17,3 +24,20 @@ export function getDatabaseUrl(): string {
 
   return `postgresql://${encodedUsername}:${encodedPassword}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public`
 }
+
+// Global database client instance
+let prismaInstance: PrismaClient | null = null
+
+/**
+ * Get or create the database client instance
+ */
+export function getDatabaseClient(): PrismaClient {
+  if (!prismaInstance) {
+    prismaInstance = new PrismaClient()
+  }
+  
+  return prismaInstance
+}
+
+// Export the client instance for backward compatibility
+export const prisma = getDatabaseClient()
