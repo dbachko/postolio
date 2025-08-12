@@ -357,22 +357,12 @@ class CampaignService {
       let styleProfile = campaign.brand.styleProfile as unknown as StyleProfile
 
       if (!styleProfile) {
-        // Generate style profile if missing (similar to autopilot service)
-        console.log(`Generating style profile for brand: ${campaign.brand.name}`)
-        try {
-          const analysisResult = await analyzeBrandStyle([], campaign.brand.name)
-          styleProfile = analysisResult.styleProfile
-
-          await prisma.brand.update({
-            where: { id: campaign.brandId },
-            data: { styleProfile: styleProfile as any },
-          })
-        } catch (error) {
-          console.error('Failed to generate style profile:', error)
-          return {
-            success: false,
-            error: 'Failed to generate brand style profile. Please try again.',
-          }
+        // Style profile should have been generated during preview creation
+        // Don't generate it here as it's too slow for the critical campaign start path
+        console.error(`Brand ${campaign.brand.name} missing style profile - should have been generated during preview`)
+        return {
+          success: false,
+          error: 'Brand style profile missing. Please regenerate campaign preview first.',
         }
       }
 
