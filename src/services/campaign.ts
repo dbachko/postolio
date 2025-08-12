@@ -421,8 +421,8 @@ class CampaignService {
           },
         })
 
-        // Schedule the post
-        await schedulerService.scheduleContent(content.id, scheduledDate)
+        // Post is already scheduled by setting scheduledAt field above
+        // No need to call scheduler service since we set scheduledAt directly
         createdContent.push(content)
       }
 

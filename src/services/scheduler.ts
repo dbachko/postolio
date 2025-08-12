@@ -57,14 +57,16 @@ class SchedulerService {
       // Create scheduled post entry
       const scheduledPost = await this.createScheduledPost(contentId, content.brandId, scheduledTime)
 
-      // Update content status
-      await prisma.content.update({
-        where: { id: contentId },
-        data: {
-          status: 'scheduled' as any, // Add this status to the enum
-          scheduledAt: scheduledTime,
-        },
-      })
+      // Update content status (only if not already scheduled)
+      if (content.status !== 'approved' || content.scheduledAt !== scheduledTime) {
+        await prisma.content.update({
+          where: { id: contentId },
+          data: {
+            status: 'approved', // Keep as approved for campaign content
+            scheduledAt: scheduledTime,
+          },
+        })
+      }
 
       return {
         success: true,
