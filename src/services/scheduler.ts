@@ -208,6 +208,15 @@ class SchedulerService {
 
       console.log(`Successfully published content: ${content.id}`)
 
+      // Trigger rolling content generation
+      try {
+        // Import rolling content service dynamically to avoid circular dependency
+        const { rollingContentService } = await import('./rolling-content.js')
+        await rollingContentService.onPostPublished(content.id)
+      } catch (error) {
+        console.error('Failed to trigger rolling content generation:', error)
+      }
+
       // Schedule metrics collection for later
       setTimeout(
         async () => {

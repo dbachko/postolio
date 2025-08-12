@@ -399,75 +399,48 @@ class CampaignService {
       const createdContent = []
       let existingPostIndex = 0
 
-      // Schedule existing preview posts first, then generate additional content if needed
-      for (let i = 0; i < postDates.length; i++) {
-        const scheduledDate = postDates[i]
-        let content
-
-        if (existingPostIndex < existingPreviews.length) {
-          // Use existing preview post
-          const existingPost = existingPreviews[existingPostIndex]
-          if (existingPost) {
-            content = await prisma.content.update({
-              where: { id: existingPost.id },
-              data: {
-                status: 'approved', // Auto-approve campaign content
-                scheduledAt: scheduledDate ?? null,
-                generationParams: {
-                  ...((existingPost?.generationParams as any) || {}),
-                  campaignGenerated: true,
-                  isPreview: false, // No longer a preview
-                },
-              },
-            })
-            existingPostIndex++
-          } else {
-            continue
-          }
-        } else {
-          // Generate new content for remaining slots
-          const theme = themes[i % themes.length]
-
-          const generatedContent = await generateInstagramContent(styleProfile, campaign.brand.name, {
-            brandId: campaign.brandId,
-            count: 1,
-            theme,
-            style: config.style,
-          })
-
-          const contentData = generatedContent[0]
-
-          // Validate generated content before saving
-          if (!contentData?.caption || contentData.caption.trim().length === 0) {
-            console.error('Generated content has empty caption:', contentData)
-            throw new Error('Generated content has empty caption')
-          }
-          if (!contentData?.hashtags || !Array.isArray(contentData.hashtags)) {
-            console.error('Generated content has invalid hashtags:', contentData)
-            throw new Error('Generated content has invalid hashtags')
-          }
-
-          content = await prisma.content.create({
-            data: {
-              caption: contentData.caption,
-              hashtags: contentData.hashtags,
-              imageUrl: contentData.imageUrl ?? null,
-              brandId: campaign.brandId,
-              campaignId: campaignId,
-              status: 'approved', // Auto-approve campaign content
-              scheduledAt: scheduledDate ?? null,
-              generationParams: {
-                theme,
-                style: config.style,
-                campaignGenerated: true,
-              },
-            },
-          })
+      // Only schedule existing preview posts (no new content generation)
+      if (existingPreviews.length === 0) {
+        return {
+          success: false,
+          error: 'No preview posts found. Please generate campaign preview first.',
         }
+      }
+
+      console.log(`Scheduling ${existingPreviews.length} preview posts for campaign: ${campaign.name}`)
+
+      // Schedule existing preview posts only
+      for (let i = 0; i < Math.min(existingPreviews.length, postDates.length); i++) {
+        const scheduledDate = postDates[i]
+        const existingPost = existingPreviews[i]
+
+        if (!existingPost) continue
+
+        // Update existing preview post to scheduled status
+        const content = await prisma.content.update({
+          where: { id: existingPost.id },
+          data: {
+            status: 'approved', // Auto-approve campaign content
+            scheduledAt: scheduledDate ?? null,
+            generationParams: {
+              ...((existingPost?.generationParams as any) || {}),
+              campaignGenerated: true,
+              isPreview: false, // No longer a preview
+              scheduledAt: scheduledDate?.toISOString(),
+            },
+          },
+        })
 
         // Schedule the post
         await schedulerService.scheduleContent(content.id, scheduledDate)
         createdContent.push(content)
+      }
+
+      // Log successful scheduling
+      console.log(`Successfully scheduled ${createdContent.length} posts for campaign: ${campaign.name}`)
+      
+      if (existingPreviews.length < postDates.length) {
+        console.warn(`Campaign has ${postDates.length} planned posts but only ${existingPreviews.length} preview posts available. Rolling generation will create additional content as needed.`)
       }
 
       // Update campaign status

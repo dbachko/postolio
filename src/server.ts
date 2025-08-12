@@ -21,6 +21,7 @@ import autopilotRoutes from './routes/autopilot.js'
 import campaignRoutes from './routes/campaign.js'
 import campaignTemplatesRoutes from './routes/campaign-templates.js'
 import campaignAnalyticsRoutes from './routes/campaign-analytics.js'
+import { rollingContentRoutes } from './routes/rolling-content.js'
 import { autopilotService } from './services/autopilot.js'
 import { schedulerService } from './services/scheduler.js'
 import { ensureDatabaseSchema } from './config/database-setup.js'
@@ -97,6 +98,7 @@ export function buildFastify(): FastifyInstance {
   app.register(campaignRoutes, { prefix: '/api/campaign' })
   app.register(campaignTemplatesRoutes, { prefix: '/api/templates' })
   app.register(campaignAnalyticsRoutes, { prefix: '/api/' }) // API root level for campaign analytics
+  app.register(rollingContentRoutes, { prefix: '/api/rolling-content' })
 
   // Health check endpoint for both load balancer health checks and API requests
   app.get('/health', async () => {
