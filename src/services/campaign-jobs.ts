@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { generateInstagramContent, type ContentGenerationRequest, type GeneratedContent } from './content-generator.js'
 import type { StyleProfile } from './ai.js'
+import { analyzeBrandStyle } from './ai.js'
 
 const prisma = new PrismaClient()
 
@@ -74,10 +75,18 @@ class CampaignJobService {
       }
 
       const config = campaign.config as any
-      const styleProfile = campaign.brand.styleProfile as unknown as StyleProfile
+      let styleProfile = campaign.brand.styleProfile as unknown as StyleProfile
 
       if (!styleProfile) {
-        throw new Error('Brand style profile not found. Please analyze your brand first.')
+        // Generate style profile if missing (similar to autopilot service)
+        console.log(`Generating style profile for brand: ${campaign.brand.name}`)
+        const analysisResult = await analyzeBrandStyle([], campaign.brand.name)
+        styleProfile = analysisResult.styleProfile
+
+        await prisma.brand.update({
+          where: { id: campaign.brandId },
+          data: { styleProfile: styleProfile as any },
+        })
       }
 
       await prisma.campaign.update({
