@@ -129,8 +129,9 @@ class RollingContentService {
     const totalScheduled = scheduledContent.length
     
     // Calculate days ahead (simple approximation)
-    const daysAhead = totalScheduled > 0 ? 
-      Math.ceil((scheduledContent[scheduledContent.length - 1].scheduledAt!.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)) : 
+    const lastContent = scheduledContent[scheduledContent.length - 1]
+    const daysAhead = totalScheduled > 0 && lastContent?.scheduledAt ? 
+      Math.ceil((lastContent.scheduledAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)) : 
       0
 
     return {

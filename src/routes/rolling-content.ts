@@ -1,11 +1,28 @@
-import { FastifyInstance } from 'fastify'
+import { FastifyPluginAsync } from 'fastify'
 import { rollingContentService } from '../services/rolling-content.js'
-import { authenticateToken } from '../plugins/auth.js'
+import { verifyJWT } from '../services/jwt.js'
+import { getDatabaseClient } from '../config/database.js'
 
-export async function rollingContentRoutes(fastify: FastifyInstance) {
-  // Apply authentication to all routes
-  fastify.addHook('preHandler', authenticateToken)
+const prisma = getDatabaseClient()
 
+// Helper function to verify authentication
+function authenticateRequest(request: any, reply: any) {
+  const authHeader = request.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    reply.status(401).send({ error: 'Missing or invalid authorization header' })
+    return null
+  }
+
+  const token = authHeader.substring(7)
+  try {
+    return verifyJWT(token)
+  } catch (error) {
+    reply.status(401).send({ error: 'Invalid token' })
+    return null
+  }
+}
+
+const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * Get queue status for a brand
    */
@@ -21,13 +38,16 @@ export async function rollingContentRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     try {
+      const user = authenticateRequest(request, reply)
+      if (!user) return
+
       const { brandId } = request.params as { brandId: string }
       
       // Verify brand ownership
-      const brand = await fastify.prisma.brand.findFirst({
+      const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: (request as any).user.id
+          userId: user.id
         }
       })
 
@@ -78,14 +98,17 @@ export async function rollingContentRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     try {
+      const user = authenticateRequest(request, reply)
+      if (!user) return
+
       const { brandId } = request.params as { brandId: string }
       const { campaignId } = request.body as { campaignId?: string }
       
       // Verify brand ownership
-      const brand = await fastify.prisma.brand.findFirst({
+      const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: (request as any).user.id
+          userId: user.id
         }
       })
 
@@ -132,13 +155,16 @@ export async function rollingContentRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     try {
+      const user = authenticateRequest(request, reply)
+      if (!user) return
+
       const { brandId } = request.params as { brandId: string }
       
       // Verify brand ownership
-      const brand = await fastify.prisma.brand.findFirst({
+      const brand = await prisma.brand.findFirst({
         where: {
           id: brandId,
-          userId: (request as any).user.id
+          userId: user.id
         }
       })
 
@@ -180,10 +206,13 @@ export async function rollingContentRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/overview', async (request, reply) => {
     try {
-      const userId = (request as any).user.id
+      const user = authenticateRequest(request, reply)
+      if (!user) return
+
+      const userId = user.id
       
       // Get all user's brands with Instagram integration
-      const brands = await fastify.prisma.brand.findMany({
+      const brands = await prisma.brand.findMany({
         where: {
           userId,
           OR: [
@@ -194,7 +223,7 @@ export async function rollingContentRoutes(fastify: FastifyInstance) {
       })
 
       const brandStatuses = await Promise.all(
-        brands.map(async (brand) => {
+        brands.map(async (brand: any) => {
           try {
             const queueStatus = await rollingContentService.getQueueStatus(brand.id)
             return {
@@ -210,6 +239,8 @@ export async function rollingContentRoutes(fastify: FastifyInstance) {
               totalScheduled: 0,
               daysAhead: 0,
               needsGeneration: true,
+              minQueueSize: 7,
+              maxQueueSize: 14,
               error: error instanceof Error ? error.message : 'Unknown error',
               lastChecked: new Date().toISOString()
             }
@@ -219,9 +250,9 @@ export async function rollingContentRoutes(fastify: FastifyInstance) {
 
       const summary = {
         totalBrands: brands.length,
-        brandsNeedingContent: brandStatuses.filter(b => b.needsGeneration).length,
-        brandsWithSufficientContent: brandStatuses.filter(b => !b.needsGeneration).length,
-        totalScheduledPosts: brandStatuses.reduce((sum, b) => sum + (b.totalScheduled || 0), 0)
+        brandsNeedingContent: brandStatuses.filter((b: any) => b.needsGeneration).length,
+        brandsWithSufficientContent: brandStatuses.filter((b: any) => !b.needsGeneration).length,
+        totalScheduledPosts: brandStatuses.reduce((sum: number, b: any) => sum + (b.totalScheduled || 0), 0)
       }
 
       return reply.send({
@@ -240,3 +271,5 @@ export async function rollingContentRoutes(fastify: FastifyInstance) {
     }
   })
 }
+
+export default rollingContentRoutes
