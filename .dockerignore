@@ -17,9 +17,17 @@ frontend/dist
 aws-infrastructure
 docs
 .github
-# Allow migration scripts
-scripts/*
-!scripts/start-with-migration.sh
-!scripts/run-migrations-only.sh
 docker-compose*.yml
+# Ignore most scripts but keep migration scripts
+scripts/*.mjs
+scripts/*.js
+scripts/*.ts
+scripts/deploy-*.sh
+scripts/bootstrap-*.sh
+scripts/validate-*.sh
+scripts/quick-*.sh
+scripts/get-*.sh
+# Keep migration scripts
+# scripts/start-with-migration.sh - KEPT
+# scripts/run-migrations-only.sh - KEPT
 *.md
