@@ -81,25 +81,28 @@ export function buildFastify(): FastifyInstance {
   app.register(monitoringPlugin)
   app.register(authPlugin)
 
-  // Register routes WITHOUT /api prefix - CloudFront already routes /api/* to backend
-  app.register(monitoringRoutes, { prefix: '/monitoring' })
-  app.register(authRoutes, { prefix: '/auth' })
-  app.register(instagramOAuthRoutes, { prefix: '/auth/instagram' })
-  app.register(brandsRoutes, { prefix: '/brands' })
-  app.register(contentRoutes, { prefix: '/content' })
-  app.register(instagramRoutes, { prefix: '/instagram' })
-  app.register(analyticsRoutes, { prefix: '/analytics' })
-  app.register(instagramAnalyticsRoutes, { prefix: '/instagram-analytics' })
-  app.register(engagementRoutes, { prefix: '/engagement' })
-  app.register(growthRoutes, { prefix: '/growth' })
-  app.register(aiRoutes, { prefix: '/ai' })
-  app.register(autopilotRoutes, { prefix: '/autopilot' })
-  app.register(campaignRoutes, { prefix: '/campaign' })
-  app.register(campaignTemplatesRoutes, { prefix: '/templates' })
-  app.register(campaignAnalyticsRoutes, { prefix: '/' }) // Root level for campaign analytics
+  // Register routes WITH /api prefix - CloudFront forwards full paths to backend
+  app.register(monitoringRoutes, { prefix: '/api/monitoring' })
+  app.register(authRoutes, { prefix: '/api/auth' })
+  app.register(instagramOAuthRoutes, { prefix: '/api/auth/instagram' })
+  app.register(brandsRoutes, { prefix: '/api/brands' })
+  app.register(contentRoutes, { prefix: '/api/content' })
+  app.register(instagramRoutes, { prefix: '/api/instagram' })
+  app.register(analyticsRoutes, { prefix: '/api/analytics' })
+  app.register(instagramAnalyticsRoutes, { prefix: '/api/instagram-analytics' })
+  app.register(engagementRoutes, { prefix: '/api/engagement' })
+  app.register(growthRoutes, { prefix: '/api/growth' })
+  app.register(aiRoutes, { prefix: '/api/ai' })
+  app.register(autopilotRoutes, { prefix: '/api/autopilot' })
+  app.register(campaignRoutes, { prefix: '/api/campaign' })
+  app.register(campaignTemplatesRoutes, { prefix: '/api/templates' })
+  app.register(campaignAnalyticsRoutes, { prefix: '/api/' }) // API root level for campaign analytics
 
-  // Health check endpoint (CloudFront routes /api/health to /health)
+  // Health check endpoint for both load balancer health checks and API requests
   app.get('/health', async () => {
+    return { status: 'ok', timestamp: new Date().toISOString() }
+  })
+  app.get('/api/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() }
   })
 
