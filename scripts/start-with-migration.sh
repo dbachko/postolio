@@ -19,6 +19,23 @@ else
     sleep 5
 fi
 
+# Construct DATABASE_URL from components if not set
+if [ -z "${DATABASE_URL}" ]; then
+    if [ -n "${DB_HOST}" ] && [ -n "${DB_USERNAME}" ] && [ -n "${DB_PASSWORD}" ]; then
+        DB_PORT="${DB_PORT:-5433}"
+        DB_NAME="${DB_NAME:-postolio}"
+        export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+        echo "DATABASE_URL constructed from components"
+    else
+        echo "Warning: DATABASE_URL not set and cannot be constructed from components"
+        echo "Available environment variables:"
+        echo "  DB_HOST: ${DB_HOST:-not set}"
+        echo "  DB_USERNAME: ${DB_USERNAME:-not set}"
+        echo "  DB_PASSWORD: ${DB_PASSWORD:+[set]}"
+        echo "  DB_PORT: ${DB_PORT:-not set}"
+    fi
+fi
+
 # Run Prisma migrations with retry logic
 echo "Running database migrations..."
 MAX_RETRIES=5
@@ -26,11 +43,6 @@ RETRY_COUNT=0
 
 while [ ${RETRY_COUNT} -lt ${MAX_RETRIES} ]; do
     echo "Migration attempt $((RETRY_COUNT + 1)) of ${MAX_RETRIES}..."
-    
-    # Set DATABASE_URL if not already set (useful for local testing)
-    if [ -z "${DATABASE_URL}" ]; then
-        echo "Warning: DATABASE_URL not set, migration may fail"
-    fi
     
     if npx prisma migrate deploy --schema=./prisma/schema.prisma 2>&1; then
         echo "Database migrations completed successfully"
