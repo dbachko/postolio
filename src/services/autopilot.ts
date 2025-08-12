@@ -280,6 +280,10 @@ class AutopilotService {
               data: {
                 caption: content.caption,
                 imageUrl: content.imageUrl ?? null,
+                s3ImageKey: content.s3ImageKey ?? null,
+                cdnImageUrl: content.cdnImageUrl ?? null,
+                imageRegion: content.imageRegion ?? null,
+                retentionExpiresAt: content.retentionExpiresAt ?? null,
                 hashtags: content.hashtags,
                 status: 'approved', // Auto-approve autopilot content
                 brandId: gap.brandId,

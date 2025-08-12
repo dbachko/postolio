@@ -286,6 +286,10 @@ class CampaignService {
             caption: post.caption,
             hashtags: post.hashtags,
             imageUrl: post.imageUrl ?? null,
+            s3ImageKey: post.s3ImageKey ?? null,
+            cdnImageUrl: post.cdnImageUrl ?? null,
+            imageRegion: post.imageRegion ?? null,
+            retentionExpiresAt: post.retentionExpiresAt ?? null,
             brandId: campaign.brandId,
             campaignId: campaignId,
             status: 'pending', // Preview posts start as pending

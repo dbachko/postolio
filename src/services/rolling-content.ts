@@ -235,6 +235,10 @@ class RollingContentService {
             caption: content.caption,
             hashtags: content.hashtags,
             imageUrl: content.imageUrl ?? null,
+            s3ImageKey: content.s3ImageKey ?? null,
+            cdnImageUrl: content.cdnImageUrl ?? null,
+            imageRegion: content.imageRegion ?? null,
+            retentionExpiresAt: content.retentionExpiresAt ?? null,
             brandId,
             campaignId: activeCampaign?.id || null,
             status: 'approved', // Auto-approve rolling content
