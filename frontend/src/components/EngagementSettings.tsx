@@ -80,7 +80,7 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
     setError('')
     
     try {
-      const response = await apiClient.get<{rules: EngagementRules}>(`/engagement/rules/${brandId}`)
+      const response = await apiClient.get<{rules: EngagementRules}>(`/api/engagement/rules/${brandId}`)
       if (response.rules) {
         setRules(response.rules)
       }
@@ -97,7 +97,7 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
     setSuccess('')
     
     try {
-      await apiClient.post('/engagement/rules', {
+      await apiClient.post('/api/engagement/rules', {
         brandId,
         rules
       })

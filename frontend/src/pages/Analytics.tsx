@@ -89,8 +89,8 @@ export default function Analytics() {
 
     try {
       const [reportResponse, statsResponse] = await Promise.all([
-        apiClient.get<{ report: AnalyticsReport }>(`/analytics/report/${selectedBrand.id}?days=${daysPeriod}`),
-        apiClient.get<{ stats: SchedulingStats }>(`/analytics/stats/${selectedBrand.id}`),
+        apiClient.get<{ report: AnalyticsReport }>(`/api/analytics/report/${selectedBrand.id}?days=${daysPeriod}`),
+        apiClient.get<{ stats: SchedulingStats }>(`/api/analytics/stats/${selectedBrand.id}`),
       ])
 
       setReport(reportResponse.report)
@@ -107,7 +107,7 @@ export default function Analytics() {
 
     try {
       const response = await apiClient.get<{ scheduledPosts: ScheduledPost[] }>(
-        `/analytics/scheduled/${selectedBrand.id}`
+        `/api/analytics/scheduled/${selectedBrand.id}`
       )
       setScheduledPosts(response.scheduledPosts)
     } catch (err) {
@@ -117,7 +117,7 @@ export default function Analytics() {
 
   const handleCancelPost = async (contentId: string) => {
     try {
-      await apiClient.delete(`/analytics/scheduled/${contentId}`)
+      await apiClient.delete(`/api/analytics/scheduled/${contentId}`)
 
       // Remove from local state
       setScheduledPosts((prev) => prev.filter((post) => post.id !== contentId))
@@ -131,7 +131,7 @@ export default function Analytics() {
 
   const handleReschedulePost = async (contentId: string, newTime: string) => {
     try {
-      await apiClient.put('/analytics/reschedule', {
+      await apiClient.put('/api/analytics/reschedule', {
         contentId,
         newTime,
       })
