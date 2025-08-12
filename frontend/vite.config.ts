@@ -44,6 +44,17 @@ export default defineConfig({
             console.log(`🔄 Proxying: ${req.method} ${req.url} → https://localhost:3000${proxyReq.path}`)
           })
         }
+      },
+      // Proxy legal routes to backend for privacy policy and terms
+      '/legal': {
+        target: 'https://localhost:3000',
+        changeOrigin: true,
+        secure: false, // Allow self-signed certificates
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            console.log(`📜 Proxying legal: ${req.method} ${req.url} → https://localhost:3000${proxyReq.path}`)
+          })
+        }
       }
     }
   }

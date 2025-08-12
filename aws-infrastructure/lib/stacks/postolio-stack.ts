@@ -160,6 +160,16 @@ export class PostolioStack extends cdk.Stack {
       port: 6380, // Use non-default port for security
     })
 
+    // S3 Access Logs bucket for CloudFront (created first to be used by other buckets)
+    const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
+      bucketName: `postolio-access-logs-${environment}-${cdk.Aws.ACCOUNT_ID}`,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED, // Required for CloudFront logging
+    })
+
     // S3 Bucket for AI-generated images with intelligent tiering
     const imagesBucket = new s3.Bucket(this, 'AIImagesBucket', {
       bucketName: `postolio-ai-images-${environment}-${cdk.Aws.ACCOUNT_ID}`,
@@ -169,7 +179,9 @@ export class PostolioStack extends cdk.Stack {
         ? s3.BucketEncryption.KMS_MANAGED // SSE-KMS for production
         : s3.BucketEncryption.S3_MANAGED,  // SSE-S3 for development
       enforceSSL: true,
-      versioning: environment === 'prod',
+      versioned: environment === 'prod',
+      serverAccessLogsBucket: accessLogsBucket,
+      serverAccessLogsPrefix: 'images-access-logs/',
       lifecycleRules: [
         {
           id: 'intelligent-tiering',
@@ -205,17 +217,7 @@ export class PostolioStack extends cdk.Stack {
       ],
     })
 
-    // S3 Access Logs bucket for CloudFront
-    const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
-      bucketName: `postolio-access-logs-${environment}-${cdk.Aws.ACCOUNT_ID}`,
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED, // Required for CloudFront logging
-    })
-
-    // Grant CloudFront logging service permission to write to the bucket
+    // Grant CloudFront logging service permission to write to the access logs bucket
     accessLogsBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         sid: 'AllowCloudFrontLogging',
@@ -531,8 +533,8 @@ export class PostolioStack extends cdk.Stack {
     })
 
     // Configure ECS service deployment settings
-    const cfnService = fargateService.service.node.defaultChild as ecs.CfnService
-    cfnService.deploymentConfiguration = {
+    const cfnServiceConfig = fargateService.service.node.defaultChild as ecs.CfnService
+    cfnServiceConfig.deploymentConfiguration = {
       maximumPercent: 200,
       minimumHealthyPercent: 100, // Ensure zero-downtime deployments
     }
@@ -588,6 +590,16 @@ export class PostolioStack extends cdk.Stack {
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
           compress: false,
         },
+        '/legal/*': {
+          origin: new origins.LoadBalancerV2Origin(fargateService.loadBalancer, {
+            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+          }),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED, // Cache legal documents
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+          compress: true,
+        },
         '/images/*': {
           origin: origins.S3BucketOrigin.withOriginAccessIdentity(imagesBucket, {
             originAccessIdentity: imagesOAI,
@@ -600,6 +612,7 @@ export class PostolioStack extends cdk.Stack {
               accessControlAllowOrigins: ['*'],
               accessControlAllowHeaders: ['*'],
               accessControlAllowMethods: ['GET', 'HEAD'],
+              accessControlAllowCredentials: false,
               accessControlMaxAge: cdk.Duration.hours(1),
               originOverride: false,
             },
@@ -634,15 +647,12 @@ export class PostolioStack extends cdk.Stack {
 
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', distributionProps)
     
-    // Add CloudFront distribution ID to ECS environment
-    const cfnService = fargateService.service.node.defaultChild as ecs.CfnService
-    const taskDef = fargateService.taskDefinition.node.defaultChild as ecs.CfnTaskDefinition
-    const containerDef = taskDef.containerDefinitions![0] as any
-    containerDef.environment = containerDef.environment || []
-    containerDef.environment.push({
-      name: 'CLOUDFRONT_DISTRIBUTION_ID',
-      value: distribution.distributionId
-    })
+    // Add CloudFront distribution ID to ECS task environment
+    // We need to update the container definition after it's created
+    fargateService.taskDefinition.defaultContainer?.addEnvironment(
+      'CLOUDFRONT_DISTRIBUTION_ID',
+      distribution.distributionId
+    )
 
     // Update existing DNS record for postolio.example to point to CloudFront (unified domain)
     // Note: We reuse the existing ApiDomainRecord logical ID to update the existing record
@@ -829,6 +839,9 @@ export class PostolioStack extends cdk.Stack {
         reason: 'This is the access logs bucket itself, does not need its own access logs',
       }]
     )
+    
+    // AI Images bucket has access logging configured to the accessLogsBucket
+    // No suppression needed as logging is enabled
 
     NagSuppressions.addResourceSuppressions(
       albAccessLogsBucket,
