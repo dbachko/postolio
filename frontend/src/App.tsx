@@ -7,13 +7,12 @@ import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import { Brands } from './pages/Brands'
-import { Content } from './pages/Content'
 import Analytics from './pages/Analytics'
 import InstagramAnalytics from './pages/InstagramAnalytics'
 import Engagement from './pages/Engagement'
 import { Growth } from './pages/Growth'
 import { AIFeatures } from './pages/AIFeatures'
-import { Autopilot } from './pages/Autopilot'
+import { Campaigns } from './pages/Campaigns'
 import { useEffect } from 'react'
 
 const queryClient = new QueryClient()
@@ -66,13 +65,7 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
-          <Route path="/content" element={
-            <ProtectedRoute>
-              <Layout>
-                <Content />
-              </Layout>
-            </ProtectedRoute>
-          } />
+          <Route path="/content" element={<Navigate to="/campaigns" replace />} />
           <Route path="/analytics" element={
             <ProtectedRoute>
               <Layout>
@@ -108,17 +101,24 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
-          <Route path="/autopilot" element={
+          <Route path="/campaigns" element={
             <ProtectedRoute>
               <Layout>
-                <Autopilot />
+                <Campaigns />
               </Layout>
             </ProtectedRoute>
           } />
-          <Route path="/autopilot/campaign/:campaignId" element={
+          <Route path="/campaigns/create" element={
             <ProtectedRoute>
               <Layout>
-                <Autopilot />
+                <Campaigns />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/campaigns/:campaignId" element={
+            <ProtectedRoute>
+              <Layout>
+                <Campaigns />
               </Layout>
             </ProtectedRoute>
           } />

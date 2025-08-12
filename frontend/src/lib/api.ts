@@ -60,6 +60,30 @@ export interface CampaignPreview {
   }
 }
 
+export interface Campaign {
+  id: string
+  name: string
+  status: 'creating' | 'preview' | 'active' | 'paused' | 'completed' | 'failed' | 'processing'
+  brandId: string
+  config?: {
+    duration?: { start: string, end: string }
+    frequency?: string
+    themes?: string[]
+    style?: string
+    postingTime?: string
+    priority?: number
+  }
+  content: Content[]
+  progress?: number
+  errorMessage?: string | null
+  previewGenerated?: boolean
+  priority: number
+  createdAt: string
+  updatedAt: string
+  startedAt?: string | null
+  completedAt?: string | null
+}
+
 export interface CampaignTemplate {
   id: string
   name: string

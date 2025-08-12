@@ -38,6 +38,7 @@ export function Layout({ children }: LayoutProps) {
     return location.pathname === path
   }
 
+
   return (
     <div className="min-h-screen bg-background">
       <nav className="bg-card shadow-sm border-b">
@@ -56,29 +57,20 @@ export function Layout({ children }: LayoutProps) {
                 <NavigationMenuList>
                   <NavigationMenuItem>
                     <Link
-                      to="/autopilot"
+                      to="/campaigns"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/autopilot') ? 'bg-accent text-accent-foreground' : ''
+                        location.pathname === '/campaigns' || 
+                        location.pathname.startsWith('/campaigns/') ? '!bg-accent !text-accent-foreground' : ''
                       }`}
                     >
-                      Autopilot
-                    </Link>
-                  </NavigationMenuItem>
-                  <NavigationMenuItem>
-                    <Link
-                      to="/content"
-                      className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/content') ? 'bg-accent text-accent-foreground' : ''
-                      }`}
-                    >
-                      Content
+                      Campaigns
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
                     <Link
                       to="/analytics"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/analytics') ? 'bg-accent text-accent-foreground' : ''
+                        isActiveRoute('/analytics') ? '!bg-accent !text-accent-foreground' : ''
                       }`}
                     >
                       Analytics
@@ -88,7 +80,7 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/instagram-analytics"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/instagram-analytics') ? 'bg-accent text-accent-foreground' : ''
+                        isActiveRoute('/instagram-analytics') ? '!bg-accent !text-accent-foreground' : ''
                       }`}
                     >
                       Instagram Analytics
@@ -98,7 +90,7 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/engagement"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/engagement') ? 'bg-accent text-accent-foreground' : ''
+                        isActiveRoute('/engagement') ? '!bg-accent !text-accent-foreground' : ''
                       }`}
                     >
                       Engagement
@@ -108,7 +100,7 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/growth"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/growth') ? 'bg-accent text-accent-foreground' : ''
+                        isActiveRoute('/growth') ? '!bg-accent !text-accent-foreground' : ''
                       }`}
                     >
                       Growth
@@ -118,7 +110,7 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/ai-features"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/ai-features') ? 'bg-accent text-accent-foreground' : ''
+                        isActiveRoute('/ai-features') ? '!bg-accent !text-accent-foreground' : ''
                       }`}
                     >
                       AI Features
