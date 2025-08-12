@@ -59,6 +59,32 @@ const CampaignCard = memo(({
     }
   }
 
+  const canDeleteCampaign = () => {
+    // Only campaigns with status: draft, preview, creating, failed can be deleted
+    const deletableStatuses = ['draft', 'preview', 'creating', 'failed']
+    return deletableStatuses.includes(campaign.status)
+  }
+
+  const getDeleteTooltip = () => {
+    if (canDeleteCampaign()) {
+      return 'Delete campaign'
+    }
+    
+    if (campaign.status === 'active') {
+      return 'Cannot delete active campaigns. Pause the campaign first to delete it.'
+    }
+    
+    if (campaign.status === 'paused') {
+      return 'Cannot delete paused campaigns. Only campaigns with status: draft, preview, creating, failed can be deleted.'
+    }
+    
+    if (campaign.status === 'completed') {
+      return 'Cannot delete completed campaigns. Only campaigns with status: draft, preview, creating, failed can be deleted.'
+    }
+    
+    return `Cannot delete campaigns with status '${campaign.status}'. Only campaigns with status: draft, preview, creating, failed can be deleted.`
+  }
+
   const getBadgeVariant = () => {
     switch (campaign.status) {
       case 'active':
@@ -200,10 +226,16 @@ const CampaignCard = memo(({
                 variant="ghost"
                 onClick={(e) => {
                   e.stopPropagation()
-                  onDeleteCampaign(campaign.id, campaign.name)
+                  if (canDeleteCampaign()) {
+                    onDeleteCampaign(campaign.id, campaign.name)
+                  }
                 }}
-                disabled={deleteCampaignLoading}
-                className="text-xs px-2 py-1 text-red-500 hover:text-red-700"
+                disabled={deleteCampaignLoading || !canDeleteCampaign()}
+                title={getDeleteTooltip()}
+                className={`text-xs px-2 py-1 ${canDeleteCampaign() 
+                  ? 'text-red-500 hover:text-red-700' 
+                  : 'text-gray-400 cursor-not-allowed'
+                }`}
               >
                 <Trash2 className="w-3 h-3" />
               </Button>
