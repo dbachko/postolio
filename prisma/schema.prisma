@@ -40,9 +40,9 @@ model Brand {
   engagementActive     Boolean            @default(false)
   engagementRules      Json?
   user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  content              Content[]
-  campaigns            Campaign[]
   campaignTemplates    CampaignTemplate[]
+  campaigns            Campaign[]
+  content              Content[]
 
   @@map("brands")
 }
@@ -50,11 +50,7 @@ model Brand {
 model Content {
   id                 String    @id @default(cuid())
   caption            String
-  imageUrl           String?   // Original external URL (DALL-E/Midjourney)
-  s3ImageKey         String?   // S3 object key for permanent storage
-  cdnImageUrl        String?   // CloudFront CDN URL for optimized delivery
-  imageRegion        String?   // User region for compliance (EU, US, UK, etc.)
-  retentionExpiresAt DateTime? // When image should be deleted per retention policy
+  imageUrl           String?
   hashtags           String[]
   status             String    @default("pending")
   createdAt          DateTime  @default(now())
@@ -68,8 +64,12 @@ model Content {
   instagramPostId    String?
   analytics          Json?
   schedulingError    String?
+  cdnImageUrl        String?
+  imageRegion        String?
+  retentionExpiresAt DateTime?
+  s3ImageKey         String?
   brand              Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  campaign           Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaign           Campaign? @relation(fields: [campaignId], references: [id])
 
   @@map("content")
 }
@@ -78,19 +78,18 @@ model Campaign {
   id               String    @id @default(cuid())
   name             String
   brandId          String
-  status           String    @default("creating") // creating, preview, active, paused, completed, failed
+  status           String    @default("creating")
   config           Json
-  priority         Int       @default(5) // 1=highest, 5=normal, 10=lowest priority
+  priority         Int       @default(5)
   previewGenerated Boolean   @default(false)
   errorMessage     String?
-  progress         Int       @default(0) // 0-100 percentage
+  progress         Int       @default(0)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   startedAt        DateTime?
   completedAt      DateTime?
-
-  brand   Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  content Content[]
+  brand            Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  content          Content[]
 
   @@index([priority])
   @@index([status])
@@ -109,9 +108,8 @@ model CampaignTemplate {
   updatedAt      DateTime @updatedAt
   createdById    String
   brandId        String?
-
-  createdBy User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  brand     Brand? @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  brand          Brand?   @relation(fields: [brandId], references: [id])
+  createdBy      User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([createdById])
   @@index([brandId])
