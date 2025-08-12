@@ -193,6 +193,39 @@ export function Layout({ children }: LayoutProps) {
       </nav>
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">{children}</main>
+      
+      {/* Footer */}
+      <footer className="bg-card border-t mt-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center text-sm text-muted-foreground">
+            <div>
+              © 2024 Postolio. All rights reserved.
+            </div>
+            <div className="flex space-x-4">
+              <Link 
+                to="/privacy-policy" 
+                className="hover:text-foreground transition-colors"
+              >
+                Privacy Policy
+              </Link>
+              <span>•</span>
+              <a 
+                href="mailto:legal@postolio.example" 
+                className="hover:text-foreground transition-colors"
+              >
+                Legal
+              </a>
+              <span>•</span>
+              <a 
+                href="mailto:support@postolio.example" 
+                className="hover:text-foreground transition-colors"
+              >
+                Support
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

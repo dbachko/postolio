@@ -100,9 +100,41 @@ export function Register() {
             >
               {isLoading ? 'Creating account...' : 'Create account'}
             </Button>
+            
+            {/* Privacy Policy Notice */}
+            <div className="text-xs text-center text-muted-foreground mt-4">
+              By creating an account, you agree to our{' '}
+              <Link 
+                to="/privacy-policy" 
+                className="text-primary hover:underline"
+              >
+                Privacy Policy
+              </Link>
+            </div>
           </form>
         </CardContent>
       </Card>
+      
+      {/* Footer */}
+      <div className="mt-8 text-center">
+        <div className="flex justify-center items-center text-sm text-muted-foreground space-x-4">
+          <span>© 2024 Postolio</span>
+          <span>•</span>
+          <Link 
+            to="/privacy-policy" 
+            className="hover:text-foreground transition-colors"
+          >
+            Privacy Policy
+          </Link>
+          <span>•</span>
+          <a 
+            href="mailto:legal@postolio.example" 
+            className="hover:text-foreground transition-colors"
+          >
+            Legal
+          </a>
+        </div>
+      </div>
     </div>
   )
 }

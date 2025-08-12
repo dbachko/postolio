@@ -14,6 +14,7 @@ import Engagement from './pages/Engagement'
 import { Growth } from './pages/Growth'
 import { AIFeatures } from './pages/AIFeatures'
 import { Autopilot } from './pages/Autopilot'
+import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { useEffect } from 'react'
 
 const queryClient = new QueryClient()
@@ -45,6 +46,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/" element={
             <ProtectedRoute>
               <Layout>
