@@ -933,15 +933,22 @@ export function Campaigns() {
           onTemplateSelected={handleTemplateSelected}
           onTemplateForConfiguration={(template: CampaignTemplate) => {
             // Pre-fill form with template data
-            const templateConfig = template.config
+            const templateConfig = template.config || {}
             const today = getTodayDate()
             const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+            
+            // Type-safe frequency handling
+            const templateFrequency = templateConfig.frequency
+            const safeFrequency = (templateFrequency && 
+              ['daily', 'every2days', '3weekly'].includes(templateFrequency)) 
+              ? templateFrequency as 'daily' | 'every2days' | '3weekly'
+              : '' as const
             
             setFormData({
               name: `${template.name} Campaign`,
               startDate: today,
               endDate: format(endDate, 'yyyy-MM-dd'),
-              frequency: templateConfig.frequency || '',
+              frequency: safeFrequency,
               themes: templateConfig.themes || [],
               style: templateConfig.style || '',
               postingTime: templateConfig.postingTime || '12:00',

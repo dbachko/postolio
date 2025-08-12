@@ -91,10 +91,11 @@ export interface CampaignTemplate {
   category: string
   config?: {
     duration?: { start: string, end: string }
-    frequency?: string
+    frequency?: 'daily' | 'every2days' | '3weekly' | string
     themes?: string[]
     style?: string
     postingTime?: string
+    priority?: number
   }
   exampleContent?: Content[]
   usageCount: number
