@@ -13,7 +13,11 @@ export default async function legalRoutes(fastify: FastifyInstance) {
     try {
       // Read the privacy policy markdown file
       const privacyPolicyPath = path.join(__dirname, '..', '..', 'PRIVACY_POLICY.md')
-      const privacyPolicyContent = fs.readFileSync(privacyPolicyPath, 'utf8')
+      let privacyPolicyContent = fs.readFileSync(privacyPolicyPath, 'utf8')
+      
+      // Make copyright year dynamic
+      const currentYear = new Date().getFullYear()
+      privacyPolicyContent = privacyPolicyContent.replace(/© \d{4} Postolio/, `© ${currentYear} Postolio`)
       
       // Check if client accepts HTML
       const acceptsHtml = request.headers.accept?.includes('text/html')
@@ -141,7 +145,7 @@ export default async function legalRoutes(fastify: FastifyInstance) {
       privacyPolicy: {
         url: '/legal/privacy-policy',
         lastUpdated: '2024-12-19',
-        effectiveDate: '2025-01-01'
+        effectiveDate: '2024-12-19'
       },
       termsOfService: {
         url: '/legal/terms-of-service',
