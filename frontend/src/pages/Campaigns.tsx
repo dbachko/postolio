@@ -819,7 +819,7 @@ export function Campaigns() {
                             {(post.cdnImageUrl || post.imageUrl) && (
                               <div className="aspect-w-16 aspect-h-9">
                                 <img
-                                  src={post.cdnImageUrl || post.imageUrl}
+                                  src={post.cdnImageUrl || post.imageUrl || ''}
                                   alt={`Post ${post.id}`}
                                   className="w-full h-48 object-cover rounded-t-lg"
                                 />
