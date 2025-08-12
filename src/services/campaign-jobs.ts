@@ -168,6 +168,9 @@ class CampaignJobService {
           hashtags: post.hashtags?.length || 0,
           imageUrl: post.imageUrl?.substring(0, 80) + '...' || 'Missing',
           imageUrlLength: post.imageUrl?.length || 0,
+          s3ImageKey: post.s3ImageKey || 'NOT SET',
+          cdnImageUrl: post.cdnImageUrl?.substring(0, 80) + '...' || 'NOT SET',
+          hasS3Fields: !!(post.s3ImageKey && post.cdnImageUrl)
         })
 
         await prisma.content.create({

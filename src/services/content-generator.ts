@@ -164,7 +164,7 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
               const s3Result = await uploadImageToS3(imageUrl, metadata)
               console.log('Uploaded image to S3:', s3Result.s3Key)
               
-              return {
+              const contentWithS3 = {
                 ...item,
                 imageUrl, // Keep original URL as backup
                 s3ImageKey: s3Result.s3Key,
@@ -172,6 +172,15 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
                 imageRegion: s3Result.region,
                 retentionExpiresAt: s3Result.retentionExpiresAt
               }
+              
+              console.log('Content with S3 fields:', {
+                hasS3Key: !!contentWithS3.s3ImageKey,
+                hasCdnUrl: !!contentWithS3.cdnImageUrl,
+                s3Key: contentWithS3.s3ImageKey,
+                cdnUrl: contentWithS3.cdnImageUrl?.substring(0, 80) + '...'
+              })
+              
+              return contentWithS3
             } catch (s3Error) {
               console.error('Failed to upload image to S3, keeping external URL:', s3Error)
               return {
