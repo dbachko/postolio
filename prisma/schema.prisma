@@ -50,7 +50,11 @@ model Brand {
 model Content {
   id                 String    @id @default(cuid())
   caption            String
-  imageUrl           String?
+  imageUrl           String?   // Original external URL (DALL-E/Midjourney)
+  s3ImageKey         String?   // S3 object key for permanent storage
+  cdnImageUrl        String?   // CloudFront CDN URL for optimized delivery
+  imageRegion        String?   // User region for compliance (EU, US, UK, etc.)
+  retentionExpiresAt DateTime? // When image should be deleted per retention policy
   hashtags           String[]
   status             String    @default("pending")
   createdAt          DateTime  @default(now())

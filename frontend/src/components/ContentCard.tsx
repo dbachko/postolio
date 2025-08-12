@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient, type Content } from '../lib/api'
+import { OptimizedImage } from './OptimizedImage'
 
 interface ContentCardProps {
   content: Content
@@ -17,7 +18,7 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
       setPublishError(null)
       queryClient.invalidateQueries({ queryKey: ['contentHistory', brandId] })
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       const errorMessage = error?.message || 'Failed to publish to Instagram. Please try again.'
       setPublishError(errorMessage)
     },
@@ -30,12 +31,15 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      {content.imageUrl && (
+      {(content.cdnImageUrl || content.imageUrl) && (
         <div className="aspect-w-16 aspect-h-9">
-          <img
-            src={content.imageUrl}
+          <OptimizedImage
+            src={content.cdnImageUrl || content.imageUrl || ''}
+            cdnUrl={content.cdnImageUrl}
+            fallbackUrl={content.imageUrl || undefined}
             alt="Generated content"
             className="w-full h-48 object-cover"
+            aspectRatio="landscape"
           />
         </div>
       )}

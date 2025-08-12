@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import type { StyleProfile } from './ai.js'
 import { generateMidjourneyImage } from './midjourney.js'
+import { uploadImageToS3, type ImageMetadata } from './s3-image.js'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -25,6 +26,10 @@ export interface GeneratedContent {
   hashtags: string[]
   imagePrompt?: string
   imageUrl?: string
+  s3ImageKey?: string
+  cdnImageUrl?: string
+  imageRegion?: string
+  retentionExpiresAt?: Date
 }
 
 export interface ContentBatch {
@@ -135,7 +140,7 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
 
     // Generate images for each post using Midjourney (with DALL-E fallback)
     const contentWithImages = await Promise.all(
-      generatedContent.map(async (item) => {
+      generatedContent.map(async (item, index) => {
         try {
           const imageUrl = await generateBrandContentImage(item.imagePrompt || item.caption, styleProfile, brandName)
           console.log('Generated image for post:', {
@@ -143,6 +148,39 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
             imageUrl: imageUrl?.substring(0, 80) + '...' || 'Failed to generate',
             urlLength: imageUrl?.length || 0,
           })
+          
+          // Upload to S3 if image was generated successfully
+          if (imageUrl && process.env.S3_IMAGES_BUCKET) {
+            try {
+              const metadata: ImageMetadata = {
+                contentId: `temp_${Date.now()}_${index}`, // Temporary ID until content is saved
+                brandId: request.brandId,
+                campaignId: undefined as string | undefined, // Will be set when content is saved
+                generatedAt: new Date(),
+                source: imageUrl.includes('dalle') ? 'dalle3' : 'midjourney',
+                originalPrompt: item.imagePrompt || item.caption
+              }
+              
+              const s3Result = await uploadImageToS3(imageUrl, metadata)
+              console.log('Uploaded image to S3:', s3Result.s3Key)
+              
+              return {
+                ...item,
+                imageUrl, // Keep original URL as backup
+                s3ImageKey: s3Result.s3Key,
+                cdnImageUrl: s3Result.cdnUrl,
+                imageRegion: s3Result.region,
+                retentionExpiresAt: s3Result.retentionExpiresAt
+              }
+            } catch (s3Error) {
+              console.error('Failed to upload image to S3, keeping external URL:', s3Error)
+              return {
+                ...item,
+                imageUrl, // Fallback to external URL if S3 upload fails
+              }
+            }
+          }
+          
           return {
             ...item,
             imageUrl,

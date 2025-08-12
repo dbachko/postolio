@@ -160,6 +160,51 @@ export class PostolioStack extends cdk.Stack {
       port: 6380, // Use non-default port for security
     })
 
+    // S3 Bucket for AI-generated images with intelligent tiering
+    const imagesBucket = new s3.Bucket(this, 'AIImagesBucket', {
+      bucketName: `postolio-ai-images-${environment}-${cdk.Aws.ACCOUNT_ID}`,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: environment === 'prod' 
+        ? s3.BucketEncryption.KMS_MANAGED // SSE-KMS for production
+        : s3.BucketEncryption.S3_MANAGED,  // SSE-S3 for development
+      enforceSSL: true,
+      versioning: environment === 'prod',
+      lifecycleRules: [
+        {
+          id: 'intelligent-tiering',
+          enabled: true,
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(30),
+            },
+            {
+              storageClass: s3.StorageClass.GLACIER,
+              transitionAfter: cdk.Duration.days(90),
+            },
+            {
+              storageClass: s3.StorageClass.DEEP_ARCHIVE,
+              transitionAfter: cdk.Duration.days(365),
+            },
+          ],
+        },
+        {
+          id: 'compliance-deletion',
+          enabled: true,
+          expiration: cdk.Duration.days(2555), // 7 years for compliance
+        },
+      ],
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
+          allowedOrigins: ['*'],
+          allowedHeaders: ['*'],
+          maxAge: 3600,
+        },
+      ],
+    })
+
     // S3 Access Logs bucket for CloudFront
     const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
       bucketName: `postolio-access-logs-${environment}-${cdk.Aws.ACCOUNT_ID}`,
@@ -283,13 +328,23 @@ export class PostolioStack extends cdk.Stack {
       containerInsights: true,
     })
 
-    // Task role with permissions to access secrets
+    // Task role with permissions to access secrets and S3
     const taskRole = new iam.Role(this, 'TaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     })
 
     dbSecret.grantRead(taskRole)
     appSecrets.grantRead(taskRole)
+    
+    // Grant permissions to upload/delete images in S3
+    imagesBucket.grantReadWrite(taskRole)
+    
+    // Grant permissions to create CloudFront invalidations
+    taskRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['cloudfront:CreateInvalidation'],
+      resources: ['*'], // Will be restricted to specific distribution after creation
+    }))
 
     // Custom task execution role policy
     const taskExecutionRolePolicy = new iam.PolicyDocument({
@@ -430,6 +485,9 @@ export class PostolioStack extends cdk.Stack {
           DB_PORT: database.instanceEndpoint.port.toString(),
           DB_NAME: 'postolio',
           CORS_ORIGIN: apiDomainName, // Use unified domain instead of CloudFront domain
+          S3_IMAGES_BUCKET: imagesBucket.bucketName,
+          AWS_REGION: cdk.Aws.REGION,
+          CLOUDFRONT_DOMAIN: apiDomainName, // Will be updated after distribution creation
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: 'postolio',
@@ -493,6 +551,20 @@ export class PostolioStack extends cdk.Stack {
       targetUtilizationPercent: 80,
     })
 
+    // Create OAI for images bucket
+    const imagesOAI = new cloudfront.OriginAccessIdentity(this, 'ImagesOAI', {
+      comment: `OAI for ${environment} images bucket`,
+    })
+
+    // Grant OAI access to images bucket
+    imagesBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:GetObject'],
+        resources: [imagesBucket.arnForObjects('*')],
+        principals: [imagesOAI.grantPrincipal],
+      })
+    )
+
     // CloudFront Distribution with multiple origins for same-domain architecture
     const distributionProps: any = {
       // Default behavior - serves frontend from S3
@@ -504,7 +576,7 @@ export class PostolioStack extends cdk.Stack {
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
       },
-      // Additional behaviors for API routing
+      // Additional behaviors for API routing and image serving
       additionalBehaviors: {
         '/api/*': {
           origin: new origins.LoadBalancerV2Origin(fargateService.loadBalancer, {
@@ -515,6 +587,23 @@ export class PostolioStack extends cdk.Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
           compress: false,
+        },
+        '/images/*': {
+          origin: origins.S3BucketOrigin.withOriginAccessIdentity(imagesBucket, {
+            originAccessIdentity: imagesOAI,
+          }),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
+          responseHeadersPolicy: new cloudfront.ResponseHeadersPolicy(this, 'ImagesResponseHeadersPolicy', {
+            corsBehavior: {
+              accessControlAllowOrigins: ['*'],
+              accessControlAllowHeaders: ['*'],
+              accessControlAllowMethods: ['GET', 'HEAD'],
+              accessControlMaxAge: cdk.Duration.hours(1),
+              originOverride: false,
+            },
+          }),
         },
       },
       // Use postolio.example as the custom domain
@@ -544,6 +633,16 @@ export class PostolioStack extends cdk.Stack {
     }
 
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', distributionProps)
+    
+    // Add CloudFront distribution ID to ECS environment
+    const cfnService = fargateService.service.node.defaultChild as ecs.CfnService
+    const taskDef = fargateService.taskDefinition.node.defaultChild as ecs.CfnTaskDefinition
+    const containerDef = taskDef.containerDefinitions![0] as any
+    containerDef.environment = containerDef.environment || []
+    containerDef.environment.push({
+      name: 'CLOUDFRONT_DISTRIBUTION_ID',
+      value: distribution.distributionId
+    })
 
     // Update existing DNS record for postolio.example to point to CloudFront (unified domain)
     // Note: We reuse the existing ApiDomainRecord logical ID to update the existing record
@@ -593,6 +692,16 @@ export class PostolioStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'FrontendBucketName', {
       value: frontendBucket.bucketName,
       description: 'Frontend S3 bucket name',
+    })
+    
+    new cdk.CfnOutput(this, 'ImagesBucketName', {
+      value: imagesBucket.bucketName,
+      description: 'AI Images S3 bucket name',
+    })
+    
+    new cdk.CfnOutput(this, 'CloudFrontDistributionId', {
+      value: distribution.distributionId,
+      description: 'CloudFront distribution ID for cache invalidation',
     })
 
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {

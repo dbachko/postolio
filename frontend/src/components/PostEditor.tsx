@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { apiClient, type Content } from '../lib/api'
 import { useDebounce } from '../hooks/useDebounce'
+import { OptimizedImage } from './OptimizedImage'
 import {
   Dialog,
   DialogContent,
@@ -393,15 +394,15 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
               placeholder="https://example.com/image.jpg"
               type="url"
             />
-            {formData.imageUrl && (
+            {(content.cdnImageUrl || formData.imageUrl) && (
               <div className="mt-2">
-                <img
-                  src={formData.imageUrl}
+                <OptimizedImage
+                  src={content.cdnImageUrl || formData.imageUrl}
+                  cdnUrl={content.cdnImageUrl}
+                  fallbackUrl={formData.imageUrl}
                   alt="Preview"
                   className="max-w-xs max-h-48 object-cover rounded-lg border"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none'
-                  }}
+                  aspectRatio="square"
                 />
               </div>
             )}

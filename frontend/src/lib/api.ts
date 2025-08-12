@@ -1,3 +1,5 @@
+// Basic types - avoiding complex type imports for now to resolve build issues
+
 export interface User {
   id: string
   email: string
@@ -11,7 +13,7 @@ export interface Brand {
   id: string
   name: string
   description: string | null
-  styleProfile: any
+  styleProfile: Record<string, unknown> | null
   createdAt: string
 }
 
@@ -20,6 +22,10 @@ export interface Content {
   caption: string
   hashtags: string[]
   imageUrl: string | null
+  s3ImageKey?: string | null
+  cdnImageUrl?: string | null
+  imageRegion?: string | null
+  retentionExpiresAt?: string | null
   status: 'pending' | 'approved' | 'rejected' | 'posted' | 'scheduled'
   scheduledAt: string | null
   postedAt: string | null
@@ -152,7 +158,7 @@ class ApiClient {
       try {
         const errorData = await response.json()
         throw new Error(errorData.error || 'Request failed')
-      } catch (parseError) {
+      } catch {
         // If JSON parsing fails, just use a generic error message
         throw new Error(`Request failed with status ${response.status}`)
       }
@@ -206,14 +212,14 @@ class ApiClient {
       caption: string
       hashtags: string[]
     }>
-  }): Promise<{ brand: Brand; analysis: any }> {
+  }): Promise<{ brand: Brand; analysis: Record<string, unknown> }> {
     return this.request('/api/brands/analyze', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
-  async deleteBrand(brandId: string): Promise<{ message: string; deletedBrand: any }> {
+  async deleteBrand(brandId: string): Promise<{ message: string; deletedBrand: Brand }> {
     return this.request(`/api/brands/brand/${brandId}`, {
       method: 'DELETE',
     })
@@ -234,7 +240,7 @@ class ApiClient {
     return this.request(`/api/auth/instagram/authorize?brandId=${brandId}`)
   }
 
-  async getInstagramConnectionStatus(brandId: string, refresh = false): Promise<{ connected: boolean; profile: any }> {
+  async getInstagramConnectionStatus(brandId: string, refresh = false): Promise<{ connected: boolean; profile: Record<string, unknown> | null }> {
     const queryParam = refresh ? '?refresh=true' : ''
     return this.request(`/api/instagram/status/${brandId}${queryParam}`)
   }
@@ -259,7 +265,7 @@ class ApiClient {
     count: number
     theme?: string
     style?: string
-  }): Promise<{ content: Content[]; metadata: any }> {
+  }): Promise<{ content: Content[]; metadata: Record<string, unknown> }> {
     return this.request('/api/content/generate', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -270,7 +276,7 @@ class ApiClient {
     return this.request(`/api/content/history/${brandId}`)
   }
 
-  async publishToInstagram(contentId: string): Promise<{ success: boolean; content: Content; instagramPost?: any }> {
+  async publishToInstagram(contentId: string): Promise<{ success: boolean; content: Content; instagramPost?: Record<string, unknown> }> {
     return this.request(`/api/instagram/publish/${contentId}`, {
       method: 'POST',
     })
@@ -316,7 +322,7 @@ class ApiClient {
     return this.request(endpoint, { ...options, method: 'GET' })
   }
 
-  async post<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> {
     return this.request(endpoint, {
       ...options,
       method: 'POST',
@@ -324,7 +330,7 @@ class ApiClient {
     })
   }
 
-  async put<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
+  async put<T>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> {
     return this.request(endpoint, {
       ...options,
       method: 'PUT',

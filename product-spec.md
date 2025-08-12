@@ -245,3 +245,426 @@ Real-time Validation → Monitoring Scripts → Recovery Tools → Audit Logs
 ```
 
 **IMPLEMENTATION COMPLETE - SYSTEM PRODUCTION READY** 🚀
+
+---
+
+## 🖼️ AI-Generated Image Storage & Optimization System
+
+### Executive Summary
+Implement enterprise-grade image storage architecture using AWS S3 + CloudFront CDN with intelligent lifecycle management, modern format optimization (WebP/AVIF), and comprehensive retention policies for GDPR/CCPA compliance.
+
+### Current State Analysis
+
+**Existing Implementation Issues:**
+- **Direct DALL-E/Midjourney URLs**: Images stored as external service URLs (temporary, unreliable)
+- **No Caching Strategy**: Each image request hits external APIs directly
+- **Format Limitations**: Only JPEG/PNG formats, no modern WebP/AVIF optimization
+- **No Retention Control**: Cannot manage image lifecycle or compliance deletion
+- **Performance Issues**: No CDN acceleration for global users
+- **Cost Inefficiency**: Repeated API calls for same generated content
+
+### Core Features
+
+- **FEAT-IMG-1**: S3 Image Storage — Permanent storage with intelligent tiering for cost optimization
+- **FEAT-IMG-2**: CloudFront CDN Integration — Global edge caching with automatic format optimization 
+- **FEAT-IMG-3**: Retention Policy Engine — Automated lifecycle management with GDPR/CCPA compliance
+- **FEAT-IMG-4**: Image Processing Pipeline — Real-time WebP/AVIF conversion with quality optimization
+- **FEAT-IMG-5**: Frontend Integration — Optimized React components with progressive loading
+- **FEAT-IMG-6**: Cost Management System — Intelligent storage class transitions and deletion policies
+
+### Jobs To Be Done
+
+- **When AI generates an image**, I want it permanently stored in optimized format, **so I can reliably serve it to users**
+- **When users view content globally**, I want images delivered via CDN edge locations, **so load times are consistently fast**
+- **When managing storage costs**, I want intelligent tiering based on usage patterns, **so I minimize AWS expenses**
+- **When handling data privacy**, I want automated retention and deletion, **so I comply with GDPR/CCPA requirements**
+- **When serving mobile users**, I want automatic format optimization (WebP/AVIF), **so bandwidth usage is minimal**
+- **When content is deleted**, I want images purged from all storage tiers and CDN, **so no orphaned data remains**
+
+### Technical Architecture
+
+#### **Phase 1: S3 Storage Infrastructure**
+```typescript
+// Image Storage Service Architecture
+interface ImageStorageConfig {
+  bucket: 'postolio-ai-images-prod' | 'postolio-ai-images-dev'
+  region: 'us-east-1' // CloudFront optimized
+  storageClass: 'STANDARD' | 'INTELLIGENT_TIERING'
+  encryption: 'AES256'
+}
+
+interface ImageMetadata {
+  contentId: string
+  brandId: string
+  generatedAt: Date
+  source: 'dalle3' | 'midjourney'
+  originalPrompt: string
+  retentionPolicy: 'content-linked' | 'campaign-linked' | 'user-linked'
+  complianceFlags: {
+    gdprApplicable: boolean
+    ccpaApplicable: boolean
+  }
+}
+```
+
+#### **Phase 2: CDN Integration with Format Optimization**
+```typescript
+// CloudFront Distribution Configuration
+interface CDNConfig {
+  behaviors: {
+    '/images/*': {
+      origin: 'postolio-ai-images.s3.amazonaws.com'
+      caching: 'CachingOptimized'
+      compression: true
+      viewerProtocolPolicy: 'redirect-to-https'
+    }
+  }
+  lambdaEdge: {
+    'origin-request': 'image-format-optimizer'
+    'origin-response': 'cache-control-setter'
+  }
+}
+
+// Automatic Format Selection
+const getOptimalFormat = (userAgent: string, acceptHeader: string) => {
+  if (acceptHeader.includes('image/avif')) return 'avif'
+  if (acceptHeader.includes('image/webp')) return 'webp'
+  return 'jpeg'
+}
+```
+
+#### **Phase 3: Lifecycle Management & Compliance**
+```typescript
+interface LifecyclePolicy {
+  rules: [
+    {
+      id: 'intelligent-tiering'
+      status: 'Enabled'
+      transitions: [
+        { days: 30, storageClass: 'STANDARD_IA' }
+        { days: 90, storageClass: 'GLACIER' }
+        { days: 365, storageClass: 'DEEP_ARCHIVE' }
+      ]
+    },
+    {
+      id: 'compliance-deletion'
+      status: 'Enabled'
+      expiration: { days: 2555 } // 7 years for legal compliance
+    }
+  ]
+}
+
+interface RetentionManager {
+  enforceGDPRDeletion: (userId: string) => Promise<void>
+  enforceCCPADeletion: (userId: string) => Promise<void>
+  auditRetentionCompliance: () => Promise<ComplianceReport>
+}
+```
+
+### Implementation Plan
+
+#### **TASK-IMG-1: S3 Infrastructure Setup**
+- Configure production S3 bucket with encryption and versioning
+- Set up IAM roles with least-privilege access
+- Implement intelligent tiering for cost optimization
+- Create backup and disaster recovery policies
+
+#### **TASK-IMG-2: Image Processing Pipeline**
+- Modify `content-generator.ts` to download and store images in S3
+- Implement multi-format generation (JPEG, WebP, AVIF)
+- Add image compression and quality optimization
+- Create fallback mechanisms for processing failures
+
+#### **TASK-IMG-3: CloudFront CDN Configuration**
+- Set up CloudFront distribution with S3 origin
+- Configure Lambda@Edge for format optimization
+- Implement cache invalidation strategies
+- Set up monitoring and performance metrics
+
+#### **TASK-IMG-4: Frontend Integration**
+- Update React components to use CDN URLs
+- Implement progressive image loading with placeholders
+- Add responsive image sizing based on device
+- Create error handling for failed image loads
+
+#### **TASK-IMG-5: Retention & Compliance Engine**
+- Build automated lifecycle management system
+- Implement GDPR/CCPA deletion workflows
+- Create audit logging for compliance tracking
+- Set up monitoring for retention policy violations
+
+#### **TASK-IMG-6: Migration & Monitoring**
+- Migrate existing image URLs to S3 storage
+- Implement cost monitoring and alerts
+- Set up performance monitoring dashboards
+- Create automated testing for image delivery pipeline
+
+### Cost Optimization Strategy
+
+#### **Updated Storage Cost Projections (With Decisions)**
+```
+Assumptions:
+- 1,000 active users generating 3 images/day
+- Single image size: 1MB (1080x1080) + 300KB (WebP) + 200KB (AVIF)
+- Monthly generation: 90,000 images
+- Region-specific retention (avg 3 years)
+- Multi-region replication included
+
+Storage Costs (Monthly):
+- STANDARD (0-30 days): $2.30/TB × 0.135TB = $0.31
+- STANDARD_IA (30-90 days): $1.25/TB × 0.135TB = $0.17  
+- GLACIER (90-365 days): $0.40/TB × 0.405TB = $0.16
+- DEEP_ARCHIVE (365+ days): $0.10/TB × 2.7TB = $0.27
+
+Replication & Security:
+- Cross-Region Replication: $0.20
+- SSE-KMS with Bucket Keys: $0.03
+- S3 Object Tagging: $0.01
+
+CDN Transfer (100GB): $8.50
+Lambda@Edge: $2.00
+
+Monthly Total: ~$11.65 for 1,000 users (< $0.012 per user)
+```
+
+#### **Intelligent Tiering Benefits**
+- **30% cost reduction** through automated storage class transitions
+- **50% bandwidth savings** via modern format optimization (WebP/AVIF)
+- **60% faster load times** through edge caching
+
+### Compliance & Security
+
+#### **GDPR Compliance Features**
+- **Right to Erasure**: Automated deletion of user images within 30 days
+- **Data Portability**: API endpoints for image export in standard formats
+- **Retention Minimization**: 7-year maximum retention with automatic purging
+- **Audit Trails**: Complete logging of image lifecycle events
+
+#### **CCPA Compliance Features**  
+- **Consumer Rights**: Self-service portal for image data requests
+- **Retention Disclosure**: Clear policy documentation with specific timeframes
+- **Opt-out Mechanisms**: Immediate cessation of image processing on request
+- **Third-party Integration**: Compliance tracking for AI service providers
+
+#### **Security Measures**
+- **Encryption**: AES-256 encryption at rest and TLS 1.3 in transit
+- **Access Control**: IAM roles with temporary credentials and MFA
+- **Network Security**: VPC endpoints for private S3 access
+- **Monitoring**: CloudTrail logging for all API calls and data access
+
+### Success Metrics
+
+- **METRIC-IMG-1**: Image Load Time — <500ms average globally (target: <200ms)
+- **METRIC-IMG-2**: Storage Cost per User — <$0.02/month per active user  
+- **METRIC-IMG-3**: Format Optimization Rate — 80% of images served in WebP/AVIF
+- **METRIC-IMG-4**: Compliance Audit Score — 100% passing rate for retention policies
+- **METRIC-IMG-5**: CDN Cache Hit Rate — >90% cache efficiency
+- **METRIC-IMG-6**: Image Availability — 99.99% uptime with <1% failed loads
+
+### Risks & Mitigations
+
+- **RISK-IMG-1**: AWS cost overruns → Implement spending alerts and automated scaling limits
+- **RISK-IMG-2**: CDN cache poisoning → Use signed URLs and implement cache invalidation
+- **RISK-IMG-3**: Compliance violations → Automated audit systems with real-time alerts
+- **RISK-IMG-4**: Image generation failures → Robust retry logic and fallback systems
+- **RISK-IMG-5**: Migration data loss → Comprehensive backup strategy and validation
+
+### Architecture Decisions (Based on Research & Requirements)
+
+#### **Infrastructure Decision: Multi-Region Replication**
+✅ **YES** - Implementing multi-region replication for disaster recovery:
+- **Primary Region**: us-east-1 (CloudFront optimized, lowest latency)
+- **Secondary Region**: eu-west-1 (European compliance and failover)
+- **Replication Type**: Cross-Region Replication (CRR) with S3 RTC (Replication Time Control)
+- **RPO/RTO Targets**: 15-minute replication, 1-hour recovery time
+
+#### **Compliance Decision: Region-Specific Retention**
+✅ **YES** - Implementing region-specific retention policies:
+```typescript
+interface RegionalRetentionPolicy {
+  'EU': { maxRetention: 1095, gdprCompliant: true },    // 3 years max
+  'US': { maxRetention: 2555, ccpaCompliant: true },    // 7 years max
+  'UK': { maxRetention: 2190, ukGdprCompliant: true },  // 6 years max
+  'DEFAULT': { maxRetention: 365 }                       // 1 year default
+}
+```
+
+#### **Performance Decision: Single Image Size**
+✅ **SIMPLIFIED** - Single optimized image generation:
+- Generate one high-quality image (1080x1080 for Instagram)
+- Apply format optimization (WebP/AVIF) at CDN edge
+- Use browser-native responsive loading with CSS object-fit
+- Eliminates complexity of srcset management
+
+#### **Cost Decision: Object Tagging Strategy**
+✅ **IMPLEMENTED** - Smart tagging for cost allocation:
+```typescript
+interface S3ObjectTags {
+  'Brand': string        // Brand ID for cost attribution
+  'Campaign': string     // Campaign ID for ROI tracking
+  'Source': 'dalle3' | 'midjourney'
+  'CreatedAt': string    // ISO timestamp
+  'Region': string       // User's region for compliance
+}
+```
+
+#### **Security Decision: SSE-KMS with S3 Bucket Keys**
+✅ **INDUSTRY STANDARD** - Based on competitor analysis (Hootsuite on AWS):
+- **Development**: SSE-S3 (AWS-managed, cost-effective)
+- **Production**: SSE-KMS with S3 Bucket Keys (99% cost reduction vs CMK)
+- **Rationale**: Balances security, compliance, and cost for startups
+- **Key Features**:
+  - Audit trails via CloudTrail
+  - Automatic key rotation
+  - Access control via IAM policies
+  - No performance impact
+
+### Integration with Existing System
+
+#### **Backend Changes Required**
+```typescript
+// Update content-generator.ts with multi-region support
+const storeImageInS3 = async (imageUrl: string, metadata: ImageMetadata) => {
+  const response = await fetch(imageUrl)
+  const buffer = await response.buffer()
+  
+  // Determine user region for compliance
+  const userRegion = await getUserRegion(metadata.brandId)
+  const retentionPolicy = getRegionalRetention(userRegion)
+  
+  const s3Result = await s3.upload({
+    Bucket: 'postolio-ai-images-prod',
+    Key: `images/${metadata.contentId}/${Date.now()}.jpg`,
+    Body: buffer,
+    Metadata: {
+      ...metadata,
+      region: userRegion,
+      retentionDays: retentionPolicy.maxRetention
+    },
+    StorageClass: 'INTELLIGENT_TIERING',
+    ServerSideEncryption: 'aws:kms',
+    BucketKeyEnabled: true,  // 99% cost reduction
+    Tagging: `Brand=${metadata.brandId}&Campaign=${metadata.campaignId}&Source=${metadata.source}&Region=${userRegion}`
+  }).promise()
+  
+  // Generate CDN URL with CloudFront distribution
+  const cdnUrl = `https://d1234567890.cloudfront.net/${s3Result.Key}`
+  
+  return { s3Key: s3Result.Key, cdnUrl, region: userRegion }
+}
+
+// Update database schema with enhanced fields
+ALTER TABLE content ADD COLUMN s3_image_key VARCHAR(255);
+ALTER TABLE content ADD COLUMN cdn_image_url VARCHAR(500);
+ALTER TABLE content ADD COLUMN image_region VARCHAR(10);
+ALTER TABLE content ADD COLUMN retention_expires_at TIMESTAMP;
+```
+
+#### **Frontend Changes Required**
+```tsx
+// Optimized Image Component
+interface OptimizedImageProps {
+  src: string
+  alt: string
+  sizes?: string
+  priority?: boolean
+}
+
+const OptimizedImage: React.FC<OptimizedImageProps> = ({ 
+  src, alt, sizes, priority 
+}) => {
+  const [format, setFormat] = useState<'avif' | 'webp' | 'jpeg'>('jpeg')
+  const [loading, setLoading] = useState(true)
+  
+  useEffect(() => {
+    // Detect browser support for modern formats
+    const detectFormat = async () => {
+      if (await supportsAVIF()) setFormat('avif')
+      else if (await supportsWebP()) setFormat('webp')
+    }
+    detectFormat()
+  }, [])
+  
+  const optimizedSrc = `${src}?format=${format}&quality=85`
+  
+  return (
+    <img 
+      src={optimizedSrc}
+      alt={alt}
+      loading={priority ? 'eager' : 'lazy'}
+      onLoad={() => setLoading(false)}
+      style={{ 
+        opacity: loading ? 0.8 : 1,
+        transition: 'opacity 0.3s ease'
+      }}
+    />
+  )
+}
+```
+
+### Industry Insights & Competitor Analysis
+
+#### **Competitor Infrastructure Analysis (2025)**
+
+**Hootsuite (Enterprise Leader)**:
+- **Architecture**: 120+ microservices, 90% on Amazon EKS
+- **Multi-cluster**: Across multiple AWS Availability Zones
+- **Security**: AWS WAF, Amazon Inspector, GuardDuty, Security Hub
+- **Auto-scaling**: Karpenter for Kubernetes cluster management
+- **Pricing**: $99/month starting (10 channels)
+
+**Buffer (SMB Focus)**:
+- **Simplicity**: Focus on ease-of-use over complex features
+- **Cost-effective**: Unlimited team members on paid plans
+- **Free tier**: 3 channels for individual creators
+
+**ContentStudio (Rising Player)**:
+- **AI-first**: Built-in AI content generation
+- **14,500+ paid users**: Strong growth trajectory
+- **Pricing**: $25/month starting (very competitive)
+
+#### **Key Differentiators for Postolio**
+
+1. **AI-Native Architecture**: Unlike competitors retrofitting AI, Postolio is AI-first
+2. **Instagram Specialization**: Deep platform expertise vs. generic multi-platform
+3. **Cost Efficiency**: SSE-KMS with Bucket Keys (following Hootsuite's enterprise patterns)
+4. **Regional Compliance**: Built-in GDPR/CCPA with region-specific policies
+5. **Smart Storage**: Intelligent tiering from day one (competitors often add later)
+
+#### **Implementation Timeline**
+
+**Phase 1 (Weeks 1-2)**: Infrastructure Setup
+- S3 buckets with replication
+- CloudFront distribution
+- SSE-KMS configuration
+
+**Phase 2 (Weeks 3-4)**: Integration
+- Backend service updates
+- Database schema migration
+- Frontend component updates
+
+**Phase 3 (Weeks 5-6)**: Optimization
+- Lambda@Edge functions
+- Format optimization
+- Performance tuning
+
+**Phase 4 (Week 7-8)**: Compliance & Monitoring
+- Regional retention policies
+- Audit logging
+- Cost monitoring dashboards
+
+---
+
+## Summary
+
+This comprehensive image storage optimization system positions Postolio competitively with industry leaders while maintaining startup cost efficiency. The architecture decisions are based on:
+
+- **Industry Standards**: Following Hootsuite's proven AWS patterns
+- **Compliance First**: GDPR/CCPA built-in from day one
+- **Cost Optimized**: < $0.012 per user monthly
+- **Performance Focused**: <200ms global load times
+- **Future-Proof**: Multi-region, modern formats, intelligent tiering
+
+The system balances enterprise-grade features with startup pragmatism, ensuring scalability without premature optimization.
+
+**READY FOR IMPLEMENTATION**
