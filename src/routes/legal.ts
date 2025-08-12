@@ -144,8 +144,8 @@ export default async function legalRoutes(fastify: FastifyInstance) {
     return {
       privacyPolicy: {
         url: '/legal/privacy-policy',
-        lastUpdated: '2024-12-19',
-        effectiveDate: '2024-12-19'
+        lastUpdated: '2025-08-11',
+        effectiveDate: '2025-08-11'
       },
       termsOfService: {
         url: '/legal/terms-of-service',
@@ -170,7 +170,7 @@ function markdownToHtml(markdown: string): string {
     // Bold text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     // Lists (simple implementation)
-    .replace(/^\- (.*$)/gim, '<li>$1</li>')
+    .replace(/^- (.*$)/gim, '<li>$1</li>')
     // Wrap lists in ul tags (basic)
     .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
     .replace(/<\/ul>\s*<ul>/g, '') // Remove duplicate ul tags
