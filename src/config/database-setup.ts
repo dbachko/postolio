@@ -25,15 +25,21 @@ export async function ensureDatabaseSchema(): Promise<void> {
       console.log('🚀 Running database migrations to create missing tables...')
       
       try {
-        // Run migrations to create tables
-        execSync('npx prisma db push', { 
+        // Use migrate deploy in production, db push in development
+        const migrateCommand = process.env.NODE_ENV === 'production' 
+          ? 'npx prisma migrate deploy' 
+          : 'npx prisma db push'
+        
+        console.log(`🔧 Running: ${migrateCommand}`)
+        execSync(migrateCommand, { 
           stdio: 'inherit',
           cwd: process.cwd()
         })
         console.log('✅ Database schema synchronized successfully')
       } catch (migrationError) {
         console.error('❌ Failed to run database migrations:', migrationError)
-        throw new Error('Database setup failed. Please run "npx prisma db push" manually.')
+        console.error('Migration command:', process.env.NODE_ENV === 'production' ? 'prisma migrate deploy' : 'prisma db push')
+        throw new Error(`Database setup failed: ${migrationError}`)
       }
     } else {
       console.log('✅ All required database tables exist')

@@ -119,16 +119,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     // Ensure database schema is ready before starting background services
     try {
+      app.log.info('🚀 Initializing database schema...')
       await ensureDatabaseSchema()
       
       // Start background services only after database is ready
       schedulerService.start()
       autopilotService.start()
 
-      app.log.info('Background services started')
+      app.log.info('✅ Database initialized and background services started')
     } catch (dbError) {
-      app.log.error('Failed to initialize database:', dbError)
-      app.log.info('Server running but background services disabled until database is ready')
+      app.log.error('❌ Failed to initialize database:', dbError)
+      app.log.info('⚠️  Server running but background services disabled until database is ready')
     }
   })
 }
