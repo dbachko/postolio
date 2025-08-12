@@ -151,21 +151,15 @@ async function downloadImage(url: string): Promise<Buffer> {
 /**
  * Optimize image for web delivery
  */
-async function optimizeImage(buffer: Buffer, format: 'jpeg' | 'webp' = 'jpeg'): Promise<Buffer> {
-  const sharpInstance = sharp(buffer)
-  
+async function optimizeImage(buffer: Buffer): Promise<Buffer> {
   // Instagram optimal size is 1080x1080
-  const optimized = sharpInstance
+  return sharp(buffer)
     .resize(1080, 1080, {
       fit: 'cover',
       position: 'center'
     })
-  
-  if (format === 'webp') {
-    return optimized.webp({ quality: 85 }).toBuffer()
-  } else {
-    return optimized.jpeg({ quality: 85, progressive: true }).toBuffer()
-  }
+    .jpeg({ quality: 85, progressive: true })
+    .toBuffer()
 }
 
 /**
@@ -199,10 +193,7 @@ export async function uploadImageToS3(
     
     // Optimize image
     console.log('Optimizing image for web delivery...')
-    const optimizedBuffer = await optimizeImage(imageBuffer, 'jpeg')
-    
-    // Generate WebP version
-    const webpBuffer = await optimizeImage(imageBuffer, 'webp')
+    const optimizedBuffer = await optimizeImage(imageBuffer)
     
     // Determine user region for compliance
     const userRegion = await getUserRegion(metadata.brandId)
@@ -210,9 +201,8 @@ export async function uploadImageToS3(
     const retentionExpiresAt = new Date()
     retentionExpiresAt.setDate(retentionExpiresAt.getDate() + retentionDays)
     
-    // Generate S3 keys
+    // Generate S3 key
     const jpegKey = generateS3Key(metadata, 'jpg')
-    const webpKey = generateS3Key(metadata, 'webp')
     
     // Prepare S3 metadata
     const s3Metadata = {
@@ -243,23 +233,7 @@ export async function uploadImageToS3(
     })
     
     await s3Client.send(jpegCommand)
-    console.log(`Uploaded JPEG to S3: ${jpegKey}`)
-    
-    // Upload WebP version
-    const webpCommand = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: webpKey,
-      Body: webpBuffer,
-      ContentType: 'image/webp',
-      Metadata: s3Metadata,
-      StorageClass: 'INTELLIGENT_TIERING',
-      ServerSideEncryption: 'AES256',
-      Tagging: tags,
-      CacheControl: 'public, max-age=31536000, immutable'
-    })
-    
-    await s3Client.send(webpCommand)
-    console.log(`Uploaded WebP to S3: ${webpKey}`)
+    console.log(`Uploaded image to S3: ${jpegKey}`)
     
     // Generate CloudFront URL
     const cdnUrl = CLOUDFRONT_DOMAIN 
@@ -283,20 +257,12 @@ export async function uploadImageToS3(
  */
 export async function deleteImageFromS3(s3Key: string): Promise<void> {
   try {
-    // Delete JPEG version
-    const deleteJpegCommand = new DeleteObjectCommand({
+    // Delete image from S3
+    const deleteCommand = new DeleteObjectCommand({
       Bucket: BUCKET_NAME,
       Key: s3Key
     })
-    await s3Client.send(deleteJpegCommand)
-    
-    // Delete WebP version if exists
-    const webpKey = s3Key.replace('.jpg', '.webp')
-    const deleteWebpCommand = new DeleteObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: webpKey
-    })
-    await s3Client.send(deleteWebpCommand)
+    await s3Client.send(deleteCommand)
     
     // Invalidate CloudFront cache if configured
     if (CLOUDFRONT_DISTRIBUTION_ID) {
@@ -305,8 +271,8 @@ export async function deleteImageFromS3(s3Key: string): Promise<void> {
         InvalidationBatch: {
           CallerReference: `delete-${Date.now()}`,
           Paths: {
-            Quantity: 2,
-            Items: [`/${s3Key}`, `/${webpKey}`]
+            Quantity: 1,
+            Items: [`/${s3Key}`]
           }
         }
       })
@@ -315,7 +281,7 @@ export async function deleteImageFromS3(s3Key: string): Promise<void> {
       console.log(`Invalidated CloudFront cache for ${s3Key}`)
     }
     
-    console.log(`Deleted images from S3: ${s3Key}`)
+    console.log(`Deleted image from S3: ${s3Key}`)
   } catch (error) {
     console.error('Failed to delete image from S3:', error)
     throw new Error(`S3 deletion failed: ${error instanceof Error ? error.message : 'Unknown error'}`)

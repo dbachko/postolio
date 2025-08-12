@@ -153,7 +153,7 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
           if (imageUrl && process.env.S3_IMAGES_BUCKET) {
             try {
               const metadata: ImageMetadata = {
-                contentId: `temp_${Date.now()}_${index}`, // Temporary ID until content is saved
+                contentId: `${Date.now()}_${index}`, // Unique ID for content
                 brandId: request.brandId,
                 campaignId: undefined as string | undefined, // Will be set when content is saved
                 generatedAt: new Date(),
