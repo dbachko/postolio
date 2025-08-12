@@ -30,6 +30,21 @@ export default defineConfig({
         console.log('No SSL certificates found, running on HTTP')
       }
       return undefined
-    })()
+    })(),
+    proxy: {
+      // Proxy API routes to backend - removes /api prefix for local development
+      // Frontend: /api/auth/login → Backend: /auth/login
+      '/api': {
+        target: 'https://localhost:3000',
+        changeOrigin: true,
+        secure: false, // Allow self-signed certificates
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            console.log(`🔄 Proxying: ${req.method} ${req.url} → https://localhost:3000${proxyReq.path}`)
+          })
+        }
+      }
+    }
   }
 })
