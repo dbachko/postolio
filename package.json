@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.772.0",
+    "@aws-sdk/client-cloudwatch": "^3.864.0",
     "@aws-sdk/client-s3": "^3.772.0",
     "@aws-sdk/s3-request-presigner": "^3.772.0",
     "@fastify/cookie": "^10.0.1",

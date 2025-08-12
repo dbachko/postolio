@@ -23,9 +23,11 @@ import campaignTemplatesRoutes from './routes/campaign-templates.js'
 import campaignAnalyticsRoutes from './routes/campaign-analytics.js'
 import rollingContentRoutes from './routes/rolling-content.js'
 import legalRoutes from './routes/legal.js'
+import { complianceRoutes } from './routes/compliance.js'
 import { autopilotService } from './services/autopilot.js'
 import { schedulerService } from './services/scheduler.js'
 import { ensureDatabaseSchema } from './config/database-setup.js'
+import { getRetentionManager } from './services/retention-manager.js'
 
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
@@ -101,6 +103,7 @@ export function buildFastify(): FastifyInstance {
   app.register(campaignAnalyticsRoutes, { prefix: '/api/' }) // API root level for campaign analytics
   app.register(rollingContentRoutes, { prefix: '/api/rolling-content' })
   app.register(legalRoutes, { prefix: '/legal' })
+  app.register(complianceRoutes)
 
   // Health check endpoint for both load balancer health checks and API requests
   app.get('/health', async () => {
@@ -132,6 +135,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // Start background services only after database is ready
       schedulerService.start()
       autopilotService.start()
+      
+      // Initialize retention manager
+      const retentionManager = getRetentionManager(app)
+      await retentionManager.initialize()
 
       app.log.info('✅ Database initialized and background services started')
     } catch (dbError) {
