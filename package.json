@@ -11,6 +11,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "start:with-migration": "./scripts/start-with-migration.sh",
+    "migrate:deploy": "npx prisma migrate deploy",
+    "migrate:only": "./scripts/run-migrations-only.sh",
     "dev": "tsx watch src/server.ts",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:db": "docker compose up -d",

@@ -49,6 +49,11 @@ COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nodejs:nodejs /app/scripts/start-with-migration.sh ./start-with-migration.sh
+COPY --from=builder --chown=nodejs:nodejs /app/scripts/run-migrations-only.sh ./scripts/run-migrations-only.sh
+
+# Make startup scripts executable
+RUN chmod +x ./start-with-migration.sh ./scripts/run-migrations-only.sh
 
 USER nodejs
 
@@ -57,8 +62,8 @@ EXPOSE 3000
 ENV PORT=3000
 ENV NODE_ENV=production
 
-# Add health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+# Add health check with longer start period for migrations
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
   CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })" || exit 1
 
-CMD ["npm", "start"]
+CMD ["./start-with-migration.sh"]
