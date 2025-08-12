@@ -15,6 +15,7 @@ import * as iam from 'aws-cdk-lib/aws-iam'
 import * as route53 from 'aws-cdk-lib/aws-route53'
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
+import * as lambda from 'aws-cdk-lib/aws-lambda'
 import { NagSuppressions } from 'cdk-nag'
 import { Construct } from 'constructs'
 
@@ -241,6 +242,46 @@ export class PostolioStack extends cdk.Stack {
         principals: [originAccessIdentity.grantPrincipal],
       })
     )
+
+    // Lambda@Edge function for SPA error handling (frontend routes only)
+    const spaErrorHandler = new lambda.Function(this, 'SPAErrorHandler', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
+        exports.handler = async (event) => {
+          const response = event.Records[0].cf.response;
+          const request = event.Records[0].cf.request;
+          
+          // Only handle 404/403 errors for non-API routes (SPA routing)
+          if ((response.status == '404' || response.status == '403') && 
+              !request.uri.startsWith('/api/')) {
+            
+            console.log('SPA Error Handler: Redirecting', request.uri, 'to /index.html');
+            
+            // Return 200 with index.html for SPA client-side routing
+            return {
+              status: '200',
+              statusDescription: 'OK',
+              headers: {
+                'content-type': [{
+                  key: 'Content-Type',
+                  value: 'text/html'
+                }],
+                'cache-control': [{
+                  key: 'Cache-Control',
+                  value: 'no-cache'
+                }]
+              },
+              body: '<!doctype html><html><head><script>window.location.href="/"; </script></head><body>Redirecting to SPA...</body></html>'
+            };
+          }
+          
+          // Pass through all other responses (including API errors)
+          return response;
+        };
+      `),
+      description: 'Lambda@Edge function for SPA error handling (frontend only)',
+    })
 
     // API Domain Configuration (postolio.example) - declare early for CloudFront
     const apiDomainName = 'postolio.example'
@@ -492,7 +533,7 @@ export class PostolioStack extends cdk.Stack {
 
     // CloudFront Distribution with multiple origins for same-domain architecture
     const distributionProps: any = {
-      // Default behavior - serves frontend from S3
+      // Default behavior - serves frontend from S3 with SPA error handling
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessIdentity(frontendBucket, {
           originAccessIdentity: originAccessIdentity,
@@ -500,6 +541,10 @@ export class PostolioStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
+        edgeLambdas: [{
+          functionVersion: spaErrorHandler.currentVersion,
+          eventType: cloudfront.LambdaEdgeEventType.ORIGIN_RESPONSE,
+        }],
       },
       // Additional behaviors for API routing
       additionalBehaviors: {
@@ -521,18 +566,8 @@ export class PostolioStack extends cdk.Stack {
       enableLogging: true,
       logBucket: accessLogsBucket,
       logFilePrefix: 'cloudfront-logs/',
-      errorResponses: [
-        {
-          httpStatus: 404,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-        },
-        {
-          httpStatus: 403,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-        },
-      ],
+      // NOTE: Global errorResponses removed - they were breaking API routes
+      // SPA error handling now done via Lambda@Edge for default behavior only
     }
 
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', distributionProps)
@@ -740,6 +775,15 @@ export class PostolioStack extends cdk.Stack {
       [{
         id: 'AwsSolutions-EC23',
         reason: 'Load balancer security group needs to accept HTTP traffic from internet on port 80',
+      }]
+    )
+
+    // Suppress Lambda@Edge function warnings
+    NagSuppressions.addResourceSuppressions(
+      spaErrorHandler,
+      [{
+        id: 'AwsSolutions-L1',
+        reason: 'Lambda@Edge function uses Node.js 18.x which is the latest supported runtime for Lambda@Edge',
       }]
     )
   }
