@@ -52,6 +52,11 @@ COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nodejs:nodejs /app/scripts/start-with-migration.sh ./start-with-migration.sh
 COPY --from=builder --chown=nodejs:nodejs /app/scripts/run-migrations-only.sh ./scripts/run-migrations-only.sh
 
+# Copy legal documents needed by API endpoints
+COPY --from=builder --chown=nodejs:nodejs /app/DATA_DELETION.md ./DATA_DELETION.md
+COPY --from=builder --chown=nodejs:nodejs /app/PRIVACY_POLICY.md ./PRIVACY_POLICY.md
+COPY --from=builder --chown=nodejs:nodejs /app/TERMS_OF_SERVICE.md ./TERMS_OF_SERVICE.md
+
 # Make startup scripts executable
 RUN chmod +x ./start-with-migration.sh ./scripts/run-migrations-only.sh
 

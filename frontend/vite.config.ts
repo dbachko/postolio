@@ -38,7 +38,6 @@ export default defineConfig({
         target: 'https://localhost:3000',
         changeOrigin: true,
         secure: false, // Allow self-signed certificates
-        // Remove the rewrite line to keep the /api prefix
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
             console.log(`🔄 Proxying: ${req.method} ${req.url} → https://localhost:3000${proxyReq.path}`)

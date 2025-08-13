@@ -41,6 +41,12 @@ model User {
   subscriptionTier     String             @default("free")
   timezone             String?            // User's preferred timezone (null = auto-detect)
   timezoneAutoDetected Boolean            @default(true) // Whether to auto-detect timezone
+  
+  // Soft delete fields
+  deletedAt         DateTime?          // Null if active, timestamp if soft-deleted
+  deletionReason    String?            // User's reason for deletion
+  scheduledDeletion DateTime?          // When permanent deletion will occur (30 days after deletedAt)
+  
   brands               Brand[]
   campaignTemplates    CampaignTemplate[]
 

@@ -207,6 +207,20 @@ export function Layout({ children }: LayoutProps) {
                 Privacy Policy
               </Link>
               <span>•</span>
+              <Link 
+                to="/terms-of-service" 
+                className="hover:text-foreground transition-colors"
+              >
+                Terms of Service
+              </Link>
+              <span>•</span>
+              <Link 
+                to="/legal/data-deletion" 
+                className="hover:text-foreground transition-colors"
+              >
+                Data Deletion
+              </Link>
+              <span>•</span>
               <a 
                 href="mailto:legal@postolio.example" 
                 className="hover:text-foreground transition-colors"
