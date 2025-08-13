@@ -575,6 +575,7 @@ class CampaignService {
       postingTime?: string
       startDate?: string
       endDate?: string
+      status?: string
     }
   ): Promise<any> {
     try {
@@ -600,9 +601,35 @@ class CampaignService {
         throw new Error('Campaign not found or access denied')
       }
 
-      // Only allow editing campaigns that are not active
-      if (campaign.status === 'active') {
-        throw new Error('Active campaigns cannot be updated. Please pause the campaign first.')
+      // Special handling for status transitions
+      if (updates.status) {
+        // Validate status transition
+        const validTransitions: Record<string, string[]> = {
+          'creating': ['preview', 'failed'],
+          'preview': ['active', 'failed'],
+          'active': ['paused', 'completed', 'failed'],
+          'paused': ['active', 'completed', 'failed'],
+          'completed': [],
+          'failed': ['preview']
+        }
+        
+        const allowedTransitions = validTransitions[campaign.status] || []
+        if (!allowedTransitions.includes(updates.status)) {
+          throw new Error(`Invalid status transition: ${campaign.status} → ${updates.status}`)
+        }
+        
+        // Handle pause operation
+        if (campaign.status === 'active' && updates.status === 'paused') {
+          return await this.pauseCampaign(campaignId, userId)
+        }
+        
+        // Handle resume operation
+        if (campaign.status === 'paused' && updates.status === 'active') {
+          return await this.resumeCampaign(campaignId, userId)
+        }
+      } else if (campaign.status === 'active') {
+        // Block other updates for active campaigns
+        throw new Error('Active campaigns can only be paused. Please pause the campaign first to make other changes.')
       }
 
       // Prepare the updated config
@@ -728,6 +755,131 @@ class CampaignService {
       return updatedCampaign
     } catch (error) {
       console.error('Update campaign error:', error)
+      throw error
+    }
+  }
+  
+  async pauseCampaign(campaignId: string, userId: string): Promise<any> {
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        // Verify ownership
+        const campaign = await tx.campaign.findFirst({
+          where: {
+            id: campaignId,
+            brand: { userId }
+          }
+        })
+        
+        if (!campaign) {
+          throw new Error('Campaign not found or access denied')
+        }
+        
+        if (campaign.status !== 'active') {
+          throw new Error(`Cannot pause campaign with status: ${campaign.status}`)
+        }
+        
+        // Update campaign status to paused
+        const updatedCampaign = await tx.campaign.update({
+          where: { id: campaignId },
+          data: { status: 'paused' }
+        })
+        
+        // Cancel all future scheduled content
+        const cancelledContent = await tx.content.updateMany({
+          where: {
+            campaignId,
+            status: 'scheduled',
+            scheduledAt: { gte: new Date() }
+          },
+          data: { status: 'pending' }
+        })
+        
+        console.log(`Campaign ${campaignId} paused. ${cancelledContent.count} scheduled posts cancelled.`)
+        
+        return {
+          campaign: updatedCampaign,
+          cancelledCount: cancelledContent.count,
+          message: 'Campaign paused. No content will be published until resumed.'
+        }
+      })
+      
+      return result
+    } catch (error) {
+      console.error('Pause campaign error:', error)
+      throw error
+    }
+  }
+  
+  async resumeCampaign(campaignId: string, userId: string): Promise<any> {
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        // Verify ownership and get campaign with config
+        const campaign = await tx.campaign.findFirst({
+          where: {
+            id: campaignId,
+            brand: { userId }
+          }
+        })
+        
+        if (!campaign) {
+          throw new Error('Campaign not found or access denied')
+        }
+        
+        if (campaign.status !== 'paused') {
+          throw new Error(`Cannot resume campaign with status: ${campaign.status}`)
+        }
+        
+        const now = new Date()
+        const config = campaign.config as any
+        const campaignEndDate = new Date(config.duration?.end)
+        
+        // Auto-complete if campaign expired
+        if (campaignEndDate < now) {
+          const completedCampaign = await tx.campaign.update({
+            where: { id: campaignId },
+            data: { 
+              status: 'completed',
+              completedAt: now
+            }
+          })
+          
+          return {
+            campaign: completedCampaign,
+            skippedCount: 0,
+            message: 'Campaign auto-completed (end date has passed)'
+          }
+        }
+        
+        // Mark past scheduled content as skipped
+        const skippedResult = await tx.content.updateMany({
+          where: {
+            campaignId,
+            status: 'scheduled',
+            scheduledAt: { lt: now }
+          },
+          data: { status: 'skipped' }
+        })
+        
+        // Resume campaign
+        const updatedCampaign = await tx.campaign.update({
+          where: { id: campaignId },
+          data: { status: 'active' }
+        })
+        
+        console.log(`Campaign ${campaignId} resumed. ${skippedResult.count} posts marked as skipped.`)
+        
+        return {
+          campaign: updatedCampaign,
+          skippedCount: skippedResult.count,
+          message: skippedResult.count > 0 
+            ? `Campaign resumed. ${skippedResult.count} scheduled posts were skipped.`
+            : 'Campaign resumed successfully!'
+        }
+      })
+      
+      return result
+    } catch (error) {
+      console.error('Resume campaign error:', error)
       throw error
     }
   }

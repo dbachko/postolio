@@ -119,8 +119,8 @@ export function Campaigns() {
 
   const pauseCampaignMutation = useMutation({
     mutationFn: (campaignId: string) => apiClient.updateCampaign(campaignId, { status: 'paused' }),
-    onSuccess: () => {
-      toast.success('Campaign paused successfully!')
+    onSuccess: (data) => {
+      toast.success(data.message || 'Campaign paused successfully!')
       campaignsQuery.refetch()
     },
   })
@@ -249,8 +249,26 @@ export function Campaigns() {
 
   // Event handlers with useCallback for performance
   const handleStartCampaign = useCallback((campaignId: string) => {
-    startCampaignMutation.mutate(campaignId)
-  }, [startCampaignMutation])
+    // Check if this is a resume operation (campaign is paused)
+    const campaign = campaigns.find(c => c.id === campaignId)
+    if (campaign?.status === 'paused') {
+      // Resume the paused campaign
+      apiClient.updateCampaign(campaignId, { status: 'active' }).then((data) => {
+        if (data.skippedCount && data.skippedCount > 0) {
+          toast.info(data.message || `Campaign resumed. ${data.skippedCount} scheduled posts were skipped.`)
+        } else {
+          toast.success(data.message || 'Campaign resumed successfully!')
+        }
+        campaignsQuery.refetch()
+      }).catch((error) => {
+        console.error('Failed to resume campaign:', error)
+        toast.error('Failed to resume campaign. Please try again.')
+      })
+    } else {
+      // Normal start for preview campaigns
+      startCampaignMutation.mutate(campaignId)
+    }
+  }, [startCampaignMutation, campaigns, campaignsQuery])
 
   const handlePauseCampaign = useCallback((campaignId: string) => {
     pauseCampaignMutation.mutate(campaignId)

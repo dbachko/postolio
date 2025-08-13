@@ -52,7 +52,7 @@ model Content {
   caption            String
   imageUrl           String?
   hashtags           String[]
-  status             String    @default("pending")
+  status             String    @default("pending") // pending, approved, rejected, scheduled, published, skipped
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   scheduledAt        DateTime?

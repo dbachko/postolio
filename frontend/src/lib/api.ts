@@ -403,7 +403,7 @@ class ApiClient {
     startDate?: string
     endDate?: string
     status?: string
-  }): Promise<{ success: boolean; campaign: any }> {
+  }): Promise<{ success: boolean; campaign: any; message?: string; skippedCount?: number; cancelledCount?: number }> {
     return this.request(`/api/campaign/${campaignId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
