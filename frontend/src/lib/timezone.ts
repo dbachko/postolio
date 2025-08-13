@@ -1,5 +1,6 @@
 import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz'
 import { parseISO } from 'date-fns'
+import { BROWSER_DETECTION_FALLBACK } from '../constants/timezone'
 
 // Session-based cache for timezone detection
 let cachedUserTimezone: string | null = null
@@ -26,8 +27,8 @@ export const getUserTimezone = (): string => {
     localStorage.setItem('detectedTimezone', cachedUserTimezone)
     return cachedUserTimezone
   } catch {
-    // Fallback to Eastern Time if browser doesn't support timezone detection
-    cachedUserTimezone = 'America/New_York'
+    // Fallback to UTC if browser doesn't support timezone detection
+    cachedUserTimezone = BROWSER_DETECTION_FALLBACK
     localStorage.setItem('detectedTimezone', cachedUserTimezone)
     return cachedUserTimezone
   }

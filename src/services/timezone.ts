@@ -1,10 +1,18 @@
 import { toZonedTime, fromZonedTime, formatInTimeZone } from 'date-fns-tz'
 import { FastifyRequest } from 'fastify'
 import { getDatabaseClient } from '../config/database.js'
+import { DEFAULT_TIMEZONE, BROWSER_DETECTION_FALLBACK, BRAND_TIMEZONE_FALLBACK, isValidTimezone } from '../constants/timezone.js'
 
 const prisma = getDatabaseClient()
 
 export class TimezoneService {
+  /**
+   * Validate if a timezone string is supported
+   */
+  static isValidTimezone(timezone: string): boolean {
+    return isValidTimezone(timezone)
+  }
+
   /**
    * Auto-detect timezone from request headers or user preferences
    */
@@ -28,8 +36,8 @@ export class TimezoneService {
       return tzHeader
     }
     
-    // Default fallback to Eastern Time (most common for US users)
-    return 'America/New_York'
+    // Default fallback to UTC (neutral for global users)
+    return DEFAULT_TIMEZONE
   }
 
   /**
@@ -58,7 +66,7 @@ export class TimezoneService {
       return brand.user.timezone
     }
     
-    return 'America/New_York'
+    return BRAND_TIMEZONE_FALLBACK
   }
 
   /**
@@ -106,8 +114,20 @@ export class TimezoneService {
     timezone: string
   ): Date {
     const timeParts = postingTime.split(':').map(Number)
-    const hours = timeParts[0] ?? 12  // Default to noon if parsing fails
-    const minutes = timeParts[1] ?? 0 // Default to 0 minutes if parsing fails
+    
+    // Validate time format strictly
+    if (
+      timeParts.length !== 2 ||
+      typeof timeParts[0] === 'undefined' || typeof timeParts[1] === 'undefined' ||
+      isNaN(timeParts[0]) || isNaN(timeParts[1]) ||
+      timeParts[0] < 0 || timeParts[0] > 23 ||
+      timeParts[1] < 0 || timeParts[1] > 59
+    ) {
+      throw new Error(`Invalid posting time format: "${postingTime}". Expected "HH:mm" with valid hour (0-23) and minute (0-59).`)
+    }
+    
+    const hours = timeParts[0]!
+    const minutes = timeParts[1]!
     
     // Create date in the target timezone
     const localDate = new Date(date)
@@ -117,18 +137,6 @@ export class TimezoneService {
     return fromZonedTime(localDate, timezone)
   }
 
-  /**
-   * Validate if a timezone string is valid
-   */
-  static isValidTimezone(timezone: string): boolean {
-    try {
-      // Try to format a date with this timezone
-      formatInTimeZone(new Date(), timezone, 'yyyy-MM-dd')
-      return true
-    } catch {
-      return false
-    }
-  }
 
   /**
    * Get offset between two timezones

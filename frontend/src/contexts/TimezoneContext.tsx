@@ -117,29 +117,15 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     // Fetch from backend
     if (token) {
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/api/brands/${brandId}/timezone`,
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'X-Timezone': timezone
-            }
-          }
-        )
+        const data = await apiClient.getBrandTimezone(brandId)
+        const brandTz = data.timezone || timezone
         
-        if (response.ok) {
-          const data = await response.json()
-          const brandTz = data.timezone || timezone
-          
-          // Cache the result
-          setBrandTimezones(prev => new Map(prev).set(brandId, brandTz))
-          return brandTz
-        } else {
-          // Log error but don't throw - fallback to user timezone
-          console.warn(`Failed to fetch brand timezone for ${brandId}, using user timezone`)
-        }
+        // Cache the result
+        setBrandTimezones(prev => new Map(prev).set(brandId, brandTz))
+        return brandTz
       } catch (error) {
-        console.warn('Error fetching brand timezone:', error)
+        // Log error but don't throw - fallback to user timezone
+        console.warn(`Failed to fetch brand timezone for ${brandId}, using user timezone`, error)
       }
     }
     
@@ -151,24 +137,15 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
   const refreshTimezone = async () => {
     if (token) {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'X-Timezone': timezone
-          }
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          if (data.user) {
-            if (data.user.timezone && !data.user.timezoneAutoDetected) {
-              setTimezoneState(data.user.timezone)
-              setIsAutoDetected(false)
-            } else {
-              const detected = getUserTimezone()
-              setTimezoneState(detected)
-              setIsAutoDetected(true)
-            }
+        const data = await apiClient.getProfile()
+        if (data.user) {
+          if (data.user.timezone && !data.user.timezoneAutoDetected) {
+            setTimezoneState(data.user.timezone)
+            setIsAutoDetected(false)
+          } else {
+            const detected = getUserTimezone()
+            setTimezoneState(detected)
+            setIsAutoDetected(true)
           }
         }
       } catch (error) {

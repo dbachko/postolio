@@ -1,8 +1,33 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+import { getDatabaseClient } from '../config/database.js'
 import { TimezoneService } from '../services/timezone.js'
 
-const prisma = new PrismaClient()
+const prisma = getDatabaseClient()
+
+// Validation helpers
+function validateTimezoneUpdate(body: unknown): { timezone: string; timezoneAutoDetected: boolean } | null {
+  if (!body || typeof body !== 'object') return null
+  
+  const { timezone, timezoneAutoDetected } = body as any
+  
+  if (typeof timezone !== 'string' || typeof timezoneAutoDetected !== 'boolean') {
+    return null
+  }
+  
+  return { timezone, timezoneAutoDetected }
+}
+
+function validateBrandTimezoneUpdate(body: unknown): { timezone: string | null } | null {
+  if (!body || typeof body !== 'object') return null
+  
+  const { timezone } = body as any
+  
+  if (timezone !== null && typeof timezone !== 'string') {
+    return null
+  }
+  
+  return { timezone }
+}
 
 const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
   // Update user timezone preferences
@@ -11,10 +36,16 @@ const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     // After authenticate middleware, user is guaranteed to exist
     const userId = (request as any).user.id
-    const { timezone, timezoneAutoDetected } = request.body as {
-      timezone: string
-      timezoneAutoDetected: boolean
+    
+    // Validate request body
+    const validatedData = validateTimezoneUpdate(request.body)
+    if (!validatedData) {
+      return reply.status(400).send({ 
+        error: 'Invalid request body. Expected { timezone: string, timezoneAutoDetected: boolean }' 
+      })
     }
+    
+    const { timezone, timezoneAutoDetected } = validatedData
     
     // Validate timezone if not auto-detected
     if (!timezoneAutoDetected && !TimezoneService.isValidTimezone(timezone)) {
@@ -24,7 +55,7 @@ const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        timezone: timezoneAutoDetected ? null : timezone,
+        timezone: timezone, // Store the actual timezone value even when auto-detected
         timezoneAutoDetected,
       },
       select: {
@@ -70,7 +101,16 @@ const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
     // After authenticate middleware, user is guaranteed to exist
     const userId = (request as any).user.id
     const { brandId } = request.params as { brandId: string }
-    const { timezone } = request.body as { timezone: string | null }
+    
+    // Validate request body
+    const validatedData = validateBrandTimezoneUpdate(request.body)
+    if (!validatedData) {
+      return reply.status(400).send({ 
+        error: 'Invalid request body. Expected { timezone: string | null }' 
+      })
+    }
+    
+    const { timezone } = validatedData
     
     // Verify brand ownership
     const brand = await prisma.brand.findFirst({
