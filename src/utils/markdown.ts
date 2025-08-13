@@ -3,27 +3,64 @@
  * Used for rendering legal documents and other markdown content
  */
 export function markdownToHtml(markdown: string): string {
-  return markdown
+  const lines = markdown.split('\n')
+  const result: string[] = []
+  let inList = false
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]
+    
+    // Skip empty lines
+    if (line.trim() === '') {
+      if (inList) {
+        result.push('</ul>')
+        inList = false
+      }
+      result.push('')
+      continue
+    }
+
     // Headers
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    // Bold text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    // Lists (simple implementation)
-    .replace(/^- (.*$)/gim, '<li>$1</li>')
-    // Wrap lists in ul tags (basic)
-    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
-    .replace(/<\/ul>\s*<ul>/g, '') // Remove duplicate ul tags
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-    // Line breaks
-    .replace(/\n\n/g, '</p><p>')
-    // Wrap in paragraphs
-    .replace(/^(?!<[h|u|l])(.+)$/gm, '<p>$1</p>')
-    // Clean up empty paragraphs
-    .replace(/<p><\/p>/g, '')
-    // Handle effective date styling
-    .replace(/\*\*Effective Date:\*\* (.*?)(?=<\/p>)/, '<div class="effective-date"><strong>Effective Date:</strong> $1')
-    .replace(/\*\*Last Updated:\*\* (.*?)(?=<\/p>)/, '<strong>Last Updated:</strong> $1</div>')
+    if (line.startsWith('### ')) {
+      if (inList) { result.push('</ul>'); inList = false }
+      result.push(`<h3>${line.substring(4)}</h3>`)
+    } else if (line.startsWith('## ')) {
+      if (inList) { result.push('</ul>'); inList = false }
+      result.push(`<h2>${line.substring(3)}</h2>`)
+    } else if (line.startsWith('# ')) {
+      if (inList) { result.push('</ul>'); inList = false }
+      result.push(`<h1>${line.substring(2)}</h1>`)
+    }
+    // List items
+    else if (line.startsWith('- ')) {
+      if (!inList) {
+        result.push('<ul>')
+        inList = true
+      }
+      const listItem = line.substring(2)
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+      result.push(`<li>${listItem}</li>`)
+    }
+    // Separator
+    else if (line === '---') {
+      if (inList) { result.push('</ul>'); inList = false }
+      result.push('<hr>')
+    }
+    // Regular paragraphs
+    else {
+      if (inList) { result.push('</ul>'); inList = false }
+      const paragraph = line
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+      result.push(`<p>${paragraph}</p>`)
+    }
+  }
+
+  // Close any open list
+  if (inList) {
+    result.push('</ul>')
+  }
+
+  return result.join('\n')
 }

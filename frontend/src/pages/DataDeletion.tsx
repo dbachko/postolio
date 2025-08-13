@@ -31,7 +31,7 @@ export function DataDeletion() {
       })
       
       if (!response.ok) {
-        throw new Error('Failed to load data deletion instructions')
+        throw new Error(`Failed to load data deletion instructions: ${response.status} ${response.statusText}`)
       }
       
       const text = await response.text()
@@ -182,12 +182,37 @@ export function DataDeletion() {
       {/* Data Deletion Content */}
       <Card>
         <CardContent className="pt-6">
+          {/* Show error if content failed to load */}
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                {error}. You can still submit a deletion request below.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <div className="prose prose-lg max-w-none">
-            {formatMarkdown(content)}
+            {content ? formatMarkdown(content) : (
+              <div>
+                <h1 className="text-3xl font-bold text-blue-600 mb-4 pb-2 border-b-2 border-blue-600">
+                  Data Deletion Instructions
+                </h1>
+                <p className="mb-3 text-gray-700">
+                  We respect your right to privacy and provide multiple ways to delete your personal data and account.
+                </p>
+                <p className="mb-3 text-gray-700">
+                  You can submit a deletion request using the form below, or contact us directly at{' '}
+                  <a href="mailto:privacy@postolio.example" className="text-blue-600 hover:underline">
+                    privacy@postolio.example
+                  </a>
+                </p>
+              </div>
+            )}
           </div>
           
-          {/* Request Form for Non-Registered Users */}
-          <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200">
+          {/* Request Form for Non-Registered Users - Always show */}
+          <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200" style={{ minHeight: '200px' }}>
             <h3 className="text-lg font-semibold text-gray-900 mb-3">
               Request Data Deletion
             </h3>
