@@ -1,5 +1,4 @@
 import { memo } from 'react'
-import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -8,6 +7,8 @@ import {
   Loader2, Edit, Calendar, TrendingUp, 
   Pause, Play, Trash2, Activity
 } from 'lucide-react'
+import { formatCompact } from '../lib/timezone'
+import { useTimezone } from '../contexts/TimezoneContext'
 
 interface CampaignCardProps {
   campaign: {
@@ -47,6 +48,7 @@ const CampaignCard = memo(({
   pauseCampaignLoading = false,
   deleteCampaignLoading = false
 }: CampaignCardProps) => {
+  const { timezone } = useTimezone()
   const getBorderColor = () => {
     switch (campaign.status) {
       case 'active': return '#22c55e'
@@ -282,7 +284,7 @@ const CampaignCard = memo(({
             {campaign.startedAt && (
               <div className="flex items-center gap-2 text-gray-600">
                 <Activity className="w-4 h-4 text-gray-400" />
-                <span>Started {format(new Date(campaign.startedAt), 'MMM d')}</span>
+                <span>Started {formatCompact(campaign.startedAt, 'MMM d', timezone)}</span>
               </div>
             )}
             {campaign.priority && campaign.priority !== 5 && (

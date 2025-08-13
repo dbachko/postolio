@@ -29,18 +29,20 @@ enum CampaignStatus {
 }
 
 model User {
-  id                String             @id @default(cuid())
-  email             String             @unique
-  password          String
-  name              String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  instagramId       String?
-  instagramUsername String?
-  instagramToken    String?
-  subscriptionTier  String             @default("free")
-  brands            Brand[]
-  campaignTemplates CampaignTemplate[]
+  id                   String             @id @default(cuid())
+  email                String             @unique
+  password             String
+  name                 String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  instagramId          String?
+  instagramUsername    String?
+  instagramToken       String?
+  subscriptionTier     String             @default("free")
+  timezone             String?            // User's preferred timezone (null = auto-detect)
+  timezoneAutoDetected Boolean            @default(true) // Whether to auto-detect timezone
+  brands               Brand[]
+  campaignTemplates    CampaignTemplate[]
 
   @@map("users")
 }
@@ -60,6 +62,7 @@ model Brand {
   instagramProfileData Json?
   engagementActive     Boolean            @default(false)
   engagementRules      Json?
+  postingTimezone      String?            // Brand-specific posting timezone (null = use user's timezone)
   user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaignTemplates    CampaignTemplate[]
   campaigns            Campaign[]

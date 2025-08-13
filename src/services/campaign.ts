@@ -5,6 +5,7 @@ import { campaignJobService } from './campaign-jobs.js'
 import { campaignCoordinationService, type CampaignConfigWithPriority } from './campaign-coordination.js'
 import type { StyleProfile } from './ai.js'
 import { analyzeBrandStyle } from './ai.js'
+import { TimezoneService } from './timezone.js'
 
 const prisma = new PrismaClient()
 
@@ -63,15 +64,15 @@ class CampaignService {
         throw new Error('Campaign start date must be before end date')
       }
 
-      // Allow today's date as valid start date - compare in local timezone
+      // Allow today's date as valid start date - compare dates only (ignoring time)
       const today = new Date()
-      const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-
-      // Get the start date components from UTC and create a local date for comparison
-      const startUTC = config.duration.start
-      const startLocal = new Date(startUTC.getUTCFullYear(), startUTC.getUTCMonth(), startUTC.getUTCDate())
-
-      if (startLocal < todayLocal) {
+      today.setHours(0, 0, 0, 0) // Set to start of day in local timezone
+      
+      // Get start date and set to start of day for comparison
+      const startDate = new Date(config.duration.start)
+      startDate.setHours(0, 0, 0, 0) // Set to start of day
+      
+      if (startDate < today) {
         throw new Error('Campaign start date cannot be in the past')
       }
 
@@ -370,12 +371,13 @@ class CampaignService {
         }
       }
 
-      // Generate posting schedule
-      const postDates = this.generatePostingSchedule(
+      // Generate posting schedule (now timezone-aware)
+      const postDates = await this.generatePostingSchedule(
         new Date(config.duration.start),
         new Date(config.duration.end),
         config.frequency,
-        config.postingTime
+        config.postingTime,
+        campaign.brandId // Pass brandId for timezone lookup
       )
 
       // Get existing preview posts for this campaign
@@ -519,16 +521,33 @@ class CampaignService {
 
   /**
    * Generate posting schedule based on frequency and duration
+   * Now timezone-aware: schedules in the brand's timezone
    */
-  private generatePostingSchedule(startDate: Date, endDate: Date, frequency: string, postingTime: string): Date[] {
+  private async generatePostingSchedule(
+    startDate: Date, 
+    endDate: Date, 
+    frequency: string, 
+    postingTime: string,
+    brandId?: string
+  ): Promise<Date[]> {
     const schedule: Date[] = []
     const [hours, minutes] = postingTime.split(':').map(Number)
 
-    const current = new Date(startDate)
-    current.setHours(hours ?? 0, minutes ?? 0, 0, 0)
+    // Get the appropriate timezone for this brand
+    const timezone = brandId 
+      ? await TimezoneService.getBrandTimezone(brandId)
+      : 'America/New_York'
 
+    const current = new Date(startDate)
+    
     while (current <= endDate) {
-      schedule.push(new Date(current))
+      // Create a date in the brand's local timezone
+      const localDate = new Date(current)
+      localDate.setHours(hours ?? 10, minutes ?? 0, 0, 0)
+      
+      // Convert to UTC for storage
+      const utcDate = TimezoneService.toUTC(localDate, timezone)
+      schedule.push(utcDate)
 
       // Increment based on frequency
       switch (frequency) {
@@ -1087,22 +1106,14 @@ class CampaignService {
     }
 
     // Date comparison - allow campaigns to start from today onwards
-    // Parse dates properly handling UTC vs local timezone
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // Today at 00:00 local
-
-    // Parse the start date and extract just the date part (ignore time/timezone)
-    const startDateStr = config.duration.start.toISOString().split('T')[0] // "2025-08-07"
-    if (startDateStr) {
-      const dateParts = startDateStr.split('-').map(Number)
-      if (dateParts.length === 3 && dateParts.every((part) => !isNaN(part))) {
-        const [year, month, day] = dateParts as [number, number, number]
-        const startDateLocal = new Date(year, month - 1, day) // Create local date (month is 0-based)
-
-        if (startDateLocal < today) {
-          errors.push('Campaign start date cannot be in the past')
-        }
-      }
+    const today = new Date()
+    today.setHours(0, 0, 0, 0) // Today at start of day
+    
+    const startDate = new Date(config.duration.start)
+    startDate.setHours(0, 0, 0, 0) // Start date at start of day
+    
+    if (startDate < today) {
+      errors.push('Campaign start date cannot be in the past')
     }
 
     if (!['daily', 'every2days', '3weekly'].includes(config.frequency)) {

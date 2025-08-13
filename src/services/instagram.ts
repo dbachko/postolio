@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { redisService } from './redis.js'
-import crypto from 'crypto'
+import * as crypto from 'crypto'
 import { analyticsCache } from './analytics-cache.js'
 
 export interface InstagramPost {
@@ -123,7 +123,7 @@ class InstagramService {
       this.rateLimitWindow.set(windowKey, currentCount + 1)
 
       // Clean up old windows
-      for (const [key, _] of this.rateLimitWindow) {
+      for (const [key, _] of Array.from(this.rateLimitWindow)) {
         const keyTime = parseInt(key.split('_')[1] || '0')
         if (keyTime < windowStart - 60 * 60 * 1000) {
           this.rateLimitWindow.delete(key)

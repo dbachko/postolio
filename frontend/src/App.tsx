@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
 import { useAuthStore } from './stores/authStore'
+import { TimezoneProvider } from './contexts/TimezoneContext'
 import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
@@ -13,6 +14,7 @@ import Engagement from './pages/Engagement'
 import { Growth } from './pages/Growth'
 import { AIFeatures } from './pages/AIFeatures'
 import { Campaigns } from './pages/Campaigns'
+import { Settings } from './pages/Settings'
 import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { useEffect } from 'react'
 
@@ -41,8 +43,9 @@ function App() {
   
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
-        <Routes>
+      <TimezoneProvider>
+        <Router>
+          <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -124,9 +127,17 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Layout>
+                <Settings />
+              </Layout>
+            </ProtectedRoute>
+          } />
         </Routes>
         <Toaster position="bottom-left" />
       </Router>
+      </TimezoneProvider>
     </QueryClientProvider>
   )
 }

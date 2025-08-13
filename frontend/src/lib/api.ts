@@ -6,6 +6,8 @@ export interface User {
   name: string | null
   instagramUsername: string | null
   subscriptionTier: string
+  timezone?: string | null
+  timezoneAutoDetected?: boolean
   createdAt: string
 }
 
@@ -148,6 +150,11 @@ class ApiClient {
     if (this.token) {
       headers.Authorization = `Bearer ${this.token}`
     }
+
+    // Include timezone header for all requests
+    const userTimezone = localStorage.getItem('userTimezone') || 
+                        Intl.DateTimeFormat().resolvedOptions().timeZone
+    headers['X-Timezone'] = userTimezone
 
     const response = await fetch(url, {
       ...options,
@@ -618,6 +625,25 @@ class ApiClient {
     lastUpdated: string
   }> {
     return this.request(`/api/brand/${brandId}/analytics/summary`)
+  }
+
+  // Timezone endpoints
+  async getBrandTimezone(brandId: string): Promise<{ timezone: string | null }> {
+    return this.request(`/api/brands/${brandId}/timezone`)
+  }
+
+  async updateBrandTimezone(brandId: string, timezone: string | null): Promise<{ success: boolean }> {
+    return this.request(`/api/brands/${brandId}/timezone`, {
+      method: 'PATCH',
+      body: JSON.stringify({ timezone }),
+    })
+  }
+
+  async updateUserTimezone(timezone: string, autoDetected: boolean): Promise<{ success: boolean }> {
+    return this.request('/api/users/timezone', {
+      method: 'PATCH',
+      body: JSON.stringify({ timezone, timezoneAutoDetected: autoDetected }),
+    })
   }
 
 }

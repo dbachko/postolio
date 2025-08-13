@@ -23,6 +23,7 @@ import campaignTemplatesRoutes from './routes/campaign-templates.js'
 import campaignAnalyticsRoutes from './routes/campaign-analytics.js'
 import rollingContentRoutes from './routes/rolling-content.js'
 import legalRoutes from './routes/legal.js'
+import userRoutes from './routes/user.js'
 import { complianceRoutes } from './routes/compliance.js'
 import { autopilotService } from './services/autopilot.js'
 import { schedulerService } from './services/scheduler.js'
@@ -88,6 +89,7 @@ export function buildFastify(): FastifyInstance {
   // Register routes WITH /api prefix - CloudFront forwards full paths to backend
   app.register(monitoringRoutes, { prefix: '/api/monitoring' })
   app.register(authRoutes, { prefix: '/api/auth' })
+  app.register(userRoutes) // User routes include their own /api prefix
   app.register(instagramOAuthRoutes, { prefix: '/api/auth/instagram' })
   app.register(brandsRoutes, { prefix: '/api/brands' })
   app.register(contentRoutes, { prefix: '/api/content' })

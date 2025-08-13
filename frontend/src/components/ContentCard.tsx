@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient, type Content } from '../lib/api'
 import { OptimizedImage } from './OptimizedImage'
+import { formatInUserTimezone } from '../lib/timezone'
+import { useTimezone } from '../contexts/TimezoneContext'
 
 interface ContentCardProps {
   content: Content
@@ -11,6 +13,7 @@ interface ContentCardProps {
 export function ContentCard({ content, brandId }: ContentCardProps) {
   const [publishError, setPublishError] = useState<string | null>(null)
   const queryClient = useQueryClient()
+  const { timezone } = useTimezone()
 
   const publishMutation = useMutation({
     mutationFn: (contentId: string) => apiClient.publishToInstagram(contentId),
@@ -132,7 +135,7 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
 
         {content.scheduledAt && (
           <div className="mt-2 text-xs text-gray-500">
-            Scheduled for: {new Date(content.scheduledAt).toLocaleString()}
+            Scheduled for: {formatInUserTimezone(content.scheduledAt, 'MMM d, yyyy h:mm a', timezone)}
           </div>
         )}
       </div>

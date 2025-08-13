@@ -168,6 +168,12 @@ export function Layout({ children }: LayoutProps) {
                       <Settings className="w-4 h-4 mr-2" />
                       Manage Brands
                     </DropdownMenuItem>
+                    
+                    {/* Settings */}
+                    <DropdownMenuItem onClick={() => navigate('/settings')}>
+                      <Settings className="w-4 h-4 mr-2" />
+                      Settings
+                    </DropdownMenuItem>
 
                     <DropdownMenuSeparator />
 
