@@ -23,6 +23,7 @@ import campaignTemplatesRoutes from './routes/campaign-templates.js'
 import campaignAnalyticsRoutes from './routes/campaign-analytics.js'
 import rollingContentRoutes from './routes/rolling-content.js'
 import legalRoutes from './routes/legal.js'
+import dataDeletionRoutes from './routes/data-deletion.js'
 import { complianceRoutes } from './routes/compliance.js'
 import { autopilotService } from './services/autopilot.js'
 import { schedulerService } from './services/scheduler.js'
@@ -103,6 +104,7 @@ export function buildFastify(): FastifyInstance {
   app.register(campaignAnalyticsRoutes, { prefix: '/api/' }) // API root level for campaign analytics
   app.register(rollingContentRoutes, { prefix: '/api/rolling-content' })
   app.register(legalRoutes, { prefix: '/legal' })
+  app.register(dataDeletionRoutes, { prefix: '/legal' })
   app.register(complianceRoutes)
 
   // Health check endpoint for both load balancer health checks and API requests

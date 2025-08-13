@@ -15,6 +15,7 @@ import { AIFeatures } from './pages/AIFeatures'
 import { Campaigns } from './pages/Campaigns'
 import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { TermsOfService } from './pages/TermsOfService'
+import { DataDeletion } from './pages/DataDeletion'
 import { useEffect } from 'react'
 
 const queryClient = new QueryClient()
@@ -48,6 +49,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
+          <Route path="/legal/data-deletion" element={<DataDeletion />} />
           <Route path="/" element={
             <ProtectedRoute>
               <Layout>
