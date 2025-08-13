@@ -1,7 +1,7 @@
 # Data Deletion Instructions
 
-**Last Updated:** January 10, 2025  
-**Effective Date:** January 10, 2025
+**Last Updated:** July 28, 2025  
+**Effective Date:** July 28, 2025
 
 ## How to Delete Your Data
 
@@ -138,11 +138,7 @@ For questions or assistance with data deletion:
 
 **Email**: privacy@postolio.example  
 **Support**: support@postolio.example  
-**Data Protection Officer**: dpo@postolio.example
-
-**Mailing Address**:  
-Postolio Inc.  
-[Address to be provided]  
+**Data Protection Officer**: dpo@postolio.example  
 
 ## Legal Basis
 
