@@ -58,8 +58,8 @@ export default function Engagement() {
     
     try {
       const [statusResponse, statsResponse] = await Promise.all([
-        apiClient.get<{status: EngagementStatus}>(`/engagement/status/${selectedBrandId}`),
-        apiClient.get<{stats: EngagementStats}>(`/engagement/stats/${selectedBrandId}?days=7`)
+        apiClient.get<{status: EngagementStatus}>(`/api/engagement/status/${selectedBrandId}`),
+        apiClient.get<{stats: EngagementStats}>(`/api/engagement/stats/${selectedBrandId}?days=7`)
       ])
       
       setStatus(statusResponse.status)
@@ -78,7 +78,7 @@ export default function Engagement() {
     setError('')
     
     try {
-      await apiClient.post(`/engagement/start/${selectedBrandId}`)
+      await apiClient.post(`/api/engagement/start/${selectedBrandId}`)
       await loadEngagementData() // Refresh status
     } catch (err: any) {
       setError(err.message || 'Failed to start engagement automation')
@@ -94,7 +94,7 @@ export default function Engagement() {
     setError('')
     
     try {
-      await apiClient.post(`/engagement/stop/${selectedBrandId}`)
+      await apiClient.post(`/api/engagement/stop/${selectedBrandId}`)
       await loadEngagementData() // Refresh status
     } catch (err: any) {
       setError(err.message || 'Failed to stop engagement automation')

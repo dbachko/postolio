@@ -78,7 +78,7 @@ export function Dashboard() {
     }
 
     // Navigate to campaign details
-    navigate(`/autopilot/campaign/${campaign.id}`)
+    navigate(`/campaigns/${campaign.id}`)
   }
 
   if (brandsLoading) {
@@ -117,7 +117,7 @@ export function Dashboard() {
             <Link to="/brands">Manage Brands</Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link to="/autopilot">Campaigns</Link>
+            <Link to="/campaigns">Campaigns</Link>
           </Button>
           <Button asChild>
             <Link to="/content">Generate Content</Link>
@@ -131,7 +131,7 @@ export function Dashboard() {
             <div className="flex items-center justify-between">
               <CardTitle>All Campaigns ({allCampaigns.length})</CardTitle>
               <Button variant="link" asChild className="text-primary hover:underline text-sm">
-                <Link to="/autopilot">View All →</Link>
+                <Link to="/campaigns">View All →</Link>
               </Button>
             </div>
           </CardHeader>
@@ -140,7 +140,7 @@ export function Dashboard() {
               <div className="text-center py-8">
                 <p className="text-muted-foreground mb-4">No campaigns created yet.</p>
                 <Button asChild>
-                  <Link to="/autopilot">Create Campaign</Link>
+                  <Link to="/campaigns/create">Create Campaign</Link>
                 </Button>
               </div>
             ) : (

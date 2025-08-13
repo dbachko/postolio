@@ -56,7 +56,7 @@ export default function InstagramAnalytics() {
     queryFn: async () => {
       const token = getToken()
       if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth')
-      return apiClient.get(`/instagram-analytics/overview/${selectedBrand.id}?timeRange=${timeRange}`, {
+      return apiClient.get(`/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=${timeRange}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
     },
@@ -70,7 +70,7 @@ export default function InstagramAnalytics() {
     queryFn: async () => {
       const token = getToken()
       if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth')
-      return apiClient.get(`/instagram-analytics/posts/${selectedBrand.id}?limit=10`, {
+      return apiClient.get(`/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`, {
         headers: { Authorization: `Bearer ${token}` }
       })
     },
@@ -84,7 +84,7 @@ export default function InstagramAnalytics() {
     queryFn: async () => {
       const token = getToken()
       if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth')
-      return apiClient.get(`/instagram-analytics/status/${selectedBrand.id}`, {
+      return apiClient.get(`/api/instagram-analytics/status/${selectedBrand.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
     },
@@ -98,7 +98,7 @@ export default function InstagramAnalytics() {
     
     setIsRefreshing(true)
     try {
-      await apiClient.post(`/instagram-analytics/refresh/${selectedBrand.id}`, {}, {
+      await apiClient.post(`/api/instagram-analytics/refresh/${selectedBrand.id}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       })
       

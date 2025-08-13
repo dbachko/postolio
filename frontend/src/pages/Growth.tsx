@@ -34,7 +34,7 @@ export function Growth() {
     queryKey: ['growth-analysis', selectedBrand?.id],
     queryFn: async () => {
       if (!selectedBrand) return null
-      const response = await apiClient.post(`/growth/analyze`, { brandId: selectedBrand.id })
+      const response = await apiClient.post(`/api/growth/analyze`, { brandId: selectedBrand.id })
       return (response as any).analysis
     },
     enabled: !!selectedBrand
@@ -44,7 +44,7 @@ export function Growth() {
     queryKey: ['growth-strategies', selectedBrand?.id, selectedFocus],
     queryFn: async () => {
       if (!selectedBrand) return null
-      const response = await apiClient.post(`/growth/strategies`, { 
+      const response = await apiClient.post(`/api/growth/strategies`, { 
         brandId: selectedBrand.id,
         focus: selectedFocus || undefined
       })
@@ -57,7 +57,7 @@ export function Growth() {
     queryKey: ['growth-metrics', selectedBrand?.id],
     queryFn: async () => {
       if (!selectedBrand) return null
-      const response = await apiClient.get(`/growth/metrics/${selectedBrand.id}?period=30`)
+      const response = await apiClient.get(`/api/growth/metrics/${selectedBrand.id}?period=30`)
       return (response as any).metrics
     },
     enabled: !!selectedBrand
