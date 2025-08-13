@@ -212,8 +212,12 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
         // Generate verification token
         const verificationToken = crypto.randomBytes(32).toString('hex')
         
-        // TODO: Store token in Redis with expiration
-        // TODO: Send verification email
+        // TODO: Store verification token in Redis with 24-hour expiration
+        // Example: await redis.setex(`deletion-token:${user.id}`, 86400, verificationToken)
+        
+        // TODO: Implement email sending service
+        // Should send email with verification link containing the token
+        // Example: await emailService.sendDeletionVerification(user.email, verificationToken)
         
         return reply.send({
           success: true,
@@ -258,14 +262,18 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
           deletedAt,
           deletionReason: reason ? `${DELETION_REASONS[reason]}${feedback ? `: ${feedback}` : ''}` : null,
           scheduledDeletion,
-          // Clear sensitive data immediately
-          instagramToken: null,
-          password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10) // Properly invalidate password
+          // Clear sensitive tokens but keep password for recovery
+          instagramToken: null
+          // Password is kept intact to allow account recovery
         }
       })
       
-      // TODO: Queue background job for permanent deletion after 30 days
-      // TODO: Send confirmation email
+      // TODO: Implement scheduled deletion job for GDPR compliance
+      // This should run daily to permanently delete accounts past their 30-day recovery period
+      // Example: await scheduleJob('permanent-deletion', { userId: user.id, scheduledFor: scheduledDeletion })
+      
+      // TODO: Send deletion confirmation email
+      // Example: await emailService.sendDeletionConfirmation(user.email, scheduledDeletion)
       
       return reply.send({
         success: true,
@@ -299,8 +307,11 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
         })
       }
       
-      // TODO: Verify password (need to store original password hash separately)
-      // For now, we'll skip password verification in soft-deleted accounts
+      // Verify password before allowing account recovery
+      const passwordHash = user.password
+      if (!passwordHash || !(await bcrypt.compare(password, passwordHash))) {
+        return reply.code(401).send({ error: 'Invalid password' })
+      }
       
       // Recover the account
       await prisma.user.update({
