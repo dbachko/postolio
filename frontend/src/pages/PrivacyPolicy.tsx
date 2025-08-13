@@ -18,7 +18,7 @@ export function PrivacyPolicy() {
 
   const fetchPrivacyPolicy = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/legal/privacy-policy`, {
+      const response = await fetch(`${API_BASE_URL}/api/legal/privacy-policy`, {
         headers: {
           'Accept': 'text/plain'
         }

@@ -18,7 +18,7 @@ export function TermsOfService() {
 
   const fetchTermsOfService = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/legal/terms-of-service`, {
+      const response = await fetch(`${API_BASE_URL}/api/legal/terms-of-service`, {
         headers: {
           'Accept': 'text/plain'
         }
