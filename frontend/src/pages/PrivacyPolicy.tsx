@@ -3,6 +3,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import type { ReactElement } from 'react'
 
 export function PrivacyPolicy() {
   const [content, setContent] = useState<string>('')
@@ -37,7 +38,7 @@ export function PrivacyPolicy() {
   const formatMarkdown = (markdown: string) => {
     // Simple markdown to JSX conversion for display
     const lines = markdown.split('\n')
-    const elements: JSX.Element[] = []
+    const elements: ReactElement[] = []
     let key = 0
 
     for (let i = 0; i < lines.length; i++) {
