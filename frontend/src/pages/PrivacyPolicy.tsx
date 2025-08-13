@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Card, CardHeader, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { ReactElement } from 'react'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://localhost:3000'
 
 export function PrivacyPolicy() {
   const [content, setContent] = useState<string>('')
@@ -16,7 +18,7 @@ export function PrivacyPolicy() {
 
   const fetchPrivacyPolicy = async () => {
     try {
-      const response = await fetch('/legal/privacy-policy', {
+      const response = await fetch(`${API_BASE_URL}/legal/privacy-policy`, {
         headers: {
           'Accept': 'text/plain'
         }
@@ -136,15 +138,7 @@ export function PrivacyPolicy() {
 
       {/* Privacy Policy Content */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-blue-600">Privacy Policy</h1>
-            <div className="text-sm text-gray-500">
-              Last Updated: December 19, 2024
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <div className="prose prose-lg max-w-none">
             {formatMarkdown(content)}
           </div>
