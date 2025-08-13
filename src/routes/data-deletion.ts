@@ -6,7 +6,7 @@ import { verifyJWT } from '../services/jwt.js'
 import { markdownToHtml } from '../utils/markdown.js'
 
 interface DeletionRequest {
-  email?: string
+  email: string
   userId?: string
   reason?: string
   source: 'user' | 'meta' | 'legal'
@@ -192,7 +192,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
     }
     
     // Validate reason if provided
-    if (body.reason && !Object.keys(DELETION_REASONS).includes(body.reason)) {
+    if (body.reason && !Object.values(DELETION_REASONS).includes(body.reason)) {
       return reply.code(400).send({ error: 'Invalid deletion reason' })
     }
     
@@ -350,7 +350,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
       // Verify signature
       if (!process.env.FACEBOOK_APP_SECRET) {
         fastify.log.error('FACEBOOK_APP_SECRET not configured')
-        return reply.code(500).send({ error: 'Server configuration error' })
+        return reply.code(400).send({ error: 'Invalid request' })
       }
       
       const expectedSig = crypto

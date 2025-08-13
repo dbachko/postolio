@@ -74,6 +74,27 @@ export function DataDeletion() {
     }
   }
 
+  // Simple HTML sanitization - only allow specific safe formatting
+  const sanitizeAndFormatText = (text: string) => {
+    // Extract bold text and replace with React components
+    const parts = text.split(/\*\*(.*?)\*\*/g)
+    const elements = []
+    
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 0) {
+        // Regular text
+        if (parts[i]) {
+          elements.push(parts[i])
+        }
+      } else {
+        // Bold text
+        elements.push(<strong key={i} className="text-gray-900">{parts[i]}</strong>)
+      }
+    }
+    
+    return elements
+  }
+
   const formatMarkdown = (markdown: string) => {
     const lines = markdown.split('\n')
     const elements: ReactElement[] = []
@@ -91,18 +112,18 @@ export function DataDeletion() {
       } else if (line.startsWith('**Last Updated:**') || line.startsWith('**Effective Date:**')) {
         elements.push(
           <div key={key++} className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded-r">
-            <div className="text-sm text-blue-800" dangerouslySetInnerHTML={{
-              __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            }} />
+            <div className="text-sm text-blue-800">
+              {sanitizeAndFormatText(line)}
+            </div>
           </div>
         )
       } else if (line.startsWith('- ')) {
         const listItems = []
         while (i < lines.length && lines[i].startsWith('- ')) {
           listItems.push(
-            <li key={key++} className="mb-1" dangerouslySetInnerHTML={{
-              __html: lines[i].substring(2).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            }} />
+            <li key={key++} className="mb-1">
+              {sanitizeAndFormatText(lines[i].substring(2))}
+            </li>
           )
           i++
         }
@@ -112,16 +133,16 @@ export function DataDeletion() {
         elements.push(
           <Alert key={key++} className="mb-4">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription dangerouslySetInnerHTML={{
-              __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            }} />
+            <AlertDescription>
+              {sanitizeAndFormatText(line)}
+            </AlertDescription>
           </Alert>
         )
       } else if (line.trim() && !line.startsWith('---')) {
         elements.push(
-          <p key={key++} className="mb-3 text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{
-            __html: line.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
-          }} />
+          <p key={key++} className="mb-3 text-gray-700 leading-relaxed">
+            {sanitizeAndFormatText(line)}
+          </p>
         )
       } else if (line === '---') {
         elements.push(<Separator key={key++} className="my-6" />)

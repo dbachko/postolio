@@ -8,10 +8,10 @@ export function markdownToHtml(markdown: string): string {
   let inList = false
 
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i]
+    const line = lines[i]
     
     // Skip empty lines
-    if (line.trim() === '') {
+    if (!line || line.trim() === '') {
       if (inList) {
         result.push('</ul>')
         inList = false
