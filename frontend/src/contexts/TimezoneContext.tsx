@@ -84,8 +84,8 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     setIsAutoDetected(isAuto)
     window.localStorage.setItem('userTimezone', newTimezone)
     
-    // Update user settings on backend if not auto-detected
-    if (!isAuto && token) {
+    // Update user settings on backend if token is present (sync both auto and manual timezones)
+    if (token) {
       try {
         await apiClient.updateUserTimezone({
           timezone: newTimezone,

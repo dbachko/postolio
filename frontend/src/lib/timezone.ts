@@ -4,6 +4,7 @@ import { BROWSER_DETECTION_FALLBACK } from '../constants/timezone'
 
 // Session-based cache for timezone detection
 let cachedUserTimezone: string | null = null
+let hasCheckedLocalStorage = false
 
 /**
  * Get user's timezone from browser (auto-detect) with session-based caching
@@ -14,11 +15,14 @@ export const getUserTimezone = (): string => {
     return cachedUserTimezone
   }
   
-  // Check localStorage for persisted detected timezone
-  const storedTimezone = localStorage.getItem('detectedTimezone')
-  if (storedTimezone) {
-    cachedUserTimezone = storedTimezone
-    return cachedUserTimezone
+  // Check localStorage for persisted detected timezone (only once per session)
+  if (!hasCheckedLocalStorage) {
+    const storedTimezone = localStorage.getItem('detectedTimezone')
+    hasCheckedLocalStorage = true
+    if (storedTimezone) {
+      cachedUserTimezone = storedTimezone
+      return cachedUserTimezone
+    }
   }
   
   try {
@@ -39,6 +43,7 @@ export const getUserTimezone = (): string => {
  */
 export const clearTimezoneCache = (): void => {
   cachedUserTimezone = null
+  hasCheckedLocalStorage = false
   localStorage.removeItem('detectedTimezone')
 }
 

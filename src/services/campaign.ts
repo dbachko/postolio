@@ -6,6 +6,7 @@ import { campaignCoordinationService, type CampaignConfigWithPriority } from './
 import type { StyleProfile } from './ai.js'
 import { analyzeBrandStyle } from './ai.js'
 import { TimezoneService } from './timezone.js'
+import { DEFAULT_TIMEZONE } from '../constants/timezone.js'
 
 const prisma = new PrismaClient()
 
@@ -536,7 +537,7 @@ class CampaignService {
     // Get the appropriate timezone for this brand
     const timezone = brandId 
       ? await TimezoneService.getBrandTimezone(brandId)
-      : 'America/New_York'
+      : DEFAULT_TIMEZONE
 
     const current = new Date(startDate)
     

@@ -14,6 +14,27 @@ export class TimezoneService {
   }
 
   /**
+   * Validate posting time format and return parsed time parts
+   */
+  static isValidPostingTime(timeParts: number[]): { isValid: boolean; hours?: number; minutes?: number } {
+    if (
+      timeParts.length !== 2 ||
+      typeof timeParts[0] === 'undefined' || typeof timeParts[1] === 'undefined' ||
+      isNaN(timeParts[0]) || isNaN(timeParts[1]) ||
+      timeParts[0] < 0 || timeParts[0] > 23 ||
+      timeParts[1] < 0 || timeParts[1] > 59
+    ) {
+      return { isValid: false }
+    }
+    
+    return { 
+      isValid: true, 
+      hours: timeParts[0],
+      minutes: timeParts[1]
+    }
+  }
+
+  /**
    * Auto-detect timezone from request headers or user preferences
    */
   static async detectTimezone(request: FastifyRequest, userId?: string): Promise<string> {
@@ -115,19 +136,18 @@ export class TimezoneService {
   ): Date {
     const timeParts = postingTime.split(':').map(Number)
     
-    // Validate time format strictly
-    if (
-      timeParts.length !== 2 ||
-      typeof timeParts[0] === 'undefined' || typeof timeParts[1] === 'undefined' ||
-      isNaN(timeParts[0]) || isNaN(timeParts[1]) ||
-      timeParts[0] < 0 || timeParts[0] > 23 ||
-      timeParts[1] < 0 || timeParts[1] > 59
-    ) {
+    // Validate time format using helper function
+    const validation = TimezoneService.isValidPostingTime(timeParts)
+    if (!validation.isValid) {
       throw new Error(`Invalid posting time format: "${postingTime}". Expected "HH:mm" with valid hour (0-23) and minute (0-59).`)
     }
     
-    const hours = timeParts[0]!
-    const minutes = timeParts[1]!
+    const { hours, minutes } = validation
+    
+    // TypeScript doesn't know hours/minutes are defined when isValid is true
+    if (typeof hours === 'undefined' || typeof minutes === 'undefined') {
+      throw new Error('Invalid time validation result')
+    }
     
     // Create date in the target timezone
     const localDate = new Date(date)

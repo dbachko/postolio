@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ChevronDown, Settings, LogOut, Check } from 'lucide-react'
+import { ChevronDown, Settings, LogOut, Check, Building2 } from 'lucide-react'
 
 interface LayoutProps {
   children: ReactNode
@@ -165,7 +165,7 @@ export function Layout({ children }: LayoutProps) {
 
                     {/* Brand Management */}
                     <DropdownMenuItem onClick={() => navigate('/brands')}>
-                      <Settings className="w-4 h-4 mr-2" />
+                      <Building2 className="w-4 h-4 mr-2" />
                       Manage Brands
                     </DropdownMenuItem>
                     

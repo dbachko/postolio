@@ -4,29 +4,36 @@ import { TimezoneService } from '../services/timezone.js'
 
 const prisma = getDatabaseClient()
 
-// Validation helpers
+// Type guards for proper input validation
+function isTimezoneUpdateBody(body: unknown): body is { timezone: string; timezoneAutoDetected: boolean } {
+  if (!body || typeof body !== 'object') return false
+  
+  const obj = body as Record<string, unknown>
+  
+  return typeof obj.timezone === 'string' && typeof obj.timezoneAutoDetected === 'boolean'
+}
+
+function isBrandTimezoneUpdateBody(body: unknown): body is { timezone: string | null } {
+  if (!body || typeof body !== 'object') return false
+  
+  const obj = body as Record<string, unknown>
+  
+  return obj.timezone === null || typeof obj.timezone === 'string'
+}
+
+// Validation helpers using type guards
 function validateTimezoneUpdate(body: unknown): { timezone: string; timezoneAutoDetected: boolean } | null {
-  if (!body || typeof body !== 'object') return null
-  
-  const { timezone, timezoneAutoDetected } = body as any
-  
-  if (typeof timezone !== 'string' || typeof timezoneAutoDetected !== 'boolean') {
-    return null
+  if (isTimezoneUpdateBody(body)) {
+    return body
   }
-  
-  return { timezone, timezoneAutoDetected }
+  return null
 }
 
 function validateBrandTimezoneUpdate(body: unknown): { timezone: string | null } | null {
-  if (!body || typeof body !== 'object') return null
-  
-  const { timezone } = body as any
-  
-  if (timezone !== null && typeof timezone !== 'string') {
-    return null
+  if (isBrandTimezoneUpdateBody(body)) {
+    return body
   }
-  
-  return { timezone }
+  return null
 }
 
 const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
