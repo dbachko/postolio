@@ -10,11 +10,62 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Configuration
-ENVIRONMENT=${1:-dev}
+# Configuration and argument parsing
+ENVIRONMENT="dev"
+FORCE_INFRA_DEPLOY=false
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --help|-h)
+            echo "Usage: $0 [ENVIRONMENT] [OPTIONS]"
+            echo ""
+            echo "ENVIRONMENT:"
+            echo "  dev                 Deploy to development environment (default)"
+            echo "  prod                Deploy to production environment"
+            echo "  staging             Deploy to staging environment"
+            echo ""
+            echo "OPTIONS:"
+            echo "  --force-infra       Force infrastructure deployment even if no changes detected"
+            echo "  --help, -h          Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  $0                  Deploy to dev with smart change detection"
+            echo "  $0 prod             Deploy to production with smart change detection"
+            echo "  $0 dev --force-infra Force full deployment to dev"
+            echo ""
+            exit 0
+            ;;
+        --force-infra)
+            FORCE_INFRA_DEPLOY=true
+            shift
+            ;;
+        prod|dev|staging)
+            ENVIRONMENT=$1
+            shift
+            ;;
+        destroy)
+            # Keep destroy argument for existing logic
+            shift
+            ;;
+        *)
+            # First positional argument is environment if not already set
+            if [ "$ENVIRONMENT" = "dev" ] && [[ ! "$1" =~ ^-- ]]; then
+                ENVIRONMENT=$1
+            fi
+            shift
+            ;;
+    esac
+done
+
 AWS_REGION=${AWS_REGION:-us-east-1}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Show force flag status if set
+if [ "$FORCE_INFRA_DEPLOY" = true ]; then
+    echo -e "${YELLOW}🔧 Force infrastructure deployment flag is SET${NC}"
+fi
 
 echo -e "${GREEN}🚀 Starting AWS deployment for environment: $ENVIRONMENT${NC}"
 
@@ -275,20 +326,15 @@ detect_docker_image_changes() {
     ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
     
     # Step 1: Check if source code changed (quick check)
-    # Use the latest deployment tag for this environment if available
-    LAST_DEPLOY_COMMIT=""
-    if git tag -l "deploy-$ENVIRONMENT-*" | tail -1 > /dev/null 2>&1; then
-        LAST_DEPLOY_TAG=$(git tag -l "deploy-$ENVIRONMENT-*" | sort | tail -1)
-        LAST_DEPLOY_COMMIT=$(git rev-list -n 1 "$LAST_DEPLOY_TAG" 2>/dev/null || echo "")
+    LAST_DEPLOY_COMMIT=$(get_last_deployment_commit)
+    if [[ "$LAST_DEPLOY_COMMIT" == "HEAD~1" ]]; then
+        echo -e "${YELLOW}ℹ️  No deployment tags found, comparing with previous commit${NC}"
+    else
+        # Show which deployment tag we're comparing against
+        LAST_DEPLOY_TAG=$(git tag -l "deploy-$ENVIRONMENT-*" | sort -V | tail -1)
         echo -e "${GREEN}ℹ️  Comparing with last deployment: $LAST_DEPLOY_TAG${NC}"
     fi
-    
-    # Fallback to simple HEAD~1 comparison if no deployment tags
-    if [ -z "$LAST_DEPLOY_COMMIT" ] || ! git rev-parse --verify "$LAST_DEPLOY_COMMIT" >/dev/null 2>&1; then
-        LAST_DEPLOY_COMMIT="HEAD~1"
-        echo -e "${YELLOW}ℹ️  No deployment tags found, comparing with previous commit${NC}"
-    fi
-    BACKEND_FILES=$(git diff --name-only $LAST_DEPLOY_COMMIT HEAD | grep -E "^(src/|prisma/|package\.json|package-lock\.json|Dockerfile|\.env\.example)$" || true)
+    BACKEND_FILES=$(git diff --name-only $LAST_DEPLOY_COMMIT HEAD | grep -E "^(src/|prisma/|package\.json|package-lock\.json|Dockerfile|\.env\.example)" || true)
     
     if [ -n "$BACKEND_FILES" ]; then
         echo -e "${YELLOW}📦 Backend source code changed - new image build required${NC}"
@@ -369,12 +415,32 @@ detect_docker_image_changes() {
     fi
 }
 
+# Get the last deployment commit for accurate change detection
+get_last_deployment_commit() {
+    local last_commit=""
+    if git tag -l "deploy-$ENVIRONMENT-*" | tail -1 > /dev/null 2>&1; then
+        local last_tag=$(git tag -l "deploy-$ENVIRONMENT-*" | sort -V | tail -1)
+        last_commit=$(git rev-list -n 1 "$last_tag" 2>/dev/null || echo "")
+        if [ -n "$last_commit" ] && git rev-parse --verify "$last_commit" >/dev/null 2>&1; then
+            echo "$last_commit"
+            return 0
+        fi
+    fi
+    # Fallback to HEAD~1 if no valid deployment tags
+    echo "HEAD~1"
+}
+
+# Check if this is the first deployment (no deployment tags exist)
+is_first_deployment() {
+    ! git tag -l "deploy-$ENVIRONMENT-*" | head -1 > /dev/null 2>&1
+}
+
 # Smart change detection for conditional deployment  
 detect_changes() {
     echo -e "${YELLOW}🔍 Detecting changes for smart deployment...${NC}"
     
-    # Always check for frontend changes using git
-    LAST_DEPLOY_COMMIT="HEAD~1"  # Simple: compare with previous commit
+    # Get consistent deployment commit for all change detection
+    LAST_DEPLOY_COMMIT=$(get_last_deployment_commit)
     FRONTEND_FILES=$(git diff --name-only $LAST_DEPLOY_COMMIT HEAD | grep -E "^frontend/" || true)
     if [ -n "$FRONTEND_FILES" ]; then
         FRONTEND_CHANGED=true
@@ -404,7 +470,17 @@ detect_changes() {
     echo -e "${YELLOW}📋 Smart Deployment Plan:${NC}"
     echo "  Backend deployment: $([ "$BACKEND_CHANGED" = true ] && echo -e "${YELLOW}YES${NC} (Docker image changed)" || echo -e "${GREEN}SKIP${NC} (Same image)")"
     echo "  Frontend deployment: $([ "$FRONTEND_CHANGED" = true ] && echo -e "${YELLOW}YES${NC} (Files changed)" || echo -e "${GREEN}SKIP${NC} (No changes)")"  
-    echo "  Infrastructure deployment: $([ "$INFRA_CHANGED" = true ] && echo -e "${YELLOW}YES${NC} (Config changed)" || echo -e "${GREEN}SKIP${NC} (No changes)")"
+    
+    # Enhanced infrastructure deployment status with force flag and first deployment
+    if [ "$FORCE_INFRA_DEPLOY" = true ]; then
+        echo "  Infrastructure deployment: ${YELLOW}YES${NC} (Force flag set)"
+    elif is_first_deployment; then
+        echo "  Infrastructure deployment: ${YELLOW}YES${NC} (First deployment)"
+    elif [ "$INFRA_CHANGED" = true ]; then
+        echo "  Infrastructure deployment: ${YELLOW}YES${NC} (Config changed)"
+    else
+        echo "  Infrastructure deployment: ${GREEN}SKIP${NC} (No changes)"
+    fi
     echo
 }
 
@@ -463,12 +539,17 @@ force_ecs_service_update() {
     fi
 }
 
-# Deploy infrastructure with security validation (only when infra changed)
+# Deploy infrastructure with security validation (smart deployment logic)
 deploy_infrastructure() {
-    # Skip if no infrastructure changes detected (but always run on first deployment)
-    if [ "$INFRA_CHANGED" = false ] && [ "$BACKEND_CHANGED" = false ]; then
+    # Always deploy on first deployment or when force flag is set
+    if is_first_deployment; then
+        echo -e "${YELLOW}🎯 First deployment detected - infrastructure deployment required${NC}"
+    elif [ "$FORCE_INFRA_DEPLOY" = true ]; then
+        echo -e "${YELLOW}🔧 Force flag set - deploying infrastructure regardless of changes${NC}"
+    elif [ "$INFRA_CHANGED" = false ] && [ "$BACKEND_CHANGED" = false ]; then
         echo -e "${GREEN}⏭️  Skipping infrastructure deployment - no infrastructure or backend changes detected${NC}"
         echo "This saves CDK deployment time and reduces AWS API calls!"
+        echo "Use --force-infra to deploy anyway"
         return 0
     fi
     
