@@ -22,13 +22,22 @@ export function markdownToHtml(markdown: string): string {
 
     // Headers
     if (line.startsWith('### ')) {
-      if (inList) { result.push('</ul>'); inList = false }
+      if (inList) { 
+        result.push('</ul>')
+        inList = false 
+      }
       result.push(`<h3>${line.substring(4)}</h3>`)
     } else if (line.startsWith('## ')) {
-      if (inList) { result.push('</ul>'); inList = false }
+      if (inList) { 
+        result.push('</ul>')
+        inList = false 
+      }
       result.push(`<h2>${line.substring(3)}</h2>`)
     } else if (line.startsWith('# ')) {
-      if (inList) { result.push('</ul>'); inList = false }
+      if (inList) { 
+        result.push('</ul>')
+        inList = false 
+      }
       result.push(`<h1>${line.substring(2)}</h1>`)
     }
     // List items

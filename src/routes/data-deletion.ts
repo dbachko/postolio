@@ -192,41 +192,34 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
     }
     
     // Validate reason if provided
-    if (body.reason && !Object.values(DELETION_REASONS).includes(body.reason)) {
+    if (body.reason && !Object.keys(DELETION_REASONS).includes(body.reason)) {
       return reply.code(400).send({ error: 'Invalid deletion reason' })
     }
     
     try {
-      // Verify email exists in our system
-      if (body.email) {
-        const user = await prisma.user.findUnique({
-          where: { email: body.email }
-        })
-        
-        if (!user) {
-          return reply.code(404).send({ 
-            error: 'No account found with this email address' 
-          })
-        }
-        
-        // Generate verification token
-        const verificationToken = crypto.randomBytes(32).toString('hex')
-        
-        // TODO: Store verification token in Redis with 24-hour expiration
-        // Example: await redis.setex(`deletion-token:${user.id}`, 86400, verificationToken)
-        
-        // TODO: Implement email sending service
-        // Should send email with verification link containing the token
-        // Example: await emailService.sendDeletionVerification(user.email, verificationToken)
-        
-        return reply.send({
-          success: true,
-          message: 'Verification email sent. Please check your inbox.'
+      const user = await prisma.user.findUnique({
+        where: { email: body.email }
+      })
+      
+      if (!user) {
+        return reply.code(404).send({ 
+          error: 'No account found with this email address' 
         })
       }
       
-      return reply.code(400).send({ 
-        error: 'Email address is required' 
+      // Generate verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex')
+      
+      // TODO: Store verification token in Redis with 24-hour expiration
+      // Example: await redis.setex(`deletion-token:${user.id}`, 86400, verificationToken)
+      
+      // TODO: Implement email sending service
+      // Should send email with verification link containing the token
+      // Example: await emailService.sendDeletionVerification(user.email, verificationToken)
+      
+      return reply.send({
+        success: true,
+        message: 'Verification email sent. Please check your inbox.'
       })
     } catch (error) {
       fastify.log.error('Data deletion request error:', error)
