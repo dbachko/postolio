@@ -1,30 +1,34 @@
 import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz'
 import { parseISO } from 'date-fns'
 
-// Cache for timezone detection
+// Session-based cache for timezone detection
 let cachedUserTimezone: string | null = null
-let timezoneDetectionTime = 0
-const TIMEZONE_CACHE_DURATION = 5 * 60 * 1000 // 5 minutes in milliseconds
 
 /**
- * Get user's timezone from browser (auto-detect) with caching
+ * Get user's timezone from browser (auto-detect) with session-based caching
  */
 export const getUserTimezone = (): string => {
-  const now = Date.now()
+  // Return cached timezone if available (session-based)
+  if (cachedUserTimezone) {
+    return cachedUserTimezone
+  }
   
-  // Return cached timezone if still valid (within 5 minutes)
-  if (cachedUserTimezone && (now - timezoneDetectionTime) < TIMEZONE_CACHE_DURATION) {
+  // Check localStorage for persisted detected timezone
+  const storedTimezone = localStorage.getItem('detectedTimezone')
+  if (storedTimezone) {
+    cachedUserTimezone = storedTimezone
     return cachedUserTimezone
   }
   
   try {
     cachedUserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    timezoneDetectionTime = now
+    // Persist to localStorage for next session
+    localStorage.setItem('detectedTimezone', cachedUserTimezone)
     return cachedUserTimezone
   } catch {
     // Fallback to Eastern Time if browser doesn't support timezone detection
     cachedUserTimezone = 'America/New_York'
-    timezoneDetectionTime = now
+    localStorage.setItem('detectedTimezone', cachedUserTimezone)
     return cachedUserTimezone
   }
 }
@@ -34,7 +38,7 @@ export const getUserTimezone = (): string => {
  */
 export const clearTimezoneCache = (): void => {
   cachedUserTimezone = null
-  timezoneDetectionTime = 0
+  localStorage.removeItem('detectedTimezone')
 }
 
 /**

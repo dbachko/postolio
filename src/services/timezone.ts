@@ -1,8 +1,8 @@
 import { toZonedTime, fromZonedTime, formatInTimeZone } from 'date-fns-tz'
 import { FastifyRequest } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+import { getDatabaseClient } from '../config/database.js'
 
-const prisma = new PrismaClient()
+const prisma = getDatabaseClient()
 
 export class TimezoneService {
   /**
@@ -105,11 +105,13 @@ export class TimezoneService {
     postingTime: string,
     timezone: string
   ): Date {
-    const [hours, minutes] = postingTime.split(':').map(Number)
+    const timeParts = postingTime.split(':').map(Number)
+    const hours = timeParts[0] ?? 12  // Default to noon if parsing fails
+    const minutes = timeParts[1] ?? 0 // Default to 0 minutes if parsing fails
     
     // Create date in the target timezone
     const localDate = new Date(date)
-    localDate.setHours(hours ?? 0, minutes ?? 0, 0, 0)
+    localDate.setHours(hours, minutes, 0, 0)
     
     // Convert to UTC for storage
     return fromZonedTime(localDate, timezone)

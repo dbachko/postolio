@@ -153,7 +153,8 @@ class ApiClient {
 
     // Include timezone header for all requests
     const userTimezone = localStorage.getItem('userTimezone') || 
-                        Intl.DateTimeFormat().resolvedOptions().timeZone
+                        localStorage.getItem('detectedTimezone') ||
+                        'America/New_York' // fallback
     headers['X-Timezone'] = userTimezone
 
     const response = await fetch(url, {
@@ -195,6 +196,17 @@ class ApiClient {
 
   async getProfile(): Promise<{ user: User }> {
     return this.request('/api/auth/me')
+  }
+
+  // User timezone endpoints
+  async updateUserTimezone(data: {
+    timezone: string
+    timezoneAutoDetected: boolean
+  }): Promise<{ success: boolean; user: { id: string; timezone: string | null; timezoneAutoDetected: boolean } }> {
+    return this.request('/api/users/timezone', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
   }
 
   // Brand endpoints
@@ -639,12 +651,6 @@ class ApiClient {
     })
   }
 
-  async updateUserTimezone(timezone: string, autoDetected: boolean): Promise<{ success: boolean }> {
-    return this.request('/api/users/timezone', {
-      method: 'PATCH',
-      body: JSON.stringify({ timezone, timezoneAutoDetected: autoDetected }),
-    })
-  }
 
 }
 

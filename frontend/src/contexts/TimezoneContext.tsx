@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { getUserTimezone } from '../lib/timezone'
 import { useAuthStore } from '../stores/authStore'
+import { apiClient } from '../lib/api'
 
 interface TimezoneContextType {
   // Current timezone being used
@@ -86,23 +87,10 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     // Update user settings on backend if not auto-detected
     if (!isAuto && token) {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users/timezone`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'X-Timezone': newTimezone
-          },
-          body: JSON.stringify({
-            timezone: newTimezone,
-            timezoneAutoDetected: isAuto
-          })
+        await apiClient.updateUserTimezone({
+          timezone: newTimezone,
+          timezoneAutoDetected: isAuto
         })
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.error || 'Failed to update timezone on server')
-        }
       } catch (error) {
         // Rollback local state on failure
         setTimezoneState(previousTimezone)
