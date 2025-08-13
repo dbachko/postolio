@@ -5,10 +5,20 @@ import bcrypt from 'bcrypt'
 import { verifyJWT } from '../services/jwt.js'
 import { markdownToHtml } from '../utils/markdown.js'
 
+// Deletion reasons for survey
+const DELETION_REASONS = {
+  not_using: "I'm not using the service anymore",
+  too_expensive: "It's too expensive",
+  missing_features: "It's missing features I need",
+  privacy_concerns: "I have privacy concerns",
+  switching_service: "I'm switching to another service",
+  other: "Other reason"
+} as const
+
 interface DeletionRequest {
   email: string
   userId?: string
-  reason?: string
+  reason?: keyof typeof DELETION_REASONS
   source: 'user' | 'meta' | 'legal'
   verificationToken?: string
 }
@@ -20,16 +30,6 @@ interface MetaDeletionCallback {
 interface DeletionSurvey {
   reason: 'not_using' | 'too_expensive' | 'missing_features' | 'privacy_concerns' | 'switching_service' | 'other'
   feedback?: string
-}
-
-// Deletion reasons for survey
-const DELETION_REASONS = {
-  not_using: "I'm not using the service anymore",
-  too_expensive: "It's too expensive",
-  missing_features: "It's missing features I need",
-  privacy_concerns: "I have privacy concerns",
-  switching_service: "I'm switching to another service",
-  other: "Other reason"
 }
 
 export default async function dataDeletionRoutes(fastify: FastifyInstance) {
@@ -354,8 +354,13 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
         .replace(/\//g, '_')
         .replace(/=/g, '')
       
-      if (expectedSig !== encodedSig) {
-        fastify.log.warn('Invalid Meta signature received', { expectedSig, receivedSig: encodedSig })
+      // Use timing-safe comparison to prevent timing attacks
+      const expectedSigBuffer = Buffer.from(expectedSig, 'utf8')
+      const receivedSigBuffer = Buffer.from(encodedSig, 'utf8')
+      
+      if (expectedSigBuffer.length !== receivedSigBuffer.length || 
+          !crypto.timingSafeEqual(expectedSigBuffer, receivedSigBuffer)) {
+        fastify.log.warn('Invalid Meta signature received')
         return reply.code(401).send({ error: 'Invalid signature' })
       }
       

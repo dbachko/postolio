@@ -8,10 +8,7 @@ import { ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { ReactElement } from 'react'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
-if (!API_BASE_URL) {
-  throw new Error('VITE_API_BASE_URL environment variable must be set')
-}
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 export function DataDeletion() {
   const [content, setContent] = useState<string>('')
