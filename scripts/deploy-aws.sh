@@ -305,7 +305,8 @@ deploy_frontend() {
         npm install
     fi
     
-    # Get the secure API URL from the stack (postolio.example)
+    # Use unified domain architecture - frontend and backend share postolio.example
+    # Check if custom domain is configured
     API_URL=$(aws cloudformation describe-stacks \
         --stack-name Postolio-$ENVIRONMENT \
         --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
@@ -319,17 +320,30 @@ deploy_frontend() {
             --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
             --output text \
             --region $AWS_REGION)
-        API_URL="http://$LOAD_BALANCER_DNS"
+        API_URL="https://$LOAD_BALANCER_DNS"
         echo -e "${YELLOW}Using fallback ALB DNS: $API_URL${NC}"
     else
-        echo -e "${GREEN}Using secure API domain: $API_URL${NC}"
+        # For unified domain, use https://postolio.example
+        API_URL="https://postolio.example"
+        echo -e "${GREEN}Using unified domain: $API_URL${NC}"
     fi
     
     # Create production environment file
     echo "VITE_API_BASE_URL=$API_URL" > .env.production
     
     # Build frontend
-    npm run build
+    echo -e "${YELLOW}Building frontend...${NC}"
+    if ! npm run build; then
+        echo -e "${RED}❌ Frontend build failed${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ Frontend built successfully${NC}"
+    
+    # Verify dist folder exists
+    if [ ! -d "dist" ]; then
+        echo -e "${RED}❌ Build output directory 'dist' not found${NC}"
+        exit 1
+    fi
     
     # Get S3 bucket name from the stack
     BUCKET_NAME=$(aws cloudformation describe-stacks \
@@ -338,18 +352,32 @@ deploy_frontend() {
         --output text \
         --region $AWS_REGION)
     
+    if [ -z "$BUCKET_NAME" ] || [ "$BUCKET_NAME" = "None" ]; then
+        echo -e "${RED}❌ Frontend S3 bucket not found in stack outputs${NC}"
+        exit 1
+    fi
+    
     # Upload to S3
     echo -e "${YELLOW}Uploading frontend to S3 bucket: $BUCKET_NAME${NC}"
-    aws s3 sync dist s3://$BUCKET_NAME --delete --region $AWS_REGION
+    if ! aws s3 sync dist s3://$BUCKET_NAME --delete --region $AWS_REGION; then
+        echo -e "${RED}❌ Failed to upload frontend to S3${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ Frontend uploaded to S3${NC}"
     
-    # Invalidate CloudFront cache
-    DISTRIBUTION_ID=$(aws cloudfront list-distributions \
-        --query "DistributionList.Items[?Comment=='Postolio-$ENVIRONMENT/FrontendDistribution'].Id" \
-        --output text)
+    # Invalidate CloudFront cache - get distribution ID from stack outputs
+    DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+        --stack-name Postolio-$ENVIRONMENT \
+        --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
+        --output text \
+        --region $AWS_REGION)
     
     if [ -n "$DISTRIBUTION_ID" ] && [ "$DISTRIBUTION_ID" != "None" ]; then
-        echo -e "${YELLOW}Invalidating CloudFront cache...${NC}"
-        aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+        echo -e "${YELLOW}Invalidating CloudFront cache (Distribution: $DISTRIBUTION_ID)...${NC}"
+        aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*" > /dev/null
+        echo -e "${GREEN}✅ CloudFront cache invalidated${NC}"
+    else
+        echo -e "${YELLOW}⚠️  CloudFront distribution not found, skipping cache invalidation${NC}"
     fi
     
     echo -e "${GREEN}✅ Frontend deployed successfully${NC}"
