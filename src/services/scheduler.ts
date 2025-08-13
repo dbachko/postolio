@@ -9,7 +9,7 @@ export interface ScheduledPost {
   contentId: string
   brandId: string
   scheduledTime: Date
-  status: 'pending' | 'processing' | 'posted' | 'failed'
+  status: 'pending' | 'processing' | 'published' | 'failed'
   retryCount: number
   lastError?: string
 }
@@ -201,7 +201,7 @@ class SchedulerService {
       await prisma.content.update({
         where: { id: content.id },
         data: {
-          status: 'posted',
+          status: 'published',
           postedAt: new Date(),
           instagramPostId: publishResult.id,
           instagramPermalink: publishResult.permalink,
@@ -391,7 +391,7 @@ class SchedulerService {
 
       return {
         scheduled,
-        posted: stats.find((s) => s.status === 'posted')?._count.status || 0,
+        posted: stats.find((s) => s.status === 'published')?._count.status || 0,
         failed: stats.find((s) => s.status === 'failed')?._count.status || 0,
         pending: stats.find((s) => s.status === 'pending')?._count.status || 0,
       }

@@ -407,7 +407,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         return reply.status(404).send({ error: 'Content not found' })
       }
 
-      if (content.status !== 'posted') {
+      if (content.status !== 'published') {
         return reply.status(400).send({ error: 'Content must be posted to collect metrics' })
       }
 

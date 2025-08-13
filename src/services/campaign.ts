@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, ContentStatus, CampaignStatus } from '@prisma/client'
 import { generateInstagramContent, type ContentGenerationRequest, type GeneratedContent } from './content-generator.js'
 import { schedulerService } from './scheduler.js'
 import { campaignJobService } from './campaign-jobs.js'
@@ -603,32 +603,22 @@ class CampaignService {
 
       // Special handling for status transitions
       if (updates.status) {
-        // Validate status transition
-        const validTransitions: Record<string, string[]> = {
-          'creating': ['preview', 'failed'],
-          'preview': ['active', 'failed'],
-          'active': ['paused', 'completed', 'failed'],
-          'paused': ['active', 'completed', 'failed'],
-          'completed': [],
-          'failed': ['preview']
-        }
-        
-        const allowedTransitions = validTransitions[campaign.status] || []
-        if (!allowedTransitions.includes(updates.status)) {
-          throw new Error(`Invalid status transition: ${campaign.status} → ${updates.status}`)
-        }
-        
         // Handle pause operation
-        if (campaign.status === 'active' && updates.status === 'paused') {
+        if (updates.status === 'paused') {
           return await this.pauseCampaign(campaignId, userId)
         }
         
         // Handle resume operation
-        if (campaign.status === 'paused' && updates.status === 'active') {
+        if (updates.status === 'active') {
           return await this.resumeCampaign(campaignId, userId)
         }
-      } else if (campaign.status === 'active') {
-        // Block other updates for active campaigns
+        
+        // Handle other status changes (completion, failure, etc.)
+        return await this.updateCampaignStatus(campaignId, userId, updates.status)
+      }
+
+      // Block non-status updates for active campaigns
+      if (campaign.status === 'active') {
         throw new Error('Active campaigns can only be paused. Please pause the campaign first to make other changes.')
       }
 
@@ -682,7 +672,7 @@ class CampaignService {
         const todayDateString = today.toISOString().split('T')[0]
         const startDateString = startDate.toISOString().split('T')[0]
 
-        if (campaign.status !== 'active' && startDateString && todayDateString && startDateString < todayDateString) {
+        if (campaign.status as string !== 'active' && startDateString && todayDateString && startDateString < todayDateString) {
           throw new Error('Start date cannot be in the past')
         }
 
@@ -762,7 +752,7 @@ class CampaignService {
   async pauseCampaign(campaignId: string, userId: string): Promise<any> {
     try {
       const result = await prisma.$transaction(async (tx) => {
-        // Verify ownership
+        // Verify ownership and get current status inside transaction
         const campaign = await tx.campaign.findFirst({
           where: {
             id: campaignId,
@@ -774,8 +764,12 @@ class CampaignService {
           throw new Error('Campaign not found or access denied')
         }
         
-        if (campaign.status !== 'active') {
-          throw new Error(`Cannot pause campaign with status: ${campaign.status}`)
+        // Validate status transition inside transaction
+        const validTransitions = this.getValidStatusTransitions()
+        const allowedTransitions = validTransitions[campaign.status] || []
+        
+        if (!allowedTransitions.includes('paused')) {
+          throw new Error(`Invalid status transition: ${campaign.status} → paused. Allowed transitions: ${allowedTransitions.join(', ')}`)
         }
         
         // Update campaign status to paused
@@ -813,7 +807,7 @@ class CampaignService {
   async resumeCampaign(campaignId: string, userId: string): Promise<any> {
     try {
       const result = await prisma.$transaction(async (tx) => {
-        // Verify ownership and get campaign with config
+        // Verify ownership and get current status inside transaction
         const campaign = await tx.campaign.findFirst({
           where: {
             id: campaignId,
@@ -825,8 +819,12 @@ class CampaignService {
           throw new Error('Campaign not found or access denied')
         }
         
-        if (campaign.status !== 'paused') {
-          throw new Error(`Cannot resume campaign with status: ${campaign.status}`)
+        // Validate status transition inside transaction
+        const validTransitions = this.getValidStatusTransitions()
+        const allowedTransitions = validTransitions[campaign.status] || []
+        
+        if (!allowedTransitions.includes('active')) {
+          throw new Error(`Invalid status transition: ${campaign.status} → active. Allowed transitions: ${allowedTransitions.join(', ')}`)
         }
         
         const now = new Date()
@@ -880,6 +878,71 @@ class CampaignService {
       return result
     } catch (error) {
       console.error('Resume campaign error:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get valid status transitions for campaigns
+   */
+  private getValidStatusTransitions(): Record<string, string[]> {
+    return {
+      'creating': ['preview', 'failed'],
+      'preview': ['active', 'failed'],
+      'active': ['paused', 'completed', 'failed'],
+      'paused': ['active', 'completed', 'failed'],
+      'completed': [], // Terminal state
+      'failed': ['preview'], // Can retry from preview
+      'processing': ['active', 'failed'] // Background processing state
+    }
+  }
+
+  /**
+   * Update campaign status with validation (for non-pause/resume operations)
+   */
+  async updateCampaignStatus(campaignId: string, userId: string, newStatus: string): Promise<any> {
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        // Verify ownership and get current status inside transaction
+        const campaign = await tx.campaign.findFirst({
+          where: {
+            id: campaignId,
+            brand: { userId }
+          }
+        })
+        
+        if (!campaign) {
+          throw new Error('Campaign not found or access denied')
+        }
+        
+        // Validate status transition inside transaction
+        const validTransitions = this.getValidStatusTransitions()
+        const allowedTransitions = validTransitions[campaign.status] || []
+        
+        if (!allowedTransitions.includes(newStatus)) {
+          throw new Error(`Invalid status transition: ${campaign.status} → ${newStatus}. Allowed transitions: ${allowedTransitions.join(', ')}`)
+        }
+        
+        // Update campaign status
+        const updatedCampaign = await tx.campaign.update({
+          where: { id: campaignId },
+          data: { 
+            status: newStatus as CampaignStatus,
+            ...(newStatus === 'completed' ? { completedAt: new Date() } : {})
+          }
+        })
+        
+        console.log(`Campaign ${campaignId} status updated: ${campaign.status} → ${newStatus}`)
+        
+        return {
+          campaign: updatedCampaign,
+          message: `Campaign status updated to ${newStatus}`
+        }
+      })
+      
+      return result
+    } catch (error) {
+      console.error('Update campaign status error:', error)
       throw error
     }
   }

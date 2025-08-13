@@ -266,7 +266,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
       const updatedContent = await prisma.content.update({
         where: { id: contentId },
         data: {
-          status: 'posted',
+          status: 'published',
           postedAt: new Date(),
           instagramPostId: publishResult.id,
           instagramPermalink: publishResult.permalink,

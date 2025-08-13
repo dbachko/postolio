@@ -54,7 +54,7 @@ class AnalyticsService {
       const content = await prisma.content.findFirst({
         where: {
           id: contentId,
-          status: 'posted',
+          status: 'published',
           instagramPostId: { not: null },
         },
         include: {
@@ -140,7 +140,7 @@ class AnalyticsService {
       const contents = await prisma.content.findMany({
         where: {
           brandId: brandId,
-          status: 'posted',
+          status: 'published',
           analytics: { not: (Prisma as any).JsonNull },
         },
         orderBy: {
@@ -301,7 +301,7 @@ class AnalyticsService {
       const contents = await prisma.content.findMany({
         where: {
           brandId: brandId,
-          status: 'posted',
+          status: 'published',
           postedAt: { gte: cutoffDate },
           analytics: { not: (Prisma as any).JsonNull },
         },
@@ -404,7 +404,7 @@ class AnalyticsService {
     try {
       const postedContents = await prisma.content.findMany({
         where: {
-          status: 'posted',
+          status: 'published',
           instagramPostId: { not: null },
           // Only collect for posts that are at least 1 hour old and less than 30 days old
           postedAt: {

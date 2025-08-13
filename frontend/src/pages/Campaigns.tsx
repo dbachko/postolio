@@ -851,7 +851,7 @@ export function Campaigns() {
                                     variant={
                                       post.status === 'approved' ? 'default' :
                                       post.status === 'pending' ? 'secondary' :
-                                      post.status === 'posted' ? 'default' :
+                                      post.status === 'published' ? 'default' :
                                       'outline'
                                     }
                                   >

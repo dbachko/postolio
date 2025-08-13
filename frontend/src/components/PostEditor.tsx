@@ -432,7 +432,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
                 variant={
                   content.status === 'pending' ? 'secondary' :
                   content.status === 'approved' ? 'default' :
-                  content.status === 'posted' ? 'secondary' : 'destructive'
+                  content.status === 'published' ? 'secondary' : 'destructive'
                 }
               >
                 {content.status.charAt(0).toUpperCase() + content.status.slice(1)}

@@ -81,7 +81,7 @@ export class CampaignAnalyticsService {
 
     // Calculate basic metrics
     const totalPosts = content.length
-    const postsPosted = content.filter((c) => c.status === 'posted').length
+    const postsPosted = content.filter((c) => c.status === 'published').length
     const postsScheduled = content.filter((c) => c.status === 'scheduled' || c.scheduledAt).length
     const postsApproved = content.filter((c) => c.status === 'approved').length
 

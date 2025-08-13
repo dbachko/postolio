@@ -45,7 +45,7 @@ class RollingContentService {
             include: {
               content: {
                 where: {
-                  status: { in: ['approved', 'scheduled', 'posted'] },
+                  status: { in: ['approved', 'scheduled', 'published'] },
                   scheduledAt: { not: null }
                 },
                 orderBy: { scheduledAt: 'asc' }
@@ -117,7 +117,7 @@ class RollingContentService {
     const scheduledContent = await prisma.content.findMany({
       where: {
         brandId,
-        status: { in: ['approved', 'scheduled', 'posted'] },
+        status: { in: ['approved', 'scheduled', 'published'] },
         scheduledAt: {
           gte: now,
           lte: maxDate

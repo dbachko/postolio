@@ -467,7 +467,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       const contentHistory = await prisma.content.findMany({
         where: {
           brandId,
-          status: { in: ['approved', 'posted', 'rejected', 'scheduled'] },
+          status: { in: ['approved', 'published', 'rejected', 'scheduled'] },
         },
         select: {
           id: true,

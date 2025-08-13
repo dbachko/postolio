@@ -78,13 +78,13 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
     const content = event.resource
     const statusColors = {
       approved: 'bg-blue-100 border-blue-400 text-blue-800',
-      posted: 'bg-green-100 border-green-400 text-green-800',
+      published: 'bg-green-100 border-green-400 text-green-800',
       rejected: 'bg-red-100 border-red-400 text-red-800',
     }
 
     const statusIcons = {
       approved: Play,
-      posted: CheckCircle,
+      published: CheckCircle,
       rejected: XCircle,
     }
 
@@ -198,7 +198,7 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-green-400 rounded-sm"></div>
-            <span className="text-gray-600">Posted ({content.filter(c => c.status === 'posted').length})</span>
+            <span className="text-gray-600">Published ({content.filter(c => c.status === 'published').length})</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-red-400 rounded-sm"></div>

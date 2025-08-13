@@ -104,7 +104,7 @@ async function createTestUser() {
         caption: 'Style tip: Pair our organic linen shirt with recycled denim for the perfect eco-chic look! 🌿👗',
         hashtags: ['styletip', 'organiclinen', 'recycleddenim', 'ecochic', 'sustainablestyle'],
         imageUrl: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=500',
-        status: 'posted',
+        status: 'published',
         brandId: brand.id,
         postedAt: new Date('2024-01-25T15:00:00Z'),
         instagramPostId: 'sample_post_123',

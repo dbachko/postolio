@@ -3,6 +3,8 @@ import { FastifyPluginAsync } from 'fastify'
 import { verifyJWT } from '../services/jwt.js'
 import { campaignService, type CampaignConfig } from '../services/campaign.js'
 import { campaignJobService } from '../services/campaign-jobs.js'
+import { pauseResumeRateLimiter, campaignRateLimiter, createRateLimitMiddleware } from '../services/rate-limiter.js'
+import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js'
 
 import { getDatabaseClient } from '../config/database.js'
 
@@ -48,6 +50,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       throw new Error('Invalid authentication token')
     }
 
+    // Store user ID for rate limiting
+    request.user = { id: decoded.id }
     return decoded.id
   }
 
@@ -296,23 +300,61 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   // Update campaign configuration
   fastify.put<{
     Params: { id: string }
-    Body: {
-      name?: string
-      themes?: string[]
-      style?: string
-      frequency?: string
-      postingTime?: string
-      startDate?: string
-      endDate?: string
-    }
+    Body: any
   }>('/:id', async (request, reply) => {
     try {
       const userId = await authenticateRequest(request)
       const { id } = request.params
-      const updates = request.body
 
       if (!id) {
         return reply.code(400).send({ error: 'Campaign ID is required' })
+      }
+
+      // Validate request schema
+      const validation = validateCampaignUpdateRequest(request.body)
+      if (!validation.valid) {
+        return reply.code(400).send({
+          error: 'Invalid request data',
+          details: validation.errors.map(err => ({
+            field: err.field,
+            message: err.message,
+            ...(err.value !== undefined ? { value: err.value } : {})
+          }))
+        })
+      }
+
+      const updates = validation.sanitizedData!
+
+      // Apply rate limiting for pause/resume operations
+      if (updates.status && ['paused', 'active'].includes(updates.status)) {
+        const rateLimitCheck = await pauseResumeRateLimiter.checkRateLimit(userId)
+        if (!rateLimitCheck.allowed) {
+          reply.header('X-RateLimit-Limit', 20)
+          reply.header('X-RateLimit-Remaining', rateLimitCheck.remaining)
+          reply.header('X-RateLimit-Reset', Math.floor(rateLimitCheck.resetTime.getTime() / 1000))
+          reply.header('Retry-After', rateLimitCheck.retryAfter || 300)
+          
+          return reply.code(429).send({
+            error: 'Too many pause/resume requests',
+            message: `Rate limit exceeded. Try again in ${rateLimitCheck.retryAfter || 300} seconds.`,
+            retryAfter: rateLimitCheck.retryAfter || 300
+          })
+        }
+      } else {
+        // Apply general campaign rate limiting for other updates
+        const rateLimitCheck = await campaignRateLimiter.checkRateLimit(userId)
+        if (!rateLimitCheck.allowed) {
+          reply.header('X-RateLimit-Limit', 10)
+          reply.header('X-RateLimit-Remaining', rateLimitCheck.remaining)
+          reply.header('X-RateLimit-Reset', Math.floor(rateLimitCheck.resetTime.getTime() / 1000))
+          reply.header('Retry-After', rateLimitCheck.retryAfter || 60)
+          
+          return reply.code(429).send({
+            error: 'Too many campaign requests',
+            message: `Rate limit exceeded. Try again in ${rateLimitCheck.retryAfter || 60} seconds.`,
+            retryAfter: rateLimitCheck.retryAfter || 60
+          })
+        }
       }
 
       const updatedCampaign = await campaignService.updateCampaign(id, userId, updates)
@@ -320,6 +362,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({
         success: true,
         campaign: updatedCampaign,
+        message: updatedCampaign.message,
+        skippedCount: updatedCampaign.skippedCount,
+        cancelledCount: updatedCampaign.cancelledCount
       })
     } catch (error) {
       console.error('Update campaign error:', error)
@@ -332,6 +377,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: 'Campaign not found or access denied' })
         }
         if (error.message.includes('cannot be updated') || error.message.includes('already active')) {
+          return reply.code(400).send({ error: error.message })
+        }
+        if (error.message.includes('Invalid status transition')) {
           return reply.code(400).send({ error: error.message })
         }
       }

@@ -134,7 +134,7 @@ class AutopilotService {
         include: {
           content: {
             where: {
-              status: { in: ['approved', 'scheduled', 'posted'] },
+              status: { in: ['approved', 'scheduled', 'published'] },
               scheduledAt: { not: null },
             },
             orderBy: { scheduledAt: 'desc' },
@@ -183,7 +183,7 @@ class AutopilotService {
     const scheduledContent = await prisma.content.count({
       where: {
         brandId: brand.id,
-        status: { in: ['approved', 'scheduled', 'posted'] },
+        status: { in: ['approved', 'scheduled', 'published'] },
         scheduledAt: {
           gte: now,
           lte: targetDate,

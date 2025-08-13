@@ -51,7 +51,7 @@ export function Dashboard() {
             content.scheduledAt &&
             new Date(content.scheduledAt) > new Date()
         ).length,
-        published: allContent.filter((content) => content.status === 'posted').length,
+        published: allContent.filter((content) => content.status === 'published').length,
       }
     },
     enabled: brands.length > 0,

@@ -113,7 +113,7 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
             </div>
           )}
 
-          {content.status === 'posted' && content.instagramPermalink && (
+          {content.status === 'published' && content.instagramPermalink && (
             <div className="flex space-x-2">
               <a
                 href={content.instagramPermalink}
