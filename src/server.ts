@@ -58,6 +58,7 @@ export function buildFastify(): FastifyInstance {
     logger: {
       level: 'info',
     },
+    bodyLimit: 10 * 1024 * 1024, // 10MB limit - industry standard for social media management tools
     ...httpsOptions,
   })
 

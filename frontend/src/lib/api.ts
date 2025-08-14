@@ -180,12 +180,41 @@ class ApiClient {
     })
 
     if (!response.ok) {
+      // Handle 401 Unauthorized specifically
+      if (response.status === 401 && endpoint !== '/api/auth/me') {
+        // Clear the token and redirect to login
+        this.removeToken()
+        // Only redirect if not already on login/register page
+        const currentPath = window.location.pathname
+        if (currentPath !== '/login' && currentPath !== '/register') {
+          window.location.href = '/login'
+        }
+      }
+      
+      // Handle specific error codes with meaningful messages
+      if (response.status === 413) {
+        throw new Error('Image too large. Please optimize your image to be under 10MB.')
+      }
+      
+      const errorText = await response.text()
       try {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Request failed')
-      } catch {
-        // If JSON parsing fails, just use a generic error message
-        throw new Error(`Request failed with status ${response.status}`)
+        const errorData = JSON.parse(errorText)
+        throw new Error(errorData.error || errorData.message || 'Request failed')
+      } catch (parseError) {
+        // If JSON parsing fails, check for specific status codes
+        if (response.status === 404) {
+          throw new Error('Resource not found')
+        } else if (response.status === 500) {
+          throw new Error('Server error. Please try again later.')
+        } else if (response.status === 403) {
+          throw new Error('You do not have permission to perform this action')
+        } else if (errorText) {
+          // If we have error text but it's not JSON, use it
+          throw new Error(errorText)
+        } else {
+          // Fallback to generic message with status
+          throw new Error(`Request failed with status ${response.status}`)
+        }
       }
     }
 
@@ -213,6 +242,12 @@ class ApiClient {
 
   async getProfile(): Promise<{ user: User }> {
     return this.request('/api/auth/me')
+  }
+
+  async refreshToken(): Promise<{ token: string }> {
+    return this.request('/api/auth/refresh', {
+      method: 'POST'
+    })
   }
 
   // User timezone endpoints
@@ -340,6 +375,31 @@ class ApiClient {
     return this.request('/api/content/update', {
       method: 'PUT',
       body: JSON.stringify(data),
+    })
+  }
+
+  async uploadContentImage(contentId: string, file: File): Promise<{ success: boolean; content: Content; message: string }> {
+    // Convert file to base64
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        try {
+          const base64Data = reader.result as string
+          const response = await this.request<{ success: boolean; content: Content; message: string }>('/api/content/upload-image', {
+            method: 'POST',
+            body: JSON.stringify({
+              contentId,
+              imageData: base64Data,
+              mimeType: file.type,
+            }),
+          })
+          resolve(response)
+        } catch (error) {
+          reject(error)
+        }
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsDataURL(file)
     })
   }
 

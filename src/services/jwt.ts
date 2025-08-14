@@ -8,9 +8,15 @@ export interface JWTPayload {
 }
 
 export function signJWT(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' })
+  // JWT automatically adds 'iat' (issued at) claim
+  return jwt.sign(payload, JWT_SECRET, { 
+    expiresIn: '7d'
+  })
 }
 
 export function verifyJWT(token: string): JWTPayload {
-  return jwt.verify(token, JWT_SECRET) as JWTPayload
+  // Add clock tolerance to handle minor time differences between client and server
+  return jwt.verify(token, JWT_SECRET, {
+    clockTolerance: 60 // Allow 60 seconds of clock skew
+  }) as JWTPayload
 }
