@@ -105,6 +105,13 @@ export function Login() {
               Privacy Policy
             </Link>
             <span>•</span>
+            <Link 
+              to="/terms-of-service" 
+              className="hover:text-foreground transition-colors"
+            >
+              Terms of Service
+            </Link>
+            <span>•</span>
             <a 
               href="mailto:legal@postolio.example" 
               className="hover:text-foreground transition-colors"

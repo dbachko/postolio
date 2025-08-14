@@ -110,6 +110,13 @@ export function Register() {
               >
                 Privacy Policy
               </Link>
+              {' '}and{' '}
+              <Link 
+                to="/terms-of-service" 
+                className="text-primary hover:underline"
+              >
+                Terms of Service
+              </Link>
             </div>
           </form>
         </CardContent>
@@ -125,6 +132,13 @@ export function Register() {
             className="hover:text-foreground transition-colors"
           >
             Privacy Policy
+          </Link>
+          <span>•</span>
+          <Link 
+            to="/terms-of-service" 
+            className="hover:text-foreground transition-colors"
+          >
+            Terms of Service
           </Link>
           <span>•</span>
           <a 
