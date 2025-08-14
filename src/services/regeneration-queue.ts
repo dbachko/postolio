@@ -11,7 +11,8 @@ const BATCH_SIZE = 5
 const redisConnection = new Redis({
   host: process.env.REDIS_HOST || 'localhost',
   port: parseInt(process.env.REDIS_PORT || '6379'),
-  maxRetriesPerRequest: 3
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false
 })
 
 // Job data interface
