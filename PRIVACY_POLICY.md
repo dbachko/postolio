@@ -201,7 +201,7 @@ Our platform may contain links to third-party websites or integrate with externa
 ### 13.1 Privacy Inquiries
 For privacy-related questions or to exercise your rights:
 - **Email**: privacy@postolio.example
-- **Address**: [Company Address to be added]
+- **Website**: https://postolio.example
 - **Response Time**: We will respond within 30 days
 
 ### 13.2 Data Protection Officer (EU)
@@ -222,4 +222,4 @@ EU users have the right to lodge a complaint with their local supervisory author
 
 This Privacy Policy is designed to be transparent about our data practices while ensuring compliance with applicable privacy laws. If you have questions about this policy or our privacy practices, please contact us at privacy@postolio.example.
 
-© 2024 Postolio. All rights reserved.
+© 2025 Postolio. All rights reserved.

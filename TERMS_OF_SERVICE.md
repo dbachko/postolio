@@ -217,4 +217,4 @@ For questions about these Terms of Service, please contact us:
 
 ---
 
-© 2025 Postolio Inc. All rights reserved.
+© 2025 Postolio. All rights reserved.
