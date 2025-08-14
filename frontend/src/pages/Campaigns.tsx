@@ -137,9 +137,30 @@ export function Campaigns() {
     }
   })
 
+  // Handle URL changes and view state synchronization
+  useEffect(() => {
+    const pathname = window.location.pathname
+    
+    // Check if we're at /campaigns (no specific campaign ID)
+    if (pathname === '/campaigns' && !urlCampaignId) {
+      setCurrentView('dashboard')
+      setSelectedCampaignId(null)
+    }
+    // Check if we're at /campaigns/create
+    else if (pathname === '/campaigns/create') {
+      setCurrentView('create')
+      setSelectedCampaignId(null)
+    }
+    // Check if we have a campaign ID in the URL
+    else if (urlCampaignId && urlCampaignId !== 'create') {
+      setSelectedCampaignId(urlCampaignId)
+      setCurrentView('details')
+    }
+  }, [urlCampaignId])
+
   // Auto brand-switching effect when accessing campaign via URL
   useEffect(() => {
-    if (urlCampaignId && urlCampaignQuery.data?.campaign) {
+    if (urlCampaignId && urlCampaignId !== 'create' && urlCampaignQuery.data?.campaign) {
       const campaign = urlCampaignQuery.data.campaign
       const campaignBrandId = campaign.brandId || campaign.brand?.id
       
@@ -152,10 +173,6 @@ export function Campaigns() {
           toast.info(`Switched to brand: ${targetBrand.name}`)
         }
       }
-      
-      setSelectedCampaignId(urlCampaignId)
-      setCurrentView('details')
-      // Keep the URL as /campaigns/:id for proper navigation and bookmarking
     }
   }, [urlCampaignId, urlCampaignQuery.data, selectedBrand, brands, setSelectedBrand])
 
