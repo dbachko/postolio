@@ -153,7 +153,7 @@ export function Campaigns() {
     if (pathname.includes('/edit')) {
       const campaignId = pathname.split('/')[2]
       if (campaignId && campaignId !== 'create') {
-        const campaign = campaigns.find(c => c.id === campaignId)
+        const campaign = campaignsQuery.data?.campaigns?.find((c: Campaign) => c.id === campaignId)
         if (campaign) {
           setEditingCampaign(campaign)
           setSelectedCampaignId(campaignId)
@@ -188,7 +188,7 @@ export function Campaigns() {
       setSelectedCampaignId(urlCampaignId!)
       setCurrentView('details')
     }
-  }, [location.pathname, urlCampaignId, campaigns])
+  }, [location.pathname, urlCampaignId, campaignsQuery.data?.campaigns])
 
   // Auto brand-switching effect when accessing campaign via URL
   useEffect(() => {
