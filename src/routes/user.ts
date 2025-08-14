@@ -5,6 +5,36 @@ import { verifyJWT } from '../services/jwt.js'
 
 const prisma = getDatabaseClient()
 
+// Helper function to verify authentication and extract user ID
+async function authenticateRequest(request: FastifyRequest, reply: FastifyReply): Promise<string | null> {
+  const authHeader = request.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    reply.code(401).send({ error: 'Authentication required' })
+    return null
+  }
+  
+  try {
+    const token = authHeader.substring(7)
+    const decoded = verifyJWT(token)
+    return decoded.id
+  } catch (err: any) {
+    // Check if the error is an authentication error
+    if (
+      err?.name === 'JsonWebTokenError' ||
+      err?.name === 'TokenExpiredError' ||
+      err?.message?.toLowerCase().includes('jwt') ||
+      err?.message?.toLowerCase().includes('auth') ||
+      err?.message?.toLowerCase().includes('token')
+    ) {
+      reply.code(401).send({ error: 'Authentication required' })
+    } else {
+      // Log error for debugging
+      request.log.error({ err }, 'Authentication verification failed')
+      reply.code(500).send({ error: 'Internal server error' })
+    }
+    return null
+  }
+}
 
 // Type guards for proper input validation
 function isTimezoneUpdateBody(body: unknown): body is { timezone: string; timezoneAutoDetected: boolean } {
@@ -42,16 +72,10 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
   // Update user timezone preferences
   fastify.patch('/api/users/timezone', async (request: FastifyRequest, reply: FastifyReply) => {
     // Verify authentication
-    const authHeader = request.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return reply.code(401).send({ error: 'Authentication required' })
-    }
+    const userId = await authenticateRequest(request, reply)
+    if (!userId) return
     
     try {
-      const token = authHeader.substring(7)
-      const decoded = verifyJWT(token)
-      const userId = decoded.id
-    
       // Validate request body
       const validatedData = validateTimezoneUpdate(request.body)
       if (!validatedData) {
@@ -81,23 +105,20 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       })
       
       return { success: true, user: updatedUser }
-    } catch {
-      return reply.code(401).send({ error: 'Authentication required' })
+    } catch (err: any) {
+      // Log error for debugging
+      request.log.error({ err }, 'Failed to update user timezone')
+      return reply.code(500).send({ error: 'Internal server error' })
     }
   })
 
   // Get brand timezone
   fastify.get('/api/brands/:brandId/timezone', async (request: FastifyRequest, reply: FastifyReply) => {
     // Verify authentication
-    const authHeader = request.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return reply.code(401).send({ error: 'Authentication required' })
-    }
+    const userId = await authenticateRequest(request, reply)
+    if (!userId) return
     
     try {
-      const token = authHeader.substring(7)
-      const decoded = verifyJWT(token)
-      const userId = decoded.id
       const { brandId } = request.params as { brandId: string }
     
       // Verify brand ownership
@@ -116,23 +137,20 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
       
       return { timezone: brand.postingTimezone }
-    } catch {
-      return reply.code(401).send({ error: 'Authentication required' })
+    } catch (err: any) {
+      // Log error for debugging
+      request.log.error({ err }, 'Failed to get brand timezone')
+      return reply.code(500).send({ error: 'Internal server error' })
     }
   })
 
   // Update brand timezone
   fastify.patch('/api/brands/:brandId/timezone', async (request: FastifyRequest, reply: FastifyReply) => {
     // Verify authentication
-    const authHeader = request.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return reply.code(401).send({ error: 'Authentication required' })
-    }
+    const userId = await authenticateRequest(request, reply)
+    if (!userId) return
     
     try {
-      const token = authHeader.substring(7)
-      const decoded = verifyJWT(token)
-      const userId = decoded.id
       const { brandId } = request.params as { brandId: string }
     
       // Validate request body
@@ -174,8 +192,10 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       })
       
       return { success: true, brand: updatedBrand }
-    } catch {
-      return reply.code(401).send({ error: 'Authentication required' })
+    } catch (err: any) {
+      // Log error for debugging
+      request.log.error({ err }, 'Failed to update brand timezone')
+      return reply.code(500).send({ error: 'Internal server error' })
     }
   })
 }
