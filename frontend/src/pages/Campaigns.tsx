@@ -159,7 +159,7 @@ export function Campaigns() {
     }
     // Check if we have a campaign ID in the URL
     else if (isRealCampaignId(urlCampaignId)) {
-      setSelectedCampaignId(urlCampaignId)
+      setSelectedCampaignId(urlCampaignId!)
       setCurrentView('details')
     }
   }, [location.pathname, urlCampaignId])
