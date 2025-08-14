@@ -321,14 +321,6 @@ build_and_push_image() {
         IMAGE_TAG="manual-$(date +%s)"
     fi
     
-    # Validate image tag format (Docker tag requirements)
-    # Docker tags can be up to 128 characters and contain lowercase/uppercase letters, digits, underscores, periods and dashes
-    if [[ ! $IMAGE_TAG =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
-        echo -e "${RED}❌ Invalid image tag format: $IMAGE_TAG${NC}"
-        echo "Image tags must be 1-128 characters, start with alphanumeric or underscore, and contain only alphanumeric, underscores (_), periods (.), or dashes (-)"
-        exit 1
-    fi
-    
     IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/postolio:$IMAGE_TAG"
     IMAGE_URI_LATEST="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/postolio:latest"
     
