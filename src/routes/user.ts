@@ -42,7 +42,7 @@ const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
     preHandler: fastify.authenticate,
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     // After authenticate middleware, user is guaranteed to exist
-    const userId = (request as any).user.id
+    const userId = request.user.id
     
     // Validate request body
     const validatedData = validateTimezoneUpdate(request.body)
@@ -80,7 +80,7 @@ const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
     preHandler: fastify.authenticate,
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     // After authenticate middleware, user is guaranteed to exist
-    const userId = (request as any).user.id
+    const userId = request.user.id
     const { brandId } = request.params as { brandId: string }
     
     // Verify brand ownership
@@ -106,7 +106,7 @@ const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
     preHandler: fastify.authenticate,
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     // After authenticate middleware, user is guaranteed to exist
-    const userId = (request as any).user.id
+    const userId = request.user.id
     const { brandId } = request.params as { brandId: string }
     
     // Validate request body
