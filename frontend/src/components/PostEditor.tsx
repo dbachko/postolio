@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { apiClient, type Content } from '../lib/api'
@@ -40,6 +40,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
   const [hashtagInput, setHashtagInput] = useState('')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const objectUrlRef = useRef<string | null>(null) // Track object URLs for cleanup
   const [learningFeedback, setLearningFeedback] = useState<{
     isVisible: boolean
     message: string
@@ -53,7 +54,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         return {
           ...oldData,
           content: oldData.content.map((item: Content) =>
-            item.id === updatedContent.id ? updatedContent : item
+            item.id === updatedContent.id ? { ...item, ...updatedContent } : item
           )
         }
       }
@@ -87,8 +88,23 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       setHashtagInput('')
       setLearningFeedback({ isVisible: false, message: '' })
       setSaveStatus('idle')
+      // Clean up object URL when modal closes
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+        objectUrlRef.current = null
+      }
     }
   }, [isOpen])
+
+  // Clean up object URL on component unmount
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+        objectUrlRef.current = null
+      }
+    }
+  }, [])
 
   // Additional safety check: Prevent form data corruption
   useEffect(() => {
@@ -267,7 +283,12 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       // No need to mutate content object - auto-save will handle it
     } else {
       // File upload - create local preview immediately
+      // Revoke previous object URL if it exists
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+      }
       const objectUrl = URL.createObjectURL(fileOrUrl)
+      objectUrlRef.current = objectUrl
       setFormData(prev => ({ ...prev, imageUrl: objectUrl }))
       
       // Upload to server
@@ -284,6 +305,12 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
             }))
             setSaveStatus('saved')
             setLastSaved(new Date())
+            
+            // Clean up the object URL since we now have the server URL
+            if (objectUrlRef.current) {
+              URL.revokeObjectURL(objectUrlRef.current)
+              objectUrlRef.current = null
+            }
             
             // Update the content in cache without mutating the original
             updateContentInCache({
@@ -309,18 +336,6 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         }
       }
     }
-  }
-  
-  const handleImageUpload = async (file: File): Promise<string> => {
-    if (!content) {
-      throw new Error('No content available for image upload')
-    }
-    
-    const response = await apiClient.uploadContentImage(content.id, file)
-    if (response.success && response.content.imageUrl) {
-      return response.content.imageUrl
-    }
-    throw new Error('Failed to upload image')
   }
 
   const handleScheduledAtChange = (value: string) => {
@@ -484,7 +499,6 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
             <ImageUploader
               value={formData.imageUrl || content.cdnImageUrl || content.imageUrl || undefined}
               onChange={handleImageChange}
-              onUpload={handleImageUpload}
               maxSizeInMB={10}
               acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
             />
