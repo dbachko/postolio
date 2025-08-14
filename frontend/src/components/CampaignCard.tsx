@@ -1,5 +1,4 @@
 import { memo } from 'react'
-import { toast } from 'sonner'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Card, CardContent } from './ui/card'
@@ -33,6 +32,7 @@ interface CampaignCardProps {
   onStartCampaign: (campaignId: string) => void
   onPauseCampaign: (campaignId: string) => void
   onDeleteCampaign: (campaignId: string, campaignName: string) => void
+  onEditCampaign: (campaignId: string) => void
   startCampaignLoading?: boolean
   pauseCampaignLoading?: boolean
   deleteCampaignLoading?: boolean
@@ -44,6 +44,7 @@ const CampaignCard = memo(({
   onStartCampaign, 
   onPauseCampaign, 
   onDeleteCampaign,
+  onEditCampaign,
   startCampaignLoading = false,
   pauseCampaignLoading = false,
   deleteCampaignLoading = false
@@ -209,13 +210,13 @@ const CampaignCard = memo(({
               )}
 
               {/* Edit/Delete actions on hover */}
-              {campaign.status === 'preview' && (
+              {(['preview', 'creating', 'failed'].includes(campaign.status)) && (
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={(e) => {
                     e.stopPropagation()
-                    toast.info('Campaign editing coming soon!')
+                    onEditCampaign(campaign.id)
                   }}
                   className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700"
                 >

@@ -10,6 +10,9 @@ import { DEFAULT_TIMEZONE } from '../constants/timezone.js'
 
 const prisma = new PrismaClient()
 
+// In-memory store for edit sessions (in production, this would be Redis or database)
+const editSessions = new Map<string, { userId: string; startedAt: Date }>()
+
 export interface CampaignConfig {
   name: string
   brandId: string
@@ -1130,6 +1133,276 @@ class CampaignService {
     }
 
     return errors
+  }
+
+  /**
+   * Validate field editability based on campaign status and field types
+   */
+  async validateFieldEditability(
+    campaignId: string, 
+    fieldsToUpdate: any, 
+    userId: string
+  ): Promise<{ valid: boolean; errors: { field: string; message: string }[] }> {
+    try {
+      // Get campaign with ownership validation
+      const campaign = await prisma.campaign.findFirst({
+        where: { 
+          id: campaignId,
+          brand: { userId }
+        },
+        include: { brand: true }
+      })
+
+      if (!campaign) {
+        return {
+          valid: false,
+          errors: [{ field: 'campaign', message: 'Campaign not found or access denied' }]
+        }
+      }
+
+      const errors: { field: string; message: string }[] = []
+
+      // Define field editability rules based on campaign status
+      const editabilityRules = {
+        // Completed campaigns are read-only
+        completed: {
+          allowedFields: [] as string[],
+          message: 'Completed campaigns are read-only'
+        },
+        // Active campaigns allow limited edits
+        active: {
+          allowedFields: ['name', 'priority'] as string[],
+          message: 'Active campaigns only allow editing name and priority'
+        },
+        // Paused campaigns allow same as active
+        paused: {
+          allowedFields: ['name', 'priority'] as string[],
+          message: 'Paused campaigns only allow editing name and priority'
+        },
+        // Failed campaigns allow all edits to recover
+        failed: {
+          allowedFields: ['name', 'priority', 'config', 'themes', 'style'] as string[],
+          message: 'Failed campaigns allow most edits for recovery'
+        },
+        // Creating and preview allow all edits
+        creating: {
+          allowedFields: ['name', 'priority', 'config', 'themes', 'style'] as string[],
+          message: 'All fields can be edited for campaigns in creation'
+        },
+        preview: {
+          allowedFields: ['name', 'priority', 'config', 'themes', 'style'] as string[],
+          message: 'All fields can be edited for preview campaigns'
+        },
+        processing: {
+          allowedFields: ['name', 'priority'] as string[],
+          message: 'Processing campaigns only allow editing name and priority'
+        }
+      }
+
+      const rule = editabilityRules[campaign.status as keyof typeof editabilityRules]
+      if (!rule) {
+        return {
+          valid: false,
+          errors: [{ field: 'status', message: `Unknown campaign status: ${campaign.status}` }]
+        }
+      }
+
+      // Special handling for completed campaigns - completely read-only
+      if (campaign.status === 'completed') {
+        if (Object.keys(fieldsToUpdate).length > 0) {
+          errors.push({ field: 'campaign', message: rule.message })
+        }
+        return { valid: errors.length === 0, errors }
+      }
+
+      // Check each field being updated
+      Object.keys(fieldsToUpdate).forEach(field => {
+        // Handle nested config fields (themes, style are inside config)
+        if (field === 'config' && fieldsToUpdate.config) {
+          const configFields = Object.keys(fieldsToUpdate.config)
+          configFields.forEach(configField => {
+            if (configField === 'themes' && !rule.allowedFields.includes('themes')) {
+              errors.push({ 
+                field: 'themes', 
+                message: `Cannot edit themes: ${rule.message}` 
+              })
+            }
+            if (configField === 'style' && !rule.allowedFields.includes('style')) {
+              errors.push({ 
+                field: 'style', 
+                message: `Cannot edit style: ${rule.message}` 
+              })
+            }
+          })
+        } else if (!rule.allowedFields.includes(field)) {
+          errors.push({ 
+            field, 
+            message: `Cannot edit ${field}: ${rule.message}` 
+          })
+        }
+      })
+
+      return { valid: errors.length === 0, errors }
+    } catch (error) {
+      console.error('Validate field editability error:', error)
+      return {
+        valid: false,
+        errors: [{ field: 'system', message: 'Failed to validate field editability' }]
+      }
+    }
+  }
+
+  /**
+   * Update campaign with automatic content regeneration when needed
+   */
+  async updateCampaignWithRegeneration(
+    campaignId: string,
+    updateData: any,
+    userId: string
+  ): Promise<{ 
+    campaign: any; 
+    regenerationTriggered: boolean; 
+    regenerationReason?: string;
+    message?: string;
+  }> {
+    try {
+      // First validate field editability
+      const editabilityCheck = await this.validateFieldEditability(campaignId, updateData, userId)
+      if (!editabilityCheck.valid) {
+        throw new Error(`Validation failed: ${editabilityCheck.errors.map(e => e.message).join(', ')}`)
+      }
+
+      // Get current campaign to compare changes
+      const currentCampaign = await prisma.campaign.findFirst({
+        where: { 
+          id: campaignId,
+          brand: { userId }
+        },
+        include: { brand: true }
+      })
+
+      if (!currentCampaign) {
+        throw new Error('Campaign not found or access denied')
+      }
+
+      // Check if regeneration is needed
+      let regenerationTriggered = false
+      let regenerationReason = ''
+
+      if (updateData.config) {
+        const currentConfig = currentCampaign.config as any
+        const newConfig = updateData.config
+
+        // Check for theme changes
+        if (newConfig.themes && JSON.stringify(currentConfig.themes) !== JSON.stringify(newConfig.themes)) {
+          regenerationTriggered = true
+          regenerationReason = 'themes changed'
+        }
+
+        // Check for style changes
+        if (newConfig.style && currentConfig.style !== newConfig.style) {
+          regenerationTriggered = true
+          regenerationReason = regenerationReason ? `${regenerationReason}, style changed` : 'style changed'
+        }
+      }
+
+      // Prepare update data with tracking fields
+      const updatePayload: any = {
+        ...updateData,
+        lastModifiedAt: new Date(),
+        lastModifiedById: userId,
+        modificationCount: { increment: 1 }
+      }
+
+      // Perform the update
+      const updatedCampaign = await prisma.campaign.update({
+        where: { id: campaignId },
+        data: updatePayload,
+        include: { 
+          brand: true,
+          content: true
+        }
+      })
+
+      // If regeneration is triggered and campaign has content, clear existing content
+      if (regenerationTriggered && updatedCampaign.content.length > 0) {
+        // In a real implementation, this would trigger background regeneration
+        // For now, we just delete existing content to simulate regeneration prep
+        await prisma.content.deleteMany({
+          where: { campaignId: campaignId }
+        })
+        
+        // Reset preview status to trigger regeneration
+        await prisma.campaign.update({
+          where: { id: campaignId },
+          data: { 
+            previewGenerated: false,
+            progress: 0
+          }
+        })
+      }
+
+      const result = {
+        campaign: updatedCampaign,
+        regenerationTriggered,
+        message: regenerationTriggered ? 'Campaign updated. Content regeneration started.' : 'Campaign updated successfully.'
+      }
+
+      if (regenerationTriggered) {
+        (result as any).regenerationReason = regenerationReason
+      }
+
+      return result
+    } catch (error) {
+      console.error('Update campaign with regeneration error:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Start an edit session for concurrent edit detection
+   */
+  async startEditSession(campaignId: string, userId: string, customStartTime?: Date): Promise<void> {
+    const startTime = customStartTime || new Date()
+    editSessions.set(campaignId, { userId, startedAt: startTime })
+  }
+
+  /**
+   * Check for concurrent edits within the 5-minute window
+   */
+  async checkConcurrentEdit(
+    campaignId: string, 
+    userId: string
+  ): Promise<{ 
+    hasConflict: boolean; 
+    conflictUser?: string; 
+    warningMessage?: string 
+  }> {
+    const session = editSessions.get(campaignId)
+    
+    if (!session) {
+      return { hasConflict: false }
+    }
+
+    // If it's the same user, no conflict
+    if (session.userId === userId) {
+      return { hasConflict: false }
+    }
+
+    // Check if the edit session is within the 5-minute window
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+    
+    if (session.startedAt > fiveMinutesAgo) {
+      return {
+        hasConflict: true,
+        conflictUser: session.userId,
+        warningMessage: 'This campaign is currently being edited by another user. Please wait or refresh to see latest changes.'
+      }
+    }
+
+    // Session expired, remove it
+    editSessions.delete(campaignId)
+    return { hasConflict: false }
   }
 }
 

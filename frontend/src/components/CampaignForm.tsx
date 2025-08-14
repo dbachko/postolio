@@ -17,12 +17,15 @@ interface CampaignFormProps {
   isSubmitting: boolean
   isFormPrefilledFromTemplate?: boolean
   usedTemplateName?: string | null
+  mode?: 'create' | 'edit'
+  existingCampaign?: any
   onSubmit: (e: React.FormEvent) => void
   onInputChange: (field: keyof CampaignFormData, value: string | number) => void
   onAddTheme: (theme: string) => void
   onRemoveTheme: (theme: string) => void
   onBackToDashboard: () => void
-  onUseTemplate: () => void
+  onUseTemplate?: () => void
+  onCancel?: () => void
 }
 
 
@@ -32,17 +35,39 @@ const CampaignForm = memo(({
   isSubmitting,
   isFormPrefilledFromTemplate = false,
   usedTemplateName = null,
+  mode = 'create',
+  existingCampaign,
   onSubmit,
   onInputChange,
   onAddTheme,
   onRemoveTheme,
   onBackToDashboard,
-  onUseTemplate
+  onUseTemplate,
+  onCancel
 }: CampaignFormProps) => {
   const [newTheme, setNewTheme] = useState('')
 
   const getTodayDate = () => {
     return format(new Date(), 'yyyy-MM-dd')
+  }
+
+  // Check if a field is editable based on campaign status
+  const isFieldEditable = (fieldName: string) => {
+    if (mode === 'create') return true
+    if (!existingCampaign) return true
+
+    const status = existingCampaign.status
+    const editableFields = {
+      completed: [],
+      active: ['name', 'priority'],
+      paused: ['name', 'priority'],
+      failed: ['name', 'priority', 'themes', 'style', 'frequency', 'dates'],
+      creating: ['name', 'priority', 'themes', 'style', 'frequency', 'dates'],
+      preview: ['name', 'priority', 'themes', 'style', 'frequency', 'dates'],
+      processing: ['name', 'priority']
+    }
+
+    return editableFields[status as keyof typeof editableFields]?.includes(fieldName as never) || false
   }
 
   const handleAddCustomTheme = () => {
@@ -57,19 +82,26 @@ const CampaignForm = memo(({
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Create New Campaign</CardTitle>
+            <CardTitle>
+              {mode === 'edit' ? 'Edit Campaign' : 'Create New Campaign'}
+            </CardTitle>
             <CardDescription>
-              Set up your automated content generation and posting campaign
+              {mode === 'edit' 
+                ? 'Modify your campaign settings. Some fields may be restricted based on campaign status.'
+                : 'Set up your automated content generation and posting campaign'
+              }
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onBackToDashboard}>
-              ← Back to Dashboard
+            <Button variant="outline" onClick={mode === 'edit' ? onCancel : onBackToDashboard}>
+              {mode === 'edit' ? 'Cancel' : '← Back to Dashboard'}
             </Button>
-            <Button variant="outline" onClick={onUseTemplate} className="flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Use Template Instead
-            </Button>
+            {mode === 'create' && onUseTemplate && (
+              <Button variant="outline" onClick={onUseTemplate} className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Use Template Instead
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -100,6 +132,7 @@ const CampaignForm = memo(({
               onChange={(e) => onInputChange('name', e.target.value)}
               placeholder="Enter campaign name..."
               className={errors.name ? 'border-red-500' : ''}
+              disabled={!isFieldEditable('name')}
             />
             {errors.name && (
               <p className="text-sm text-red-600">{errors.name}</p>
@@ -117,6 +150,7 @@ const CampaignForm = memo(({
                 onChange={(e) => onInputChange('startDate', e.target.value)}
                 min={getTodayDate()}
                 className={errors.startDate ? 'border-red-500' : ''}
+                disabled={!isFieldEditable('dates')}
               />
               {errors.startDate && (
                 <p className="text-sm text-red-600">{errors.startDate}</p>
@@ -132,6 +166,7 @@ const CampaignForm = memo(({
                 onChange={(e) => onInputChange('endDate', e.target.value)}
                 min={formData.startDate || getTodayDate()}
                 className={errors.endDate ? 'border-red-500' : ''}
+                disabled={!isFieldEditable('dates')}
               />
               {errors.endDate && (
                 <p className="text-sm text-red-600">{errors.endDate}</p>
@@ -142,7 +177,11 @@ const CampaignForm = memo(({
           {/* Posting Frequency */}
           <div className="space-y-2">
             <Label htmlFor="frequency">Posting Frequency</Label>
-            <Select value={formData.frequency} onValueChange={(value) => onInputChange('frequency', value)}>
+            <Select 
+              value={formData.frequency} 
+              onValueChange={(value) => onInputChange('frequency', value)}
+              disabled={!isFieldEditable('frequency')}
+            >
               <SelectTrigger className={errors.frequency ? 'border-red-500' : ''}>
                 <SelectValue placeholder="Select posting frequency" />
               </SelectTrigger>
@@ -171,8 +210,8 @@ const CampaignForm = memo(({
                   <Badge
                     key={theme}
                     variant={formData.themes.includes(theme) ? "default" : "secondary"}
-                    className="cursor-pointer hover:bg-primary/80"
-                    onClick={() => onAddTheme(theme)}
+                    className={`cursor-pointer hover:bg-primary/80 ${!isFieldEditable('themes') ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    onClick={() => isFieldEditable('themes') && onAddTheme(theme)}
                   >
                     {theme}
                   </Badge>
@@ -190,8 +229,14 @@ const CampaignForm = memo(({
                   onChange={(e) => setNewTheme(e.target.value)}
                   placeholder="Enter custom theme..."
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCustomTheme())}
+                  disabled={!isFieldEditable('themes')}
                 />
-                <Button type="button" onClick={handleAddCustomTheme} variant="outline">
+                <Button 
+                  type="button" 
+                  onClick={handleAddCustomTheme} 
+                  variant="outline"
+                  disabled={!isFieldEditable('themes')}
+                >
                   Add
                 </Button>
               </div>
@@ -209,15 +254,17 @@ const CampaignForm = memo(({
                       className="cursor-pointer group"
                     >
                       {theme}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onRemoveTheme(theme)}
-                        className="ml-1 h-auto p-0 text-current hover:bg-transparent"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
+                      {isFieldEditable('themes') && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onRemoveTheme(theme)}
+                          className="ml-1 h-auto p-0 text-current hover:bg-transparent"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
                     </Badge>
                   ))}
                 </div>
@@ -232,7 +279,11 @@ const CampaignForm = memo(({
           {/* Style Selection */}
           <div className="space-y-2">
             <Label htmlFor="style">Content Style</Label>
-            <Select value={formData.style} onValueChange={(value) => onInputChange('style', value)}>
+            <Select 
+              value={formData.style} 
+              onValueChange={(value) => onInputChange('style', value)}
+              disabled={!isFieldEditable('style')}
+            >
               <SelectTrigger className={errors.style ? 'border-red-500' : ''}>
                 <SelectValue placeholder="Select content style" />
               </SelectTrigger>
@@ -248,6 +299,24 @@ const CampaignForm = memo(({
               <p className="text-sm text-red-600">{errors.style}</p>
             )}
           </div>
+
+          {/* Regeneration Indicator for Edit Mode */}
+          {mode === 'edit' && existingCampaign?.content?.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                <h4 className="text-sm font-medium text-blue-900">Content Regeneration</h4>
+              </div>
+              <p className="text-sm text-blue-700 mb-2">
+                Changes to themes or style will regenerate existing content posts
+              </p>
+              <div className="flex items-center gap-2 text-xs text-blue-600">
+                <span>🔄 Will regenerate {existingCampaign.content.length} posts</span>
+                <span>•</span>
+                <span>⏱️ Estimated: ~{Math.ceil(existingCampaign.content.length * 7.5)} seconds</span>
+              </div>
+            </div>
+          )}
 
           {/* Posting Time */}
           <div className="space-y-2">
@@ -295,10 +364,10 @@ const CampaignForm = memo(({
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating Campaign...
+                  {mode === 'edit' ? 'Updating Campaign...' : 'Creating Campaign...'}
                 </>
               ) : (
-                'Create Campaign'
+                mode === 'edit' ? 'Update Campaign' : 'Create Campaign'
               )}
             </Button>
           </div>
