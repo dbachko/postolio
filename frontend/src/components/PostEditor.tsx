@@ -114,7 +114,8 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         captionLength: data.caption?.length || 0,
         hashtags: data.hashtags,
         imageUrl: data.imageUrl,
-        scheduledAt: data.scheduledAt
+        scheduledAt: data.scheduledAt,
+        scheduledAtType: typeof data.scheduledAt
       })
       
       // Final safety check before API call
@@ -225,15 +226,18 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         contentId: content.id, 
         originalCaption: originalCaption.substring(0, 30) + '...', 
         newCaption: debouncedFormData.caption.substring(0, 30) + '...',
-        imageUrl: debouncedFormData.imageUrl 
+        imageUrl: debouncedFormData.imageUrl,
+        scheduledAt: debouncedFormData.scheduledAt,
+        originalScheduledAt: originalScheduledAt
       })
 
+      // Always include scheduledAt in the mutation, even if empty
       updateContentMutation.mutate({
         contentId: content.id,
         caption: debouncedFormData.caption,
         hashtags: debouncedFormData.hashtags,
         imageUrl: debouncedFormData.imageUrl || undefined,
-        scheduledAt: debouncedFormData.scheduledAt || undefined
+        scheduledAt: debouncedFormData.scheduledAt // Send empty string if cleared, datetime string if set
       })
     }
   }, [debouncedFormData, content, isOpen])
@@ -247,7 +251,24 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
   }
 
   const handleScheduledAtChange = (value: string) => {
+    console.log('Scheduled time changed:', { 
+      from: formData.scheduledAt, 
+      to: value,
+      contentId: content?.id 
+    })
     setFormData(prev => ({ ...prev, scheduledAt: value }))
+    
+    // Trigger immediate save for scheduled time changes
+    if (content && content.id) {
+      setSaveStatus('saving')
+      updateContentMutation.mutate({
+        contentId: content.id,
+        caption: formData.caption,
+        hashtags: formData.hashtags,
+        imageUrl: formData.imageUrl || undefined,
+        scheduledAt: value // Use the new value directly
+      })
+    }
   }
 
   const handleHashtagInputChange = (value: string) => {
@@ -410,7 +431,18 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
 
           {/* Scheduled Time */}
           <div className="space-y-2">
-            <Label htmlFor="scheduledAt">Scheduled Time</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="scheduledAt">Scheduled Time</Label>
+              {formData.scheduledAt && (
+                <button
+                  type="button"
+                  onClick={() => handleScheduledAtChange('')}
+                  className="text-xs text-gray-500 hover:text-red-600"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
             <Input
               id="scheduledAt"
               type="datetime-local"
