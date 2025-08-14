@@ -464,7 +464,7 @@ export class PostolioStack extends cdk.Stack {
       memoryLimitMiB: 2048, // Increased from 1024 to prevent OOM kills
       desiredCount: 1,
       taskImageOptions: {
-        image: ecs.ContainerImage.fromEcrRepository(ecrRepository, 'v5-legal-routes-fix'),
+        image: ecs.ContainerImage.fromEcrRepository(ecrRepository, 'latest'),
         containerPort: 3000,
         executionRole,
         taskRole,
