@@ -40,6 +40,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
   const [hashtagInput, setHashtagInput] = useState('')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [learningFeedback, setLearningFeedback] = useState<{
     isVisible: boolean
     message: string
@@ -87,6 +88,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       setHashtagInput('')
       setLearningFeedback({ isVisible: false, message: '' })
       setSaveStatus('idle')
+      setIsUploadingImage(false) // Reset upload flag
     }
   }, [isOpen])
 
@@ -186,6 +188,12 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       return
     }
 
+    // Skip auto-save if we're uploading an image
+    if (isUploadingImage) {
+      console.log('Skipping autosave: Image upload in progress')
+      return
+    }
+
     // Critical safety check: NEVER autosave if caption is empty
     if (!debouncedFormData.caption || debouncedFormData.caption.trim().length === 0) {
       console.warn('CRITICAL: Skipping autosave - Caption is empty or undefined', { 
@@ -245,7 +253,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         scheduledAt: debouncedFormData.scheduledAt // Send empty string if cleared, datetime string if set
       })
     }
-  }, [debouncedFormData, content, isOpen, updateContentMutation])
+  }, [debouncedFormData, content, isOpen, updateContentMutation, isUploadingImage])
 
   const handleCaptionChange = (value: string) => {
     setFormData(prev => ({ ...prev, caption: value }))
@@ -258,11 +266,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       
       // If it's an empty string, it means the user removed the image
       // This will trigger the auto-save via the debounced form data
-      if (fileOrUrl === '' && content) {
-        // Clear the CDN URL as well
-        content.cdnImageUrl = undefined
-        content.imageUrl = ''
-      }
+      // No need to mutate content object here
     } else {
       // File upload - create local preview immediately
       const objectUrl = URL.createObjectURL(fileOrUrl)
@@ -270,6 +274,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       
       // Upload to server
       if (content) {
+        setIsUploadingImage(true) // Prevent auto-save during upload
         setSaveStatus('saving')
         try {
           const response = await apiClient.uploadContentImage(content.id, fileOrUrl)
@@ -283,11 +288,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
             setSaveStatus('saved')
             setLastSaved(new Date())
             
-            // Update the content object to reflect the new CDN URL
-            content.cdnImageUrl = response.content.cdnImageUrl
-            content.imageUrl = response.content.imageUrl
-            
-            // Update the content in cache
+            // Update the content in cache WITHOUT mutating the original
             updateContentInCache({
               ...content,
               imageUrl: response.content.imageUrl,
@@ -309,6 +310,8 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
           setTimeout(() => {
             setSaveStatus('idle')
           }, 3000)
+        } finally {
+          setIsUploadingImage(false) // Re-enable auto-save
         }
       }
     }
