@@ -511,6 +511,7 @@ class ApiClient {
     startDate?: string
     endDate?: string
     status?: string
+    priority?: number
   }): Promise<{ success: boolean; campaign: any; message?: string; skippedCount?: number; cancelledCount?: number }> {
     return this.request(`/api/campaign/${campaignId}`, {
       method: 'PUT',

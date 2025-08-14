@@ -1181,16 +1181,16 @@ class CampaignService {
         },
         // Failed campaigns allow all edits to recover
         failed: {
-          allowedFields: ['name', 'priority', 'config', 'themes', 'style'] as string[],
+          allowedFields: ['name', 'priority', 'config', 'themes', 'style', 'frequency', 'postingTime', 'startDate', 'endDate'] as string[],
           message: 'Failed campaigns allow most edits for recovery'
         },
         // Creating and preview allow all edits
         creating: {
-          allowedFields: ['name', 'priority', 'config', 'themes', 'style'] as string[],
+          allowedFields: ['name', 'priority', 'config', 'themes', 'style', 'frequency', 'postingTime', 'startDate', 'endDate'] as string[],
           message: 'All fields can be edited for campaigns in creation'
         },
         preview: {
-          allowedFields: ['name', 'priority', 'config', 'themes', 'style'] as string[],
+          allowedFields: ['name', 'priority', 'config', 'themes', 'style', 'frequency', 'postingTime', 'startDate', 'endDate'] as string[],
           message: 'All fields can be edited for preview campaigns'
         },
         processing: {
@@ -1289,18 +1289,36 @@ class CampaignService {
       let regenerationTriggered = false
       let regenerationReason = ''
 
+      const currentConfig = currentCampaign.config as any
+
+      // Check for theme changes (either in config object or as direct field)
+      if (updateData.themes) {
+        if (JSON.stringify(currentConfig?.themes) !== JSON.stringify(updateData.themes)) {
+          regenerationTriggered = true
+          regenerationReason = 'themes changed'
+        }
+      }
+
+      // Check for style changes (either in config object or as direct field)
+      if (updateData.style) {
+        if (currentConfig?.style !== updateData.style) {
+          regenerationTriggered = true
+          regenerationReason = regenerationReason ? `${regenerationReason}, style changed` : 'style changed'
+        }
+      }
+
+      // Also check if config object is provided (backward compatibility)
       if (updateData.config) {
-        const currentConfig = currentCampaign.config as any
         const newConfig = updateData.config
 
-        // Check for theme changes
-        if (newConfig.themes && JSON.stringify(currentConfig.themes) !== JSON.stringify(newConfig.themes)) {
+        // Check for theme changes in config
+        if (newConfig.themes && JSON.stringify(currentConfig?.themes) !== JSON.stringify(newConfig.themes)) {
           regenerationTriggered = true
           regenerationReason = 'themes changed'
         }
 
-        // Check for style changes
-        if (newConfig.style && currentConfig.style !== newConfig.style) {
+        // Check for style changes in config
+        if (newConfig.style && currentConfig?.style !== newConfig.style) {
           regenerationTriggered = true
           regenerationReason = regenerationReason ? `${regenerationReason}, style changed` : 'style changed'
         }
@@ -1308,10 +1326,51 @@ class CampaignService {
 
       // Prepare update data with tracking fields
       const updatePayload: any = {
-        ...updateData,
         lastModifiedAt: new Date(),
         lastModifiedById: userId,
         modificationCount: { increment: 1 }
+      }
+
+      // Handle individual fields that should be stored in config
+      const configUpdates: any = {}
+      
+      if (updateData.themes !== undefined) {
+        configUpdates.themes = updateData.themes
+      }
+      if (updateData.style !== undefined) {
+        configUpdates.style = updateData.style
+      }
+      if (updateData.frequency !== undefined) {
+        configUpdates.frequency = updateData.frequency
+      }
+      if (updateData.postingTime !== undefined) {
+        configUpdates.postingTime = updateData.postingTime
+      }
+      if (updateData.startDate !== undefined || updateData.endDate !== undefined) {
+        configUpdates.duration = {
+          ...(currentConfig?.duration || {}),
+          ...(updateData.startDate ? { start: updateData.startDate } : {}),
+          ...(updateData.endDate ? { end: updateData.endDate } : {})
+        }
+      }
+
+      // If we have config updates, merge them with existing config
+      if (Object.keys(configUpdates).length > 0) {
+        updatePayload.config = {
+          ...(currentConfig || {}),
+          ...configUpdates
+        }
+      }
+
+      // Handle non-config fields
+      if (updateData.name !== undefined) {
+        updatePayload.name = updateData.name
+      }
+      if (updateData.priority !== undefined) {
+        updatePayload.priority = updateData.priority
+      }
+      if (updateData.status !== undefined) {
+        updatePayload.status = updateData.status
       }
 
       // Perform the update

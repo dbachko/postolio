@@ -52,6 +52,7 @@ export function Campaigns() {
   
   // Determine initial view based on URL
   const getInitialView = () => {
+    if (window.location.pathname.includes('/edit')) return 'edit'
     if (window.location.pathname === '/campaigns/create') return 'create'
     if (urlCampaignId && urlCampaignId !== 'create') return 'details'
     return 'dashboard'
@@ -189,6 +190,27 @@ export function Campaigns() {
       setCurrentView('details')
     }
   }, [location.pathname, urlCampaignId, campaignsQuery.data?.campaigns])
+
+  // Handle initial edit mode setup when directly accessing edit URL
+  useEffect(() => {
+    if (currentView === 'edit' && urlCampaignId && !editingCampaign && campaignsQuery.data?.campaigns) {
+      const campaign = campaignsQuery.data.campaigns.find((c: Campaign) => c.id === urlCampaignId)
+      if (campaign) {
+        setEditingCampaign(campaign)
+        setSelectedCampaignId(urlCampaignId)
+        setFormData({
+          name: campaign.name,
+          startDate: campaign.config?.duration?.start || '',
+          endDate: campaign.config?.duration?.end || '',
+          frequency: campaign.config?.frequency || 'daily',
+          postingTime: campaign.config?.postingTime || '12:00',
+          style: campaign.config?.style || 'lifestyle',
+          themes: campaign.config?.themes || [],
+          priority: campaign.priority || 5
+        })
+      }
+    }
+  }, [currentView, urlCampaignId, editingCampaign, campaignsQuery.data?.campaigns])
 
   // Auto brand-switching effect when accessing campaign via URL
   useEffect(() => {
@@ -360,7 +382,7 @@ export function Campaigns() {
   // Campaign edit hook
   const {
     isUpdating,
-    handleEditSubmit,
+    handleEditSubmit: submitEdit,
     dialogs: editDialogs
   } = useCampaignEdit({
     campaignId: editingCampaign?.id || '',
@@ -372,6 +394,28 @@ export function Campaigns() {
       campaignsQuery.refetch()
     }
   })
+
+  // Wrapper for edit form submission
+  const handleEditFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!validateForm() || !selectedBrand) {
+      return
+    }
+
+    // Prepare edit data
+    const editData = {
+      name: formData.name,
+      themes: formData.themes,
+      style: formData.style,
+      frequency: formData.frequency,
+      postingTime: formData.postingTime,
+      endDate: formData.endDate,
+      priority: formData.priority
+    }
+
+    submitEdit(editData)
+  }
 
   if (!selectedBrand) {
     return (
@@ -671,12 +715,16 @@ export function Campaigns() {
             formData={formData}
             errors={errors}
             isSubmitting={isUpdating}
-            setFormData={setFormData}
-            setErrors={setErrors}
-            onSubmit={handleEditSubmit}
+            onSubmit={handleEditFormSubmit}
+            onInputChange={handleInputChange}
             onAddTheme={addTheme}
             onRemoveTheme={removeTheme}
             onBackToDashboard={() => {
+              setCurrentView('dashboard')
+              setEditingCampaign(null)
+              navigate('/campaigns', { replace: true })
+            }}
+            onCancel={() => {
               setCurrentView('dashboard')
               setEditingCampaign(null)
               navigate('/campaigns', { replace: true })
