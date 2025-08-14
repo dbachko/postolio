@@ -260,13 +260,13 @@ export default async function legalRoutes(fastify: FastifyInstance) {
     return {
       privacyPolicy: {
         url: '/legal/privacy-policy',
-        lastUpdated: '2025-08-11',
-        effectiveDate: '2025-08-11'
+        lastUpdated: '2025-01-13',
+        effectiveDate: '2025-01-13'
       },
       termsOfService: {
         url: '/legal/terms-of-service',
-        lastUpdated: '2025-01-10',
-        effectiveDate: '2025-01-10'
+        lastUpdated: '2025-01-13',
+        effectiveDate: '2025-01-13'
       },
       dataDeletion: {
         url: '/legal/data-deletion',
