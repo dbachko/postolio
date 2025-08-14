@@ -38,7 +38,7 @@ function validateBrandTimezoneUpdate(body: unknown): { timezone: string | null }
   return null
 }
 
-const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
+const userRoutes: FastifyPluginAsync = async (fastify) => {
   // Update user timezone preferences
   fastify.patch('/api/users/timezone', async (request: FastifyRequest, reply: FastifyReply) => {
     // Verify authentication
@@ -81,7 +81,7 @@ const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
       })
       
       return { success: true, user: updatedUser }
-    } catch (err) {
+    } catch {
       return reply.code(401).send({ error: 'Authentication required' })
     }
   })
@@ -116,7 +116,7 @@ const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
       }
       
       return { timezone: brand.postingTimezone }
-    } catch (err) {
+    } catch {
       return reply.code(401).send({ error: 'Authentication required' })
     }
   })
@@ -174,7 +174,7 @@ const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
       })
       
       return { success: true, brand: updatedBrand }
-    } catch (err) {
+    } catch {
       return reply.code(401).send({ error: 'Authentication required' })
     }
   })
