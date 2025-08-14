@@ -208,6 +208,13 @@ export function Layout({ children }: LayoutProps) {
                 Terms of Service
               </Link>
               <span>•</span>
+              <Link 
+                to="/legal/data-deletion" 
+                className="hover:text-foreground transition-colors"
+              >
+                Data Deletion
+              </Link>
+              <span>•</span>
               <a 
                 href="mailto:legal@postolio.example" 
                 className="hover:text-foreground transition-colors"
