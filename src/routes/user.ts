@@ -1,8 +1,10 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
 import { getDatabaseClient } from '../config/database.js'
 import { TimezoneService } from '../services/timezone.js'
+import { verifyJWT } from '../services/jwt.js'
 
 const prisma = getDatabaseClient()
+
 
 // Type guards for proper input validation
 function isTimezoneUpdateBody(body: unknown): body is { timezone: string; timezoneAutoDetected: boolean } {
@@ -38,116 +40,143 @@ function validateBrandTimezoneUpdate(body: unknown): { timezone: string | null }
 
 const userRoutes: FastifyPluginAsync = async (fastify, opts) => {
   // Update user timezone preferences
-  fastify.patch('/api/users/timezone', {
-    preHandler: fastify.authenticate,
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    // After authenticate middleware, user is guaranteed to exist
-    const userId = request.user.id
-    
-    // Validate request body
-    const validatedData = validateTimezoneUpdate(request.body)
-    if (!validatedData) {
-      return reply.status(400).send({ 
-        error: 'Invalid request body. Expected { timezone: string, timezoneAutoDetected: boolean }' 
-      })
+  fastify.patch('/api/users/timezone', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Verify authentication
+    const authHeader = request.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.code(401).send({ error: 'Authentication required' })
     }
     
-    const { timezone, timezoneAutoDetected } = validatedData
+    try {
+      const token = authHeader.substring(7)
+      const decoded = verifyJWT(token)
+      const userId = decoded.id
     
-    // Validate timezone if not auto-detected
-    if (!timezoneAutoDetected && !TimezoneService.isValidTimezone(timezone)) {
-      return reply.status(400).send({ error: 'Invalid timezone' })
-    }
-    
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        timezone: timezone, // Store the actual timezone value even when auto-detected
-        timezoneAutoDetected,
-      },
-      select: {
-        id: true,
-        timezone: true,
-        timezoneAutoDetected: true,
+      // Validate request body
+      const validatedData = validateTimezoneUpdate(request.body)
+      if (!validatedData) {
+        return reply.status(400).send({ 
+          error: 'Invalid request body. Expected { timezone: string, timezoneAutoDetected: boolean }' 
+        })
       }
-    })
-    
-    return { success: true, user: updatedUser }
+      
+      const { timezone, timezoneAutoDetected } = validatedData
+      
+      // Validate timezone if not auto-detected
+      if (!timezoneAutoDetected && !TimezoneService.isValidTimezone(timezone)) {
+        return reply.status(400).send({ error: 'Invalid timezone' })
+      }
+      
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          timezone: timezone, // Store the actual timezone value even when auto-detected
+          timezoneAutoDetected,
+        },
+        select: {
+          id: true,
+          timezone: true,
+          timezoneAutoDetected: true,
+        }
+      })
+      
+      return { success: true, user: updatedUser }
+    } catch (err) {
+      return reply.code(401).send({ error: 'Authentication required' })
+    }
   })
 
   // Get brand timezone
-  fastify.get('/api/brands/:brandId/timezone', {
-    preHandler: fastify.authenticate,
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    // After authenticate middleware, user is guaranteed to exist
-    const userId = request.user.id
-    const { brandId } = request.params as { brandId: string }
-    
-    // Verify brand ownership
-    const brand = await prisma.brand.findFirst({
-      where: {
-        id: brandId,
-        userId,
-      },
-      select: {
-        postingTimezone: true,
-      }
-    })
-    
-    if (!brand) {
-      return reply.status(404).send({ error: 'Brand not found or access denied' })
+  fastify.get('/api/brands/:brandId/timezone', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Verify authentication
+    const authHeader = request.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.code(401).send({ error: 'Authentication required' })
     }
     
-    return { timezone: brand.postingTimezone }
+    try {
+      const token = authHeader.substring(7)
+      const decoded = verifyJWT(token)
+      const userId = decoded.id
+      const { brandId } = request.params as { brandId: string }
+    
+      // Verify brand ownership
+      const brand = await prisma.brand.findFirst({
+        where: {
+          id: brandId,
+          userId,
+        },
+        select: {
+          postingTimezone: true,
+        }
+      })
+      
+      if (!brand) {
+        return reply.status(404).send({ error: 'Brand not found or access denied' })
+      }
+      
+      return { timezone: brand.postingTimezone }
+    } catch (err) {
+      return reply.code(401).send({ error: 'Authentication required' })
+    }
   })
 
   // Update brand timezone
-  fastify.patch('/api/brands/:brandId/timezone', {
-    preHandler: fastify.authenticate,
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    // After authenticate middleware, user is guaranteed to exist
-    const userId = request.user.id
-    const { brandId } = request.params as { brandId: string }
+  fastify.patch('/api/brands/:brandId/timezone', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Verify authentication
+    const authHeader = request.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.code(401).send({ error: 'Authentication required' })
+    }
     
-    // Validate request body
-    const validatedData = validateBrandTimezoneUpdate(request.body)
-    if (!validatedData) {
-      return reply.status(400).send({ 
-        error: 'Invalid request body. Expected { timezone: string | null }' 
+    try {
+      const token = authHeader.substring(7)
+      const decoded = verifyJWT(token)
+      const userId = decoded.id
+      const { brandId } = request.params as { brandId: string }
+    
+      // Validate request body
+      const validatedData = validateBrandTimezoneUpdate(request.body)
+      if (!validatedData) {
+        return reply.status(400).send({ 
+          error: 'Invalid request body. Expected { timezone: string | null }' 
+        })
+      }
+      
+      const { timezone } = validatedData
+      
+      // Verify brand ownership
+      const brand = await prisma.brand.findFirst({
+        where: {
+          id: brandId,
+          userId,
+        }
       })
-    }
-    
-    const { timezone } = validatedData
-    
-    // Verify brand ownership
-    const brand = await prisma.brand.findFirst({
-      where: {
-        id: brandId,
-        userId,
+      
+      if (!brand) {
+        return reply.status(404).send({ error: 'Brand not found or access denied' })
       }
-    })
-    
-    if (!brand) {
-      return reply.status(404).send({ error: 'Brand not found or access denied' })
-    }
-    
-    // Validate timezone if provided
-    if (timezone && !TimezoneService.isValidTimezone(timezone)) {
-      return reply.status(400).send({ error: 'Invalid timezone' })
-    }
-    
-    const updatedBrand = await prisma.brand.update({
-      where: { id: brandId },
-      data: {
-        postingTimezone: timezone,
-      },
-      select: {
-        id: true,
-        postingTimezone: true,
+      
+      // Validate timezone if provided
+      if (timezone && !TimezoneService.isValidTimezone(timezone)) {
+        return reply.status(400).send({ error: 'Invalid timezone' })
       }
-    })
-    
-    return { success: true, brand: updatedBrand }
+      
+      const updatedBrand = await prisma.brand.update({
+        where: { id: brandId },
+        data: {
+          postingTimezone: timezone,
+        },
+        select: {
+          id: true,
+          postingTimezone: true,
+        }
+      })
+      
+      return { success: true, brand: updatedBrand }
+    } catch (err) {
+      return reply.code(401).send({ error: 'Authentication required' })
+    }
   })
 }
 

@@ -30,6 +30,8 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorate('authenticate', async function (request: any, reply: any) {
     try {
       await request.jwtVerify()
+      // The jwtVerify() method sets request.user with the decoded token payload
+      console.log('After jwtVerify, request.user:', request.user)
     } catch (err) {
       reply.code(401).send({ error: 'Authentication required' })
     }
