@@ -44,6 +44,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
       
       const __filename = fileURLToPath(import.meta.url)
       const __dirname = path.dirname(__filename)
+      
       const deletionPath = path.join(__dirname, '..', '..', 'DATA_DELETION.md')
       
       let content = fs.readFileSync(deletionPath, 'utf8')

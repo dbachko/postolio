@@ -103,8 +103,8 @@ export function buildFastify(): FastifyInstance {
   app.register(campaignTemplatesRoutes, { prefix: '/api/templates' })
   app.register(campaignAnalyticsRoutes, { prefix: '/api/' }) // API root level for campaign analytics
   app.register(rollingContentRoutes, { prefix: '/api/rolling-content' })
-  app.register(legalRoutes, { prefix: '/legal' })
-  app.register(dataDeletionRoutes, { prefix: '/legal' })
+  app.register(legalRoutes, { prefix: '/api/legal' })
+  app.register(dataDeletionRoutes, { prefix: '/api/legal' })
   app.register(complianceRoutes)
 
   // Health check endpoint for both load balancer health checks and API requests
@@ -121,6 +121,27 @@ export function buildFastify(): FastifyInstance {
 // Start server if this file is run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   const app = buildFastify()
+
+  // Graceful shutdown handling
+  const signals = ['SIGTERM', 'SIGINT']
+  signals.forEach(signal => {
+    process.on(signal, async () => {
+      app.log.warn(`Received ${signal}, starting graceful shutdown...`)
+      try {
+        // Stop background services
+        schedulerService.stop()
+        autopilotService.stop()
+        
+        // Close server
+        await app.close()
+        app.log.info('Server closed successfully')
+        process.exit(0)
+      } catch (error) {
+        app.log.error('Error during shutdown:', error)
+        process.exit(1)
+      }
+    })
+  })
 
   app.listen({ port: 3000, host: '0.0.0.0' }, async (err, address) => {
     if (err) {

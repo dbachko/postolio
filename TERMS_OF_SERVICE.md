@@ -1,7 +1,7 @@
 # Terms of Service
 
-**Effective Date:** January 10, 2025  
-**Last Updated:** January 10, 2025
+**Effective Date:** July 28, 2025  
+**Last Updated:** July 28, 2025
 
 ## 1. Agreement to Terms
 
@@ -213,8 +213,7 @@ You agree to comply with all applicable export and re-export control laws and re
 For questions about these Terms of Service, please contact us:
 
 **Email**: legal@postolio.example  
-**Support**: support@postolio.example  
-**Address**: [To be provided]
+**Support**: support@postolio.example
 
 ---
 

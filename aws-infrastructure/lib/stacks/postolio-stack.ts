@@ -327,7 +327,7 @@ export class PostolioStack extends cdk.Stack {
     // ECS Cluster
     const cluster = new ecs.Cluster(this, 'PostolioCluster', {
       vpc,
-      containerInsights: true,
+      containerInsights: true,  // Will be deprecated but still works
     })
 
     // Task role with permissions to access secrets and S3
@@ -461,12 +461,10 @@ export class PostolioStack extends cdk.Stack {
     const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'PostolioService', {
       cluster,
       cpu: 512,
-      memoryLimitMiB: 1024,
+      memoryLimitMiB: 2048, // Increased from 1024 to prevent OOM kills
       desiredCount: 1,
       taskImageOptions: {
-        image: this.node.tryGetContext('useEcrImage') === 'true' 
-          ? ecs.ContainerImage.fromEcrRepository(ecrRepository, 'latest')
-          : ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/node:20-alpine'),
+        image: ecs.ContainerImage.fromEcrRepository(ecrRepository, 'v5-legal-routes-fix'),
         containerPort: 3000,
         executionRole,
         taskRole,
@@ -526,10 +524,14 @@ export class PostolioStack extends cdk.Stack {
     fargateService.loadBalancer.setAttribute('access_logs.s3.enabled', 'true')
     fargateService.loadBalancer.setAttribute('access_logs.s3.bucket', albAccessLogsBucket.bucketName)
 
-    // Health check configuration
+    // Health check configuration with proper timeouts
     fargateService.targetGroup.configureHealthCheck({
       path: '/health',
       healthyHttpCodes: '200',
+      interval: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(10), // Increased from default 5s
+      healthyThresholdCount: 2, // Reduced from 5 to speed up healthy status
+      unhealthyThresholdCount: 3, // Increased from 2 to be more tolerant
     })
 
     // Configure ECS service deployment settings
@@ -538,6 +540,9 @@ export class PostolioStack extends cdk.Stack {
       maximumPercent: 200,
       minimumHealthyPercent: 100, // Ensure zero-downtime deployments
     }
+    
+    // CRITICAL: Set health check grace period to allow container to start
+    cfnServiceConfig.healthCheckGracePeriodSeconds = 300 // 5 minutes grace period
 
     // Auto Scaling
     const scalableTarget = fargateService.service.autoScaleTaskCount({
@@ -589,16 +594,6 @@ export class PostolioStack extends cdk.Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
           compress: false,
-        },
-        '/legal/*': {
-          origin: new origins.LoadBalancerV2Origin(fargateService.loadBalancer, {
-            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
-          }),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED, // Cache legal documents
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
-          compress: true,
         },
         '/images/*': {
           origin: origins.S3BucketOrigin.withOriginAccessIdentity(imagesBucket, {
