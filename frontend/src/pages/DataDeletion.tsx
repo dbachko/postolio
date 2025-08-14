@@ -24,7 +24,7 @@ export function DataDeletion() {
 
   const fetchDataDeletionInstructions = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/legal/data-deletion`, {
+      const response = await fetch(`${API_BASE_URL}/api/legal/data-deletion`, {
         headers: {
           'Accept': 'text/plain'
         }
@@ -49,7 +49,7 @@ export function DataDeletion() {
     setError('')
 
     try {
-      const response = await fetch(`${API_BASE_URL}/legal/data-deletion-request`, {
+      const response = await fetch(`${API_BASE_URL}/api/legal/data-deletion-request`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
