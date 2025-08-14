@@ -531,7 +531,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Validate mime type
-      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp']
       if (!allowedMimeTypes.includes(mimeType)) {
         return reply.code(400).send({ error: 'Invalid image type. Supported types: JPEG, PNG, WebP' })
       }
@@ -554,7 +554,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Convert base64 to buffer - validate size BEFORE creating buffer
         const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
         
-        // Calculate estimated size from base64 length (base64 is ~33% larger than binary)
+        // Calculate estimated size from base64 length
+        // Base64 encoding represents every 3 bytes of binary data as 4 ASCII characters (4/3 ratio).
+        // To estimate the original binary size, multiply the base64 string length by 3/4.
         const estimatedSize = (base64Data.length * 3) / 4
         const maxSize = 10 * 1024 * 1024
         
@@ -595,10 +597,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           
           console.log('Upload successful! CDN URL:', imageUrlToStore)
         } catch (s3Error) {
-          console.error('S3 upload failed, falling back to data URL:', s3Error)
-          // Fallback to data URL if S3 fails (for development or S3 issues)
-          imageUrlToStore = `data:${mimeType};base64,${base64Data}`
-          console.warn('Using data URL fallback for content:', contentId)
+          console.error('S3 upload failed:', s3Error)
+          // Fail gracefully instead of storing large base64 data URLs
+          return reply.code(500).send({ error: 'Failed to upload image to storage. Please try again.' })
         }
         
         // Update content with S3 URLs or fallback

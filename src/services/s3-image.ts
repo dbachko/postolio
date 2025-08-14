@@ -163,10 +163,12 @@ async function optimizeImage(buffer: Buffer): Promise<Buffer> {
     const metadata = await image.metadata()
     
     // Instagram optimal size is 1080x1080
-    // Use 'contain' to fit the entire image within the square, adding white padding if needed
+    // IMPORTANT: Using 'contain' instead of 'cover' to preserve the entire image
+    // This prevents cropping of important parts of the image but may add white padding
+    // If you need to revert to cropping behavior, change 'contain' back to 'cover'
     const processedImage = image
       .resize(1080, 1080, {
-        fit: 'contain',  // Changed from 'cover' to 'contain' to show full image
+        fit: 'contain',  // Shows full image with padding instead of cropping
         position: 'center',
         background: { r: 255, g: 255, b: 255, alpha: 1 } // White background for padding
       })

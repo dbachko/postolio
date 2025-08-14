@@ -46,6 +46,21 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
     appliedToFuturePosts?: number
   }>({ isVisible: false, message: '' })
 
+  // Helper function to update content in cache
+  const updateContentInCache = (updatedContent: Content) => {
+    queryClient.setQueryData(['contentHistory', updatedContent.id], (oldData: { content: Content[] } | undefined) => {
+      if (oldData?.content) {
+        return {
+          ...oldData,
+          content: oldData.content.map((item: Content) =>
+            item.id === updatedContent.id ? updatedContent : item
+          )
+        }
+      }
+      return oldData
+    })
+  }
+
   // Initialize form data when content changes
   useEffect(() => {
     if (content && isOpen) {
@@ -144,17 +159,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       }
       
       // Update the content in relevant queries
-      queryClient.setQueryData(['contentHistory', response.content.id], (oldData: { content: Content[] } | undefined) => {
-        if (oldData?.content) {
-          return {
-            ...oldData,
-            content: oldData.content.map((item: Content) =>
-              item.id === response.content.id ? response.content : item
-            )
-          }
-        }
-        return oldData
-      })
+      updateContentInCache(response.content)
 
       // Invalidate queries to refresh calendar
       queryClient.invalidateQueries({ queryKey: ['contentHistory'] })
@@ -283,20 +288,10 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
             content.imageUrl = response.content.imageUrl
             
             // Update the content in cache
-            queryClient.setQueryData(['contentHistory', content.id], (oldData: { content: Content[] } | undefined) => {
-              if (oldData?.content) {
-                return {
-                  ...oldData,
-                  content: oldData.content.map((item: Content) =>
-                    item.id === content.id ? { 
-                      ...item, 
-                      imageUrl: response.content.imageUrl,
-                      cdnImageUrl: response.content.cdnImageUrl 
-                    } : item
-                  )
-                }
-              }
-              return oldData
+            updateContentInCache({
+              ...content,
+              imageUrl: response.content.imageUrl,
+              cdnImageUrl: response.content.cdnImageUrl
             })
             
             // Invalidate queries to refresh data

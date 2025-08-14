@@ -19,7 +19,7 @@ export function ImageUploader({
   onUpload,
   className,
   maxSizeInMB = 10,
-  acceptedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+  acceptedFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 }: ImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string>(value || '')
