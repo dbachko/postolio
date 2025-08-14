@@ -18,6 +18,7 @@ import { CampaignsList } from '../components/CampaignsList'
 import { CampaignForm } from '../components/CampaignForm'
 import type { CampaignFormData, CampaignErrors } from '../types/campaign'
 import { frequencyOptions, styleOptions } from '../constants/campaign'
+import { useCampaignEdit } from '../hooks/useCampaignEdit'
 import { 
   Loader2, Edit, Calendar, Users, TrendingUp, AlertCircle, Plus,
   FileText, Bookmark, BarChart3
@@ -57,8 +58,9 @@ export function Campaigns() {
   }
   
   // View state management
-  const [currentView, setCurrentView] = useState<'dashboard' | 'create' | 'details'>(getInitialView())
+  const [currentView, setCurrentView] = useState<'dashboard' | 'create' | 'details' | 'edit'>(getInitialView())
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(urlCampaignId || null)
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
   
   // Modal state
   const [selectedPost, setSelectedPost] = useState<Content | null>(null)
@@ -147,6 +149,30 @@ export function Campaigns() {
   useEffect(() => {
     const pathname = location.pathname
     
+    // Check for edit mode
+    if (pathname.includes('/edit')) {
+      const campaignId = pathname.split('/')[2]
+      if (campaignId && campaignId !== 'create') {
+        const campaign = campaigns.find(c => c.id === campaignId)
+        if (campaign) {
+          setEditingCampaign(campaign)
+          setSelectedCampaignId(campaignId)
+          setCurrentView('edit')
+          setFormData({
+            name: campaign.name,
+            startDate: campaign.config?.duration?.start || '',
+            endDate: campaign.config?.duration?.end || '',
+            frequency: campaign.config?.frequency || 'daily',
+            postingTime: campaign.config?.postingTime || '12:00',
+            style: campaign.config?.style || 'lifestyle',
+            themes: campaign.config?.themes || [],
+            priority: campaign.priority || 5
+          })
+        }
+      }
+      return
+    }
+    
     // Check if we're at /campaigns (no specific campaign ID)
     if (pathname === '/campaigns' && !urlCampaignId) {
       setCurrentView('dashboard')
@@ -162,7 +188,7 @@ export function Campaigns() {
       setSelectedCampaignId(urlCampaignId!)
       setCurrentView('details')
     }
-  }, [location.pathname, urlCampaignId])
+  }, [location.pathname, urlCampaignId, campaigns])
 
   // Auto brand-switching effect when accessing campaign via URL
   useEffect(() => {
@@ -307,9 +333,45 @@ export function Campaigns() {
     }
   }, [deleteCampaignMutation])
 
+  const handleEditCampaign = useCallback((campaignId: string) => {
+    const campaign = campaigns.find(c => c.id === campaignId)
+    if (campaign) {
+      setEditingCampaign(campaign)
+      setSelectedCampaignId(campaignId)
+      setCurrentView('edit')
+      setFormData({
+        name: campaign.name,
+        startDate: campaign.config?.duration?.start || '',
+        endDate: campaign.config?.duration?.end || '',
+        frequency: campaign.config?.frequency || 'daily',
+        postingTime: campaign.config?.postingTime || '12:00',
+        style: campaign.config?.style || 'lifestyle',
+        themes: campaign.config?.themes || [],
+        priority: campaign.priority || 5
+      })
+      navigate(`/campaigns/${campaignId}/edit`)
+    }
+  }, [campaigns, navigate])
+
   const handleViewCampaignDetails = useCallback((campaignId: string) => {
     navigate(`/campaigns/${campaignId}`)
   }, [navigate])
+
+  // Campaign edit hook
+  const {
+    isUpdating,
+    handleEditSubmit,
+    dialogs: editDialogs
+  } = useCampaignEdit({
+    campaignId: editingCampaign?.id || '',
+    existingCampaign: editingCampaign,
+    onEditComplete: () => {
+      setCurrentView('dashboard')
+      setEditingCampaign(null)
+      navigate('/campaigns')
+      campaignsQuery.refetch()
+    }
+  })
 
   if (!selectedBrand) {
     return (
@@ -485,6 +547,8 @@ export function Campaigns() {
             ? `Manage automated content campaigns for ${selectedBrand.name}`
             : currentView === 'create' 
             ? `Create new automated content campaign for ${selectedBrand.name}`
+            : currentView === 'edit'
+            ? `Edit campaign for ${selectedBrand.name}`
             : `View campaign details for ${selectedBrand.name}`
           }
         </p>
@@ -569,6 +633,7 @@ export function Campaigns() {
               onStartCampaign={handleStartCampaign}
               onPauseCampaign={handlePauseCampaign}
               onDeleteCampaign={handleDeleteCampaign}
+              onEditCampaign={handleEditCampaign}
               startCampaignLoading={startCampaignMutation.isPending}
               pauseCampaignLoading={pauseCampaignMutation.isPending}
               deleteCampaignLoading={deleteCampaignMutation.isPending}
@@ -597,6 +662,30 @@ export function Campaigns() {
         />
       )}
 
+      {/* Edit Campaign View */}
+      {currentView === 'edit' && editingCampaign && (
+        <>
+          <CampaignForm
+            mode="edit"
+            existingCampaign={editingCampaign}
+            formData={formData}
+            errors={errors}
+            isSubmitting={isUpdating}
+            setFormData={setFormData}
+            setErrors={setErrors}
+            onSubmit={handleEditSubmit}
+            onAddTheme={addTheme}
+            onRemoveTheme={removeTheme}
+            onBackToDashboard={() => {
+              setCurrentView('dashboard')
+              setEditingCampaign(null)
+              navigate('/campaigns', { replace: true })
+            }}
+          />
+          {editDialogs}
+        </>
+      )}
+
       {/* Campaign Details View */}
       {currentView === 'details' && campaignDetailsQuery.data?.campaign && (
         <>
@@ -619,13 +708,10 @@ export function Campaigns() {
                     ← Back to Dashboard
                   </Button>
                   <div className="flex gap-2">
-                    {campaignDetailsQuery.data.campaign.status === 'preview' && (
+                    {(['preview', 'creating', 'failed'].includes(campaignDetailsQuery.data.campaign.status)) && (
                       <Button 
                         variant="outline" 
-                        onClick={() => {
-                          // TODO: Implement edit functionality
-                          toast.info('Campaign editing coming soon!')
-                        }}
+                        onClick={() => handleEditCampaign(campaignDetailsQuery.data.campaign.id)}
                         className="flex items-center gap-2"
                       >
                         <Edit className="w-4 h-4" />
