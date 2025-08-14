@@ -113,6 +113,59 @@ check_requirements() {
     echo -e "${GREEN}✅ All requirements met${NC}"
 }
 
+# Helper function to get CloudFormation stack output value
+get_stack_output() {
+    local stack_name="$1"
+    local output_key="$2"
+    local default_value="${3:-}"
+    
+    local value=$(aws cloudformation describe-stacks \
+        --stack-name "$stack_name" \
+        --query "Stacks[0].Outputs[?OutputKey=='$output_key'].OutputValue" \
+        --output text \
+        --region $AWS_REGION 2>/dev/null || echo "")
+    
+    if [ -z "$value" ] || [ "$value" = "None" ]; then
+        echo "$default_value"
+    else
+        echo "$value"
+    fi
+}
+
+# Get ECS cluster name from stack outputs or fallback to resource query
+get_ecs_cluster_name() {
+    local stack_name="Postolio-$ENVIRONMENT"
+    local cluster_name=$(get_stack_output "$stack_name" "EcsClusterName")
+    
+    if [ -z "$cluster_name" ]; then
+        # Fallback to resource query for older stacks without the output
+        cluster_name=$(aws cloudformation describe-stacks \
+            --stack-name "$stack_name" \
+            --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Cluster`].PhysicalResourceId' \
+            --output text \
+            --region $AWS_REGION 2>/dev/null | head -1)
+    fi
+    
+    echo "$cluster_name"
+}
+
+# Get ECS service name from stack outputs or fallback to resource query
+get_ecs_service_name() {
+    local stack_name="Postolio-$ENVIRONMENT"
+    local service_name=$(get_stack_output "$stack_name" "EcsServiceName")
+    
+    if [ -z "$service_name" ]; then
+        # Fallback to resource query for older stacks without the output
+        service_name=$(aws cloudformation describe-stacks \
+            --stack-name "$stack_name" \
+            --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Service`].PhysicalResourceId' \
+            --output text \
+            --region $AWS_REGION 2>/dev/null | head -1)
+    fi
+    
+    echo "$service_name"
+}
+
 # Setup infrastructure dependencies
 setup_infrastructure() {
     echo -e "${YELLOW}Setting up infrastructure dependencies...${NC}"
@@ -269,9 +322,10 @@ build_and_push_image() {
     fi
     
     # Validate image tag format (Docker tag requirements)
-    if [[ ! $IMAGE_TAG =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
+    # Docker tags can be up to 128 characters and contain lowercase/uppercase letters, digits, underscores, periods and dashes
+    if [[ ! $IMAGE_TAG =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
         echo -e "${RED}❌ Invalid image tag format: $IMAGE_TAG${NC}"
-        echo "Image tags must start with alphanumeric and contain only alphanumeric, dots, underscores, and hyphens"
+        echo "Image tags must be 1-128 characters, start with alphanumeric or underscore, and contain only alphanumeric, underscores (_), periods (.), or dashes (-)"
         exit 1
     fi
     
@@ -315,21 +369,27 @@ redeploy_with_ecr_image() {
         
         # Force ECS service to deploy the new image
         echo -e "${YELLOW}Forcing ECS service deployment...${NC}"
-        CLUSTER_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-$ENVIRONMENT --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Cluster`].PhysicalResourceId' --output text | head -1)
-        SERVICE_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-$ENVIRONMENT --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Service`].PhysicalResourceId' --output text | head -1)
+        CLUSTER_NAME=$(get_ecs_cluster_name)
+        SERVICE_NAME=$(get_ecs_service_name)
         
         if [ -n "$CLUSTER_NAME" ] && [ -n "$SERVICE_NAME" ]; then
             echo "Forcing new deployment for cluster: $CLUSTER_NAME, service: $SERVICE_NAME"
             aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment --region $AWS_REGION
             echo -e "${GREEN}✅ ECS service deployment triggered successfully${NC}"
             
-            # Verify deployment is using the correct image tag
-            echo -e "${YELLOW}Verifying deployment...${NC}"
-            sleep 5  # Give AWS a moment to update
-            TASK_DEF_ARN=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].taskDefinition' --output text --region $AWS_REGION)
-            if [ -n "$TASK_DEF_ARN" ] && [ "$TASK_DEF_ARN" != "None" ]; then
-                DEPLOYED_IMAGE=$(aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" --query 'taskDefinition.containerDefinitions[0].image' --output text --region $AWS_REGION)
-                echo -e "${GREEN}✅ Deployed with image: $DEPLOYED_IMAGE${NC}"
+            # Wait for ECS service to stabilize and verify deployment
+            echo -e "${YELLOW}Waiting for ECS service to stabilize...${NC}"
+            if aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --region $AWS_REGION 2>/dev/null; then
+                echo -e "${GREEN}✅ ECS service stabilized${NC}"
+                
+                # Verify deployment is using the correct image tag
+                TASK_DEF_ARN=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].taskDefinition' --output text --region $AWS_REGION)
+                if [ -n "$TASK_DEF_ARN" ] && [ "$TASK_DEF_ARN" != "None" ]; then
+                    DEPLOYED_IMAGE=$(aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" --query 'taskDefinition.containerDefinitions[0].image' --output text --region $AWS_REGION)
+                    echo -e "${GREEN}✅ Deployed with image: $DEPLOYED_IMAGE${NC}"
+                fi
+            else
+                echo -e "${YELLOW}⚠️ Service is still stabilizing. Check ECS console for status.${NC}"
             fi
         else
             echo -e "${YELLOW}⚠️ Could not determine ECS cluster or service names, skipping force deployment${NC}"
@@ -405,21 +465,27 @@ deploy_infrastructure() {
         
         # Force ECS service to deploy the new image
         echo -e "${YELLOW}Forcing ECS service deployment...${NC}"
-        CLUSTER_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-$ENVIRONMENT --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Cluster`].PhysicalResourceId' --output text | head -1)
-        SERVICE_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-$ENVIRONMENT --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Service`].PhysicalResourceId' --output text | head -1)
+        CLUSTER_NAME=$(get_ecs_cluster_name)
+        SERVICE_NAME=$(get_ecs_service_name)
         
         if [ -n "$CLUSTER_NAME" ] && [ -n "$SERVICE_NAME" ]; then
             echo "Forcing new deployment for cluster: $CLUSTER_NAME, service: $SERVICE_NAME"
             aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment --region $AWS_REGION
             echo -e "${GREEN}✅ ECS service deployment triggered successfully${NC}"
             
-            # Verify deployment is using the correct image tag
-            echo -e "${YELLOW}Verifying deployment...${NC}"
-            sleep 5  # Give AWS a moment to update
-            TASK_DEF_ARN=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].taskDefinition' --output text --region $AWS_REGION)
-            if [ -n "$TASK_DEF_ARN" ] && [ "$TASK_DEF_ARN" != "None" ]; then
-                DEPLOYED_IMAGE=$(aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" --query 'taskDefinition.containerDefinitions[0].image' --output text --region $AWS_REGION)
-                echo -e "${GREEN}✅ Deployed with image: $DEPLOYED_IMAGE${NC}"
+            # Wait for ECS service to stabilize and verify deployment
+            echo -e "${YELLOW}Waiting for ECS service to stabilize...${NC}"
+            if aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --region $AWS_REGION 2>/dev/null; then
+                echo -e "${GREEN}✅ ECS service stabilized${NC}"
+                
+                # Verify deployment is using the correct image tag
+                TASK_DEF_ARN=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].taskDefinition' --output text --region $AWS_REGION)
+                if [ -n "$TASK_DEF_ARN" ] && [ "$TASK_DEF_ARN" != "None" ]; then
+                    DEPLOYED_IMAGE=$(aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" --query 'taskDefinition.containerDefinitions[0].image' --output text --region $AWS_REGION)
+                    echo -e "${GREEN}✅ Deployed with image: $DEPLOYED_IMAGE${NC}"
+                fi
+            else
+                echo -e "${YELLOW}⚠️ Service is still stabilizing. Check ECS console for status.${NC}"
             fi
         else
             echo -e "${YELLOW}⚠️ Could not determine ECS cluster or service names, skipping force deployment${NC}"

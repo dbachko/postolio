@@ -717,6 +717,16 @@ export class PostolioStack extends cdk.Stack {
       description: 'Docker image tag used for this deployment',
     })
     
+    new cdk.CfnOutput(this, 'EcsClusterName', {
+      value: cluster.clusterName,
+      description: 'ECS Cluster name for deployments',
+    })
+    
+    new cdk.CfnOutput(this, 'EcsServiceName', {
+      value: fargateService.service.serviceName,
+      description: 'ECS Service name for deployments',
+    })
+    
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
       description: 'RDS PostgreSQL endpoint',
