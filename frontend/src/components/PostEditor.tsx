@@ -109,7 +109,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         setHashtagInput((content.hashtags || []).join(' '))
       }
     }
-  }, [content, isOpen, formData.caption])
+  }, [content, isOpen]) // Removed formData.caption to prevent unnecessary effects
 
   // Debounced form data for auto-save
   const debouncedFormData = useDebounce(formData, 500)
@@ -161,8 +161,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       // Update the content in relevant queries
       updateContentInCache(response.content)
 
-      // Invalidate queries to refresh calendar
-      queryClient.invalidateQueries({ queryKey: ['contentHistory'] })
+      // Cache is already updated, no need to invalidate
       
       // Show "AI is learning" message briefly
       setTimeout(() => {
@@ -181,6 +180,12 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
 
   // Auto-save when debounced form data changes
   useEffect(() => {
+    console.log('🔄 Auto-save useEffect triggered', { 
+      hasContent: !!content, 
+      isOpen, 
+      debouncedCaption: debouncedFormData.caption?.substring(0, 20) 
+    })
+    
     if (!content || !isOpen) {
       console.log('Skipping autosave: content or modal not available', { contentId: content?.id, isOpen })
       return
@@ -227,13 +232,14 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         return
       }
 
-      console.log('Autosaving content:', { 
+      console.log('✅ Autosaving content:', { 
         contentId: content.id, 
         originalCaption: originalCaption.substring(0, 30) + '...', 
         newCaption: debouncedFormData.caption.substring(0, 30) + '...',
         imageUrl: debouncedFormData.imageUrl,
         scheduledAt: debouncedFormData.scheduledAt,
-        originalScheduledAt: originalScheduledAt
+        originalScheduledAt: originalScheduledAt,
+        timestamp: new Date().toISOString()
       })
 
       // Always include scheduledAt in the mutation, even if empty
@@ -245,7 +251,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         scheduledAt: debouncedFormData.scheduledAt // Send empty string if cleared, datetime string if set
       })
     }
-  }, [debouncedFormData, content, isOpen, updateContentMutation])
+  }, [debouncedFormData, content, isOpen]) // FIXED: Removed updateContentMutation from dependencies
 
   const handleCaptionChange = (value: string) => {
     setFormData(prev => ({ ...prev, caption: value }))
@@ -258,11 +264,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       
       // If it's an empty string, it means the user removed the image
       // This will trigger the auto-save via the debounced form data
-      if (fileOrUrl === '' && content) {
-        // Clear the CDN URL as well
-        content.cdnImageUrl = undefined
-        content.imageUrl = ''
-      }
+      // No need to mutate content object - auto-save will handle it
     } else {
       // File upload - create local preview immediately
       const objectUrl = URL.createObjectURL(fileOrUrl)
@@ -283,19 +285,14 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
             setSaveStatus('saved')
             setLastSaved(new Date())
             
-            // Update the content object to reflect the new CDN URL
-            content.cdnImageUrl = response.content.cdnImageUrl
-            content.imageUrl = response.content.imageUrl
-            
-            // Update the content in cache
+            // Update the content in cache without mutating the original
             updateContentInCache({
               ...content,
               imageUrl: response.content.imageUrl,
               cdnImageUrl: response.content.cdnImageUrl
             })
             
-            // Invalidate queries to refresh data
-            queryClient.invalidateQueries({ queryKey: ['contentHistory'] })
+            // Cache is already updated, no need to invalidate
             
             setTimeout(() => {
               setSaveStatus('idle')
