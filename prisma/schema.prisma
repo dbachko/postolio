@@ -7,48 +7,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Enum definitions for better type safety and database constraints
-enum ContentStatus {
-  pending
-  approved
-  rejected
-  scheduled
-  published
-  skipped
-  failed    // Content that failed to be published
-}
-
-enum CampaignStatus {
-  creating
-  preview
-  active
-  paused
-  completed
-  failed
-  processing
-}
-
 model User {
-  id                   String             @id @default(cuid())
-  email                String             @unique
-  password             String
-  name                 String?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  instagramId          String?
-  instagramUsername    String?
-  instagramToken       String?
-  subscriptionTier     String             @default("free")
+  id                String             @id @default(cuid())
+  email             String             @unique
+  password          String
+  name              String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  instagramId       String?
+  instagramUsername String?
+  instagramToken    String?
+  subscriptionTier  String             @default("free")
+  deletedAt         DateTime?
+  deletionReason    String?
+  scheduledDeletion DateTime?
   timezone             String?            // User's preferred timezone (null = auto-detect)
   timezoneAutoDetected Boolean            @default(true) // Whether to auto-detect timezone
-  
-  // Soft delete fields
-  deletedAt         DateTime?          // Null if active, timestamp if soft-deleted
-  deletionReason    String?            // User's reason for deletion
-  scheduledDeletion DateTime?          // When permanent deletion will occur (30 days after deletedAt)
-  
-  brands               Brand[]
-  campaignTemplates    CampaignTemplate[]
+  brands            Brand[]
+  campaignTemplates CampaignTemplate[]
 
   @@map("users")
 }
@@ -78,13 +54,13 @@ model Brand {
 }
 
 model Content {
-  id                 String    @id @default(cuid())
+  id                 String        @id @default(cuid())
   caption            String
   imageUrl           String?
   hashtags           String[]
   status             ContentStatus @default(pending)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
   scheduledAt        DateTime?
   postedAt           DateTime?
   generationParams   Json?
@@ -98,27 +74,27 @@ model Content {
   imageRegion        String?
   retentionExpiresAt DateTime?
   s3ImageKey         String?
-  brand              Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  campaign           Campaign? @relation(fields: [campaignId], references: [id])
+  brand              Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  campaign           Campaign?     @relation(fields: [campaignId], references: [id])
 
   @@map("content")
 }
 
 model Campaign {
-  id               String    @id @default(cuid())
+  id               String         @id @default(cuid())
   name             String
   brandId          String
   status           CampaignStatus @default(creating)
   config           Json
-  priority         Int       @default(5)
-  previewGenerated Boolean   @default(false)
+  priority         Int            @default(5)
+  previewGenerated Boolean        @default(false)
   errorMessage     String?
-  progress         Int       @default(0)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  progress         Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
   startedAt        DateTime?
   completedAt      DateTime?
-  brand            Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand            Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
   content          Content[]
 
   @@index([priority])
@@ -146,4 +122,24 @@ model CampaignTemplate {
   @@index([isPublic])
   @@index([createdAt])
   @@map("campaign_templates")
+}
+
+enum ContentStatus {
+  pending
+  approved
+  rejected
+  scheduled
+  published
+  skipped
+  failed
+}
+
+enum CampaignStatus {
+  creating
+  preview
+  active
+  paused
+  completed
+  failed
+  processing
 }
