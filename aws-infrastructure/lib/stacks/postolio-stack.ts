@@ -457,6 +457,9 @@ export class PostolioStack extends cdk.Stack {
       })
     )
 
+    // Get the image tag from context, defaulting to 'latest' if not provided
+    const imageTag = this.node.tryGetContext('imageTag') || 'latest'
+    
     // ECS Service with Application Load Balancer (CloudFront domain passed as environment variable)
     const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'PostolioService', {
       cluster,
@@ -464,7 +467,7 @@ export class PostolioStack extends cdk.Stack {
       memoryLimitMiB: 2048, // Increased from 1024 to prevent OOM kills
       desiredCount: 1,
       taskImageOptions: {
-        image: ecs.ContainerImage.fromEcrRepository(ecrRepository, 'latest'),
+        image: ecs.ContainerImage.fromEcrRepository(ecrRepository, imageTag),
         containerPort: 3000,
         executionRole,
         taskRole,
@@ -709,6 +712,11 @@ export class PostolioStack extends cdk.Stack {
       description: 'CloudFront distribution ID for cache invalidation',
     })
 
+    new cdk.CfnOutput(this, 'DeployedImageTag', {
+      value: imageTag,
+      description: 'Docker image tag used for this deployment',
+    })
+    
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
       description: 'RDS PostgreSQL endpoint',

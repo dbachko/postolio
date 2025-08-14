@@ -62,10 +62,8 @@ AWS_REGION=${AWS_REGION:-us-east-1}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Show force flag status if set
-if [ "$FORCE_INFRA_DEPLOY" = true ]; then
-    echo -e "${YELLOW}🔧 Force infrastructure deployment flag is SET${NC}"
-fi
+# Note: --force-infra flag kept for backwards compatibility but no longer needed
+# Infrastructure now always deploys with unique image tags
 
 echo -e "${GREEN}🚀 Starting AWS deployment for environment: $ENVIRONMENT${NC}"
 
@@ -249,14 +247,7 @@ setup_ecr() {
 
 # Build and push Docker image
 build_and_push_image() {
-    # Skip if no backend changes detected
-    if [ "$BACKEND_CHANGED" = false ]; then
-        echo -e "${GREEN}⏭️  Skipping Docker build - no backend changes detected${NC}"
-        echo "This saves significant build time and ECR storage!"
-        return 0
-    fi
-    
-    echo -e "${YELLOW}Building and pushing Docker image...${NC}"
+    echo -e "${YELLOW}Building and pushing Docker image with unique tag...${NC}"
     cd "$PROJECT_ROOT"
     
     # Get ECR login token
@@ -275,6 +266,13 @@ build_and_push_image() {
         IMAGE_TAG="$GIT_SHA-$(date +%s)"
     else
         IMAGE_TAG="manual-$(date +%s)"
+    fi
+    
+    # Validate image tag format (Docker tag requirements)
+    if [[ ! $IMAGE_TAG =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
+        echo -e "${RED}❌ Invalid image tag format: $IMAGE_TAG${NC}"
+        echo "Image tags must start with alphanumeric and contain only alphanumeric, dots, underscores, and hyphens"
+        exit 1
     fi
     
     IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/postolio:$IMAGE_TAG"
@@ -303,261 +301,60 @@ redeploy_with_ecr_image() {
     cd "$PROJECT_ROOT/aws-infrastructure"
     
     # Temporary modification: change image source to ECR
-    echo -e "${YELLOW}Updating CDK stack to use ECR image...${NC}"
+    echo -e "${YELLOW}Updating CDK stack to use ECR image with tag: $IMAGE_TAG...${NC}"
     
-    # Deploy with ECR image
+    # Deploy with ECR image using the specific tag to ensure new deployment
     npx cdk deploy Postolio-$ENVIRONMENT \
         --require-approval never \
         --context useEcrImage=true \
+        --context imageTag="$IMAGE_TAG" \
         --region $AWS_REGION
         
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ CDK stack redeployed with ECR image${NC}"
+        
+        # Force ECS service to deploy the new image
+        echo -e "${YELLOW}Forcing ECS service deployment...${NC}"
+        CLUSTER_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-$ENVIRONMENT --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Cluster`].PhysicalResourceId' --output text | head -1)
+        SERVICE_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-$ENVIRONMENT --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Service`].PhysicalResourceId' --output text | head -1)
+        
+        if [ -n "$CLUSTER_NAME" ] && [ -n "$SERVICE_NAME" ]; then
+            echo "Forcing new deployment for cluster: $CLUSTER_NAME, service: $SERVICE_NAME"
+            aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment --region $AWS_REGION
+            echo -e "${GREEN}✅ ECS service deployment triggered successfully${NC}"
+            
+            # Verify deployment is using the correct image tag
+            echo -e "${YELLOW}Verifying deployment...${NC}"
+            sleep 5  # Give AWS a moment to update
+            TASK_DEF_ARN=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].taskDefinition' --output text --region $AWS_REGION)
+            if [ -n "$TASK_DEF_ARN" ] && [ "$TASK_DEF_ARN" != "None" ]; then
+                DEPLOYED_IMAGE=$(aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" --query 'taskDefinition.containerDefinitions[0].image' --output text --region $AWS_REGION)
+                echo -e "${GREEN}✅ Deployed with image: $DEPLOYED_IMAGE${NC}"
+            fi
+        else
+            echo -e "${YELLOW}⚠️ Could not determine ECS cluster or service names, skipping force deployment${NC}"
+            echo "Note: The CDK deploy should have already triggered the deployment with the new image tag"
+        fi
     else
         echo -e "${RED}❌ CDK redeployment failed${NC}"
         exit 1
     fi
 }
 
-# Smart Docker image change detection using ECR and source code
-detect_docker_image_changes() {
-    echo -e "${YELLOW}🔍 Checking if Docker image update is needed...${NC}"
-    
-    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-    
-    # Step 1: Check if source code changed (quick check)
-    LAST_DEPLOY_COMMIT=$(get_last_deployment_commit)
-    if [[ "$LAST_DEPLOY_COMMIT" == "HEAD~1" ]]; then
-        echo -e "${YELLOW}ℹ️  No deployment tags found, comparing with previous commit${NC}"
-    else
-        # Show which deployment tag we're comparing against
-        LAST_DEPLOY_TAG=$(git tag -l "deploy-$ENVIRONMENT-*" | sort -V | tail -1)
-        echo -e "${GREEN}ℹ️  Comparing with last deployment: $LAST_DEPLOY_TAG${NC}"
-    fi
-    BACKEND_FILES=$(git diff --name-only $LAST_DEPLOY_COMMIT HEAD | grep -E "^(src/|prisma/|package\.json|package-lock\.json|Dockerfile|\.env\.example)" || true)
-    
-    if [ -n "$BACKEND_FILES" ]; then
-        echo -e "${YELLOW}📦 Backend source code changed - new image build required${NC}"
-        echo "Changed files:"
-        echo "$BACKEND_FILES" | sed 's/^/  - /' | head -3
-        [ $(echo "$BACKEND_FILES" | wc -l) -gt 3 ] && echo "  - ... and $(( $(echo "$BACKEND_FILES" | wc -l) - 3 )) more files"
-        BACKEND_CHANGED=true
-        return
-    fi
-    
-    # Step 2: If no source changes, check if ECS is running the latest ECR image
-    echo -e "${GREEN}✅ No source code changes detected${NC}"
-    echo -e "${YELLOW}🔍 Checking if ECS is running latest ECR image...${NC}"
-    
-    # Get current :latest image SHA from ECR
-    LATEST_ECR_SHA=""
-    if aws ecr describe-images --repository-name postolio --image-ids imageTag=latest --region $AWS_REGION >/dev/null 2>&1; then
-        LATEST_ECR_SHA=$(aws ecr describe-images \
-            --repository-name postolio \
-            --image-ids imageTag=latest \
-            --query 'imageDetails[0].imageDigest' \
-            --output text \
-            --region $AWS_REGION 2>/dev/null || echo "")
-    fi
-    
-    # Get currently running image SHA from ECS service
-    CLUSTER_NAME="Postolio-$ENVIRONMENT-PostolioCluster"
-    SERVICE_NAME="Postolio-$ENVIRONMENT-PostolioService"
-    RUNNING_ECR_SHA=""
-    
-    if aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --region $AWS_REGION >/dev/null 2>&1; then
-        # Get the task definition ARN from the service
-        TASK_DEF_ARN=$(aws ecs describe-services \
-            --cluster "$CLUSTER_NAME" \
-            --services "$SERVICE_NAME" \
-            --query 'services[0].taskDefinition' \
-            --output text \
-            --region $AWS_REGION 2>/dev/null || echo "")
-        
-        if [ -n "$TASK_DEF_ARN" ] && [ "$TASK_DEF_ARN" != "None" ]; then
-            # Get the image URI from task definition
-            RUNNING_IMAGE_URI=$(aws ecs describe-task-definition \
-                --task-definition "$TASK_DEF_ARN" \
-                --query 'taskDefinition.containerDefinitions[0].image' \
-                --output text \
-                --region $AWS_REGION 2>/dev/null || echo "")
-            
-            echo -e "${GREEN}ℹ️  Currently running image: $(basename "$RUNNING_IMAGE_URI")${NC}"
-            
-            # Extract SHA from the image URI if it contains @sha256:
-            if [[ "$RUNNING_IMAGE_URI" == *"@sha256:"* ]]; then
-                RUNNING_ECR_SHA="sha256:${RUNNING_IMAGE_URI#*@sha256:}"
-            else
-                echo -e "${YELLOW}ℹ️  Service is using tag-based image (not SHA)${NC}"
-                # Check when the :latest tag was last updated vs when service was deployed
-                BACKEND_CHANGED=false  # No source changes + tag-based = assume up to date
-                return
-            fi
-        fi
-    fi
-    
-    # Compare the SHAs
-    if [ -z "$LATEST_ECR_SHA" ]; then
-        echo -e "${YELLOW}⚠️  No :latest image found in ECR${NC}"
-        BACKEND_CHANGED=false  # No source changes, no need to rebuild
-    elif [ -z "$RUNNING_ECR_SHA" ]; then
-        echo -e "${YELLOW}⚠️  Cannot determine running image SHA. Service may not exist yet.${NC}"
-        BACKEND_CHANGED=false  # No source changes, assume deployment is needed for other reasons
-    elif [ "$LATEST_ECR_SHA" = "$RUNNING_ECR_SHA" ]; then
-        echo -e "${GREEN}✅ ECS is running the latest ECR image${NC}"
-        echo "  Image SHA: ${LATEST_ECR_SHA:0:12}..."
-        BACKEND_CHANGED=false
-    else
-        echo -e "${YELLOW}📦 ECS is running outdated image - update needed${NC}"
-        echo "  Running SHA: ${RUNNING_ECR_SHA:0:12}..."
-        echo "  Latest SHA:  ${LATEST_ECR_SHA:0:12}..."
-        BACKEND_CHANGED=true  # Force update to latest image
-    fi
-}
-
-# Get the last deployment commit for accurate change detection
-get_last_deployment_commit() {
-    local last_commit=""
-    if git tag -l "deploy-$ENVIRONMENT-*" | tail -1 > /dev/null 2>&1; then
-        local last_tag=$(git tag -l "deploy-$ENVIRONMENT-*" | sort -V | tail -1)
-        last_commit=$(git rev-list -n 1 "$last_tag" 2>/dev/null || echo "")
-        if [ -n "$last_commit" ] && git rev-parse --verify "$last_commit" >/dev/null 2>&1; then
-            echo "$last_commit"
-            return 0
-        fi
-    fi
-    # Fallback to HEAD~1 if no valid deployment tags
-    echo "HEAD~1"
-}
+# Note: detect_docker_image_changes removed - now using unique image tags for every deployment
 
 # Check if this is the first deployment (no deployment tags exist)
 is_first_deployment() {
     ! git tag -l "deploy-$ENVIRONMENT-*" | head -1 > /dev/null 2>&1
 }
 
-# Smart change detection for conditional deployment  
-detect_changes() {
-    echo -e "${YELLOW}🔍 Detecting changes for smart deployment...${NC}"
-    
-    # Get consistent deployment commit for all change detection
-    LAST_DEPLOY_COMMIT=$(get_last_deployment_commit)
-    FRONTEND_FILES=$(git diff --name-only $LAST_DEPLOY_COMMIT HEAD | grep -E "^frontend/" || true)
-    if [ -n "$FRONTEND_FILES" ]; then
-        FRONTEND_CHANGED=true
-        echo -e "${GREEN}🎨 Frontend changes detected:${NC}"
-        echo "$FRONTEND_FILES" | sed 's/^/  - /' | head -3
-        [ $(echo "$FRONTEND_FILES" | wc -l) -gt 3 ] && echo "  - ... and $(( $(echo "$FRONTEND_FILES" | wc -l) - 3 )) more files"
-    else
-        FRONTEND_CHANGED=false
-        echo -e "${GREEN}✅ No frontend changes detected${NC}"
-    fi
-    
-    # Check infrastructure changes using git
-    INFRA_FILES=$(git diff --name-only $LAST_DEPLOY_COMMIT HEAD | grep -E "^(aws-infrastructure/|scripts/deploy)" || true)
-    if [ -n "$INFRA_FILES" ]; then
-        INFRA_CHANGED=true
-        echo -e "${GREEN}🏗️  Infrastructure changes detected:${NC}"
-        echo "$INFRA_FILES" | sed 's/^/  - /'
-    else
-        INFRA_CHANGED=false
-        echo -e "${GREEN}✅ No infrastructure changes detected${NC}"
-    fi
-    
-    # Check backend changes using Docker image comparison (more reliable)
-    detect_docker_image_changes
-    
-    echo
-    echo -e "${YELLOW}📋 Smart Deployment Plan:${NC}"
-    echo "  Backend deployment: $([ "$BACKEND_CHANGED" = true ] && echo -e "${YELLOW}YES${NC} (Docker image changed)" || echo -e "${GREEN}SKIP${NC} (Same image)")"
-    echo "  Frontend deployment: $([ "$FRONTEND_CHANGED" = true ] && echo -e "${YELLOW}YES${NC} (Files changed)" || echo -e "${GREEN}SKIP${NC} (No changes)")"  
-    
-    # Enhanced infrastructure deployment status with force flag and first deployment
-    if [ "$FORCE_INFRA_DEPLOY" = true ]; then
-        echo "  Infrastructure deployment: ${YELLOW}YES${NC} (Force flag set)"
-    elif is_first_deployment; then
-        echo "  Infrastructure deployment: ${YELLOW}YES${NC} (First deployment)"
-    elif [ "$INFRA_CHANGED" = true ]; then
-        echo "  Infrastructure deployment: ${YELLOW}YES${NC} (Config changed)"
-    else
-        echo "  Infrastructure deployment: ${GREEN}SKIP${NC} (No changes)"
-    fi
-    echo
-}
+# Note: Smart change detection removed - now using unique image tags for every deployment
 
-# Force ECS service to use new Docker image (only when backend changed)
-force_ecs_service_update() {
-    # Skip if no backend changes detected
-    if [ "$BACKEND_CHANGED" = false ]; then
-        echo -e "${GREEN}⏭️  Skipping ECS service update - no backend changes detected${NC}"
-        echo "This saves deployment time and avoids unnecessary container restarts!"
-        return 0
-    fi
-    
-    echo -e "${YELLOW}🔄 Forcing ECS service to use new Docker image...${NC}"
-    
-    # Get ECS cluster and service names
-    CLUSTER_NAME="Postolio-$ENVIRONMENT-PostolioCluster"
-    SERVICE_NAME="Postolio-$ENVIRONMENT-PostolioService"
-    
-    # Check if service exists
-    if ! aws ecs describe-services \
-        --cluster "$CLUSTER_NAME" \
-        --services "$SERVICE_NAME" \
-        --region $AWS_REGION \
-        --query 'services[0].serviceName' \
-        --output text > /dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  ECS service not found yet. It may still be creating from CDK deployment.${NC}"
-        echo "Service will automatically use the new image when it starts."
-        return 0
-    fi
-    
-    echo -e "${YELLOW}Updating ECS service: $SERVICE_NAME in cluster: $CLUSTER_NAME${NC}"
-    
-    # Force new deployment to pull latest image
-    aws ecs update-service \
-        --cluster "$CLUSTER_NAME" \
-        --service "$SERVICE_NAME" \
-        --force-new-deployment \
-        --region $AWS_REGION > /dev/null
-    
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ ECS service update initiated. New containers will start with latest image.${NC}"
-        
-        # Wait for deployment to stabilize (optional, but good for feedback)
-        echo -e "${YELLOW}⏳ Waiting for deployment to stabilize (this may take 2-3 minutes)...${NC}"
-        if aws ecs wait services-stable \
-            --cluster "$CLUSTER_NAME" \
-            --services "$SERVICE_NAME" \
-            --region $AWS_REGION; then
-            echo -e "${GREEN}✅ ECS service deployment completed successfully${NC}"
-        else
-            echo -e "${YELLOW}⚠️  Deployment in progress. Check ECS console for status.${NC}"
-        fi
-    else
-        echo -e "${RED}❌ Failed to update ECS service. Check AWS console for details.${NC}"
-        return 1
-    fi
-}
+# Note: force_ecs_service_update removed - ECS updates now handled in redeploy_with_ecr_image and deploy_infrastructure functions
 
-# Deploy infrastructure with security validation (smart deployment logic)
+# Deploy infrastructure with security validation
 deploy_infrastructure() {
-    # Always deploy on first deployment or when force flag is set
-    if is_first_deployment; then
-        echo -e "${YELLOW}🎯 First deployment detected - infrastructure deployment required${NC}"
-    elif [ "$FORCE_INFRA_DEPLOY" = true ]; then
-        echo -e "${YELLOW}🔧 Force flag set - deploying infrastructure regardless of changes${NC}"
-    elif [ "$INFRA_CHANGED" = false ] && [ "$BACKEND_CHANGED" = false ]; then
-        echo -e "${GREEN}⏭️  Skipping infrastructure deployment - no infrastructure or backend changes detected${NC}"
-        echo "This saves CDK deployment time and reduces AWS API calls!"
-        echo "Use --force-infra to deploy anyway"
-        return 0
-    fi
-    
-    if [ "$INFRA_CHANGED" = false ] && [ "$BACKEND_CHANGED" = true ]; then
-        echo -e "${YELLOW}ℹ️  Infrastructure unchanged, but backend changed - running minimal CDK update${NC}"
-    fi
-    
-    echo -e "${YELLOW}Deploying secure infrastructure with CDK Nag validation...${NC}"
+    echo -e "${YELLOW}Deploying infrastructure with unique image tag: $IMAGE_TAG...${NC}"
     cd "$PROJECT_ROOT/aws-infrastructure"
     
     # Build and validate infrastructure first
@@ -592,17 +389,46 @@ deploy_infrastructure() {
         fi
     fi
     
-    # Deploy the secure stack with ECR image
+    # Deploy the secure stack with ECR image using specific tag
     npx cdk deploy Postolio-$ENVIRONMENT \
         --context environment=$ENVIRONMENT \
         --context account=$(aws sts get-caller-identity --query Account --output text) \
         --context region=$AWS_REGION \
         --context useEcrImage=true \
+        --context imageTag="$IMAGE_TAG" \
         $DOMAIN_ARGS \
         --require-approval never
     
-    echo -e "${GREEN}✅ Secure infrastructure deployed successfully${NC}"
-    echo -e "${GREEN}🛡️  All security features enabled: VPC Flow Logs, encryption at rest, non-default ports${NC}"
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Secure infrastructure deployed successfully${NC}"
+        echo -e "${GREEN}🛡️  All security features enabled: VPC Flow Logs, encryption at rest, non-default ports${NC}"
+        
+        # Force ECS service to deploy the new image
+        echo -e "${YELLOW}Forcing ECS service deployment...${NC}"
+        CLUSTER_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-$ENVIRONMENT --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Cluster`].PhysicalResourceId' --output text | head -1)
+        SERVICE_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-$ENVIRONMENT --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Service`].PhysicalResourceId' --output text | head -1)
+        
+        if [ -n "$CLUSTER_NAME" ] && [ -n "$SERVICE_NAME" ]; then
+            echo "Forcing new deployment for cluster: $CLUSTER_NAME, service: $SERVICE_NAME"
+            aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment --region $AWS_REGION
+            echo -e "${GREEN}✅ ECS service deployment triggered successfully${NC}"
+            
+            # Verify deployment is using the correct image tag
+            echo -e "${YELLOW}Verifying deployment...${NC}"
+            sleep 5  # Give AWS a moment to update
+            TASK_DEF_ARN=$(aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --query 'services[0].taskDefinition' --output text --region $AWS_REGION)
+            if [ -n "$TASK_DEF_ARN" ] && [ "$TASK_DEF_ARN" != "None" ]; then
+                DEPLOYED_IMAGE=$(aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" --query 'taskDefinition.containerDefinitions[0].image' --output text --region $AWS_REGION)
+                echo -e "${GREEN}✅ Deployed with image: $DEPLOYED_IMAGE${NC}"
+            fi
+        else
+            echo -e "${YELLOW}⚠️ Could not determine ECS cluster or service names, skipping force deployment${NC}"
+            echo "Note: The CDK deploy should have already triggered the deployment with the new image tag"
+        fi
+    else
+        echo -e "${RED}❌ Infrastructure deployment failed${NC}"
+        exit 1
+    fi
 }
 
 # Deploy frontend
@@ -825,19 +651,17 @@ main() {
     setup_infrastructure
     bootstrap_cdk
     deploy_ecr_repository
-    detect_changes  # 🆕 Smart change detection
     build_and_push_image
     deploy_infrastructure
-    force_ecs_service_update
     deploy_frontend
     show_deployment_info
     update_secrets
     tag_deployment
     
     echo
-    echo -e "${GREEN}✨ Smart deployment complete! Your Postolio is now running on AWS with enhanced security.${NC}"
+    echo -e "${GREEN}✨ Deployment complete! Your Postolio is now running on AWS with enhanced security.${NC}"
     echo -e "${GREEN}🛡️  Security features: VPC Flow Logs, database encryption, non-default ports, CDK Nag validated${NC}"
-    echo -e "${GREEN}⚡ Optimizations: Smart change detection, conditional deployments, reduced downtime${NC}"
+    echo -e "${GREEN}⚡ Using unique image tags for reliable backend deployments${NC}"
 }
 
 # Fix current deployment by building image and updating ECS service
@@ -850,7 +674,6 @@ fix_deployment() {
     check_requirements
     build_and_push_image
     redeploy_with_ecr_image
-    force_ecs_service_update
     
     echo -e "${GREEN}✅ Deployment fixed with ECR image and ECS service updated${NC}"
 }

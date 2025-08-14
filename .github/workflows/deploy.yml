@@ -227,10 +227,26 @@ jobs:
           # The CDK app creates stacks with name "Postolio-${environment}" where
           # environment defaults to 'dev' if not specified via context
           # CRITICAL: useEcrImage=true ensures the deployed task uses the ECR image instead of base Node.js image
-          npm run cdk -- deploy Postolio-dev --require-approval never -c environment=dev -c useEcrImage=true
+          # Pass the git SHA as the image tag to ensure new deployments use the latest code
+          npm run cdk -- deploy Postolio-dev --require-approval never -c environment=dev -c useEcrImage=true -c imageTag=${{ github.sha }}
         env:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+
+      - name: Force ECS service deployment
+        run: |
+          # Get the cluster and service names from CloudFormation stack outputs
+          CLUSTER_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-dev --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Cluster`].PhysicalResourceId' --output text | head -1)
+          SERVICE_NAME=$(aws cloudformation describe-stacks --stack-name Postolio-dev --query 'Stacks[0].Resources[?ResourceType==`AWS::ECS::Service`].PhysicalResourceId' --output text | head -1)
+          
+          if [ -n "$CLUSTER_NAME" ] && [ -n "$SERVICE_NAME" ]; then
+            echo "Forcing new deployment for cluster: $CLUSTER_NAME, service: $SERVICE_NAME"
+            aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment
+            echo "✅ ECS service deployment triggered successfully"
+          else
+            echo "⚠️ Could not determine ECS cluster or service names, skipping force deployment"
+            echo "Note: The CDK deploy should have already triggered the deployment with the new image tag"
+          fi
 
   deploy-frontend:
     runs-on: ubuntu-latest
