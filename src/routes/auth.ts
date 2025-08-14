@@ -123,7 +123,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           name: true,
           instagramUsername: true,
           subscriptionTier: true,
-          createdAt: true
+          timezone: true,
+          timezoneAutoDetected: true,
+          createdAt: true,
+          updatedAt: true
         }
       })
 

@@ -6,6 +6,8 @@ export interface User {
   name: string | null
   instagramUsername: string | null
   subscriptionTier: string
+  timezone?: string | null
+  timezoneAutoDetected?: boolean
   createdAt: string
 }
 
@@ -116,6 +118,9 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://localhost:300
 
 class ApiClient {
   private token: string | null = null
+  private cachedTimezone: string | null = null
+  private timezoneLastUpdated = 0
+  private static TIMEZONE_CACHE_DURATION = 30 * 1000 // 30 seconds
 
   constructor() {
     this.token = localStorage.getItem('auth_token')
@@ -129,6 +134,23 @@ class ApiClient {
   removeToken() {
     this.token = null
     localStorage.removeItem('auth_token')
+  }
+
+  private getTimezone(): string {
+    const now = Date.now()
+    
+    // Return cached timezone if still valid
+    if (this.cachedTimezone && (now - this.timezoneLastUpdated) < ApiClient.TIMEZONE_CACHE_DURATION) {
+      return this.cachedTimezone
+    }
+    
+    // Update cache with fresh value
+    this.cachedTimezone = localStorage.getItem('userTimezone') || 
+                         localStorage.getItem('detectedTimezone') ||
+                         'UTC' // neutral global fallback
+    this.timezoneLastUpdated = now
+    
+    return this.cachedTimezone
   }
 
   private async request<T>(
@@ -148,6 +170,9 @@ class ApiClient {
     if (this.token) {
       headers.Authorization = `Bearer ${this.token}`
     }
+
+    // Include timezone header for all requests (cached for performance)
+    headers['X-Timezone'] = this.getTimezone()
 
     const response = await fetch(url, {
       ...options,
@@ -188,6 +213,29 @@ class ApiClient {
 
   async getProfile(): Promise<{ user: User }> {
     return this.request('/api/auth/me')
+  }
+
+  // User timezone endpoints
+  async updateUserTimezone(data: {
+    timezone: string
+    timezoneAutoDetected: boolean
+  }): Promise<{ success: boolean; user: { id: string; timezone: string | null; timezoneAutoDetected: boolean } }> {
+    return this.request('/api/users/timezone', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
+  // Brand timezone endpoints
+  async getBrandTimezone(brandId: string): Promise<{ timezone: string | null }> {
+    return this.request(`/api/brands/${brandId}/timezone`)
+  }
+
+  async updateBrandTimezone(brandId: string, timezone: string | null): Promise<{ success: boolean; brand: { id: string; postingTimezone: string | null } }> {
+    return this.request(`/api/brands/${brandId}/timezone`, {
+      method: 'PATCH',
+      body: JSON.stringify({ timezone }),
+    })
   }
 
   // Brand endpoints

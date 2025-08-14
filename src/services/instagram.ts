@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { redisService } from './redis.js'
-import crypto from 'crypto'
+import * as crypto from 'crypto'
 import { analyticsCache } from './analytics-cache.js'
 
 export interface InstagramPost {

@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Calendar, dateFnsLocalizer, type View } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay, addDays, subDays, isToday } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import type { Content } from '../lib/api'
-import { ChevronLeft, ChevronRight, Play, CheckCircle, XCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Play, CheckCircle, XCircle, Globe } from 'lucide-react'
+import { useTimezone } from '../contexts/TimezoneContext'
+import { formatInUserTimezone, convertUTCToLocal, getTimezoneAbbr } from '../lib/timezone'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import './CalendarView.css'
 
@@ -35,43 +37,48 @@ interface CalendarViewProps {
 export function CalendarView({ content, onContentClick }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<View>('week')
+  const { timezone, isAutoDetected } = useTimezone()
 
-  // Convert content to calendar events
+  // Convert content to calendar events (converting UTC to local time)
   const events: CalendarEvent[] = useMemo(() => {
+    if (!content || content.length === 0) return []
+    
     return content
       .filter(item => item.scheduledAt || item.postedAt)
       .map(item => {
-        const date = new Date(item.scheduledAt || item.postedAt!)
+        // Convert UTC timestamp to user's local timezone for display
+        const utcDate = item.scheduledAt || item.postedAt!
+        const localDate = convertUTCToLocal(utcDate, timezone)
         return {
           id: item.id,
           title: item.caption.length > 50 ? `${item.caption.substring(0, 50)}...` : item.caption,
-          start: date,
-          end: new Date(date.getTime() + 60 * 60 * 1000), // 1 hour duration
+          start: localDate,
+          end: new Date(localDate.getTime() + 60 * 60 * 1000), // 1 hour duration
           resource: item,
         }
       })
-  }, [content])
+  }, [content, timezone])
 
-  // Navigation handlers
-  const handlePrevious = () => {
+  // Navigation handlers with memoization
+  const handlePrevious = useCallback(() => {
     if (view === 'week') {
       setCurrentDate(prev => subDays(prev, 7))
     } else {
       setCurrentDate(prev => subDays(prev, 1))
     }
-  }
+  }, [view])
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (view === 'week') {
       setCurrentDate(prev => addDays(prev, 7))
     } else {
       setCurrentDate(prev => addDays(prev, 1))
     }
-  }
+  }, [view])
 
-  const handleToday = () => {
+  const handleToday = useCallback(() => {
     setCurrentDate(new Date())
-  }
+  }, [])
 
   // Custom event component
   const EventComponent = ({ event }: { event: CalendarEvent }) => {
@@ -103,6 +110,9 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
     )
   }
 
+  // Memoize timezone abbreviation to avoid recalculation
+  const tzAbbr = useMemo(() => getTimezoneAbbr(timezone), [timezone])
+  
   // Custom toolbar component
   const CustomToolbar = () => {
     const nextRunTime = new Date()
@@ -111,6 +121,17 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
 
     return (
       <div className="mb-6 space-y-4">
+        {/* Timezone Display */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <Globe className="w-4 h-4" />
+            <span>
+              Showing times in {tzAbbr}
+              {isAutoDetected && ' (auto-detected)'}
+            </span>
+          </div>
+        </div>
+
         {/* Autopilot Status */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
@@ -119,7 +140,7 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
               <div>
                 <h3 className="font-medium text-gray-900">Autopilot Active</h3>
                 <p className="text-sm text-gray-600">
-                  Next run: {format(nextRunTime, 'EEEE, MMMM d')} at {format(nextRunTime, 'h:mm a')}
+                  Next run: {formatInUserTimezone(nextRunTime, 'EEEE, MMMM d \'at\' h:mm a', timezone)}
                 </p>
               </div>
             </div>

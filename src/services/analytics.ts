@@ -176,7 +176,7 @@ class AnalyticsService {
       // Calculate average engagement for each time slot
       const optimalTimes: OptimalTimeSlot[] = []
 
-      for (const [key, data] of timeSlotMap.entries()) {
+      for (const [key, data] of timeSlotMap) {
         if (data.count < 2) continue // Need at least 2 posts for reliability
 
         const keyParts = key.split('-')
