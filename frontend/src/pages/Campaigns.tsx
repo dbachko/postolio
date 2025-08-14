@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { format } from 'date-fns'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useBrandStore } from '../stores/brandStore'
 import { apiClient, type CampaignConfig, type Content, type Campaign, type CampaignTemplate } from '../lib/api'
 import { Button } from '../components/ui/button'
@@ -23,6 +23,11 @@ import {
   FileText, Bookmark, BarChart3
 } from 'lucide-react'
 
+
+// Helper function to check if campaign ID is valid (not 'create')
+const isRealCampaignId = (campaignId: string | undefined): boolean => {
+  return !!campaignId && campaignId !== 'create'
+}
 
 const initialFormData: CampaignFormData = {
   name: '',
@@ -137,9 +142,31 @@ export function Campaigns() {
     }
   })
 
+  // Handle URL changes and view state synchronization
+  const location = useLocation()
+  useEffect(() => {
+    const pathname = location.pathname
+    
+    // Check if we're at /campaigns (no specific campaign ID)
+    if (pathname === '/campaigns' && !urlCampaignId) {
+      setCurrentView('dashboard')
+      setSelectedCampaignId(null)
+    }
+    // Check if we're at /campaigns/create
+    else if (pathname === '/campaigns/create') {
+      setCurrentView('create')
+      setSelectedCampaignId(null)
+    }
+    // Check if we have a campaign ID in the URL
+    else if (isRealCampaignId(urlCampaignId)) {
+      setSelectedCampaignId(urlCampaignId!)
+      setCurrentView('details')
+    }
+  }, [location.pathname, urlCampaignId])
+
   // Auto brand-switching effect when accessing campaign via URL
   useEffect(() => {
-    if (urlCampaignId && urlCampaignQuery.data?.campaign) {
+    if (isRealCampaignId(urlCampaignId) && urlCampaignQuery.data?.campaign) {
       const campaign = urlCampaignQuery.data.campaign
       const campaignBrandId = campaign.brandId || campaign.brand?.id
       
@@ -152,10 +179,6 @@ export function Campaigns() {
           toast.info(`Switched to brand: ${targetBrand.name}`)
         }
       }
-      
-      setSelectedCampaignId(urlCampaignId)
-      setCurrentView('details')
-      // Keep the URL as /campaigns/:id for proper navigation and bookmarking
     }
   }, [urlCampaignId, urlCampaignQuery.data, selectedBrand, brands, setSelectedBrand])
 
