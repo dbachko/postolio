@@ -144,7 +144,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       }
       
       // Update the content in relevant queries
-      queryClient.setQueryData(['contentHistory', response.content.id], (oldData: any) => {
+      queryClient.setQueryData(['contentHistory', response.content.id], (oldData: { content: Content[] } | undefined) => {
         if (oldData?.content) {
           return {
             ...oldData,
@@ -240,7 +240,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         scheduledAt: debouncedFormData.scheduledAt // Send empty string if cleared, datetime string if set
       })
     }
-  }, [debouncedFormData, content, isOpen])
+  }, [debouncedFormData, content, isOpen, updateContentMutation])
 
   const handleCaptionChange = (value: string) => {
     setFormData(prev => ({ ...prev, caption: value }))
