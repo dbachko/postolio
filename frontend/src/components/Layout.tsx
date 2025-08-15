@@ -205,45 +205,31 @@ export function Layout({ children }: LayoutProps) {
       {/* Footer */}
       <footer className="bg-card border-t mt-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center text-sm text-muted-foreground">
-            <div>
+          <div className="flex flex-col md:flex-row justify-between items-center text-sm text-muted-foreground space-y-3 md:space-y-0">
+            <div className="text-center md:text-left">
               © {new Date().getFullYear()} Postolio. All rights reserved.
             </div>
-            <div className="flex space-x-4">
+            <div className="flex items-center gap-1 text-xs md:text-sm">
               <Link 
                 to="/privacy-policy" 
-                className="hover:text-foreground transition-colors"
+                className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-accent"
               >
                 Privacy Policy
               </Link>
-              <span>•</span>
+              <span className="text-muted-foreground/50">•</span>
               <Link 
                 to="/terms-of-service" 
-                className="hover:text-foreground transition-colors"
+                className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-accent"
               >
                 Terms of Service
               </Link>
-              <span>•</span>
+              <span className="text-muted-foreground/50">•</span>
               <Link 
                 to="/legal/data-deletion" 
-                className="hover:text-foreground transition-colors"
+                className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-accent"
               >
                 Data Deletion
               </Link>
-              <span>•</span>
-              <a 
-                href="mailto:legal@postolio.example" 
-                className="hover:text-foreground transition-colors"
-              >
-                Legal
-              </a>
-              <span>•</span>
-              <a 
-                href="mailto:support@postolio.example" 
-                className="hover:text-foreground transition-colors"
-              >
-                Support
-              </a>
             </div>
           </div>
         </div>
