@@ -68,6 +68,16 @@ export function Layout({ children }: LayoutProps) {
                   </NavigationMenuItem>
                   <NavigationMenuItem>
                     <Link
+                      to="/content"
+                      className={`${navigationMenuTriggerStyle()} ${
+                        isActiveRoute('/content') ? '!bg-accent !text-accent-foreground' : ''
+                      }`}
+                    >
+                      Content
+                    </Link>
+                  </NavigationMenuItem>
+                  <NavigationMenuItem>
+                    <Link
                       to="/analytics"
                       className={`${navigationMenuTriggerStyle()} ${
                         isActiveRoute('/analytics') ? '!bg-accent !text-accent-foreground' : ''

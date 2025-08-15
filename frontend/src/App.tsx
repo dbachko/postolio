@@ -14,6 +14,7 @@ import Engagement from './pages/Engagement'
 import { Growth } from './pages/Growth'
 import { AIFeatures } from './pages/AIFeatures'
 import { Campaigns } from './pages/Campaigns'
+import { Content } from './pages/Content'
 import { Settings } from './pages/Settings'
 import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { TermsOfService } from './pages/TermsOfService'
@@ -74,7 +75,13 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
-          <Route path="/content" element={<Navigate to="/campaigns" replace />} />
+          <Route path="/content" element={
+            <ProtectedRoute>
+              <Layout>
+                <Content />
+              </Layout>
+            </ProtectedRoute>
+          } />
           <Route path="/analytics" element={
             <ProtectedRoute>
               <Layout>

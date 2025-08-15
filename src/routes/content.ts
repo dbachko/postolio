@@ -5,6 +5,7 @@ import { generateInstagramContent, type ContentGenerationRequest } from '../serv
 import type { StyleProfile } from '../services/ai.js'
 import learningService from '../services/learning.js'
 import { uploadImageBufferToS3, type ImageMetadata } from '../services/s3-image.js'
+import { computePlaceholders } from '../services/placeholderService.js'
 
 import { getDatabaseClient } from '../config/database.js'
 
@@ -371,7 +372,32 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (scheduledAt !== undefined) {
         updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null
+        // When setting a scheduledAt date, ensure proper status
+        // Don't change status if content is already published
+        if (scheduledAt && content.status !== 'published') {
+          // If content is pending, approve it when scheduling
+          // If content is approved or scheduled, keep as scheduled
+          // This ensures the content appears correctly in calendar views
+          if (content.status === 'pending') {
+            updateData.status = 'approved'
+          } else if (content.status === 'rejected' || content.status === 'failed') {
+            // Don't allow scheduling of rejected/failed content
+            return reply.code(400).send({ error: 'Cannot schedule rejected or failed content' })
+          }
+          // Note: Keep 'approved' status as many parts of the app expect this
+        } else if (!scheduledAt && content.status === 'scheduled') {
+          // If removing scheduledAt, revert to approved
+          updateData.status = 'approved'
+        }
       }
+
+      // Log the update for debugging
+      console.log('Updating content with data:', {
+        contentId,
+        updateData,
+        originalScheduledAt: content.scheduledAt,
+        originalStatus: content.status
+      })
 
       // Update content
       const updatedContent = await prisma.content.update({
@@ -389,6 +415,14 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           updatedAt: true,
           brandId: true,
         },
+      })
+
+      // Log the result for debugging
+      console.log('Content update result:', {
+        contentId: updatedContent.id,
+        newScheduledAt: updatedContent.scheduledAt,
+        newStatus: updatedContent.status,
+        updateSuccessful: true
       })
 
       // Apply AI learning if there were changes
@@ -646,6 +680,85 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       console.error('Upload image error:', error)
       return reply.code(500).send({ error: 'Failed to process image upload' })
+    }
+  })
+
+  // Get calendar content with placeholders
+  fastify.get<{
+    Params: { brandId: string; month: string }
+  }>('/calendar/:brandId/:month', async (request, reply) => {
+    try {
+      const authHeader = request.headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Authentication required' })
+      }
+
+      const token = authHeader.substring(7)
+      const decoded = verifyJWT(token)
+      const userId = decoded.id
+
+      const { brandId, month } = request.params
+
+      // Verify brand ownership
+      const brand = await prisma.brand.findFirst({
+        where: { id: brandId, userId }
+      })
+
+      if (!brand) {
+        return reply.code(404).send({ 
+          success: false, 
+          error: 'Brand not found' 
+        })
+      }
+
+      // Parse month string (format: YYYY-MM)
+      const [year, monthNum] = month.split('-').map(Number)
+      const monthStart = new Date(year, monthNum - 1, 1)
+      const monthEnd = new Date(year, monthNum, 0, 23, 59, 59)
+
+      // Get existing content for the month
+      const content = await prisma.content.findMany({
+        where: {
+          brandId,
+          OR: [
+            {
+              scheduledAt: {
+                gte: monthStart,
+                lte: monthEnd
+              }
+            },
+            {
+              postedAt: {
+                gte: monthStart,
+                lte: monthEnd
+              }
+            }
+          ]
+        },
+        orderBy: { scheduledAt: 'asc' }
+      })
+
+      // Get active campaigns
+      const campaigns = await prisma.campaign.findMany({
+        where: {
+          brandId,
+          status: { in: ['active', 'preview'] }
+        }
+      })
+
+      // Compute placeholders
+      const placeholders = computePlaceholders(campaigns, content, monthStart, monthEnd)
+
+      return {
+        success: true,
+        data: {
+          content,
+          placeholders
+        }
+      }
+    } catch (error) {
+      console.error('Calendar content error:', error)
+      return reply.code(500).send({ error: 'Failed to retrieve calendar content' })
     }
   })
 }

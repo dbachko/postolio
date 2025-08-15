@@ -1,12 +1,16 @@
 import { useState, useMemo, useCallback } from 'react'
-import { Calendar, dateFnsLocalizer, type View } from 'react-big-calendar'
+import { Calendar, dateFnsLocalizer, type View, type Event } from 'react-big-calendar'
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
 import { format, parse, startOfWeek, getDay, addDays, subDays, isToday } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import type { Content } from '../lib/api'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiClient, type Content } from '../lib/api'
 import { ChevronLeft, ChevronRight, Play, CheckCircle, XCircle, Globe } from 'lucide-react'
 import { useTimezone } from '../contexts/TimezoneContext'
-import { formatInUserTimezone, convertUTCToLocal, getTimezoneAbbr } from '../lib/timezone'
+import { formatInUserTimezone, convertUTCToLocal, convertLocalToUTC, getTimezoneAbbr } from '../lib/timezone'
+import { toast } from 'sonner'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 import './CalendarView.css'
 
 const locales = {
@@ -21,29 +25,99 @@ const localizer = dateFnsLocalizer({
   locales,
 })
 
-interface CalendarEvent {
+// Create the DnD Calendar component
+const DnDCalendar = withDragAndDrop(Calendar)
+
+interface CalendarEvent extends Event {
   id: string
   title: string
   start: Date
   end: Date
-  resource: Content
+  resource: Content | (Content & { 
+    type: 'placeholder'
+    isPlaceholder: boolean
+    message: string
+  })
 }
 
 interface CalendarViewProps {
-  content: Content[]
+  brandId?: string
+  content?: Content[]
   onContentClick?: (content: Content) => void
 }
 
-export function CalendarView({ content, onContentClick }: CalendarViewProps) {
+export function CalendarView({ brandId, content: propContent, onContentClick }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<View>('week')
   const { timezone, isAutoDetected } = useTimezone()
+  const queryClient = useQueryClient()
 
-  // Convert content to calendar events (converting UTC to local time)
+  // Fetch calendar content with placeholders if brandId is provided
+  const calendarQuery = useQuery({
+    queryKey: ['calendar', brandId, format(currentDate, 'yyyy-MM')],
+    queryFn: () => apiClient.getCalendarContent(brandId!, format(currentDate, 'yyyy-MM')),
+    enabled: !!brandId && !propContent,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+  })
+
+  // Use provided content or fetched content
+  const content = propContent || calendarQuery.data?.data?.content || []
+  const placeholders = calendarQuery.data?.data?.placeholders || []
+
+  // Reschedule mutation with optimistic updates
+  const rescheduleMutation = useMutation({
+    mutationFn: ({ contentId, scheduledAt }: { contentId: string; scheduledAt: string }) => 
+      apiClient.updateContent({ contentId, scheduledAt }),
+    onMutate: async ({ contentId, scheduledAt }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['calendar', brandId, format(currentDate, 'yyyy-MM')] })
+      
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(['calendar', brandId, format(currentDate, 'yyyy-MM')])
+      
+      // Optimistically update the cache
+      queryClient.setQueryData(['calendar', brandId, format(currentDate, 'yyyy-MM')], (old: any) => {
+        if (!old?.data?.content) return old
+        
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            content: old.data.content.map((item: Content) => 
+              item.id === contentId 
+                ? { ...item, scheduledAt } 
+                : item
+            )
+          }
+        }
+      })
+      
+      // Return a context with the previous data
+      return { previousData }
+    },
+    onError: (error, _variables, context) => {
+      console.error('Reschedule failed:', error)
+      // If the mutation fails, use the context to roll back
+      if (context?.previousData) {
+        queryClient.setQueryData(['calendar', brandId, format(currentDate, 'yyyy-MM')], context.previousData)
+      }
+      toast.error(`Failed to reschedule post: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    },
+    onSuccess: (data) => {
+      toast.success('Post rescheduled successfully')
+    },
+    onSettled: () => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: ['calendar', brandId] })
+      if (brandId) {
+        calendarQuery.refetch()
+      }
+    }
+  })
+
+  // Convert content and placeholders to calendar events
   const events: CalendarEvent[] = useMemo(() => {
-    if (!content || content.length === 0) return []
-    
-    return content
+    const contentEvents = content
       .filter(item => item.scheduledAt || item.postedAt)
       .map(item => {
         // Convert UTC timestamp to user's local timezone for display
@@ -57,7 +131,63 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
           resource: item,
         }
       })
-  }, [content, timezone])
+
+    // Add placeholder events
+    const placeholderEvents = placeholders.map(placeholder => {
+      const localDate = convertUTCToLocal(placeholder.scheduledAt, timezone)
+      return {
+        id: placeholder.id,
+        title: '⏳ Future Post',
+        start: localDate,
+        end: new Date(localDate.getTime() + 60 * 60 * 1000),
+        resource: {
+          ...placeholder,
+          caption: placeholder.message,
+          hashtags: [],
+          imageUrl: '',
+          brandId: placeholder.brandId || '',
+          postedAt: null,
+          createdAt: placeholder.scheduledAt,
+          updatedAt: placeholder.scheduledAt,
+          type: 'placeholder' as const,
+          isPlaceholder: true,
+          message: placeholder.message
+        }
+      }
+    })
+
+    return [...contentEvents, ...placeholderEvents]
+  }, [content, placeholders, timezone])
+
+  // Handle event drop (rescheduling)
+  const handleEventDrop = useCallback(({ event, start }: { event: CalendarEvent; start: Date | string; end: Date | string }) => {
+    
+    const draggedContent = event.resource
+    
+    // Don't allow dragging of published posts, placeholders, or rejected posts
+    if (draggedContent.status === 'published' || ('isPlaceholder' in draggedContent && draggedContent.isPlaceholder) || draggedContent.status === 'rejected') {
+      toast.error('Cannot reschedule this post')
+      return
+    }
+
+    // The 'start' parameter from react-big-calendar is already in local timezone
+    // and represents the exact date/time where the event was dropped
+    const newLocalDate = typeof start === 'string' ? new Date(start) : start
+    
+    // IMPORTANT: We use the EXACT time from the drop location, not the original time
+    // This allows users to change both date AND time by dragging
+    
+    // Convert the local date/time to UTC for storage
+    const utcDate = convertLocalToUTC(newLocalDate, timezone)
+    const scheduledAt = utcDate.toISOString()
+    
+    
+    // Perform the mutation
+    rescheduleMutation.mutate({
+      contentId: draggedContent.id,
+      scheduledAt
+    })
+  }, [rescheduleMutation, timezone])
 
   // Navigation handlers with memoization
   const handlePrevious = useCallback(() => {
@@ -83,29 +213,38 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
   // Custom event component
   const EventComponent = ({ event }: { event: CalendarEvent }) => {
     const content = event.resource
+    const isPlaceholder = 'isPlaceholder' in content && content.isPlaceholder
+    const isDraggable = !isPlaceholder && content.status !== 'published' && content.status !== 'rejected'
+    
     const statusColors = {
       approved: 'bg-blue-100 border-blue-400 text-blue-800',
       published: 'bg-green-100 border-green-400 text-green-800',
       rejected: 'bg-red-100 border-red-400 text-red-800',
+      placeholder: 'bg-gray-50 border-gray-300 text-gray-600',
     }
 
     const statusIcons = {
       approved: Play,
       published: CheckCircle,
       rejected: XCircle,
+      placeholder: null, // No icon for placeholders
     }
 
-    const StatusIcon = statusIcons[content.status as keyof typeof statusIcons] || Play
+    const StatusIcon = statusIcons[content.status as keyof typeof statusIcons]
 
     return (
       <div
-        className={`p-1 rounded border-l-2 ${statusColors[content.status as keyof typeof statusColors] || statusColors.approved} cursor-pointer hover:opacity-80 transition-opacity`}
-        onClick={() => onContentClick?.(content)}
+        className={`p-1 rounded ${isPlaceholder ? 'border border-dashed' : 'border-l-2'} ${statusColors[content.status as keyof typeof statusColors] || statusColors.approved} ${isDraggable ? 'cursor-move' : isPlaceholder ? '' : 'cursor-pointer'} hover:opacity-80 transition-opacity`}
+        onClick={() => !isPlaceholder && onContentClick?.(content)}
+        title={isDraggable ? 'Drag to reschedule' : ''}
       >
         <div className="flex items-center gap-1 text-xs">
-          <StatusIcon className="w-3 h-3 flex-shrink-0" />
+          {StatusIcon && <StatusIcon className="w-3 h-3 flex-shrink-0" />}
           <span className="truncate">{event.title}</span>
         </div>
+        {isPlaceholder && (
+          <div className="text-[10px] opacity-60 mt-0.5">Will generate</div>
+        )}
       </div>
     )
   }
@@ -222,6 +361,10 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
             <span className="text-gray-600">Published ({content.filter(c => c.status === 'published').length})</span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="w-3 h-3 border border-dashed border-gray-400 bg-gray-50 rounded-sm"></div>
+            <span className="text-gray-600">Future AI ({placeholders.length})</span>
+          </div>
+          <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-red-400 rounded-sm"></div>
             <span className="text-gray-600">Failed ({content.filter(c => c.status === 'rejected').length})</span>
           </div>
@@ -230,13 +373,21 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
     )
   }
 
+  // Check if event is draggable
+  const isDraggableAccessor = useCallback((event: CalendarEvent) => {
+    const status = event.resource.status
+    const isPlaceholder = 'isPlaceholder' in event.resource && event.resource.isPlaceholder
+    // Allow dragging for approved, scheduled, and pending posts
+    // Disallow for published, placeholder, and rejected posts
+    return !isPlaceholder && status !== 'published' && status !== 'rejected'
+  }, [])
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <CustomToolbar />
       
       <div className="calendar-container" style={{ height: '600px' }}>
-        <Calendar
+        <DnDCalendar
           localizer={localizer}
           events={events}
           startAccessor="start"
@@ -274,6 +425,10 @@ export function CalendarView({ content, onContentClick }: CalendarViewProps) {
             eventTimeRangeFormat: ({ start }, culture, localizer) =>
               localizer?.format(start, 'h:mm a', culture) || '',
           }}
+          // Drag and drop props
+          draggableAccessor={isDraggableAccessor}
+          onEventDrop={handleEventDrop}
+          resizable={false}
         />
       </div>
     </div>
