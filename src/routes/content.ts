@@ -712,7 +712,23 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Parse month string (format: YYYY-MM)
-      const [year, monthNum] = month.split('-').map(Number)
+      const parts = month.split('-')
+      if (parts.length !== 2) {
+        return reply.code(400).send({ error: 'Invalid month format. Use YYYY-MM' })
+      }
+      
+      const [yearStr, monthStr] = parts
+      if (!yearStr || !monthStr) {
+        return reply.code(400).send({ error: 'Invalid month format. Use YYYY-MM' })
+      }
+      
+      const year = parseInt(yearStr, 10)
+      const monthNum = parseInt(monthStr, 10)
+      
+      if (isNaN(year) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+        return reply.code(400).send({ error: 'Invalid month format. Use YYYY-MM' })
+      }
+      
       const monthStart = new Date(year, monthNum - 1, 1)
       const monthEnd = new Date(year, monthNum, 0, 23, 59, 59)
 
