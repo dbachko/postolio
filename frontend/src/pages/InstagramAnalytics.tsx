@@ -157,10 +157,10 @@ export default function InstagramAnalytics() {
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Instagram className="h-8 w-8" />
+          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+            <Instagram className="h-6 w-6 md:h-8 md:w-8" />
             Instagram Analytics
           </h1>
           <p className="text-muted-foreground">
@@ -168,7 +168,7 @@ export default function InstagramAnalytics() {
           </p>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap gap-3">
           <TimeRangeSelector value={timeRange} onValueChange={setTimeRange} />
           <RefreshControls
             onRefresh={handleRefresh}
@@ -181,15 +181,15 @@ export default function InstagramAnalytics() {
 
       {/* Status Bar */}
       {status && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>
+        <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+          <span className="whitespace-nowrap">
             Last updated: {status.lastUpdated ? formatDistanceToNow(new Date(status.lastUpdated), { addSuffix: true }) : 'Never'}
           </span>
-          <Badge variant={overview?.fromCache ? 'secondary' : 'default'}>
+          <Badge variant={overview?.fromCache ? 'secondary' : 'default'} className="text-xs">
             {overview?.fromCache ? 'Cached' : 'Fresh'}
           </Badge>
-          <span>•</span>
-          <span>Rate limit: {status.rateLimitRemaining}/200</span>
+          <span className="hidden sm:inline">•</span>
+          <span className="whitespace-nowrap">Rate limit: {status.rateLimitRemaining}/200</span>
         </div>
       )}
 

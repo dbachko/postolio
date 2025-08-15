@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '../lib/api'
+import { PageHeader } from '@/components/PageHeader'
 import AnalyticsChart from '../components/AnalyticsChart'
 import SchedulingPanel from '../components/SchedulingPanel'
 import { useBrandStore } from '../stores/brandStore'
@@ -150,16 +151,16 @@ export default function Analytics() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics & Scheduling</h1>
-          <p className="text-gray-600">Track performance and manage your posting schedule</p>
-        </div>
+        <PageHeader
+          title="Analytics & Scheduling"
+          description="Track performance and manage your posting schedule"
+        />
 
-        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">{error}</div>}
+        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6 mt-6">{error}</div>}
 
-        <div className="mb-6 flex space-x-4">
+        <div className="mb-6 mt-6 flex flex-wrap gap-3 items-center">
           {selectedBrand && (
             <div className="text-sm text-gray-600">
               Analytics for: <span className="font-medium">{selectedBrand.name}</span>

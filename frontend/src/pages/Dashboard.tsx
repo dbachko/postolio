@@ -5,6 +5,7 @@ import { apiClient } from '../lib/api'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/PageHeader'
 import { useBrandStore } from '../stores/brandStore'
 
 export function Dashboard() {
@@ -105,25 +106,23 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground">
-            {activeBrand ? `Managing content for ${activeBrand.name}` : 'No active brand selected'}
-          </p>
-        </div>
-        <div className="flex space-x-3">
-          <Button variant="outline" asChild>
-            <Link to="/brands">Manage Brands</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link to="/campaigns">Campaigns</Link>
-          </Button>
-          <Button asChild>
-            <Link to="/content">Generate Content</Link>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description={activeBrand ? `Managing content for ${activeBrand.name}` : 'No active brand selected'}
+        actions={
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/brands">Manage Brands</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to="/campaigns">Campaigns</Link>
+            </Button>
+            <Button asChild>
+              <Link to="/content">Generate Content</Link>
+            </Button>
+          </>
+        }
+      />
 
       {allCampaigns.length > 0 && (
         <Card>

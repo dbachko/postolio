@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useBrandStore } from '../stores/brandStore'
 import { ContentCalendar } from '../components/ContentCalendar'
+import { PageHeader } from '../components/PageHeader'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
 import { AlertCircle, Calendar, ArrowLeft, Plus } from 'lucide-react'
@@ -36,8 +37,8 @@ export function Content() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
+      <PageHeader
+        title={
           <div className="flex items-center gap-3">
             {campaignId && (
               <Button
@@ -50,9 +51,16 @@ export function Content() {
                 Back to Campaigns
               </Button>
             )}
-            <h1 className="text-2xl font-bold text-gray-900">Content Calendar</h1>
+            <span>Content Calendar</span>
           </div>
-          <div className="flex gap-2">
+        }
+        description={
+          campaignName 
+            ? `Viewing content for campaign: ${campaignName}`
+            : `View and manage scheduled content for ${selectedBrand.name}`
+        }
+        actions={
+          <>
             <Button
               variant="outline"
               onClick={() => navigate('/campaigns/create')}
@@ -68,15 +76,9 @@ export function Content() {
               <Calendar className="w-4 h-4" />
               Manage Campaigns
             </Button>
-          </div>
-        </div>
-        <p className="text-gray-600">
-          {campaignName 
-            ? `Viewing content for campaign: ${campaignName}`
-            : `View and manage scheduled content for ${selectedBrand.name}`
-          }
-        </p>
-      </div>
+          </>
+        }
+      />
 
       {/* Campaign Filter Alert */}
       {campaignId && (
