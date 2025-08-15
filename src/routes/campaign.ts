@@ -6,6 +6,7 @@ import { campaignJobService } from '../services/campaign-jobs.js'
 import { pauseResumeRateLimiter, campaignRateLimiter, createRateLimitMiddleware } from '../services/rate-limiter.js'
 import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js'
 import { regenerationService } from '../services/regeneration-queue.js'
+import { TimezoneService } from '../services/timezone.js'
 
 import { getDatabaseClient } from '../config/database.js'
 
@@ -62,13 +63,41 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await authenticateRequest(request)
       const body = request.body
 
-      // Convert date strings to Date objects
+      // Get brand's timezone for proper date interpretation
+      // If brand doesn't have a timezone set, fall back to user's detected timezone
+      let brandTimezone = await TimezoneService.getBrandTimezone(body.brandId)
+      
+      // If brand timezone is UTC (default) and we have user's timezone from header, use that
+      if (brandTimezone === 'UTC') {
+        const detectedTimezone = await TimezoneService.detectTimezone(request, userId)
+        if (detectedTimezone !== 'UTC') {
+          brandTimezone = detectedTimezone
+        }
+      }
+      
+      // Parse dates in the brand's timezone context
+      const interpretDateInTimezone = (dateStr: string, timezone: string): Date => {
+        if (dateStr.includes('T')) {
+          // Handle legacy ISO strings
+          const datePart = dateStr.split('T')[0]
+          dateStr = datePart
+        }
+        
+        // Parse the date components
+        const [year, month, day] = dateStr.split('-').map(Number)
+        
+        // Create a date object for midnight and convert to UTC
+        const localMidnight = new Date(year, month - 1, day, 0, 0, 0, 0)
+        return TimezoneService.toUTC(localMidnight, timezone)
+      }
+      
+      // Convert date strings to Date objects with timezone awareness
       const config: CampaignConfig = {
         name: body.name,
         brandId: body.brandId,
         duration: {
-          start: new Date(body.duration.start),
-          end: new Date(body.duration.end),
+          start: interpretDateInTimezone(body.duration.start, brandTimezone),
+          end: interpretDateInTimezone(body.duration.end, brandTimezone),
         },
         frequency: body.frequency,
         themes: body.themes,
@@ -87,8 +116,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      // Create campaign
-      const campaign = await campaignService.configureCampaign(config, userId)
+      // Create campaign, passing the detected timezone
+      const campaign = await campaignService.configureCampaign(config, userId, brandTimezone)
 
       return reply.code(201).send({
         success: true,
