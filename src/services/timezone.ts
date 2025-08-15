@@ -217,14 +217,34 @@ export class TimezoneService {
    * and convert to UTC for storage
    */
   static parseTimezoneAwareDate(dateStr: string, timezone: string): Date {
+    let processedDateStr = dateStr
     if (dateStr.includes('T')) {
       // Handle legacy ISO strings
       const datePart = dateStr.split('T')[0]
-      dateStr = datePart
+      if (!datePart) {
+        throw new Error('Invalid date format')
+      }
+      processedDateStr = datePart
     }
     
     // Parse the date components
-    const [year, month, day] = dateStr.split('-').map(Number)
+    const dateParts = processedDateStr.split('-')
+    if (dateParts.length !== 3) {
+      throw new Error('Invalid date format. Expected YYYY-MM-DD')
+    }
+    
+    const [yearStr, monthStr, dayStr] = dateParts
+    if (!yearStr || !monthStr || !dayStr) {
+      throw new Error('Invalid date format. Expected YYYY-MM-DD')
+    }
+    
+    const year = parseInt(yearStr, 10)
+    const month = parseInt(monthStr, 10)
+    const day = parseInt(dayStr, 10)
+    
+    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+      throw new Error('Invalid date format')
+    }
     
     // Create a date object for midnight and convert to UTC
     const localMidnight = new Date(year, month - 1, day, 0, 0, 0, 0)
