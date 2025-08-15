@@ -1,7 +1,6 @@
 import Papa from 'papaparse'
 import { jsPDF } from 'jspdf'
 import { format } from 'date-fns'
-import type { Content } from '../lib/api'
 
 interface ExportContent {
   id: string
@@ -101,8 +100,8 @@ export async function exportToPDF(
   
   const doc = new jsPDF()
   let yPosition = 20
-  const pageHeight = doc.internal.pageSize.height
-  const pageWidth = doc.internal.pageSize.width
+  const pageHeight = doc.getPageHeight()
+  const pageWidth = doc.getPageWidth()
   const margin = 20
   const lineHeight = 7
   

@@ -94,8 +94,19 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
         campaigns: state.campaigns,
         statuses: state.statuses,
         contentTypes: state.contentTypes,
-        searchQuery: state.searchQuery
-        // Exclude dateRange from persistence as dates don't serialize well
+        searchQuery: state.searchQuery,
+        dateRange: {
+          start: state.dateRange.start?.toISOString() || null,
+          end: state.dateRange.end?.toISOString() || null
+        }
+      }),
+      merge: (persistedState: Partial<CalendarFilterState> & { dateRange?: { start: string | null, end: string | null } }, currentState) => ({
+        ...currentState,
+        ...persistedState,
+        dateRange: {
+          start: persistedState?.dateRange?.start ? new Date(persistedState.dateRange.start) : null,
+          end: persistedState?.dateRange?.end ? new Date(persistedState.dateRange.end) : null
+        }
       })
     }
   )
