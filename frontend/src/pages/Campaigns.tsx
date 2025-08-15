@@ -379,6 +379,16 @@ export function Campaigns() {
     navigate(`/campaigns/${campaignId}`)
   }, [navigate])
 
+  const handleCreateNewCampaign = useCallback(() => {
+    // Reset form data to initial state when creating new campaign
+    setFormData(initialFormData)
+    setErrors({})
+    setIsFormPrefilledFromTemplate(false)
+    setUsedTemplateName(null)
+    setCurrentView('create')
+    navigate('/campaigns/create')
+  }, [navigate])
+
   // Campaign edit hook
   const {
     isUpdating,
@@ -625,10 +635,7 @@ export function Campaigns() {
                     <FileText className="w-4 h-4 text-blue-600" />
                     Use Template
                   </Button>
-                  <Button onClick={() => {
-                    navigate('/campaigns/create')
-                    setCurrentView('create')
-                  }} className="flex items-center gap-2">
+                  <Button onClick={handleCreateNewCampaign} className="flex items-center gap-2">
                     <Plus className="w-4 h-4" />
                     Create New Campaign
                   </Button>
@@ -664,7 +671,7 @@ export function Campaigns() {
                   <FileText className="w-4 h-4 text-blue-600" />
                   Use Template
                 </Button>
-                <Button onClick={() => setCurrentView('create')} className="flex items-center gap-2">
+                <Button onClick={handleCreateNewCampaign} className="flex items-center gap-2">
                   <Plus className="w-4 h-4" />
                   Create New Campaign
                 </Button>
@@ -700,6 +707,10 @@ export function Campaigns() {
           onRemoveTheme={removeTheme}
           onBackToDashboard={() => {
             setCurrentView('dashboard')
+            setFormData(initialFormData)
+            setErrors({})
+            setIsFormPrefilledFromTemplate(false)
+            setUsedTemplateName(null)
             navigate('/campaigns', { replace: true })
           }}
           onUseTemplate={handleUseTemplate}
