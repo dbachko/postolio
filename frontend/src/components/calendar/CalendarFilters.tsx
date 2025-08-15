@@ -27,11 +27,11 @@ interface CalendarFiltersProps {
 }
 
 const STATUS_OPTIONS: { value: ContentStatus; label: string; color: string }[] = [
-  { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'approved', label: 'Approved', color: 'bg-blue-100 text-blue-800' },
-  { value: 'scheduled', label: 'Scheduled', color: 'bg-purple-100 text-purple-800' },
+  { value: 'draft', label: 'Draft', color: 'bg-gray-100 text-gray-800' },
+  { value: 'scheduled', label: 'Scheduled', color: 'bg-blue-100 text-blue-800' },
   { value: 'published', label: 'Published', color: 'bg-green-100 text-green-800' },
-  { value: 'rejected', label: 'Rejected', color: 'bg-red-100 text-red-800' },
+  { value: 'failed', label: 'Failed', color: 'bg-red-100 text-red-800' },
+  { value: 'skipped', label: 'Skipped', color: 'bg-yellow-100 text-yellow-800' },
 ]
 
 const CONTENT_TYPE_OPTIONS: { value: ContentType; label: string }[] = [

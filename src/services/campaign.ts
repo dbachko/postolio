@@ -302,7 +302,7 @@ class CampaignService {
             retentionExpiresAt: post.retentionExpiresAt ?? null,
             brandId: campaign.brandId,
             campaignId: campaignId,
-            status: 'pending', // Preview posts start as pending
+            status: 'draft', // Preview posts start as draft
             generationParams: {
               theme: config.themes?.[0] || 'preview',
               style: config.style,
@@ -425,7 +425,7 @@ class CampaignService {
         const content = await prisma.content.update({
           where: { id: existingPost.id },
           data: {
-            status: 'approved', // Auto-approve campaign content
+            status: 'scheduled', // Set to scheduled for campaign content
             scheduledAt: scheduledDate ?? null,
             generationParams: {
               ...((existingPost?.generationParams as any) || {}),
@@ -819,13 +819,23 @@ class CampaignService {
         const cancelledContent = await tx.content.updateMany({
           where: {
             campaignId,
-            status: 'scheduled',
-            scheduledAt: { gte: new Date() }
+            status: 'scheduled',  // Now using actual 'scheduled' status
+            scheduledAt: { 
+              gte: new Date()    // In the future
+            }
           },
-          data: { status: 'pending' }
+          data: { 
+            status: 'draft',     // Revert to draft
+            scheduledAt: null    // Clear scheduled time
+          }
         })
         
         console.log(`Campaign ${campaignId} paused. ${cancelledContent.count} scheduled posts cancelled.`)
+        if (cancelledContent.count > 0) {
+          console.log(`  - Cancelled ${cancelledContent.count} future posts`)
+          console.log(`  - Status changed: scheduled → draft`)
+          console.log(`  - scheduledAt cleared for cancelled posts`)
+        }
         
         return {
           campaign: updatedCampaign,
@@ -889,10 +899,15 @@ class CampaignService {
         const skippedResult = await tx.content.updateMany({
           where: {
             campaignId,
-            status: 'scheduled',
-            scheduledAt: { lt: now }
+            status: 'scheduled',      // Now using actual 'scheduled' status
+            scheduledAt: { 
+              lt: now               // In the past (missed during pause)
+            }
           },
-          data: { status: 'skipped' }
+          data: { 
+            status: 'skipped',      // Mark as skipped
+            schedulingError: 'Skipped: Campaign was paused during scheduled time'
+          }
         })
         
         // Resume campaign
@@ -902,6 +917,11 @@ class CampaignService {
         })
         
         console.log(`Campaign ${campaignId} resumed. ${skippedResult.count} posts marked as skipped.`)
+        if (skippedResult.count > 0) {
+          console.log(`  - Marked ${skippedResult.count} past posts as skipped`)
+          console.log(`  - These posts were scheduled during the pause period`)
+          console.log(`  - Status changed: scheduled → skipped`)
+        }
         
         return {
           campaign: updatedCampaign,

@@ -537,9 +537,11 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
             <div className="flex items-center gap-2">
               <Badge 
                 variant={
-                  content.status === 'pending' ? 'secondary' :
-                  content.status === 'approved' ? 'default' :
-                  content.status === 'published' ? 'secondary' : 'destructive'
+                  content.status === 'draft' ? 'secondary' :
+                  content.status === 'scheduled' ? 'default' :
+                  content.status === 'published' ? 'secondary' :
+                  content.status === 'failed' ? 'destructive' :
+                  content.status === 'skipped' ? 'outline' : 'secondary'
                 }
               >
                 {content.status.charAt(0).toUpperCase() + content.status.slice(1)}

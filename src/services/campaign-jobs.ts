@@ -184,7 +184,7 @@ class CampaignJobService {
             retentionExpiresAt: post.retentionExpiresAt ?? null,
             brandId: campaign.brandId,
             campaignId: campaign.id,
-            status: 'pending', // Preview posts start as pending
+            status: 'draft', // Preview posts start as draft
             generationParams: {
               theme: config.themes?.[0] || 'preview',
               style: config.style,

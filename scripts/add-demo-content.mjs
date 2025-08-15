@@ -37,19 +37,19 @@ async function addDemoContent() {
         caption: "🧠 Neural interface breakthrough achieved! Our latest prototype allows direct thought-to-digital communication at 99.7% accuracy. The future of human-AI collaboration is here. #AI #NeuralInterface #TechBreakthrough #Innovation",
         hashtags: ["#AI", "#NeuralInterface", "#TechBreakthrough", "#Innovation", "#CyberTech", "#FutureTech", "#BrainComputer", "#TechRevolution"],
         imageUrl: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800&h=600&fit=crop",
-        status: "pending"
+        status: "draft"
       },
       {
         caption: "⚡ Quantum processors now online! Our new AI cores operate at 1000x faster processing speeds while consuming 90% less energy. Sustainable AI is no longer just a dream. #QuantumComputing #SustainableAI #TechInnovation",
         hashtags: ["#QuantumComputing", "#SustainableAI", "#TechInnovation", "#GreenTech", "#AI", "#Innovation", "#CyberTech", "#FutureTech"],
         imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800&h=600&fit=crop",
-        status: "pending"
+        status: "draft"
       },
       {
         caption: "🌐 Autonomous city infrastructure now live in Neo-Tokyo test zone. Our AI systems manage traffic, energy, and security with zero human intervention. Welcome to the smart city revolution! #SmartCity #Automation #AI #UrbanTech",
         hashtags: ["#SmartCity", "#Automation", "#AI", "#UrbanTech", "#Innovation", "#CyberTech", "#FutureTech", "#SmartInfrastructure"],
         imageUrl: "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1f?w=800&h=600&fit=crop",
-        status: "approved",
+        status: "scheduled",
         scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // Tomorrow
       }
     ]
@@ -84,7 +84,7 @@ async function addDemoContent() {
           caption: "🤖 Meet ARIA-7, our latest companion robot! Features advanced emotional intelligence, natural conversation, and adaptive learning. Pre-orders start next month! #Robotics #CompanionBot #AI #Innovation",
           hashtags: ["#Robotics", "#CompanionBot", "#AI", "#Innovation", "#RoboForge", "#EmotionalAI", "#FutureTech"],
           imageUrl: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&h=600&fit=crop",
-          status: "pending",
+          status: "draft",
           brandId: roboForgeBrand.id,
           generationParams: {
             theme: 'robotics',
@@ -99,7 +99,7 @@ async function addDemoContent() {
     console.log('\n🎉 Demo content added successfully!')
     console.log('\n📱 You can now:')
     console.log('1. Login with demo@example.com / password123')
-    console.log('2. View pending content for approval')
+    console.log('2. View draft content for scheduling')
     console.log('3. Create campaigns using the Autopilot feature')
     console.log('4. Edit and approve content')
     

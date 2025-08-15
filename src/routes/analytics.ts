@@ -161,8 +161,8 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         return reply.status(404).send({ error: 'Content not found' })
       }
 
-      if (content.status !== 'approved') {
-        return reply.status(400).send({ error: 'Content must be approved before scheduling' })
+      if (content.status !== 'draft') {
+        return reply.status(400).send({ error: 'Content must be in draft status before scheduling' })
       }
 
       const customTime = scheduledTime ? new Date(scheduledTime) : undefined

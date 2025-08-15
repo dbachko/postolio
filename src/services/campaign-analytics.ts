@@ -10,7 +10,7 @@ export interface CampaignMetrics {
   reach: number
   postsScheduled: number
   postsPosted: number
-  postsApproved: number
+  postsDraft: number
   campaignDuration: number
   postingFrequency: number
   topHashtags: Array<{ tag: string; count: number; avgEngagement: number }>
@@ -82,8 +82,8 @@ export class CampaignAnalyticsService {
     // Calculate basic metrics
     const totalPosts = content.length
     const postsPosted = content.filter((c) => c.status === 'published').length
-    const postsScheduled = content.filter((c) => c.status === 'scheduled' || c.scheduledAt).length
-    const postsApproved = content.filter((c) => c.status === 'approved').length
+    const postsScheduled = content.filter((c) => c.status === 'scheduled').length
+    const postsDraft = content.filter((c) => c.status === 'draft').length
 
     // Extract performance metrics from generationParams
     let totalImpressions = 0
@@ -150,7 +150,7 @@ export class CampaignAnalyticsService {
       reach: totalReach,
       postsScheduled,
       postsPosted,
-      postsApproved,
+      postsDraft,
       campaignDuration,
       postingFrequency,
       topHashtags,

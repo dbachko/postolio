@@ -4,12 +4,12 @@ const prisma = new PrismaClient()
 
 async function approveContent() {
   try {
-    console.log('🔍 Finding pending content...')
+    console.log('🔍 Finding draft content...')
     
-    // Find all pending content
-    const pendingContent = await prisma.content.findMany({
+    // Find all draft content
+    const draftContent = await prisma.content.findMany({
       where: {
-        status: 'pending'
+        status: 'draft'
       },
       include: {
         brand: {
@@ -20,24 +20,25 @@ async function approveContent() {
       }
     })
     
-    console.log(`📊 Found ${pendingContent.length} pending content items`)
+    console.log(`📊 Found ${draftContent.length} draft content items`)
     
-    if (pendingContent.length === 0) {
-      console.log('ℹ️ No pending content found to approve')
+    if (draftContent.length === 0) {
+      console.log('ℹ️ No draft content found to schedule')
       return
     }
     
-    // Approve the first item for testing
-    const firstContent = pendingContent[0]
+    // Schedule the first item for testing
+    const firstContent = draftContent[0]
     
     const updatedContent = await prisma.content.update({
       where: { id: firstContent.id },
       data: {
-        status: 'approved'
+        status: 'scheduled',
+        scheduledAt: new Date(Date.now() + 60 * 60 * 1000) // Schedule for 1 hour from now
       }
     })
     
-    console.log('✅ Approved content for testing:')
+    console.log('✅ Scheduled content for testing:')
     console.log('==========================================')
     console.log(`ID: ${updatedContent.id}`)
     console.log(`Caption: ${updatedContent.caption.substring(0, 50)}...`)

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type ContentStatus = 'pending' | 'approved' | 'rejected' | 'published' | 'scheduled' | 'failed'
+export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'
 export type ContentType = 'post' | 'placeholder'
 
 interface DateRange {

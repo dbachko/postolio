@@ -33,7 +33,7 @@ export function useFilteredContent(items: ContentItem[]) {
     // Filter by status
     if (filters.statuses.length > 0) {
       filtered = filtered.filter(item => 
-        item.status && filters.statuses.includes(item.status as 'pending' | 'approved' | 'published' | 'rejected' | 'failed' | 'scheduled')
+        item.status && filters.statuses.includes(item.status as 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped')
       )
     }
     
