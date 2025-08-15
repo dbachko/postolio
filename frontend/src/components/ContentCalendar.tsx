@@ -8,6 +8,7 @@ import { CalendarFilters } from './calendar/CalendarFilters'
 import { CalendarExport } from './calendar/CalendarExport'
 import { useFilteredContent } from '../hooks/useFilteredContent'
 import { useCalendarFilterStore } from '../stores/calendarFilterStore'
+import { useURLFilterSync } from '../hooks/useURLFilterSync'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { apiClient } from '@/lib/api'
@@ -18,10 +19,12 @@ type ViewMode = 'month' | 'timeline' | 'list'
 interface ContentCalendarProps {
   brandId: string
   brandName?: string
-  campaignFilter?: string | null
 }
 
 export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
+  // Sync filters with URL
+  useURLFilterSync()
+  
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   

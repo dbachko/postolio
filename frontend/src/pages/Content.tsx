@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useBrandStore } from '../stores/brandStore'
+import { useCalendarFilterStore } from '../stores/calendarFilterStore'
 import { ContentCalendar } from '../components/ContentCalendar'
 import { PageHeader } from '../components/PageHeader'
 import { Alert, AlertDescription } from '../components/ui/alert'
@@ -9,12 +10,11 @@ import { AlertCircle, Calendar, ArrowLeft, Plus } from 'lucide-react'
 
 export function Content() {
   const { selectedBrand } = useBrandStore()
-  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const filters = useCalendarFilterStore()
   
-  // Get campaign filter from URL if present
-  const campaignId = searchParams.get('campaign')
-  const campaignName = searchParams.get('campaignName')
+  // Check if we're filtering by campaign(s)
+  const isCampaignFiltered = filters.campaigns.length > 0
 
   // Redirect to dashboard if no brand selected
   useEffect(() => {
@@ -40,7 +40,7 @@ export function Content() {
       <PageHeader
         title={
           <div className="flex items-center gap-3">
-            {campaignId && (
+            {isCampaignFiltered && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -55,8 +55,8 @@ export function Content() {
           </div>
         }
         description={
-          campaignName 
-            ? `Viewing content for campaign: ${campaignName}`
+          isCampaignFiltered 
+            ? `Viewing filtered content`
             : `View and manage scheduled content for ${selectedBrand.name}`
         }
         actions={
@@ -81,7 +81,7 @@ export function Content() {
       />
 
       {/* Campaign Filter Alert */}
-      {campaignId && (
+      {isCampaignFiltered && (
         <Alert>
           <Calendar className="h-4 w-4" />
           <AlertDescription>
@@ -102,7 +102,6 @@ export function Content() {
       <ContentCalendar 
         brandId={selectedBrand.id}
         brandName={selectedBrand.name}
-        campaignFilter={campaignId}
       />
     </div>
   )

@@ -223,7 +223,7 @@ const CampaignCard = memo(({
                 variant="ghost"
                 onClick={(e) => {
                   e.stopPropagation()
-                  navigate(`/content?campaign=${campaign.id}&campaignName=${encodeURIComponent(campaign.name)}`)
+                  navigate(`/content?campaigns=${campaign.id}`)
                 }}
                 className="text-xs px-2 py-1 text-blue-500 hover:text-blue-700"
                 title="View in calendar"
