@@ -818,31 +818,32 @@ class CampaignService {
           data: { status: 'paused' }
         })
         
-        // Cancel all future scheduled content
-        const cancelledContent = await tx.content.updateMany({
+        // Mark all future scheduled content as skipped (preserving scheduledAt for resume)
+        const skippedContent = await tx.content.updateMany({
           where: {
             campaignId,
-            status: 'scheduled',  // Now using actual 'scheduled' status
+            status: 'scheduled',  // Content currently scheduled
             scheduledAt: { 
               gte: new Date()    // In the future
             }
           },
           data: { 
-            status: 'draft',     // Revert to draft
-            scheduledAt: null    // Clear scheduled time
+            status: 'skipped',     // Mark as skipped (NOT draft!)
+            // Keep scheduledAt intact so we can restore it on resume
+            schedulingError: 'Skipped: Campaign was paused'
           }
         })
         
-        console.log(`Campaign ${campaignId} paused. ${cancelledContent.count} scheduled posts cancelled.`)
-        if (cancelledContent.count > 0) {
-          console.log(`  - Cancelled ${cancelledContent.count} future posts`)
-          console.log(`  - Status changed: scheduled → draft`)
-          console.log(`  - scheduledAt cleared for cancelled posts`)
+        console.log(`Campaign ${campaignId} paused. ${skippedContent.count} scheduled posts marked as skipped.`)
+        if (skippedContent.count > 0) {
+          console.log(`  - Marked ${skippedContent.count} future posts as skipped`)
+          console.log(`  - Status changed: scheduled → skipped`)
+          console.log(`  - scheduledAt preserved for potential resume`)
         }
         
         return {
           campaign: updatedCampaign,
-          cancelledCount: cancelledContent.count,
+          cancelledCount: skippedContent.count,
           message: 'Campaign paused. No content will be published until resumed.'
         }
       })
@@ -898,18 +899,32 @@ class CampaignService {
           }
         }
         
-        // Mark past scheduled content as skipped
-        const skippedResult = await tx.content.updateMany({
+        // Restore skipped content with future dates back to scheduled
+        const restoredContent = await tx.content.updateMany({
           where: {
             campaignId,
-            status: 'scheduled',      // Now using actual 'scheduled' status
+            status: 'skipped',        // Content that was skipped during pause
             scheduledAt: { 
-              lt: now               // In the past (missed during pause)
+              gte: now               // Still in the future - can be rescheduled
             }
           },
           data: { 
-            status: 'skipped',      // Mark as skipped
-            schedulingError: 'Skipped: Campaign was paused during scheduled time'
+            status: 'scheduled',      // Restore to scheduled status
+            schedulingError: null     // Clear the error message
+          }
+        })
+        
+        // Handle skipped content with past dates (permanently missed)
+        const permanentlySkipped = await tx.content.updateMany({
+          where: {
+            campaignId,
+            status: 'skipped',        // Content that was skipped
+            scheduledAt: { 
+              lt: now                // In the past - permanently missed
+            }
+          },
+          data: { 
+            schedulingError: 'Permanently skipped: Scheduled time passed during pause'
           }
         })
         
@@ -919,19 +934,24 @@ class CampaignService {
           data: { status: 'active' }
         })
         
-        console.log(`Campaign ${campaignId} resumed. ${skippedResult.count} posts marked as skipped.`)
-        if (skippedResult.count > 0) {
-          console.log(`  - Marked ${skippedResult.count} past posts as skipped`)
-          console.log(`  - These posts were scheduled during the pause period`)
-          console.log(`  - Status changed: scheduled → skipped`)
+        console.log(`Campaign ${campaignId} resumed.`)
+        if (restoredContent.count > 0) {
+          console.log(`  - Restored ${restoredContent.count} future posts`)
+          console.log(`  - Status changed: skipped → scheduled`)
+        }
+        if (permanentlySkipped.count > 0) {
+          console.log(`  - ${permanentlySkipped.count} posts permanently skipped (past scheduled time)`)
         }
         
         return {
           campaign: updatedCampaign,
-          skippedCount: skippedResult.count,
-          message: skippedResult.count > 0 
-            ? `Campaign resumed. ${skippedResult.count} scheduled posts were skipped.`
-            : 'Campaign resumed successfully!'
+          restoredCount: restoredContent.count,
+          permanentlySkippedCount: permanentlySkipped.count,
+          message: restoredContent.count > 0 
+            ? `Campaign resumed. ${restoredContent.count} posts restored to schedule.${permanentlySkipped.count > 0 ? ` ${permanentlySkipped.count} posts permanently skipped.` : ''}`
+            : permanentlySkipped.count > 0 
+              ? `Campaign resumed. ${permanentlySkipped.count} posts were permanently skipped.`
+              : 'Campaign resumed successfully!'
         }
       })
       
