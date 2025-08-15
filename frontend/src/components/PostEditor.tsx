@@ -40,8 +40,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
   const [hashtagInput, setHashtagInput] = useState('')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
-  const [isUploadingImage, setIsUploadingImage] = useState(false)
-  const objectUrlRef = useRef<string | null>(null)
+  const objectUrlRef = useRef<string | null>(null) // Track object URLs for cleanup
   const [learningFeedback, setLearningFeedback] = useState<{
     isVisible: boolean
     message: string
@@ -61,29 +60,6 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       }
       return oldData
     })
-  }
-
-  // Helper function to update specific fields in cached content
-  const updateContentFields = (contentId: string, fields: Partial<Content>) => {
-    queryClient.setQueryData(['contentHistory', contentId], (oldData: { content: Content[] } | undefined) => {
-      if (oldData?.content) {
-        return {
-          ...oldData,
-          content: oldData.content.map((item: Content) =>
-            item.id === contentId ? { ...item, ...fields } : item
-          )
-        }
-      }
-      return oldData
-    })
-  }
-
-  // Helper function to clean up object URLs
-  const cleanupObjectUrl = () => {
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current)
-      objectUrlRef.current = null
-    }
   }
 
   // Initialize form data when content changes
@@ -112,15 +88,21 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       setHashtagInput('')
       setLearningFeedback({ isVisible: false, message: '' })
       setSaveStatus('idle')
-      setIsUploadingImage(false) // Reset upload flag
-      cleanupObjectUrl() // Clean up any object URLs
+      // Clean up object URL when modal closes
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+        objectUrlRef.current = null
+      }
     }
   }, [isOpen])
 
-  // Cleanup object URL on component unmount
+  // Clean up object URL on component unmount
   useEffect(() => {
     return () => {
-      cleanupObjectUrl()
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+        objectUrlRef.current = null
+      }
     }
   }, [])
 
@@ -143,7 +125,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         setHashtagInput((content.hashtags || []).join(' '))
       }
     }
-  }, [content, isOpen, formData.caption])
+  }, [content, isOpen]) // Removed formData.caption to prevent unnecessary effects
 
   // Debounced form data for auto-save
   const debouncedFormData = useDebounce(formData, 500)
@@ -195,7 +177,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       // Update the content in relevant queries
       updateContentInCache(response.content)
 
-      // Cache is already updated; no need to invalidate and refetch
+      // Cache is already updated, no need to invalidate
       
       // Show "AI is learning" message briefly
       setTimeout(() => {
@@ -214,14 +196,14 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
 
   // Auto-save when debounced form data changes
   useEffect(() => {
+    console.log('🔄 Auto-save useEffect triggered', { 
+      hasContent: !!content, 
+      isOpen, 
+      debouncedCaption: debouncedFormData.caption?.substring(0, 20) 
+    })
+    
     if (!content || !isOpen) {
       console.log('Skipping autosave: content or modal not available', { contentId: content?.id, isOpen })
-      return
-    }
-
-    // Skip auto-save if we're uploading an image
-    if (isUploadingImage) {
-      console.log('Skipping autosave: Image upload in progress')
       return
     }
 
@@ -266,13 +248,14 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         return
       }
 
-      console.log('Autosaving content:', { 
+      console.log('✅ Autosaving content:', { 
         contentId: content.id, 
         originalCaption: originalCaption.substring(0, 30) + '...', 
         newCaption: debouncedFormData.caption.substring(0, 30) + '...',
         imageUrl: debouncedFormData.imageUrl,
         scheduledAt: debouncedFormData.scheduledAt,
-        originalScheduledAt: originalScheduledAt
+        originalScheduledAt: originalScheduledAt,
+        timestamp: new Date().toISOString()
       })
 
       // Always include scheduledAt in the mutation, even if empty
@@ -284,7 +267,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         scheduledAt: debouncedFormData.scheduledAt // Send empty string if cleared, datetime string if set
       })
     }
-  }, [debouncedFormData, content, isOpen, updateContentMutation, isUploadingImage])
+  }, [debouncedFormData, content, isOpen]) // FIXED: Removed updateContentMutation from dependencies
 
   const handleCaptionChange = (value: string) => {
     setFormData(prev => ({ ...prev, caption: value }))
@@ -297,77 +280,62 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       
       // If it's an empty string, it means the user removed the image
       // This will trigger the auto-save via the debounced form data
-      // No need to mutate content object here
+      // No need to mutate content object - auto-save will handle it
     } else {
       // File upload - create local preview immediately
-      // Clean up any previous object URL
-      cleanupObjectUrl()
+      // Revoke previous object URL if it exists
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+      }
       const objectUrl = URL.createObjectURL(fileOrUrl)
       objectUrlRef.current = objectUrl
       setFormData(prev => ({ ...prev, imageUrl: objectUrl }))
       
       // Upload to server
       if (content) {
-        setIsUploadingImage(true) // Prevent auto-save during upload
         setSaveStatus('saving')
         try {
-          const uploadedContent = await uploadImageToServer(fileOrUrl)
-          // Update with the server's response - use cdnImageUrl if available
-          const newImageUrl = uploadedContent.cdnImageUrl || uploadedContent.imageUrl || objectUrl
-          setFormData(prev => ({ 
-            ...prev, 
-            imageUrl: newImageUrl 
-          }))
-          setSaveStatus('saved')
-          setLastSaved(new Date())
-          
-          // Clean up the temporary object URL since we now have the server URL
-          cleanupObjectUrl()
-          
-          // Update only the specific image fields that changed
-          updateContentFields(content.id, {
-            imageUrl: uploadedContent.imageUrl,
-            cdnImageUrl: uploadedContent.cdnImageUrl
-          })
-          
-          // Cache is already updated; no need to invalidate and refetch
-          
-          setTimeout(() => {
-            setSaveStatus('idle')
-          }, 2000)
+          const response = await apiClient.uploadContentImage(content.id, fileOrUrl)
+          if (response.success && response.content) {
+            // Update with the server's response - use cdnImageUrl if available
+            const newImageUrl = response.content.cdnImageUrl || response.content.imageUrl || objectUrl
+            setFormData(prev => ({ 
+              ...prev, 
+              imageUrl: newImageUrl 
+            }))
+            setSaveStatus('saved')
+            setLastSaved(new Date())
+            
+            // Clean up the object URL since we now have the server URL
+            if (objectUrlRef.current) {
+              URL.revokeObjectURL(objectUrlRef.current)
+              objectUrlRef.current = null
+            }
+            
+            // Update the content in cache without mutating the original
+            updateContentInCache({
+              ...content,
+              imageUrl: response.content.imageUrl,
+              cdnImageUrl: response.content.cdnImageUrl
+            })
+            
+            // Cache is already updated, no need to invalidate
+            
+            setTimeout(() => {
+              setSaveStatus('idle')
+            }, 2000)
+          }
         } catch (error) {
           console.error('Failed to upload image:', error)
           setSaveStatus('error')
-          // Clean up the temporary object URL on error
-          cleanupObjectUrl()
           // Revert to previous image on error
           setFormData(prev => ({ ...prev, imageUrl: content.imageUrl || '' }))
           setTimeout(() => {
             setSaveStatus('idle')
           }, 3000)
-        } finally {
-          setIsUploadingImage(false) // Re-enable auto-save
         }
       }
     }
-  }
-  
-  // Core upload function that can be reused
-  const uploadImageToServer = async (file: File) => {
-    if (!content) {
-      throw new Error('No content available for image upload')
-    }
-    
-    const response = await apiClient.uploadContentImage(content.id, file)
-    if (response.success && response.content) {
-      return response.content
-    }
-    throw new Error('Failed to upload image')
-  }
-
-  const handleImageUpload = async (file: File): Promise<string> => {
-    const uploadedContent = await uploadImageToServer(file)
-    return uploadedContent.cdnImageUrl || uploadedContent.imageUrl || ''
   }
 
   const handleScheduledAtChange = (value: string) => {
@@ -531,7 +499,6 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
             <ImageUploader
               value={formData.imageUrl || content.cdnImageUrl || content.imageUrl || undefined}
               onChange={handleImageChange}
-              onUpload={handleImageUpload}
               maxSizeInMB={10}
               acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
             />
