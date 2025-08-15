@@ -213,6 +213,25 @@ export class TimezoneService {
   }
 
   /**
+   * Parse a date string (YYYY-MM-DD) as midnight in the specified timezone
+   * and convert to UTC for storage
+   */
+  static parseTimezoneAwareDate(dateStr: string, timezone: string): Date {
+    if (dateStr.includes('T')) {
+      // Handle legacy ISO strings
+      const datePart = dateStr.split('T')[0]
+      dateStr = datePart
+    }
+    
+    // Parse the date components
+    const [year, month, day] = dateStr.split('-').map(Number)
+    
+    // Create a date object for midnight and convert to UTC
+    const localMidnight = new Date(year, month - 1, day, 0, 0, 0, 0)
+    return TimezoneService.toUTC(localMidnight, timezone)
+  }
+
+  /**
    * Check if a date is in DST for a given timezone
    */
   static isDST(date: Date, timezone: string): boolean {

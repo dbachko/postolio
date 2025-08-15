@@ -1123,9 +1123,10 @@ class CampaignService {
       errors.push('Campaign start date must be before end date')
     }
 
-    // Date validation is now handled in the async configureCampaign method
-    // which has access to the brand's timezone for proper comparison.
-    // We skip it here since this synchronous method can't do timezone-aware validation.
+    // Date validation has been moved to the async configureCampaign method 
+    // to enable timezone-aware validation. Since this synchronous validation
+    // method cannot access timezone data, date validation is performed later
+    // where we can properly interpret dates in the user's timezone context.
 
     if (!['daily', 'every2days', '3weekly'].includes(config.frequency)) {
       errors.push('Invalid frequency. Must be daily, every2days, or 3weekly')

@@ -516,8 +516,8 @@ export function Campaigns() {
       duration: {
         // Send date strings directly instead of converting to Date objects
         // This prevents timezone issues with Date constructor
-        start: formData.startDate as any, // Temporarily bypass type check
-        end: formData.endDate as any
+        start: formData.startDate,
+        end: formData.endDate
       },
       frequency: formData.frequency,
       themes: formData.themes,

@@ -45,7 +45,7 @@ export interface AuthResponse {
 export interface CampaignConfig {
   name: string
   brandId: string
-  duration: { start: Date, end: Date }
+  duration: { start: string | Date, end: string | Date }
   frequency: string
   themes: string[]
   style: string
@@ -480,7 +480,8 @@ class ApiClient {
         frequency: config.frequency,
         themes: config.themes,
         style: config.style,
-        postingTime: config.postingTime
+        postingTime: config.postingTime,
+        priority: config.priority
       }),
     })
   }

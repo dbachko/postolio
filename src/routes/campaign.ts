@@ -75,29 +75,13 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
       
-      // Parse dates in the brand's timezone context
-      const interpretDateInTimezone = (dateStr: string, timezone: string): Date => {
-        if (dateStr.includes('T')) {
-          // Handle legacy ISO strings
-          const datePart = dateStr.split('T')[0]
-          dateStr = datePart
-        }
-        
-        // Parse the date components
-        const [year, month, day] = dateStr.split('-').map(Number)
-        
-        // Create a date object for midnight and convert to UTC
-        const localMidnight = new Date(year, month - 1, day, 0, 0, 0, 0)
-        return TimezoneService.toUTC(localMidnight, timezone)
-      }
-      
       // Convert date strings to Date objects with timezone awareness
       const config: CampaignConfig = {
         name: body.name,
         brandId: body.brandId,
         duration: {
-          start: interpretDateInTimezone(body.duration.start, brandTimezone),
-          end: interpretDateInTimezone(body.duration.end, brandTimezone),
+          start: TimezoneService.parseTimezoneAwareDate(body.duration.start, brandTimezone),
+          end: TimezoneService.parseTimezoneAwareDate(body.duration.end, brandTimezone),
         },
         frequency: body.frequency,
         themes: body.themes,
