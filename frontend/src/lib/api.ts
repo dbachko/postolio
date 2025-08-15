@@ -45,7 +45,7 @@ export interface AuthResponse {
 export interface CampaignConfig {
   name: string
   brandId: string
-  duration: { start: Date, end: Date }
+  duration: { start: string | Date, end: string | Date }
   frequency: string
   themes: string[]
   style: string
@@ -452,19 +452,36 @@ class ApiClient {
 
   // Campaign endpoints
   async configureCampaign(config: CampaignConfig): Promise<{ success: boolean; campaign: any }> {
+    // Handle both Date objects and strings for duration
+    const getDurationString = (dateValue: Date | string): string => {
+      if (typeof dateValue === 'string') {
+        // Already a string, use directly
+        return dateValue
+      }
+      // Convert Date object to YYYY-MM-DD format
+      const year = dateValue.getFullYear()
+      const month = String(dateValue.getMonth() + 1).padStart(2, '0')
+      const day = String(dateValue.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    
     return this.request('/api/campaign/configure', {
       method: 'POST',
+      headers: {
+        'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
       body: JSON.stringify({
         name: config.name,
         brandId: config.brandId,
         duration: {
-          start: config.duration.start.toISOString(),
-          end: config.duration.end.toISOString()
+          start: getDurationString(config.duration.start),
+          end: getDurationString(config.duration.end)
         },
         frequency: config.frequency,
         themes: config.themes,
         style: config.style,
-        postingTime: config.postingTime
+        postingTime: config.postingTime,
+        priority: config.priority
       }),
     })
   }

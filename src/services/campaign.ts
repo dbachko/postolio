@@ -49,7 +49,7 @@ class CampaignService {
   /**
    * Create and save campaign configuration
    */
-  async configureCampaign(config: CampaignConfig, userId: string): Promise<any> {
+  async configureCampaign(config: CampaignConfig, userId: string, overrideTimezone?: string): Promise<any> {
     try {
       // Validate brand ownership
       const brand = await prisma.brand.findFirst({
@@ -68,15 +68,20 @@ class CampaignService {
         throw new Error('Campaign start date must be before end date')
       }
 
-      // Allow today's date as valid start date - compare dates only (ignoring time)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0) // Set to start of day in local timezone
+      // Get brand's timezone for proper date comparison
+      const brandTimezone = overrideTimezone || await TimezoneService.getBrandTimezone(config.brandId)
       
-      // Get start date and set to start of day for comparison
-      const startDate = new Date(config.duration.start)
-      startDate.setHours(0, 0, 0, 0) // Set to start of day
+      // Get today's date in the brand's timezone (start of day)
+      const nowUTC = new Date()
+      const todayInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone)
+      todayInBrandTz.setHours(0, 0, 0, 0)
       
-      if (startDate < today) {
+      // Convert the input start date to the same timezone for comparison
+      const startDateInBrandTz = TimezoneService.toLocal(config.duration.start, brandTimezone)
+      startDateInBrandTz.setHours(0, 0, 0, 0)
+      
+      // Compare dates in the same timezone context
+      if (startDateInBrandTz < todayInBrandTz) {
         throw new Error('Campaign start date cannot be in the past')
       }
 
@@ -691,11 +696,20 @@ class CampaignService {
           throw new Error('End date must be after start date')
         }
 
-        const today = new Date()
-        const todayDateString = today.toISOString().split('T')[0]
-        const startDateString = startDate.toISOString().split('T')[0]
-
-        if (campaign.status as string !== 'active' && startDateString && todayDateString && startDateString < todayDateString) {
+        // Get brand's timezone for proper date comparison
+        const brandTimezone = await TimezoneService.getBrandTimezone(campaign.brandId)
+        
+        // Get today's date in the brand's timezone (start of day)
+        const nowUTC = new Date()
+        const todayInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone)
+        todayInBrandTz.setHours(0, 0, 0, 0)
+        
+        // Convert the start date to the brand's timezone for comparison
+        const startDateInBrandTz = TimezoneService.toLocal(startDate, brandTimezone)
+        startDateInBrandTz.setHours(0, 0, 0, 0)
+        
+        // Only validate if campaign is not active (active campaigns can keep their past dates)
+        if (campaign.status as string !== 'active' && startDateInBrandTz < todayInBrandTz) {
           throw new Error('Start date cannot be in the past')
         }
 
@@ -1109,16 +1123,10 @@ class CampaignService {
       errors.push('Campaign start date must be before end date')
     }
 
-    // Date comparison - allow campaigns to start from today onwards
-    const today = new Date()
-    today.setHours(0, 0, 0, 0) // Today at start of day
-    
-    const startDate = new Date(config.duration.start)
-    startDate.setHours(0, 0, 0, 0) // Start date at start of day
-    
-    if (startDate < today) {
-      errors.push('Campaign start date cannot be in the past')
-    }
+    // Date validation has been moved to the async configureCampaign method 
+    // to enable timezone-aware validation. Since this synchronous validation
+    // method cannot access timezone data, date validation is performed later
+    // where we can properly interpret dates in the user's timezone context.
 
     if (!['daily', 'every2days', '3weekly'].includes(config.frequency)) {
       errors.push('Invalid frequency. Must be daily, every2days, or 3weekly')

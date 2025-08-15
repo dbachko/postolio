@@ -40,18 +40,16 @@ export interface CampaignData {
 
 export interface CampaignConfig {
   name: string
+  brandId: string
   duration: {
-    startDate: string
-    endDate: string
+    start: string | Date
+    end: string | Date
   }
-  postingFrequency: 'daily' | 'every-other-day' | 'weekly'
-  contentThemes: string[]
-  optimalTimes: Array<{ hour: number; minute: number }>
-  generationParams?: {
-    styleIntensity?: number
-    creativityLevel?: number
-    themeRotation?: boolean
-  }
+  frequency: string
+  themes: string[]
+  style: string
+  postingTime: string
+  priority?: number
 }
 
 export interface CampaignPreview {

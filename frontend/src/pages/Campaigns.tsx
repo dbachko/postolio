@@ -524,8 +524,10 @@ export function Campaigns() {
       name: formData.name,
       brandId: selectedBrand.id,
       duration: {
-        start: new Date(formData.startDate),
-        end: new Date(formData.endDate)
+        // Send date strings directly instead of converting to Date objects
+        // This prevents timezone issues with Date constructor
+        start: formData.startDate,
+        end: formData.endDate
       },
       frequency: formData.frequency,
       themes: formData.themes,
