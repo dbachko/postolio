@@ -14,6 +14,11 @@ const cloudfrontClient = new CloudFrontClient({
 })
 
 // Configuration
+// Required environment variables for production:
+// S3_IMAGES_BUCKET: S3 bucket name for storing images
+// CLOUDFRONT_DISTRIBUTION_ID: CloudFront distribution ID for cache invalidation
+// CLOUDFRONT_DOMAIN: CloudFront domain for CDN URLs
+// AWS_REGION: AWS region (defaults to us-east-1)
 const BUCKET_NAME = process.env.S3_IMAGES_BUCKET || 'postolio-ai-images'
 const CLOUDFRONT_DISTRIBUTION_ID = process.env.CLOUDFRONT_DISTRIBUTION_ID || ''
 const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN || ''
@@ -152,14 +157,35 @@ async function downloadImage(url: string): Promise<Buffer> {
  * Optimize image for web delivery
  */
 async function optimizeImage(buffer: Buffer): Promise<Buffer> {
-  // Instagram optimal size is 1080x1080
-  return sharp(buffer)
-    .resize(1080, 1080, {
-      fit: 'cover',
-      position: 'center'
-    })
-    .jpeg({ quality: 85, progressive: true })
-    .toBuffer()
+  try {
+    // Get image metadata first
+    const image = sharp(buffer)
+    const metadata = await image.metadata()
+    
+    // Instagram optimal size is 1080x1080
+    // IMPORTANT: Using 'contain' instead of 'cover' to preserve the entire image
+    // This prevents cropping of important parts of the image but may add white padding
+    // If you need to revert to cropping behavior, change 'contain' back to 'cover'
+    const processedImage = image
+      .resize(1080, 1080, {
+        fit: 'contain',  // Shows full image with padding instead of cropping
+        position: 'center',
+        background: { r: 255, g: 255, b: 255, alpha: 1 } // White background for padding
+      })
+    
+    // Only flatten if the image has an alpha channel (transparency)
+    if (metadata.channels === 4 || metadata.hasAlpha) {
+      processedImage.flatten({ background: { r: 255, g: 255, b: 255 } })
+    }
+    
+    return processedImage
+      .jpeg({ quality: 85, progressive: true })
+      .toBuffer()
+  } catch (error) {
+    console.error('Error optimizing image:', error)
+    // If optimization fails, return the original buffer
+    return buffer
+  }
 }
 
 /**
@@ -285,6 +311,92 @@ export async function deleteImageFromS3(s3Key: string): Promise<void> {
   } catch (error) {
     console.error('Failed to delete image from S3:', error)
     throw new Error(`S3 deletion failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+
+/**
+ * Upload image buffer directly to S3 (for user uploads)
+ */
+export async function uploadImageBufferToS3(
+  buffer: Buffer,
+  metadata: ImageMetadata
+): Promise<S3UploadResult> {
+  // Input validation
+  if (!buffer || !Buffer.isBuffer(buffer)) {
+    throw new Error('Invalid buffer provided')
+  }
+  
+  if (!metadata.contentId || typeof metadata.contentId !== 'string') {
+    throw new Error('Invalid content ID in metadata')
+  }
+  
+  if (!metadata.brandId || typeof metadata.brandId !== 'string') {
+    throw new Error('Invalid brand ID in metadata')
+  }
+  
+  if (!BUCKET_NAME) {
+    throw new Error('S3_IMAGES_BUCKET environment variable not configured')
+  }
+  
+  try {
+    // Optimize image
+    console.log('Optimizing image for web delivery...')
+    const optimizedBuffer = await optimizeImage(buffer)
+    
+    // Determine user region for compliance
+    const userRegion = await getUserRegion(metadata.brandId)
+    const retentionDays = getRetentionDays(userRegion)
+    const retentionExpiresAt = new Date()
+    retentionExpiresAt.setDate(retentionExpiresAt.getDate() + retentionDays)
+    
+    // Generate S3 key
+    const jpegKey = generateS3Key(metadata, 'jpg')
+    
+    // Prepare S3 metadata
+    const s3Metadata = {
+      contentId: metadata.contentId,
+      brandId: metadata.brandId,
+      campaignId: metadata.campaignId || '',
+      source: metadata.source,
+      generatedAt: metadata.generatedAt.toISOString(),
+      region: userRegion,
+      retentionDays: retentionDays.toString(),
+      retentionExpiresAt: retentionExpiresAt.toISOString()
+    }
+    
+    // Prepare tags for cost allocation
+    const tags = `Brand=${metadata.brandId}&Campaign=${metadata.campaignId || 'none'}&Source=${metadata.source}&Region=${userRegion}`
+    
+    // Upload JPEG version
+    const jpegCommand = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: jpegKey,
+      Body: optimizedBuffer,
+      ContentType: 'image/jpeg',
+      Metadata: s3Metadata,
+      StorageClass: 'INTELLIGENT_TIERING',
+      ServerSideEncryption: 'AES256',
+      Tagging: tags,
+      CacheControl: 'public, max-age=31536000, immutable'
+    })
+    
+    await s3Client.send(jpegCommand)
+    console.log(`Uploaded image to S3: ${jpegKey}`)
+    
+    // Generate CloudFront URL
+    const cdnUrl = CLOUDFRONT_DOMAIN 
+      ? `https://${CLOUDFRONT_DOMAIN}/${jpegKey}`
+      : `https://${BUCKET_NAME}.s3.amazonaws.com/${jpegKey}`
+    
+    return {
+      s3Key: jpegKey,
+      cdnUrl,
+      region: userRegion,
+      retentionExpiresAt
+    }
+  } catch (error) {
+    console.error('Failed to upload image buffer to S3:', error)
+    throw new Error(`S3 upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 

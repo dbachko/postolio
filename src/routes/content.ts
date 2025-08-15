@@ -4,6 +4,7 @@ import { verifyJWT } from '../services/jwt.js'
 import { generateInstagramContent, type ContentGenerationRequest } from '../services/content-generator.js'
 import type { StyleProfile } from '../services/ai.js'
 import learningService from '../services/learning.js'
+import { uploadImageBufferToS3, type ImageMetadata } from '../services/s3-image.js'
 
 import { getDatabaseClient } from '../config/database.js'
 
@@ -358,7 +359,16 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         updateData.caption = caption.trim() // Ensure we store trimmed caption
       }
       if (hashtags !== undefined) updateData.hashtags = hashtags
-      if (imageUrl !== undefined) updateData.imageUrl = imageUrl
+      if (imageUrl !== undefined) {
+        updateData.imageUrl = imageUrl
+        // If imageUrl is empty, also clear S3-related fields
+        if (imageUrl === '' || imageUrl === null) {
+          updateData.s3ImageKey = null
+          updateData.cdnImageUrl = null
+          updateData.imageRegion = null
+          updateData.retentionExpiresAt = null
+        }
+      }
       if (scheduledAt !== undefined) {
         updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null
       }
@@ -492,6 +502,150 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       console.error('Content history error:', error)
       return reply.code(500).send({ error: 'Failed to retrieve content history' })
+    }
+  })
+
+  // Upload image for content
+  fastify.post<{ 
+    Body: { 
+      contentId: string
+      imageData: string  // Base64 encoded image data
+      mimeType: string
+    } 
+  }>('/upload-image', async (request, reply) => {
+    try {
+      const authHeader = request.headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Authentication required' })
+      }
+
+      const token = authHeader.substring(7)
+      const decoded = verifyJWT(token)
+      const userId = decoded.id
+
+      const { contentId, imageData, mimeType } = request.body
+
+      // Validate input
+      if (!contentId || !imageData || !mimeType) {
+        return reply.code(400).send({ error: 'Missing required fields' })
+      }
+
+      // Validate mime type
+      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp']
+      if (!allowedMimeTypes.includes(mimeType)) {
+        return reply.code(400).send({ error: 'Invalid image type. Supported types: JPEG, PNG, WebP' })
+      }
+
+      // Verify user owns the content through brand ownership
+      const content = await prisma.content.findFirst({
+        where: { id: contentId },
+        include: {
+          brand: {
+            select: { userId: true, id: true },
+          },
+        },
+      })
+
+      if (!content || content.brand.userId !== userId) {
+        return reply.code(404).send({ error: 'Content not found' })
+      }
+
+      try {
+        // Convert base64 to buffer - validate size BEFORE creating buffer
+        const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
+        
+        // Calculate estimated size from base64 length
+        // Base64 encoding represents every 3 bytes of binary data as 4 ASCII characters (4/3 ratio).
+        // To estimate the original binary size, multiply the base64 string length by 3/4.
+        const estimatedSize = (base64Data.length * 3) / 4
+        const maxSize = 10 * 1024 * 1024
+        
+        if (estimatedSize > maxSize) {
+          return reply.code(400).send({ 
+            error: `Image size exceeds 10MB limit. Estimated size: ${(estimatedSize / (1024 * 1024)).toFixed(2)}MB` 
+          })
+        }
+        
+        // Now safe to create buffer
+        const buffer = Buffer.from(base64Data, 'base64')
+        
+        // Double-check actual size
+        if (buffer.length > maxSize) {
+          return reply.code(400).send({ error: 'Image size exceeds 10MB limit' })
+        }
+
+        // Upload to S3
+        let uploadResult = null
+        let imageUrlToStore = ''
+        
+        try {
+          const metadata: ImageMetadata = {
+            contentId: content.id,
+            brandId: content.brand.id,
+            campaignId: content.campaignId || undefined,
+            generatedAt: new Date(),
+            source: 'dalle3', // Mark as user upload (we use dalle3 as default)
+            originalPrompt: 'User uploaded image',
+          }
+
+          console.log('Uploading user image to S3 for content:', contentId)
+          console.log('Image buffer size:', buffer.length, 'bytes')
+          console.log('MIME type:', mimeType)
+          
+          uploadResult = await uploadImageBufferToS3(buffer, metadata)
+          imageUrlToStore = uploadResult.cdnUrl
+          
+          console.log('Upload successful! CDN URL:', imageUrlToStore)
+        } catch (s3Error) {
+          console.error('S3 upload failed:', s3Error)
+          // Fail gracefully instead of storing large base64 data URLs
+          return reply.code(500).send({ error: 'Failed to upload image to storage. Please try again.' })
+        }
+        
+        // Update content with S3 URLs or fallback
+        const updateData: any = {
+          imageUrl: imageUrlToStore,
+        }
+        
+        // Only add S3 fields if upload succeeded
+        if (uploadResult) {
+          updateData.s3ImageKey = uploadResult.s3Key
+          updateData.cdnImageUrl = uploadResult.cdnUrl
+          updateData.imageRegion = uploadResult.region
+          updateData.retentionExpiresAt = uploadResult.retentionExpiresAt
+        }
+        
+        const updatedContent = await prisma.content.update({
+          where: { id: contentId },
+          data: updateData,
+          select: {
+            id: true,
+            caption: true,
+            hashtags: true,
+            imageUrl: true,
+            s3ImageKey: true,
+            cdnImageUrl: true,
+            status: true,
+            scheduledAt: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        })
+
+        return reply.send({
+          success: true,
+          content: updatedContent,
+          message: 'Image uploaded successfully',
+        })
+
+      } catch (uploadError) {
+        console.error('Image upload error:', uploadError)
+        return reply.code(500).send({ error: 'Failed to upload image' })
+      }
+
+    } catch (error) {
+      console.error('Upload image error:', error)
+      return reply.code(500).send({ error: 'Failed to process image upload' })
     }
   })
 }

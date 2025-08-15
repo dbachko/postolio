@@ -17,8 +17,6 @@ interface LoginBody {
 }
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
-  // Wait for JWT plugin to be registered
-  await fastify.after()
   // User registration
   fastify.post<{ Body: RegisterBody }>('/register', async (request, reply) => {
     const { email, password, name } = request.body
@@ -103,6 +101,23 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     })
   })
 
+  // Refresh token endpoint
+  fastify.post('/refresh', {
+    preHandler: fastify.authenticate
+  }, async (request: any, reply) => {
+    // After authenticate middleware, user is guaranteed to exist
+    const userId = request.user.id
+    const userEmail = request.user.email
+    
+    // Generate new token with same payload
+    const newToken = signJWT({ 
+      id: userId, 
+      email: userEmail 
+    })
+    
+    return reply.send({ token: newToken })
+  })
+
   // Get current user profile  
   fastify.get('/me', async (request, reply) => {
     try {
@@ -130,8 +145,21 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         }
       })
 
+      if (!user) {
+        return reply.code(404).send({ error: 'User not found' })
+      }
+
       return { user }
     } catch (err) {
+      // Log the specific error for debugging
+      if (err instanceof Error) {
+        console.error('Auth verification failed:', err.message)
+        if (err.name === 'TokenExpiredError') {
+          return reply.code(401).send({ error: 'Token expired' })
+        } else if (err.name === 'JsonWebTokenError') {
+          return reply.code(401).send({ error: 'Invalid token' })
+        }
+      }
       return reply.code(401).send({ error: 'Authentication required' })
     }
   })

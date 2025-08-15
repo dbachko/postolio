@@ -45,10 +45,18 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   checkAuth: async () => {
+    // Skip auth check if no token exists
+    const token = localStorage.getItem('auth_token')
+    if (!token) {
+      set({ user: null, isAuthenticated: false, isLoading: false })
+      return
+    }
+    
     try {
       const response = await apiClient.getProfile()
       set({ user: response.user, isAuthenticated: true, isLoading: false })
     } catch (error) {
+      // Only clear auth state, don't trigger any redirects here
       set({ user: null, isAuthenticated: false, isLoading: false })
     }
   },

@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { apiClient, type Content } from '../lib/api'
 import { useDebounce } from '../hooks/useDebounce'
-import { OptimizedImage } from './OptimizedImage'
+import { ImageUploader } from './ImageUploader'
 import {
   Dialog,
   DialogContent,
@@ -45,6 +45,21 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
     message: string
     appliedToFuturePosts?: number
   }>({ isVisible: false, message: '' })
+
+  // Helper function to update content in cache
+  const updateContentInCache = (updatedContent: Content) => {
+    queryClient.setQueryData(['contentHistory', updatedContent.id], (oldData: { content: Content[] } | undefined) => {
+      if (oldData?.content) {
+        return {
+          ...oldData,
+          content: oldData.content.map((item: Content) =>
+            item.id === updatedContent.id ? updatedContent : item
+          )
+        }
+      }
+      return oldData
+    })
+  }
 
   // Initialize form data when content changes
   useEffect(() => {
@@ -144,17 +159,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       }
       
       // Update the content in relevant queries
-      queryClient.setQueryData(['contentHistory', response.content.id], (oldData: { content: Content[] } | undefined) => {
-        if (oldData?.content) {
-          return {
-            ...oldData,
-            content: oldData.content.map((item: Content) =>
-              item.id === response.content.id ? response.content : item
-            )
-          }
-        }
-        return oldData
-      })
+      updateContentInCache(response.content)
 
       // Invalidate queries to refresh calendar
       queryClient.invalidateQueries({ queryKey: ['contentHistory'] })
@@ -246,8 +251,79 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
     setFormData(prev => ({ ...prev, caption: value }))
   }
 
-  const handleImageUrlChange = (value: string) => {
-    setFormData(prev => ({ ...prev, imageUrl: value }))
+  const handleImageChange = async (fileOrUrl: string | File) => {
+    if (typeof fileOrUrl === 'string') {
+      // Direct URL update (e.g., when removing the image)
+      setFormData(prev => ({ ...prev, imageUrl: fileOrUrl }))
+      
+      // If it's an empty string, it means the user removed the image
+      // This will trigger the auto-save via the debounced form data
+      if (fileOrUrl === '' && content) {
+        // Clear the CDN URL as well
+        content.cdnImageUrl = undefined
+        content.imageUrl = ''
+      }
+    } else {
+      // File upload - create local preview immediately
+      const objectUrl = URL.createObjectURL(fileOrUrl)
+      setFormData(prev => ({ ...prev, imageUrl: objectUrl }))
+      
+      // Upload to server
+      if (content) {
+        setSaveStatus('saving')
+        try {
+          const response = await apiClient.uploadContentImage(content.id, fileOrUrl)
+          if (response.success && response.content) {
+            // Update with the server's response - use cdnImageUrl if available
+            const newImageUrl = response.content.cdnImageUrl || response.content.imageUrl || objectUrl
+            setFormData(prev => ({ 
+              ...prev, 
+              imageUrl: newImageUrl 
+            }))
+            setSaveStatus('saved')
+            setLastSaved(new Date())
+            
+            // Update the content object to reflect the new CDN URL
+            content.cdnImageUrl = response.content.cdnImageUrl
+            content.imageUrl = response.content.imageUrl
+            
+            // Update the content in cache
+            updateContentInCache({
+              ...content,
+              imageUrl: response.content.imageUrl,
+              cdnImageUrl: response.content.cdnImageUrl
+            })
+            
+            // Invalidate queries to refresh data
+            queryClient.invalidateQueries({ queryKey: ['contentHistory'] })
+            
+            setTimeout(() => {
+              setSaveStatus('idle')
+            }, 2000)
+          }
+        } catch (error) {
+          console.error('Failed to upload image:', error)
+          setSaveStatus('error')
+          // Revert to previous image on error
+          setFormData(prev => ({ ...prev, imageUrl: content.imageUrl || '' }))
+          setTimeout(() => {
+            setSaveStatus('idle')
+          }, 3000)
+        }
+      }
+    }
+  }
+  
+  const handleImageUpload = async (file: File): Promise<string> => {
+    if (!content) {
+      throw new Error('No content available for image upload')
+    }
+    
+    const response = await apiClient.uploadContentImage(content.id, file)
+    if (response.success && response.content.imageUrl) {
+      return response.content.imageUrl
+    }
+    throw new Error('Failed to upload image')
   }
 
   const handleScheduledAtChange = (value: string) => {
@@ -405,28 +481,16 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
             )}
           </div>
 
-          {/* Image URL */}
+          {/* Image Upload */}
           <div className="space-y-2">
-            <Label htmlFor="imageUrl">Image URL</Label>
-            <Input
-              id="imageUrl"
-              value={formData.imageUrl}
-              onChange={(e) => handleImageUrlChange(e.target.value)}
-              placeholder="https://example.com/image.jpg"
-              type="url"
+            <Label>Post Image</Label>
+            <ImageUploader
+              value={formData.imageUrl || content.cdnImageUrl || content.imageUrl}
+              onChange={handleImageChange}
+              onUpload={handleImageUpload}
+              maxSizeInMB={10}
+              acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
             />
-            {(content.cdnImageUrl || formData.imageUrl) && (
-              <div className="mt-2">
-                <OptimizedImage
-                  src={content.cdnImageUrl || formData.imageUrl}
-                  cdnUrl={content.cdnImageUrl}
-                  fallbackUrl={formData.imageUrl}
-                  alt="Preview"
-                  className="max-w-xs max-h-48 object-cover rounded-lg border"
-                  aspectRatio="square"
-                />
-              </div>
-            )}
           </div>
 
           {/* Scheduled Time */}
