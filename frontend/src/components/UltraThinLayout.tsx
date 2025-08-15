@@ -1,4 +1,4 @@
-import { useState, type ReactNode, useEffect, useCallback, useRef } from 'react'
+import { useState, type ReactNode, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { useBrandStore } from '../stores/brandStore'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
@@ -48,6 +48,7 @@ interface NavigationItem {
   path: string
   icon: typeof Megaphone
   description?: string
+  matchType?: 'exact' | 'startsWith'
 }
 
 // Main navigation items (always visible on desktop)
@@ -56,19 +57,22 @@ const mainNavItems: NavigationItem[] = [
     label: 'Campaigns',
     path: '/campaigns',
     icon: Megaphone,
-    description: 'Manage content campaigns'
+    description: 'Manage content campaigns',
+    matchType: 'startsWith'
   },
   {
     label: 'Content',
     path: '/content',
     icon: FileText,
-    description: 'Content library'
+    description: 'Content library',
+    matchType: 'exact'
   },
   {
     label: 'Analytics',
     path: '/analytics',
     icon: BarChart3,
-    description: 'Performance metrics'
+    description: 'Performance metrics',
+    matchType: 'exact'
   }
 ]
 
@@ -103,6 +107,15 @@ const secondaryNavItems: NavigationItem[] = [
 // Combine all navigation items for search
 const allNavItems = [...mainNavItems, ...secondaryNavItems]
 
+// Utility function for route matching
+const isRouteActive = (item: NavigationItem, currentPath: string): boolean => {
+  if (item.matchType === 'startsWith') {
+    return currentPath === item.path || currentPath.startsWith(item.path + '/')
+  }
+  // Default to exact match
+  return currentPath === item.path
+}
+
 export function UltraThinLayout({ children }: LayoutProps) {
   const { user, logout } = useAuthStore()
   const { selectedBrand, brands, setSelectedBrand } = useBrandStore()
@@ -118,15 +131,9 @@ export function UltraThinLayout({ children }: LayoutProps) {
     navigate('/login')
   }
 
-  const isActiveRoute = (path: string) => {
-    if (path === '/campaigns') {
-      return location.pathname === path || location.pathname.startsWith('/campaigns/')
-    }
-    if (path === '/content') {
-      return location.pathname === path || location.pathname === '/content'
-    }
-    return location.pathname === path
-  }
+  const isActiveRoute = useCallback((item: NavigationItem) => {
+    return isRouteActive(item, location.pathname)
+  }, [location.pathname])
 
   // Command palette keyboard shortcut
   useEffect(() => {
@@ -166,9 +173,12 @@ export function UltraThinLayout({ children }: LayoutProps) {
   }, [navigate])
 
   // Filter navigation items based on search query
-  const filteredItems = allNavItems.filter(item => 
-    item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredItems = useMemo(() => 
+    allNavItems.filter(item => 
+      item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [searchQuery]
   )
 
   return (
@@ -211,11 +221,11 @@ export function UltraThinLayout({ children }: LayoutProps) {
                     to={item.path}
                     className={cn(
                       "flex items-center px-6 h-full border-b-2 transition-colors",
-                      isActiveRoute(item.path) 
+                      isActiveRoute(item) 
                         ? "border-blue-600 text-blue-600 bg-blue-50/50" 
                         : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50"
                     )}
-                    aria-current={isActiveRoute(item.path) ? 'page' : undefined}
+                    aria-current={isActiveRoute(item) ? 'page' : undefined}
                   >
                     <item.icon className="w-5 h-5 mr-2" aria-hidden="true" />
                     <span className="font-medium text-sm">{item.label}</span>
@@ -279,7 +289,7 @@ export function UltraThinLayout({ children }: LayoutProps) {
                                 onClick={() => setMenuOpen(false)}
                                 className={cn(
                                   "flex items-center px-3 py-2 rounded-lg text-sm transition-colors",
-                                  isActiveRoute(item.path)
+                                  isActiveRoute(item)
                                     ? "bg-blue-50 text-blue-600"
                                     : "hover:bg-accent hover:text-accent-foreground"
                                 )}
@@ -304,7 +314,7 @@ export function UltraThinLayout({ children }: LayoutProps) {
                               onClick={() => setMenuOpen(false)}
                               className={cn(
                                 "flex flex-col items-center p-3 rounded-lg text-center transition-colors",
-                                isActiveRoute(item.path)
+                                isActiveRoute(item)
                                   ? "bg-blue-50 text-blue-600"
                                   : "hover:bg-accent hover:text-accent-foreground"
                               )}
