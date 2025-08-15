@@ -422,8 +422,8 @@ class CampaignService {
         if (!existingPost) continue
 
         // Update existing preview post to scheduled status
-        // Only set to 'scheduled' if we have a valid future date
-        const hasValidScheduledDate = scheduledDate && scheduledDate > new Date()
+        // Only set to 'scheduled' if we have a valid scheduledAt date (allows past dates for makeup posts)
+        const hasValidScheduledDate = scheduledDate !== null && scheduledDate !== undefined
         
         const content = await prisma.content.update({
           where: { id: existingPost.id },

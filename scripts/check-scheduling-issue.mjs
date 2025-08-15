@@ -59,7 +59,7 @@ async function checkSchedulingIssue() {
     
     console.log(`\n📊 All content in campaign "${content.campaign?.name}":`)
     campaignContent.forEach(c => {
-      console.log(`  ${c.id.substring(-8)}: status=${c.status}, scheduledAt=${c.scheduledAt || 'NULL'}`)
+      console.log(`  ${c.id.slice(-8)}: status=${c.status}, scheduledAt=${c.scheduledAt || 'NULL'}`)
     })
   }
   

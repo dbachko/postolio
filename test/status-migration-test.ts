@@ -80,13 +80,12 @@ test('Status Migration Verification', async (t) => {
         console.log('No test user found, skipping campaign test')
         return
       }
-      const brand = await prisma.brand.create({
+      testBrand = await prisma.brand.create({
         data: {
           name: 'Test Brand',
           userId: user.id,
         }
       })
-      testBrand.id = brand.id
     }
 
     // Create a test campaign

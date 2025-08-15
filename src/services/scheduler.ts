@@ -149,7 +149,7 @@ class SchedulerService {
         where: {
           status: 'scheduled',
           scheduledAt: {
-            not: null, // Ensure scheduledAt is not null
+            not: null, // Defensive check: prevent legacy/corrupted data with status='scheduled' but scheduledAt=null
             lte: new Date(now.getTime() + 5 * 60 * 1000), // Next 5 minutes
           },
         },
