@@ -104,7 +104,6 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
       toast.error(`Failed to reschedule post: ${error instanceof Error ? error.message : 'Unknown error'}`)
     },
     onSuccess: (data) => {
-      console.log('Reschedule successful:', data)
       toast.success('Post rescheduled successfully')
     },
     onSettled: () => {
@@ -182,19 +181,6 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     const utcDate = convertLocalToUTC(newLocalDate, timezone)
     const scheduledAt = utcDate.toISOString()
     
-    // Log for debugging
-    const oldUtcDate = draggedContent.scheduledAt || draggedContent.createdAt
-    const oldLocalDate = convertUTCToLocal(oldUtcDate, timezone)
-    
-    console.log('Rescheduling post:', {
-      contentId: draggedContent.id,
-      oldLocalDate: oldLocalDate.toISOString(),
-      oldUtcDate: oldUtcDate,
-      newLocalDate: newLocalDate.toISOString(),
-      newUtcDate: scheduledAt,
-      timezone,
-      draggedToSameDay: oldLocalDate.toDateString() === newLocalDate.toDateString()
-    })
     
     // Perform the mutation
     rescheduleMutation.mutate({
