@@ -97,10 +97,14 @@ export function ContentCalendar({ brandId, brandName, campaignFilter }: ContentC
       ...placeholders.map(item => ({ 
         ...item, 
         type: 'placeholder' as const,
-        caption: item.message,
-        hashtags: [],
+        caption: item.message || '',
+        hashtags: [] as string[],
         imageUrl: '',
         brandId,
+        status: 'placeholder',
+        createdAt: item.scheduledAt,
+        postedAt: null,
+        campaignName: item.campaignName || '',
       }))
     ]
     return items.sort((a, b) => {

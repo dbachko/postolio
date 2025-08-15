@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Button } from '../ui/button'
-import { Badge } from '../ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,7 +24,17 @@ import { format } from 'date-fns'
 import { toast } from 'sonner'
 
 interface CalendarExportProps {
-  content: any[]
+  content: Array<{
+    id: string
+    type?: 'content' | 'placeholder'
+    caption: string
+    hashtags: string[]
+    status?: string
+    scheduledAt?: string
+    postedAt?: string
+    campaignId?: string
+    instagramPermalink?: string
+  }>
   brandName: string
   dateRange?: { start: Date | null, end: Date | null }
 }
@@ -63,7 +72,7 @@ export function CalendarExport({ content, brandName, dateRange }: CalendarExport
       const timestamp = format(new Date(), 'yyyy-MM-dd')
       
       switch (exportFormat) {
-        case 'csv':
+        case 'csv': {
           const csvResult = await exportToCSV(
             content,
             `${brandName}-calendar-${timestamp}.csv`
@@ -72,24 +81,29 @@ export function CalendarExport({ content, brandName, dateRange }: CalendarExport
             toast.success(`Exported ${csvResult.rowCount} items to CSV`)
           }
           break
+        }
           
-        case 'pdf':
+        case 'pdf': {
           const pdfResult = await exportToPDF(
             content,
             brandName,
-            dateRange ? { dateRange } : undefined
+            dateRange && dateRange.start && dateRange.end ? { 
+              dateRange: { start: dateRange.start, end: dateRange.end }
+            } : undefined
           )
           if (pdfResult.success) {
             toast.success(`Exported ${pdfResult.pageCount} pages to PDF`)
           }
           break
+        }
           
-        case 'ical':
+        case 'ical': {
           const icalResult = await exportToICal(content, brandName)
           if (icalResult.success) {
             toast.success(`Exported ${icalResult.eventCount} events to iCal`)
           }
           break
+        }
       }
     } catch (error) {
       console.error('Export failed:', error)
@@ -106,7 +120,7 @@ export function CalendarExport({ content, brandName, dateRange }: CalendarExport
       const timestamp = format(new Date(), 'yyyy-MM-dd')
       
       switch (exportFormat) {
-        case 'csv':
+        case 'csv': {
           const csvResult = await exportToCSV(
             content,
             `${brandName}-calendar-${timestamp}.csv`,
@@ -118,8 +132,9 @@ export function CalendarExport({ content, brandName, dateRange }: CalendarExport
             toast.success(`Exported ${csvResult.rowCount} items to CSV`)
           }
           break
+        }
           
-        case 'pdf':
+        case 'pdf': {
           const pdfResult = await exportToPDF(
             content,
             brandName,
@@ -134,13 +149,15 @@ export function CalendarExport({ content, brandName, dateRange }: CalendarExport
             toast.success(`Exported ${pdfResult.pageCount} pages to PDF`)
           }
           break
+        }
           
-        case 'ical':
+        case 'ical': {
           const icalResult = await exportToICal(content, brandName)
           if (icalResult.success) {
             toast.success(`Exported ${icalResult.eventCount} events to iCal`)
           }
           break
+        }
       }
       
       setShowExportDialog(false)
@@ -214,7 +231,7 @@ export function CalendarExport({ content, brandName, dateRange }: CalendarExport
             {/* Format Selection */}
             <div className="space-y-2">
               <Label>Export Format</Label>
-              <RadioGroup value={exportFormat} onValueChange={(v) => setExportFormat(v as ExportFormat)}>
+              <RadioGroup value={exportFormat} onValueChange={(v: string) => setExportFormat(v as ExportFormat)}>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="csv" id="csv" />
                   <Label htmlFor="csv" className="font-normal cursor-pointer">

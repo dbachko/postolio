@@ -47,7 +47,7 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
 
     return items.filter(item => {
       // Check if in current month
-      const itemDate = new Date(item.scheduledAt || item.postedAt || item.createdAt)
+      const itemDate = new Date(item.scheduledAt || item.postedAt || item.createdAt || new Date())
       if (!isWithinInterval(itemDate, { start: monthStart, end: monthEnd })) {
         return false
       }

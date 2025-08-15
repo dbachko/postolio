@@ -2,15 +2,20 @@ import { useMemo } from 'react'
 import { useCalendarFilterStore } from '../stores/calendarFilterStore'
 import type { Content } from '../lib/api'
 
-interface ContentItem extends Partial<Content> {
+interface ContentItem {
   id: string
   type: 'content' | 'placeholder'
-  caption?: string
-  status?: string
+  caption: string
+  status: string
   scheduledAt?: string | null
-  campaignId?: string
+  campaignId?: string | null
   campaignName?: string
-  hashtags?: string[]
+  hashtags: string[]
+  createdAt?: string
+  postedAt?: string | null
+  brandId: string
+  imageUrl?: string
+  instagramPermalink?: string | null
 }
 
 export function useFilteredContent(items: ContentItem[]) {
@@ -29,7 +34,7 @@ export function useFilteredContent(items: ContentItem[]) {
     // Filter by status
     if (filters.statuses.length > 0) {
       filtered = filtered.filter(item => 
-        item.status && filters.statuses.includes(item.status as any)
+        item.status && filters.statuses.includes(item.status as 'pending' | 'approved' | 'published' | 'rejected' | 'failed' | 'scheduled')
       )
     }
     
@@ -37,7 +42,7 @@ export function useFilteredContent(items: ContentItem[]) {
     if (filters.contentTypes.length > 0 && filters.contentTypes.length < 2) {
       filtered = filtered.filter(item => {
         const itemType = item.type === 'placeholder' ? 'placeholder' : 'post'
-        return filters.contentTypes.includes(itemType as any)
+        return filters.contentTypes.includes(itemType as 'post' | 'placeholder')
       })
     }
     

@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns'
 import { Card, CardContent } from './ui/card'
-import { Badge } from './ui/badge'
 import { Clock, Calendar, CheckCircle, AlertCircle } from 'lucide-react'
 
 interface TimelineItem {

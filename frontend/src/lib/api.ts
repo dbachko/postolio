@@ -28,11 +28,13 @@ export interface Content {
   cdnImageUrl?: string | null
   imageRegion?: string | null
   retentionExpiresAt?: string | null
-  status: 'pending' | 'approved' | 'rejected' | 'published' | 'scheduled'
+  status: 'pending' | 'approved' | 'rejected' | 'published' | 'scheduled' | 'failed'
   scheduledAt: string | null
   postedAt: string | null
   createdAt: string
   updatedAt: string
+  brandId: string
+  campaignId?: string | null
   instagramPostId?: string | null
   instagramPermalink?: string | null
 }

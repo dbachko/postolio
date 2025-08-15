@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useCalendarFilterStore, ContentStatus, ContentType } from '../../stores/calendarFilterStore'
+import { useCalendarFilterStore, type ContentStatus, type ContentType } from '../../stores/calendarFilterStore'
 import { apiClient } from '../../lib/api'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
@@ -251,7 +251,7 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
                     <Calendar
                       mode="single"
                       selected={tempDateRange.start || undefined}
-                      onSelect={(date) => setTempDateRange(prev => ({ ...prev, start: date || null }))}
+                      onSelect={(date: Date | undefined) => setTempDateRange(prev => ({ ...prev, start: date || null }))}
                       className="rounded-md border"
                     />
                   </div>
@@ -260,7 +260,7 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
                     <Calendar
                       mode="single"
                       selected={tempDateRange.end || undefined}
-                      onSelect={(date) => setTempDateRange(prev => ({ ...prev, end: date || null }))}
+                      onSelect={(date: Date | undefined) => setTempDateRange(prev => ({ ...prev, end: date || null }))}
                       className="rounded-md border"
                     />
                   </div>

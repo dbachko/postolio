@@ -3,7 +3,7 @@ import { jsPDF } from 'jspdf'
 import { format } from 'date-fns'
 import type { Content } from '../lib/api'
 
-interface ExportContent extends Partial<Content> {
+interface ExportContent {
   id: string
   type?: 'content' | 'placeholder'
   caption?: string
@@ -51,7 +51,7 @@ export async function exportToCSV(
   const { includeHeaders = true, selectedFields } = options || {}
   
   const data = content.map(item => {
-    const row: Record<string, any> = {
+    const row: Record<string, string | number> = {
       'Post ID': item.id,
       'Type': item.type === 'placeholder' ? 'AI Placeholder' : 'Post',
       'Caption': item.caption || '',
@@ -65,7 +65,7 @@ export async function exportToCSV(
     
     // Filter fields if specified
     if (selectedFields && selectedFields.length > 0) {
-      const filteredRow: Record<string, any> = {}
+      const filteredRow: Record<string, string | number> = {}
       selectedFields.forEach(field => {
         if (row[field] !== undefined) {
           filteredRow[field] = row[field]
@@ -97,7 +97,7 @@ export async function exportToPDF(
     dateRange?: { start: Date, end: Date }
   }
 ) {
-  const { includeImages = false, groupByCampaign = false, dateRange } = options || {}
+  const { groupByCampaign = false, dateRange } = options || {}
   
   const doc = new jsPDF()
   let yPosition = 20
@@ -164,15 +164,15 @@ export async function exportToPDF(
     // Group header
     if (groupByCampaign) {
       doc.setFontSize(11)
-      doc.setFont(undefined, 'bold')
+      doc.setFont('helvetica', 'bold')
       doc.text(groupName, margin, yPosition)
       yPosition += lineHeight
-      doc.setFont(undefined, 'normal')
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
     }
     
     // Content items
-    items.forEach((item, index) => {
+    items.forEach((item) => {
       // Check if we need a new page
       if (yPosition > pageHeight - 30) {
         doc.addPage()
@@ -182,12 +182,12 @@ export async function exportToPDF(
       // Date and status
       const dateStr = formatDate(item.scheduledAt || item.postedAt)
       const statusBadge = `[${item.status?.toUpperCase() || 'DRAFT'}]`
-      doc.setFont(undefined, 'bold')
+      doc.setFont('helvetica', 'bold')
       doc.text(`${dateStr} ${statusBadge}`, margin, yPosition)
       yPosition += lineHeight - 2
       
       // Caption (truncated)
-      doc.setFont(undefined, 'normal')
+      doc.setFont('helvetica', 'normal')
       const caption = item.caption || 'No caption'
       const maxCaptionLength = 80
       const truncatedCaption = caption.length > maxCaptionLength 

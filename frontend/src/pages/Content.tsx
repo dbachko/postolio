@@ -3,7 +3,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useBrandStore } from '../stores/brandStore'
 import { ContentCalendar } from '../components/ContentCalendar'
 import { Alert, AlertDescription } from '../components/ui/alert'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { AlertCircle, Calendar, ArrowLeft, Plus } from 'lucide-react'
 

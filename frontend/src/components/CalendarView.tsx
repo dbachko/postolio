@@ -33,7 +33,11 @@ interface CalendarEvent extends Event {
   title: string
   start: Date
   end: Date
-  resource: Content & { isPlaceholder?: boolean }
+  resource: Content | (Content & { 
+    type: 'placeholder'
+    isPlaceholder: boolean
+    message: string
+  })
 }
 
 interface CalendarViewProps {
@@ -45,7 +49,6 @@ interface CalendarViewProps {
 export function CalendarView({ brandId, content: propContent, onContentClick }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<View>('week')
-  const [isDragging, setIsDragging] = useState(false)
   const { timezone, isAutoDetected } = useTimezone()
   const queryClient = useQueryClient()
 
@@ -92,7 +95,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
       // Return a context with the previous data
       return { previousData }
     },
-    onError: (error, variables, context) => {
+    onError: (error, _variables, context) => {
       console.error('Reschedule failed:', error)
       // If the mutation fails, use the context to roll back
       if (context?.previousData) {
@@ -143,10 +146,13 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
           caption: placeholder.message,
           hashtags: [],
           imageUrl: '',
-          brandId: '',
+          brandId: placeholder.brandId || '',
+          postedAt: null,
           createdAt: placeholder.scheduledAt,
           updatedAt: placeholder.scheduledAt,
-          isPlaceholder: true
+          type: 'placeholder' as const,
+          isPlaceholder: true,
+          message: placeholder.message
         }
       }
     })
@@ -154,19 +160,13 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     return [...contentEvents, ...placeholderEvents]
   }, [content, placeholders, timezone])
 
-  // Handle drag start
-  const handleDragStart = useCallback(() => {
-    setIsDragging(true)
-  }, [])
-
   // Handle event drop (rescheduling)
-  const handleEventDrop = useCallback(({ event, start, end }: { event: CalendarEvent; start: Date | string; end: Date | string }) => {
-    setIsDragging(false)
+  const handleEventDrop = useCallback(({ event, start }: { event: CalendarEvent; start: Date | string; end: Date | string }) => {
     
     const draggedContent = event.resource
     
     // Don't allow dragging of published posts, placeholders, or rejected posts
-    if (draggedContent.status === 'published' || draggedContent.isPlaceholder || draggedContent.status === 'rejected') {
+    if (draggedContent.status === 'published' || ('isPlaceholder' in draggedContent && draggedContent.isPlaceholder) || draggedContent.status === 'rejected') {
       toast.error('Cannot reschedule this post')
       return
     }
@@ -227,7 +227,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   // Custom event component
   const EventComponent = ({ event }: { event: CalendarEvent }) => {
     const content = event.resource
-    const isPlaceholder = content.isPlaceholder
+    const isPlaceholder = 'isPlaceholder' in content && content.isPlaceholder
     const isDraggable = !isPlaceholder && content.status !== 'published' && content.status !== 'rejected'
     
     const statusColors = {
@@ -390,7 +390,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   // Check if event is draggable
   const isDraggableAccessor = useCallback((event: CalendarEvent) => {
     const status = event.resource.status
-    const isPlaceholder = event.resource.isPlaceholder
+    const isPlaceholder = 'isPlaceholder' in event.resource && event.resource.isPlaceholder
     // Allow dragging for approved, scheduled, and pending posts
     // Disallow for published, placeholder, and rejected posts
     return !isPlaceholder && status !== 'published' && status !== 'rejected'
@@ -441,7 +441,6 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
           }}
           // Drag and drop props
           draggableAccessor={isDraggableAccessor}
-          onDragStart={handleDragStart}
           onEventDrop={handleEventDrop}
           resizable={false}
         />
