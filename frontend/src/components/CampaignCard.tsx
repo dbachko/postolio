@@ -76,19 +76,24 @@ const CampaignCard = memo(({
       return 'Delete campaign'
     }
     
+    // Provide clear explanations for why campaigns cannot be deleted
     if (campaign.status === 'active') {
-      return 'Cannot delete active campaigns. Pause the campaign first to delete it.'
+      return 'Active campaigns cannot be deleted. They contain published content and serve as historical records. Pause or wait for completion if you want to stop the campaign.'
     }
     
     if (campaign.status === 'paused') {
-      return 'Cannot delete paused campaigns. Only campaigns with status: draft, preview, creating, failed can be deleted.'
+      return 'Paused campaigns cannot be deleted. They may contain published content and can be resumed. Only campaigns that haven\'t started (draft, preview, creating, failed) can be deleted.'
     }
     
     if (campaign.status === 'completed') {
-      return 'Cannot delete completed campaigns. Only campaigns with status: draft, preview, creating, failed can be deleted.'
+      return 'Completed campaigns cannot be deleted. They serve as historical records of your marketing activities and contain published content.'
     }
     
-    return `Cannot delete campaigns with status '${campaign.status}'. Only campaigns with status: draft, preview, creating, failed can be deleted.`
+    if (campaign.status === 'processing') {
+      return 'Campaigns being processed cannot be deleted. Wait for processing to complete or fail before attempting deletion.'
+    }
+    
+    return `Campaigns with status "${campaign.status}" cannot be deleted. Only campaigns that haven't started (draft, preview, creating, failed) can be deleted.`
   }
 
   const getBadgeVariant = () => {
@@ -241,24 +246,35 @@ const CampaignCard = memo(({
                 </Button>
               )}
               
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (canDeleteCampaign()) {
-                    onDeleteCampaign(campaign.id, campaign.name)
-                  }
-                }}
-                disabled={deleteCampaignLoading || !canDeleteCampaign()}
-                title={getDeleteTooltip()}
-                className={`text-xs px-2 py-1 ${canDeleteCampaign() 
-                  ? 'text-red-500 hover:text-red-700' 
-                  : 'text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                <Trash2 className="w-3 h-3" />
-              </Button>
+              <div className="relative group/delete">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (canDeleteCampaign()) {
+                      onDeleteCampaign(campaign.id, campaign.name)
+                    }
+                  }}
+                  disabled={deleteCampaignLoading || !canDeleteCampaign()}
+                  title={getDeleteTooltip()}
+                  className={`text-xs px-2 py-1 transition-all ${canDeleteCampaign() 
+                    ? 'text-red-500 hover:text-red-700 hover:bg-red-50' 
+                    : 'text-gray-300 cursor-not-allowed opacity-50 hover:bg-transparent'
+                  }`}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+                {/* Show tooltip on hover for disabled state */}
+                {!canDeleteCampaign() && (
+                  <div className="absolute hidden group-hover/delete:block z-50 bottom-full mb-2 right-0 w-64 p-2 text-xs text-white bg-gray-900 rounded-md shadow-lg">
+                    <div className="relative">
+                      {getDeleteTooltip()}
+                      <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-gray-900"></div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
