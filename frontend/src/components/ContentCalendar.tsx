@@ -1,0 +1,352 @@
+import { useState, useMemo, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
+import { CalendarView } from './CalendarView'
+import { TimelineView } from './TimelineView'
+import { ContentListView } from './ContentListView'
+import { CalendarFilters } from './calendar/CalendarFilters'
+import { CalendarExport } from './calendar/CalendarExport'
+import { useFilteredContent } from '../hooks/useFilteredContent'
+import { useCalendarFilterStore } from '../stores/calendarFilterStore'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Button } from './ui/button'
+import { Badge } from './ui/badge'
+import { apiClient } from '@/lib/api'
+import { Calendar, List, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+
+type ViewMode = 'month' | 'timeline' | 'list'
+
+interface ContentCalendarProps {
+  brandId: string
+  brandName?: string
+  campaignFilter?: string | null
+}
+
+export function ContentCalendar({ brandId, brandName, campaignFilter }: ContentCalendarProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [currentDate, setCurrentDate] = useState(new Date())
+  
+  // Fetch calendar data with placeholders - with prefetching
+  const calendarQuery = useQuery({
+    queryKey: ['calendar', brandId, format(currentDate, 'yyyy-MM')],
+    queryFn: () => apiClient.getCalendarContent(brandId, format(currentDate, 'yyyy-MM')),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+  })
+
+  // Prefetch adjacent months for smooth navigation
+  const queryClient = useQueryClient()
+  
+  useEffect(() => {
+    const prevMonth = format(subMonths(currentDate, 1), 'yyyy-MM')
+    const nextMonth = format(addMonths(currentDate, 1), 'yyyy-MM')
+    
+    // Prefetch previous month
+    queryClient.prefetchQuery({
+      queryKey: ['calendar', brandId, prevMonth],
+      queryFn: () => apiClient.getCalendarContent(brandId, prevMonth),
+      staleTime: 5 * 60 * 1000,
+    })
+    
+    // Prefetch next month
+    queryClient.prefetchQuery({
+      queryKey: ['calendar', brandId, nextMonth],
+      queryFn: () => apiClient.getCalendarContent(brandId, nextMonth),
+      staleTime: 5 * 60 * 1000,
+    })
+  }, [currentDate, brandId, queryClient])
+
+  const content = calendarQuery.data?.data?.content || []
+  const placeholders = calendarQuery.data?.data?.placeholders || []
+
+  // Fetch campaigns for progress visualization
+  const campaignsQuery = useQuery({
+    queryKey: ['campaigns', brandId],
+    queryFn: () => apiClient.listCampaigns(brandId),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const campaigns = campaignsQuery.data?.campaigns || []
+
+  // Calculate campaign progress
+  const campaignProgress = useMemo(() => {
+    return campaigns.map(campaign => {
+      const campaignContent = content.filter(c => c.campaignId === campaign.id)
+      const campaignPlaceholders = placeholders.filter(p => p.campaignId === campaign.id)
+      const total = campaignContent.length + campaignPlaceholders.length
+      const published = campaignContent.filter(c => c.status === 'published').length
+      const scheduled = campaignContent.filter(c => c.status === 'approved' || c.status === 'scheduled').length
+      
+      return {
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        total,
+        published,
+        scheduled,
+        pending: campaignPlaceholders.length,
+        progress: total > 0 ? Math.round((published / total) * 100) : 0
+      }
+    })
+  }, [campaigns, content, placeholders])
+
+  // Combine content and placeholders for unified handling
+  const allItems = useMemo(() => {
+    const items = [
+      ...content.map(item => ({ ...item, type: 'content' as const })),
+      ...placeholders.map(item => ({ 
+        ...item, 
+        type: 'placeholder' as const,
+        caption: item.message,
+        hashtags: [],
+        imageUrl: '',
+        brandId,
+      }))
+    ]
+    return items.sort((a, b) => {
+      const dateA = new Date(a.scheduledAt || a.createdAt).getTime()
+      const dateB = new Date(b.scheduledAt || b.createdAt).getTime()
+      return dateA - dateB
+    })
+  }, [content, placeholders, brandId])
+  
+  // Apply filters to content
+  const filters = useCalendarFilterStore()
+  const { filteredItems, totalItems, filteredCount, isFiltered } = useFilteredContent(allItems)
+
+  // Navigation handlers
+  const handlePreviousMonth = () => {
+    setCurrentDate(prev => subMonths(prev, 1))
+  }
+
+  const handleNextMonth = () => {
+    setCurrentDate(prev => addMonths(prev, 1))
+  }
+
+  const handleToday = () => {
+    setCurrentDate(new Date())
+  }
+
+  // Statistics (based on filtered items)
+  const stats = useMemo(() => {
+    const filteredContent = filteredItems.filter(item => item.type === 'content')
+    const filteredPlaceholders = filteredItems.filter(item => item.type === 'placeholder')
+    
+    return {
+      total: filteredItems.length,
+      published: filteredContent.filter(c => c.status === 'published').length,
+      scheduled: filteredContent.filter(c => c.status === 'approved' || c.status === 'scheduled').length,
+      placeholders: filteredPlaceholders.length,
+      failed: filteredContent.filter(c => c.status === 'rejected' || c.status === 'failed').length,
+    }
+  }, [filteredItems])
+
+  if (calendarQuery.isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          Loading calendar...
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header with navigation and view switcher */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <CardTitle>Content Calendar</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handlePreviousMonth}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleToday}
+                >
+                  Today
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleNextMonth}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+                <span className="ml-2 font-medium">
+                  {format(currentDate, 'MMMM yyyy')}
+                </span>
+              </div>
+            </div>
+            
+            {/* View mode switcher and Export */}
+            <div className="flex items-center gap-4">
+              <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+                <Button
+                  variant={viewMode === 'month' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('month')}
+                  className="gap-2"
+                  data-testid="view-month"
+                >
+                  <Calendar className="w-4 h-4" />
+                  Month
+                </Button>
+                <Button
+                  variant={viewMode === 'timeline' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('timeline')}
+                  className="gap-2"
+                >
+                  <Clock className="w-4 h-4" />
+                  Timeline
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="gap-2"
+                >
+                  <List className="w-4 h-4" />
+                  List
+                </Button>
+              </div>
+              
+              <CalendarExport 
+                content={filteredItems}
+                brandName={brandName || 'Brand'}
+                dateRange={filters.dateRange}
+              />
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+      
+      {/* Filters */}
+      <CalendarFilters brandId={brandId} />
+      
+      {/* Filter Results Summary */}
+      {isFiltered && (
+        <Card>
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">
+                Showing <span className="font-medium text-gray-900">{filteredCount}</span> of {totalItems} items
+              </span>
+              {filteredCount === 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => filters.clearAll()}
+                >
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Campaign Progress */}
+      {campaignProgress.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Campaign Progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {campaignProgress.map(campaign => (
+                <div key={campaign.id} className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{campaign.name}</span>
+                    <span className="text-gray-500">{campaign.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${campaign.progress}%`,
+                        backgroundColor: campaign.status === 'active' ? '#22c55e' : 
+                                       campaign.status === 'paused' ? '#6b7280' : '#3b82f6'
+                      }}
+                    />
+                  </div>
+                  <div className="flex gap-4 text-xs text-gray-500">
+                    <span>{campaign.published} published</span>
+                    <span>{campaign.scheduled} scheduled</span>
+                    <span>{campaign.pending} pending</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Statistics bar */}
+      <div className="grid grid-cols-5 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold">{stats.total}</div>
+            <div className="text-sm text-gray-600">Total Posts</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-green-600">{stats.published}</div>
+            <div className="text-sm text-gray-600">Published</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-blue-600">{stats.scheduled}</div>
+            <div className="text-sm text-gray-600">Scheduled</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-gray-500">{stats.placeholders}</div>
+            <div className="text-sm text-gray-600">Future AI</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
+            <div className="text-sm text-gray-600">Failed</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* View content based on selected mode */}
+      {viewMode === 'month' && (
+        <CalendarView 
+          brandId={brandId} 
+          content={filteredItems.filter(item => item.type === 'content')}
+        />
+      )}
+      
+      {viewMode === 'timeline' && (
+        <TimelineView 
+          items={filteredItems}
+          currentDate={currentDate}
+        />
+      )}
+      
+      {viewMode === 'list' && (
+        <ContentListView 
+          items={filteredItems}
+          currentDate={currentDate}
+        />
+      )}
+    </div>
+  )
+}

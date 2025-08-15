@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Card, CardContent } from './ui/card'
@@ -50,6 +51,8 @@ const CampaignCard = memo(({
   deleteCampaignLoading = false
 }: CampaignCardProps) => {
   const { timezone } = useTimezone()
+  const navigate = useNavigate()
+  
   const getBorderColor = () => {
     switch (campaign.status) {
       case 'active': return '#22c55e'
@@ -208,6 +211,20 @@ const CampaignCard = memo(({
                   Resume
                 </Button>
               )}
+
+              {/* View in Calendar */}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigate(`/content?campaign=${campaign.id}&campaignName=${encodeURIComponent(campaign.name)}`)
+                }}
+                className="text-xs px-2 py-1 text-blue-500 hover:text-blue-700"
+                title="View in calendar"
+              >
+                <Calendar className="w-3 h-3" />
+              </Button>
 
               {/* Edit/Delete actions on hover */}
               {(['preview', 'creating', 'failed'].includes(campaign.status)) && (

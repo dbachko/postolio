@@ -668,3 +668,501 @@ This comprehensive image storage optimization system positions Postolio competit
 The system balances enterprise-grade features with startup pragmatism, ensuring scalability without premature optimization.
 
 **READY FOR IMPLEMENTATION**
+
+---
+
+## 📅 Content Calendar & Future Post Display System
+
+### Executive Summary
+Comprehensive visual system for displaying published, scheduled, and future auto-generated content with intuitive filtering and status indicators, following industry best practices while introducing innovative placeholder management.
+
+### Product Overview
+
+- **Purpose**: Provide clear visibility into all content states—past, present, and future—including posts that will be auto-generated but don't exist yet
+- **Target Users**: Content managers, social media managers, brand owners who need to understand their content pipeline at a glance
+- **Key Scenarios**:
+  - Viewing a month-long campaign with mix of generated and placeholder posts
+  - Understanding content gaps and upcoming auto-generation schedule
+  - Quick filtering between published, scheduled, and pending content
+  - Editing or regenerating specific future posts before they're created
+
+### User Personas
+
+- **Primary**: Campaign Manager — needs overview of entire content pipeline, ability to spot gaps, and confidence in what's coming
+- **Secondary**: Brand Owner — wants simple view of what's been posted and what's planned without technical complexity
+
+### Jobs To Be Done
+
+- When viewing my content calendar, I want to see ALL future posts including those not yet generated, so I understand my complete content pipeline
+- When looking at a specific day, I want to distinguish between published, scheduled, and to-be-generated posts, so I know what requires action
+- When planning campaigns, I want to see placeholder slots for future auto-generation, so I can adjust frequency and timing
+- When reviewing scheduled content, I want visual confirmation of post status, so I can quickly identify what needs attention
+- When managing multiple campaigns, I want to filter by campaign and status, so I can focus on specific workflows
+
+### Core Features
+
+- **FEAT-CAL-1 (P0)**: Multi-View Calendar — Monthly grid, weekly timeline, and list views with seamless switching | Depends: none
+- **FEAT-CAL-2 (P0)**: Smart Placeholders — Visual representation of future auto-generated posts with generation countdown | Depends: FEAT-CAL-1
+- **FEAT-CAL-3 (P0)**: Status Indicators — Color-coded badges showing published, scheduled, generating, failed states | Depends: FEAT-CAL-1
+- **FEAT-CAL-4 (P1)**: Advanced Filtering — Multi-select filters for status, campaign, date range, content type | Depends: FEAT-CAL-1
+- **FEAT-CAL-5 (P1)**: Batch Actions — Select multiple posts for bulk operations (approve, reschedule, delete) | Depends: FEAT-CAL-1,3
+- **FEAT-CAL-6 (P2)**: Generation Preview — Hover to see when placeholder will be generated and campaign details | Depends: FEAT-CAL-2
+- **FEAT-CAL-7 (P2)**: Conflict Detection — Visual warnings for scheduling conflicts or generation bottlenecks | Depends: FEAT-CAL-1,2
+
+### Visual Design System
+
+#### **Status Color Coding (Industry Standard + Innovation)**
+```
+Published:     ✅ Green (#10B981)   - Successfully posted to Instagram
+Scheduled:     📅 Blue (#3B82F6)    - Created and queued for posting
+Generating:    ⚡ Purple (#8B5CF6)  - AI currently creating content
+Placeholder:   ⏳ Gray (#9CA3AF)    - Future slot for auto-generation
+Failed:        ❌ Red (#EF4444)     - Publishing or generation error
+Draft:         📝 Yellow (#F59E0B)  - Saved but not scheduled
+```
+
+#### **Calendar View Layouts**
+
+##### **Monthly Grid View (Primary)**
+```
+┌─────────────────────────────────────────────────────┐
+│ January 2025                      [Month] [Week] [List]│
+├──────┬──────┬──────┬──────┬──────┬──────┬──────┤
+│ Sun  │ Mon  │ Tue  │ Wed  │ Thu  │ Fri  │ Sat  │
+├──────┼──────┼──────┼──────┼──────┼──────┼──────┤
+│  1   │  2   │  3   │  4   │  5   │  6   │  7   │
+│      │ ✅9am│ 📅10am│ ⏳2pm│ ⏳2pm│ ⏳2pm│      │
+│      │ ✅2pm│ ⚡3pm │[+2]  │[+1]  │[+1]  │      │
+├──────┼──────┼──────┼──────┼──────┼──────┼──────┤
+```
+
+##### **Weekly Timeline View (Detailed)**
+```
+Time    Mon 2      Tue 3      Wed 4      Thu 5
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9:00am  ✅ Posted  
+10:00am            📅 Scheduled
+                   "New product launch..."
+                   Campaign: Holiday Sale
+2:00pm  ✅ Posted  
+3:00pm             ⚡ Generating...
+                   Campaign: Daily Content
+4:00pm                        ⏳ Placeholder
+                              Will generate: 2hrs
+```
+
+##### **List View (Scannable)**
+```
+┌─────────────────────────────────────────────────────┐
+│ Upcoming Content                    [Filters ▼]      │
+├─────────────────────────────────────────────────────┤
+│ ✅ Jan 2, 9:00am  - "Morning motivation..." Posted   │
+│ ✅ Jan 2, 2:00pm  - "Product spotlight..." Posted    │
+│ 📅 Jan 3, 10:00am - "New arrivals just..." Scheduled│
+│ ⚡ Jan 3, 3:00pm  - [Generating content...] 45%      │
+│ ⏳ Jan 4, 2:00pm  - [Auto-generate in 2 days]       │
+│ ⏳ Jan 5, 2:00pm  - [Auto-generate in 3 days]       │
+└─────────────────────────────────────────────────────┘
+```
+
+### Placeholder Innovation System
+
+#### **Smart Placeholder Cards**
+```typescript
+interface PlaceholderPost {
+  id: string
+  scheduledFor: Date
+  campaign: {
+    id: string
+    name: string
+    theme: string
+    style: string
+  }
+  generationTiming: {
+    willGenerateAt: Date      // When AI will create
+    hoursBeforePost: number   // Buffer time
+    priority: number          // Generation queue position
+  }
+  actions: {
+    generateNow: boolean      // Force immediate generation
+    editSlot: boolean         // Change time/date
+    skipSlot: boolean         // Don't generate for this slot
+    // Note: Content preview removed per stakeholder decision
+  }
+}
+```
+
+#### **Placeholder Visual Design (Simplified)**
+```
+┌─────────────────────────────┐
+│ ⏳ Auto-Generate            │
+│                             │
+│ [Dashed Border Box]         │
+│ "Content will be generated │
+│  closer to scheduled date"  │
+│                             │
+│ Campaign: Holiday Sale      │
+│ Theme: Product Focus        │
+│ Generates: Dec 3, 8:00am    │
+│                             │
+│ [Generate Now] [Edit Slot]  │
+└─────────────────────────────┘
+```
+
+**Decision Rationale**: Based on stakeholder feedback, placeholders will NOT show estimated content preview in the initial release. This simplifies the user experience and avoids setting incorrect expectations about what content will be generated. This feature has been moved to the Future Premium Features roadmap.
+
+### Historical Calendar Access
+
+#### **Unlimited Historical Navigation**
+Based on stakeholder requirements, users can navigate to ANY historical month without restrictions. This enables comprehensive content history review and performance analysis across all time periods.
+
+#### **Performance Optimization Strategy**
+```typescript
+interface HistoricalDataLoading {
+  strategy: 'lazy-loading'        // Load months only when accessed
+  cachePolicy: {
+    recentMonths: 6               // Keep 6 months in memory
+    olderMonths: 'on-demand'      // Load from API when requested
+  }
+  pagination: {
+    postsPerMonth: 100            // Initial load limit
+    loadMoreThreshold: 20         // Load more when user scrolls
+  }
+  performance: {
+    virtualScrolling: true        // For months with >50 posts
+    debounceNavigation: 300       // ms delay for rapid month changes
+    preloadAdjacentMonths: true   // Preload previous/next month
+  }
+}
+```
+
+#### **Navigation UI Enhancement**
+```
+┌─────────────────────────────────────────────┐
+│ ◀ December 2024    January 2025    February 2025 ▶ │
+│                                             │
+│ Quick Jump: [Year: 2025 ▼] [Month: Jan ▼] [Go] │
+│ Or type: [MM/YYYY________] [Jump]          │
+└─────────────────────────────────────────────┘
+```
+
+**Technical Considerations**:
+- Implement infinite scroll for year navigation
+- Use browser caching for recently viewed months
+- Consider archival after 2+ years (move to cold storage)
+- Add "Export Historical Data" for periods >1 year
+
+### Advanced Filtering System
+
+#### **Filter Panel Design**
+```
+┌─ Filter Content ────────────────────────────┐
+│                                             │
+│ Status:  ☑ Published  ☑ Scheduled          │
+│          ☑ Generating ☐ Placeholder        │
+│          ☐ Failed     ☐ Draft              │
+│                                             │
+│ Campaign: [All Campaigns        ▼]         │
+│                                             │
+│ Date Range: [Last 7 days] to [Next 30 days]│
+│                                             │
+│ Content Type: ☑ Posts ☑ Stories ☐ Reels   │
+│                                             │
+│ [Apply Filters] [Clear All]                │
+└─────────────────────────────────────────────┘
+```
+
+### Content Count & Summary Indicators
+
+#### **Campaign Progress Bar**
+```
+Holiday Sale Campaign (Dec 1-15)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Published: 5 ████████░░░░░░░░░░░░░░░░░░ 
+Scheduled: 3 ░░░░░░░░█████░░░░░░░░░░░░░
+Pending:   7 ░░░░░░░░░░░░░░███████████
+
+Total: 15 posts | 33% Complete | 7 days remaining
+```
+
+#### **Daily Content Density Indicator**
+```
+Content Density This Week:
+Mon ████████ 8 posts (2 published, 3 scheduled, 3 pending)
+Tue ████░░░░ 4 posts (1 published, 2 scheduled, 1 pending)
+Wed ██░░░░░░ 2 posts (0 published, 1 scheduled, 1 pending)
+Thu ████████ 8 posts (campaign batch generation)
+Fri ████░░░░ 4 posts
+Sat ░░░░░░░░ 0 posts (no content scheduled)
+Sun ██░░░░░░ 2 posts
+```
+
+### Drag-and-Drop Rescheduling System
+
+#### **Implementation Decision**
+YES - Full drag-and-drop rescheduling will be implemented directly in the calendar view, following industry best practices from Google Calendar, Calendly, and Later.
+
+#### **Drag Interaction Patterns**
+```typescript
+interface DragAndDropBehavior {
+  draggableStates: {
+    scheduled: true       // Can be moved to any future slot
+    placeholder: true     // Can be moved within campaign constraints
+    generating: false     // Locked during generation
+    published: false      // Cannot modify past content
+    failed: true         // Can be rescheduled for retry
+  }
+  
+  visualFeedback: {
+    dragPreview: 'ghost'  // Semi-transparent copy follows cursor
+    dropZones: 'highlight' // Valid drop targets glow
+    invalidZones: 'dim'   // Invalid targets become dimmed
+    snapToSlot: true      // Snaps to nearest time slot
+  }
+  
+  constraints: {
+    minimumBuffer: 30     // Minutes between posts
+    campaignBounds: true  // Placeholders stay within campaign dates
+    conflictWarning: true // Alert when dropping on occupied slot
+  }
+}
+```
+
+#### **Visual Feedback During Drag**
+```
+While dragging:
+┌─────────────────────────────┐
+│ Original Position (ghosted)  │ ← 50% opacity
+└─────────────────────────────┘
+
+                ↓ (cursor dragging)
+
+┌─────────────────────────────┐
+│ Valid Drop Zone (highlighted)│ ← Green border, slight glow
+└─────────────────────────────┘
+
+┌─────────────────────────────┐
+│ Invalid/Occupied (warning)   │ ← Red border, warning icon
+└─────────────────────────────┘
+```
+
+#### **Conflict Resolution**
+```typescript
+interface ConflictResolution {
+  strategies: {
+    swap: boolean         // Exchange positions with existing post
+    bump: boolean         // Push existing post to next available slot
+    merge: boolean        // Combine into multi-post slot (advanced)
+    cancel: boolean       // Abort operation and return to original
+  }
+  
+  userPrompt: {
+    title: "Time Slot Conflict"
+    message: "This slot already has scheduled content"
+    options: [
+      "Replace existing post",
+      "Swap positions",
+      "Find next available slot",
+      "Cancel"
+    ]
+  }
+}
+```
+
+#### **Mobile Touch Support**
+```typescript
+interface TouchDragSupport {
+  longPressDelay: 500        // ms before drag activates
+  hapticFeedback: true       // Vibrate on drag start
+  scrollWhileDragging: true  // Auto-scroll near edges
+  zoomOut: true             // Zoom to week view during drag
+}
+```
+
+#### **Best Practices (Research-Based)**
+Based on analysis of leading calendar platforms:
+
+**Google Calendar Patterns**:
+- Instant visual feedback with color changes
+- Smart conflict detection with options
+- Keyboard shortcuts for power users (Ctrl+drag to copy)
+
+**Calendly Insights**:
+- Clear unavailable slots with striped patterns
+- Time zone awareness during drag operations
+- Undo/redo stack for drag operations
+
+**Later (Instagram-specific)**:
+- Preview thumbnail moves with drag
+- Instagram-specific constraints (posting frequency limits)
+- Bulk drag for multiple selection
+
+#### **Implementation Requirements**
+```typescript
+// React DnD Implementation
+import { DndProvider, useDrag, useDrop } from 'react-dnd'
+
+interface DraggablePost {
+  type: 'POST'
+  data: {
+    id: string
+    currentDate: Date
+    constraints: PostConstraints
+  }
+  canDrag: (post: Post) => boolean
+  onDrop: (post: Post, newDate: Date) => Promise<void>
+  onConflict: (conflict: Conflict) => ConflictResolution
+}
+```
+
+### Interaction Patterns
+
+#### **Click Actions by Status**
+- **Published Post**: Opens Instagram post analytics and engagement metrics
+- **Scheduled Post**: Opens editor with option to modify or reschedule
+- **Generating Post**: Shows generation progress with option to cancel/retry
+- **Placeholder**: Opens quick action menu (Generate Now, Edit Slot, Skip)
+- **Failed Post**: Shows error details with retry/edit options
+
+#### **Hover Information**
+```typescript
+interface HoverTooltip {
+  published: {
+    postedAt: Date
+    engagement: { likes: number, comments: number }
+    permalink: string
+  }
+  scheduled: {
+    scheduledFor: Date
+    canEdit: boolean
+    timeUntilPost: string
+  }
+  placeholder: {
+    campaign: string
+    willGenerateAt: Date
+    // Note: estimatedContent removed per stakeholder decision
+  }
+}
+```
+
+### Batch Operations
+
+#### **Multi-Select Mode**
+```
+[✓] Select All | 12 posts selected
+
+With selected posts:
+[Reschedule] [Change Campaign] [Regenerate] [Delete]
+
+┌─────────────────────────────────────────────┐
+│ ☑ 📅 Jan 3, 10:00am - Scheduled post       │
+│ ☑ ⏳ Jan 4, 2:00pm  - Placeholder          │
+│ ☐ ✅ Jan 2, 9:00am  - Published (disabled) │
+│ ☑ ⏳ Jan 5, 2:00pm  - Placeholder          │
+└─────────────────────────────────────────────┘
+```
+
+### Success Metrics
+
+- **METRIC-CAL-1**: Time to Find Content — Users locate specific posts in <5 seconds
+- **METRIC-CAL-2**: Placeholder Clarity — 95% users understand placeholder meaning without help
+- **METRIC-CAL-3**: Filter Usage — 80% of users successfully use filters within first session
+- **METRIC-CAL-4**: Batch Operation Efficiency — 50% reduction in time for bulk operations
+- **METRIC-CAL-5**: Status Recognition — 99% accuracy in identifying post status at a glance
+
+### Technical Implementation Notes
+
+#### **Database Schema Additions**
+```sql
+-- Add placeholder tracking
+ALTER TABLE content ADD COLUMN is_placeholder BOOLEAN DEFAULT FALSE;
+ALTER TABLE content ADD COLUMN placeholder_metadata JSONB;
+ALTER TABLE content ADD COLUMN will_generate_at TIMESTAMP;
+
+-- Add view preferences
+CREATE TABLE user_calendar_preferences (
+  user_id VARCHAR(36) PRIMARY KEY,
+  default_view ENUM('month', 'week', 'list'),
+  default_filters JSONB,
+  timezone VARCHAR(50)
+);
+```
+
+#### **API Endpoints**
+```typescript
+GET /api/calendar/posts
+  ?view=month|week|list
+  &startDate=2025-01-01
+  &endDate=2025-01-31
+  &status[]=published,scheduled,placeholder
+  &campaignId=campaign-123
+  &includePlaceholders=true
+  
+Response: {
+  posts: [...],
+  placeholders: [...],
+  summary: {
+    total: 45,
+    published: 15,
+    scheduled: 10,
+    placeholders: 20
+  }
+}
+```
+
+### Risk Mitigation
+
+- **RISK-CAL-1**: Placeholder confusion → Clear visual distinction and educational tooltips
+- **RISK-CAL-2**: Performance with many posts → Pagination and virtual scrolling
+- **RISK-CAL-3**: Timezone complexity → Clear timezone indicators and user preferences
+- **RISK-CAL-4**: Mobile responsiveness → Simplified mobile view with essential information
+
+### Open Questions
+
+*All initial questions have been resolved through stakeholder feedback and incorporated into the specification above.*
+
+### Future Premium Features
+
+#### **AI Content Preview in Placeholders (Premium Tier)**
+- **Feature**: Show AI-predicted content preview in placeholder cards based on campaign settings
+- **Value Proposition**: Premium users get visibility into what AI will likely generate
+- **Implementation**: 
+  - Light AI inference to generate preview text without full content creation
+  - "This is an estimate" disclaimer to manage expectations
+  - Refresh preview button to see alternative predictions
+- **Pricing Tier**: Available in Premium ($79/month) and Custom ($199+/month) plans
+- **Technical Approach**: Use GPT-4o-mini for fast, cost-effective preview generation
+
+#### **Advanced Calendar Analytics (Premium Tier)**
+- **Feature**: Heatmaps showing optimal posting times based on historical engagement
+- **Feature**: Predictive performance indicators for scheduled content
+- **Feature**: A/B testing calendar view to compare different scheduling strategies
+
+### Research Findings
+
+- **Market**: Leading platforms (Buffer, Hootsuite, Later) use calendar views but none effectively show future auto-generated content as placeholders
+- **User**: Visual calendar with color coding universally preferred over list-only views
+- **Technical**: Virtual scrolling necessary for performance with 100+ posts per month
+- **Innovation**: Placeholder system with generation countdown is unique differentiator
+
+### Validation Criteria
+
+- **FEAT-CAL-1**: Calendar loads in <2 seconds with 500 posts
+- **FEAT-CAL-2**: Placeholders clearly distinguishable from real content
+- **FEAT-CAL-3**: Status colors meet WCAG AA accessibility standards
+- **FEAT-CAL-4**: Filters apply in <500ms without page reload
+- **FEAT-CAL-5**: Batch operations complete in <3 seconds for 50 posts
+
+### Implementation Decisions Summary
+
+Based on stakeholder feedback (January 2025), the following decisions have been made:
+
+1. **Placeholder Content Preview**: NO - Placeholders will show simple "Content will be generated closer to scheduled date" message. AI preview moved to future premium features.
+
+2. **Historical Calendar Access**: UNLIMITED - Users can navigate to any historical month without restrictions. Performance optimized through lazy loading and caching strategies.
+
+3. **Drag-and-Drop Rescheduling**: YES - Full implementation following Google Calendar and Later best practices, with conflict resolution and visual feedback.
+
+**CALENDAR SYSTEM SPECIFICATION COMPLETE** ✅
+
+**READY FOR IMPLEMENTATION**

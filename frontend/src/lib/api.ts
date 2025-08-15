@@ -450,6 +450,29 @@ class ApiClient {
     return this.request(endpoint, { ...options, method: 'DELETE' })
   }
 
+  // Content endpoints (fixed duplicate method - keeping the correct one)
+  /* Note: updateContent is already defined above at line 368-379 with PUT method */
+
+  // Calendar endpoints
+  async getCalendarContent(brandId: string, month?: string): Promise<{
+    success: boolean
+    data: {
+      content: Content[]
+      placeholders: Array<{
+        id: string
+        type: 'placeholder'
+        campaignId: string
+        campaignName: string
+        scheduledAt: string
+        status: 'placeholder'
+        message: string
+      }>
+    }
+  }> {
+    const currentMonth = month || new Date().toISOString().slice(0, 7)
+    return this.request(`/api/content/calendar/${brandId}/${currentMonth}`)
+  }
+
   // Campaign endpoints
   async configureCampaign(config: CampaignConfig): Promise<{ success: boolean; campaign: any }> {
     // Handle both Date objects and strings for duration
