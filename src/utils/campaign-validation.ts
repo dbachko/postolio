@@ -11,6 +11,7 @@ export interface CampaignUpdateRequest {
   startDate?: string
   endDate?: string
   status?: string
+  priority?: number
 }
 
 export interface ValidationError {
@@ -172,8 +173,23 @@ export function validateCampaignUpdateRequest(data: any): ValidationResult {
     }
   }
 
+  // Validate priority (optional)
+  if (data.priority !== undefined) {
+    if (typeof data.priority !== 'number') {
+      errors.push({ field: 'priority', message: 'Priority must be a number', value: data.priority })
+    } else if (data.priority < 1 || data.priority > 10) {
+      errors.push({ 
+        field: 'priority', 
+        message: 'Priority must be between 1 (highest) and 10 (lowest)', 
+        value: data.priority 
+      })
+    } else {
+      sanitizedData.priority = data.priority
+    }
+  }
+
   // Check for unknown fields
-  const knownFields = ['name', 'themes', 'style', 'frequency', 'postingTime', 'startDate', 'endDate', 'status']
+  const knownFields = ['name', 'themes', 'style', 'frequency', 'postingTime', 'startDate', 'endDate', 'status', 'priority']
   const unknownFields = Object.keys(data).filter(key => !knownFields.includes(key))
   if (unknownFields.length > 0) {
     errors.push({

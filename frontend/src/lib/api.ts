@@ -511,6 +511,7 @@ class ApiClient {
     startDate?: string
     endDate?: string
     status?: string
+    priority?: number
   }): Promise<{ success: boolean; campaign: any; message?: string; skippedCount?: number; cancelledCount?: number }> {
     return this.request(`/api/campaign/${campaignId}`, {
       method: 'PUT',
@@ -726,6 +727,48 @@ class ApiClient {
     lastUpdated: string
   }> {
     return this.request(`/api/brand/${brandId}/analytics/summary`)
+  }
+
+  // Content regeneration endpoints
+  async regenerateContent(campaignId: string, params: {
+    themes?: string[]
+    style?: string
+    contentIds?: string[]
+  }): Promise<{
+    success: boolean
+    data: {
+      jobId: string
+      totalContent: number
+      estimatedTime: number
+    }
+  }> {
+    return this.request(`/api/campaigns/${campaignId}/regenerate-content`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    })
+  }
+
+  async getRegenerationJobProgress(jobId: string): Promise<{
+    success: boolean
+    data: {
+      status: 'pending' | 'processing' | 'completed' | 'failed'
+      progress: number
+      total: number
+      completed: number
+      failed: number
+      errors?: string[]
+    }
+  }> {
+    return this.request(`/api/campaigns/regeneration-jobs/${jobId}`)
+  }
+
+  async cancelRegenerationJob(jobId: string): Promise<{
+    success: boolean
+    message: string
+  }> {
+    return this.request(`/api/campaigns/regeneration-jobs/${jobId}`, {
+      method: 'DELETE',
+    })
   }
 
 }

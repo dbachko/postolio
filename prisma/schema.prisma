@@ -25,6 +25,7 @@ model User {
   timezoneAutoDetected Boolean            @default(true) // Whether to auto-detect timezone
   brands            Brand[]
   campaignTemplates CampaignTemplate[]
+  modifiedCampaigns Campaign[]
 
   @@map("users")
 }
@@ -81,21 +82,25 @@ model Content {
 }
 
 model Campaign {
-  id               String         @id @default(cuid())
-  name             String
-  brandId          String
-  status           CampaignStatus @default(creating)
-  config           Json
-  priority         Int            @default(5)
-  previewGenerated Boolean        @default(false)
-  errorMessage     String?
-  progress         Int            @default(0)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  startedAt        DateTime?
-  completedAt      DateTime?
-  brand            Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  content          Content[]
+  id                 String         @id @default(cuid())
+  name               String
+  brandId            String
+  status             CampaignStatus @default(creating)
+  config             Json
+  priority           Int            @default(5)
+  previewGenerated   Boolean        @default(false)
+  errorMessage       String?
+  progress           Int            @default(0)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  startedAt          DateTime?
+  completedAt        DateTime?
+  lastModifiedAt     DateTime       @default(now()) @updatedAt
+  lastModifiedById   String?
+  modificationCount  Int            @default(0)
+  brand              Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  lastModifiedBy     User?          @relation(fields: [lastModifiedById], references: [id])
+  content            Content[]
 
   @@index([priority])
   @@index([status])

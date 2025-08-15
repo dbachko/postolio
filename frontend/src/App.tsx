@@ -124,6 +124,13 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          <Route path="/campaigns/:campaignId/edit" element={
+            <ProtectedRoute>
+              <Layout>
+                <Campaigns />
+              </Layout>
+            </ProtectedRoute>
+          } />
           <Route path="/campaigns/:campaignId" element={
             <ProtectedRoute>
               <Layout>

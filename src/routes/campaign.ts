@@ -5,6 +5,7 @@ import { campaignService, type CampaignConfig } from '../services/campaign.js'
 import { campaignJobService } from '../services/campaign-jobs.js'
 import { pauseResumeRateLimiter, campaignRateLimiter, createRateLimitMiddleware } from '../services/rate-limiter.js'
 import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js'
+import { regenerationService } from '../services/regeneration-queue.js'
 
 import { getDatabaseClient } from '../config/database.js'
 
@@ -357,14 +358,15 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const updatedCampaign = await campaignService.updateCampaign(id, userId, updates)
+      // Use the new update method with regeneration support for comprehensive edits
+      const result = await campaignService.updateCampaignWithRegeneration(id, updates, userId)
 
       return reply.send({
         success: true,
-        campaign: updatedCampaign,
-        message: updatedCampaign.message,
-        skippedCount: updatedCampaign.skippedCount,
-        cancelledCount: updatedCampaign.cancelledCount
+        campaign: result.campaign,
+        message: result.message,
+        regenerationTriggered: result.regenerationTriggered,
+        regenerationReason: result.regenerationReason
       })
     } catch (error) {
       console.error('Update campaign error:', error)
@@ -627,6 +629,110 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.code(500).send({
         error: 'Failed to get campaign coordination. Please try again.',
+      })
+    }
+  })
+
+  // Regenerate campaign content (simplified without rollback)
+  fastify.post('/:id/regenerate-content', async (request: any, reply) => {
+    try {
+      const userId = await authenticateRequest(request)
+      const { id: campaignId } = request.params
+      const { themes, style, contentIds } = request.body
+
+      // Get campaign and verify ownership
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        include: { 
+          brand: true,
+          content: true 
+        }
+      })
+
+      if (!campaign) {
+        return reply.code(404).send({ error: 'Campaign not found' })
+      }
+
+      if (campaign.brand.userId !== userId) {
+        return reply.code(403).send({ error: 'Access denied' })
+      }
+
+      // Determine which content to regenerate
+      const targetContentIds = contentIds && contentIds.length > 0 
+        ? contentIds 
+        : campaign.content.map(c => c.id)
+
+      if (targetContentIds.length === 0) {
+        return reply.code(400).send({ error: 'No content to regenerate' })
+      }
+
+      // Start regeneration job
+      const regenerationJob = await regenerationService.startRegeneration(
+        campaignId,
+        targetContentIds,
+        userId,
+        { themes, style }
+      )
+
+      return reply.send({
+        success: true,
+        data: regenerationJob
+      })
+
+    } catch (error) {
+      console.error('Content regeneration error:', error)
+      return reply.code(500).send({
+        error: 'Failed to start content regeneration. Please try again.',
+      })
+    }
+  })
+
+  // Get regeneration job progress
+  fastify.get('/regeneration-jobs/:jobId', async (request: any, reply) => {
+    try {
+      const userId = await authenticateRequest(request)
+      const { jobId } = request.params
+
+      const progress = await regenerationService.getJobProgress(jobId)
+
+      if (!progress) {
+        return reply.code(404).send({ error: 'Job not found' })
+      }
+
+      return reply.send({
+        success: true,
+        data: progress
+      })
+
+    } catch (error) {
+      console.error('Get job progress error:', error)
+      return reply.code(500).send({
+        error: 'Failed to get job progress. Please try again.',
+      })
+    }
+  })
+
+  // Cancel regeneration job
+  fastify.delete('/regeneration-jobs/:jobId', async (request: any, reply) => {
+    try {
+      const userId = await authenticateRequest(request)
+      const { jobId } = request.params
+
+      const cancelled = await regenerationService.cancelJob(jobId)
+
+      if (!cancelled) {
+        return reply.code(404).send({ error: 'Job not found or already completed' })
+      }
+
+      return reply.send({
+        success: true,
+        message: 'Job cancelled successfully'
+      })
+
+    } catch (error) {
+      console.error('Cancel job error:', error)
+      return reply.code(500).send({
+        error: 'Failed to cancel job. Please try again.',
       })
     }
   })
