@@ -145,7 +145,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // Get pending content for approval
+  // Get draft content for review
   fastify.get<{ Params: { brandId: string } }>('/pending/:brandId', async (request, reply) => {
     try {
       const authHeader = request.headers.authorization
@@ -171,7 +171,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Brand not found' })
       }
 
-      const pendingContent = await prisma.content.findMany({
+      const draftContent = await prisma.content.findMany({
         where: {
           brandId,
           status: 'draft',
@@ -191,10 +191,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: { createdAt: 'desc' },
       })
 
-      return { content: pendingContent }
+      return { content: draftContent }
     } catch (error) {
-      console.error('Pending content error:', error)
-      return reply.code(500).send({ error: 'Failed to retrieve pending content' })
+      console.error('Draft content error:', error)
+      return reply.code(500).send({ error: 'Failed to retrieve draft content' })
     }
   })
 

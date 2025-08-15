@@ -157,7 +157,7 @@ The frontend integrates with these backend endpoints:
 
 - **Auth**: `/auth/login`, `/auth/register`, `/auth/me`
 - **Brands**: `/brands/list`, `/brands/create`, `/brands/analyze`
-- **Content**: `/content/generate`, `/content/approve`, `/content/pending`
+- **Content**: `/content/generate`, `/content/approve`, `/content/draft`
 - **Instagram**: `/instagram/profile`, `/instagram/connect`, `/instagram/publish`
 - **Analytics**: `/analytics/report`, `/analytics/optimal-times`, `/analytics/schedule`
 

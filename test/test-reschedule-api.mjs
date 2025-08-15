@@ -72,14 +72,14 @@ async function testRescheduleAPI() {
   
   const { content } = await contentResponse.json()
   
-  // Find content that can be rescheduled (approved or scheduled, not published)
+  // Find content that can be rescheduled (draft or scheduled, not published)
   const reschedulableContent = content.find(c => 
-    (c.status === 'approved' || c.status === 'scheduled' || c.status === 'pending') && 
+    (c.status === 'draft' || c.status === 'scheduled') && 
     c.status !== 'published'
   )
   
   if (!reschedulableContent) {
-    console.log('❌ No reschedulable content found. Need approved/scheduled content.')
+    console.log('❌ No reschedulable content found. Need draft/scheduled content.')
     return
   }
   

@@ -87,7 +87,7 @@ async function testCalendarFilters() {
     
     console.log('\n✨ Filter Features Available:')
     console.log('  1. Filter by Campaign')
-    console.log('  2. Filter by Status (pending, approved, published, etc.)')
+    console.log('  2. Filter by Status (draft, scheduled, published, failed, skipped)')
     console.log('  3. Filter by Content Type (posts vs placeholders)')
     console.log('  4. Filter by Date Range')
     console.log('  5. Search by caption/hashtags')
