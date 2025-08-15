@@ -100,7 +100,7 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
           end: state.dateRange.end?.toISOString() || null
         }
       }),
-      merge: (persistedState: Partial<CalendarFilterState> & { dateRange?: { start: string | null, end: string | null } }, currentState) => ({
+      merge: (persistedState: any, currentState) => ({
         ...currentState,
         ...persistedState,
         dateRange: {

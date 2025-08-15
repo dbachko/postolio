@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { useCalendarFilterStore } from '../stores/calendarFilterStore'
-import type { Content } from '../lib/api'
 
 interface ContentItem {
   id: string

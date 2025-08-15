@@ -100,8 +100,8 @@ export async function exportToPDF(
   
   const doc = new jsPDF()
   let yPosition = 20
-  const pageHeight = doc.getPageHeight()
-  const pageWidth = doc.getPageWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const pageWidth = doc.internal.pageSize.getWidth()
   const margin = 20
   const lineHeight = 7
   

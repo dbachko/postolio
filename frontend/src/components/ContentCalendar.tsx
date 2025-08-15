@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
+import { format, addMonths, subMonths } from 'date-fns'
 import { CalendarView } from './CalendarView'
 import { TimelineView } from './TimelineView'
 import { ContentListView } from './ContentListView'
@@ -10,7 +10,6 @@ import { useFilteredContent } from '../hooks/useFilteredContent'
 import { useCalendarFilterStore } from '../stores/calendarFilterStore'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
-import { Badge } from './ui/badge'
 import { apiClient } from '@/lib/api'
 import { Calendar, List, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 
@@ -22,7 +21,7 @@ interface ContentCalendarProps {
   campaignFilter?: string | null
 }
 
-export function ContentCalendar({ brandId, brandName, campaignFilter }: ContentCalendarProps) {
+export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   
@@ -93,17 +92,23 @@ export function ContentCalendar({ brandId, brandName, campaignFilter }: ContentC
   // Combine content and placeholders for unified handling
   const allItems = useMemo(() => {
     const items = [
-      ...content.map(item => ({ ...item, type: 'content' as const })),
+      ...content.map(item => ({ 
+        ...item, 
+        type: 'content' as const, 
+        imageUrl: item.imageUrl || undefined,
+        scheduledAt: item.scheduledAt || undefined,
+        postedAt: item.postedAt || undefined
+      })),
       ...placeholders.map(item => ({ 
         ...item, 
         type: 'placeholder' as const,
         caption: item.message || '',
         hashtags: [] as string[],
-        imageUrl: '',
+        imageUrl: undefined,
         brandId,
         status: 'placeholder',
         createdAt: item.scheduledAt,
-        postedAt: null,
+        postedAt: undefined,
         campaignName: item.campaignName || '',
       }))
     ]
@@ -226,7 +231,13 @@ export function ContentCalendar({ brandId, brandName, campaignFilter }: ContentC
               </div>
               
               <CalendarExport 
-                content={filteredItems}
+                content={filteredItems.map(item => ({
+                  ...item,
+                  scheduledAt: item.scheduledAt || undefined,
+                  postedAt: item.postedAt || undefined,
+                  campaignId: item.campaignId || undefined,
+                  instagramPermalink: item.instagramPermalink || undefined
+                }))}
                 brandName={brandName || 'Brand'}
                 dateRange={filters.dateRange}
               />
@@ -334,20 +345,20 @@ export function ContentCalendar({ brandId, brandName, campaignFilter }: ContentC
       {viewMode === 'month' && (
         <CalendarView 
           brandId={brandId} 
-          content={filteredItems.filter(item => item.type === 'content')}
+          content={filteredItems.filter(item => item.type === 'content') as any}
         />
       )}
       
       {viewMode === 'timeline' && (
         <TimelineView 
-          items={filteredItems}
+          items={filteredItems as any}
           currentDate={currentDate}
         />
       )}
       
       {viewMode === 'list' && (
         <ContentListView 
-          items={filteredItems}
+          items={filteredItems as any}
           currentDate={currentDate}
         />
       )}

@@ -28,16 +28,30 @@ const localizer = dateFnsLocalizer({
 // Create the DnD Calendar component
 const DnDCalendar = withDragAndDrop(Calendar)
 
+interface PlaceholderContent {
+  id: string
+  caption: string
+  hashtags: string[]
+  imageUrl: string
+  brandId: string
+  status: 'placeholder'
+  postedAt: null
+  createdAt: string
+  updatedAt: string
+  scheduledAt: string
+  campaignId: string
+  campaignName: string
+  type: 'placeholder'
+  isPlaceholder: boolean
+  message: string
+}
+
 interface CalendarEvent extends Event {
   id: string
   title: string
   start: Date
   end: Date
-  resource: Content | (Content & { 
-    type: 'placeholder'
-    isPlaceholder: boolean
-    message: string
-  })
+  resource: Content | PlaceholderContent
 }
 
 interface CalendarViewProps {
@@ -103,7 +117,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
       }
       toast.error(`Failed to reschedule post: ${error instanceof Error ? error.message : 'Unknown error'}`)
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success('Post rescheduled successfully')
     },
     onSettled: () => {
@@ -141,14 +155,18 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
         start: localDate,
         end: new Date(localDate.getTime() + 60 * 60 * 1000),
         resource: {
-          ...placeholder,
+          id: placeholder.id,
           caption: placeholder.message,
           hashtags: [],
           imageUrl: '',
-          brandId: placeholder.brandId || '',
+          brandId: placeholder.campaignId,
+          status: 'placeholder' as const,
           postedAt: null,
           createdAt: placeholder.scheduledAt,
           updatedAt: placeholder.scheduledAt,
+          scheduledAt: placeholder.scheduledAt,
+          campaignId: placeholder.campaignId,
+          campaignName: placeholder.campaignName,
           type: 'placeholder' as const,
           isPlaceholder: true,
           message: placeholder.message
@@ -235,7 +253,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     return (
       <div
         className={`p-1 rounded ${isPlaceholder ? 'border border-dashed' : 'border-l-2'} ${statusColors[content.status as keyof typeof statusColors] || statusColors.approved} ${isDraggable ? 'cursor-move' : isPlaceholder ? '' : 'cursor-pointer'} hover:opacity-80 transition-opacity`}
-        onClick={() => !isPlaceholder && onContentClick?.(content)}
+        onClick={() => !isPlaceholder && onContentClick?.(content as any)}
         title={isDraggable ? 'Drag to reschedule' : ''}
       >
         <div className="flex items-center gap-1 text-xs">
@@ -390,8 +408,8 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
         <DnDCalendar
           localizer={localizer}
           events={events}
-          startAccessor="start"
-          endAccessor="end"
+          startAccessor={(event: any) => event.start}
+          endAccessor={(event: any) => event.end}
           date={currentDate}
           onNavigate={setCurrentDate}
           view={view}
@@ -399,7 +417,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
           views={['day', 'week']}
           toolbar={false} // We use our custom toolbar
           components={{
-            event: EventComponent,
+            event: EventComponent as any,
           }}
           eventPropGetter={() => ({
             className: 'calendar-event',
@@ -426,8 +444,8 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
               localizer?.format(start, 'h:mm a', culture) || '',
           }}
           // Drag and drop props
-          draggableAccessor={isDraggableAccessor}
-          onEventDrop={handleEventDrop}
+          draggableAccessor={isDraggableAccessor as any}
+          onEventDrop={handleEventDrop as any}
           resizable={false}
         />
       </div>
