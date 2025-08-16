@@ -54,6 +54,15 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       email: user.email 
     })
 
+    // Set HTTP-only cookie for enhanced security
+    reply.setCookie('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 // 7 days
+    })
+
     return reply.code(201).send({
       token,
       user
@@ -92,6 +101,15 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       email: user.email 
     })
 
+    // Set HTTP-only cookie for enhanced security
+    reply.setCookie('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 // 7 days
+    })
+
     // Return user without password
     const { password: _, ...userWithoutPassword } = user
 
@@ -115,18 +133,45 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       email: userEmail 
     })
     
+    // Set new HTTP-only cookie
+    reply.setCookie('auth_token', newToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 // 7 days
+    })
+    
     return reply.send({ token: newToken })
+  })
+
+  // Logout endpoint
+  fastify.post('/logout', async (request, reply) => {
+    // Clear the HTTP-only cookie
+    reply.clearCookie('auth_token', {
+      path: '/',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    })
+    
+    return reply.send({ success: true, message: 'Logged out successfully' })
   })
 
   // Get current user profile  
   fastify.get('/me', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' })
+      // Try to get token from cookie first (more secure)
+      let token = (request as any).cookies?.auth_token
+      
+      // Fallback to Authorization header for backward compatibility
+      if (!token) {
+        const authHeader = request.headers.authorization
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return reply.code(401).send({ error: 'Authentication required' })
+        }
+        token = authHeader.substring(7)
       }
-
-      const token = authHeader.substring(7)
       const decoded = verifyJWT(token)
       const userId = decoded.id
 

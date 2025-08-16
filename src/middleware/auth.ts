@@ -15,16 +15,22 @@ export async function authenticateRequest(
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const authHeader = request.headers.authorization
+    // Try to get token from cookie first (more secure)
+    let token = (request as any).cookies?.auth_token
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return reply.code(401).send({ 
-        success: false,
-        error: 'Authentication required' 
-      })
-    }
+    // Fallback to Authorization header for backward compatibility
+    if (!token) {
+      const authHeader = request.headers.authorization
+      
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ 
+          success: false,
+          error: 'Authentication required' 
+        })
+      }
 
-    const token = authHeader.slice(7)
+      token = authHeader.slice(7)
+    }
     
     if (!process.env.JWT_SECRET) {
       console.error('JWT_SECRET not configured')

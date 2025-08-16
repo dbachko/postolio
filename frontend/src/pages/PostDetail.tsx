@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect, useMemo, memo } from 'react'
+import { apiClient } from '../lib/api'
 import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -137,17 +138,8 @@ export default function PostDetail() {
   const { data: post, isLoading: postLoading, isFetching: postFetching } = useQuery<PostDetailData>({
     queryKey: ['post', postId],
     queryFn: async () => {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
-      const token = localStorage.getItem('auth_token')
-      const response = await fetch(`${API_BASE_URL}/api/posts/${postId}/detail`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) throw new Error('Failed to fetch post')
-      const data = await response.json()
-      return data.data
+      const response = await apiClient.getPostDetail(postId!)
+      return response.data
     },
     enabled: !!postId,
     refetchInterval: 30000, // Refresh every 30 seconds
@@ -165,17 +157,8 @@ export default function PostDetail() {
   const { data: insights, isFetching: insightsFetching } = useQuery<PostInsights>({
     queryKey: ['post-insights', postId],
     queryFn: async () => {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
-      const token = localStorage.getItem('auth_token')
-      const response = await fetch(`${API_BASE_URL}/api/posts/${postId}/insights`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) throw new Error('Failed to fetch insights')
-      const data = await response.json()
-      return data.data
+      const response = await apiClient.getPostInsights(postId!)
+      return response.data
     },
     enabled: !!postId && post?.status === 'published',
     refetchInterval: 60000, // Refresh every minute for live metrics
@@ -186,17 +169,8 @@ export default function PostDetail() {
   const { data: commentsData } = useQuery({
     queryKey: ['post-comments', postId],
     queryFn: async () => {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
-      const token = localStorage.getItem('auth_token')
-      const response = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) throw new Error('Failed to fetch comments')
-      const data = await response.json()
-      return data.data
+      const response = await apiClient.getPostComments(postId!)
+      return response.data
     },
     enabled: !!postId && post?.status === 'published',
     staleTime: 60000 // Keep comments fresh for 1 minute
@@ -205,18 +179,7 @@ export default function PostDetail() {
   // Update post mutation with optimistic updates
   const updatePostMutation = useMutation({
     mutationFn: async (data: { caption: string; hashtags: string[] }) => {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
-      const token = localStorage.getItem('auth_token')
-      const response = await fetch(`${API_BASE_URL}/api/content/${postId}/edit`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      })
-      if (!response.ok) throw new Error('Failed to update post')
-      return response.json()
+      return apiClient.updatePost(postId!, data)
     },
     onMutate: async (newData) => {
       // Cancel outgoing refetches
