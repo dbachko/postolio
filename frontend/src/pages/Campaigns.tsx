@@ -616,14 +616,14 @@ export function Campaigns() {
           {/* Action Header */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-col gap-4">
+                <div className="space-y-1">
                   <CardTitle>Campaign Management</CardTitle>
                   <CardDescription>
                     Monitor active campaigns and manage your content pipeline
                   </CardDescription>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button 
                     variant="outline" 
                     onClick={() => setIsComparisonOpen(true)}
@@ -766,7 +766,7 @@ export function Campaigns() {
                     setSelectedCampaignId(null)
                     navigate('/campaigns', { replace: true })
                   }}>
-                    ← Back to Dashboard
+                    ← All Campaigns
                   </Button>
                   <div className="flex gap-2">
                     {(['preview', 'creating', 'failed'].includes(campaignDetailsQuery.data.campaign.status)) && (

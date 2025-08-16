@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../lib/api'
+import { PageHeader } from '@/components/PageHeader'
 import { useBrandStore } from '../stores/brandStore'
 import { InstagramConnect } from '../components/InstagramConnect'
 
@@ -121,18 +122,18 @@ export function Brands() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Brand Management</h1>
-          <p className="text-gray-600">Create and manage your brand profiles for AI content generation</p>
-        </div>
-        <button
-          onClick={() => setIsCreating(!isCreating)}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-        >
-          {isCreating ? 'Cancel' : 'Create Brand'}
-        </button>
-      </div>
+      <PageHeader
+        title="Brand Management"
+        description="Create and manage your brand profiles for AI content generation"
+        actions={
+          <button
+            onClick={() => setIsCreating(!isCreating)}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            {isCreating ? 'Cancel' : 'Create Brand'}
+          </button>
+        }
+      />
 
       {/* Create Brand Form */}
       {isCreating && (

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { apiClient } from '../lib/api'
+import { PageHeader } from '@/components/PageHeader'
 import { useBrandStore } from '../stores/brandStore'
 
 // Types for API responses
@@ -164,7 +165,7 @@ export function AIFeatures() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">AI-Powered Features</h1>
+      <PageHeader title="AI-Powered Features" />
 
       {/* Tab Navigation */}
       <div className="border-b border-gray-200">

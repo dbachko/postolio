@@ -94,7 +94,7 @@ const CampaignForm = memo(({
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={mode === 'edit' ? onCancel : onBackToDashboard}>
-              {mode === 'edit' ? 'Cancel' : '← Back to Dashboard'}
+              {mode === 'edit' ? 'Cancel' : '← All Campaigns'}
             </Button>
             {mode === 'create' && onUseTemplate && (
               <Button variant="outline" onClick={onUseTemplate} className="flex items-center gap-2">

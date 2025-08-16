@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../lib/api'
+import { PageHeader } from '@/components/PageHeader'
 import { useBrandStore } from '../stores/brandStore'
 
 interface GrowthOpportunity {
@@ -91,9 +92,9 @@ export function Growth() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Growth Strategy Engine</h1>
-        <div className="flex space-x-3">
+      <PageHeader
+        title="Growth Strategy Engine"
+        actions={
           <button
             onClick={handleAnalyze}
             disabled={analysisLoading}
@@ -101,8 +102,8 @@ export function Growth() {
           >
             {analysisLoading ? 'Analyzing...' : 'Analyze Growth'}
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Growth Metrics Overview */}
       {metrics && (

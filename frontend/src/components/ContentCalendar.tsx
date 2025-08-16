@@ -166,8 +166,9 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       {/* Header with navigation and view switcher */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-4">
+            {/* Title and Navigation Row */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle>Content Calendar</CardTitle>
               <div className="flex items-center gap-2">
                 <Button
@@ -197,8 +198,8 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
               </div>
             </div>
             
-            {/* View mode switcher and Export */}
-            <div className="flex items-center gap-4">
+            {/* View Controls Row */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
                 <Button
                   variant={viewMode === 'month' ? 'default' : 'ghost'}
