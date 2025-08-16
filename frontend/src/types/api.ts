@@ -103,7 +103,9 @@ export interface AnalyticsMetrics {
 export interface ContentMetadata {
   totalCount: number
   generatedToday?: number
-  pendingApproval?: number
+  draft?: number  // Replaces pendingApproval
   scheduled?: number
   published?: number
+  failed?: number
+  skipped?: number
 }

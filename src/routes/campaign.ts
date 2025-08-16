@@ -371,14 +371,21 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      // Use the new update method with regeneration support for comprehensive edits
-      const result = await campaignService.updateCampaignWithRegeneration(id, updates, userId)
+      // Choose the appropriate update method based on the type of update
+      let result
+      if (updates.status && ['paused', 'active'].includes(updates.status)) {
+        // For pause/resume operations, use the standard update method that handles status transitions
+        result = await campaignService.updateCampaign(id, userId, updates)
+      } else {
+        // For other edits (themes, config, etc.), use the regeneration-aware method
+        result = await campaignService.updateCampaignWithRegeneration(id, updates, userId)
+      }
 
       return reply.send({
         success: true,
-        campaign: result.campaign,
-        message: result.message,
-        regenerationTriggered: result.regenerationTriggered,
+        campaign: result.campaign || result, // updateCampaign returns campaign directly, updateCampaignWithRegeneration wraps it
+        message: result.message || 'Campaign updated successfully',
+        regenerationTriggered: result.regenerationTriggered || false,
         regenerationReason: result.regenerationReason
       })
     } catch (error) {

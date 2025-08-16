@@ -59,7 +59,7 @@ model Content {
   caption            String
   imageUrl           String?
   hashtags           String[]
-  status             ContentStatus @default(pending)
+  status             ContentStatus @default(draft)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   scheduledAt        DateTime?
@@ -130,13 +130,11 @@ model CampaignTemplate {
 }
 
 enum ContentStatus {
-  pending
-  approved
-  rejected
-  scheduled
-  published
-  skipped
-  failed
+  draft      // New content or unscheduled content (replaces pending, approved without scheduledAt, rejected)
+  scheduled  // Content scheduled for future posting (replaces approved with scheduledAt)
+  published  // Successfully posted to Instagram
+  failed     // Publishing failed
+  skipped    // Missed during campaign pause
 }
 
 enum CampaignStatus {

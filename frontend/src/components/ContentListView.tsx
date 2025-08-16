@@ -56,8 +56,8 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
       if (filterStatus !== 'all') {
         if (filterStatus === 'placeholder' && item.type !== 'placeholder') return false
         if (filterStatus === 'published' && item.status !== 'published') return false
-        if (filterStatus === 'scheduled' && !['approved', 'scheduled'].includes(item.status)) return false
-        if (filterStatus === 'failed' && !['failed', 'rejected'].includes(item.status)) return false
+        if (filterStatus === 'scheduled' && item.status !== 'scheduled') return false
+        if (filterStatus === 'failed' && item.status !== 'failed') return false
       }
 
       // Apply search query
@@ -127,12 +127,14 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
     switch (status) {
       case 'published':
         return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle className="w-3 h-3" />Published</Badge>
-      case 'approved':
       case 'scheduled':
         return <Badge variant="default" className="gap-1 bg-blue-600"><Calendar className="w-3 h-3" />Scheduled</Badge>
       case 'failed':
-      case 'rejected':
         return <Badge variant="destructive" className="gap-1"><AlertCircle className="w-3 h-3" />Failed</Badge>
+      case 'skipped':
+        return <Badge variant="outline" className="gap-1 bg-yellow-100 text-yellow-800"><AlertCircle className="w-3 h-3" />Skipped</Badge>
+      case 'draft':
+        return <Badge variant="secondary" className="gap-1"><Clock className="w-3 h-3" />Draft</Badge>
       default:
         return <Badge variant="secondary">{status}</Badge>
     }

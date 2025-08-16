@@ -28,7 +28,7 @@ export interface Content {
   cdnImageUrl?: string | null
   imageRegion?: string | null
   retentionExpiresAt?: string | null
-  status: 'pending' | 'approved' | 'rejected' | 'published' | 'scheduled' | 'failed'
+  status: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'
   scheduledAt: string | null
   postedAt: string | null
   createdAt: string

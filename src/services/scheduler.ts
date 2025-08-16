@@ -32,7 +32,10 @@ class SchedulerService {
       const content = await prisma.content.findFirst({
         where: {
           id: contentId,
-          status: 'approved',
+          OR: [
+            { status: 'draft' },
+            { status: 'scheduled' }
+          ]
         },
         include: {
           brand: true,
@@ -40,7 +43,7 @@ class SchedulerService {
       })
 
       if (!content) {
-        return { success: false, error: 'Content not found or not approved' }
+        return { success: false, error: 'Content not found or not available for scheduling' }
       }
 
       let scheduledTime: Date
@@ -57,12 +60,12 @@ class SchedulerService {
       // Create scheduled post entry
       const scheduledPost = await this.createScheduledPost(contentId, content.brandId, scheduledTime)
 
-      // Update content status (only if not already scheduled)
-      if (content.status !== 'approved' || content.scheduledAt !== scheduledTime) {
+      // Update content status to scheduled
+      if (content.status !== 'scheduled' || content.scheduledAt !== scheduledTime) {
         await prisma.content.update({
           where: { id: contentId },
           data: {
-            status: 'approved', // Keep as approved for campaign content
+            status: 'scheduled',
             scheduledAt: scheduledTime,
           },
         })
@@ -144,8 +147,9 @@ class SchedulerService {
       // Find content scheduled for posting within the next 5 minutes
       const readyContent = await prisma.content.findMany({
         where: {
-          status: 'approved',
+          status: 'scheduled',
           scheduledAt: {
+            not: null, // Defensive check: prevent legacy/corrupted data with status='scheduled' but scheduledAt=null
             lte: new Date(now.getTime() + 5 * 60 * 1000), // Next 5 minutes
           },
         },
@@ -282,7 +286,7 @@ class SchedulerService {
           await prisma.content.update({
             where: { id: content.id },
             data: {
-              status: 'approved',
+              status: 'scheduled',
               generationParams: {
                 ...metadata,
                 retryCount: retryCount + 1,
@@ -307,8 +311,7 @@ class SchedulerService {
       const scheduledContent = await prisma.content.findMany({
         where: {
           brandId: brandId,
-          status: 'approved',
-          scheduledAt: { not: null },
+          status: 'scheduled',
         },
         orderBy: {
           scheduledAt: 'asc',
@@ -337,7 +340,7 @@ class SchedulerService {
       await prisma.content.update({
         where: { id: contentId },
         data: {
-          status: 'approved',
+          status: 'draft',
           scheduledAt: null,
         },
       })
@@ -381,19 +384,13 @@ class SchedulerService {
         _count: { status: true },
       })
 
-      const scheduled = await prisma.content.count({
-        where: {
-          brandId,
-          status: 'approved',
-          scheduledAt: { not: null },
-        },
-      })
+      const scheduled = stats.find((s) => s.status === 'scheduled')?._count.status || 0
 
       return {
         scheduled,
         posted: stats.find((s) => s.status === 'published')?._count.status || 0,
         failed: stats.find((s) => s.status === 'failed')?._count.status || 0,
-        pending: stats.find((s) => s.status === 'pending')?._count.status || 0,
+        draft: stats.find((s) => s.status === 'draft')?._count.status || 0,
       }
     } catch (error) {
       console.error('Failed to get scheduling stats:', error)

@@ -45,7 +45,7 @@ class RollingContentService {
             include: {
               content: {
                 where: {
-                  status: { in: ['approved', 'scheduled', 'published'] },
+                  status: { in: ['scheduled', 'published'] },
                   scheduledAt: { not: null }
                 },
                 orderBy: { scheduledAt: 'asc' }
@@ -117,7 +117,7 @@ class RollingContentService {
     const scheduledContent = await prisma.content.findMany({
       where: {
         brandId,
-        status: { in: ['approved', 'scheduled', 'published'] },
+        status: { in: ['scheduled', 'published'] },
         scheduledAt: {
           gte: now,
           lte: maxDate
@@ -241,7 +241,7 @@ class RollingContentService {
             retentionExpiresAt: content.retentionExpiresAt ?? null,
             brandId,
             campaignId: activeCampaign?.id || null,
-            status: 'approved', // Auto-approve rolling content
+            status: 'scheduled', // Auto-schedule rolling content
             generationParams: {
               source: 'rolling_generation',
               theme: content.imagePrompt || 'lifestyle',

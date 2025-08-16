@@ -219,8 +219,8 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         return reply.status(404).send({ error: 'Content not found' })
       }
 
-      if (content.status !== 'approved') {
-        return reply.status(400).send({ error: 'Content must be approved before publishing' })
+      if (content.status !== 'scheduled' && content.status !== 'draft') {
+        return reply.status(400).send({ error: 'Content must be scheduled or in draft status before publishing' })
       }
 
       // Check if brand has Instagram connection

@@ -157,19 +157,21 @@ async function generateTestData() {
           {
             caption: `Discover the art of perfect coffee brewing! ☕✨ Our master roasters share their secrets for the ultimate morning ritual. What's your favorite brewing method?`,
             hashtags: ['#CoffeeLovers', '#ArtisanCoffee', '#MorningRitual', '#CoffeeArt', '#HandCrafted'],
-            status: 'approved',
+            status: 'scheduled',
+            scheduledAt: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000),
             imageUrl: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800'
           },
           {
             caption: `Behind the scenes at our roastery 🔥 Watch our artisans carefully craft each batch to perfection. The aroma, the color, the perfect roast - it's pure magic!`,
             hashtags: ['#BehindTheScenes', '#CoffeeRoasting', '#Craftsmanship', '#Quality', '#Passion'],
-            status: 'pending',
+            status: 'draft',
             imageUrl: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=800'
           },
           {
             caption: `Customer love story ❤️ Meet Sarah, who credits our Colombian blend for getting her through her PhD thesis. What's your coffee story?`,
             hashtags: ['#CustomerStory', '#ColombianCoffee', '#CoffeeStory', '#Community', '#Success'],
-            status: 'approved',
+            status: 'scheduled',
+            scheduledAt: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000),
             imageUrl: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=800'
           }
         ]
@@ -192,7 +194,8 @@ async function generateTestData() {
               brandId: brand.id,
               caption: 'Start your day with intention 🌱 Our morning wellness ritual includes mindful breathing, natural supplements, and gratitude practice.',
               hashtags: ['#WellnessWednesday', '#MorningRitual', '#Mindfulness', '#NaturalWellness', '#GratitudePractice'],
-              status: 'approved',
+              status: 'scheduled',
+            scheduledAt: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000),
               imageUrl: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800'
             }
           })
@@ -204,7 +207,7 @@ async function generateTestData() {
               brandId: brand.id,
               caption: 'Push your limits! 💪 This HIIT workout will challenge every muscle and leave you feeling unstoppable. Ready to level up?',
               hashtags: ['#HIITWorkout', '#FitnessMotivation', '#PushYourLimits', '#StrengthTraining', '#FitnessGoals'],
-              status: 'pending',
+              status: 'draft',
               imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800'
             }
           })

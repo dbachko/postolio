@@ -72,7 +72,8 @@ async function createTestUser() {
         caption: 'Discover our new sustainable collection made from 100% organic cotton! 🌱 Every piece tells a story of environmental responsibility.',
         hashtags: ['sustainablefashion', 'organicclotton', 'ecofriendly', 'ethicalfashion', 'slowfashion'],
         imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500',
-        status: 'approved',
+        status: 'scheduled',
+        scheduledAt: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000),
         brandId: brand.id,
         generationParams: {
           contentTheme: 'sustainability',
@@ -84,7 +85,8 @@ async function createTestUser() {
         caption: 'Behind the scenes: Meet our artisans who handcraft each piece with love and dedication ✨ #ethicallymade',
         hashtags: ['ethicallymade', 'artisans', 'handcrafted', 'sustainablefashion', 'ethicalfashion'],
         imageUrl: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=500',
-        status: 'approved',
+        status: 'scheduled',
+        scheduledAt: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000),
         brandId: brand.id,
         generationParams: {
           contentTheme: 'behind-the-scenes',

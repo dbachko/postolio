@@ -52,10 +52,10 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
     if (type === 'placeholder') return 'bg-gray-100 text-gray-600 border-gray-300'
     switch (status) {
       case 'published': return 'bg-green-100 text-green-800 border-green-300'
-      case 'approved':
       case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-300'
-      case 'failed':
-      case 'rejected': return 'bg-red-100 text-red-800 border-red-300'
+      case 'failed': return 'bg-red-100 text-red-800 border-red-300'
+      case 'skipped': return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+      case 'draft': return 'bg-gray-100 text-gray-800 border-gray-300'
       default: return 'bg-gray-100 text-gray-800 border-gray-300'
     }
   }
@@ -64,8 +64,8 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
     if (type === 'placeholder') return <Clock className="w-4 h-4" />
     switch (status) {
       case 'published': return <CheckCircle className="w-4 h-4" />
-      case 'failed':
-      case 'rejected': return <AlertCircle className="w-4 h-4" />
+      case 'failed': return <AlertCircle className="w-4 h-4" />
+      case 'skipped': return <AlertCircle className="w-4 h-4" />
       default: return <Calendar className="w-4 h-4" />
     }
   }

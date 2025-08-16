@@ -242,7 +242,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
         include: {
           content: {
             where: {
-              status: { in: ['approved', 'scheduled', 'published'] },
+              status: { in: ['scheduled', 'published'] },
               scheduledAt: { not: null },
             },
             orderBy: { scheduledAt: 'desc' },

@@ -74,7 +74,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       const campaignPlaceholders = placeholders.filter(p => p.campaignId === campaign.id)
       const total = campaignContent.length + campaignPlaceholders.length
       const published = campaignContent.filter(c => c.status === 'published').length
-      const scheduled = campaignContent.filter(c => c.status === 'approved' || c.status === 'scheduled').length
+      const scheduled = campaignContent.filter(c => c.status === 'scheduled').length
       
       return {
         id: campaign.id,
@@ -144,9 +144,9 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     return {
       total: filteredItems.length,
       published: filteredContent.filter(c => c.status === 'published').length,
-      scheduled: filteredContent.filter(c => c.status === 'approved' || c.status === 'scheduled').length,
+      scheduled: filteredContent.filter(c => c.status === 'scheduled').length,
       placeholders: filteredPlaceholders.length,
-      failed: filteredContent.filter(c => c.status === 'rejected' || c.status === 'failed').length,
+      failed: filteredContent.filter(c => c.status === 'failed').length,
     }
   }, [filteredItems])
 

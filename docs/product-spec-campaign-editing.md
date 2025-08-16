@@ -71,10 +71,11 @@ Enable users to modify existing campaigns with intelligent safeguards that prese
 **Automatic Trigger**: When themes or style fields are modified, unpublished content automatically regenerates to maintain campaign consistency.
 
 **Eligible Content States for Regeneration**:
-- ✅ **Draft/Pending**: Always regenerate (not yet approved)
-- ✅ **Approved**: Regenerate with user confirmation (scheduled but not published)
+- ✅ **Draft**: Always regenerate (unscheduled content)
+- ✅ **Scheduled**: Regenerate with user confirmation (scheduled but not published)
 - ❌ **Published**: Never modify (already on Instagram)
 - ❌ **Failed**: Skip and flag for manual review
+- ❌ **Skipped**: Skip and flag for manual review
 
 ### Regeneration Flow
 ```
@@ -115,7 +116,7 @@ Request: {
   themes?: string[]      // New themes to apply
   style?: string        // New style to apply
   contentIds?: string[] // Specific content to regenerate (optional)
-  force?: boolean       // Skip confirmation for approved content
+  force?: boolean       // Skip confirmation for scheduled content
 }
 
 Response: {
@@ -309,9 +310,9 @@ Response: {
 interface EditImpact {
   published: Content[]      // Never modified
   scheduled: Content[]      // Regenerate with confirmation
-  approved: Content[]       // Regenerate with confirmation
-  pending: Content[]        // Auto-regenerate
   draft: Content[]          // Auto-regenerate
+  failed: Content[]         // Skip and flag
+  skipped: Content[]        // Skip and flag
 }
 
 // Regeneration Decision Logic:
@@ -323,11 +324,11 @@ async function handleThemeStyleChange(campaign, changes) {
     return updateCampaignOnly(changes)
   }
   
-  if (impact.approved > 0 && !changes.force) {
-    // Need user confirmation for approved content
+  if (impact.scheduled > 0 && !changes.force) {
+    // Need user confirmation for scheduled content
     return {
       requiresConfirmation: true,
-      message: `${impact.approved} approved posts will be regenerated`,
+      message: `${impact.scheduled} scheduled posts will be regenerated`,
       impact
     }
   }
@@ -379,11 +380,11 @@ Title: "Content Will Be Regenerated"
 Content: 
   Your changes to [themes/style] will regenerate:
   • 8 draft posts (automatic)
-  • 4 approved posts (requires confirmation)
+  • 4 scheduled posts (requires confirmation)
   
   Estimated time: ~30 seconds
   
-  [✓] Regenerate approved content too
+  [✓] Regenerate scheduled content too
   
 Actions: [Cancel] [Preview Changes] [Proceed]
 ```
@@ -435,7 +436,7 @@ Actions: [Refresh & Continue] [Continue Anyway]
 - **Solution**: Queue-based processing with exponential backoff, show accurate time estimates
 
 ### E5: Theme Change After Content Approval
-- **Scenario**: Marketing manager approved content, then themes are changed
+- **Scenario**: Marketing manager scheduled content, then themes are changed
 - **Solution**: Require explicit re-approval after regeneration, track approval history
 
 ### E6: Extension Beyond Instagram Token Expiry

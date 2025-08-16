@@ -134,7 +134,7 @@ class AutopilotService {
         include: {
           content: {
             where: {
-              status: { in: ['approved', 'scheduled', 'published'] },
+              status: { in: ['scheduled', 'published'] },
               scheduledAt: { not: null },
             },
             orderBy: { scheduledAt: 'desc' },
@@ -183,7 +183,7 @@ class AutopilotService {
     const scheduledContent = await prisma.content.count({
       where: {
         brandId: brand.id,
-        status: { in: ['approved', 'scheduled', 'published'] },
+        status: { in: ['scheduled', 'published'] },
         scheduledAt: {
           gte: now,
           lte: targetDate,
@@ -285,7 +285,7 @@ class AutopilotService {
                 imageRegion: content.imageRegion ?? null,
                 retentionExpiresAt: content.retentionExpiresAt ?? null,
                 hashtags: content.hashtags,
-                status: 'approved', // Auto-approve autopilot content
+                status: 'scheduled', // Auto-schedule autopilot content
                 brandId: gap.brandId,
                 generationParams: {
                   source: 'autopilot',
@@ -319,11 +319,11 @@ class AutopilotService {
    */
   private async scheduleGeneratedContent(brandId: string, strategy: any): Promise<void> {
     try {
-      // Get unscheduled approved content for this brand
+      // Get unscheduled draft content for this brand
       const unscheduledContent = await prisma.content.findMany({
         where: {
           brandId,
-          status: 'approved',
+          status: 'draft',
           scheduledAt: null,
           generationParams: {
             path: ['source'],

@@ -316,9 +316,9 @@ npx prisma migrate deploy
 ### Content Management
 
 - `POST /content/generate` - Generate new content
-- `GET /content/pending/:brandId` - Get pending content for approval
+- `GET /content/pending/:brandId` - Get draft content for review
 - `POST /content/approve` - Approve content (with optional scheduling)
-- `POST /content/reject/:contentId` - Reject content
+- `POST /content/reject/:contentId` - Reject content (moves to draft status)
 - `GET /content/history/:brandId` - Get content history
 
 ### Instagram Integration

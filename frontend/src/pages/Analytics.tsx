@@ -40,7 +40,7 @@ interface SchedulingStats {
   scheduled: number
   posted: number
   failed: number
-  pending: number
+  draft: number
 }
 
 interface ScheduledPost {
@@ -229,8 +229,8 @@ export default function Analytics() {
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-md">
-                  <h3 className="text-sm font-medium text-gray-500">Pending</h3>
-                  <p className="text-2xl font-bold text-yellow-600">{schedulingStats.pending}</p>
+                  <h3 className="text-sm font-medium text-gray-500">Draft</h3>
+                  <p className="text-2xl font-bold text-yellow-600">{schedulingStats.draft}</p>
                 </div>
               </div>
             )}

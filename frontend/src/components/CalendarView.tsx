@@ -182,8 +182,8 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     
     const draggedContent = event.resource
     
-    // Don't allow dragging of published posts, placeholders, or rejected posts
-    if (draggedContent.status === 'published' || ('isPlaceholder' in draggedContent && draggedContent.isPlaceholder) || draggedContent.status === 'rejected') {
+    // Don't allow dragging of published posts, placeholders, failed, or skipped posts
+    if (draggedContent.status === 'published' || ('isPlaceholder' in draggedContent && draggedContent.isPlaceholder) || draggedContent.status === 'failed' || draggedContent.status === 'skipped') {
       toast.error('Cannot reschedule this post')
       return
     }
@@ -232,19 +232,23 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   const EventComponent = ({ event }: { event: CalendarEvent }) => {
     const content = event.resource
     const isPlaceholder = 'isPlaceholder' in content && content.isPlaceholder
-    const isDraggable = !isPlaceholder && content.status !== 'published' && content.status !== 'rejected'
+    const isDraggable = !isPlaceholder && content.status !== 'published' && content.status !== 'failed' && content.status !== 'skipped'
     
     const statusColors = {
-      approved: 'bg-blue-100 border-blue-400 text-blue-800',
+      draft: 'bg-gray-100 border-gray-400 text-gray-800',
+      scheduled: 'bg-blue-100 border-blue-400 text-blue-800',
       published: 'bg-green-100 border-green-400 text-green-800',
-      rejected: 'bg-red-100 border-red-400 text-red-800',
+      failed: 'bg-red-100 border-red-400 text-red-800',
+      skipped: 'bg-yellow-100 border-yellow-400 text-yellow-800',
       placeholder: 'bg-gray-50 border-gray-300 text-gray-600',
     }
 
     const statusIcons = {
-      approved: Play,
+      draft: null,
+      scheduled: Play,
       published: CheckCircle,
-      rejected: XCircle,
+      failed: XCircle,
+      skipped: null,
       placeholder: null, // No icon for placeholders
     }
 
@@ -252,7 +256,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
 
     return (
       <div
-        className={`p-1 rounded ${isPlaceholder ? 'border border-dashed' : 'border-l-2'} ${statusColors[content.status as keyof typeof statusColors] || statusColors.approved} ${isDraggable ? 'cursor-move' : isPlaceholder ? '' : 'cursor-pointer'} hover:opacity-80 transition-opacity`}
+        className={`p-1 rounded ${isPlaceholder ? 'border border-dashed' : 'border-l-2'} ${statusColors[content.status as keyof typeof statusColors] || statusColors.draft} ${isDraggable ? 'cursor-move' : isPlaceholder ? '' : 'cursor-pointer'} hover:opacity-80 transition-opacity`}
         onClick={() => !isPlaceholder && onContentClick?.(content as any)}
         title={isDraggable ? 'Drag to reschedule' : ''}
       >
@@ -303,7 +307,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
             </div>
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">
-                {content.filter(c => c.status === 'approved').length} posts scheduled
+                {content.filter(c => c.status === 'scheduled').length} posts scheduled
               </div>
             </div>
           </div>
@@ -372,7 +376,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
         <div className="flex items-center gap-6 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-blue-400 rounded-sm"></div>
-            <span className="text-gray-600">Scheduled ({content.filter(c => c.status === 'approved').length})</span>
+            <span className="text-gray-600">Scheduled ({content.filter(c => c.status === 'scheduled').length})</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-green-400 rounded-sm"></div>
@@ -384,7 +388,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-red-400 rounded-sm"></div>
-            <span className="text-gray-600">Failed ({content.filter(c => c.status === 'rejected').length})</span>
+            <span className="text-gray-600">Failed ({content.filter(c => c.status === 'failed').length})</span>
           </div>
         </div>
       </div>
@@ -395,9 +399,9 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   const isDraggableAccessor = useCallback((event: CalendarEvent) => {
     const status = event.resource.status
     const isPlaceholder = 'isPlaceholder' in event.resource && event.resource.isPlaceholder
-    // Allow dragging for approved, scheduled, and pending posts
-    // Disallow for published, placeholder, and rejected posts
-    return !isPlaceholder && status !== 'published' && status !== 'rejected'
+    // Allow dragging for draft and scheduled posts
+    // Disallow for published, placeholder, failed, and skipped posts
+    return !isPlaceholder && status !== 'published' && status !== 'failed' && status !== 'skipped'
   }, [])
 
   return (

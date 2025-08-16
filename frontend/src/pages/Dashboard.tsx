@@ -48,7 +48,7 @@ export function Dashboard() {
       return {
         scheduled: allContent.filter(
           (content) =>
-            (content.status === 'approved' || content.status === 'scheduled') &&
+            content.status === 'scheduled' &&
             content.scheduledAt &&
             new Date(content.scheduledAt) > new Date()
         ).length,

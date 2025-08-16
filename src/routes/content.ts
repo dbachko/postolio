@@ -91,7 +91,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
               cdnImageUrl: content.cdnImageUrl || null,
               imageRegion: content.imageRegion || null,
               retentionExpiresAt: content.retentionExpiresAt || null,
-              status: 'pending',
+              status: 'draft',
               brandId,
               generationParams: {
                 theme,
@@ -145,7 +145,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // Get pending content for approval
+  // Get draft content for review
   fastify.get<{ Params: { brandId: string } }>('/pending/:brandId', async (request, reply) => {
     try {
       const authHeader = request.headers.authorization
@@ -171,10 +171,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Brand not found' })
       }
 
-      const pendingContent = await prisma.content.findMany({
+      const draftContent = await prisma.content.findMany({
         where: {
           brandId,
-          status: 'pending',
+          status: 'draft',
         },
         select: {
           id: true,
@@ -191,10 +191,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: { createdAt: 'desc' },
       })
 
-      return { content: pendingContent }
+      return { content: draftContent }
     } catch (error) {
-      console.error('Pending content error:', error)
-      return reply.code(500).send({ error: 'Failed to retrieve pending content' })
+      console.error('Draft content error:', error)
+      return reply.code(500).send({ error: 'Failed to retrieve draft content' })
     }
   })
 
@@ -226,15 +226,15 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Content not found' })
       }
 
-      if (content.status !== 'pending') {
-        return reply.code(400).send({ error: 'Content is not in pending status' })
+      if (content.status !== 'draft') {
+        return reply.code(400).send({ error: 'Content is not in draft status' })
       }
 
-      // Update content status
+      // Update content status - use 'scheduled' if scheduledAt provided
       const updatedContent = await prisma.content.update({
         where: { id: contentId },
         data: {
-          status: 'approved',
+          status: scheduledAt ? 'scheduled' : 'draft',
           scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         },
         select: {
@@ -283,11 +283,12 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Content not found' })
       }
 
-      // Update content status
+      // Update content status - reject means back to draft
       const updatedContent = await prisma.content.update({
         where: { id: contentId },
         data: {
-          status: 'rejected',
+          status: 'draft',
+          scheduledAt: null, // Clear any scheduled time
         },
         select: {
           id: true,
@@ -375,19 +376,16 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // When setting a scheduledAt date, ensure proper status
         // Don't change status if content is already published
         if (scheduledAt && content.status !== 'published') {
-          // If content is pending, approve it when scheduling
-          // If content is approved or scheduled, keep as scheduled
-          // This ensures the content appears correctly in calendar views
-          if (content.status === 'pending') {
-            updateData.status = 'approved'
-          } else if (content.status === 'rejected' || content.status === 'failed') {
-            // Don't allow scheduling of rejected/failed content
-            return reply.code(400).send({ error: 'Cannot schedule rejected or failed content' })
+          // Set to scheduled when adding a scheduled time
+          if (content.status === 'draft') {
+            updateData.status = 'scheduled'
+          } else if (content.status === 'failed' || content.status === 'skipped') {
+            // Don't allow scheduling of failed/skipped content
+            return reply.code(400).send({ error: 'Cannot schedule failed or skipped content' })
           }
-          // Note: Keep 'approved' status as many parts of the app expect this
         } else if (!scheduledAt && content.status === 'scheduled') {
-          // If removing scheduledAt, revert to approved
-          updateData.status = 'approved'
+          // If removing scheduledAt, revert to draft
+          updateData.status = 'draft'
         }
       }
 
@@ -511,7 +509,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       const contentHistory = await prisma.content.findMany({
         where: {
           brandId,
-          status: { in: ['approved', 'published', 'rejected', 'scheduled'] },
+          status: { in: ['draft', 'scheduled', 'published', 'failed', 'skipped'] },
         },
         select: {
           id: true,

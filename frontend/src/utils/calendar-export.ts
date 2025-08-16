@@ -126,10 +126,10 @@ export async function exportToPDF(
   doc.setFontSize(10)
   doc.setTextColor(60)
   const published = content.filter(c => c.status === 'published').length
-  const scheduled = content.filter(c => c.status === 'scheduled' || c.status === 'approved').length
-  const pending = content.filter(c => c.status === 'pending').length
+  const scheduled = content.filter(c => c.status === 'scheduled').length
+  const draft = content.filter(c => c.status === 'draft').length
   
-  doc.text(`Total: ${content.length} | Published: ${published} | Scheduled: ${scheduled} | Pending: ${pending}`, margin, yPosition)
+  doc.text(`Total: ${content.length} | Published: ${published} | Scheduled: ${scheduled} | Draft: ${draft}`, margin, yPosition)
   yPosition += 15
   
   // Reset text color

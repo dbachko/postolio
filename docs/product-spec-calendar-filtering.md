@@ -8,19 +8,19 @@ Empower users to efficiently navigate and manage large volumes of scheduled cont
 - **Target Users**: Content managers handling multiple campaigns, team leads reviewing scheduled content, creators tracking publication status
 - **Key Scenarios**: 
   - Reviewing all posts for a specific campaign before launch
-  - Identifying content gaps by filtering approved vs placeholder posts
-  - Auditing rejected content to understand issues
+  - Identifying content gaps by filtering draft vs scheduled posts
+  - Auditing failed content to understand issues
   - Focusing on upcoming scheduled posts for final review
 - **Success Definition**: 80% reduction in time to find specific content, 90% user satisfaction with filter responsiveness, zero performance degradation with 1000+ posts
 
 ## User Personas
 - **Primary**: Content Manager — manages 10+ campaigns simultaneously, needs quick visibility into campaign-specific schedules
 - **Secondary**: Marketing Director — reviews overall content strategy, needs high-level status overview across all campaigns
-- **Tertiary**: Social Media Specialist — focuses on day-to-day publishing, needs to see only approved/scheduled content
+- **Tertiary**: Social Media Specialist — focuses on day-to-day publishing, needs to see only scheduled content
 
 ## Jobs To Be Done
 - When I manage multiple campaigns, I want to filter by specific campaigns, so I can focus on one initiative at a time
-- When I review content quality, I want to filter by status, so I can see what needs approval or has been rejected
+- When I review content quality, I want to filter by status, so I can see what needs approval or has failed
 - When I plan content gaps, I want to see only AI placeholders, so I can understand what will be auto-generated
 - When I audit past performance, I want to filter by published posts, so I can analyze what went live
 - When I need specific date ranges, I want custom date filtering, so I can focus beyond the current month view
@@ -29,7 +29,7 @@ Empower users to efficiently navigate and manage large volumes of scheduled cont
 
 ## Core Features
 - FEAT-1 (P0): Campaign filter dropdown — Multi-select campaigns with search | Depends: none
-- FEAT-2 (P0): Status filter chips — Quick toggle for approved/scheduled/published/rejected | Depends: none  
+- FEAT-2 (P0): Status filter chips — Quick toggle for draft/scheduled/published/failed/skipped | Depends: none  
 - FEAT-3 (P0): Content type toggle — Show/hide actual posts vs AI placeholders | Depends: none
 - FEAT-4 (P0): Active filter indicators — Visual badges showing applied filters with counts | Depends: FEAT-1,2,3
 - FEAT-5 (P0): Clear all filters — One-click reset to unfiltered view | Depends: FEAT-1,2,3
@@ -77,7 +77,7 @@ Empower users to efficiently navigate and manage large volumes of scheduled cont
 ┌─────────────────────────────────────────────────────────────┐
 │ [Campaign ▼] [Status: All ▼] [Type: All ▼] [Dates ▼]       │
 │                                                              │
-│ Active Filters: Campaign: Holiday (2) • Status: Approved (15) [Clear All] │
+│ Active Filters: Campaign: Holiday (2) • Status: Scheduled (15) [Clear All] │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -95,7 +95,7 @@ Empower users to efficiently navigate and manage large volumes of scheduled cont
 
 #### Status Filter Chips
 - **Type**: Toggle chip buttons
-- **Options**: Approved | Scheduled | Published | Rejected
+- **Options**: Draft | Scheduled | Published | Failed | Skipped
 - **Visual**: 
   - Inactive: Gray outline
   - Active: Colored background matching status color
@@ -128,7 +128,7 @@ Empower users to efficiently navigate and manage large volumes of scheduled cont
 ```typescript
 interface CalendarFilters {
   campaigns: string[]        // Campaign IDs
-  statuses: Status[]        // approved, scheduled, published, rejected
+  statuses: Status[]        // draft, scheduled, published, failed, skipped
   contentType: 'all' | 'posts' | 'placeholders'
   dateRange: {
     start: Date | null

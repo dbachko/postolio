@@ -90,7 +90,7 @@ Content-Type: application/json
 2. **Theme Selection**: Rotates through configured themes
 3. **AI Generation**: Creates caption, hashtags, and image prompt
 4. **Image Creation**: Generates images via DALL-E 3
-5. **Database Storage**: Saves as approved content
+5. **Database Storage**: Saves as scheduled content
 6. **Auto-Scheduling**: Schedules at optimal times
 
 ## Configuration Options

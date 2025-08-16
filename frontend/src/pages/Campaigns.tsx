@@ -1019,9 +1019,11 @@ export function Campaigns() {
                                 <div className="flex items-center gap-2 mb-2">
                                   <Badge 
                                     variant={
-                                      post.status === 'approved' ? 'default' :
-                                      post.status === 'pending' ? 'secondary' :
+                                      post.status === 'scheduled' ? 'default' :
+                                      post.status === 'draft' ? 'secondary' :
                                       post.status === 'published' ? 'default' :
+                                      post.status === 'failed' ? 'destructive' :
+                                      post.status === 'skipped' ? 'outline' :
                                       'outline'
                                     }
                                   >

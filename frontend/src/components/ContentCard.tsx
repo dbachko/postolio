@@ -70,20 +70,24 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
         <div className="flex items-center justify-between">
           <span
             className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              content.status === 'pending'
-                ? 'bg-yellow-100 text-yellow-800'
-                : content.status === 'approved'
+              content.status === 'draft'
+                ? 'bg-gray-100 text-gray-800'
+                : content.status === 'scheduled'
+                ? 'bg-blue-100 text-blue-800'
+                : content.status === 'published'
                 ? 'bg-green-100 text-green-800'
-                : content.status === 'rejected'
+                : content.status === 'failed'
                 ? 'bg-red-100 text-red-800'
-                : 'bg-blue-100 text-blue-800'
+                : content.status === 'skipped'
+                ? 'bg-yellow-100 text-yellow-800'
+                : 'bg-gray-100 text-gray-800'
             }`}
           >
             {content.status.charAt(0).toUpperCase() + content.status.slice(1)}
           </span>
 
 
-          {content.status === 'approved' && (
+          {(content.status === 'draft' || content.status === 'scheduled') && (
             <div className="flex flex-col space-y-2">
               <div className="flex space-x-2">
                 <button
