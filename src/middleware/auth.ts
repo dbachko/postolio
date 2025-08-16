@@ -42,7 +42,6 @@ export async function authenticateRequest(
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET) as UserPayload
-    // @ts-ignore - FastifyJWT types conflict with manual assignment
     request.user = decoded
     
   } catch (error) {
@@ -89,7 +88,6 @@ export async function optionalAuth(
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET) as UserPayload
-    // @ts-ignore - FastifyJWT types conflict with manual assignment
     request.user = decoded
     
   } catch (error) {

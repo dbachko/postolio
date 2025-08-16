@@ -119,7 +119,6 @@ export default function PostDetail() {
   const [isEditing, setIsEditing] = useState(false)
   const [editCaption, setEditCaption] = useState('')
   const [editHashtags, setEditHashtags] = useState<string[]>([])
-  const [, setLastRefresh] = useState<Date>(new Date())
 
   // Memoize status color calculation - MUST be before any conditional returns
   const getStatusColor = useMemo(() => {
@@ -146,12 +145,6 @@ export default function PostDetail() {
     staleTime: 10000 // Consider data stale after 10 seconds
   })
 
-  // Update last refresh time when data is fetched
-  useEffect(() => {
-    if (!postFetching) {
-      setLastRefresh(new Date())
-    }
-  }, [postFetching])
 
   // Fetch post insights with frequent updates for published posts
   const { data: insights, isFetching: insightsFetching } = useQuery<PostInsights>({

@@ -34,8 +34,14 @@ test('Post Detail API', async (t) => {
     })
 
     const registerData = JSON.parse(registerResponse.body)
-    authToken = registerData.data?.token || registerData.token
-    userId = registerData.data?.user?.id || registerData.user?.id || registerData.data?.id
+    authToken = registerData.token
+    if (!authToken) {
+      throw new Error(`Failed to get authToken from response: ${JSON.stringify(registerData)}`)
+    }
+    userId = registerData.user?.id
+    if (!userId) {
+      throw new Error(`Failed to get userId from response: ${JSON.stringify(registerData)}`)
+    }
 
     // Create test brand
     const brandResponse = await app.inject({
