@@ -252,7 +252,7 @@ class ApiClient {
       method: 'POST'
     })
     this.removeToken()
-    return response
+    return response as { success: boolean; message: string }
   }
 
   async refreshToken(): Promise<{ token: string }> {

@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useMemo, memo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { apiClient } from '../lib/api'
 import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -195,7 +195,7 @@ export default function PostDetail() {
       // Return context with snapshot
       return { previousPost }
     },
-    onError: (err, newData, context) => {
+    onError: (_err, _newData, context) => {
       // If mutation fails, use context to roll back
       if (context?.previousPost) {
         queryClient.setQueryData(['post', postId], context.previousPost)
@@ -377,7 +377,7 @@ export default function PostDetail() {
                 </TabsContent>
 
                 <TabsContent value="comments" className="mt-6">
-                  {commentsData?.comments?.length > 0 ? (
+                  {commentsData?.comments && commentsData.comments.length > 0 ? (
                     <div className="space-y-4 max-h-[400px] overflow-y-auto">
                       {commentsData.comments.map((comment: { username: string; text: string }, index: number) => (
                         <div key={index} className="flex gap-3 p-3 bg-gray-50 rounded-lg">
