@@ -102,7 +102,6 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
       hashtags: data.hashtags,
       gsi1pk: `BRAND#${data.brandId}`,
       gsi1sk: scheduledAt,
-      status: 'scheduled',
       ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days
       createdAt: new Date().toISOString(),
     },
