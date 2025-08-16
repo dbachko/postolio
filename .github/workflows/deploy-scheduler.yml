@@ -92,7 +92,9 @@ jobs:
         working-directory: aws-infrastructure
         run: |
           # Synthesize with CDK Nag checks
-          npx cdk synth ContentScheduler-dev -c environment=dev
+          npx cdk synth ContentScheduler-dev \
+            --app "npx ts-node --prefer-ts-exts bin/scheduler-app.ts" \
+            -c environment=dev
 
       - name: Run Lambda tests (if exist)
         working-directory: aws-infrastructure
