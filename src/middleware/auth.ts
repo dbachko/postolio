@@ -6,6 +6,7 @@ interface UserPayload {
   email: string
 }
 
+
 /**
  * Authentication middleware for Fastify
  * Verifies JWT tokens and attaches user to request
@@ -16,7 +17,7 @@ export async function authenticateRequest(
 ): Promise<void> {
   try {
     // Try to get token from cookie first (more secure)
-    let token = (request as any).cookies?.auth_token
+    let token = request.cookies?.auth_token
     
     // Fallback to Authorization header for backward compatibility
     if (!token) {
@@ -41,8 +42,8 @@ export async function authenticateRequest(
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET) as UserPayload
-    // Cast request to any to avoid type conflicts with @fastify/jwt
-    (request as any).user = decoded
+    // @ts-ignore - FastifyJWT types conflict with manual assignment
+    request.user = decoded
     
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
@@ -88,8 +89,8 @@ export async function optionalAuth(
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET) as UserPayload
-    // Cast request to any to avoid type conflicts with @fastify/jwt
-    (request as any).user = decoded
+    // @ts-ignore - FastifyJWT types conflict with manual assignment
+    request.user = decoded
     
   } catch (error) {
     // Silently fail for optional auth

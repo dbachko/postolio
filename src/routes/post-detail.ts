@@ -15,7 +15,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
   // Get comprehensive post detail
   app.get<{ Params: PostDetailParams }>('/api/posts/:postId/detail', async (request, reply) => {
     const { postId } = request.params
-    const userId = (request as any).user.id // User is guaranteed by middleware
+    const userId = request.user!.id // User is guaranteed by middleware
 
     try {
       // Fetch post with all relations
@@ -65,7 +65,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
   // Get Instagram insights for a post
   app.get<{ Params: PostDetailParams }>('/api/posts/:postId/insights', async (request, reply) => {
     const { postId } = request.params
-    const userId = (request as any).user.id // User is guaranteed by middleware
+    const userId = request.user!.id // User is guaranteed by middleware
 
     try {
       // Fetch post to check access
@@ -131,7 +131,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: PostDetailParams }>('/api/posts/:postId/comments', async (request, reply) => {
     const { postId } = request.params
     const { page = 1, limit = 20 } = request.query as { page?: number; limit?: number }
-    const userId = (request as any).user.id // User is guaranteed by middleware
+    const userId = request.user!.id // User is guaranteed by middleware
 
     try {
       // Fetch post to check access

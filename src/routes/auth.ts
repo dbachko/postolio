@@ -1,7 +1,8 @@
-import { FastifyPluginAsync } from 'fastify'
+import { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
 import { signJWT, verifyJWT } from '../services/jwt.js'
 import { getDatabaseClient } from '../config/database.js'
+
 
 const prisma = getDatabaseClient()
 
@@ -162,7 +163,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/me', async (request, reply) => {
     try {
       // Try to get token from cookie first (more secure)
-      let token = (request as any).cookies?.auth_token
+      let token = request.cookies?.auth_token
       
       // Fallback to Authorization header for backward compatibility
       if (!token) {
