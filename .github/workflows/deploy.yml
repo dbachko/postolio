@@ -233,7 +233,7 @@ jobs:
           # Deploy Content Scheduler Microservice (if it exists)
           if [ -f "bin/scheduler-app.ts" ]; then
             echo "📦 Deploying Content Scheduler Microservice..."
-            npm run cdk -- deploy ContentScheduler-dev --require-approval never -c environment=dev || true
+            npm run deploy:scheduler:dev || true
           fi
         env:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}

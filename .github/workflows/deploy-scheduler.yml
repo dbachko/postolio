@@ -170,6 +170,7 @@ jobs:
         working-directory: aws-infrastructure
         run: |
           npx cdk deploy ContentScheduler-dev \
+            --app "npx ts-node --prefer-ts-exts bin/scheduler-app.ts" \
             --require-approval never \
             -c environment=dev \
             -c alertEmail=${{ secrets.ALERT_EMAIL || '' }} \
@@ -230,6 +231,7 @@ jobs:
         working-directory: aws-infrastructure
         run: |
           npx cdk deploy ContentScheduler-staging \
+            --app "npx ts-node --prefer-ts-exts bin/scheduler-app.ts" \
             --require-approval never \
             -c environment=staging \
             -c alertEmail=${{ secrets.ALERT_EMAIL || '' }} \
@@ -284,6 +286,7 @@ jobs:
         working-directory: aws-infrastructure
         run: |
           npx cdk deploy ContentScheduler-prod \
+            --app "npx ts-node --prefer-ts-exts bin/scheduler-app.ts" \
             --require-approval never \
             -c environment=prod \
             -c alertEmail=${{ secrets.PROD_ALERT_EMAIL }} \
