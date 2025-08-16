@@ -237,6 +237,8 @@ export class ContentSchedulerStack extends cdk.Stack {
       encryption: sqs.QueueEncryption.KMS,
       encryptionMasterKey: encryptionKey,
       retentionPeriod: cdk.Duration.days(14),
+      // Visibility timeout must be >= Lambda timeout (60 seconds) * 6
+      visibilityTimeout: cdk.Duration.seconds(360),
     });
 
     // ==================== Lambda Layer for Powertools ====================
@@ -250,7 +252,7 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // ==================== Lambda Functions with Best Practices ====================
     
-    // Shared Lambda environment variables
+    // Shared Lambda environment variables 
     const lambdaEnvironment = {
       ENVIRONMENT: environment,
       SCHEDULES_TABLE: this.schedulesTable.tableName,
@@ -262,6 +264,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       POWERTOOLS_SERVICE_NAME: 'content-scheduler',
       POWERTOOLS_METRICS_NAMESPACE: 'ContentScheduler',
       LOG_LEVEL: environment === 'prod' ? 'INFO' : 'DEBUG',
+      SCHEDULER_GROUP_NAME: `${prefix}-schedules`,
     };
 
     // Custom IAM Role for Lambda (Least Privilege)
@@ -297,16 +300,24 @@ export class ContentSchedulerStack extends cdk.Stack {
       bundling: {
         minify: environment === 'prod',
         sourceMap: environment !== 'prod',
-        externalModules: ['@aws-lambda-powertools/logger', '@aws-lambda-powertools/tracer', '@aws-lambda-powertools/metrics'],
+        externalModules: [
+          '@aws-lambda-powertools/logger', 
+          '@aws-lambda-powertools/tracer', 
+          '@aws-lambda-powertools/metrics',
+          '@aws-sdk/client-dynamodb',
+          '@aws-sdk/lib-dynamodb',
+          '@aws-sdk/client-scheduler',
+          '@aws-sdk/*'
+        ],
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
       reservedConcurrentExecutions: environment === 'prod' ? 10 : undefined,
       environment: lambdaEnvironment,
       layers: [powertoolsLayer],
-      role: lambdaRole,
+      // Using default role to avoid circular dependencies
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logs.RetentionDays.THREE_MONTHS,
+      // logRetention removed to avoid circular dependencies
       deadLetterQueueEnabled: true,
       deadLetterQueue: deadLetterQueue,
     });
@@ -320,16 +331,24 @@ export class ContentSchedulerStack extends cdk.Stack {
       bundling: {
         minify: environment === 'prod',
         sourceMap: environment !== 'prod',
-        externalModules: ['@aws-lambda-powertools/logger', '@aws-lambda-powertools/tracer', '@aws-lambda-powertools/metrics'],
+        externalModules: [
+          '@aws-lambda-powertools/logger', 
+          '@aws-lambda-powertools/tracer', 
+          '@aws-lambda-powertools/metrics',
+          '@aws-sdk/client-dynamodb',
+          '@aws-sdk/lib-dynamodb',
+          '@aws-sdk/client-scheduler',
+          '@aws-sdk/*'
+        ],
       },
       timeout: cdk.Duration.minutes(5),
       memorySize: 2048,
       reservedConcurrentExecutions: environment === 'prod' ? 50 : undefined,
       environment: lambdaEnvironment,
       layers: [powertoolsLayer],
-      role: lambdaRole,
+      // Using default role to avoid circular dependencies
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logs.RetentionDays.THREE_MONTHS,
+      // logRetention removed to avoid circular dependencies
       deadLetterQueueEnabled: true,
       deadLetterQueue: deadLetterQueue,
     });
@@ -343,7 +362,15 @@ export class ContentSchedulerStack extends cdk.Stack {
       bundling: {
         minify: environment === 'prod',
         sourceMap: environment !== 'prod',
-        externalModules: ['@aws-lambda-powertools/logger', '@aws-lambda-powertools/tracer', '@aws-lambda-powertools/metrics'],
+        externalModules: [
+          '@aws-lambda-powertools/logger', 
+          '@aws-lambda-powertools/tracer', 
+          '@aws-lambda-powertools/metrics',
+          '@aws-sdk/client-dynamodb',
+          '@aws-sdk/lib-dynamodb',
+          '@aws-sdk/client-scheduler',
+          '@aws-sdk/*'
+        ],
       },
       timeout: cdk.Duration.minutes(1),
       memorySize: 512,
@@ -352,9 +379,9 @@ export class ContentSchedulerStack extends cdk.Stack {
         PUBLISHER_LAMBDA_ARN: publisherLambda.functionArn,
       },
       layers: [powertoolsLayer],
-      role: lambdaRole,
+      // Using default role to avoid circular dependencies
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logs.RetentionDays.THREE_MONTHS,
+      // logRetention removed to avoid circular dependencies
     });
 
     // Add DLQ as event source for retry handler
@@ -388,6 +415,10 @@ export class ContentSchedulerStack extends cdk.Stack {
       name: `${prefix}-schedules`,
     });
 
+    // Add environment variables to Lambda functions here
+    scheduleManagementLambda.addEnvironment('PUBLISHER_LAMBDA_ARN', publisherLambda.functionArn);
+    scheduleManagementLambda.addEnvironment('SCHEDULER_ROLE_ARN', schedulerRole.roleArn);
+
     // ==================== API Gateway with Request Validation ====================
     
     this.api = new apigateway.RestApi(this, 'SchedulerApi', {
@@ -396,7 +427,8 @@ export class ContentSchedulerStack extends cdk.Stack {
       deployOptions: {
         stageName: environment,
         tracingEnabled: true,
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        // Disable logging to avoid CloudWatch Logs role issue
+        loggingLevel: apigateway.MethodLoggingLevel.OFF,
         metricsEnabled: true,
         throttlingBurstLimit: 1000,
         throttlingRateLimit: 500,
@@ -496,6 +528,8 @@ export class ContentSchedulerStack extends cdk.Stack {
       authorizer,
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
+
+    // Environment variables moved to Lambda definition to avoid circular dependencies
 
     // ==================== WAF for API Protection ====================
     

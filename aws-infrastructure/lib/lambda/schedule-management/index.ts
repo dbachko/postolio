@@ -5,6 +5,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { SchedulerClient, CreateScheduleCommand, DeleteScheduleCommand } from '@aws-sdk/client-scheduler';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { randomUUID } from 'crypto';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'schedule-management' });
@@ -81,7 +82,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 };
 
 async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
-  const scheduleId = `SCH_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const scheduleId = `SCH_${Date.now()}_${randomUUID()}`;
   const scheduledAt = new Date(data.scheduledAt).toISOString();
 
   // Store in DynamoDB

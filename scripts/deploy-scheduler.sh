@@ -58,6 +58,9 @@ else
     echo -e "${GREEN}✓ CDK already bootstrapped${NC}"
 fi
 
+# Define stack name variable for consistency
+STACK_NAME="ContentScheduler-$ENVIRONMENT"
+
 # Synthesize the stack
 echo -e "${YELLOW}Synthesizing CloudFormation template...${NC}"
 CONTEXT_ARGS="-c environment=$ENVIRONMENT"
@@ -65,11 +68,11 @@ if [ -n "$ALERT_EMAIL" ]; then
     CONTEXT_ARGS="$CONTEXT_ARGS -c alertEmail=$ALERT_EMAIL"
 fi
 
-npx cdk synth ContentScheduler-$ENVIRONMENT $CONTEXT_ARGS
+npx cdk synth $STACK_NAME $CONTEXT_ARGS
 
 # Deploy the stack
 echo -e "${YELLOW}Deploying Content Scheduler Stack...${NC}"
-npx cdk deploy ContentScheduler-$ENVIRONMENT $CONTEXT_ARGS \
+npx cdk deploy $STACK_NAME $CONTEXT_ARGS \
     --require-approval never \
     --outputs-file scheduler-outputs-$ENVIRONMENT.json
 
