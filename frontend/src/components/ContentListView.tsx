@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns'
 import { Card, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
@@ -34,6 +35,7 @@ type SortOrder = 'asc' | 'desc'
 type FilterStatus = 'all' | 'published' | 'scheduled' | 'placeholder' | 'failed'
 
 export function ContentListView({ items, currentDate }: ContentListViewProps) {
+  const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [sortField, setSortField] = useState<SortField>('date')
@@ -229,8 +231,13 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
                 <div
                   key={item.id}
                   className={`grid grid-cols-12 gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors ${
-                    item.type === 'placeholder' ? 'border border-dashed border-gray-300' : 'border border-gray-200'
+                    item.type === 'placeholder' ? 'border border-dashed border-gray-300' : 'border border-gray-200 cursor-pointer'
                   }`}
+                  onClick={() => {
+                    if (item.type === 'content') {
+                      navigate(`/posts/${item.id}`)
+                    }
+                  }}
                 >
                   <div className="col-span-1">
                     {item.type === 'placeholder' ? (
@@ -259,7 +266,10 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
                   
                   <div className="col-span-5">
                     <button
-                      onClick={() => toggleExpanded(item.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleExpanded(item.id)
+                      }}
                       className="text-left w-full"
                     >
                       <div className={`text-sm ${isExpanded ? '' : 'line-clamp-2'}`}>
