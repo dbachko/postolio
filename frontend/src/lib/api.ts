@@ -179,6 +179,7 @@ class ApiClient {
     const response = await fetch(url, {
       ...options,
       headers,
+      credentials: 'include' // Include cookies in requests
     })
 
     if (!response.ok) {
@@ -244,6 +245,14 @@ class ApiClient {
 
   async getProfile(): Promise<{ user: User }> {
     return this.request('/api/auth/me')
+  }
+
+  async logout(): Promise<{ success: boolean; message: string }> {
+    const response = await this.request('/api/auth/logout', {
+      method: 'POST'
+    })
+    this.removeToken()
+    return response
   }
 
   async refreshToken(): Promise<{ token: string }> {
@@ -660,6 +669,64 @@ class ApiClient {
     return this.request(`/api/templates/campaigns/${campaignId}/save-template`, {
       method: 'POST',
       body: JSON.stringify(data),
+    })
+  }
+
+  // Post Detail Methods
+  async getPostDetail(postId: string): Promise<{
+    success: boolean
+    data: any
+  }> {
+    return this.request(`/api/posts/${postId}/detail`)
+  }
+
+  async getPostInsights(postId: string): Promise<{
+    success: boolean
+    data: {
+      postId: string
+      metrics: {
+        impressions: number
+        reach: number
+        engagement: number
+        saves: number
+        shares: number
+        comments_count: number
+        likes_count: number
+      }
+      lastUpdated: string
+    }
+  }> {
+    return this.request(`/api/posts/${postId}/insights`)
+  }
+
+  async getPostComments(postId: string, page = 1, limit = 20): Promise<{
+    success: boolean
+    data: {
+      comments: Array<{
+        username: string
+        text: string
+      }>
+      pagination: {
+        page: number
+        limit: number
+        total: number
+        pages: number
+      }
+    }
+  }> {
+    return this.request(`/api/posts/${postId}/comments?page=${page}&limit=${limit}`)
+  }
+
+  async updatePost(postId: string, data: {
+    caption: string
+    hashtags: string[]
+  }): Promise<{
+    success: boolean
+    data: any
+  }> {
+    return this.request(`/api/content/${postId}/edit`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
     })
   }
 

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns'
 import { Card, CardContent } from './ui/card'
 import { Clock, Calendar, CheckCircle, AlertCircle } from 'lucide-react'
@@ -21,6 +22,8 @@ interface TimelineViewProps {
 }
 
 export function TimelineView({ items, currentDate }: TimelineViewProps) {
+  const navigate = useNavigate()
+  
   // Group items by day for the current week
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 })
@@ -105,9 +108,14 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
                       <div
                         key={item.id}
                         className={`absolute left-0 right-0 mx-1 p-2 rounded text-xs ${
-                          item.type === 'placeholder' ? 'border border-dashed' : 'border'
+                          item.type === 'placeholder' ? 'border border-dashed' : 'border cursor-pointer hover:shadow-md transition-shadow'
                         } ${getStatusColor(item.status, item.type)}`}
                         style={{ top: `${idx * 25}px` }}
+                        onClick={() => {
+                          if (item.type === 'content') {
+                            navigate(`/posts/${item.id}`)
+                          }
+                        }}
                       >
                         <div className="flex items-start gap-1">
                           {getStatusIcon(item.status, item.type)}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { apiClient, type Content } from '../lib/api'
 import { OptimizedImage } from './OptimizedImage'
 import { formatInUserTimezone } from '../lib/timezone'
@@ -14,6 +15,7 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
   const [publishError, setPublishError] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { timezone } = useTimezone()
+  const navigate = useNavigate()
 
   const publishMutation = useMutation({
     mutationFn: (contentId: string) => apiClient.publishToInstagram(contentId),
@@ -33,7 +35,10 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+    <div 
+      className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+      onClick={() => navigate(`/posts/${content.id}`)}
+    >
       {(content.cdnImageUrl || content.imageUrl) && (
         <div className="aspect-w-16 aspect-h-9">
           <OptimizedImage
@@ -91,7 +96,10 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
             <div className="flex flex-col space-y-2">
               <div className="flex space-x-2">
                 <button
-                  onClick={handlePublish}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handlePublish()
+                  }}
                   className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded text-sm hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   disabled={publishMutation.isPending}
                 >
