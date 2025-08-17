@@ -175,13 +175,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 // Utility function to sanitize file names
 function sanitizeFileName(fileName: string): string {
-  // Remove null bytes, control characters, path traversal attempts, and dangerous characters
-  return fileName
+  // Normalize Unicode to NFC to prevent normalization attacks
+  let sanitized = fileName.normalize('NFC')
     .replace(/[\x00-\x1F\x7F]/g, '') // Remove null bytes and control characters
     .replace(/\.\./g, '') // Remove path traversal
     .replace(/[\/\\]/g, '_') // Replace directory separators
-    .replace(/[^a-zA-Z0-9._-]/g, '_') // Keep only safe characters
-    .substring(0, 255); // Limit length
+    .replace(/[^a-zA-Z0-9._-]/g, '_'); // Keep only safe characters
+  
+  // Ensure the filename doesn't exceed 255 bytes (not characters)
+  const maxBytes = 255;
+  while (Buffer.byteLength(sanitized, 'utf8') > maxBytes) {
+    sanitized = sanitized.slice(0, -1);
+  }
+  
+  // Ensure we have a valid filename
+  if (!sanitized || sanitized === '.') {
+    sanitized = 'unnamed_file';
+  }
+  
+  return sanitized;
 }
 
 async function initiateMultipartUpload(request: VideoUploadRequest): Promise<APIGatewayProxyResult> {

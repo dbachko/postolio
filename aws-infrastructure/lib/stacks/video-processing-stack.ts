@@ -180,7 +180,7 @@ export class VideoProcessingStack extends Stack {
       environment: {
         VIDEO_BUCKET: this.videoBucket.bucketName,
         VIDEO_UPLOADS_TABLE: videoUploadsTable.tableName,
-        VIDEO_PROCESSOR_LAMBDA: `video-processor-${environment}`, // Will be set after processor is created
+        // VIDEO_PROCESSOR_LAMBDA will be added after processor is created
         ENVIRONMENT: environment,
       },
       layers: [powertoolsLayer],
@@ -210,6 +210,7 @@ export class VideoProcessingStack extends Stack {
         MEDIACONVERT_QUEUE_ARN: `arn:aws:mediaconvert:${this.region}:${this.account}:queues/Default`,
         SCHEDULE_QUEUE_URL: '', // Will be set later if needed
         ENVIRONMENT: environment,
+        // VIDEO_VALIDATOR_LAMBDA will be added after validator is created
       },
       layers: [powertoolsLayer],
       tracing: lambda.Tracing.ACTIVE,
@@ -224,6 +225,12 @@ export class VideoProcessingStack extends Stack {
     
     // Grant video upload function permission to invoke video processor
     this.videoProcessorFunction.grantInvoke(this.videoUploadFunction);
+    
+    // Add VIDEO_PROCESSOR_LAMBDA environment variable after processor is created
+    this.videoUploadFunction.addEnvironment(
+      'VIDEO_PROCESSOR_LAMBDA',
+      this.videoProcessorFunction.functionArn
+    );
 
     // Grant MediaConvert permissions
     this.videoProcessorFunction.addToRolePolicy(new iam.PolicyStatement({
@@ -247,16 +254,32 @@ export class VideoProcessingStack extends Stack {
     const ffmpegLayerAssetPath = path.join(__dirname, '../layers/ffmpeg');
     const ffmpegBinPath = path.join(ffmpegLayerAssetPath, 'bin');
     
-    // Check if FFmpeg binaries exist or create placeholder
-    if (!fs.existsSync(ffmpegBinPath)) {
+    // Check if FFmpeg binaries exist; fail deployment if missing
+    if (!fs.existsSync(path.join(ffmpegBinPath, 'ffmpeg')) || 
+        !fs.existsSync(path.join(ffmpegBinPath, 'ffprobe'))) {
+      // Create bin directory if it doesn't exist for development
+      if (!fs.existsSync(ffmpegBinPath)) {
+        fs.mkdirSync(ffmpegBinPath, { recursive: true });
+      }
+      
       console.warn(
-        `WARNING: FFmpeg binaries not found at ${ffmpegBinPath}. ` +
-        `Please follow the instructions in ${ffmpegLayerAssetPath}/README.md to set up FFmpeg binaries. ` +
-        `Creating placeholder directory for now.`
+        `\n⚠️  FFmpeg binaries not found at ${ffmpegBinPath}\n` +
+        `\nTo set up FFmpeg binaries:\n` +
+        `1. Download FFmpeg static builds:\n` +
+        `   wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz\n` +
+        `2. Extract and copy binaries:\n` +
+        `   tar xf ffmpeg-release-amd64-static.tar.xz\n` +
+        `   cp ffmpeg-*/ffmpeg ${ffmpegBinPath}/\n` +
+        `   cp ffmpeg-*/ffprobe ${ffmpegBinPath}/\n` +
+        `   chmod +x ${ffmpegBinPath}/*\n` +
+        `\nFor development, creating empty binaries. Production deployment will require actual binaries.\n`
       );
-      fs.mkdirSync(ffmpegBinPath, { recursive: true });
-      // Create placeholder files so the layer can be deployed
-      fs.writeFileSync(path.join(ffmpegBinPath, '.placeholder'), 'Replace with actual ffmpeg binaries');
+      
+      // For development only - create empty executable files
+      fs.writeFileSync(path.join(ffmpegBinPath, 'ffmpeg'), '#!/bin/sh\necho "FFmpeg placeholder"');
+      fs.writeFileSync(path.join(ffmpegBinPath, 'ffprobe'), '#!/bin/sh\necho "FFprobe placeholder"');
+      fs.chmodSync(path.join(ffmpegBinPath, 'ffmpeg'), 0o755);
+      fs.chmodSync(path.join(ffmpegBinPath, 'ffprobe'), 0o755);
     }
     
     const ffmpegLayer = new lambda.LayerVersion(this, 'FFmpegLayer', {
@@ -284,6 +307,15 @@ export class VideoProcessingStack extends Stack {
     // Grant permissions to video validator
     this.videoBucket.grantRead(this.videoValidatorFunction);
     videoUploadsTable.grantReadWriteData(this.videoValidatorFunction);
+    
+    // Grant video processor permission to invoke video validator
+    this.videoValidatorFunction.grantInvoke(this.videoProcessorFunction);
+    
+    // Add VIDEO_VALIDATOR_LAMBDA environment variable after validator is created
+    this.videoProcessorFunction.addEnvironment(
+      'VIDEO_VALIDATOR_LAMBDA',
+      this.videoValidatorFunction.functionArn
+    );
 
     // CloudWatch Events for MediaConvert job status updates
     const mediaConvertEventRule = new events.Rule(this, 'MediaConvertJobStatusRule', {

@@ -4,7 +4,10 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { execSync, execFileSync } from 'child_process';
+import { execSync, execFileSync, execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 import { writeFileSync, unlinkSync, createWriteStream } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -235,7 +238,7 @@ async function downloadVideo(bucket: string, key: string): Promise<string> {
 async function extractVideoMetadata(filePath: string): Promise<VideoMetadata> {
   logger.info('Extracting video metadata', { filePath });
   
-  // Use execFileSync to avoid command injection
+  // Use async execFile to avoid blocking the event loop
   const ffprobeArgs = [
     '-v', 'quiet',
     '-print_format', 'json',
@@ -246,7 +249,22 @@ async function extractVideoMetadata(filePath: string): Promise<VideoMetadata> {
   
   let output: string;
   try {
-    output = execFileSync('ffprobe', ffprobeArgs, { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 }); // 2MB should be sufficient for metadata
+    // Set a timeout for ffprobe (10 seconds)
+    const { stdout, stderr } = await execFileAsync(
+      'ffprobe',
+      ffprobeArgs,
+      { 
+        encoding: 'utf8', 
+        maxBuffer: 2 * 1024 * 1024, // 2MB should be sufficient for metadata
+        timeout: 10000 // 10 second timeout
+      }
+    );
+    
+    if (stderr) {
+      logger.warn('ffprobe stderr output', { stderr });
+    }
+    
+    output = stdout;
   } catch (error) {
     logger.error('ffprobe failed', error as Error);
     throw new Error(`Failed to extract video metadata: ${(error as Error).message}`);

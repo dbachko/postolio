@@ -6,6 +6,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { S3Event } from 'aws-lambda';
 
 // Initialize Powertools
@@ -51,7 +52,7 @@ const PLATFORM_OUTPUTS: Record<string, MediaConvertOutputSettings> = {
     outputGroupSettings: {
       type: 'FILE_GROUP_SETTINGS',
       fileGroupSettings: {
-        destination: 's3://${PROCESSED_VIDEO_BUCKET}/processed/instagram/',
+        destination: `s3://\${PROCESSED_VIDEO_BUCKET}/processed/instagram/`,
       },
     },
     outputs: [{
@@ -101,7 +102,7 @@ const PLATFORM_OUTPUTS: Record<string, MediaConvertOutputSettings> = {
     outputGroupSettings: {
       type: 'FILE_GROUP_SETTINGS',
       fileGroupSettings: {
-        destination: 's3://${PROCESSED_VIDEO_BUCKET}/processed/tiktok/',
+        destination: `s3://\${PROCESSED_VIDEO_BUCKET}/processed/tiktok/`,
       },
     },
     outputs: [{
@@ -151,7 +152,7 @@ const PLATFORM_OUTPUTS: Record<string, MediaConvertOutputSettings> = {
     outputGroupSettings: {
       type: 'FILE_GROUP_SETTINGS',
       fileGroupSettings: {
-        destination: 's3://${PROCESSED_VIDEO_BUCKET}/processed/youtube/',
+        destination: `s3://\${PROCESSED_VIDEO_BUCKET}/processed/youtube/`,
       },
     },
     outputs: [{
@@ -201,7 +202,7 @@ const PLATFORM_OUTPUTS: Record<string, MediaConvertOutputSettings> = {
     outputGroupSettings: {
       type: 'FILE_GROUP_SETTINGS',
       fileGroupSettings: {
-        destination: 's3://${PROCESSED_VIDEO_BUCKET}/processed/facebook/',
+        destination: `s3://\${PROCESSED_VIDEO_BUCKET}/processed/facebook/`,
       },
     },
     outputs: [{
@@ -251,7 +252,7 @@ const PLATFORM_OUTPUTS: Record<string, MediaConvertOutputSettings> = {
     outputGroupSettings: {
       type: 'FILE_GROUP_SETTINGS',
       fileGroupSettings: {
-        destination: 's3://${PROCESSED_VIDEO_BUCKET}/processed/linkedin/',
+        destination: `s3://\${PROCESSED_VIDEO_BUCKET}/processed/linkedin/`,
       },
     },
     outputs: [{
@@ -428,13 +429,31 @@ async function validateVideo(
     errors.push(`File size exceeds ${platform} limit: ${s3Metadata.contentLength} > ${maxSize}`);
   }
 
-  // TODO: Use MediaInfo or FFprobe Lambda Layer to validate:
-  // - Video duration
-  // - Video codec
-  // - Audio codec
-  // - Resolution
-  // - Frame rate
-  // - Aspect ratio
+  // For advanced validation, invoke the video-validator Lambda
+  if (process.env.VIDEO_VALIDATOR_LAMBDA) {
+    try {
+      const lambdaClient = new LambdaClient({});
+      const validationResult = await lambdaClient.send(new InvokeCommand({
+        FunctionName: process.env.VIDEO_VALIDATOR_LAMBDA,
+        InvocationType: 'RequestResponse',
+        Payload: Buffer.from(JSON.stringify({
+          videoId: `temp_${Date.now()}`,
+          s3Bucket: bucket,
+          s3Key: key,
+          platform
+        }))
+      }));
+      
+      if (validationResult.Payload) {
+        const result = JSON.parse(new TextDecoder().decode(validationResult.Payload));
+        if (!result.valid && result.errors) {
+          errors.push(...result.errors);
+        }
+      }
+    } catch (err) {
+      logger.warn('Video validator Lambda invocation failed, using basic validation only', err as Error);
+    }
+  }
 
   return errors.length > 0 ? { valid: false, errors } : { valid: true };
 }
