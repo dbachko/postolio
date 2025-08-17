@@ -7,6 +7,12 @@ import { PrismaClient } from '@prisma/client';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
 import { analyzeBrandStyle } from './ai.js';
 import { schedulerService } from './scheduler.js';
+import { 
+  SCHEDULER_TIME_INTERVALS, 
+  SCHEDULER_LIMITS, 
+  getPostingIntervalMs
+} from '../constants/scheduler.js';
+import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-events.js';
 
 const prisma = new PrismaClient();
 
@@ -65,8 +71,13 @@ class AutopilotService {
    * Lambda handler for EventBridge trigger
    * This will be called by AWS Lambda when triggered by EventBridge
    */
-  async handleEventBridgeTrigger(event: any): Promise<any> {
-    console.log('Autopilot triggered by EventBridge:', event);
+  async handleEventBridgeTrigger(event: EventBridgeScheduledEvent): Promise<LambdaResponse> {
+    console.log('Autopilot triggered by EventBridge:', {
+      id: event.id,
+      time: event.time,
+      detailType: event['detail-type'],
+      taskType: event.detail?.taskType,
+    });
     
     const result = await this.runAutopilotGeneration();
     
@@ -76,6 +87,8 @@ class AutopilotService {
         message: 'Autopilot generation completed',
         totalGenerated: result.totalGenerated,
         gaps: result.gaps.length,
+        eventId: event.id,
+        executionTime: event.time,
       }),
     };
   }
@@ -107,7 +120,7 @@ class AutopilotService {
    */
   private async detectContentGaps(): Promise<ContentGap[]> {
     const gaps: ContentGap[] = [];
-    const targetDaysAhead = 14;
+    const targetDaysAhead = SCHEDULER_LIMITS.TARGET_DAYS_AHEAD;
 
     try {
       // Get all brands that have Instagram integration
@@ -240,7 +253,7 @@ class AutopilotService {
 
       // Generate content requests
       const contentRequests: ContentGenerationRequest[] = [];
-      const postsToGenerate = Math.min(gap.missingDays, 7); // Generate max 7 posts at a time
+      const postsToGenerate = Math.min(gap.missingDays, SCHEDULER_LIMITS.MAX_AUTOPILOT_POSTS_PER_RUN);
 
       for (let i = 0; i < postsToGenerate; i++) {
         const theme = strategy.themes?.[i % strategy.themes.length] || 'lifestyle';
@@ -321,13 +334,8 @@ class AutopilotService {
         return;
       }
 
-      // Determine posting frequency
-      let hoursInterval = 24; // daily
-      if (strategy.postingFrequency === 'every-other-day') {
-        hoursInterval = 48;
-      } else if (strategy.postingFrequency === 'weekly') {
-        hoursInterval = 168;
-      }
+      // Determine posting interval based on frequency
+      const intervalMs = getPostingIntervalMs(strategy.postingFrequency || 'daily');
 
       // Find the next available time slot
       let nextScheduleTime = await this.getNextAvailableSlot(brandId);
@@ -337,7 +345,7 @@ class AutopilotService {
         await schedulerService.scheduleContent(content.id, nextScheduleTime);
 
         // Move to next slot
-        nextScheduleTime = new Date(nextScheduleTime.getTime() + hoursInterval * 60 * 60 * 1000);
+        nextScheduleTime = new Date(nextScheduleTime.getTime() + intervalMs);
       }
 
       console.log(`Scheduled ${unscheduledContent.length} autopilot posts for brand ${brandId}`);
@@ -353,7 +361,7 @@ class AutopilotService {
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(9, 0, 0, 0); // Default to 9 AM
+    tomorrow.setHours(SCHEDULER_LIMITS.DEFAULT_POSTING_HOUR, 0, 0, 0);
 
     // Find the last scheduled post
     const lastScheduled = await prisma.content.findFirst({
@@ -368,8 +376,8 @@ class AutopilotService {
       return tomorrow;
     }
 
-    // Schedule at least 4 hours after the last post
-    const nextSlot = new Date(lastScheduled.scheduledAt.getTime() + 4 * 60 * 60 * 1000);
+    // Schedule with minimum interval after the last post
+    const nextSlot = new Date(lastScheduled.scheduledAt.getTime() + SCHEDULER_TIME_INTERVALS.MIN_POST_INTERVAL_MS);
     return nextSlot > tomorrow ? nextSlot : tomorrow;
   }
 
@@ -402,7 +410,7 @@ class AutopilotService {
 
       const brandStatuses = await Promise.all(
         brands.map(async (brand) => {
-          const gap = await this.analyzeContentGap(brand, 14);
+          const gap = await this.analyzeContentGap(brand, SCHEDULER_LIMITS.TARGET_DAYS_AHEAD);
           const nextPost = brand.content[0]?.scheduledAt ?? null;
 
           return {

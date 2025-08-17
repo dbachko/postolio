@@ -4,6 +4,7 @@
  */
 
 import { schedulerAdapter } from './scheduler-adapter.js';
+import { SCHEDULER_TIME_INTERVALS } from '../constants/scheduler.js';
 
 export interface ScheduledPost {
   id: string;
@@ -34,7 +35,7 @@ class SchedulerService {
         scheduledPost: {
           id: result.scheduleId || `schedule_${contentId}`,
           contentId,
-          brandId: '', // Will be populated by adapter
+          brandId: result.brandId || '', // Extracted from adapter result
           scheduledTime: customTime || new Date(),
           status: 'pending',
           retryCount: 0,
@@ -88,14 +89,14 @@ class SchedulerService {
    */
   async bulkSchedule(contentIds: string[], startTime?: Date): Promise<SchedulingResult[]> {
     const results: SchedulingResult[] = [];
-    let currentTime = startTime || new Date(Date.now() + 24 * 60 * 60 * 1000);
+    let currentTime = startTime || new Date(Date.now() + SCHEDULER_TIME_INTERVALS.DEFAULT_SCHEDULE_DELAY_MS);
     
     for (const contentId of contentIds) {
       const result = await this.scheduleContent(contentId, currentTime);
       results.push(result);
       
-      // Increment time by 4 hours for next post
-      currentTime = new Date(currentTime.getTime() + 4 * 60 * 60 * 1000);
+      // Increment time for next post to maintain minimum interval
+      currentTime = new Date(currentTime.getTime() + SCHEDULER_TIME_INTERVALS.MIN_POST_INTERVAL_MS);
     }
     
     return results;

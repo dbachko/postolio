@@ -340,6 +340,37 @@ export class ContentSchedulerClient {
     try {
       return await this.circuitBreaker.fire(fn) as T;
     } catch (error) {
+      // Check if circuit breaker is open
+      if (error && typeof error === 'object' && 'name' in error) {
+        const errorObj = error as any;
+        
+        // Handle circuit breaker specific errors
+        if (errorObj.name === 'OpenCircuitError') {
+          throw new SchedulerError(
+            'Scheduler service is temporarily unavailable due to repeated failures',
+            'CIRCUIT_BREAKER_OPEN',
+            503,
+            { 
+              message: 'Circuit breaker is open. Service will retry after cooldown period.',
+              stats: this.getCircuitBreakerStats() 
+            }
+          );
+        }
+        
+        if (errorObj.name === 'TimeoutError') {
+          throw new SchedulerError(
+            'Request to scheduler service timed out',
+            'TIMEOUT',
+            504,
+            { 
+              timeout: this.config.timeout,
+              message: 'The operation took too long to complete'
+            }
+          );
+        }
+      }
+      
+      // Handle known error types
       if (error instanceof SchedulerError) {
         throw error;
       }
@@ -354,11 +385,17 @@ export class ContentSchedulerClient {
         throw this.handleAxiosError(error);
       }
 
+      // Log unexpected errors for debugging
+      console.error('Unexpected error in circuit breaker:', error);
+      
       throw new SchedulerError(
-        'Unexpected error occurred',
+        'Unexpected error occurred in scheduler client',
         'UNKNOWN_ERROR',
         500,
-        { originalError: error }
+        { 
+          originalError: error instanceof Error ? error.message : String(error),
+          circuitBreakerState: this.circuitBreaker.opened ? 'open' : 'closed'
+        }
       );
     }
   }
@@ -513,19 +550,56 @@ export class ContentSchedulerClient {
    */
   private setupCircuitBreakerEvents(): void {
     this.circuitBreaker.on('open', () => {
-      console.warn('Circuit breaker opened - requests will fail fast');
+      console.warn('Circuit breaker opened - requests will fail fast', {
+        baseURL: this.config.baseURL,
+        timestamp: new Date().toISOString(),
+        stats: this.circuitBreaker.stats
+      });
     });
 
     this.circuitBreaker.on('halfOpen', () => {
-      console.info('Circuit breaker half-open - testing service availability');
+      console.info('Circuit breaker half-open - testing service availability', {
+        baseURL: this.config.baseURL,
+        timestamp: new Date().toISOString(),
+        stats: this.circuitBreaker.stats
+      });
     });
 
     this.circuitBreaker.on('close', () => {
-      console.info('Circuit breaker closed - service recovered');
+      console.info('Circuit breaker closed - service recovered', {
+        baseURL: this.config.baseURL,
+        timestamp: new Date().toISOString(),
+        stats: this.circuitBreaker.stats
+      });
     });
 
     this.circuitBreaker.on('timeout', () => {
-      console.error('Circuit breaker timeout');
+      console.error('Circuit breaker timeout', {
+        baseURL: this.config.baseURL,
+        timeout: this.config.timeout,
+        timestamp: new Date().toISOString(),
+        stats: this.circuitBreaker.stats
+      });
+    });
+
+    this.circuitBreaker.on('failure', (error: Error) => {
+      console.error('Circuit breaker failure detected', {
+        baseURL: this.config.baseURL,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        stats: this.circuitBreaker.stats
+      });
+    });
+
+    this.circuitBreaker.on('success', () => {
+      // Only log on debug level to avoid spam
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Circuit breaker success', {
+          baseURL: this.config.baseURL,
+          timestamp: new Date().toISOString(),
+          stats: this.circuitBreaker.stats
+        });
+      }
     });
   }
 

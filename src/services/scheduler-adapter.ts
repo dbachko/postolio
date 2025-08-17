@@ -5,7 +5,7 @@
 
 import { PrismaClient, ContentStatus } from '@prisma/client';
 import { ContentSchedulerClient, ContentSchedulerConfig } from '../clients/content-scheduler-client.js';
-// Import removed - will use analytics service directly
+import { SCHEDULER_TIME_INTERVALS, SYNC_TOLERANCE } from '../constants/scheduler.js';
 
 const prisma = new PrismaClient();
 
@@ -42,7 +42,7 @@ export class SchedulerAdapter {
     contentId: string,
     customTime?: Date,
     userId?: string
-  ): Promise<{ success: boolean; scheduleId?: string; error?: string }> {
+  ): Promise<{ success: boolean; scheduleId?: string; brandId?: string; error?: string }> {
     try {
       // 1. Get content with brand and user info
       const content = await prisma.content.findUnique({
@@ -61,7 +61,7 @@ export class SchedulerAdapter {
       }
 
       // Use default time if not provided (optimal time calculation can be added later)
-      const scheduledTime = customTime || new Date(Date.now() + 24 * 60 * 60 * 1000); // Tomorrow same time
+      const scheduledTime = customTime || new Date(Date.now() + SCHEDULER_TIME_INTERVALS.DEFAULT_SCHEDULE_DELAY_MS);
 
       // 2. Create schedule in AWS microservice
       try {
@@ -94,7 +94,7 @@ export class SchedulerAdapter {
         });
 
         console.log(`Content ${contentId} scheduled successfully at ${scheduledTime.toISOString()}`);
-        return { success: true, scheduleId: schedule.id };
+        return { success: true, scheduleId: schedule.id, brandId: content.brandId };
       } catch (schedulerError) {
         console.error('Failed to create schedule in AWS:', schedulerError);
         
@@ -362,11 +362,9 @@ export class SchedulerAdapter {
     if (!awsStats || !localStats) return false;
     
     // Check if key metrics are within acceptable range (allow small differences)
-    const tolerance = 2; // Allow difference of 2 items
-    
     return (
-      Math.abs((awsStats.pending || 0) - (localStats.pending || 0)) <= tolerance &&
-      Math.abs((awsStats.published || 0) - (localStats.published || 0)) <= tolerance
+      Math.abs((awsStats.pending || 0) - (localStats.pending || 0)) <= SYNC_TOLERANCE &&
+      Math.abs((awsStats.published || 0) - (localStats.published || 0)) <= SYNC_TOLERANCE
     );
   }
 }
