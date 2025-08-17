@@ -49,9 +49,11 @@
     "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "openai": "^4.77.3",
+    "opossum": "^9.0.0",
     "prisma": "^6.2.0",
     "redis": "^5.6.1",
-    "sharp": "^0.33.4"
+    "sharp": "^0.33.4",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
