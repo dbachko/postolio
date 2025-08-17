@@ -7,7 +7,7 @@ interface AuthState {
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, name?: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   checkAuth: () => Promise<void>
   getToken: () => string | null
 }
@@ -39,9 +39,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
-    apiClient.removeToken()
-    set({ user: null, isAuthenticated: false })
+  logout: async () => {
+    try {
+      await apiClient.logout()
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      apiClient.removeToken()
+      set({ user: null, isAuthenticated: false })
+    }
   },
 
   checkAuth: async () => {

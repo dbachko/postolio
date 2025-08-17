@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Calendar, dateFnsLocalizer, type View, type Event } from 'react-big-calendar'
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
 import { format, parse, startOfWeek, getDay, addDays, subDays, isToday } from 'date-fns'
@@ -61,6 +62,7 @@ interface CalendarViewProps {
 }
 
 export function CalendarView({ brandId, content: propContent, onContentClick }: CalendarViewProps) {
+  const navigate = useNavigate()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<View>('week')
   const { timezone, isAutoDetected } = useTimezone()
@@ -404,6 +406,21 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     return !isPlaceholder && status !== 'published' && status !== 'failed' && status !== 'skipped'
   }, [])
 
+  // Handle event click to navigate to post detail
+  const handleSelectEvent = useCallback((event: CalendarEvent | object, _e?: React.SyntheticEvent<HTMLElement>) => {
+    // Type guard to ensure we have the right event type
+    if (!('resource' in event)) return
+    
+    const calendarEvent = event as CalendarEvent
+    const resource = calendarEvent.resource
+    // Don't navigate for placeholders
+    if ('isPlaceholder' in resource && resource.isPlaceholder) {
+      return
+    }
+    // Navigate to post detail page
+    navigate(`/posts/${resource.id}`)
+  }, [navigate])
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <CustomToolbar />
@@ -451,6 +468,8 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
           draggableAccessor={isDraggableAccessor as any}
           onEventDrop={handleEventDrop as any}
           resizable={false}
+          // Click handler for navigation
+          onSelectEvent={handleSelectEvent}
         />
       </div>
     </div>

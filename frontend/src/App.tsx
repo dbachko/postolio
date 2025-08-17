@@ -19,7 +19,9 @@ import { Settings } from './pages/Settings'
 import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { TermsOfService } from './pages/TermsOfService'
 import { DataDeletion } from './pages/DataDeletion'
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
+import { ErrorBoundary } from './components/ErrorBoundary'
+const PostDetail = lazy(() => import('./pages/PostDetail'))
 
 const queryClient = new QueryClient()
 
@@ -45,10 +47,11 @@ function App() {
   }, [])
   
   return (
-    <QueryClientProvider client={queryClient}>
-      <TimezoneProvider>
-        <Router>
-          <Routes>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TimezoneProvider>
+          <Router>
+            <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -145,6 +148,21 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          <Route path="/posts/:postId" element={
+            <ProtectedRoute>
+              <Layout>
+                <ErrorBoundary>
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center min-h-[400px]">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                  }>
+                    <PostDetail />
+                  </Suspense>
+                </ErrorBoundary>
+              </Layout>
+            </ProtectedRoute>
+          } />
           <Route path="/settings" element={
             <ProtectedRoute>
               <Layout>
@@ -157,6 +175,7 @@ function App() {
       </Router>
       </TimezoneProvider>
     </QueryClientProvider>
+    </ErrorBoundary>
   )
 }
 
