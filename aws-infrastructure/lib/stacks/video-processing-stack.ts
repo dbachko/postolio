@@ -12,6 +12,7 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export interface VideoProcessingStackProps extends StackProps {
   environment: string;
@@ -179,6 +180,7 @@ export class VideoProcessingStack extends Stack {
       environment: {
         VIDEO_BUCKET: this.videoBucket.bucketName,
         VIDEO_UPLOADS_TABLE: videoUploadsTable.tableName,
+        VIDEO_PROCESSOR_LAMBDA: `video-processor-${environment}`, // Will be set after processor is created
         ENVIRONMENT: environment,
       },
       layers: [powertoolsLayer],
@@ -219,6 +221,9 @@ export class VideoProcessingStack extends Stack {
     videoUploadsTable.grantReadWriteData(this.videoProcessorFunction);
     videoProcessingTable.grantReadWriteData(this.videoProcessorFunction);
     videoDLQ.grantSendMessages(this.videoProcessorFunction);
+    
+    // Grant video upload function permission to invoke video processor
+    this.videoProcessorFunction.grantInvoke(this.videoUploadFunction);
 
     // Grant MediaConvert permissions
     this.videoProcessorFunction.addToRolePolicy(new iam.PolicyStatement({
@@ -239,8 +244,23 @@ export class VideoProcessingStack extends Stack {
     );
 
     // Video Validator Lambda (with FFmpeg layer)
+    const ffmpegLayerAssetPath = path.join(__dirname, '../layers/ffmpeg');
+    const ffmpegBinPath = path.join(ffmpegLayerAssetPath, 'bin');
+    
+    // Check if FFmpeg binaries exist or create placeholder
+    if (!fs.existsSync(ffmpegBinPath)) {
+      console.warn(
+        `WARNING: FFmpeg binaries not found at ${ffmpegBinPath}. ` +
+        `Please follow the instructions in ${ffmpegLayerAssetPath}/README.md to set up FFmpeg binaries. ` +
+        `Creating placeholder directory for now.`
+      );
+      fs.mkdirSync(ffmpegBinPath, { recursive: true });
+      // Create placeholder files so the layer can be deployed
+      fs.writeFileSync(path.join(ffmpegBinPath, '.placeholder'), 'Replace with actual ffmpeg binaries');
+    }
+    
     const ffmpegLayer = new lambda.LayerVersion(this, 'FFmpegLayer', {
-      code: lambda.Code.fromAsset(path.join(__dirname, '../layers/ffmpeg')),
+      code: lambda.Code.fromAsset(ffmpegLayerAssetPath),
       compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
       description: 'FFmpeg and FFprobe binaries',
     });

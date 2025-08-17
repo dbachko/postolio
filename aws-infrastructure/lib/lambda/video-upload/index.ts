@@ -4,6 +4,7 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { S3Client, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { randomUUID } from 'crypto';
@@ -27,6 +28,7 @@ for (const envVar of requiredEnvVars) {
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const lambdaClient = tracer.captureAWSv3Client(new LambdaClient({}));
 
 // Constants
 const MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024; // 4GB
@@ -173,8 +175,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 // Utility function to sanitize file names
 function sanitizeFileName(fileName: string): string {
-  // Remove path traversal attempts and dangerous characters
+  // Remove null bytes, control characters, path traversal attempts, and dangerous characters
   return fileName
+    .replace(/[\x00-\x1F\x7F]/g, '') // Remove null bytes and control characters
     .replace(/\.\./g, '') // Remove path traversal
     .replace(/[\/\\]/g, '_') // Replace directory separators
     .replace(/[^a-zA-Z0-9._-]/g, '_') // Keep only safe characters
@@ -504,12 +507,34 @@ function validateUploadRequest(request: VideoUploadRequest): { valid: boolean; e
 }
 
 async function triggerVideoProcessing(videoId: string, uploadData: any): Promise<void> {
-  // This will trigger the MediaConvert job in the next Lambda
-  // For now, just log it
   logger.info('Triggering video processing', { 
     videoId, 
     platform: uploadData.platform 
   });
-  
-  // TODO: Invoke video-processor Lambda or send to SQS for processing
+
+  // Invoke the video-processor Lambda asynchronously
+  if (process.env.VIDEO_PROCESSOR_LAMBDA) {
+    try {
+      const payload = JSON.stringify({
+        videoId,
+        s3Key: uploadData.s3Key,
+        platform: uploadData.platform,
+        brandId: uploadData.brandId,
+        contentId: uploadData.contentId,
+      });
+      
+      await lambdaClient.send(new InvokeCommand({
+        FunctionName: process.env.VIDEO_PROCESSOR_LAMBDA,
+        InvocationType: 'Event', // async invocation
+        Payload: Buffer.from(payload),
+      }));
+      
+      logger.info('Video processor Lambda invoked successfully', { videoId });
+    } catch (err) {
+      logger.error('Failed to invoke video processor Lambda', err as Error);
+      throw err;
+    }
+  } else {
+    logger.warn('VIDEO_PROCESSOR_LAMBDA environment variable not set, skipping processing trigger');
+  }
 }

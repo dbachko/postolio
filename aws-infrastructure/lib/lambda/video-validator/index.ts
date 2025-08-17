@@ -4,10 +4,12 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { execSync } from 'child_process';
-import { writeFileSync, unlinkSync } from 'fs';
+import { execSync, execFileSync } from 'child_process';
+import { writeFileSync, unlinkSync, createWriteStream } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { pipeline } from 'stream/promises';
+import { Readable } from 'stream';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'video-validator' });
@@ -206,17 +208,26 @@ async function downloadVideo(bucket: string, key: string): Promise<string> {
     throw new Error('No body in S3 response');
   }
   
-  const chunks: Uint8Array[] = [];
-  const stream = response.Body as any;
+  // Stream directly to file to avoid memory issues with large videos
+  const writeStream = createWriteStream(tempFile);
+  const bodyStream = response.Body as Readable;
   
-  for await (const chunk of stream) {
-    chunks.push(chunk);
+  try {
+    await pipeline(bodyStream, writeStream);
+    logger.info('Video downloaded successfully', { 
+      size: response.ContentLength,
+      tempFile 
+    });
+  } catch (error) {
+    logger.error('Failed to download video', error as Error);
+    // Clean up partial file on error
+    try {
+      unlinkSync(tempFile);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+    throw error;
   }
-  
-  const buffer = Buffer.concat(chunks);
-  writeFileSync(tempFile, buffer);
-  
-  logger.info('Video downloaded', { size: buffer.length });
   
   return tempFile;
 }
@@ -224,12 +235,18 @@ async function downloadVideo(bucket: string, key: string): Promise<string> {
 async function extractVideoMetadata(filePath: string): Promise<VideoMetadata> {
   logger.info('Extracting video metadata', { filePath });
   
-  // Use ffprobe to extract metadata
-  const ffprobeCommand = `ffprobe -v quiet -print_format json -show_format -show_streams "${filePath}"`;
+  // Use execFileSync to avoid command injection
+  const ffprobeArgs = [
+    '-v', 'quiet',
+    '-print_format', 'json',
+    '-show_format',
+    '-show_streams',
+    filePath
+  ];
   
   let output: string;
   try {
-    output = execSync(ffprobeCommand, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+    output = execFileSync('ffprobe', ffprobeArgs, { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 }); // 2MB should be sufficient for metadata
   } catch (error) {
     logger.error('ffprobe failed', error as Error);
     throw new Error(`Failed to extract video metadata: ${(error as Error).message}`);
