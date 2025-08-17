@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { deleteExpiredImages } from './s3-image.js'
-import cron from 'node-cron'
 import { FastifyInstance } from 'fastify'
+import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-events.js'
 
 const prisma = new PrismaClient()
 
@@ -14,20 +14,52 @@ export class RetentionManager {
   }
 
   /**
-   * Initialize retention policy cron jobs
+   * Initialize retention manager
+   * Note: Scheduling is now handled by AWS EventBridge instead of node-cron
    */
   async initialize() {
-    // Schedule daily retention check at 3 AM
-    cron.schedule('0 3 * * *', async () => {
-      await this.processExpiredContent()
+    this.app.log.info('Retention Manager initialized - awaiting EventBridge triggers')
+  }
+
+  /**
+   * Lambda handler for EventBridge scheduled retention processing
+   * This will be triggered by EventBridge rules configured in AWS
+   */
+  async handleEventBridgeTrigger(event: EventBridgeScheduledEvent): Promise<LambdaResponse> {
+    this.app.log.info('Retention processing triggered by EventBridge', {
+      id: event.id,
+      time: event.time,
+      detailType: event['detail-type'],
+      taskType: event.detail?.taskType,
     })
 
-    // Schedule weekly GDPR compliance check
-    cron.schedule('0 4 * * 0', async () => {
-      await this.processGDPRDeletions()
-    })
+    try {
+      const taskType = event.detail?.taskType || 'retention'
+      
+      if (taskType === 'retention') {
+        await this.processExpiredContent()
+      } else if (taskType === 'gdpr') {
+        await this.processGDPRDeletions()
+      }
 
-    this.app.log.info('Retention Manager initialized with cron jobs')
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          message: `${taskType} processing completed`,
+          eventId: event.id,
+          executionTime: event.time,
+        }),
+      }
+    } catch (error) {
+      this.app.log.error({ error }, 'Error handling EventBridge trigger')
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: 'Processing failed',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        }),
+      }
+    }
   }
 
   /**

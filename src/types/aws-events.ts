@@ -18,7 +18,7 @@ export interface EventBridgeScheduledEvent {
   resources: string[];
   detail: {
     /** Custom data passed to the event */
-    taskType?: 'autopilot' | 'content-publishing' | 'metrics-collection';
+    taskType?: 'autopilot' | 'content-publishing' | 'metrics-collection' | 'retention' | 'gdpr';
     /** Additional context for the task */
     context?: Record<string, any>;
   };
