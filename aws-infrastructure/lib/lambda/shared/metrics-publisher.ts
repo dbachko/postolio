@@ -16,16 +16,14 @@ export interface PublishingMetrics {
   latency: number;
   retryCount?: number;
   errorCode?: string;
-  userId?: string;
-  brandId?: string;
+  // Removed userId and brandId to prevent high cardinality
 }
 
 export interface SchedulingMetrics {
   contentCount: number;
   scheduledAt: Date;
   platform: string;
-  userId?: string;
-  brandId?: string;
+  // Removed userId and brandId to prevent high cardinality
 }
 
 export interface RetryMetrics {
@@ -94,13 +92,8 @@ export class MetricsPublisher {
         metrics.addDimensions({ Platform: data.platform });
       }
 
-      // User and brand dimensions
-      if (data.userId) {
-        metrics.addDimensions({ UserId: data.userId });
-      }
-      if (data.brandId) {
-        metrics.addDimensions({ BrandId: data.brandId });
-      }
+      // User and brand dimensions removed to prevent high cardinality
+      // High cardinality dimensions can cause CloudWatch cost explosion
 
       logger.info('Publishing metrics emitted', { data });
     } catch (error) {
@@ -123,13 +116,8 @@ export class MetricsPublisher {
       const latency = data.scheduledAt.getTime() - now.getTime();
       metrics.addMetric('SchedulingLatency', MetricUnit.Milliseconds, Math.max(0, latency));
 
-      // User and brand dimensions
-      if (data.userId) {
-        metrics.addDimensions({ UserId: data.userId });
-      }
-      if (data.brandId) {
-        metrics.addDimensions({ BrandId: data.brandId });
-      }
+      // User and brand dimensions removed to prevent high cardinality
+      // High cardinality dimensions can cause CloudWatch cost explosion
 
       logger.info('Scheduling metrics emitted', { data });
     } catch (error) {

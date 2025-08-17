@@ -43,11 +43,21 @@ export class PerformanceProfiler {
   private profiles: Map<string, ProfileResult> = new Map();
   private segments: Map<string, ProfileSegment[]> = new Map();
   private memoryBaseline?: MemoryProfile;
+  private maxProfileSize = 100; // Prevent memory leaks by limiting map size
 
   /**
    * Start profiling an operation
    */
   startProfile(operation: string, metadata?: Record<string, any>): void {
+    // Clean up old profiles if we're at capacity
+    if (this.profiles.size >= this.maxProfileSize) {
+      const oldestKey = this.profiles.keys().next().value;
+      if (oldestKey) {
+        this.profiles.delete(oldestKey);
+        this.segments.delete(oldestKey);
+      }
+    }
+
     const profile: ProfileResult = {
       operation,
       startTime: Date.now(),
@@ -325,11 +335,11 @@ export class PerformanceProfiler {
   /**
    * Get performance statistics
    */
-  getPerformanceStats(): Record<string, any> {
+  async getPerformanceStats(): Promise<Record<string, any>> {
     const stats = {
       timestamp: new Date().toISOString(),
       memory: this.captureMemoryProfile(),
-      eventLoopLag: this.measureEventLoopLag(),
+      eventLoopLag: await this.measureEventLoopLag(),
       cpuUsage: process.cpuUsage(),
       uptime: process.uptime(),
     };
@@ -341,7 +351,7 @@ export class PerformanceProfiler {
   /**
    * Measure event loop lag
    */
-  private measureEventLoopLag(): number {
+  private async measureEventLoopLag(): Promise<number> {
     const start = Date.now();
     
     return new Promise<number>((resolve) => {
@@ -349,7 +359,7 @@ export class PerformanceProfiler {
         const lag = Date.now() - start;
         resolve(lag);
       });
-    }) as unknown as number;
+    });
   }
 
   /**
@@ -444,3 +454,9 @@ export class PerformanceProfiler {
 
 // Export singleton instance
 export const profiler = new PerformanceProfiler();
+
+// Clean up on Lambda container shutdown
+process.on('SIGTERM', () => {
+  profiler.profiles.clear();
+  profiler.segments.clear();
+});

@@ -12,8 +12,9 @@ import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as xray from 'aws-cdk-lib/aws-xray';
+// import * as logs from 'aws-cdk-lib/aws-logs'; // Unused import
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as iam from 'aws-cdk-lib/aws-iam';
 
 export interface MonitoringStackProps extends StackProps {
   environment: string;
@@ -32,6 +33,7 @@ export class MonitoringStack extends Stack {
   public readonly costDashboard: cloudwatch.Dashboard;
   public readonly slaDashboard: cloudwatch.Dashboard;
   public readonly alertTopic: sns.Topic;
+  public readonly kmsKey: kms.Key;
 
   constructor(scope: Construct, id: string, props: MonitoringStackProps) {
     super(scope, id, props);
@@ -47,10 +49,25 @@ export class MonitoringStack extends Stack {
       alertEmail
     } = props;
 
-    // Create SNS topic for alerts
+    // Create KMS key for encryption
+    this.kmsKey = new kms.Key(this, 'MonitoringKey', {
+      enableKeyRotation: true,
+      description: `KMS key for Content Scheduler monitoring - ${environment}`,
+      removalPolicy: environment === 'prod' ? undefined : RemovalPolicy.DESTROY, // Only for non-prod
+      alias: `alias/content-scheduler-monitoring-${environment}`,
+    });
+
+    // Grant CloudWatch access to use the key
+    this.kmsKey.grantEncryptDecrypt(new iam.ServicePrincipal('cloudwatch.amazonaws.com'));
+    this.kmsKey.grantEncryptDecrypt(new iam.ServicePrincipal('sns.amazonaws.com'));
+
+    // Create SNS topic for alerts with encryption
     this.alertTopic = new sns.Topic(this, 'AlertTopic', {
       displayName: `Content Scheduler Alerts - ${environment}`,
       topicName: `content-scheduler-alerts-${environment}`,
+      masterKey: this.kmsKey,
+      fifo: false,
+      contentBasedDeduplication: false,
     });
 
     // Add email subscription if provided
@@ -99,13 +116,9 @@ export class MonitoringStack extends Stack {
       retryTable
     );
 
-    // Enable X-Ray tracing
-    this.enableXRayTracing([
-      schedulerFunction,
-      publisherFunction,
-      statusUpdaterFunction,
-      retryProcessorFunction,
-    ]);
+    // Note: X-Ray tracing should be enabled at Lambda function creation with:
+    // tracing: lambda.Tracing.ACTIVE
+    // This is handled in the Lambda function definitions
   }
 
   /**
@@ -234,8 +247,8 @@ export class MonitoringStack extends Stack {
    */
   private createBusinessDashboard(
     environment: string,
-    publisherFunction: lambda.Function,
-    schedulerTable: dynamodb.Table
+    _publisherFunction: lambda.Function,
+    _schedulerTable: dynamodb.Table
   ): cloudwatch.Dashboard {
     const dashboard = new cloudwatch.Dashboard(this, 'BusinessDashboard', {
       dashboardName: `ContentScheduler-Business-${environment}`,
@@ -495,7 +508,7 @@ export class MonitoringStack extends Stack {
   private createSLADashboard(
     environment: string,
     publisherFunction: lambda.Function,
-    schedulerTable: dynamodb.Table
+    _schedulerTable: dynamodb.Table
   ): cloudwatch.Dashboard {
     const dashboard = new cloudwatch.Dashboard(this, 'SLADashboard', {
       dashboardName: `ContentScheduler-SLA-${environment}`,
@@ -776,29 +789,7 @@ export class MonitoringStack extends Stack {
     );
   }
 
-  /**
-   * Enable X-Ray tracing for Lambda functions
-   */
-  private enableXRayTracing(functions: lambda.Function[]): void {
-    functions.forEach(fn => {
-      // X-Ray tracing is typically enabled at the function level
-      // This would be done in the Lambda function definition
-      // Here we just add the necessary permissions
-      const xrayPolicy = new xray.CfnSamplingRule(this, `${fn.node.id}XRaySamplingRule`, {
-        samplingRule: {
-          ruleName: `${fn.functionName}-sampling`,
-          priority: 1000,
-          reservoirSize: 1,
-          fixedRate: 0.1, // Sample 10% of requests
-          version: 1,
-          serviceName: fn.functionName,
-          serviceType: 'AWS::Lambda::Function',
-          host: '*',
-          httpMethod: '*',
-          urlPath: '*',
-          resourceArn: '*',
-        },
-      });
-    });
-  }
+  // X-Ray tracing should be enabled at Lambda function creation with:
+  // tracing: lambda.Tracing.ACTIVE
+  // This is handled in the Lambda function definitions
 }
