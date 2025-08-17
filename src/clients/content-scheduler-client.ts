@@ -123,6 +123,8 @@ export interface ContentSchedulerConfig {
   maxRetries?: number;
   retryDelay?: number;
   circuitBreakerOptions?: CircuitBreaker.Options;
+  // User context for multi-tenant support
+  userId?: string;
 }
 
 // ==================== Main Client Class ====================
@@ -143,7 +145,7 @@ export class ContentSchedulerClient {
     // Initialize Axios client
     this.client = axios.create({
       baseURL: this.config.baseURL,
-      timeout: this.config.timeout,
+      timeout: this.config.timeout || 10000,
       headers: {
         'Content-Type': 'application/json',
         ...(this.config.apiKey && { 'X-API-Key': this.config.apiKey }),
@@ -236,7 +238,7 @@ export class ContentSchedulerClient {
   /**
    * List schedules with filters
    */
-  async listSchedules(params: ListSchedulesParams = {}): Promise<ScheduleList> {
+  async listSchedules(params: ListSchedulesParams = { limit: 20 }): Promise<ScheduleList> {
     return this.executeWithCircuitBreaker(async () => {
       // Validate parameters
       const validatedParams = ListSchedulesParamsSchema.parse(params);
@@ -273,7 +275,7 @@ export class ContentSchedulerClient {
    */
   async getSchedulesByBrand(
     brandId: string, 
-    params: Omit<ListSchedulesParams, 'brandId'> = {}
+    params: Omit<ListSchedulesParams, 'brandId'> = { limit: 20 }
   ): Promise<ScheduleList> {
     return this.listSchedules({ ...params, brandId });
   }
@@ -304,16 +306,18 @@ export class ContentSchedulerClient {
     published: number;
     failed: number;
     cancelled: number;
+    processing: number;
   }> {
     const stats = {
       pending: 0,
       published: 0,
       failed: 0,
       cancelled: 0,
+      processing: 0,
     };
 
     // Fetch counts for each status
-    const statuses: ScheduleStatus[] = ['pending', 'published', 'failed', 'cancelled'];
+    const statuses: ScheduleStatus[] = ['pending', 'published', 'failed', 'cancelled', 'processing'];
     
     for (const status of statuses) {
       const result = await this.listSchedules({
@@ -334,7 +338,7 @@ export class ContentSchedulerClient {
    */
   private async executeWithCircuitBreaker<T>(fn: () => Promise<T>): Promise<T> {
     try {
-      return await this.circuitBreaker.fire(fn);
+      return await this.circuitBreaker.fire(fn) as T;
     } catch (error) {
       if (error instanceof SchedulerError) {
         throw error;

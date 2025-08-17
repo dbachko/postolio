@@ -133,9 +133,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.on(signal, async () => {
       app.log.warn(`Received ${signal}, starting graceful shutdown...`)
       try {
-        // Stop background services
-        schedulerService.stop()
-        autopilotService.stop()
+        // Background services now managed by EventBridge
+        // No need to stop services here
         
         // Close server
         await app.close()
@@ -160,9 +159,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       app.log.info('🚀 Initializing database schema...')
       await ensureDatabaseSchema()
       
-      // Start background services only after database is ready
-      schedulerService.start()
-      autopilotService.start()
+      // Background services now managed by EventBridge
+      // Services are triggered by AWS Lambda/EventBridge, not started here
       
       // Initialize retention manager
       const retentionManager = getRetentionManager(app)

@@ -208,7 +208,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         return reply.status(404).send({ error: 'Brand not found' })
       }
 
-      const scheduledPosts = await schedulerService.getScheduledPosts(brandId)
+      const scheduledPosts = await schedulerService.getUpcomingPosts(brandId)
       
       reply.send({ scheduledPosts })
     } catch (error) {
