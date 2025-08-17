@@ -8,10 +8,11 @@ import { Tracer } from '@aws-lambda-powertools/tracer';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { SQSEvent, SQSRecord } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { SQSClient, SendMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-import { retryWithBackoff, PLATFORM_RETRY_CONFIGS } from '../../shared/retry-utils';
+import { PLATFORM_RETRY_CONFIGS } from '../../shared/retry-utils';
+import * as crypto from 'crypto';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'dlq-processor' });
@@ -26,7 +27,7 @@ const snsClient = tracer.captureAWSv3Client(new SNSClient({}));
 
 // Configuration
 const MAX_RETRY_COUNT = 5;
-const PERMANENT_FAILURE_THRESHOLD = 10;
+// const PERMANENT_FAILURE_THRESHOLD = 10; // Reserved for future use
 
 interface DLQMessage {
   messageType: 'SCHEDULE_PUBLISH' | 'VIDEO_PROCESSING' | 'PLATFORM_API' | 'ANALYTICS';
@@ -232,7 +233,7 @@ function getRetryStrategy(dlqMessage: DLQMessage): RetryStrategy {
         }),
       };
       
-    case 'PLATFORM_API':
+    case 'PLATFORM_API': {
       // Use platform-specific retry configuration
       const platform = metadata.platform || 'default';
       const config = PLATFORM_RETRY_CONFIGS[platform] || {};
@@ -244,6 +245,7 @@ function getRetryStrategy(dlqMessage: DLQMessage): RetryStrategy {
           900 // SQS max delay is 900 seconds
         ),
       };
+    }
       
     case 'ANALYTICS':
       return {
@@ -389,8 +391,8 @@ async function handlePermanentFailure(dlqMessage: DLQMessage, record: SQSRecord)
 async function recordRetryResult(dlqMessage: DLQMessage, status: 'RECOVERED' | 'FAILED'): Promise<void> {
   const record: RetryRecord = {
     pk: `DLQ#${dlqMessage.messageType}`,
-    sk: `RETRY#${Date.now()}#${Math.random().toString(36).substr(2, 9)}`,
-    messageId: dlqMessage.metadata.scheduleId || dlqMessage.metadata.videoId || 'unknown',
+    sk: `RETRY#${Date.now()}#${crypto.randomUUID()}`,
+    messageId: dlqMessage.metadata.scheduleId || dlqMessage.metadata.videoId || `${dlqMessage.messageType}-${Date.now()}`,
     retryCount: dlqMessage.metadata.retryCount,
     maxRetries: MAX_RETRY_COUNT,
     firstFailureTime: dlqMessage.metadata.firstFailureTime,
@@ -415,7 +417,7 @@ async function storeFailedMessage(dlqMessage: DLQMessage): Promise<void> {
     TableName: process.env.FAILED_MESSAGES_TABLE!,
     Item: {
       pk: `FAILED#${dlqMessage.messageType}`,
-      sk: `${Date.now()}#${Math.random().toString(36).substr(2, 9)}`,
+      sk: `${Date.now()}#${crypto.randomUUID()}`,
       ...dlqMessage,
       storedAt: new Date().toISOString(),
       ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days retention

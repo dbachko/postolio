@@ -9,10 +9,10 @@ import { Tracer } from '@aws-lambda-powertools/tracer';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, DeleteCommand, BatchWriteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, BatchWriteCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
-import { KMSClient, EncryptCommand, DecryptCommand, GenerateDataKeyCommand } from '@aws-sdk/client-kms';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
+// import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as crypto from 'crypto';
 
@@ -26,7 +26,8 @@ const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 const kmsClient = tracer.captureAWSv3Client(new KMSClient({}));
-const secretsClient = tracer.captureAWSv3Client(new SecretsManagerClient({}));
+// Secrets client available if needed for token verification
+// const secretsClient = tracer.captureAWSv3Client(new SecretsManagerClient({}));
 
 // Configuration
 const EXPORT_BUCKET = process.env.GDPR_EXPORT_BUCKET!;
@@ -75,7 +76,7 @@ function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult 
     ...response,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
+      'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN!,
       'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       'X-Content-Type-Options': 'nosniff',
@@ -669,7 +670,11 @@ function anonymizeForViewing(data: any): any {
     for (const [key, value] of Object.entries(obj)) {
       if (sensitiveFields.includes(key) && typeof value === 'string') {
         // Mask sensitive fields
-        anonymized[key] = value.substring(0, 3) + '***' + value.substring(Math.max(value.length - 2, 3));
+        if (value.length < 3) {
+          anonymized[key] = '*'.repeat(value.length);
+        } else {
+          anonymized[key] = value.substring(0, 3) + '***' + value.substring(Math.max(value.length - 2, 3));
+        }
       } else if (typeof value === 'object') {
         anonymized[key] = anonymize(value);
       } else {
@@ -710,12 +715,49 @@ function convertToCSV(data: any): string {
 }
 
 /**
- * Verify deletion confirmation token
+ * Generate secure deletion token with HMAC and timestamp
+ */
+async function _generateDeletionToken(userId: string): Promise<string> {
+  const timestamp = Date.now().toString();
+  const secret = process.env.DELETION_TOKEN_SECRET || 'default-secret-key-change-in-production';
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(`${userId}:DELETE:${timestamp}`)
+    .digest('hex');
+  return `${timestamp}.${signature}`;
+}
+
+/**
+ * Verify deletion confirmation token with HMAC and timestamp validation
  */
 async function verifyDeletionToken(userId: string, token: string): Promise<boolean> {
-  // In production, verify against a stored token or use a cryptographic signature
-  // For now, simple validation
-  return token === crypto.createHash('sha256').update(`${userId}:DELETE`).digest('hex').substring(0, 16);
+  try {
+    const [timestamp, signature] = token.split('.');
+    
+    if (!timestamp || !signature) {
+      return false;
+    }
+    
+    // Check token age (24 hours max)
+    const tokenAge = Date.now() - parseInt(timestamp);
+    if (tokenAge > 24 * 60 * 60 * 1000) {
+      logger.warn('Deletion token expired', { userId, tokenAge });
+      return false;
+    }
+    
+    // Verify HMAC signature
+    const secret = process.env.DELETION_TOKEN_SECRET || 'default-secret-key-change-in-production';
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(`${userId}:DELETE:${timestamp}`)
+      .digest('hex');
+      
+    // Use timing-safe comparison to prevent timing attacks
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+  } catch (error) {
+    logger.error('Error verifying deletion token', { userId, error });
+    return false;
+  }
 }
 
 /**

@@ -135,7 +135,7 @@ export async function retryWithBackoff<T>(
     onRetry,
   } = finalConfig;
 
-  let lastError: Error;
+  let lastError: Error | undefined;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
@@ -183,7 +183,11 @@ export async function retryWithBackoff<T>(
     }
   }
 
-  throw lastError!;
+  if (lastError) {
+    throw lastError;
+  } else {
+    throw new Error('No error captured during retries');
+  }
 }
 
 /**
