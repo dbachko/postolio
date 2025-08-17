@@ -13,6 +13,25 @@ const logger = new Logger({ serviceName: 'video-processor' });
 const tracer = new Tracer({ serviceName: 'video-processor' });
 const metrics = new Metrics({ namespace: 'ContentScheduler', serviceName: 'video-processor' });
 
+// Validate required environment variables
+const requiredEnvVars = [
+  'VIDEO_BUCKET',
+  'PROCESSED_VIDEO_BUCKET',
+  'VIDEO_UPLOADS_TABLE',
+  'VIDEO_PROCESSING_TABLE',
+  'MEDIACONVERT_ENDPOINT',
+  'MEDIACONVERT_ROLE_ARN',
+  'MEDIACONVERT_QUEUE_ARN',
+];
+
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    const error = `Missing required environment variable: ${envVar}`;
+    logger.error(error);
+    throw new Error(error);
+  }
+}
+
 // Initialize AWS SDK clients
 const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
 const docClient = DynamoDBDocumentClient.from(dynamoClient);

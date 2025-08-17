@@ -29,18 +29,46 @@ export class VideoProcessingStack extends Stack {
   public readonly videoValidatorFunction: NodejsFunction;
   public readonly videoDistribution: cloudfront.Distribution;
 
+  private getAllowedOrigins(environment: string): string[] {
+    switch (environment) {
+      case 'prod':
+        return ['https://postolio.example', 'https://postolio.example'];
+      case 'staging':
+        return ['https://postolio.example'];
+      default:
+        return ['http://localhost:3000', 'http://localhost:5173'];
+    }
+  }
+
   constructor(scope: Construct, id: string, props: VideoProcessingStackProps) {
     super(scope, id, props);
 
     const { environment, schedulesTable, powertoolsLayer } = props;
 
-    // S3 Buckets for video storage
+    // S3 Bucket for access logs
+    const logBucket = new s3.Bucket(this, 'AccessLogBucket', {
+      bucketName: `postolio-video-logs-${environment}-${this.account}`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      lifecycleRules: [
+        {
+          id: 'delete-old-logs',
+          expiration: Duration.days(90),
+        },
+      ],
+      removalPolicy: environment === 'prod' ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+      autoDeleteObjects: environment !== 'prod',
+    });
+
+    // S3 Buckets for video storage with access logging
     this.videoBucket = new s3.Bucket(this, 'VideoBucket', {
       bucketName: `postolio-videos-${environment}-${this.account}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: environment === 'prod' ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
       autoDeleteObjects: environment !== 'prod',
+      serverAccessLogsBucket: logBucket,
+      serverAccessLogsPrefix: 'video-bucket/',
       lifecycleRules: [
         {
           id: 'delete-incomplete-uploads',
@@ -69,9 +97,9 @@ export class VideoProcessingStack extends Stack {
             s3.HttpMethods.DELETE,
             s3.HttpMethods.HEAD,
           ],
-          allowedOrigins: ['*'], // Restrict in production
-          allowedHeaders: ['*'],
-          exposedHeaders: ['ETag'],
+          allowedOrigins: this.getAllowedOrigins(environment),
+          allowedHeaders: ['Content-Type', 'Authorization', 'x-amz-meta-*'],
+          exposedHeaders: ['ETag', 'x-amz-server-side-encryption', 'x-amz-request-id'],
           maxAge: 3000,
         },
       ],
@@ -83,6 +111,8 @@ export class VideoProcessingStack extends Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: environment === 'prod' ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
       autoDeleteObjects: environment !== 'prod',
+      serverAccessLogsBucket: logBucket,
+      serverAccessLogsPrefix: 'processed-video-bucket/',
       lifecycleRules: [
         {
           id: 'delete-old-processed-videos',
@@ -119,13 +149,24 @@ export class VideoProcessingStack extends Stack {
       encryption: sqs.QueueEncryption.KMS_MANAGED,
     });
 
-    // IAM Role for MediaConvert
+    // IAM Role for MediaConvert with least privilege
     const mediaConvertRole = new iam.Role(this, 'MediaConvertRole', {
       assumedBy: new iam.ServicePrincipal('mediaconvert.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'),
-      ],
+      description: `MediaConvert role for video processing in ${environment}`,
     });
+
+    // Add specific S3 permissions for MediaConvert
+    mediaConvertRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:GetObject', 's3:GetObjectVersion'],
+      resources: [this.videoBucket.arnForObjects('*')],
+    }));
+
+    mediaConvertRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:PutObject', 's3:PutObjectAcl'],
+      resources: [this.processedVideoBucket.arnForObjects('*')],
+    }));
 
     // Video Upload Lambda
     this.videoUploadFunction = new NodejsFunction(this, 'VideoUploadFunction', {

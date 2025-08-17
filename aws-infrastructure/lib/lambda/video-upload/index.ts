@@ -13,6 +13,16 @@ const logger = new Logger({ serviceName: 'video-upload' });
 const tracer = new Tracer({ serviceName: 'video-upload' });
 const metrics = new Metrics({ namespace: 'ContentScheduler', serviceName: 'video-upload' });
 
+// Validate required environment variables at startup
+const requiredEnvVars = ['VIDEO_BUCKET', 'VIDEO_UPLOADS_TABLE'];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    const error = `Missing required environment variable: ${envVar}`;
+    logger.error(error);
+    throw new Error(error);
+  }
+}
+
 // Initialize AWS SDK clients
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
@@ -161,6 +171,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
+// Utility function to sanitize file names
+function sanitizeFileName(fileName: string): string {
+  // Remove path traversal attempts and dangerous characters
+  return fileName
+    .replace(/\.\./g, '') // Remove path traversal
+    .replace(/[\/\\]/g, '_') // Replace directory separators
+    .replace(/[^a-zA-Z0-9._-]/g, '_') // Keep only safe characters
+    .substring(0, 255); // Limit length
+}
+
 async function initiateMultipartUpload(request: VideoUploadRequest): Promise<APIGatewayProxyResult> {
   try {
     // Validate request
@@ -176,7 +196,8 @@ async function initiateMultipartUpload(request: VideoUploadRequest): Promise<API
     }
 
     const videoId = `VID_${Date.now()}_${randomUUID()}`;
-    const key = `videos/${request.brandId}/${videoId}/${request.fileName}`;
+    const sanitizedFileName = sanitizeFileName(request.fileName);
+    const key = `videos/${request.brandId}/${videoId}/${sanitizedFileName}`;
 
     // Initiate multipart upload with S3
     const multipartUpload = await s3Client.send(new CreateMultipartUploadCommand({

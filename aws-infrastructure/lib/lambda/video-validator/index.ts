@@ -14,6 +14,16 @@ const logger = new Logger({ serviceName: 'video-validator' });
 const tracer = new Tracer({ serviceName: 'video-validator' });
 const metrics = new Metrics({ namespace: 'ContentScheduler', serviceName: 'video-validator' });
 
+// Validate required environment variables
+const requiredEnvVars = ['VIDEO_UPLOADS_TABLE'];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    const error = `Missing required environment variable: ${envVar}`;
+    logger.error(error);
+    throw new Error(error);
+  }
+}
+
 // Initialize AWS SDK clients
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
