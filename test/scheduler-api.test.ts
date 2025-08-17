@@ -30,24 +30,36 @@ describe('Content Scheduler API Tests', () => {
   });
 
   afterAll(async () => {
-    // Clean up test data
-    const scanResult = await dynamoClient.send(new ScanCommand({
-      TableName: process.env.SCHEDULES_TABLE!,
-      FilterExpression: 'brandId = :brandId',
-      ExpressionAttributeValues: {
-        ':brandId': testBrandId,
-      },
-    }));
+    // Clean up test data using a real DynamoDB client (not mocked)
+    // Skip cleanup in test environment since we're using mocks
+    if (process.env.NODE_ENV !== 'test') {
+      // Temporarily restore the real implementation for cleanup
+      jest.unmock('@aws-sdk/client-dynamodb');
+      jest.unmock('@aws-sdk/lib-dynamodb');
+      
+      const { DynamoDBClient: RealDynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+      const { DynamoDBDocumentClient: RealDocClient, ScanCommand: RealScanCommand, DeleteCommand: RealDeleteCommand } = await import('@aws-sdk/lib-dynamodb');
+      
+      const realDynamoClient = RealDocClient.from(new RealDynamoDBClient({}));
+      
+      const scanResult = await realDynamoClient.send(new RealScanCommand({
+        TableName: process.env.SCHEDULES_TABLE!,
+        FilterExpression: 'brandId = :brandId',
+        ExpressionAttributeValues: {
+          ':brandId': testBrandId,
+        },
+      }));
 
-    if (scanResult.Items && scanResult.Items.length > 0) {
-      for (const item of scanResult.Items) {
-        await dynamoClient.send(new DeleteCommand({
-          TableName: process.env.SCHEDULES_TABLE!,
-          Key: {
-            pk: item.pk,
-            sk: item.sk,
-          },
-        }));
+      if (scanResult.Items && scanResult.Items.length > 0) {
+        for (const item of scanResult.Items) {
+          await realDynamoClient.send(new RealDeleteCommand({
+            TableName: process.env.SCHEDULES_TABLE!,
+            Key: {
+              pk: item.pk,
+              sk: item.sk,
+            },
+          }));
+        }
       }
     }
   });

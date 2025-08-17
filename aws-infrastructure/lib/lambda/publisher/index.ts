@@ -2,10 +2,20 @@ import { Logger } from '@aws-lambda-powertools/logger';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+// Platform-specific character limits
+const PLATFORM_LIMITS = {
+  INSTAGRAM_CAPTION: 2200,
+  FACEBOOK_POST: 63206,
+  TWITTER_TWEET: 280,
+  LINKEDIN_POST: 3000,
+  YOUTUBE_TITLE: 100,
+  YOUTUBE_DESCRIPTION: 5000,
+} as const;
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'publisher' });
@@ -104,9 +114,10 @@ class InstagramAdapter implements PlatformAdapter {
     };
   }
 
-  private formatCaption(caption: string, hashtags: string[]): string {
+  private formatCaption(caption: string | undefined | null, hashtags: string[] | undefined): string {
+    const safeCaption = caption ?? '';
     const hashtagString = hashtags?.length ? '\n\n' + hashtags.map(tag => `#${tag}`).join(' ') : '';
-    return `${caption}${hashtagString}`.slice(0, 2200); // Instagram caption limit
+    return `${safeCaption}${hashtagString}`.slice(0, PLATFORM_LIMITS.INSTAGRAM_CAPTION);
   }
 }
 
@@ -138,7 +149,7 @@ class TwitterAdapter implements PlatformAdapter {
   }
 
   formatContent(schedule: any): any {
-    return { text: schedule.caption?.slice(0, 280) }; // Twitter character limit
+    return { text: schedule.caption?.slice(0, PLATFORM_LIMITS.TWITTER_TWEET) };
   }
 }
 
@@ -171,8 +182,8 @@ class YouTubeAdapter implements PlatformAdapter {
 
   formatContent(schedule: any): any {
     return {
-      title: schedule.caption?.split('\n')[0]?.slice(0, 100),
-      description: schedule.caption,
+      title: schedule.caption?.split('\n')[0]?.slice(0, PLATFORM_LIMITS.YOUTUBE_TITLE),
+      description: schedule.caption?.slice(0, PLATFORM_LIMITS.YOUTUBE_DESCRIPTION),
     };
   }
 }
@@ -277,9 +288,7 @@ async function logAudit(
   result: 'success' | 'failure',
   details?: any
 ): Promise<void> {
-  const { PutCommand: AuditPutCommand } = await import('@aws-sdk/lib-dynamodb');
-  
-  await docClient.send(new AuditPutCommand({
+  await docClient.send(new PutCommand({
     TableName: process.env.AUDIT_LOG_TABLE!,
     Item: {
       pk: `AUDIT#${scheduleId}`,

@@ -2,7 +2,7 @@ import { Logger } from '@aws-lambda-powertools/logger';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, GetCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, GetCommand, DeleteCommand, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { SchedulerClient, CreateScheduleCommand, DeleteScheduleCommand } from '@aws-sdk/client-scheduler';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { randomUUID } from 'crypto';
@@ -114,7 +114,7 @@ function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult 
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Add context to logs
-  logger.appendKeys({
+  logger.addPersistentLogAttributes({
     requestId: event.requestContext.requestId,
     method: event.httpMethod,
     path: event.path,
@@ -282,7 +282,6 @@ async function listSchedules(queryParams: any): Promise<APIGatewayProxyResult> {
   try {
     // Query schedules by brand if brandId provided
     if (brandId) {
-      const { QueryCommand } = await import('@aws-sdk/lib-dynamodb');
       const result = await docClient.send(new QueryCommand({
         TableName: process.env.SCHEDULES_TABLE!,
         IndexName: 'gsi1',
@@ -308,7 +307,6 @@ async function listSchedules(queryParams: any): Promise<APIGatewayProxyResult> {
     }
     
     // Scan all schedules if no brandId
-    const { ScanCommand } = await import('@aws-sdk/lib-dynamodb');
     const result = await docClient.send(new ScanCommand({
       TableName: process.env.SCHEDULES_TABLE!,
       FilterExpression: '#status = :status AND sk = :sk',
