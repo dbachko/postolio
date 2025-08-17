@@ -30,13 +30,22 @@ class SchedulerService {
     const result = await schedulerAdapter.scheduleContent(contentId, customTime);
     
     if (result.success) {
+      // Ensure brandId is available - it should always be returned by the adapter
+      if (!result.brandId) {
+        console.error(`Warning: brandId not returned for content ${contentId}`);
+        return {
+          success: false,
+          error: 'Failed to retrieve brand information',
+        };
+      }
+      
       return {
         success: true,
         scheduledPost: {
           id: result.scheduleId || `schedule_${contentId}`,
           contentId,
-          brandId: result.brandId || '', // Extracted from adapter result
-          scheduledTime: customTime || new Date(),
+          brandId: result.brandId,
+          scheduledTime: customTime || new Date(Date.now() + SCHEDULER_TIME_INTERVALS.DEFAULT_SCHEDULE_DELAY_MS),
           status: 'pending',
           retryCount: 0,
         },

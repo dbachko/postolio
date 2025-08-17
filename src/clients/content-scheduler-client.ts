@@ -3,6 +3,7 @@
  * Provides type-safe integration with AWS Content Scheduler microservice
  */
 
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import CircuitBreaker from 'opossum';
@@ -308,25 +309,32 @@ export class ContentSchedulerClient {
     cancelled: number;
     processing: number;
   }> {
-    const stats = {
+    // Fetch counts for each status in parallel
+    const statuses: ScheduleStatus[] = ['pending', 'published', 'failed', 'cancelled', 'processing'];
+    
+    const results = await Promise.all(
+      statuses.map(status =>
+        this.listSchedules({
+          brandId,
+          status,
+          limit: 1, // We only need the total count
+        })
+      )
+    );
+
+    // Build stats object from parallel results
+    const stats: Record<ScheduleStatus, number> = {
       pending: 0,
       published: 0,
       failed: 0,
       cancelled: 0,
       processing: 0,
     };
-
-    // Fetch counts for each status
-    const statuses: ScheduleStatus[] = ['pending', 'published', 'failed', 'cancelled', 'processing'];
     
-    for (const status of statuses) {
-      const result = await this.listSchedules({
-        brandId,
-        status,
-        limit: 1, // We only need the total count
-      });
-      stats[status] = result.total;
-    }
+    statuses.forEach((status, index) => {
+      const result = results[index];
+      stats[status] = result ? result.total : 0;
+    });
 
     return stats;
   }
@@ -607,7 +615,7 @@ export class ContentSchedulerClient {
    * Generate unique request ID
    */
   private generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `req_${randomUUID()}`;
   }
 
   /**
