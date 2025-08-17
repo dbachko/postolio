@@ -407,8 +407,12 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   }, [])
 
   // Handle event click to navigate to post detail
-  const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    const resource = event.resource
+  const handleSelectEvent = useCallback((event: CalendarEvent | object, _e?: React.SyntheticEvent<HTMLElement>) => {
+    // Type guard to ensure we have the right event type
+    if (!('resource' in event)) return
+    
+    const calendarEvent = event as CalendarEvent
+    const resource = calendarEvent.resource
     // Don't navigate for placeholders
     if ('isPlaceholder' in resource && resource.isPlaceholder) {
       return
