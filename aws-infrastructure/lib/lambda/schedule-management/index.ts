@@ -17,6 +17,101 @@ const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 
+// Validation schemas
+interface ScheduleRequest {
+  brandId: string;
+  contentId: string;
+  platform: 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
+  scheduledAt: string;
+  contentType?: 'image' | 'video' | 'carousel' | 'reel' | 'story';
+  videoUrl?: string;
+  caption?: string;
+  hashtags?: string[];
+  mediaUrls?: string[];
+  userId?: string;
+}
+
+// Input validation helper
+function validateScheduleRequest(data: any): { valid: boolean; errors?: string[]; data?: ScheduleRequest } {
+  const errors: string[] = [];
+  
+  // Required fields
+  if (!data.brandId) errors.push('brandId is required');
+  if (!data.contentId) errors.push('contentId is required');
+  if (!data.platform) errors.push('platform is required');
+  if (!data.scheduledAt) errors.push('scheduledAt is required');
+  
+  // Platform validation
+  const validPlatforms = ['instagram', 'facebook', 'twitter', 'linkedin', 'youtube'];
+  if (data.platform && !validPlatforms.includes(data.platform)) {
+    errors.push(`platform must be one of: ${validPlatforms.join(', ')}`);
+  }
+  
+  // Date validation
+  if (data.scheduledAt) {
+    const scheduledDate = new Date(data.scheduledAt);
+    const now = new Date();
+    if (isNaN(scheduledDate.getTime())) {
+      errors.push('scheduledAt must be a valid ISO 8601 date string');
+    } else if (scheduledDate <= now) {
+      errors.push('scheduledAt must be in the future');
+    }
+  }
+  
+  // Content type validation
+  const validContentTypes = ['image', 'video', 'carousel', 'reel', 'story'];
+  if (data.contentType && !validContentTypes.includes(data.contentType)) {
+    errors.push(`contentType must be one of: ${validContentTypes.join(', ')}`);
+  }
+  
+  // Video URL required for video content types
+  if (['video', 'reel'].includes(data.contentType) && !data.videoUrl) {
+    errors.push('videoUrl is required for video content');
+  }
+  
+  // Caption length validation (platform-specific)
+  if (data.caption) {
+    const maxLengths: Record<string, number> = {
+      instagram: 2200,
+      facebook: 63206,
+      twitter: 280,
+      linkedin: 3000,
+      youtube: 5000,
+    };
+    const maxLength = maxLengths[data.platform] || 2200;
+    if (data.caption.length > maxLength) {
+      errors.push(`caption exceeds maximum length of ${maxLength} characters for ${data.platform}`);
+    }
+  }
+  
+  // Hashtag validation
+  if (data.hashtags) {
+    if (!Array.isArray(data.hashtags)) {
+      errors.push('hashtags must be an array');
+    } else if (data.hashtags.length > 30) {
+      errors.push('maximum 30 hashtags allowed');
+    }
+  }
+  
+  return errors.length > 0 
+    ? { valid: false, errors }
+    : { valid: true, data: data as ScheduleRequest };
+}
+
+// CORS headers helper
+function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult {
+  return {
+    ...response,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      ...response.headers,
+    },
+  };
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Add context to logs
   logger.addContext({
@@ -32,6 +127,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const scheduleId = pathParameters?.scheduleId;
 
     let result: APIGatewayProxyResult;
+
+    // Handle CORS preflight
+    if (httpMethod === 'OPTIONS') {
+      return addCorsHeaders({
+        statusCode: 200,
+        body: '',
+      });
+    }
 
     switch (httpMethod) {
       case 'POST':
@@ -65,25 +168,38 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Publish metrics
     metrics.publishStoredMetrics();
 
-    return result;
+    return addCorsHeaders(result);
   } catch (error) {
     logger.error('Error processing request', error as Error);
     metrics.addMetric('ScheduleError', MetricUnits.Count, 1);
     metrics.publishStoredMetrics();
 
-    return {
+    return addCorsHeaders({
       statusCode: 500,
       body: JSON.stringify({ 
         error: 'Internal server error',
         message: error instanceof Error ? error.message : 'Unknown error',
       }),
-    };
+    });
   }
 };
 
 async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
+  // Validate input
+  const validation = validateScheduleRequest(data);
+  if (!validation.valid) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ 
+        error: 'Validation failed',
+        errors: validation.errors,
+      }),
+    };
+  }
+  
+  const validatedData = validation.data!;
   const scheduleId = `SCH_${Date.now()}_${randomUUID()}`;
-  const scheduledAt = new Date(data.scheduledAt).toISOString();
+  const scheduledAt = new Date(validatedData.scheduledAt).toISOString();
 
   // Store in DynamoDB
   await docClient.send(new PutCommand({
@@ -92,16 +208,18 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
       pk: `SCHEDULE#${scheduleId}`,
       sk: 'METADATA',
       scheduleId,
-      brandId: data.brandId,
-      contentId: data.contentId,
-      platform: data.platform,
+      brandId: validatedData.brandId,
+      contentId: validatedData.contentId,
+      platform: validatedData.platform,
       scheduledAt,
       status: 'scheduled',
-      contentType: data.contentType || 'image',
-      videoUrl: data.videoUrl,
-      caption: data.caption,
-      hashtags: data.hashtags,
-      gsi1pk: `BRAND#${data.brandId}`,
+      contentType: validatedData.contentType || 'image',
+      videoUrl: validatedData.videoUrl,
+      caption: validatedData.caption,
+      hashtags: validatedData.hashtags,
+      mediaUrls: validatedData.mediaUrls,
+      userId: validatedData.userId,
+      gsi1pk: `BRAND#${validatedData.brandId}`,
       gsi1sk: scheduledAt,
       ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days
       createdAt: new Date().toISOString(),
@@ -155,19 +273,156 @@ async function getSchedule(scheduleId: string): Promise<APIGatewayProxyResult> {
 }
 
 async function listSchedules(queryParams: any): Promise<APIGatewayProxyResult> {
-  // Implementation for listing schedules
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ schedules: [] }),
-  };
+  const brandId = queryParams?.brandId;
+  const status = queryParams?.status || 'scheduled';
+  const limit = parseInt(queryParams?.limit || '50');
+  
+  logger.info('Listing schedules', { brandId, status, limit });
+  
+  try {
+    // Query schedules by brand if brandId provided
+    if (brandId) {
+      const { QueryCommand } = await import('@aws-sdk/lib-dynamodb');
+      const result = await docClient.send(new QueryCommand({
+        TableName: process.env.SCHEDULES_TABLE!,
+        IndexName: 'gsi1',
+        KeyConditionExpression: 'gsi1pk = :brandId',
+        FilterExpression: '#status = :status',
+        ExpressionAttributeNames: {
+          '#status': 'status',
+        },
+        ExpressionAttributeValues: {
+          ':brandId': `BRAND#${brandId}`,
+          ':status': status,
+        },
+        Limit: limit,
+      }));
+      
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ 
+          schedules: result.Items || [],
+          lastEvaluatedKey: result.LastEvaluatedKey,
+        }),
+      };
+    }
+    
+    // Scan all schedules if no brandId
+    const { ScanCommand } = await import('@aws-sdk/lib-dynamodb');
+    const result = await docClient.send(new ScanCommand({
+      TableName: process.env.SCHEDULES_TABLE!,
+      FilterExpression: '#status = :status AND sk = :sk',
+      ExpressionAttributeNames: {
+        '#status': 'status',
+      },
+      ExpressionAttributeValues: {
+        ':status': status,
+        ':sk': 'METADATA',
+      },
+      Limit: limit,
+    }));
+    
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ 
+        schedules: result.Items || [],
+        lastEvaluatedKey: result.LastEvaluatedKey,
+      }),
+    };
+  } catch (error) {
+    logger.error('Error listing schedules', error as Error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Failed to list schedules' }),
+    };
+  }
 }
 
 async function updateSchedule(scheduleId: string, data: any): Promise<APIGatewayProxyResult> {
-  // Implementation for updating schedule
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ message: 'Schedule updated' }),
-  };
+  try {
+    // First, get the existing schedule
+    const existingSchedule = await docClient.send(new GetCommand({
+      TableName: process.env.SCHEDULES_TABLE!,
+      Key: {
+        pk: `SCHEDULE#${scheduleId}`,
+        sk: 'METADATA',
+      },
+    }));
+    
+    if (!existingSchedule.Item) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: 'Schedule not found' }),
+      };
+    }
+    
+    // Update the schedule data
+    const updatedItem = {
+      ...existingSchedule.Item,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    // If scheduledAt changed, we need to update EventBridge
+    if (data.scheduledAt && data.scheduledAt !== existingSchedule.Item.scheduledAt) {
+      const newScheduledAt = new Date(data.scheduledAt).toISOString();
+      
+      // Delete old EventBridge schedule
+      try {
+        await schedulerClient.send(new DeleteScheduleCommand({
+          Name: `schedule-${scheduleId}`,
+          GroupName: process.env.SCHEDULER_GROUP_NAME,
+        }));
+      } catch (err) {
+        logger.warn('Could not delete old schedule, it may not exist', { scheduleId });
+      }
+      
+      // Create new EventBridge schedule
+      await schedulerClient.send(new CreateScheduleCommand({
+        Name: `schedule-${scheduleId}`,
+        GroupName: process.env.SCHEDULER_GROUP_NAME,
+        ScheduleExpression: `at(${newScheduledAt})`,
+        Target: {
+          Arn: process.env.PUBLISHER_LAMBDA_ARN,
+          RoleArn: process.env.SCHEDULER_ROLE_ARN,
+          Input: JSON.stringify({ scheduleId }),
+        },
+        FlexibleTimeWindow: {
+          Mode: 'OFF',
+        },
+        Description: `Updated content publishing schedule for ${scheduleId}`,
+      }));
+      
+      updatedItem.scheduledAt = newScheduledAt;
+      updatedItem.gsi1sk = newScheduledAt;
+    }
+    
+    // Update in DynamoDB
+    await docClient.send(new PutCommand({
+      TableName: process.env.SCHEDULES_TABLE!,
+      Item: updatedItem,
+    }));
+    
+    logger.info('Schedule updated successfully', { scheduleId });
+    
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ 
+        scheduleId,
+        message: 'Schedule updated successfully',
+        data: updatedItem,
+      }),
+    };
+  } catch (error) {
+    logger.error('Error updating schedule', error as Error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ 
+        error: 'Failed to update schedule',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      }),
+    };
+  }
 }
 
 async function deleteSchedule(scheduleId: string): Promise<APIGatewayProxyResult> {

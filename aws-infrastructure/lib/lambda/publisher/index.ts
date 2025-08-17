@@ -22,6 +22,161 @@ interface PublishEvent {
   scheduleId: string;
 }
 
+interface PlatformAdapter {
+  publish(schedule: any, credentials: any, mediaUrl: string | null): Promise<PublishResult>;
+  validateCredentials(credentials: any): boolean;
+  formatContent(schedule: any): any;
+}
+
+interface PublishResult {
+  success: boolean;
+  platformPostId?: string;
+  platformUrl?: string;
+  error?: string;
+}
+
+// Platform adapter factory
+class PlatformAdapterFactory {
+  static getAdapter(platform: string): PlatformAdapter {
+    switch (platform) {
+      case 'instagram':
+        return new InstagramAdapter();
+      case 'facebook':
+        return new FacebookAdapter();
+      case 'twitter':
+        return new TwitterAdapter();
+      case 'linkedin':
+        return new LinkedInAdapter();
+      case 'youtube':
+        return new YouTubeAdapter();
+      default:
+        throw new Error(`Unsupported platform: ${platform}`);
+    }
+  }
+}
+
+// Instagram adapter implementation
+class InstagramAdapter implements PlatformAdapter {
+  async publish(schedule: any, credentials: any, mediaUrl: string | null): Promise<PublishResult> {
+    try {
+      // Instagram-specific publishing logic
+      const response = await fetch(`${process.env.MAIN_APP_API_URL}/api/instagram/publish`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Secret': process.env.INTERNAL_API_SECRET || '',
+        },
+        body: JSON.stringify({
+          brandId: schedule.brandId,
+          contentId: schedule.contentId,
+          caption: this.formatCaption(schedule.caption, schedule.hashtags),
+          mediaUrl: mediaUrl || schedule.imageUrl,
+          accessToken: credentials.accessToken,
+          pageId: credentials.pageId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        return { success: false, error: `Instagram API error: ${error}` };
+      }
+
+      const result = await response.json();
+      return {
+        success: true,
+        platformPostId: result.id,
+        platformUrl: result.permalink,
+      };
+    } catch (error) {
+      logger.error('Instagram publishing failed', error as Error);
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  validateCredentials(credentials: any): boolean {
+    return !!(credentials?.accessToken && credentials?.pageId);
+  }
+
+  formatContent(schedule: any): any {
+    return {
+      caption: this.formatCaption(schedule.caption, schedule.hashtags),
+      mediaType: schedule.contentType === 'video' ? 'VIDEO' : 'IMAGE',
+    };
+  }
+
+  private formatCaption(caption: string, hashtags: string[]): string {
+    const hashtagString = hashtags?.length ? '\n\n' + hashtags.map(tag => `#${tag}`).join(' ') : '';
+    return `${caption}${hashtagString}`.slice(0, 2200); // Instagram caption limit
+  }
+}
+
+// Facebook adapter (placeholder)
+class FacebookAdapter implements PlatformAdapter {
+  async publish(schedule: any, credentials: any, mediaUrl: string | null): Promise<PublishResult> {
+    // Facebook publishing logic would go here
+    return { success: false, error: 'Facebook publishing not yet implemented' };
+  }
+
+  validateCredentials(credentials: any): boolean {
+    return !!(credentials?.accessToken && credentials?.pageId);
+  }
+
+  formatContent(schedule: any): any {
+    return { message: schedule.caption };
+  }
+}
+
+// Twitter adapter (placeholder)
+class TwitterAdapter implements PlatformAdapter {
+  async publish(schedule: any, credentials: any, mediaUrl: string | null): Promise<PublishResult> {
+    // Twitter publishing logic would go here
+    return { success: false, error: 'Twitter publishing not yet implemented' };
+  }
+
+  validateCredentials(credentials: any): boolean {
+    return !!(credentials?.apiKey && credentials?.apiSecret);
+  }
+
+  formatContent(schedule: any): any {
+    return { text: schedule.caption?.slice(0, 280) }; // Twitter character limit
+  }
+}
+
+// LinkedIn adapter (placeholder)
+class LinkedInAdapter implements PlatformAdapter {
+  async publish(schedule: any, credentials: any, mediaUrl: string | null): Promise<PublishResult> {
+    // LinkedIn publishing logic would go here
+    return { success: false, error: 'LinkedIn publishing not yet implemented' };
+  }
+
+  validateCredentials(credentials: any): boolean {
+    return !!(credentials?.accessToken);
+  }
+
+  formatContent(schedule: any): any {
+    return { text: schedule.caption };
+  }
+}
+
+// YouTube adapter (placeholder)
+class YouTubeAdapter implements PlatformAdapter {
+  async publish(schedule: any, credentials: any, mediaUrl: string | null): Promise<PublishResult> {
+    // YouTube publishing logic would go here
+    return { success: false, error: 'YouTube publishing not yet implemented' };
+  }
+
+  validateCredentials(credentials: any): boolean {
+    return !!(credentials?.apiKey && credentials?.channelId);
+  }
+
+  formatContent(schedule: any): any {
+    return {
+      title: schedule.caption?.split('\n')[0]?.slice(0, 100),
+      description: schedule.caption,
+    };
+  }
+}
+
 export const handler = async (event: PublishEvent): Promise<void> => {
   logger.info('Publishing content', { scheduleId: event.scheduleId });
 
@@ -41,11 +196,29 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       mediaUrl = await getSignedVideoUrl(schedule.videoUrl);
     }
 
-    // Publish to platform
-    await publishToPlatform(schedule, credentials, mediaUrl);
-
-    // Update schedule status
-    await updateScheduleStatus(event.scheduleId, 'published');
+    // Get platform adapter
+    const adapter = PlatformAdapterFactory.getAdapter(schedule.platform);
+    
+    // Validate credentials
+    if (!adapter.validateCredentials(credentials)) {
+      throw new Error(`Invalid credentials for platform: ${schedule.platform}`);
+    }
+    
+    // Publish to platform using adapter
+    const publishResult = await adapter.publish(schedule, credentials, mediaUrl);
+    
+    if (!publishResult.success) {
+      throw new Error(publishResult.error || 'Publishing failed');
+    }
+    
+    // Update schedule status with platform info
+    await updateScheduleStatus(
+      event.scheduleId, 
+      'published',
+      undefined,
+      publishResult.platformPostId,
+      publishResult.platformUrl
+    );
 
     metrics.addMetric('ContentPublished', MetricUnits.Count, 1);
     metrics.addMetric(`ContentPublished_${schedule.platform}`, MetricUnits.Count, 1);
@@ -97,43 +270,46 @@ async function getSignedVideoUrl(videoKey: string): Promise<string> {
   return await getSignedUrl(s3Client, command, { expiresIn: 3600 });
 }
 
-async function publishToPlatform(
-  schedule: any,
-  credentials: any,
-  mediaUrl: string | null
+// Audit log helper
+async function logAudit(
+  scheduleId: string,
+  action: string,
+  result: 'success' | 'failure',
+  details?: any
 ): Promise<void> {
-  // Call main application API to publish content
-  const response = await fetch(`${process.env.MAIN_APP_API_URL}/api/instagram/publish`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Internal-Secret': process.env.INTERNAL_API_SECRET || '',
+  const { PutCommand: AuditPutCommand } = await import('@aws-sdk/lib-dynamodb');
+  
+  await docClient.send(new AuditPutCommand({
+    TableName: process.env.AUDIT_LOG_TABLE!,
+    Item: {
+      pk: `AUDIT#${scheduleId}`,
+      sk: `${Date.now()}#${action}`,
+      scheduleId,
+      action,
+      result,
+      details,
+      timestamp: new Date().toISOString(),
+      ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days
     },
-    body: JSON.stringify({
-      brandId: schedule.brandId,
-      contentId: schedule.contentId,
-      caption: schedule.caption,
-      hashtags: schedule.hashtags,
-      mediaUrl: mediaUrl || schedule.imageUrl,
-      platform: schedule.platform,
-      credentials,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Platform API error: ${error}`);
-  }
+  }));
 }
 
 async function updateScheduleStatus(
   scheduleId: string,
   status: string,
-  errorMessage?: string
+  errorMessage?: string,
+  platformPostId?: string,
+  platformUrl?: string
 ): Promise<void> {
-  const updateExpression = errorMessage
-    ? 'SET #status = :status, #error = :error, #updatedAt = :updatedAt'
-    : 'SET #status = :status, #updatedAt = :updatedAt, #publishedAt = :publishedAt';
+  let updateExpression = 'SET #status = :status, #updatedAt = :updatedAt';
+  
+  if (errorMessage) {
+    updateExpression += ', #error = :error';
+  } else if (status === 'published') {
+    updateExpression += ', #publishedAt = :publishedAt';
+    if (platformPostId) updateExpression += ', #platformPostId = :platformPostId';
+    if (platformUrl) updateExpression += ', #platformUrl = :platformUrl';
+  }
 
   const expressionAttributeNames: any = {
     '#status': 'status',
@@ -148,9 +324,19 @@ async function updateScheduleStatus(
   if (errorMessage) {
     expressionAttributeNames['#error'] = 'schedulingError';
     expressionAttributeValues[':error'] = errorMessage;
-  } else {
+  } else if (status === 'published') {
     expressionAttributeNames['#publishedAt'] = 'publishedAt';
     expressionAttributeValues[':publishedAt'] = new Date().toISOString();
+    
+    if (platformPostId) {
+      expressionAttributeNames['#platformPostId'] = 'platformPostId';
+      expressionAttributeValues[':platformPostId'] = platformPostId;
+    }
+    
+    if (platformUrl) {
+      expressionAttributeNames['#platformUrl'] = 'platformUrl';
+      expressionAttributeValues[':platformUrl'] = platformUrl;
+    }
   }
 
   await docClient.send(new UpdateCommand({
@@ -163,4 +349,7 @@ async function updateScheduleStatus(
     ExpressionAttributeNames: expressionAttributeNames,
     ExpressionAttributeValues: expressionAttributeValues,
   }));
+  
+  // Log audit
+  await logAudit(scheduleId, `status_update_${status}`, 'success', { errorMessage, platformPostId, platformUrl });
 }
