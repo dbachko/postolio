@@ -1,6 +1,16 @@
 /**
  * Custom Metrics Publisher for Content Scheduler
  * Provides utilities to emit business metrics to CloudWatch
+ * 
+ * IMPORTANT: High Cardinality Considerations
+ * This publisher intentionally avoids high cardinality dimensions like userId and brandId
+ * to prevent CloudWatch cost explosion. Each unique dimension combination creates a new
+ * metric stream that incurs charges. With thousands of users/brands, costs can quickly
+ * escalate. Instead, we use fixed dimensions like platform, contentType, and errorCode
+ * which have bounded cardinality.
+ * 
+ * For user/brand-specific analytics, consider using CloudWatch Logs Insights or
+ * a dedicated analytics service like Amazon Timestream or external solutions.
  */
 
 import { MetricUnit, Metrics } from '@aws-lambda-powertools/metrics';

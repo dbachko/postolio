@@ -232,11 +232,15 @@ export class PerformanceProfiler {
     
     try {
       const result = fn();
-      this.endProfile(operation, true);
+      this.endProfile(operation, true).catch(err => 
+        logger.error('Error in endProfile (success)', { operation, error: err })
+      );
       return result;
     } catch (error) {
       const errorType = error instanceof Error ? error.constructor.name : 'UnknownError';
-      this.endProfile(operation, false, errorType);
+      this.endProfile(operation, false, errorType).catch(err => 
+        logger.error('Error in endProfile (failure)', { operation, error: err })
+      );
       throw error;
     }
   }
@@ -417,6 +421,15 @@ export class PerformanceProfiler {
   }
 
   /**
+   * Clean up all profiles and segments
+   */
+  cleanup(): void {
+    this.profiles.clear();
+    this.segments.clear();
+    logger.info('Performance profiler cleaned up');
+  }
+
+  /**
    * Get segment analysis
    */
   private getSegmentAnalysis(profiles: ProfileResult[]): Record<string, any> {
@@ -457,6 +470,5 @@ export const profiler = new PerformanceProfiler();
 
 // Clean up on Lambda container shutdown
 process.on('SIGTERM', () => {
-  profiler.profiles.clear();
-  profiler.segments.clear();
+  profiler.cleanup();
 });

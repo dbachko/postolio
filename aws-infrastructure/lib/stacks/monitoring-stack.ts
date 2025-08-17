@@ -12,7 +12,6 @@ import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-// import * as logs from 'aws-cdk-lib/aws-logs'; // Unused import
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';
 
@@ -53,7 +52,7 @@ export class MonitoringStack extends Stack {
     this.kmsKey = new kms.Key(this, 'MonitoringKey', {
       enableKeyRotation: true,
       description: `KMS key for Content Scheduler monitoring - ${environment}`,
-      removalPolicy: environment === 'prod' ? undefined : RemovalPolicy.DESTROY, // Only for non-prod
+      removalPolicy: environment === 'prod' ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY, // Explicit for prod
       alias: `alias/content-scheduler-monitoring-${environment}`,
     });
 
