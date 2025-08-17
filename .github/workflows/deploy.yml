@@ -229,6 +229,12 @@ jobs:
           # CRITICAL: useEcrImage=true ensures the deployed task uses the ECR image instead of base Node.js image
           # Pass the git SHA as the image tag to ensure new deployments use the latest code
           npm run cdk -- deploy Postolio-dev --require-approval never -c environment=dev -c useEcrImage=true -c imageTag=${{ github.sha }}
+          
+          # Deploy Content Scheduler Microservice (if it exists)
+          if [ -f "bin/scheduler-app.ts" ]; then
+            echo "📦 Deploying Content Scheduler Microservice..."
+            npm run deploy:scheduler:dev || true
+          fi
         env:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}

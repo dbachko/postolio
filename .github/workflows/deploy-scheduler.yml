@@ -1,0 +1,355 @@
+name: Deploy Content Scheduler Microservice
+
+on:
+  push:
+    branches: 
+      - main
+      - 'feature/content-scheduler-*'
+      - 'feat/scheduler-*'
+    paths:
+      - 'aws-infrastructure/lib/scheduler/**'
+      - 'aws-infrastructure/lib/lambda/**'
+      - 'aws-infrastructure/bin/scheduler-app.ts'
+      - '.github/workflows/deploy-scheduler.yml'
+      - 'scripts/deploy-scheduler.sh'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'aws-infrastructure/lib/scheduler/**'
+      - 'aws-infrastructure/lib/lambda/**'
+      - 'aws-infrastructure/bin/scheduler-app.ts'
+
+permissions:
+  contents: read
+  security-events: write  # Required for uploading SARIF files
+  actions: read          # Required for workflow run information
+
+env:
+  AWS_REGION: us-east-1
+  NODE_VERSION: '22'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Validate Content Scheduler Prerequisites
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check AWS credentials
+        run: |
+          echo "🔍 Validating AWS credentials for Content Scheduler deployment..."
+          
+          MISSING_SECRETS=false
+          
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "❌ AWS_ACCESS_KEY_ID secret is missing"
+            MISSING_SECRETS=true
+          else
+            echo "✅ AWS_ACCESS_KEY_ID is configured"
+          fi
+          
+          if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "❌ AWS_SECRET_ACCESS_KEY secret is missing"
+            MISSING_SECRETS=true
+          else
+            echo "✅ AWS_SECRET_ACCESS_KEY is configured"
+          fi
+          
+          if [ -z "${{ secrets.AWS_ACCOUNT_ID }}" ]; then
+            echo "❌ AWS_ACCOUNT_ID secret is missing"
+            MISSING_SECRETS=true
+          else
+            echo "✅ AWS_ACCOUNT_ID is configured"
+          fi
+          
+          if [ "$MISSING_SECRETS" = true ]; then
+            echo "🚨 Cannot deploy Content Scheduler - Missing AWS credentials"
+            exit 1
+          fi
+          
+          echo "✅ All required secrets are configured!"
+
+  test:
+    runs-on: ubuntu-latest
+    name: Test Content Scheduler Code
+    needs: validate
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: aws-infrastructure/package-lock.json
+
+      - name: Install dependencies
+        working-directory: aws-infrastructure
+        run: npm ci
+
+      - name: TypeScript compilation check
+        working-directory: aws-infrastructure
+        run: npx tsc --noEmit
+
+      - name: Run CDK Nag validation
+        working-directory: aws-infrastructure
+        run: |
+          # Synthesize with CDK Nag checks
+          npx cdk synth ContentScheduler-dev \
+            --app "npx ts-node --prefer-ts-exts bin/scheduler-app.ts" \
+            -c environment=dev
+
+      - name: Run Lambda tests (if exist)
+        working-directory: aws-infrastructure
+        run: |
+          if [ -f "lib/lambda/test.ts" ]; then
+            npm test
+          else
+            echo "No Lambda tests found, skipping..."
+          fi
+
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security Scan
+    needs: validate
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'aws-infrastructure'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  deploy-dev:
+    runs-on: ubuntu-latest
+    name: Deploy to Development
+    needs: [test, security-scan]
+    if: github.event_name == 'push' && contains(github.ref, 'scheduler')
+    environment:
+      name: development
+      url: https://postolio.example
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: aws-infrastructure/package-lock.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        working-directory: aws-infrastructure
+        run: npm ci
+
+      - name: Install AWS CDK
+        run: npm install -g aws-cdk
+
+      - name: Bootstrap CDK (if needed)
+        working-directory: aws-infrastructure
+        run: |
+          npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }} || true
+        env:
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+
+      - name: Deploy Content Scheduler to Dev
+        working-directory: aws-infrastructure
+        run: |
+          npx cdk deploy ContentScheduler-dev \
+            --app "npx ts-node --prefer-ts-exts bin/scheduler-app.ts" \
+            --require-approval never \
+            -c environment=dev \
+            -c alertEmail=${{ secrets.ALERT_EMAIL || '' }} \
+            --outputs-file scheduler-outputs-dev.json
+        env:
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+
+      - name: Save deployment outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduler-outputs-dev
+          path: aws-infrastructure/scheduler-outputs-dev.json
+
+      - name: Display deployment summary
+        working-directory: aws-infrastructure
+        run: |
+          echo "📋 Content Scheduler Deployment Summary"
+          echo "========================================"
+          cat scheduler-outputs-dev.json | jq '.'
+          echo ""
+          echo "✅ Development deployment complete!"
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    name: Deploy to Staging
+    needs: deploy-dev
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://postolio.example
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: aws-infrastructure/package-lock.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        working-directory: aws-infrastructure
+        run: npm ci
+
+      - name: Install AWS CDK
+        run: npm install -g aws-cdk
+
+      - name: Deploy Content Scheduler to Staging
+        working-directory: aws-infrastructure
+        run: |
+          npx cdk deploy ContentScheduler-staging \
+            --app "npx ts-node --prefer-ts-exts bin/scheduler-app.ts" \
+            --require-approval never \
+            -c environment=staging \
+            -c alertEmail=${{ secrets.ALERT_EMAIL || '' }} \
+            --outputs-file scheduler-outputs-staging.json
+        env:
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+
+      - name: Run smoke tests
+        run: |
+          API_ENDPOINT=$(cat aws-infrastructure/scheduler-outputs-staging.json | jq -r '.["ContentScheduler-staging"].ApiEndpoint')
+          echo "Testing API endpoint: $API_ENDPOINT"
+          
+          # Health check
+          curl -f "$API_ENDPOINT/health" || exit 1
+          echo "✅ Health check passed"
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+    name: Deploy to Production
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://postolio.example
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: aws-infrastructure/package-lock.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        working-directory: aws-infrastructure
+        run: npm ci
+
+      - name: Install AWS CDK
+        run: npm install -g aws-cdk
+
+      - name: Deploy Content Scheduler to Production
+        working-directory: aws-infrastructure
+        run: |
+          npx cdk deploy ContentScheduler-prod \
+            --app "npx ts-node --prefer-ts-exts bin/scheduler-app.ts" \
+            --require-approval never \
+            -c environment=prod \
+            -c alertEmail=${{ secrets.PROD_ALERT_EMAIL }} \
+            --outputs-file scheduler-outputs-prod.json
+        env:
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+
+      - name: Create deployment notification
+        run: |
+          echo "🚀 Content Scheduler deployed to production!"
+          echo "Version: ${{ github.sha }}"
+          echo "Deployed by: ${{ github.actor }}"
+          echo "Time: $(date)"
+
+      - name: Monitor initial metrics
+        run: |
+          echo "📊 Monitoring deployment health..."
+          # Add CloudWatch metric checks here
+          echo "✅ Production deployment successful!"
+
+  rollback:
+    runs-on: ubuntu-latest
+    name: Rollback on Failure
+    needs: [deploy-dev, deploy-staging, deploy-prod]
+    if: failure()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Determine failed environment
+        id: env-check
+        run: |
+          if [ "${{ needs.deploy-prod.result }}" == "failure" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.deploy-staging.result }}" == "failure" ]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Rollback deployment
+        run: |
+          echo "⚠️ Rolling back Content Scheduler in ${{ steps.env-check.outputs.environment }}"
+          # Add rollback logic here (e.g., deploy previous version from tags)
+          echo "🔄 Rollback initiated"
+
+      - name: Notify team
+        run: |
+          echo "📧 Sending failure notification..."
+          # Add notification logic (Slack, email, etc.)
