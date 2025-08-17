@@ -1,6 +1,6 @@
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Tracer } from '@aws-lambda-powertools/tracer';
-import { Metrics, MetricUnits } from '@aws-lambda-powertools/metrics';
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { SchedulerClient, CreateScheduleCommand, DeleteScheduleCommand } from '@aws-sdk/client-scheduler';
@@ -114,7 +114,7 @@ function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult 
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Add context to logs
-  logger.addContext({
+  logger.appendKeys({
     requestId: event.requestContext.requestId,
     method: event.httpMethod,
     path: event.path,
@@ -139,24 +139,24 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     switch (httpMethod) {
       case 'POST':
         result = await createSchedule(JSON.parse(body || '{}'));
-        metrics.addMetric('ScheduleCreated', MetricUnits.Count, 1);
+        metrics.addMetric('ScheduleCreated', MetricUnit.Count, 1);
         break;
       case 'GET':
         if (scheduleId) {
           result = await getSchedule(scheduleId);
-          metrics.addMetric('ScheduleRetrieved', MetricUnits.Count, 1);
+          metrics.addMetric('ScheduleRetrieved', MetricUnit.Count, 1);
         } else {
           result = await listSchedules(event.queryStringParameters);
-          metrics.addMetric('SchedulesListed', MetricUnits.Count, 1);
+          metrics.addMetric('SchedulesListed', MetricUnit.Count, 1);
         }
         break;
       case 'PUT':
         result = await updateSchedule(scheduleId!, JSON.parse(body || '{}'));
-        metrics.addMetric('ScheduleUpdated', MetricUnits.Count, 1);
+        metrics.addMetric('ScheduleUpdated', MetricUnit.Count, 1);
         break;
       case 'DELETE':
         result = await deleteSchedule(scheduleId!);
-        metrics.addMetric('ScheduleDeleted', MetricUnits.Count, 1);
+        metrics.addMetric('ScheduleDeleted', MetricUnit.Count, 1);
         break;
       default:
         result = {
@@ -171,7 +171,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return addCorsHeaders(result);
   } catch (error) {
     logger.error('Error processing request', error as Error);
-    metrics.addMetric('ScheduleError', MetricUnits.Count, 1);
+    metrics.addMetric('ScheduleError', MetricUnit.Count, 1);
     metrics.publishStoredMetrics();
 
     return addCorsHeaders({

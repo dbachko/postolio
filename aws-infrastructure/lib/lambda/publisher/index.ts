@@ -1,6 +1,6 @@
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Tracer } from '@aws-lambda-powertools/tracer';
-import { Metrics, MetricUnits } from '@aws-lambda-powertools/metrics';
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
@@ -220,8 +220,8 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       publishResult.platformUrl
     );
 
-    metrics.addMetric('ContentPublished', MetricUnits.Count, 1);
-    metrics.addMetric(`ContentPublished_${schedule.platform}`, MetricUnits.Count, 1);
+    metrics.addMetric('ContentPublished', MetricUnit.Count, 1);
+    metrics.addMetric(`ContentPublished_${schedule.platform}`, MetricUnit.Count, 1);
     
     logger.info('Content published successfully', { 
       scheduleId: event.scheduleId,
@@ -229,7 +229,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     });
   } catch (error) {
     logger.error('Failed to publish content', error as Error);
-    metrics.addMetric('PublishingError', MetricUnits.Count, 1);
+    metrics.addMetric('PublishingError', MetricUnit.Count, 1);
     
     // Update schedule status to failed
     await updateScheduleStatus(event.scheduleId, 'failed', (error as Error).message);
