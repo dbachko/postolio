@@ -4,11 +4,11 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { execSync, execFileSync, execFile } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
-import { writeFileSync, unlinkSync, createWriteStream } from 'fs';
+import { unlinkSync, createWriteStream } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pipeline } from 'stream/promises';
@@ -226,7 +226,7 @@ async function downloadVideo(bucket: string, key: string): Promise<string> {
     // Clean up partial file on error
     try {
       unlinkSync(tempFile);
-    } catch (e) {
+    } catch {
       // Ignore cleanup errors
     }
     throw error;

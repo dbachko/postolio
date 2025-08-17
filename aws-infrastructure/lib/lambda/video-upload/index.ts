@@ -8,6 +8,7 @@ import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { randomUUID } from 'crypto';
+import * as path from 'path';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'video-upload' });
@@ -92,27 +93,39 @@ interface VideoUploadRequest {
   metadata?: Record<string, string>;
 }
 
-interface MultipartUploadResponse {
-  uploadId: string;
-  videoId: string;
-  urls: Array<{
-    partNumber: number;
-    url: string;
-  }>;
-}
+// MultipartUploadResponse interface removed - not used
 
 // CORS headers helper
-function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult {
+function addCorsHeaders(response: APIGatewayProxyResult, origin?: string): APIGatewayProxyResult {
+  const allowedOrigins = getAllowedOrigins();
+  const requestOrigin = origin || '';
+  const allowOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : allowedOrigins[0];
+  
   return {
     ...response,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Origin': allowOrigin,
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
       ...response.headers,
     },
   };
+}
+
+// Get allowed origins based on environment
+function getAllowedOrigins(): string[] {
+  const environment = process.env.ENVIRONMENT || 'dev';
+  switch (environment) {
+    case 'prod':
+      return ['https://postolio.example', 'https://postolio.example'];
+    case 'staging':
+      return ['https://postolio.example'];
+    default:
+      return ['http://localhost:3000', 'http://localhost:5173'];
+  }
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -124,6 +137,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   logger.info('Processing video upload request', { event });
 
+  const origin = event.headers?.Origin || event.headers?.origin;
+
   try {
     const { httpMethod, path, body } = event;
 
@@ -132,7 +147,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return addCorsHeaders({
         statusCode: 200,
         body: '',
-      });
+      }, origin);
     }
 
     let result: APIGatewayProxyResult;
@@ -157,7 +172,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     metrics.publishStoredMetrics();
-    return addCorsHeaders(result);
+    return addCorsHeaders(result, origin);
   } catch (error) {
     logger.error('Error processing video upload request', error as Error);
     metrics.addMetric('VideoUploadError', MetricUnit.Count, 1);
@@ -169,17 +184,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         error: 'Internal server error',
         message: error instanceof Error ? error.message : 'Unknown error',
       }),
-    });
+    }, origin);
   }
 };
 
 // Utility function to sanitize file names
 function sanitizeFileName(fileName: string): string {
+  // Extract just the filename, removing any path components
+  const baseName = path.basename(fileName);
+  
   // Normalize Unicode to NFC to prevent normalization attacks
-  let sanitized = fileName.normalize('NFC')
+  let sanitized = baseName.normalize('NFC')
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1F\x7F]/g, '') // Remove null bytes and control characters
-    .replace(/\.\./g, '') // Remove path traversal
-    .replace(/[\/\\]/g, '_') // Replace directory separators
+    .replace(/\.{2,}/g, '') // Remove multiple dots (path traversal attempts)
+    .replace(/^\.+/, '') // Remove leading dots
+    .replace(/[/\\]/g, '_') // Replace directory separators
     .replace(/[^a-zA-Z0-9._-]/g, '_'); // Keep only safe characters
   
   // Ensure the filename doesn't exceed 255 bytes (not characters)
@@ -189,8 +209,8 @@ function sanitizeFileName(fileName: string): string {
   }
   
   // Ensure we have a valid filename
-  if (!sanitized || sanitized === '.') {
-    sanitized = 'unnamed_file';
+  if (!sanitized || sanitized === '.' || sanitized === '') {
+    sanitized = `unnamed_file_${Date.now()}`;
   }
   
   return sanitized;
@@ -300,9 +320,44 @@ async function initiateMultipartUpload(request: VideoUploadRequest): Promise<API
   }
 }
 
+interface CompleteUploadRequest {
+  videoId: string;
+  uploadId: string;
+  parts: Array<{
+    etag: string;
+    partNumber: number;
+  }>;
+}
+
+function validateCompleteUploadRequest(request: any): CompleteUploadRequest {
+  if (!request?.videoId?.match(/^VID_\d+_[a-f0-9-]+$/)) {
+    throw new Error('Invalid videoId format');
+  }
+  
+  if (!request?.uploadId) {
+    throw new Error('uploadId is required');
+  }
+  
+  if (!Array.isArray(request.parts) || request.parts.length === 0) {
+    throw new Error('Parts array is required and must not be empty');
+  }
+  
+  request.parts.forEach((part: any, index: number) => {
+    if (!part.etag) {
+      throw new Error(`Missing etag at part ${index}`);
+    }
+    if (!Number.isInteger(part.partNumber) || part.partNumber < 1 || part.partNumber > 10000) {
+      throw new Error(`Invalid partNumber at part ${index}: must be between 1 and 10000`);
+    }
+  });
+  
+  return request as CompleteUploadRequest;
+}
+
 async function completeMultipartUpload(request: any): Promise<APIGatewayProxyResult> {
   try {
-    const { videoId, uploadId, parts } = request;
+    const validatedRequest = validateCompleteUploadRequest(request);
+    const { videoId, uploadId, parts } = validatedRequest;
 
     // Get upload metadata from DynamoDB
     const uploadData = await docClient.send(new GetCommand({

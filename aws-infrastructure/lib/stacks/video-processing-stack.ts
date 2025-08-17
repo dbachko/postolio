@@ -232,15 +232,20 @@ export class VideoProcessingStack extends Stack {
       this.videoProcessorFunction.functionArn
     );
 
-    // Grant MediaConvert permissions
+    // Grant MediaConvert permissions with specific resources
     this.videoProcessorFunction.addToRolePolicy(new iam.PolicyStatement({
-      actions: [
-        'mediaconvert:CreateJob',
-        'mediaconvert:GetJob',
-        'mediaconvert:DescribeEndpoints',
-        'mediaconvert:GetJobTemplate',
+      actions: ['mediaconvert:CreateJob', 'mediaconvert:GetJob'],
+      resources: [
+        `arn:aws:mediaconvert:${this.region}:${this.account}:jobs/*`,
+        `arn:aws:mediaconvert:${this.region}:${this.account}:queues/Default`,
+        `arn:aws:mediaconvert:${this.region}:${this.account}:queues/*`,
       ],
-      resources: ['*'],
+    }));
+    
+    // DescribeEndpoints must have * resource
+    this.videoProcessorFunction.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['mediaconvert:DescribeEndpoints'],
+      resources: ['*'], // This action requires * resource
     }));
 
     // Add S3 trigger for video processor
