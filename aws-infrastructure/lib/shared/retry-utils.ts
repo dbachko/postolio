@@ -139,7 +139,7 @@ export async function retryWithBackoff<T>(
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      logger.info('Attempting operation', { attempt, maxRetries: maxRetries + 1 });
+      logger.debug('Attempting operation', { attempt, maxRetries: maxRetries + 1 });
       const result = await operation();
       
       if (attempt > 1) {
