@@ -7,6 +7,7 @@ import { ContentStatus } from '@prisma/client';
 import { ContentSchedulerClient, ContentSchedulerConfig } from '../clients/content-scheduler-client.js';
 import { SCHEDULER_TIME_INTERVALS, SYNC_TOLERANCE } from '../constants/scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
+import { TimezoneService } from './timezone.js';
 
 const prisma = getDatabaseClient();
 
@@ -37,7 +38,7 @@ export class SchedulerAdapter {
   }
 
   /**
-   * Schedule content with dual-write pattern
+   * Schedule content with timezone-aware handling
    */
   async scheduleContent(
     contentId: string,
@@ -61,40 +62,66 @@ export class SchedulerAdapter {
         return { success: false, error: 'Content not found' };
       }
 
-      // Use default time if not provided (optimal time calculation can be added later)
-      const scheduledTime = customTime || new Date(Date.now() + SCHEDULER_TIME_INTERVALS.DEFAULT_SCHEDULE_DELAY_MS);
+      // 2. Get the brand's timezone for proper scheduling
+      const brandTimezone = await TimezoneService.getBrandTimezone(content.brandId);
+      console.log(`Scheduling for brand ${content.brandId} in timezone: ${brandTimezone}`);
 
-      // 2. Create schedule in AWS microservice
+      // 3. Determine the scheduled time
+      let scheduledTimeUTC: Date;
+      
+      if (customTime) {
+        // If customTime is provided, assume it's in the brand's timezone and convert to UTC
+        scheduledTimeUTC = TimezoneService.toUTC(customTime, brandTimezone);
+        console.log(`Custom time ${customTime.toISOString()} in ${brandTimezone} converted to UTC: ${scheduledTimeUTC.toISOString()}`);
+      } else if (content.scheduledAt) {
+        // If content already has a scheduled time, use it (assume it's already in UTC)
+        scheduledTimeUTC = new Date(content.scheduledAt);
+      } else {
+        // Default: schedule for 1 hour from now in the brand's timezone
+        const defaultTimeLocal = new Date(Date.now() + SCHEDULER_TIME_INTERVALS.DEFAULT_SCHEDULE_DELAY_MS);
+        scheduledTimeUTC = TimezoneService.toUTC(defaultTimeLocal, brandTimezone);
+      }
+
+      // 4. Create schedule in AWS microservice (AWS expects UTC time)
       try {
         const schedule = await this.client.createSchedule({
           contentId: content.id,
           brandId: content.brandId,
           userId: userId || content.brand.userId,
           platform: 'instagram', // Default for now
-          scheduledTime: scheduledTime.toISOString(),
+          scheduledTime: scheduledTimeUTC.toISOString(),
           content: {
             caption: content.caption,
             mediaUrl: content.imageUrl || content.cdnImageUrl || undefined,
             hashtags: content.hashtags,
           },
+          metadata: {
+            timezone: brandTimezone,
+            localTime: customTime ? customTime.toISOString() : undefined,
+          },
         });
 
-        // 3. Update local database to maintain consistency
+        // 5. Update local database to maintain consistency (store UTC time)
         await prisma.content.update({
           where: { id: contentId },
           data: {
             status: 'scheduled' as ContentStatus,
-            scheduledAt: scheduledTime,
-            // Store external schedule ID for reference
+            scheduledAt: scheduledTimeUTC,
+            // Store external schedule ID and timezone info for reference
             schedulingError: null,
             generationParams: {
               ...(content.generationParams as any || {}),
               scheduleId: schedule.id,
+              scheduledTimezone: brandTimezone,
+              scheduledLocalTime: customTime ? customTime.toISOString() : undefined,
             },
           },
         });
 
-        console.log(`Content ${contentId} scheduled successfully at ${scheduledTime.toISOString()}`);
+        // Log with timezone context
+        const localTimeDisplay = TimezoneService.formatWithTimezone(scheduledTimeUTC, brandTimezone);
+        console.log(`Content ${contentId} scheduled successfully for ${localTimeDisplay}`);
+        
         return { success: true, scheduleId: schedule.id, brandId: content.brandId };
       } catch (schedulerError) {
         console.error('Failed to create schedule in AWS:', schedulerError);
@@ -167,11 +194,12 @@ export class SchedulerAdapter {
   }
 
   /**
-   * Reschedule content to new time
+   * Reschedule content to new time with timezone awareness
    */
   async rescheduleContent(
     contentId: string,
-    newTime: Date
+    newTime: Date,
+    isLocalTime: boolean = true
   ): Promise<{ success: boolean; error?: string }> {
     try {
       // Get content to find schedule ID
@@ -184,25 +212,45 @@ export class SchedulerAdapter {
         return { success: false, error: 'Content not found' };
       }
 
+      // Get brand timezone
+      const brandTimezone = await TimezoneService.getBrandTimezone(content.brandId);
+      
+      // Convert new time to UTC if it's provided in local time
+      const newTimeUTC = isLocalTime 
+        ? TimezoneService.toUTC(newTime, brandTimezone)
+        : newTime;
+      
+      console.log(`Rescheduling content ${contentId} from ${content.scheduledAt} to ${newTimeUTC.toISOString()} (${brandTimezone})`);
+
       const scheduleId = (content.generationParams as any)?.scheduleId;
       
       if (scheduleId) {
         // Reschedule in AWS
         try {
-          await this.client.reschedule(scheduleId, newTime);
+          await this.client.reschedule(scheduleId, newTimeUTC);
         } catch (error) {
           console.error('Failed to reschedule in AWS:', error);
           // Continue with local update even if AWS fails
         }
       }
 
-      // Update local database
+      // Update local database with UTC time
       await prisma.content.update({
         where: { id: contentId },
         data: {
-          scheduledAt: newTime,
+          scheduledAt: newTimeUTC,
+          generationParams: {
+            ...(content.generationParams as any || {}),
+            scheduledTimezone: brandTimezone,
+            rescheduledAt: new Date().toISOString(),
+            rescheduledLocalTime: isLocalTime ? newTime.toISOString() : undefined,
+          },
         },
       });
+
+      // Log with timezone context
+      const localTimeDisplay = TimezoneService.formatWithTimezone(newTimeUTC, brandTimezone);
+      console.log(`Content ${contentId} rescheduled successfully for ${localTimeDisplay}`);
 
       return { success: true };
     } catch (error) {
