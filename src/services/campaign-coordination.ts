@@ -106,7 +106,7 @@ export class CampaignCoordinationService {
   async resolveSchedulingConflict(
     newCampaign: CampaignConfigWithPriority,
     conflictingCampaign: CampaignConfigWithPriority,
-    userId: string
+    _userId: string
   ): Promise<ConflictResolution> {
     // Higher priority = lower number (1 is highest priority)
     if (newCampaign.priority < conflictingCampaign.priority) {
@@ -142,8 +142,8 @@ export class CampaignCoordinationService {
     const totalCapacity = 100 // Max posts per hour
     let allocatedCapacity = 0
 
-    const campaignAllocations = activeCampaigns.map((campaign, index) => {
-      const config = campaign.config as any
+    const campaignAllocations = activeCampaigns.map((campaign, _index) => {
+      const _config = campaign.config as any
       const baseAllocation = Math.max(10, Math.floor(totalCapacity / activeCampaigns.length))
 
       // Give priority campaigns extra allocation

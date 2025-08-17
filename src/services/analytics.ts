@@ -221,12 +221,12 @@ class AnalyticsService {
   /**
    * Generate scheduling recommendation for new content
    */
-  async getSchedulingRecommendation(brandId: string, timeZone: string = 'UTC'): Promise<SchedulingRecommendation> {
+  async getSchedulingRecommendation(brandId: string, _timeZone: string = 'UTC'): Promise<SchedulingRecommendation> {
     try {
       const optimalTimes = await this.analyzeOptimalTimes(brandId)
       const now = new Date()
-      const currentDay = now.getDay()
-      const currentHour = now.getHours()
+      const _currentDay = now.getDay()
+      const _currentHour = now.getHours()
 
       // Find next optimal time
       const nextRecommendations: Date[] = []

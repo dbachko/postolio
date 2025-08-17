@@ -18,6 +18,8 @@ const optionalEnvVars = [
   'CLOUDFRONT_DISTRIBUTION_ID',
   'CLOUDFRONT_DOMAIN',
   'REDIS_URL',
+  'SCHEDULER_API_KEY',
+  'SCHEDULER_API_URL',
 ] as const
 
 export interface EnvironmentConfig {
@@ -31,6 +33,8 @@ export interface EnvironmentConfig {
   CLOUDFRONT_DISTRIBUTION_ID?: string | undefined
   CLOUDFRONT_DOMAIN?: string | undefined
   REDIS_URL?: string | undefined
+  SCHEDULER_API_KEY?: string | undefined
+  SCHEDULER_API_URL?: string | undefined
   NODE_ENV: 'development' | 'production' | 'test'
   PORT: number
 }
@@ -93,6 +97,8 @@ export function validateEnvironment(): EnvironmentConfig {
     CLOUDFRONT_DISTRIBUTION_ID: process.env.CLOUDFRONT_DISTRIBUTION_ID,
     CLOUDFRONT_DOMAIN: process.env.CLOUDFRONT_DOMAIN,
     REDIS_URL: process.env.REDIS_URL,
+    SCHEDULER_API_KEY: process.env.SCHEDULER_API_KEY,
+    SCHEDULER_API_URL: process.env.SCHEDULER_API_URL,
     NODE_ENV: nodeEnv as 'development' | 'production' | 'test',
     PORT: port,
   }

@@ -209,14 +209,14 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
       }
       
       // Generate verification token
-      const verificationToken = crypto.randomBytes(32).toString('hex')
+      const _verificationToken = crypto.randomBytes(32).toString('hex')
       
       // TODO: Store verification token in Redis with 24-hour expiration
-      // Example: await redis.setex(`deletion-token:${user.id}`, 86400, verificationToken)
+      // Example: await redis.setex(`deletion-token:${user.id}`, 86400, _verificationToken)
       
       // TODO: Implement email sending service
       // Should send email with verification link containing the token
-      // Example: await emailService.sendDeletionVerification(user.email, verificationToken)
+      // Example: await emailService.sendDeletionVerification(user.email, _verificationToken)
       
       return reply.send({
         success: true,
@@ -250,7 +250,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
       scheduledDeletion.setDate(scheduledDeletion.getDate() + 30)
       
       // Soft delete the user account
-      const user = await prisma.user.update({
+      const _user = await prisma.user.update({
         where: { id: userId },
         data: {
           deletedAt,

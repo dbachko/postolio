@@ -232,12 +232,20 @@ export class RegenerationService {
   /**
    * Get regeneration job progress
    */
-  async getJobProgress(jobId: string): Promise<RegenerationProgress | null> {
+  async getJobProgress(jobId: string, userId?: string): Promise<RegenerationProgress | null> {
     try {
       const job = await Job.fromId(regenerationQueue, jobId)
       
       if (!job) {
         return null
+      }
+      
+      // Authorization check: verify user owns this job
+      if (userId) {
+        const jobData = job.data as RegenerationJobData
+        if (jobData.userId !== userId) {
+          return null // User doesn't own this job
+        }
       }
       
       const progress = job.progress as number || 0
@@ -275,10 +283,18 @@ export class RegenerationService {
   /**
    * Cancel a regeneration job
    */
-  async cancelJob(jobId: string): Promise<boolean> {
+  async cancelJob(jobId: string, userId?: string): Promise<boolean> {
     try {
       const job = await Job.fromId(regenerationQueue, jobId)
       if (job) {
+        // Authorization check: verify user owns this job
+        if (userId) {
+          const jobData = job.data as RegenerationJobData
+          if (jobData.userId !== userId) {
+            return false // User doesn't own this job
+          }
+        }
+        
         await job.remove()
         return true
       }

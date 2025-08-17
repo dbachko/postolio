@@ -3,7 +3,6 @@
  * Removed node-cron dependency, now triggered by EventBridge rules
  */
 
-import { PrismaClient } from '@prisma/client';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
 import { analyzeBrandStyle } from './ai.js';
 import { schedulerService } from './scheduler.js';
@@ -13,8 +12,9 @@ import {
   getPostingIntervalMs
 } from '../constants/scheduler.js';
 import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-events.js';
+import { getDatabaseClient } from '../config/database.js';
 
-const prisma = new PrismaClient();
+const prisma = getDatabaseClient();
 
 export interface AutopilotConfig {
   enabled: boolean;

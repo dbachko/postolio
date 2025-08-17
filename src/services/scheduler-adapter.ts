@@ -3,11 +3,12 @@
  * Bridges the gap between legacy scheduler and new AWS Content Scheduler
  */
 
-import { PrismaClient, ContentStatus } from '@prisma/client';
+import { ContentStatus } from '@prisma/client';
 import { ContentSchedulerClient, ContentSchedulerConfig } from '../clients/content-scheduler-client.js';
 import { SCHEDULER_TIME_INTERVALS, SYNC_TOLERANCE } from '../constants/scheduler.js';
+import { getDatabaseClient } from '../config/database.js';
 
-const prisma = new PrismaClient();
+const prisma = getDatabaseClient();
 
 export class SchedulerAdapter {
   private client: ContentSchedulerClient;

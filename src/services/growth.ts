@@ -272,7 +272,7 @@ export class GrowthService {
     return Math.round((content.length * 150 + Math.random() * 500) * 100) / 100
   }
 
-  private calculateEngagementRate(content: any[]): number {
+  private calculateEngagementRate(_content: any[]): number {
     // Simulate engagement rate
     return Math.round((3.5 + Math.random() * 2) * 100) / 100
   }

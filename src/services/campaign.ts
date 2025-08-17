@@ -1,6 +1,5 @@
-import { PrismaClient, ContentStatus, CampaignStatus } from '@prisma/client'
+import { PrismaClient, CampaignStatus } from '@prisma/client'
 import { generateInstagramContent, type ContentGenerationRequest, type GeneratedContent } from './content-generator.js'
-import { schedulerService } from './scheduler.js'
 import { campaignJobService } from './campaign-jobs.js'
 import { campaignCoordinationService, type CampaignConfigWithPriority } from './campaign-coordination.js'
 import type { StyleProfile } from './ai.js'
@@ -400,9 +399,7 @@ class CampaignService {
         },
       })
 
-      const themes = config.themes as string[]
       const createdContent = []
-      let existingPostIndex = 0
 
       // Only schedule existing preview posts (no new content generation)
       if (existingPreviews.length === 0) {

@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, FastifyRequest } from 'fastify'
+import { FastifyPluginAsync } from 'fastify'
 import bcrypt from 'bcrypt'
 import { signJWT, verifyJWT } from '../services/jwt.js'
 import { getDatabaseClient } from '../config/database.js'

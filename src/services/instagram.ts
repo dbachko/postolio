@@ -437,7 +437,7 @@ class InstagramService {
             media_url: media.media_url,
             posted_at: media.timestamp,
           })
-        } catch (insightError) {
+        } catch {
           // If insights fail for individual post, include it without metrics
           posts.push({
             id: media.id,
@@ -489,7 +489,7 @@ class InstagramService {
 
     try {
       // Clear existing cache for this brand
-      const today = new Date().toISOString().split('T')[0]
+      const _today = new Date().toISOString().split('T')[0]
       await analyticsCache.clear() // This clears all analytics cache - in production you'd be more selective
 
       // Force fresh data fetch
