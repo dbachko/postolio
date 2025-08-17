@@ -5,26 +5,24 @@
 
 import { Logger } from '@aws-lambda-powertools/logger';
 import axios, { AxiosInstance } from 'axios';
-import FormData from 'form-data';
 import {
   BasePlatformConnector,
   Content,
   PublishResult,
   Insights,
   RateLimitConfig,
-  PlatformCredentials,
 } from './base-connector';
 
 const logger = new Logger({ serviceName: 'instagram-connector' });
 
-interface InstagramMediaResponse {
+interface _InstagramMediaResponse {
   id: string;
   permalink?: string;
   media_url?: string;
   caption?: string;
 }
 
-interface InstagramInsightsResponse {
+interface _InstagramInsightsResponse {
   data: Array<{
     name: string;
     values: Array<{
@@ -33,7 +31,7 @@ interface InstagramInsightsResponse {
   }>;
 }
 
-interface InstagramContainerResponse {
+interface _InstagramContainerResponse {
   id: string;
   status?: string;
   status_code?: string;
@@ -451,11 +449,14 @@ export class InstagramConnector extends BasePlatformConnector {
         Date.now() + response.data.expires_in * 1000
       ).toISOString();
       
-      // TODO: Save updated credentials to Secrets Manager
+      // Save updated credentials to Secrets Manager
+      await this.saveCredentials(this.credentials);
       
-      logger.info('Instagram access token refreshed');
+      logger.info('Instagram access token refreshed and saved');
     } catch (error) {
-      logger.error('Failed to refresh Instagram access token', { error });
+      logger.error('Failed to refresh Instagram access token', { 
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
       throw new Error('Failed to refresh access token');
     }
   }

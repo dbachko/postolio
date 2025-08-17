@@ -5,7 +5,7 @@
 
 import { Logger } from '@aws-lambda-powertools/logger';
 import axios, { AxiosInstance } from 'axios';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 import {
   BasePlatformConnector,
   Content,
@@ -27,7 +27,7 @@ interface TikTokVideoInitResponse {
   };
 }
 
-interface TikTokPublishResponse {
+interface _TikTokPublishResponse {
   data: {
     post_id: string;
     share_url: string;
@@ -38,7 +38,7 @@ interface TikTokPublishResponse {
   };
 }
 
-interface TikTokInsightsResponse {
+interface _TikTokInsightsResponse {
   data: {
     videos: Array<{
       video_id: string;
@@ -159,7 +159,19 @@ export class TikTokConnector extends BasePlatformConnector {
       await this.uploadVideoFile(upload_url, content.videoUrl!);
       
       // Step 3: Create video post
-      const publishData = {
+      const publishData: {
+        upload_id: string;
+        post_info: {
+          title: string;
+          description: string;
+          privacy_level: string;
+          disable_duet: boolean;
+          disable_stitch: boolean;
+          disable_comment: boolean;
+          video_cover_timestamp_ms: number;
+          music_id?: string;
+        };
+      } = {
         upload_id,
         post_info: {
           title: caption.substring(0, 150), // TikTok title limit
@@ -342,11 +354,14 @@ export class TikTokConnector extends BasePlatformConnector {
         Date.now() + response.data.expires_in * 1000
       ).toISOString();
       
-      // TODO: Save updated credentials to Secrets Manager
+      // Save updated credentials to Secrets Manager
+      await this.saveCredentials(this.credentials);
       
-      logger.info('TikTok access token refreshed');
+      logger.info('TikTok access token refreshed and saved');
     } catch (error) {
-      logger.error('Failed to refresh TikTok access token', { error });
+      logger.error('Failed to refresh TikTok access token', { 
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
       throw new Error('Failed to refresh access token');
     }
   }

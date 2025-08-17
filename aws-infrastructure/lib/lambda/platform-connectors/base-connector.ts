@@ -6,7 +6,11 @@
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { Tracer } from '@aws-lambda-powertools/tracer';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { 
+  SecretsManagerClient, 
+  GetSecretValueCommand,
+  PutSecretValueCommand 
+} from '@aws-sdk/client-secrets-manager';
 import { retryWithCircuitBreaker } from '../../shared/retry-utils';
 
 // Initialize Powertools
@@ -138,6 +142,7 @@ export abstract class BasePlatformConnector {
       }
 
       const credentials = JSON.parse(response.SecretString) as PlatformCredentials;
+      this.credentials = credentials;
       
       // Check if token needs refresh
       if (credentials.expiresAt && new Date(credentials.expiresAt) <= new Date()) {
@@ -145,11 +150,34 @@ export abstract class BasePlatformConnector {
         await this.refreshAccessToken();
       }
 
-      this.credentials = credentials;
-      return credentials;
+      return this.credentials;
     } catch (error) {
-      logger.error('Failed to load credentials', { platform: this.platform, error });
+      logger.error('Failed to load credentials', { 
+        platform: this.platform, 
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
       throw new Error(`Failed to load ${this.platform} credentials: ${error}`);
+    }
+  }
+
+  /**
+   * Save credentials to AWS Secrets Manager
+   */
+  protected async saveCredentials(credentials: PlatformCredentials): Promise<void> {
+    try {
+      const secretName = `${this.platform}-api-credentials`;
+      await secretsClient.send(new PutSecretValueCommand({
+        SecretId: secretName,
+        SecretString: JSON.stringify(credentials),
+      }));
+      
+      logger.info('Credentials saved successfully', { platform: this.platform });
+    } catch (error) {
+      logger.error('Failed to save credentials', { 
+        platform: this.platform,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw new Error(`Failed to save ${this.platform} credentials`);
     }
   }
 

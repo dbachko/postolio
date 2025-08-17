@@ -157,10 +157,10 @@ describe('Platform Publisher Lambda Handler', () => {
       // Verify status was updated to published
       expect(ddbMock.commandCalls(UpdateCommand)).toHaveLength(2);
       const updateCalls = ddbMock.commandCalls(UpdateCommand);
-      const finalUpdate = updateCalls[1].args[0].input;
-      expect(finalUpdate.ExpressionAttributeValues[':status']).toBe('published');
-      expect(finalUpdate.ExpressionAttributeValues[':platformPostId']).toBe('ig-post-123');
-      expect(finalUpdate.ExpressionAttributeValues[':platformUrl']).toBe('https://www.instagram.com/p/abc123/');
+      const finalUpdate = updateCalls[1]?.args[0]?.input;
+      expect(finalUpdate?.ExpressionAttributeValues?.[':status']).toBe('published');
+      expect(finalUpdate?.ExpressionAttributeValues?.[':platformPostId']).toBe('ig-post-123');
+      expect(finalUpdate?.ExpressionAttributeValues?.[':platformUrl']).toBe('https://www.instagram.com/p/abc123/');
     });
 
     it('should handle Instagram Reel publishing', async () => {
@@ -362,16 +362,14 @@ describe('Platform Publisher Lambda Handler', () => {
       // Verify status was updated to retrying
       const updateCalls = ddbMock.commandCalls(UpdateCommand);
       const statusUpdate = updateCalls.find(call => 
-        call.args[0].input.ExpressionAttributeValues[':status'] === 'retrying'
+        call?.args[0]?.input?.ExpressionAttributeValues?.[':status'] === 'retrying'
       );
       expect(statusUpdate).toBeDefined();
     });
 
     it('should handle permanent failures', async () => {
       const event = createEvent({
-        detail: {
-          retryCount: 3, // Max retries reached
-        },
+        retryCount: 3, // Max retries reached
       });
 
       ddbMock.on(GetCommand).resolves({
@@ -397,8 +395,8 @@ describe('Platform Publisher Lambda Handler', () => {
 
       // Verify status was updated to failed (not retrying)
       const updateCalls = ddbMock.commandCalls(UpdateCommand);
-      const finalUpdate = updateCalls[updateCalls.length - 1].args[0].input;
-      expect(finalUpdate.ExpressionAttributeValues[':status']).toBe('failed');
+      const finalUpdate = updateCalls[updateCalls.length - 1]?.args[0]?.input;
+      expect(finalUpdate?.ExpressionAttributeValues?.[':status']).toBe('failed');
     });
 
     it('should handle unsupported platforms', async () => {
@@ -437,7 +435,7 @@ describe('Platform Publisher Lambda Handler', () => {
       // Verify status was updated to failed
       const updateCalls = ddbMock.commandCalls(UpdateCommand);
       const failedUpdate = updateCalls.find(call =>
-        call.args[0].input.ExpressionAttributeValues[':status'] === 'failed'
+        call?.args[0]?.input?.ExpressionAttributeValues?.[':status'] === 'failed'
       );
       expect(failedUpdate).toBeDefined();
     });

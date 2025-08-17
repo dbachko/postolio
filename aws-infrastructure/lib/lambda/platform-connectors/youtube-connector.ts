@@ -37,7 +37,7 @@ interface YouTubeVideoResource {
   };
 }
 
-interface YouTubeUploadResponse {
+interface _YouTubeUploadResponse {
   id: string;
   snippet: {
     title: string;
@@ -50,7 +50,7 @@ interface YouTubeUploadResponse {
   };
 }
 
-interface YouTubeAnalyticsResponse {
+interface _YouTubeAnalyticsResponse {
   rows: Array<Array<number>>;
   columnHeaders: Array<{
     name: string;
@@ -170,8 +170,8 @@ export class YouTubeConnector extends BasePlatformConnector {
       const videoResource: YouTubeVideoResource = {
         snippet: {
           title: this.formatTitle(content.caption, isShort),
-          description: this.formatDescription(content.caption, content.hashtags, isShort),
-          tags: this.formatTags(content.hashtags, isShort),
+          description: this.formatDescription(content.caption, isShort, content.hashtags),
+          tags: this.formatTags(isShort, content.hashtags),
           categoryId: content.platformSpecific?.youtube?.categoryId || '22', // People & Blogs
         },
         status: {
@@ -226,7 +226,7 @@ export class YouTubeConnector extends BasePlatformConnector {
     const aspectRatio = content.aspectRatio || '16:9';
     const hasShortTag = content.hashtags?.some(tag => 
       tag.toLowerCase().includes('shorts')
-    );
+    ) || false;
     
     return (
       duration <= 60 &&
@@ -250,7 +250,7 @@ export class YouTubeConnector extends BasePlatformConnector {
   /**
    * Format description for YouTube
    */
-  private formatDescription(caption: string, hashtags?: string[], isShort: boolean): string {
+  private formatDescription(caption: string, isShort: boolean, hashtags?: string[]): string {
     let description = caption;
     
     if (hashtags && hashtags.length > 0) {
@@ -270,7 +270,7 @@ export class YouTubeConnector extends BasePlatformConnector {
   /**
    * Format tags for YouTube
    */
-  private formatTags(hashtags?: string[], isShort: boolean): string[] {
+  private formatTags(isShort: boolean, hashtags?: string[]): string[] {
     const tags = hashtags?.map(tag => tag.replace('#', '')) || [];
     
     if (isShort && !tags.includes('Shorts')) {
@@ -554,11 +554,14 @@ export class YouTubeConnector extends BasePlatformConnector {
         Date.now() + response.data.expires_in * 1000
       ).toISOString();
       
-      // TODO: Save updated credentials to Secrets Manager
+      // Save updated credentials to Secrets Manager
+      await this.saveCredentials(this.credentials);
       
-      logger.info('YouTube access token refreshed');
+      logger.info('YouTube access token refreshed and saved');
     } catch (error) {
-      logger.error('Failed to refresh YouTube access token', { error });
+      logger.error('Failed to refresh YouTube access token', { 
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
       throw new Error('Failed to refresh access token');
     }
   }
