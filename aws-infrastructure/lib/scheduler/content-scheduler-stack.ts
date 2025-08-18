@@ -636,27 +636,45 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // ==================== CDK Nag Suppressions with Justifications ====================
     
-    NagSuppressions.addResourceSuppressions(lambdaRole, [
-      {
-        id: 'AwsSolutions-IAM5',
-        reason: 'X-Ray tracing requires wildcard permissions for PutTraceSegments',
-        appliesTo: ['Resource::*'],
-      },
-    ]);
+    // Suppress X-Ray permissions specifically
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/LambdaExecutionRole/DefaultPolicy/Resource`,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'X-Ray tracing requires wildcard permissions for PutTraceSegments and PutTelemetryRecords',
+          appliesTo: [
+            'Resource::arn:aws:xray:*:*:trace/*',
+            'Resource::arn:aws:xray:*:*:group/*',
+          ],
+        },
+      ]
+    );
 
-    NagSuppressions.addResourceSuppressions(this.api, [
-      {
-        id: 'AwsSolutions-APIG1',
-        reason: 'Access logging will be configured post-deployment',
-      },
-    ]);
+    // Suppress API Gateway logging configuration
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/SchedulerApi/Resource`,
+      [
+        {
+          id: 'AwsSolutions-APIG1',
+          reason: 'CloudWatch logging disabled to avoid circular dependency with IAM role. Metrics and tracing are enabled for monitoring.',
+        },
+      ]
+    );
 
-    NagSuppressions.addResourceSuppressions(accessLogsBucket, [
-      {
-        id: 'AwsSolutions-S1',
-        reason: 'Access logs bucket does not need its own access logging',
-      },
-    ]);
+    // Suppress access logs bucket logging requirement
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/AccessLogsBucket/Resource`,
+      [
+        {
+          id: 'AwsSolutions-S1',
+          reason: 'This is the access logs bucket itself - enabling access logging would create an infinite loop',
+        },
+      ]
+    );
 
     // ==================== Outputs ====================
     
