@@ -30,6 +30,8 @@ export class AnalyticsCache {
 
   constructor() {
     const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
+    console.log(`[AnalyticsCache] Environment REDIS_URL: ${process.env.REDIS_URL ? 'SET' : 'NOT SET'}`)
+    console.log(`[AnalyticsCache] Using Redis URL: ${redisUrl.replace(/\/\/.*@/, '//***@')}`)
     this.redis = new Redis(redisUrl, {
       enableReadyCheck: false,
       maxRetriesPerRequest: 1,
