@@ -390,3 +390,32 @@ export function getRetentionManager(app: FastifyInstance): RetentionManager {
   }
   return retentionManager
 }
+
+/**
+ * Lambda handler for EventBridge scheduled events
+ * This is the entry point when running as a Lambda function
+ */
+export const lambdaHandler = async (
+  event: EventBridgeScheduledEvent
+): Promise<LambdaResponse> => {
+  // Initialize minimal Fastify instance for logging
+  const fastifyModule = await import('fastify')
+  const app = fastifyModule.default({
+    logger: {
+      level: process.env.LOG_LEVEL || 'info',
+      serializers: {
+        req: (req: any) => ({
+          method: req.method,
+          url: req.url,
+          hostname: req.hostname,
+        }),
+        res: (res: any) => ({
+          statusCode: res.statusCode,
+        }),
+      },
+    },
+  })
+  
+  const manager = new RetentionManager(app)
+  return await manager.handleEventBridgeTrigger(event)
+}
