@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import OpenAI from 'openai'
 import type { StyleProfile } from './ai.js'
 import { generateMidjourneyImage } from './midjourney.js'
@@ -322,7 +323,7 @@ export async function generateContentBatch(
       const content = await generateInstagramContent(styleProfile, brandName, request)
 
       return {
-        id: `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `batch_${Date.now()}_${randomUUID()}`,
         content,
         brandId,
         createdAt: new Date(),

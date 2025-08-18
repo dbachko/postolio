@@ -3,7 +3,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { verifyJWT } from '../services/jwt.js'
 import { campaignService, type CampaignConfig } from '../services/campaign.js'
 import { campaignJobService } from '../services/campaign-jobs.js'
-import { pauseResumeRateLimiter, campaignRateLimiter, createRateLimitMiddleware } from '../services/rate-limiter.js'
+import { pauseResumeRateLimiter, campaignRateLimiter } from '../services/rate-limiter.js'
 import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js'
 import { regenerationService } from '../services/regeneration-queue.js'
 import { TimezoneService } from '../services/timezone.js'
@@ -713,7 +713,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await authenticateRequest(request)
       const { jobId } = request.params
 
-      const progress = await regenerationService.getJobProgress(jobId)
+      const progress = await regenerationService.getJobProgress(jobId, userId)
 
       if (!progress) {
         return reply.code(404).send({ error: 'Job not found' })
@@ -738,7 +738,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await authenticateRequest(request)
       const { jobId } = request.params
 
-      const cancelled = await regenerationService.cancelJob(jobId)
+      const cancelled = await regenerationService.cancelJob(jobId, userId)
 
       if (!cancelled) {
         return reply.code(404).send({ error: 'Job not found or already completed' })

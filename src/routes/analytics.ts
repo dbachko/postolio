@@ -19,7 +19,7 @@ function authenticateRequest(request: any, reply: any) {
   const token = authHeader.substring(7)
   try {
     return verifyJWT(token)
-  } catch (error) {
+  } catch {
     reply.status(401).send({ error: 'Invalid token' })
     return null
   }
@@ -208,7 +208,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         return reply.status(404).send({ error: 'Brand not found' })
       }
 
-      const scheduledPosts = await schedulerService.getScheduledPosts(brandId)
+      const scheduledPosts = await schedulerService.getUpcomingPosts(brandId)
       
       reply.send({ scheduledPosts })
     } catch (error) {

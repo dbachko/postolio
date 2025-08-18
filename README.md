@@ -508,9 +508,20 @@ See the [CDK Bootstrap Troubleshooting Guide](docs/CDK_BOOTSTRAP_TROUBLESHOOTING
 Set the following environment variables in production:
 
 ```bash
+# Required
 DATABASE_URL=postgresql://username:password@host:port/database
 JWT_SECRET=your-secure-jwt-secret
+
+# Optional but recommended
 OPENAI_API_KEY=your-openai-api-key
+FACEBOOK_APP_ID=your-meta-app-id
+FACEBOOK_APP_SECRET=your-meta-app-secret
+
+# AWS Scheduler Service (for production scheduling)
+SCHEDULER_API_KEY=your-aws-scheduler-api-key
+SCHEDULER_API_URL=https://your-scheduler-api.execute-api.region.amazonaws.com/prod
+
+# System
 NODE_ENV=production
 PORT=3000
 ```
@@ -554,7 +565,15 @@ postolio/
 │   │   ├── instagram.ts   # Instagram Graph API
 │   │   ├── redis.ts       # Redis caching & rate limiting
 │   │   ├── analytics.ts   # Analytics & metrics collection
-│   │   └── scheduler.ts   # Automated posting scheduler
+│   │   ├── scheduler.ts   # AWS scheduler service facade
+│   │   ├── scheduler-adapter.ts # AWS scheduler integration
+│   │   └── autopilot.ts   # EventBridge-triggered content generation
+│   ├── clients/           # External service clients
+│   │   └── content-scheduler-client.ts # AWS Content Scheduler SDK
+│   ├── constants/         # Centralized constants
+│   │   └── scheduler.ts   # Scheduler time intervals and limits
+│   ├── types/             # TypeScript type definitions
+│   │   └── aws-events.ts  # AWS EventBridge and Lambda types
 │   ├── plugins/           # Fastify plugins
 │   └── server.ts          # Main server file
 ├── frontend/              # Frontend React application

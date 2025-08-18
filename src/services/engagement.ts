@@ -390,7 +390,7 @@ class EngagementService {
   /**
    * Get recent actions for rate limiting
    */
-  private async getRecentActions(brandId: string, since: Date): Promise<any[]> {
+  private async getRecentActions(_brandId: string, _since: Date): Promise<any[]> {
     // In a real implementation, query engagement_actions table
     // For now, return empty array
     return []

@@ -256,7 +256,7 @@ export default async function legalRoutes(fastify: FastifyInstance) {
   })
 
   // Legal info endpoint (JSON format for API consumers)
-  fastify.get('/legal-info', async (request, reply) => {
+  fastify.get('/legal-info', async (_request, _reply) => {
     return {
       privacyPolicy: {
         url: '/legal/privacy-policy',

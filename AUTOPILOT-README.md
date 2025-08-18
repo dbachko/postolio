@@ -5,10 +5,10 @@ The autopilot system automatically maintains a 14-day content pipeline for all c
 ## Features
 
 ### 🕐 Daily Scheduling
-- **Cron Job**: Runs daily at 2:00 AM
+- **EventBridge Scheduler**: Triggered by AWS EventBridge (replacing node-cron)
 - **Gap Detection**: Analyzes each brand's content schedule
 - **Auto-Generation**: Creates content when gaps are detected
-- **Auto-Scheduling**: Schedules generated content optimally
+- **Auto-Scheduling**: Schedules generated content optimally using AWS Content Scheduler
 
 ### 🎯 Intelligent Content Generation
 - **Brand-Aware**: Uses each brand's style profile and preferences
@@ -196,7 +196,7 @@ npx tsx scripts/test-autopilot.ts
 
 ### Service Status
 - **Health Check**: Autopilot service running status
-- **Cron Schedule**: Next execution time
+- **EventBridge Status**: AWS EventBridge rule status and next execution time
 - **Brand Coverage**: Number of brands with autopilot enabled
 
 ### Content Metrics

@@ -16,7 +16,7 @@ function authenticateRequest(request: any, reply: any) {
   const token = authHeader.substring(7)
   try {
     return verifyJWT(token)
-  } catch (error) {
+  } catch {
     reply.status(401).send({ error: 'Invalid token' })
     return null
   }

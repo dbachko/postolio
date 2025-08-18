@@ -168,7 +168,7 @@ export class AIFeaturesService {
 
   private generateOptimizedHashtags(content: string, current: string[], brand: any): string[] {
     const contentWords = content.toLowerCase().split(' ')
-    const brandStyle = brand.styleProfile || {}
+    const _brandStyle = brand.styleProfile || {}
     
     const optimized = [
       ...current,
@@ -197,7 +197,7 @@ export class AIFeaturesService {
     return Math.round((relevantHashtags.length / hashtags.length) * 100)
   }
 
-  private generateHashtagSuggestions(content: string, brand: any): string[] {
+  private generateHashtagSuggestions(_content: string, _brand: any): string[] {
     return [
       '#socialmedia',
       '#contentcreator',
@@ -252,7 +252,7 @@ export class AIFeaturesService {
     ]
   }
 
-  private identifyOpportunities(insights: any[]): string[] {
+  private identifyOpportunities(_insights: any[]): string[] {
     return [
       'Content gap: fewer brands posting on weekends',
       'Underutilized hashtags with high potential reach',
@@ -273,7 +273,7 @@ export class AIFeaturesService {
     }
   }
 
-  private generateContentSuggestions(context: string, type: string, brand: any): ContentSuggestion[] {
+  private generateContentSuggestions(context: string, type: string, _brand: any): ContentSuggestion[] {
     const basePrompts = {
       'holiday season': [
         {

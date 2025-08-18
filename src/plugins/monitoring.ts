@@ -15,7 +15,7 @@ export function logResponse(request: any, reply: any) {
     if (request.user?.id) {
       userId = request.user.id
     }
-  } catch (error) {
+  } catch {
     // Ignore JWT parsing errors for monitoring
   }
 

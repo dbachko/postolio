@@ -19,7 +19,7 @@ function authenticateRequest(request: any, reply: any) {
   const token = authHeader.substring(7)
   try {
     return verifyJWT(token)
-  } catch (error) {
+  } catch {
     reply.status(401).send({ error: 'Invalid token' })
     return null
   }
@@ -67,7 +67,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
             const freshProfile = await instagramService.getProfile(brand)
 
             // Update database with fresh profile data
-            const updatedBrand = await prisma.brand.update({
+            const _updatedBrand = await prisma.brand.update({
               where: { id: brandId },
               data: {
                 instagramProfileData: freshProfile as any,
@@ -399,7 +399,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
     try {
       await instagramService.handleWebhookEvent(request.body)
       reply.send('OK')
-    } catch (error) {
+    } catch {
       reply.status(500).send('Error processing webhook')
     }
   })

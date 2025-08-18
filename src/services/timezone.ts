@@ -1,7 +1,7 @@
 import { toZonedTime, fromZonedTime, formatInTimeZone } from 'date-fns-tz'
 import { FastifyRequest } from 'fastify'
 import { getDatabaseClient } from '../config/database.js'
-import { DEFAULT_TIMEZONE, BROWSER_DETECTION_FALLBACK, BRAND_TIMEZONE_FALLBACK, isValidTimezone } from '../constants/timezone.js'
+import { DEFAULT_TIMEZONE, BRAND_TIMEZONE_FALLBACK, isValidTimezone } from '../constants/timezone.js'
 
 const prisma = getDatabaseClient()
 
