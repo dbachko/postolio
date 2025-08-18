@@ -1,6 +1,5 @@
 import { FastifyPluginAsync } from 'fastify'
 import jwt from '@fastify/jwt'
-import cookie from '@fastify/cookie'
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
@@ -23,13 +22,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     secret: process.env.JWT_SECRET || 'fallback-secret-for-development'
   })
 
-  // Register cookie plugin only if not already registered
-  if (!fastify.hasDecorator('parseCookie')) {
-    await fastify.register(cookie, {
-      secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET || 'default-secret-change-in-production',
-      parseOptions: {}
-    })
-  }
+  // Cookie plugin is registered elsewhere in the application
 
   // Authentication decorator
   fastify.decorate('authenticate', async function (request: any, reply: any) {
