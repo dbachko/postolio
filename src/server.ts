@@ -1,6 +1,7 @@
 import './dotenv-init.js'
 import fastify, { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
+import cookie from '@fastify/cookie'
 import helmet from '@fastify/helmet'
 import fs from 'fs'
 import path from 'path'
@@ -84,6 +85,10 @@ export function buildFastify(): FastifyInstance {
   app.register(cors, {
     origin: corsOrigins,
     credentials: true,
+  })
+  app.register(cookie, {
+    secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET || 'default-secret-change-in-production',
+    parseOptions: {}
   })
   app.register(helmet)
   app.register(monitoringPlugin)
