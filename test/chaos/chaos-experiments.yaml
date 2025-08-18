@@ -1,0 +1,556 @@
+# Chaos Engineering Experiments for Content Scheduler
+# Uses Chaos Toolkit format for chaos engineering tests
+# Phase 8 Testing & Validation
+
+version: 1.0.0
+title: Content Scheduler Chaos Engineering Test Suite
+description: |
+  Comprehensive chaos engineering experiments to validate the resilience
+  of the Content Scheduler microservice under various failure scenarios.
+  Target: 99.99% reliability with 1M posts/day capacity.
+
+configuration:
+  aws_region: us-east-1
+  scheduler_api_endpoint:
+    type: env
+    key: SCHEDULER_API_ENDPOINT
+  dynamodb_tables:
+    schedules: content-scheduler-schedules
+    retry_queue: content-scheduler-retry-queue
+    audit_log: content-scheduler-audit-log
+    dlq: content-scheduler-dlq
+  lambda_functions:
+    - content-scheduler-schedule-management
+    - content-scheduler-publisher
+    - content-scheduler-retry-handler
+    - content-scheduler-platform-adapter
+  eventbridge_scheduler_group: content-scheduler
+  monitoring:
+    cloudwatch_namespace: ContentScheduler/Chaos
+    datadog_enabled: true
+    prometheus_enabled: true
+
+steady-state-hypothesis:
+  title: System operates normally
+  probes:
+    - type: probe
+      name: api-health-check
+      tolerance:
+        type: status
+        value: 200
+      provider:
+        type: http
+        url: ${scheduler_api_endpoint}/health
+        timeout: 5
+    
+    - type: probe
+      name: schedule-success-rate
+      tolerance:
+        type: percentage
+        min: 95
+      provider:
+        type: python
+        module: chaosaws.cloudwatch.probes
+        func: get_metric_statistics
+        arguments:
+          namespace: ContentScheduler
+          metric_name: ScheduleSuccessRate
+          statistic: Average
+          duration: 300
+    
+    - type: probe
+      name: api-latency-p95
+      tolerance:
+        type: range
+        min: 0
+        max: 2000
+      provider:
+        type: python
+        module: chaosaws.cloudwatch.probes
+        func: get_metric_statistics
+        arguments:
+          namespace: AWS/Lambda
+          metric_name: Duration
+          statistic: p95
+          duration: 300
+
+experiments:
+  # Experiment 1: Random Lambda Failures
+  - title: Lambda Function Random Failures
+    description: |
+      Inject random failures in Lambda functions to test retry logic
+      and error handling. Should maintain 95% success rate.
+    
+    steady-state-hypothesis:
+      title: System maintains operation despite Lambda failures
+      probes:
+        - ref: api-health-check
+        - ref: schedule-success-rate
+        - type: probe
+          name: retry-mechanism-active
+          tolerance:
+            type: boolean
+            value: true
+          provider:
+            type: python
+            module: custom_probes
+            func: check_retry_queue_processing
+    
+    method:
+      - type: action
+        name: inject-lambda-errors
+        provider:
+          type: python
+          module: chaosaws.lambda.actions
+          func: put_function_concurrency
+          arguments:
+            function_name: content-scheduler-publisher
+            concurrent_executions: 0
+        pauses:
+          after: 10
+      
+      - type: action
+        name: simulate-random-failures
+        provider:
+          type: python
+          module: custom_actions
+          func: inject_lambda_failures
+          arguments:
+            functions: ${lambda_functions}
+            failure_rate: 0.3
+            duration: 300
+            error_types:
+              - timeout
+              - error
+              - throttle
+    
+    rollbacks:
+      - type: action
+        name: restore-lambda-concurrency
+        provider:
+          type: python
+          module: chaosaws.lambda.actions
+          func: delete_function_concurrency
+          arguments:
+            function_name: content-scheduler-publisher
+
+  # Experiment 2: DynamoDB Throttling
+  - title: DynamoDB Throttling Simulation
+    description: |
+      Simulate DynamoDB throttling to test exponential backoff
+      and throughput management under constrained resources.
+    
+    method:
+      - type: action
+        name: reduce-dynamodb-capacity
+        provider:
+          type: python
+          module: chaosaws.dynamodb.actions
+          func: update_table
+          arguments:
+            table_name: ${dynamodb_tables.schedules}
+            provisioned_throughput:
+              read_capacity_units: 1
+              write_capacity_units: 1
+        pauses:
+          after: 30
+      
+      - type: action
+        name: generate-high-load
+        provider:
+          type: process
+          path: k6
+          arguments:
+            - run
+            - --env
+            - "SCENARIO=dynamodb_stress"
+            - test/load/k6-config.js
+    
+    rollbacks:
+      - type: action
+        name: restore-dynamodb-capacity
+        provider:
+          type: python
+          module: chaosaws.dynamodb.actions
+          func: update_table
+          arguments:
+            table_name: ${dynamodb_tables.schedules}
+            billing_mode: PAY_PER_REQUEST
+
+  # Experiment 3: EventBridge Delays
+  - title: EventBridge Schedule Delays
+    description: |
+      Inject delays in EventBridge schedules to test SLA compliance
+      when scheduling service experiences latency.
+    
+    steady-state-hypothesis:
+      title: Maintains 2-minute delivery SLA
+      probes:
+        - type: probe
+          name: on-time-delivery-rate
+          tolerance:
+            type: percentage
+            min: 95
+          provider:
+            type: python
+            module: custom_probes
+            func: check_delivery_sla
+            arguments:
+              sla_seconds: 120
+    
+    method:
+      - type: action
+        name: inject-eventbridge-delays
+        provider:
+          type: python
+          module: custom_actions
+          func: delay_eventbridge_schedules
+          arguments:
+            scheduler_group: ${eventbridge_scheduler_group}
+            min_delay_seconds: 10
+            max_delay_seconds: 300
+            affected_percentage: 25
+            duration: 900
+
+  # Experiment 4: Network Partition
+  - title: Network Partition Simulation
+    description: |
+      Simulate network partition between Lambda and DynamoDB
+      to test circuit breaker and fallback mechanisms.
+    
+    method:
+      - type: action
+        name: block-dynamodb-access
+        provider:
+          type: python
+          module: chaosaws.ec2.actions
+          func: modify_security_group_rules
+          arguments:
+            group_id: ${lambda_security_group}
+            ip_protocol: tcp
+            from_port: 443
+            to_port: 443
+            cidr_ip: 0.0.0.0/0
+            action: revoke
+        pauses:
+          after: 60
+      
+      - type: probe
+        name: circuit-breaker-activated
+        provider:
+          type: python
+          module: custom_probes
+          func: check_circuit_breaker_state
+          arguments:
+            expected_state: open
+    
+    rollbacks:
+      - type: action
+        name: restore-network-access
+        provider:
+          type: python
+          module: chaosaws.ec2.actions
+          func: modify_security_group_rules
+          arguments:
+            group_id: ${lambda_security_group}
+            ip_protocol: tcp
+            from_port: 443
+            to_port: 443
+            cidr_ip: 0.0.0.0/0
+            action: authorize
+
+  # Experiment 5: Platform API Unavailability
+  - title: Social Media Platform API Failure
+    description: |
+      Simulate Instagram/Facebook API unavailability to test
+      retry queue and platform-specific error handling.
+    
+    method:
+      - type: action
+        name: block-instagram-api
+        provider:
+          type: python
+          module: custom_actions
+          func: mock_platform_failure
+          arguments:
+            platform: instagram
+            failure_type: complete
+            duration: 1800
+      
+      - type: probe
+        name: retry-queue-growing
+        provider:
+          type: python
+          module: custom_probes
+          func: monitor_retry_queue
+          arguments:
+            expected_behavior: growing
+            platform: instagram
+      
+      - type: probe
+        name: other-platforms-unaffected
+        provider:
+          type: python
+          module: custom_probes
+          func: check_platform_health
+          arguments:
+            platforms:
+              - facebook
+              - twitter
+            expected_status: healthy
+
+  # Experiment 6: Multi-Region Failover
+  - title: Primary Region Failure
+    description: |
+      Simulate complete us-east-1 region failure to test
+      multi-region failover and data consistency.
+    
+    steady-state-hypothesis:
+      title: System maintains availability during region failure
+      probes:
+        - type: probe
+          name: api-availability
+          tolerance:
+            type: percentage
+            min: 99.9
+          provider:
+            type: python
+            module: custom_probes
+            func: check_multi_region_availability
+        
+        - type: probe
+          name: data-consistency
+          tolerance:
+            type: boolean
+            value: true
+          provider:
+            type: python
+            module: custom_probes
+            func: verify_cross_region_consistency
+    
+    method:
+      - type: action
+        name: fail-primary-region
+        provider:
+          type: python
+          module: custom_actions
+          func: simulate_region_failure
+          arguments:
+            region: us-east-1
+            services:
+              - lambda
+              - dynamodb
+              - eventbridge
+            duration: 1800
+      
+      - type: probe
+        name: failover-triggered
+        provider:
+          type: python
+          module: custom_probes
+          func: check_failover_status
+          arguments:
+            expected_region: us-west-2
+            max_failover_time: 300
+
+  # Experiment 7: Memory Leak Simulation
+  - title: Lambda Memory Leak
+    description: |
+      Simulate memory leaks in Lambda functions to test
+      auto-recovery and resource management.
+    
+    method:
+      - type: action
+        name: inject-memory-leak
+        provider:
+          type: python
+          module: custom_actions
+          func: simulate_memory_leak
+          arguments:
+            function_name: content-scheduler-publisher
+            leak_rate_mb_per_invocation: 50
+            max_memory_mb: 3008
+            duration: 1800
+      
+      - type: probe
+        name: auto-recovery-triggered
+        provider:
+          type: python
+          module: custom_probes
+          func: check_lambda_recovery
+          arguments:
+            function_name: content-scheduler-publisher
+            expected_behavior: auto_restart
+
+  # Experiment 8: Clock Skew
+  - title: Time Synchronization Issues
+    description: |
+      Test system behavior when clocks are not synchronized
+      between services.
+    
+    method:
+      - type: action
+        name: inject-clock-skew
+        provider:
+          type: python
+          module: custom_actions
+          func: modify_system_time
+          arguments:
+            services:
+              - lambda: +300  # 5 minutes ahead
+              - eventbridge: -300  # 5 minutes behind
+            duration: 3600
+      
+      - type: probe
+        name: no-duplicate-posts
+        provider:
+          type: python
+          module: custom_probes
+          func: check_duplicate_prevention
+          arguments:
+            tolerance: 0
+      
+      - type: probe
+        name: schedule-accuracy-maintained
+        provider:
+          type: python
+          module: custom_probes
+          func: check_schedule_accuracy
+          arguments:
+            tolerance_seconds: 120
+
+  # Experiment 9: Data Corruption
+  - title: Corrupted Schedule Data
+    description: |
+      Inject corrupted data to test validation and
+      quarantine mechanisms.
+    
+    method:
+      - type: action
+        name: corrupt-schedule-records
+        provider:
+          type: python
+          module: custom_actions
+          func: inject_data_corruption
+          arguments:
+            table: ${dynamodb_tables.schedules}
+            corruption_types:
+              - invalid_json
+              - missing_required_fields
+              - invalid_timestamps
+            affected_percentage: 5
+      
+      - type: probe
+        name: corruption-detected
+        provider:
+          type: python
+          module: custom_probes
+          func: check_corruption_detection
+          arguments:
+            expected_detection_rate: 100
+      
+      - type: probe
+        name: corrupted-records-quarantined
+        provider:
+          type: python
+          module: custom_probes
+          func: verify_quarantine_process
+          arguments:
+            quarantine_table: ${dynamodb_tables.dlq}
+
+  # Experiment 10: Cascading Failures
+  - title: Cascading Failure Simulation
+    description: |
+      Test system resilience against cascading failures
+      starting from a single component.
+    
+    method:
+      - type: action
+        name: trigger-cascade
+        provider:
+          type: python
+          module: custom_actions
+          func: trigger_cascading_failure
+          arguments:
+            initial_failure: retry-handler-overload
+            cascade_pattern:
+              - retry_queue_backup
+              - publisher_throttling
+              - api_degradation
+            duration: 600
+      
+      - type: probe
+        name: cascade-contained
+        provider:
+          type: python
+          module: custom_probes
+          func: check_cascade_containment
+          arguments:
+            max_affected_components: 3
+            recovery_time_seconds: 300
+
+# Rollback configuration for all experiments
+global_rollbacks:
+  - type: action
+    name: restore-all-services
+    provider:
+      type: python
+      module: custom_actions
+      func: restore_all_services
+    
+  - type: action
+    name: clear-test-data
+    provider:
+      type: python
+      module: custom_actions
+      func: cleanup_test_data
+    
+  - type: action
+    name: reset-monitoring
+    provider:
+      type: python
+      module: custom_actions
+      func: reset_monitoring_alerts
+
+# Notifications
+notifications:
+  - type: slack
+    webhook_url:
+      type: env
+      key: SLACK_WEBHOOK_URL
+    message_template: |
+      Chaos Experiment: {title}
+      Status: {status}
+      Duration: {duration}
+      Steady State: {steady_state_met}
+      Rollback Required: {rollback_executed}
+  
+  - type: email
+    smtp_server: smtp.gmail.com
+    from:
+      type: env
+      key: ALERT_EMAIL_FROM
+    to:
+      type: env
+      key: ALERT_EMAIL_TO
+    subject: "Chaos Engineering Test Results - {title}"
+
+# Reporting
+reporting:
+  outputs:
+    - type: json
+      path: ./reports/chaos-results.json
+    
+    - type: html
+      path: ./reports/chaos-report.html
+      template: chaos-report-template.html
+    
+    - type: prometheus
+      push_gateway: http://prometheus-pushgateway:9091
+      job: chaos_engineering
+      
+    - type: cloudwatch
+      namespace: ContentScheduler/ChaosEngineering
+      dimensions:
+        Environment: ${environment}
+        TestSuite: phase8
