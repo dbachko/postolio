@@ -1,6 +1,6 @@
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Tracer } from '@aws-lambda-powertools/tracer';
-import { Metrics, MetricUnits } from '@aws-lambda-powertools/metrics';
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
@@ -25,10 +25,10 @@ export const handler = async (event: SQSEvent): Promise<void> => {
   for (const record of event.Records) {
     try {
       await processRetryMessage(record);
-      metrics.addMetric('RetryProcessed', MetricUnits.Count, 1);
+      metrics.addMetric('RetryProcessed', MetricUnit.Count, 1);
     } catch (error) {
       logger.error('Failed to process retry message', error as Error);
-      metrics.addMetric('RetryFailed', MetricUnits.Count, 1);
+      metrics.addMetric('RetryFailed', MetricUnit.Count, 1);
       throw error; // Let SQS handle retry
     }
   }
@@ -49,7 +49,7 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
   if (attemptNumber > MAX_RETRY_ATTEMPTS) {
     logger.warn('Max retry attempts exceeded', { scheduleId, attemptNumber });
     await markAsFailed(scheduleId, 'Max retry attempts exceeded');
-    metrics.addMetric('MaxRetriesExceeded', MetricUnits.Count, 1);
+    metrics.addMetric('MaxRetriesExceeded', MetricUnit.Count, 1);
     return;
   }
 
@@ -68,7 +68,7 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
     }));
 
     logger.info('Retry invoked successfully', { scheduleId, attemptNumber });
-    metrics.addMetric('RetryInvoked', MetricUnits.Count, 1);
+    metrics.addMetric('RetryInvoked', MetricUnit.Count, 1);
   } catch (error) {
     logger.error('Failed to invoke retry', error as Error);
     
