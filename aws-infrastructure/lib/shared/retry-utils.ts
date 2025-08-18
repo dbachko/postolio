@@ -145,7 +145,6 @@ export async function retryWithBackoff<T>(
       if (attempt > 1) {
         logger.info('Operation succeeded after retry', { attempt });
         metrics.addMetric('RetrySuccess', MetricUnit.Count, 1);
-        metrics.addMetadata('attempt', attempt.toString());
       }
       
       return result;
@@ -175,8 +174,6 @@ export async function retryWithBackoff<T>(
 
       // Record retry metric
       metrics.addMetric('RetryAttempt', MetricUnit.Count, 1);
-      metrics.addMetadata('attempt', attempt.toString());
-      metrics.addMetadata('delay', delay.toString());
 
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -288,7 +285,6 @@ export class CircuitBreaker {
     }
 
     metrics.addMetric('CircuitBreakerFailure', MetricUnit.Count, 1);
-    metrics.addMetadata('failures', this.failures.toString());
   }
 
   /**
