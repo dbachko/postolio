@@ -143,6 +143,7 @@ export class PostolioLambdaStack extends cdk.Stack {
             // Copy Prisma client
             return [
               `cp -r ${inputDir}/node_modules/.prisma ${outputDir}/`,
+              `mkdir -p ${outputDir}/node_modules/@prisma/`,
               `cp -r ${inputDir}/node_modules/@prisma/client ${outputDir}/node_modules/@prisma/`,
             ]
           },

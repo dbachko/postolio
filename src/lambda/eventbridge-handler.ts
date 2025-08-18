@@ -52,7 +52,7 @@ export const handler = async (
     switch (taskType) {
       case 'autopilot':
         // Handle autopilot content generation
-        const result = await autopilotService.runAutopilotGeneration()
+        await autopilotService.runAutopilotGeneration()
         return {
           statusCode: 200,
           body: JSON.stringify({

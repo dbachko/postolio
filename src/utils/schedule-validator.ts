@@ -218,10 +218,10 @@ export function getNextExecutionTime(expression: string): Date | null {
 
   // For rate expressions, calculate next time
   if (expression.startsWith('rate(')) {
-    const match = expression.match(/rate\((\d+)\s+(minute|hour|day)/)
+    const match = expression.match(/rate\((\d+)\s+(minute|minutes|hour|hours|day|days)/)
     if (match) {
       const value = parseInt(match[1]!, 10)
-      const unit = match[2]!
+      const unit = match[2]!.replace(/s$/, '') // Remove trailing 's' for switch statement
       const now = new Date()
       
       switch (unit) {

@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { deleteExpiredImages } from './s3-image.js'
-import { FastifyInstance } from 'fastify'
+import fastify, { FastifyInstance } from 'fastify'
 import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-events.js'
 
 const prisma = new PrismaClient()
@@ -399,8 +399,7 @@ export const lambdaHandler = async (
   event: EventBridgeScheduledEvent
 ): Promise<LambdaResponse> => {
   // Initialize minimal Fastify instance for logging
-  const fastifyModule = await import('fastify')
-  const app = fastifyModule.default({
+  const app = fastify({
     logger: {
       level: process.env.LOG_LEVEL || 'info',
       serializers: {
