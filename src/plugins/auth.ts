@@ -23,11 +23,13 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     secret: process.env.JWT_SECRET || 'fallback-secret-for-development'
   })
 
-  // Register cookie plugin
-  await fastify.register(cookie, {
-    secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET || 'default-secret-change-in-production',
-    parseOptions: {}
-  })
+  // Register cookie plugin only if not already registered
+  if (!fastify.hasDecorator('parseCookie')) {
+    await fastify.register(cookie, {
+      secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET || 'default-secret-change-in-production',
+      parseOptions: {}
+    })
+  }
 
   // Authentication decorator
   fastify.decorate('authenticate', async function (request: any, reply: any) {
