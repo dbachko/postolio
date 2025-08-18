@@ -373,9 +373,17 @@ EOF
 cleanup_test_resources() {
     log_info "Cleaning up test resources..."
     
-    # Stop any running sustained tests
-    if [ -f "${REPORTS_DIR}/load/sustained.pid" ]; then
-        kill $(cat "${REPORTS_DIR}/load/sustained.pid") 2>/dev/null || true
+    # Stop any running sustained tests (safe approach)
+    if [[ -f "${REPORTS_DIR}/load/sustained.pid" ]]; then
+        local pid
+        pid=$(cat "${REPORTS_DIR}/load/sustained.pid" 2>/dev/null)
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            log_info "Terminating sustained test (PID: $pid)"
+            kill -TERM "$pid"
+            sleep 5
+            kill -0 "$pid" 2>/dev/null && kill -KILL "$pid"
+        fi
+        rm -f "${REPORTS_DIR}/load/sustained.pid"
     fi
     
     # Clean up test data from DynamoDB
