@@ -50,13 +50,13 @@ export interface EventBridgeRulesStackProps extends cdk.StackProps {
  */
 export class EventBridgeRulesStack extends cdk.Stack {
   private readonly scheduleConfig: ScheduleConfig;
-  private readonly environment: string;
+  private readonly envName: string;
 
   constructor(scope: Construct, id: string, props: EventBridgeRulesStackProps) {
     super(scope, id, props);
 
     const { environment, mainLambdaFunction } = props;
-    this.environment = environment;
+    this.envName = environment;
 
     // Load configuration from environment or use defaults
     this.scheduleConfig = this.loadScheduleConfig(props.config);
@@ -141,7 +141,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
     };
 
     // Use custom config if provided, otherwise use environment defaults
-    return customConfig || defaultConfigs[this.environment] || defaultConfigs.dev;
+    return customConfig || defaultConfigs[this.envName] || defaultConfigs.dev;
   }
 
   /**
@@ -149,7 +149,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
    * Industry Standard: Externalized configuration management
    */
   private storeConfigInParameterStore(): void {
-    const parameterPrefix = `/postolio/${this.environment}/scheduler`;
+    const parameterPrefix = `/postolio/${this.envName}/scheduler`;
 
     // Store each schedule configuration as a parameter
     Object.entries(this.scheduleConfig).forEach(([taskType, config]) => {
@@ -179,7 +179,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
     }
 
     const rule = new events.Rule(this, 'AutopilotRule', {
-      ruleName: `postolio-${this.environment}-autopilot`,
+      ruleName: `postolio-${this.envName}-autopilot`,
       description: 'Trigger autopilot content generation',
       schedule: events.Schedule.expression(this.scheduleConfig.autopilot.schedule),
       enabled: true,
@@ -192,7 +192,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
         'detail-type': 'Scheduled Task',
         detail: {
           taskType: 'autopilot',
-          environment: this.environment,
+          environment: this.envName,
           timestamp: events.EventField.time,
         },
       }),
@@ -203,7 +203,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
     // Add tags for cost tracking
     cdk.Tags.of(rule).add('Service', 'Postolio');
     cdk.Tags.of(rule).add('Component', 'Autopilot');
-    cdk.Tags.of(rule).add('Environment', this.environment);
+    cdk.Tags.of(rule).add('Environment', this.envName);
   }
 
   /**
@@ -215,7 +215,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
     }
 
     const rule = new events.Rule(this, 'RetentionRule', {
-      ruleName: `postolio-${this.environment}-retention`,
+      ruleName: `postolio-${this.envName}-retention`,
       description: 'Process expired content based on retention policies',
       schedule: events.Schedule.expression(this.scheduleConfig.retention.schedule),
       enabled: true,
@@ -227,7 +227,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
         'detail-type': 'Scheduled Task',
         detail: {
           taskType: 'retention',
-          environment: this.environment,
+          environment: this.envName,
           timestamp: events.EventField.time,
         },
       }),
@@ -237,7 +237,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
 
     cdk.Tags.of(rule).add('Service', 'Postolio');
     cdk.Tags.of(rule).add('Component', 'Retention');
-    cdk.Tags.of(rule).add('Environment', this.environment);
+    cdk.Tags.of(rule).add('Environment', this.envName);
   }
 
   /**
@@ -249,7 +249,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
     }
 
     const rule = new events.Rule(this, 'GDPRComplianceRule', {
-      ruleName: `postolio-${this.environment}-gdpr`,
+      ruleName: `postolio-${this.envName}-gdpr`,
       description: 'Process GDPR compliance and data deletion requests',
       schedule: events.Schedule.expression(this.scheduleConfig.gdpr.schedule),
       enabled: true,
@@ -261,7 +261,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
         'detail-type': 'Scheduled Task',
         detail: {
           taskType: 'gdpr',
-          environment: this.environment,
+          environment: this.envName,
           timestamp: events.EventField.time,
         },
       }),
@@ -271,7 +271,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
 
     cdk.Tags.of(rule).add('Service', 'Postolio');
     cdk.Tags.of(rule).add('Component', 'GDPR');
-    cdk.Tags.of(rule).add('Environment', this.environment);
+    cdk.Tags.of(rule).add('Environment', this.envName);
     cdk.Tags.of(rule).add('Compliance', 'GDPR');
   }
 
@@ -284,7 +284,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
     }
 
     const rule = new events.Rule(this, 'MetricsCollectionRule', {
-      ruleName: `postolio-${this.environment}-metrics`,
+      ruleName: `postolio-${this.envName}-metrics`,
       description: 'Collect and aggregate application metrics',
       schedule: events.Schedule.expression(this.scheduleConfig.metrics.schedule),
       enabled: true,
@@ -296,7 +296,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
         'detail-type': 'Scheduled Task',
         detail: {
           taskType: 'metrics-collection',
-          environment: this.environment,
+          environment: this.envName,
           timestamp: events.EventField.time,
         },
       }),
@@ -306,7 +306,7 @@ export class EventBridgeRulesStack extends cdk.Stack {
 
     cdk.Tags.of(rule).add('Service', 'Postolio');
     cdk.Tags.of(rule).add('Component', 'Metrics');
-    cdk.Tags.of(rule).add('Environment', this.environment);
+    cdk.Tags.of(rule).add('Environment', this.envName);
   }
 
   /**
