@@ -8,9 +8,11 @@ import type { StyleProfile } from './ai.js'
 const BATCH_SIZE = 5
 
 // Redis connection configuration
-const redisConnection = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
+console.log(`[RegenerationQueue] Environment REDIS_URL: ${process.env.REDIS_URL ? 'SET' : 'NOT SET'}`)
+console.log(`[RegenerationQueue] Using Redis URL: ${redisUrl.replace(/\/\/.*@/, '//***@')}`)
+
+const redisConnection = new Redis(redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false
 })
