@@ -24,7 +24,10 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   })
 
   // Register cookie plugin
-  await fastify.register(cookie)
+  await fastify.register(cookie, {
+    secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET || 'default-secret-change-in-production',
+    parseOptions: {}
+  })
 
   // Authentication decorator
   fastify.decorate('authenticate', async function (request: any, reply: any) {
