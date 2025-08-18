@@ -19,8 +19,6 @@ class RedisService {
 
     try {
       const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
-      console.log(`[Redis] Environment REDIS_URL: ${process.env.REDIS_URL ? 'SET' : 'NOT SET'}`)
-      console.log(`[Redis] Using Redis URL: ${redisUrl.replace(/\/\/.*@/, '//***@')}`)
       
       this.client = new Redis(redisUrl, {
         enableReadyCheck: true,

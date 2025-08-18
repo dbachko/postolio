@@ -9,8 +9,6 @@ const BATCH_SIZE = 5
 
 // Redis connection configuration
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
-console.log(`[RegenerationQueue] Environment REDIS_URL: ${process.env.REDIS_URL ? 'SET' : 'NOT SET'}`)
-console.log(`[RegenerationQueue] Using Redis URL: ${redisUrl.replace(/\/\/.*@/, '//***@')}`)
 
 const redisConnection = new Redis(redisUrl, {
   maxRetriesPerRequest: null,
