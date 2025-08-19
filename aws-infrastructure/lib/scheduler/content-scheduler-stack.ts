@@ -74,6 +74,60 @@ export class ContentSchedulerStack extends cdk.Stack {
       generateSecret: false,
     });
 
+    // Create Cognito domain for OAuth2 endpoints
+    const userPoolDomain = new cognito.UserPoolDomain(this, 'UserPoolDomain', {
+      userPool: this.userPool,
+      cognitoDomain: {
+        domainPrefix: prefix,
+      },
+    });
+
+    // Create a resource server for OAuth2 scopes
+    const resourceServer = new cognito.UserPoolResourceServer(this, 'ResourceServer', {
+      userPool: this.userPool,
+      identifier: 'scheduler',
+      scopes: [
+        {
+          scopeName: 'admin',
+          scopeDescription: 'Full admin access to scheduler API',
+        },
+      ],
+    });
+
+    // Create a service-to-service app client with client credentials flow
+    const serviceClient = new cognito.UserPoolClient(this, 'ServiceClient', {
+      userPool: this.userPool,
+      userPoolClientName: `${prefix}-service-client`,
+      authFlows: {
+        userPassword: false,
+        userSrp: false,
+      },
+      generateSecret: true, // Required for client credentials flow
+      oAuth: {
+        flows: {
+          clientCredentials: true, // Enable machine-to-machine auth
+        },
+        scopes: [cognito.OAuthScope.resourceServer(resourceServer, {
+          scopeName: 'admin',
+          scopeDescription: 'Full admin access to scheduler API',
+        })],
+      },
+    });
+
+    // Store service client credentials in Secrets Manager (API URL will be added later)
+    const serviceClientSecret = new secretsmanager.Secret(this, 'ServiceClientSecret', {
+      secretName: `${prefix}-service-credentials`,
+      description: 'Credentials for service-to-service authentication',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({
+          userPoolId: this.userPool.userPoolId,
+          clientId: serviceClient.userPoolClientId,
+        }),
+        generateStringKey: 'clientSecret',
+        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+      },
+    });
+
     // ==================== DynamoDB Tables with PITR ====================
     
     // Schedules Table with PITR
@@ -706,6 +760,12 @@ export class ContentSchedulerStack extends cdk.Stack {
       value: this.videoBucket.bucketName,
       description: 'S3 Video bucket name',
       exportName: `${prefix}-video-bucket`,
+    });
+
+    new cdk.CfnOutput(this, 'ServiceClientSecretArn', {
+      value: serviceClientSecret.secretArn,
+      description: 'ARN of the service client credentials secret',
+      exportName: `${prefix}-service-secret-arn`,
     });
   }
 }

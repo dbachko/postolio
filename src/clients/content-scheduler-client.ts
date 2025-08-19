@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import CircuitBreaker from 'opossum';
+import { cognitoAuthClient } from '../services/cognito-auth.js';
 
 // ==================== Validation Schemas ====================
 
@@ -524,7 +525,13 @@ export class ContentSchedulerClient {
   private setupInterceptors(): void {
     // Request interceptor
     this.client.interceptors.request.use(
-      (config) => {
+      async (config) => {
+        // Add OAuth2 authentication if available
+        const authHeaders = await cognitoAuthClient.getAuthHeaders();
+        if (authHeaders.Authorization) {
+          config.headers['Authorization'] = authHeaders.Authorization;
+        }
+        
         // Add request ID for tracing
         config.headers['X-Request-ID'] = this.generateRequestId();
         

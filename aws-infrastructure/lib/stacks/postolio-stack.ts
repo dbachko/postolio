@@ -23,13 +23,24 @@ export interface PostolioStackProps extends cdk.StackProps {
   domainName?: string
   hostedZoneId?: string
   useExternalDns?: boolean
+  contentSchedulerStack?: cdk.Stack // Optional reference to ContentScheduler stack
 }
 
 export class PostolioStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PostolioStackProps) {
     super(scope, id, props)
 
-    const { environment, domainName, hostedZoneId, useExternalDns } = props
+    const { environment, domainName, hostedZoneId, useExternalDns, contentSchedulerStack } = props
+
+    // Import ContentScheduler API URL if stack reference is provided
+    const schedulerApiUrl = contentSchedulerStack 
+      ? cdk.Fn.importValue(`postolio-scheduler-${environment}-api-endpoint`)
+      : process.env.SCHEDULER_API_URL || 'https://placeholder-scheduler-api.amazonaws.com';
+
+    // Generate a secure API key for scheduler communication
+    const schedulerApiKey = contentSchedulerStack 
+      ? cdk.Fn.select(0, cdk.Fn.split('-', cdk.Fn.select(2, cdk.Fn.split('/', cdk.Aws.STACK_ID))))
+      : process.env.SCHEDULER_API_KEY || 'placeholder-api-key';
 
     // ECR Repository for backend container images - reference existing repository
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio')
@@ -307,7 +318,7 @@ export class PostolioStack extends cdk.Stack {
 
     // Placeholder for CloudFront distribution - will be created after ECS service
 
-    // Application secrets
+    // Application secrets with ContentScheduler integration
     const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
       description: 'Postolio application secrets',
       secretObjectValue: {
@@ -321,6 +332,9 @@ export class PostolioStack extends cdk.Stack {
         nodeEnv: cdk.SecretValue.unsafePlainText('production'),
         port: cdk.SecretValue.unsafePlainText('3000'),
         instagramRedirectUri: cdk.SecretValue.unsafePlainText(`https://${domainName || 'PLACEHOLDER_DOMAIN'}/auth/instagram/callback`),
+        // ContentScheduler integration
+        schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
+        schedulerApiKey: cdk.SecretValue.unsafePlainText(schedulerApiKey),
       },
     })
 
@@ -457,6 +471,19 @@ export class PostolioStack extends cdk.Stack {
       })
     )
 
+    // Import ContentScheduler service secret ARN from cross-stack exports
+    const schedulerServiceSecretArn = cdk.Fn.importValue(`postolio-scheduler-${environment}-service-secret-arn`)
+    
+    // Import the scheduler service credentials secret
+    const schedulerServiceSecret = secretsmanager.Secret.fromSecretCompleteArn(
+      this,
+      'SchedulerServiceSecret',
+      schedulerServiceSecretArn
+    )
+    
+    // Grant read access to the scheduler secret
+    schedulerServiceSecret.grantRead(taskRole)
+    
     // Get the image tag from context, defaulting to 'latest' if not provided
     const imageTag = this.node.tryGetContext('imageTag') || 'latest'
     
@@ -482,6 +509,10 @@ export class PostolioStack extends cdk.Stack {
           PORT: ecs.Secret.fromSecretsManager(appSecrets, 'port'),
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
           INSTAGRAM_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecrets, 'instagramRedirectUri'),
+          // Scheduler credentials from imported secret
+          SCHEDULER_CLIENT_ID: ecs.Secret.fromSecretsManager(schedulerServiceSecret, 'clientId'),
+          SCHEDULER_CLIENT_SECRET: ecs.Secret.fromSecretsManager(schedulerServiceSecret, 'clientSecret'),
+          SCHEDULER_USER_POOL_ID: ecs.Secret.fromSecretsManager(schedulerServiceSecret, 'userPoolId'),
         },
         environment: {
           DB_HOST: database.instanceEndpoint.hostname,
@@ -491,6 +522,7 @@ export class PostolioStack extends cdk.Stack {
           S3_IMAGES_BUCKET: imagesBucket.bucketName,
           AWS_REGION: cdk.Aws.REGION,
           CLOUDFRONT_DOMAIN: apiDomainName, // Will be updated after distribution creation
+          SCHEDULER_API_URL: schedulerApiUrl, // Imported from ContentScheduler stack
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: 'postolio',
@@ -585,6 +617,9 @@ export class PostolioStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
+        // Note: Error responses for SPA routing should be handled here if needed,
+        // but CloudFront doesn't support behavior-specific error responses.
+        // The React app will handle routing on the client side.
       },
       // Additional behaviors for API routing and image serving
       additionalBehaviors: {
@@ -625,22 +660,19 @@ export class PostolioStack extends cdk.Stack {
       enableLogging: true,
       logBucket: accessLogsBucket,
       logFilePrefix: 'cloudfront-logs/',
-      // Global error responses for SPA routing (404/403 from S3 → serve index.html)
-      // These may affect API routes, but API behavior has allowedMethods: ALLOW_ALL
+      // IMPORTANT: Selective error response configuration
+      // Only handle 403 errors (S3 access denied for non-existent objects)
+      // This enables SPA routing while preserving API error responses
       errorResponses: [
         {
-          httpStatus: 404,
+          httpStatus: 403,
           responseHttpStatus: 200,
           responsePagePath: '/index.html',
           ttl: cdk.Duration.minutes(5),
         },
-        {
-          httpStatus: 403,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html', 
-          ttl: cdk.Duration.minutes(5),
-        },
       ],
+      // Note: We explicitly DO NOT handle 404, 500, or other status codes
+      // to ensure API errors pass through with their original response bodies
     }
 
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', distributionProps)
