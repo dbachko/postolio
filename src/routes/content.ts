@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from 'fastify'
+import { Prisma } from '@prisma/client'
 
 import { verifyJWT } from '../services/jwt.js'
 import { generateInstagramContent, type ContentGenerationRequest } from '../services/content-generator.js'
@@ -165,7 +166,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       const decoded = verifyJWT(token)
       const userId = decoded.id
 
-      const { brandId, caption, hashtags, imageData, mimeType } = request.body
+      const { brandId, caption, hashtags, imageData } = request.body
 
       // Validate input
       if (!caption || caption.trim().length === 0) {
@@ -210,7 +211,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         try {
           // Extract base64 data
           const base64Match = imageData.match(/^data:([^;]+);base64,(.+)$/)
-          if (!base64Match) {
+          if (!base64Match || !base64Match[2]) {
             return reply.code(400).send({ error: 'Invalid image data format' })
           }
 
@@ -247,7 +248,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           retentionExpiresAt,
           status: 'draft',
           brandId,
-          generationParams: null, // null indicates manual creation
+          generationParams: Prisma.JsonNull, // null indicates manual creation
         },
         select: {
           id: true,

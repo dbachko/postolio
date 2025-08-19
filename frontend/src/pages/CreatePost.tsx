@@ -10,6 +10,7 @@ import { Label } from '../components/ui/label'
 import { Textarea } from '../components/ui/textarea'
 import { Input } from '../components/ui/input'
 import { Alert, AlertDescription } from '../components/ui/alert'
+import { validateImageFile } from '../lib/fileUtils'
 
 export function CreatePost() {
   const navigate = useNavigate()
@@ -39,7 +40,7 @@ export function CreatePost() {
       queryClient.invalidateQueries({ queryKey: ['content'] })
       navigate('/content')
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       console.error('Failed to create post:', error)
       alert(error.message || 'Failed to create post. Please try again.')
     }
@@ -78,18 +79,7 @@ export function CreatePost() {
 
   const validateImage = (file: File | null): string | undefined => {
     if (!file) return undefined
-    
-    const maxSize = 10 * 1024 * 1024 // 10MB
-    if (file.size > maxSize) {
-      return 'Image size must be less than 10MB'
-    }
-    
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-    if (!validTypes.includes(file.type)) {
-      return 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)'
-    }
-    
-    return undefined
+    return validateImageFile(file, 10)
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -202,15 +192,23 @@ export function CreatePost() {
               accept="image/*"
               onChange={handleImageChange}
               className={`cursor-pointer ${errors.image ? 'border-red-500' : ''}`}
+              aria-label="Upload post image"
+              aria-describedby={errors.image ? 'image-error' : 'image-help'}
+              aria-invalid={!!errors.image}
             />
             {errors.image && (
-              <p className="text-sm text-red-500 mt-1">{errors.image}</p>
+              <p id="image-error" className="text-sm text-red-500 mt-1" role="alert">{errors.image}</p>
+            )}
+            {!errors.image && (
+              <p id="image-help" className="text-sm text-muted-foreground sr-only">
+                Upload an image for your post (optional, max 10MB)
+              </p>
             )}
             {imagePreview && (
               <div className="mt-4">
                 <img 
                   src={imagePreview} 
-                  alt="Preview" 
+                  alt="Preview of uploaded image for Instagram post" 
                   className="max-w-md rounded-lg border"
                 />
               </div>
@@ -237,11 +235,15 @@ export function CreatePost() {
               className={`min-h-[150px] ${errors.caption ? 'border-red-500' : ''}`}
               maxLength={2200}
               required
+              aria-label="Post caption"
+              aria-describedby={errors.caption ? 'caption-error' : 'caption-help'}
+              aria-invalid={!!errors.caption}
+              aria-required="true"
             />
             {errors.caption && (
-              <p className="text-sm text-red-500">{errors.caption}</p>
+              <p id="caption-error" className="text-sm text-red-500" role="alert">{errors.caption}</p>
             )}
-            <p className={`text-sm ${caption.length > 2000 ? 'text-orange-500' : 'text-muted-foreground'}`}>
+            <p id="caption-help" className={`text-sm ${caption.length > 2000 ? 'text-orange-500' : 'text-muted-foreground'}`} aria-live="polite">
               {caption.length}/2200 characters
             </p>
           </div>
@@ -264,11 +266,14 @@ export function CreatePost() {
               }}
               placeholder="Enter hashtags separated by spaces or commas"
               className={errors.hashtags ? 'border-red-500' : ''}
+              aria-label="Post hashtags"
+              aria-describedby={errors.hashtags ? 'hashtags-error' : 'hashtags-help'}
+              aria-invalid={!!errors.hashtags}
             />
             {errors.hashtags && (
-              <p className="text-sm text-red-500">{errors.hashtags}</p>
+              <p id="hashtags-error" className="text-sm text-red-500" role="alert">{errors.hashtags}</p>
             )}
-            <p className="text-sm text-muted-foreground">
+            <p id="hashtags-help" className="text-sm text-muted-foreground">
               Separate hashtags with spaces or commas (max 30)
             </p>
           </div>
