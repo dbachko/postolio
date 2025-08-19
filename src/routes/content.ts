@@ -223,7 +223,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             brandId,
             generatedAt: new Date(),
             source: 'dalle3' as const, // Use dalle3 as placeholder for manual uploads
-            originalPrompt: 'Manual upload',
+            originalPrompt: '',
           })
 
           s3ImageKey = uploadResult.s3Key

@@ -26,6 +26,7 @@ export function CreatePost() {
     hashtags?: string
     image?: string
   }>({})
+  const [mutationError, setMutationError] = useState<string | null>(null)
   
   const createPostMutation = useMutation({
     mutationFn: async (data: { 
@@ -42,7 +43,7 @@ export function CreatePost() {
     },
     onError: (error: Error) => {
       console.error('Failed to create post:', error)
-      alert(error.message || 'Failed to create post. Please try again.')
+      setMutationError(error.message || 'Failed to create post. Please try again.')
     }
   })
   
@@ -107,6 +108,7 @@ export function CreatePost() {
     
     // Clear previous errors
     setErrors({})
+    setMutationError(null)
     
     // Validate all fields
     const captionError = validateCaption(caption)
@@ -170,12 +172,12 @@ export function CreatePost() {
       
       <Card className="p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Show general error if mutation failed */}
-          {createPostMutation.isError && (
+          {/* Show mutation error */}
+          {mutationError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Failed to create post. Please check your inputs and try again.
+                {mutationError}
               </AlertDescription>
             </Alert>
           )}

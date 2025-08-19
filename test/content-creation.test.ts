@@ -7,6 +7,9 @@ import { signJWT } from '../src/services/jwt.js'
 
 const prisma = new PrismaClient()
 
+// Test constants
+const TEST_BASE64_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+
 describe('Manual Content Creation', () => {
   let app: FastifyInstance
   let testUserId: string
@@ -72,7 +75,7 @@ describe('Manual Content Creation', () => {
   })
 
   test('should handle image upload for manual content', async () => {
-    const base64Image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+    const base64Image = TEST_BASE64_IMAGE
     
     const response = await app.inject({
       method: 'POST',

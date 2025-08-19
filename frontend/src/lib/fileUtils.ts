@@ -47,7 +47,7 @@ export function validateImageFile(
   file: File, 
   maxSizeMB: number = 10
 ): string | undefined {
-  const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
   
   if (!validTypes.includes(file.type)) {
     return 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)'
