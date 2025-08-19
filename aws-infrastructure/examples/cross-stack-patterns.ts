@@ -228,7 +228,7 @@ export class SecretConsumerStack extends cdk.Stack {
     const configSecretArn = cdk.Fn.importValue(`${publisherStackName}-config-secret-arn`);
 
     // Reference the imported secret
-    const schedulerConfig = secretsmanager.Secret.fromSecretArn(
+    const schedulerConfig = secretsmanager.Secret.fromSecretCompleteArn(
       this, 
       'ImportedSchedulerConfig', 
       configSecretArn

@@ -1,4 +1,5 @@
 import './dotenv-init.js'
+import { validateEnvironment } from './config/validation.js'
 import fastify, { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
@@ -158,6 +159,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.exit(1)
     }
     app.log.info(`Server listening at ${address}`)
+
+    // Validate environment configuration at startup
+    try {
+      validateEnvironment()
+    } catch (envError) {
+      app.log.error('❌ Environment validation failed:', envError)
+      process.exit(1)
+    }
 
     // Ensure database schema is ready before starting background services
     try {

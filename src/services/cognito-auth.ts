@@ -23,14 +23,31 @@ export class CognitoAuthClient {
   private credentials: CognitoCredentials | null = null;
   
   constructor() {
-    // Load credentials from environment variables
-    if (process.env.SCHEDULER_CLIENT_ID && process.env.SCHEDULER_CLIENT_SECRET) {
+    // Load credentials from environment variables with validation
+    const clientId = process.env.SCHEDULER_CLIENT_ID;
+    const clientSecret = process.env.SCHEDULER_CLIENT_SECRET;
+    const userPoolId = process.env.SCHEDULER_USER_POOL_ID;
+    
+    if (clientId && clientSecret) {
+      // Validate format of credentials
+      if (!userPoolId || !userPoolId.match(/^[\w-]+_[0-9a-zA-Z]+$/)) {
+        console.warn('Invalid or missing SCHEDULER_USER_POOL_ID format. Expected format: region_id (e.g., us-east-1_abc123)');
+      }
+      
       this.credentials = {
-        clientId: process.env.SCHEDULER_CLIENT_ID,
-        clientSecret: process.env.SCHEDULER_CLIENT_SECRET,
-        userPoolId: process.env.SCHEDULER_USER_POOL_ID || '',
+        clientId,
+        clientSecret,
+        userPoolId: userPoolId || '',
       };
     }
+  }
+  
+  /**
+   * Cleanup method for long-running processes
+   */
+  cleanup(): void {
+    this.accessToken = null;
+    this.tokenExpiry = null;
   }
   
   /**
@@ -48,17 +65,13 @@ export class CognitoAuthClient {
       return this.accessToken;
     }
     
+    // Construct the token endpoint URL outside try block for error handler access
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const environment = process.env.ENVIRONMENT || 'dev';
+    const cognitoDomain = `postolio-scheduler-${environment}`;
+    const tokenEndpoint = `https://${cognitoDomain}.auth.${region}.amazoncognito.com/oauth2/token`;
+    
     try {
-      // Get the AWS region from environment
-      const region = process.env.AWS_REGION || 'us-east-1';
-      
-      // Construct the Cognito domain (format: postolio-scheduler-{env})
-      const environment = process.env.ENVIRONMENT || 'dev';
-      const cognitoDomain = `postolio-scheduler-${environment}`;
-      
-      // Construct the token endpoint URL
-      const tokenEndpoint = `https://${cognitoDomain}.auth.${region}.amazoncognito.com/oauth2/token`;
-      
       // Request new token using client credentials grant
       const response = await axios.post<TokenResponse>(
         tokenEndpoint,
@@ -85,14 +98,30 @@ export class CognitoAuthClient {
       console.log('Successfully obtained Cognito access token for scheduler');
       return this.accessToken;
     } catch (error) {
-      console.error('Failed to get Cognito access token:', error);
+      const errorMessage = 'Failed to get Cognito access token';
       
-      // Log more details for debugging
+      // Structured error logging with context
       if (axios.isAxiosError(error)) {
-        console.error('Response data:', error.response?.data);
-        console.error('Response status:', error.response?.status);
+        const errorDetails = {
+          message: errorMessage,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          endpoint: tokenEndpoint,
+        };
+        
+        console.error('Cognito authentication error:', errorDetails);
+        
+        // Check if error is retryable
+        if (error.response?.status && [429, 500, 502, 503, 504].includes(error.response.status)) {
+          console.info('Error is potentially retryable. Consider implementing retry logic.');
+        }
+      } else {
+        console.error(errorMessage, error);
       }
       
+      // Return null but log that authentication will be skipped
+      console.warn('Proceeding without scheduler authentication. Some features may be unavailable.');
       return null;
     }
   }
@@ -115,3 +144,12 @@ export class CognitoAuthClient {
 
 // Export singleton instance
 export const cognitoAuthClient = new CognitoAuthClient();
+
+// Cleanup on process termination
+process.on('SIGTERM', () => {
+  cognitoAuthClient.cleanup();
+});
+
+process.on('SIGINT', () => {
+  cognitoAuthClient.cleanup();
+});
