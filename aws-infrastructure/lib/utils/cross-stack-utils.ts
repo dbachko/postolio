@@ -117,7 +117,7 @@ export class CrossStackConfigManager {
    * Import a configuration secret from another stack
    */
   importConfigSecret(secretArn: string, secretId?: string): secretsmanager.ISecret {
-    return secretsmanager.Secret.fromSecretArn(
+    return secretsmanager.Secret.fromSecretCompleteArn(
       this.stack,
       secretId || 'ImportedConfigSecret',
       secretArn
@@ -204,7 +204,7 @@ export class SchedulerIntegration {
     };
 
     if (schedulerConfig.endpoints) {
-      secretConfig.schedulerEndpoints = cdk.SecretValue.unsafePlainText(
+      (secretConfig as any).schedulerEndpoints = cdk.SecretValue.unsafePlainText(
         JSON.stringify(schedulerConfig.endpoints)
       );
     }

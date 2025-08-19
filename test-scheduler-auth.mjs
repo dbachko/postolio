@@ -9,6 +9,11 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+async function getAccountId() {
+  const { stdout } = await execAsync('aws sts get-caller-identity --query Account --output text');
+  return stdout.trim();
+}
+
 async function getSecretValue(secretArn) {
   const { stdout } = await execAsync(`aws secretsmanager get-secret-value --secret-id "${secretArn}" --query SecretString --output text`);
   return JSON.parse(stdout);
@@ -18,10 +23,20 @@ async function testSchedulerAuth() {
   console.log('🔍 Testing ContentScheduler OAuth2 Authentication...\n');
 
   try {
-    // Get the service secret
-    const secretArn = 'arn:aws:secretsmanager:us-east-1:000000000000:secret:postolio-scheduler-dev-service-credentials-ojvXzM';
+    // Get the service secret from environment or construct it
+    const environment = process.env.ENVIRONMENT || 'dev';
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const accountId = process.env.AWS_ACCOUNT_ID || await getAccountId();
+    
+    // Dynamically discover the secret ARN
+    const secretName = `postolio-scheduler-${environment}-service-credentials`;
+    const { stdout: secretArn } = await execAsync(
+      `aws secretsmanager describe-secret --secret-id "${secretName}" --query ARN --output text`
+    );
+    
     console.log('📦 Fetching service credentials from Secrets Manager...');
-    const credentials = await getSecretValue(secretArn);
+    console.log('   Secret Name:', secretName);
+    const credentials = await getSecretValue(secretArn.trim());
     
     console.log('✅ Retrieved credentials:');
     console.log('   - User Pool ID:', credentials.userPoolId);
