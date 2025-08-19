@@ -375,7 +375,13 @@ npm run test:coverage
 #### Architecture Diagram
 ![Postolio AWS Architecture](docs/generated-diagrams/architecture-aws.png)
 
-The application is designed for deployment on AWS using a modern containerized architecture. See the complete [AWS Deployment Strategy](docs/AWS_DEPLOYMENT_STRATEGY.md) for detailed information.
+The application is designed for deployment on AWS using a modern containerized architecture with secure microservice communication. See the complete [AWS Deployment Strategy](docs/AWS_DEPLOYMENT_STRATEGY.md) for detailed information.
+
+#### 🔐 Security Updates (v2.3.0 - January 2025)
+- **OAuth2 Authentication**: Service-to-service authentication using AWS Cognito
+- **Cross-Stack Dependencies**: ContentScheduler and Postolio stacks with automatic dependency management
+- **Secret Management**: Enhanced AWS Secrets Manager integration for OAuth2 credentials
+- **Zero-Trust Architecture**: All microservice communication requires authenticated JWT tokens
 
 #### Quick AWS Deployment
 
@@ -383,11 +389,17 @@ The application is designed for deployment on AWS using a modern containerized a
    - AWS CLI configured with appropriate permissions
    - Docker installed and running
    - Node.js 20+ installed
+   - AWS CDK 2.x installed (`npm install -g aws-cdk`)
 
-2. **One-command deployment**
+2. **One-command deployment (both stacks)**
    ```bash
    ./scripts/quick-start-aws.sh
    ```
+   
+   This will deploy:
+   - ContentScheduler microservice stack (with Cognito User Pool)
+   - Postolio main application stack (with OAuth2 client)
+   - Cross-stack dependencies automatically configured
 
 3. **Production deployment with custom domain (postolio.example)**
    ```bash
