@@ -8,24 +8,24 @@ datasource db {
 }
 
 model User {
-  id                   String             @id @default(cuid())
-  email                String             @unique
-  password             String
-  name                 String?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  instagramId          String?
-  instagramUsername    String?
-  instagramToken       String?
-  subscriptionTier     String             @default("free")
-  timezone             String?
-  timezoneAutoDetected Boolean            @default(true)
-  deletedAt            DateTime?
-  deletionReason       String?
-  scheduledDeletion    DateTime?
-  brands               Brand[]
-  campaignTemplates    CampaignTemplate[]
-  modifiedCampaigns    Campaign[]
+  id                String             @id @default(cuid())
+  email             String             @unique
+  password          String
+  name              String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  instagramId       String?
+  instagramUsername String?
+  instagramToken    String?
+  subscriptionTier  String             @default("free")
+  deletedAt         DateTime?
+  deletionReason    String?
+  scheduledDeletion DateTime?
+  timezone             String?            // User's preferred timezone (null = auto-detect)
+  timezoneAutoDetected Boolean            @default(true) // Whether to auto-detect timezone
+  brands            Brand[]
+  campaignTemplates CampaignTemplate[]
+  modifiedCampaigns Campaign[]
 
   @@map("users")
 }
@@ -45,7 +45,7 @@ model Brand {
   instagramProfileData Json?
   engagementActive     Boolean            @default(false)
   engagementRules      Json?
-  postingTimezone      String?
+  postingTimezone      String?            // Brand-specific posting timezone (null = use user's timezone)
   user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaignTemplates    CampaignTemplate[]
   campaigns            Campaign[]
@@ -75,47 +75,36 @@ model Content {
   imageRegion        String?
   retentionExpiresAt DateTime?
   s3ImageKey         String?
-  deletedAt          DateTime?
-  deletedBy          String?
-  deletionReason     String?
   brand              Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   campaign           Campaign?     @relation(fields: [campaignId], references: [id])
 
-  @@index([brandId, deletedAt])
-  @@index([campaignId, deletedAt])
-  @@index([deletedAt])
   @@map("content")
 }
 
 model Campaign {
-  id                String         @id @default(cuid())
-  name              String
-  brandId           String
-  status            CampaignStatus @default(creating)
-  config            Json
-  priority          Int            @default(5)
-  previewGenerated  Boolean        @default(false)
-  errorMessage      String?
-  progress          Int            @default(0)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  startedAt         DateTime?
-  completedAt       DateTime?
-  lastModifiedAt    DateTime       @default(now()) @updatedAt
-  lastModifiedById  String?
-  modificationCount Int            @default(0)
-  deletedAt         DateTime?
-  deletedBy         String?
-  deletionReason    String?
-  brand             Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  lastModifiedBy    User?          @relation(fields: [lastModifiedById], references: [id])
-  content           Content[]
+  id                 String         @id @default(cuid())
+  name               String
+  brandId            String
+  status             CampaignStatus @default(creating)
+  config             Json
+  priority           Int            @default(5)
+  previewGenerated   Boolean        @default(false)
+  errorMessage       String?
+  progress           Int            @default(0)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  startedAt          DateTime?
+  completedAt        DateTime?
+  lastModifiedAt     DateTime       @default(now()) @updatedAt
+  lastModifiedById   String?
+  modificationCount  Int            @default(0)
+  brand              Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  lastModifiedBy     User?          @relation(fields: [lastModifiedById], references: [id])
+  content            Content[]
 
   @@index([priority])
   @@index([status])
   @@index([brandId, status])
-  @@index([brandId, deletedAt])
-  @@index([deletedAt])
   @@map("campaigns")
 }
 
@@ -141,11 +130,11 @@ model CampaignTemplate {
 }
 
 enum ContentStatus {
-  draft
-  scheduled
-  published
-  failed
-  skipped
+  draft      // New content or unscheduled content (replaces pending, approved without scheduledAt, rejected)
+  scheduled  // Content scheduled for future posting (replaces approved with scheduledAt)
+  published  // Successfully posted to Instagram
+  failed     // Publishing failed
+  skipped    // Missed during campaign pause
 }
 
 enum CampaignStatus {
