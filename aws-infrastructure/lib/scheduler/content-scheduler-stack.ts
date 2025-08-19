@@ -494,11 +494,8 @@ export class ContentSchedulerStack extends cdk.Stack {
       },
     });
 
-    // Add Cognito authorizer
-    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'ApiAuthorizer', {
-      cognitoUserPools: [this.userPool],
-      authorizerName: `${prefix}-authorizer`,
-    });
+    // NO AUTHORIZER NEEDED - Using IAM SigV4 authentication
+    // This provides secure service-to-service authentication using AWS credentials
 
     // Request Validator
     const requestValidator = new apigateway.RequestValidator(this, 'RequestValidator', {
@@ -551,8 +548,7 @@ export class ContentSchedulerStack extends cdk.Stack {
     const lambdaIntegration = new apigateway.LambdaIntegration(scheduleManagementLambda);
     
     schedulesResource.addMethod('POST', lambdaIntegration, {
-      authorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO,
+      authorizationType: apigateway.AuthorizationType.IAM,
       requestValidator,
       requestModels: {
         'application/json': scheduleModel,
@@ -560,18 +556,15 @@ export class ContentSchedulerStack extends cdk.Stack {
     });
 
     schedulesResource.addMethod('GET', lambdaIntegration, {
-      authorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO,
+      authorizationType: apigateway.AuthorizationType.IAM,
     });
 
     scheduleResource.addMethod('GET', lambdaIntegration, {
-      authorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO,
+      authorizationType: apigateway.AuthorizationType.IAM,
     });
 
     scheduleResource.addMethod('PUT', lambdaIntegration, {
-      authorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO,
+      authorizationType: apigateway.AuthorizationType.IAM,
       requestValidator,
       requestModels: {
         'application/json': scheduleModel,
@@ -579,8 +572,7 @@ export class ContentSchedulerStack extends cdk.Stack {
     });
 
     scheduleResource.addMethod('DELETE', lambdaIntegration, {
-      authorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO,
+      authorizationType: apigateway.AuthorizationType.IAM,
     });
 
     // Environment variables moved to Lambda definition to avoid circular dependencies
@@ -736,6 +728,12 @@ export class ContentSchedulerStack extends cdk.Stack {
       value: this.api.url,
       description: 'Content Scheduler API endpoint',
       exportName: `${prefix}-api-endpoint`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiArn', {
+      value: this.api.arnForExecuteApi(),
+      description: 'Content Scheduler API ARN for IAM permissions',
+      exportName: `${prefix}-api-arn`,
     });
 
     new cdk.CfnOutput(this, 'UserPoolId', {

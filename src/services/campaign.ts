@@ -6,6 +6,7 @@ import type { StyleProfile } from './ai.js'
 import { analyzeBrandStyle } from './ai.js'
 import { TimezoneService } from './timezone.js'
 import { DEFAULT_TIMEZONE } from '../constants/timezone.js'
+import { schedulerService } from './scheduler.js'
 
 const prisma = new PrismaClient()
 
@@ -436,8 +437,24 @@ class CampaignService {
           },
         })
 
-        // Post is already scheduled by setting scheduledAt field above
-        // No need to call scheduler service since we set scheduledAt directly
+        // Create schedule in AWS if we have a valid scheduled date
+        if (hasValidScheduledDate && scheduledDate) {
+          try {
+            // Don't pass customTime - scheduler-adapter will read from DB (UTC)
+            const scheduleResult = await schedulerService.scheduleContent(existingPost.id)
+            
+            if (!scheduleResult.success) {
+              console.error(`Failed to create AWS schedule for content ${existingPost.id}:`, scheduleResult.error)
+              // Continue with local scheduling - don't fail the entire campaign
+            } else {
+              console.log(`Content ${existingPost.id} scheduled successfully in AWS`)
+            }
+          } catch (scheduleError) {
+            console.error(`Error scheduling content ${existingPost.id}:`, scheduleError)
+            // Continue with local scheduling
+          }
+        }
+
         createdContent.push(content)
       }
 
