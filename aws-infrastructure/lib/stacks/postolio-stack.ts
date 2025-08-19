@@ -35,12 +35,15 @@ export class PostolioStack extends cdk.Stack {
     // Import ContentScheduler API URL if stack reference is provided
     const schedulerApiUrl = contentSchedulerStack 
       ? cdk.Fn.importValue(`postolio-scheduler-${environment}-api-endpoint`)
-      : process.env.SCHEDULER_API_URL || 'https://placeholder-scheduler-api.amazonaws.com';
+      : process.env.SCHEDULER_API_URL || 'https://scheduler-api-not-configured.example.com';
 
     // Generate a secure API key for scheduler communication
     const schedulerApiKey = contentSchedulerStack 
       ? cdk.Fn.select(0, cdk.Fn.split('-', cdk.Fn.select(2, cdk.Fn.split('/', cdk.Aws.STACK_ID))))
-      : process.env.SCHEDULER_API_KEY || 'placeholder-api-key';
+      : process.env.SCHEDULER_API_KEY || (() => {
+          console.warn('WARNING: SCHEDULER_API_KEY not provided. Scheduler integration will be disabled.');
+          return 'disabled-scheduler-integration';
+        })();
 
     // ECR Repository for backend container images - reference existing repository
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio')

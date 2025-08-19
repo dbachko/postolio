@@ -44,7 +44,6 @@ async function testSchedulerAuth() {
     console.log('   - Client Secret:', credentials.clientSecret ? '***' + credentials.clientSecret.slice(-4) : 'Not found');
     
     // Construct the Cognito token endpoint
-    const region = 'us-east-1';
     const cognitoDomain = 'postolio-scheduler-dev';
     const tokenEndpoint = `https://${cognitoDomain}.auth.${region}.amazoncognito.com/oauth2/token`;
     

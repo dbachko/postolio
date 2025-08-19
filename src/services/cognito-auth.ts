@@ -65,17 +65,13 @@ export class CognitoAuthClient {
       return this.accessToken;
     }
     
+    // Construct the token endpoint URL outside try block for error handler access
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const environment = process.env.ENVIRONMENT || 'dev';
+    const cognitoDomain = `postolio-scheduler-${environment}`;
+    const tokenEndpoint = `https://${cognitoDomain}.auth.${region}.amazoncognito.com/oauth2/token`;
+    
     try {
-      // Get the AWS region from environment
-      const region = process.env.AWS_REGION || 'us-east-1';
-      
-      // Construct the Cognito domain (format: postolio-scheduler-{env})
-      const environment = process.env.ENVIRONMENT || 'dev';
-      const cognitoDomain = `postolio-scheduler-${environment}`;
-      
-      // Construct the token endpoint URL
-      const tokenEndpoint = `https://${cognitoDomain}.auth.${region}.amazoncognito.com/oauth2/token`;
-      
       // Request new token using client credentials grant
       const response = await axios.post<TokenResponse>(
         tokenEndpoint,
