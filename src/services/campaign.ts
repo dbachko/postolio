@@ -575,7 +575,7 @@ class CampaignService {
         current.getFullYear(),
         current.getMonth(),
         current.getDate()
-      ).toISOString().split('T')[0]
+      ).toISOString().split('T')[0]!
       
       // Create the scheduled time in the brand's timezone
       // Use TimezoneService.createDateInBrandTimezone to properly handle timezone
