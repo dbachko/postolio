@@ -22,6 +22,7 @@ import { DataDeletion } from './pages/DataDeletion'
 import { useEffect, lazy, Suspense } from 'react'
 import { ErrorBoundary } from './components/ErrorBoundary'
 const PostDetail = lazy(() => import('./pages/PostDetail'))
+const CreatePost = lazy(() => import('./pages/CreatePost').then(module => ({ default: module.CreatePost })))
 
 const queryClient = new QueryClient()
 
@@ -158,6 +159,21 @@ function App() {
                     </div>
                   }>
                     <PostDetail />
+                  </Suspense>
+                </ErrorBoundary>
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/posts/create" element={
+            <ProtectedRoute>
+              <Layout>
+                <ErrorBoundary>
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center min-h-[400px]">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                  }>
+                    <CreatePost />
                   </Suspense>
                 </ErrorBoundary>
               </Layout>

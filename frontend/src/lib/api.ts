@@ -366,6 +366,45 @@ class ApiClient {
     })
   }
 
+  async createManualContent(data: {
+    brandId: string
+    caption: string
+    hashtags: string[]
+    imageFile?: File
+  }): Promise<{ content: Content; metadata: { brandId: string; source: string } }> {
+    if (data.imageFile) {
+      // Convert File to base64 for upload
+      const reader = new FileReader()
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(data.imageFile!)
+      })
+      
+      const imageData = await base64Promise
+      
+      return this.request('/api/content/create', {
+        method: 'POST',
+        body: JSON.stringify({
+          brandId: data.brandId,
+          caption: data.caption,
+          hashtags: data.hashtags,
+          imageData,
+          mimeType: data.imageFile.type,
+        }),
+      })
+    }
+    
+    return this.request('/api/content/create', {
+      method: 'POST',
+      body: JSON.stringify({
+        brandId: data.brandId,
+        caption: data.caption,
+        hashtags: data.hashtags,
+      }),
+    })
+  }
+
   async getContentHistory(brandId: string): Promise<{ content: Content[] }> {
     return this.request(`/api/content/history/${brandId}`)
   }

@@ -18,6 +18,14 @@ interface ApproveContentBody {
   scheduledAt?: string
 }
 
+interface CreateManualContentBody {
+  brandId: string
+  caption: string
+  hashtags: string[]
+  imageData?: string
+  mimeType?: string
+}
+
 interface UpdateContentBody {
   contentId: string
   caption?: string
@@ -142,6 +150,131 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(500).send({ error: 'Failed to generate content. Please try again.' })
+    }
+  })
+
+  // Create manual content (user-generated, not AI)
+  fastify.post<{ Body: CreateManualContentBody }>('/create', async (request, reply) => {
+    try {
+      const authHeader = request.headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Authentication required' })
+      }
+
+      const token = authHeader.substring(7)
+      const decoded = verifyJWT(token)
+      const userId = decoded.id
+
+      const { brandId, caption, hashtags, imageData, mimeType } = request.body
+
+      // Validate input
+      if (!caption || caption.trim().length === 0) {
+        return reply.code(400).send({ error: 'Caption is required' })
+      }
+
+      if (caption.length > 2200) {
+        return reply.code(400).send({ error: 'Caption exceeds Instagram limit of 2200 characters' })
+      }
+
+      if (!Array.isArray(hashtags)) {
+        return reply.code(400).send({ error: 'Hashtags must be an array' })
+      }
+
+      if (hashtags.length > 30) {
+        return reply.code(400).send({ error: 'Maximum 30 hashtags allowed' })
+      }
+
+      // Verify user owns the brand
+      const brand = await prisma.brand.findFirst({
+        where: {
+          id: brandId,
+          userId,
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      })
+
+      if (!brand) {
+        return reply.code(404).send({ error: 'Brand not found' })
+      }
+
+      let s3ImageKey: string | null = null
+      let cdnImageUrl: string | null = null
+      let imageRegion: string | null = null
+      let retentionExpiresAt: Date | null = null
+
+      // Handle image upload if provided
+      if (imageData) {
+        try {
+          // Extract base64 data
+          const base64Match = imageData.match(/^data:([^;]+);base64,(.+)$/)
+          if (!base64Match) {
+            return reply.code(400).send({ error: 'Invalid image data format' })
+          }
+
+          const buffer = Buffer.from(base64Match[2], 'base64')
+
+          // Upload to S3
+          const uploadResult = await uploadImageBufferToS3(buffer, {
+            contentId: `manual-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+            brandId,
+            generatedAt: new Date(),
+            source: 'dalle3' as const, // Use dalle3 as placeholder for manual uploads
+            originalPrompt: 'Manual upload',
+          })
+
+          s3ImageKey = uploadResult.s3Key
+          cdnImageUrl = uploadResult.cdnUrl
+          imageRegion = uploadResult.region
+          retentionExpiresAt = uploadResult.retentionExpiresAt
+        } catch (uploadError) {
+          console.error('Image upload error:', uploadError)
+          // Continue without image rather than failing entirely
+        }
+      }
+
+      // Create content record
+      const content = await prisma.content.create({
+        data: {
+          caption,
+          hashtags,
+          imageUrl: null, // Legacy field, we use CDN URL now
+          s3ImageKey,
+          cdnImageUrl,
+          imageRegion,
+          retentionExpiresAt,
+          status: 'draft',
+          brandId,
+          generationParams: null, // null indicates manual creation
+        },
+        select: {
+          id: true,
+          caption: true,
+          hashtags: true,
+          imageUrl: true,
+          s3ImageKey: true,
+          cdnImageUrl: true,
+          imageRegion: true,
+          retentionExpiresAt: true,
+          status: true,
+          brandId: true,
+          generationParams: true,
+          createdAt: true,
+        },
+      })
+
+      return reply.code(201).send({
+        content,
+        metadata: {
+          brandId,
+          source: 'manual',
+        },
+      })
+    } catch (error) {
+      console.error('Manual content creation error:', error)
+      return reply.code(500).send({ error: 'Failed to create content' })
     }
   })
 
