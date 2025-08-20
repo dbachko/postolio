@@ -127,6 +127,28 @@ export class TimezoneService {
   }
 
   /**
+   * Create a date in a specific timezone with a specific time
+   * @param dateString - Date in YYYY-MM-DD format
+   * @param timeString - Time in HH:mm format
+   * @param timezone - Target timezone
+   * @returns UTC Date object
+   */
+  static createDateInBrandTimezone(
+    dateString: string,
+    timeString: string,
+    timezone: string
+  ): Date {
+    // Create a date-time string in the format that date-fns-tz expects
+    // This represents the date and time in the brand's timezone
+    const dateTimeString = `${dateString}T${timeString}:00`
+    
+    // Parse this as a date in the brand's timezone and convert to UTC
+    // fromZonedTime interprets the dateTimeString as being in the specified timezone
+    // and returns the equivalent UTC date
+    return fromZonedTime(dateTimeString, timezone)
+  }
+
+  /**
    * Convert a posting time (e.g., "14:30") to UTC datetime for a specific date and timezone
    */
   static scheduleTimeToUTC(

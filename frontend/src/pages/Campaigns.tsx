@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { format } from 'date-fns'
+import { formatCompact } from '../lib/timezone'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
@@ -1031,7 +1032,7 @@ export function Campaigns() {
                                   </Badge>
                                   {post.scheduledAt && (
                                     <span className="text-xs text-muted-foreground">
-                                      {format(new Date(post.scheduledAt), 'MMM d, HH:mm')}
+                                      {formatCompact(post.scheduledAt, 'MMM d, h:mm a')}
                                     </span>
                                   )}
                                 </div>

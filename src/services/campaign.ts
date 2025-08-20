@@ -567,13 +567,25 @@ class CampaignService {
     const current = new Date(startDate)
     
     while (current <= endDate) {
-      // Create a date in the brand's local timezone
-      const localDate = new Date(current)
-      localDate.setHours(hours ?? 10, minutes ?? 0, 0, 0)
+      // Create a date string in YYYY-MM-DD format for the current date
+      const year = current.getFullYear()
+      const month = String(current.getMonth() + 1).padStart(2, '0')
+      const day = String(current.getDate()).padStart(2, '0')
+      const dateString = new Date(
+        current.getFullYear(),
+        current.getMonth(),
+        current.getDate()
+      ).toISOString().split('T')[0]
       
-      // Convert to UTC for storage
-      const utcDate = TimezoneService.toUTC(localDate, timezone)
-      schedule.push(utcDate)
+      // Create the scheduled time in the brand's timezone
+      // Use TimezoneService.createDateInBrandTimezone to properly handle timezone
+      const scheduledTime = TimezoneService.createDateInBrandTimezone(
+        dateString,
+        `${String(hours ?? 10).padStart(2, '0')}:${String(minutes ?? 0).padStart(2, '0')}`,
+        timezone
+      )
+      
+      schedule.push(scheduledTime)
 
       // Increment based on frequency
       switch (frequency) {
