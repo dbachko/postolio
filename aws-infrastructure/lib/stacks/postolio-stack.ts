@@ -37,13 +37,6 @@ export class PostolioStack extends cdk.Stack {
       ? cdk.Fn.importValue(`postolio-scheduler-${environment}-api-endpoint`)
       : process.env.SCHEDULER_API_URL || 'https://scheduler-api-not-configured.example.com';
 
-    // Generate a secure API key for scheduler communication
-    const schedulerApiKey = contentSchedulerStack 
-      ? cdk.Fn.select(0, cdk.Fn.split('-', cdk.Fn.select(2, cdk.Fn.split('/', cdk.Aws.STACK_ID))))
-      : process.env.SCHEDULER_API_KEY || (() => {
-          console.warn('WARNING: SCHEDULER_API_KEY not provided. Scheduler integration will be disabled.');
-          return 'disabled-scheduler-integration';
-        })();
 
     // ECR Repository for backend container images - reference existing repository
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio')
@@ -335,9 +328,8 @@ export class PostolioStack extends cdk.Stack {
         nodeEnv: cdk.SecretValue.unsafePlainText('production'),
         port: cdk.SecretValue.unsafePlainText('3000'),
         instagramRedirectUri: cdk.SecretValue.unsafePlainText(`https://${domainName || 'PLACEHOLDER_DOMAIN'}/auth/instagram/callback`),
-        // ContentScheduler integration
-        schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
-        schedulerApiKey: cdk.SecretValue.unsafePlainText(schedulerApiKey),
+  // ContentScheduler integration (SigV4 IAM auth only; API key deprecated)
+  schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
       },
     })
 
@@ -474,19 +466,6 @@ export class PostolioStack extends cdk.Stack {
       })
     )
 
-    // Import ContentScheduler service secret ARN from cross-stack exports
-    const schedulerServiceSecretArn = cdk.Fn.importValue(`postolio-scheduler-${environment}-service-secret-arn`)
-    
-    // Import the scheduler service credentials secret
-    const schedulerServiceSecret = secretsmanager.Secret.fromSecretCompleteArn(
-      this,
-      'SchedulerServiceSecret',
-      schedulerServiceSecretArn
-    )
-    
-    // Grant read access to the scheduler secret
-    schedulerServiceSecret.grantRead(taskRole)
-    
     // Grant permission to invoke Content Scheduler API using IAM authentication
     // Import the API ARN from ContentScheduler stack exports
     const schedulerApiArn = cdk.Fn.importValue(`postolio-scheduler-${environment}-api-arn`)
@@ -526,10 +505,6 @@ export class PostolioStack extends cdk.Stack {
           PORT: ecs.Secret.fromSecretsManager(appSecrets, 'port'),
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
           INSTAGRAM_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecrets, 'instagramRedirectUri'),
-          // Scheduler credentials from imported secret
-          SCHEDULER_CLIENT_ID: ecs.Secret.fromSecretsManager(schedulerServiceSecret, 'clientId'),
-          SCHEDULER_CLIENT_SECRET: ecs.Secret.fromSecretsManager(schedulerServiceSecret, 'clientSecret'),
-          SCHEDULER_USER_POOL_ID: ecs.Secret.fromSecretsManager(schedulerServiceSecret, 'userPoolId'),
         },
         environment: {
           DB_HOST: database.instanceEndpoint.hostname,

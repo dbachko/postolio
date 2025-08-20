@@ -10,9 +10,6 @@ export interface RequiredEnvironmentVariables {
 }
 
 export interface OptionalEnvironmentVariables {
-  SCHEDULER_CLIENT_ID?: string;
-  SCHEDULER_CLIENT_SECRET?: string;
-  SCHEDULER_USER_POOL_ID?: string;
   SCHEDULER_API_URL?: string;
   OPENAI_API_KEY?: string;
   FACEBOOK_APP_ID?: string;
@@ -41,30 +38,6 @@ export function validateRequiredEnvironment(): void {
   }
 }
 
-/**
- * Validates optional scheduler configuration
- * @returns boolean indicating if scheduler is configured
- */
-export function validateSchedulerConfig(): boolean {
-  const schedulerVars = [
-    'SCHEDULER_CLIENT_ID',
-    'SCHEDULER_CLIENT_SECRET',
-    'SCHEDULER_USER_POOL_ID',
-  ];
-  
-  const hasAll = schedulerVars.every(key => process.env[key]);
-  const hasNone = schedulerVars.every(key => !process.env[key]);
-  
-  if (!hasAll && !hasNone) {
-    console.warn(
-      'Partial scheduler configuration detected. ' +
-      'All of SCHEDULER_CLIENT_ID, SCHEDULER_CLIENT_SECRET, and SCHEDULER_USER_POOL_ID must be set for scheduler to work.'
-    );
-    return false;
-  }
-  
-  return hasAll;
-}
 
 /**
  * Validates all environment configuration at startup
@@ -75,9 +48,12 @@ export function validateEnvironment(): void {
   // Check required variables
   validateRequiredEnvironment();
   
-  // Check optional scheduler config
-  const schedulerEnabled = validateSchedulerConfig();
-  console.log(`Scheduler integration: ${schedulerEnabled ? 'enabled' : 'disabled'}`);
+  // Scheduler now uses IAM SigV4 only; presence of SCHEDULER_API_URL is enough
+  if (process.env.SCHEDULER_API_URL) {
+    console.log('Scheduler integration: enabled (SigV4)');
+  } else {
+    console.log('Scheduler integration: disabled (no SCHEDULER_API_URL)');
+  }
   
   // Validate format of specific variables
   if (process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('postgresql://')) {
