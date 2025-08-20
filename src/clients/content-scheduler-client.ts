@@ -8,9 +8,7 @@ import { z } from 'zod';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { aws4Interceptor } from 'aws4-axios';
 import * as https from 'https';
-// Using require for opossum due to ESM/CommonJS compatibility issues
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const CircuitBreaker = require('opossum');
+import CircuitBreaker from 'opossum';
 import type { Options as CircuitBreakerOptions } from 'opossum';
 
 // ==================== Validation Schemas ====================
