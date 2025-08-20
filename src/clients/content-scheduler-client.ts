@@ -122,7 +122,6 @@ export class RateLimitError extends SchedulerError {
 
 export interface ContentSchedulerConfig {
   baseURL: string;
-  apiKey?: string;
   timeout?: number;
   maxRetries?: number;
   retryDelay?: number;
@@ -149,15 +148,26 @@ export class ContentSchedulerClient {
 
     // Initialize cache for response caching
     this.cache = new Map();
+    // Normalize and sanitize base URL (remove trailing slashes) to avoid SigV4 canonical path mismatches
+    const normalizedBaseURL = this.config.baseURL.replace(/\/+$/, '');
+
+    // Infer AWS region from execute-api hostname if possible (fallback to env or us-east-1)
+    const inferredRegion: string = (() => {
+      try {
+        const host = new URL(normalizedBaseURL).hostname;
+        const match = host.match(/execute-api\.([a-z0-9-]+)\.amazonaws\.com$/);
+        if (match && match[1]) return match[1];
+      } catch { /* ignore parse errors */ }
+      return process.env.AWS_REGION || 'us-east-1';
+    })();
 
     // Initialize Axios client with connection keep-alive for better performance
     this.client = axios.create({
-      baseURL: this.config.baseURL,
+      baseURL: normalizedBaseURL,
       timeout: this.config.timeout || 10000,
       headers: {
         'Content-Type': 'application/json',
       },
-      // Add HTTPS agent with keep-alive for persistent connections
       httpsAgent: new https.Agent({
         keepAlive: true,
         keepAliveMsecs: 1000,
@@ -167,17 +177,37 @@ export class ContentSchedulerClient {
       }),
     });
 
-    // Add AWS SigV4 signing interceptor
-    const interceptor = aws4Interceptor({
+    // Pre-signing request interceptor: clean headers & canonicalize URL path
+    this.client.interceptors.request.use((req) => {
+      if (req.headers) {
+        // Remove any stale Authorization header to prevent signature conflicts
+        delete (req.headers as any)['Authorization'];
+        delete (req.headers as any)['authorization'];
+        // Host header is set by the HTTP agent; ensure we don't duplicate
+        delete (req.headers as any)['Host'];
+        delete (req.headers as any)['host'];
+      }
+      // Avoid accidental double slashes which break canonical request
+      if (req.url) {
+        // Preserve query string while normalizing path
+        const parts = req.url.split('?');
+        const pathPart = parts[0] || '/';
+        const queryPart = parts[1];
+        const normalizedPath = pathPart.replace(/\/+/g, '/');
+        req.url = queryPart ? `${normalizedPath}?${queryPart}` : normalizedPath;
+      }
+      return req;
+    });
+
+    // Add AWS SigV4 signing interceptor AFTER cleanup interceptor
+    const sigv4Interceptor = aws4Interceptor({
       options: {
-        region: process.env.AWS_REGION || 'us-east-1',
+        region: inferredRegion,
         service: 'execute-api',
       },
-      // Let aws4-axios use the default credential provider chain
-      // This will automatically use ECS task role credentials when running in ECS
+      // Default credential provider chain (ECS task role / environment / shared config)
     });
-    
-    this.client.interceptors.request.use(interceptor);
+    this.client.interceptors.request.use(sigv4Interceptor);
 
     // Add custom request/response interceptors for logging and request IDs
     this.setupInterceptors();

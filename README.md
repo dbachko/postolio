@@ -530,7 +530,7 @@ FACEBOOK_APP_ID=your-meta-app-id
 FACEBOOK_APP_SECRET=your-meta-app-secret
 
 # AWS Scheduler Service (for production scheduling)
-SCHEDULER_API_KEY=your-aws-scheduler-api-key
+# Scheduler now authenticates via IAM SigV4 only; API key removed
 SCHEDULER_API_URL=https://your-scheduler-api.execute-api.region.amazonaws.com/prod
 
 # System
