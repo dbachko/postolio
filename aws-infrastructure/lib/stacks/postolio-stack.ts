@@ -514,7 +514,9 @@ export class PostolioStack extends cdk.Stack {
           S3_IMAGES_BUCKET: imagesBucket.bucketName,
           AWS_REGION: cdk.Aws.REGION,
           CLOUDFRONT_DOMAIN: apiDomainName, // Will be updated after distribution creation
-          SCHEDULER_API_URL: schedulerApiUrl, // Imported from ContentScheduler stack
+          // Trim any trailing slash at runtime via container entrypoint logic (client also normalizes)
+          SCHEDULER_API_URL: schedulerApiUrl,
+          SCHEDULER_API_STAGE: environment,
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: 'postolio',

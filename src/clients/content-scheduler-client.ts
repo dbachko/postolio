@@ -603,6 +603,12 @@ export class ContentSchedulerClient {
         this.log('warn', 'scheduler.http.forbidden', {
           status,
           data,
+          baseURL: this.config.baseURL,
+          fullUrl: this.composeFullUrl(this.config.baseURL, error.config?.url || ''),
+          region: this.region,
+          hint: data && (data as any).message === 'Missing Authentication Token'
+            ? 'Check that the request path preserves the API stage (e.g. /dev). Leading slashes on axios request URLs can strip the stage.'
+            : undefined,
         });
       }
       return new SchedulerError('Forbidden', 'FORBIDDEN', 403);
