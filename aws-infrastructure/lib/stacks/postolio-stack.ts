@@ -487,6 +487,20 @@ export class PostolioStack extends cdk.Stack {
     // Grant read access to the scheduler secret
     schedulerServiceSecret.grantRead(taskRole)
     
+    // Grant permission to invoke Content Scheduler API using IAM authentication
+    // Import the API ARN from ContentScheduler stack exports
+    const schedulerApiArn = cdk.Fn.importValue(`postolio-scheduler-${environment}-api-arn`)
+    
+    taskRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['execute-api:Invoke'],
+      resources: [
+        // Allow invoking all methods on the API
+        // The schedulerApiArn already includes /*/*/*, so we don't need to add more
+        schedulerApiArn
+      ],
+    }))
+    
     // Get the image tag from context, defaulting to 'latest' if not provided
     const imageTag = this.node.tryGetContext('imageTag') || 'latest'
     

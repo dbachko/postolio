@@ -7,7 +7,10 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import CircuitBreaker from 'opossum';
-import { cognitoAuthClient } from '../services/cognito-auth.js';
+import { SignatureV4 } from '@aws-sdk/signature-v4';
+import { Sha256 } from '@aws-crypto/sha256-js';
+import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { HttpRequest } from '@aws-sdk/protocol-http';
 
 // ==================== Validation Schemas ====================
 
@@ -135,6 +138,7 @@ export class ContentSchedulerClient {
   private client: AxiosInstance;
   private circuitBreaker: CircuitBreaker;
   private config: ContentSchedulerConfig;
+  private signer: SignatureV4;
 
   constructor(config: ContentSchedulerConfig) {
     this.config = {
@@ -144,13 +148,20 @@ export class ContentSchedulerClient {
       ...config,
     };
 
+    // Initialize AWS SigV4 signer
+    this.signer = new SignatureV4({
+      credentials: defaultProvider(),
+      region: process.env.AWS_REGION || 'us-east-1',
+      service: 'execute-api',
+      sha256: Sha256,
+    });
+
     // Initialize Axios client
     this.client = axios.create({
       baseURL: this.config.baseURL,
       timeout: this.config.timeout || 10000,
       headers: {
         'Content-Type': 'application/json',
-        ...(this.config.apiKey && { 'X-API-Key': this.config.apiKey }),
       },
     });
 
@@ -520,17 +531,63 @@ export class ContentSchedulerClient {
   }
 
   /**
-   * Setup Axios interceptors
+   * Setup Axios interceptors with AWS SigV4 signing
    */
   private setupInterceptors(): void {
     // Request interceptor
     this.client.interceptors.request.use(
       async (config) => {
-        // Add OAuth2 authentication if available
-        const authHeaders = await cognitoAuthClient.getAuthHeaders();
-        if (authHeaders.Authorization) {
-          config.headers['Authorization'] = authHeaders.Authorization;
+        // Build the full URL with query parameters
+        let fullUrl = config.url || '';
+        
+        // If there are params, add them to the URL
+        if (config.params && Object.keys(config.params).length > 0) {
+          const searchParams = new URLSearchParams();
+          Object.entries(config.params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+              searchParams.append(key, String(value));
+            }
+          });
+          const queryString = searchParams.toString();
+          if (queryString) {
+            fullUrl += (fullUrl.includes('?') ? '&' : '?') + queryString;
+          }
         }
+        
+        // Parse URL to get hostname and path
+        const url = new URL(fullUrl, config.baseURL);
+        
+        // Create HTTP request for signing
+        const requestOptions: any = {
+          method: config.method?.toUpperCase() || 'GET',
+          protocol: url.protocol,
+          hostname: url.hostname,
+          path: url.pathname + url.search,
+          headers: {
+            'host': url.hostname,
+            'content-type': 'application/json',
+          },
+        };
+        
+        // Only add port if it exists
+        if (url.port) {
+          requestOptions.port = parseInt(url.port);
+        }
+        
+        // Only add body if it exists
+        if (config.data) {
+          requestOptions.body = JSON.stringify(config.data);
+        }
+        
+        const request = new HttpRequest(requestOptions);
+
+        // Sign the request with AWS SigV4
+        const signedRequest = await this.signer.sign(request);
+        
+        // Apply signed headers to axios config
+        Object.entries(signedRequest.headers).forEach(([key, value]) => {
+          config.headers[key] = value;
+        });
         
         // Add request ID for tracing
         config.headers['X-Request-ID'] = this.generateRequestId();

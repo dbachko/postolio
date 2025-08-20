@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "public"."ContentStatus" AS ENUM ('pending', 'approved', 'rejected', 'scheduled', 'published', 'skipped', 'failed');
+CREATE TYPE "public"."ContentStatus" AS ENUM ('draft', 'scheduled', 'published', 'failed', 'skipped');
 
 -- CreateEnum
 CREATE TYPE "public"."CampaignStatus" AS ENUM ('creating', 'preview', 'active', 'paused', 'completed', 'failed', 'processing');
@@ -16,6 +16,11 @@ CREATE TABLE "public"."users" (
     "instagramUsername" TEXT,
     "instagramToken" TEXT,
     "subscriptionTier" TEXT NOT NULL DEFAULT 'free',
+    "deletedAt" TIMESTAMP(3),
+    "deletionReason" TEXT,
+    "scheduledDeletion" TIMESTAMP(3),
+    "timezone" TEXT,
+    "timezoneAutoDetected" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
@@ -36,6 +41,7 @@ CREATE TABLE "public"."brands" (
     "instagramProfileData" JSONB,
     "engagementActive" BOOLEAN NOT NULL DEFAULT false,
     "engagementRules" JSONB,
+    "postingTimezone" TEXT,
 
     CONSTRAINT "brands_pkey" PRIMARY KEY ("id")
 );
@@ -46,7 +52,7 @@ CREATE TABLE "public"."content" (
     "caption" TEXT NOT NULL,
     "imageUrl" TEXT,
     "hashtags" TEXT[],
-    "status" "public"."ContentStatus" NOT NULL DEFAULT 'pending',
+    "status" "public"."ContentStatus" NOT NULL DEFAULT 'draft',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "scheduledAt" TIMESTAMP(3),
@@ -81,6 +87,9 @@ CREATE TABLE "public"."campaigns" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "startedAt" TIMESTAMP(3),
     "completedAt" TIMESTAMP(3),
+    "lastModifiedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastModifiedById" TEXT,
+    "modificationCount" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "campaigns_pkey" PRIMARY KEY ("id")
 );
@@ -136,6 +145,9 @@ ALTER TABLE "public"."content" ADD CONSTRAINT "content_campaignId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "public"."campaigns" ADD CONSTRAINT "campaigns_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "public"."brands"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."campaigns" ADD CONSTRAINT "campaigns_lastModifiedById_fkey" FOREIGN KEY ("lastModifiedById") REFERENCES "public"."users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."campaign_templates" ADD CONSTRAINT "campaign_templates_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "public"."brands"("id") ON DELETE SET NULL ON UPDATE CASCADE;

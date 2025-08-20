@@ -7,6 +7,8 @@ import type { StyleProfile } from '../services/ai.js'
 import learningService from '../services/learning.js'
 import { uploadImageBufferToS3, type ImageMetadata } from '../services/s3-image.js'
 import { computePlaceholders } from '../services/placeholderService.js'
+import { schedulerService } from '../services/scheduler.js'
+import { TimezoneService } from '../services/timezone.js'
 
 import { getDatabaseClient } from '../config/database.js'
 
@@ -382,6 +384,26 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // If scheduledAt is provided, create a schedule in AWS
+      if (scheduledAt) {
+        try {
+          // Don't pass customTime - let scheduler-adapter read scheduledAt from database
+          // This avoids timezone conversion issues since DB stores UTC
+          const scheduleResult = await schedulerService.scheduleContent(contentId)
+          
+          if (!scheduleResult.success) {
+            console.error('Failed to create AWS schedule:', scheduleResult.error)
+            // Note: We don't fail the request here as the content is already scheduled locally
+            // The scheduler adapter has fallback logic
+          } else {
+            console.log(`Content ${contentId} scheduled successfully in AWS`)
+          }
+        } catch (scheduleError) {
+          console.error('Error calling scheduler service:', scheduleError)
+          // Continue with local scheduling
+        }
+      }
+
       return { content: updatedContent }
     } catch (error) {
       console.error('Content approval error:', error)
@@ -556,6 +578,58 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         newStatus: updatedContent.status,
         updateSuccessful: true
       })
+
+      // Handle scheduling changes with AWS ContentScheduler
+      if (scheduledAt !== undefined) {
+        const originalScheduledTime = content.scheduledAt?.toISOString()
+        const newScheduledTime = updatedContent.scheduledAt?.toISOString()
+        
+        // Case 1: New schedule (wasn't scheduled before, now is)
+        if (!originalScheduledTime && newScheduledTime) {
+          try {
+            // Don't pass customTime - scheduler-adapter will read from DB (UTC)
+            const scheduleResult = await schedulerService.scheduleContent(contentId)
+            
+            if (!scheduleResult.success) {
+              console.error('Failed to create AWS schedule:', scheduleResult.error)
+            } else {
+              console.log(`Content ${contentId} scheduled successfully in AWS`)
+            }
+          } catch (scheduleError) {
+            console.error('Error creating schedule:', scheduleError)
+          }
+        }
+        // Case 2: Cancel schedule (was scheduled, now isn't)
+        else if (originalScheduledTime && !newScheduledTime) {
+          try {
+            const cancelResult = await schedulerService.cancelScheduledPost(contentId)
+            
+            if (cancelResult) {
+              console.log(`Schedule for content ${contentId} cancelled successfully`)
+            } else {
+              console.error('Failed to cancel AWS schedule for content:', contentId)
+            }
+          } catch (cancelError) {
+            console.error('Error cancelling schedule:', cancelError)
+          }
+        }
+        // Case 3: Reschedule (time changed)
+        else if (originalScheduledTime && newScheduledTime && originalScheduledTime !== newScheduledTime) {
+          try {
+            // For rescheduling, also don't pass customTime
+            // The scheduler-adapter will read the updated scheduledAt from DB
+            const rescheduleResult = await schedulerService.reschedulePost(contentId, updatedContent.scheduledAt!)
+            
+            if (!rescheduleResult.success) {
+              console.error('Failed to reschedule in AWS:', rescheduleResult.error)
+            } else {
+              console.log(`Content ${contentId} rescheduled successfully in AWS`)
+            }
+          } catch (rescheduleError) {
+            console.error('Error rescheduling:', rescheduleError)
+          }
+        }
+      }
 
       // Apply AI learning if there were changes
       let learningResults = null
