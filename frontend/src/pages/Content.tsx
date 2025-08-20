@@ -39,6 +39,14 @@ export function Content() {
           <>
             <Button
               variant="outline"
+              onClick={() => navigate('/posts/create')}
+              className="gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Create Post
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => navigate('/campaigns/create')}
               className="gap-2"
             >

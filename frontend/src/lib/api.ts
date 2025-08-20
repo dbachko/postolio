@@ -1,4 +1,5 @@
 // Basic types - avoiding complex type imports for now to resolve build issues
+import { convertFileToBase64 } from './fileUtils'
 
 export interface User {
   id: string
@@ -366,6 +367,38 @@ class ApiClient {
     })
   }
 
+  async createManualContent(data: {
+    brandId: string
+    caption: string
+    hashtags: string[]
+    imageFile?: File
+  }): Promise<{ content: Content; metadata: { brandId: string; source: string } }> {
+    if (data.imageFile) {
+      // Convert File to base64 for upload (matching existing pattern)
+      const imageData = await convertFileToBase64(data.imageFile)
+      
+      return this.request('/api/content/create', {
+        method: 'POST',
+        body: JSON.stringify({
+          brandId: data.brandId,
+          caption: data.caption,
+          hashtags: data.hashtags,
+          imageData,
+          mimeType: data.imageFile.type,
+        }),
+      })
+    }
+    
+    return this.request('/api/content/create', {
+      method: 'POST',
+      body: JSON.stringify({
+        brandId: data.brandId,
+        caption: data.caption,
+        hashtags: data.hashtags,
+      }),
+    })
+  }
+
   async getContentHistory(brandId: string): Promise<{ content: Content[] }> {
     return this.request(`/api/content/history/${brandId}`)
   }
@@ -390,27 +423,16 @@ class ApiClient {
   }
 
   async uploadContentImage(contentId: string, file: File): Promise<{ success: boolean; content: Content; message: string }> {
-    // Convert file to base64
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = async () => {
-        try {
-          const base64Data = reader.result as string
-          const response = await this.request<{ success: boolean; content: Content; message: string }>('/api/content/upload-image', {
-            method: 'POST',
-            body: JSON.stringify({
-              contentId,
-              imageData: base64Data,
-              mimeType: file.type,
-            }),
-          })
-          resolve(response)
-        } catch (error) {
-          reject(error)
-        }
-      }
-      reader.onerror = () => reject(new Error('Failed to read file'))
-      reader.readAsDataURL(file)
+    // Convert file to base64 (matching existing pattern)
+    const base64Data = await convertFileToBase64(file)
+    
+    return this.request<{ success: boolean; content: Content; message: string }>('/api/content/upload-image', {
+      method: 'POST',
+      body: JSON.stringify({
+        contentId,
+        imageData: base64Data,
+        mimeType: file.type,
+      }),
     })
   }
 
