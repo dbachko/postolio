@@ -497,7 +497,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
           <div className="space-y-2">
             <Label>Post Image</Label>
             <ImageUploader
-              value={formData.cdnImageUrl || content?.cdnImageUrl || undefined}
+              value={formData.cdnImageUrl || content.cdnImageUrl || undefined}
               onChange={handleImageChange}
               maxSizeInMB={10}
               acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}

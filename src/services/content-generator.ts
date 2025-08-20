@@ -173,20 +173,16 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
               }
             } catch (s3Error) {
               console.error('Failed to upload image to S3, keeping external URL:', s3Error)
-              // If S3 upload fails, we don't save the image at all
-              console.warn('S3 upload failed, content will have no image')
+              // If S3 upload fails, fall back to the original external URL
               return {
                 ...item,
-                cdnImageUrl: null,
+                imageUrl, // Keep original URL as fallback
               }
             }
           }
           
-          // Return without any image URL
-          return {
-            ...item,
-            cdnImageUrl: null,
-          }
+          // No image was generated
+          return item
         } catch (error) {
           console.error('Brand image generation failed:', error)
           return item // Return without image if generation fails
