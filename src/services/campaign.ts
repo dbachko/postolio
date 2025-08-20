@@ -571,7 +571,11 @@ class CampaignService {
       const year = current.getFullYear()
       const month = String(current.getMonth() + 1).padStart(2, '0')
       const day = String(current.getDate()).padStart(2, '0')
-      const dateString = `${year}-${month}-${day}`
+      const dateString = new Date(
+        current.getFullYear(),
+        current.getMonth(),
+        current.getDate()
+      ).toISOString().split('T')[0]
       
       // Create the scheduled time in the brand's timezone
       // Use TimezoneService.createDateInBrandTimezone to properly handle timezone
