@@ -98,7 +98,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       ...content.map(item => ({ 
         ...item, 
         type: 'content' as const, 
-        imageUrl: item.imageUrl || undefined,
+        imageUrl: item.cdnImageUrl || undefined,
         scheduledAt: item.scheduledAt || undefined,
         postedAt: item.postedAt || undefined
       })),
