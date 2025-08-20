@@ -166,7 +166,6 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
               
               return {
                 ...item,
-                imageUrl, // Keep original URL as backup
                 s3ImageKey: s3Result.s3Key,
                 cdnImageUrl: s3Result.cdnUrl,
                 imageRegion: s3Result.region,
@@ -174,16 +173,19 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
               }
             } catch (s3Error) {
               console.error('Failed to upload image to S3, keeping external URL:', s3Error)
+              // If S3 upload fails, we don't save the image at all
+              console.warn('S3 upload failed, content will have no image')
               return {
                 ...item,
-                imageUrl, // Fallback to external URL if S3 upload fails
+                cdnImageUrl: null,
               }
             }
           }
           
+          // Return without any image URL
           return {
             ...item,
-            imageUrl,
+            cdnImageUrl: null,
           }
         } catch (error) {
           console.error('Brand image generation failed:', error)

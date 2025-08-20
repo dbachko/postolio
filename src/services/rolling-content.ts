@@ -234,7 +234,6 @@ class RollingContentService {
           data: {
             caption: content.caption,
             hashtags: content.hashtags,
-            imageUrl: content.imageUrl ?? null,
             s3ImageKey: content.s3ImageKey ?? null,
             cdnImageUrl: content.cdnImageUrl ?? null,
             imageRegion: content.imageRegion ?? null,

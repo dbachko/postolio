@@ -97,7 +97,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             data: {
               caption: content.caption,
               hashtags: content.hashtags,
-              imageUrl: content.imageUrl || null,
               s3ImageKey: content.s3ImageKey || null,
               cdnImageUrl: content.cdnImageUrl || null,
               imageRegion: content.imageRegion || null,
@@ -115,7 +114,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
               id: true,
               caption: true,
               hashtags: true,
-              imageUrl: true,
               s3ImageKey: true,
               cdnImageUrl: true,
               imageRegion: true,
@@ -243,7 +241,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         data: {
           caption,
           hashtags,
-          imageUrl: null, // Legacy field, we use CDN URL now
           s3ImageKey,
           cdnImageUrl,
           imageRegion,
@@ -256,7 +253,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           caption: true,
           hashtags: true,
-          imageUrl: true,
           s3ImageKey: true,
           cdnImageUrl: true,
           imageRegion: true,

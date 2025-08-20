@@ -57,7 +57,6 @@ model Brand {
 model Content {
   id                 String        @id @default(cuid())
   caption            String
-  imageUrl           String?
   hashtags           String[]
   status             ContentStatus @default(draft)
   createdAt          DateTime      @default(now())

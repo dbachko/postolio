@@ -24,7 +24,6 @@ export interface Content {
   id: string
   caption: string
   hashtags: string[]
-  imageUrl: string | null
   s3ImageKey?: string | null
   cdnImageUrl?: string | null
   imageRegion?: string | null

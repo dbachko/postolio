@@ -276,7 +276,6 @@ class AutopilotService {
             await prisma.content.create({
               data: {
                 caption: content.caption,
-                imageUrl: content.imageUrl ?? null,
                 s3ImageKey: content.s3ImageKey ?? null,
                 cdnImageUrl: content.cdnImageUrl ?? null,
                 imageRegion: content.imageRegion ?? null,

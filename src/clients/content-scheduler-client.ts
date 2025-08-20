@@ -6,11 +6,8 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import CircuitBreaker from 'opossum';
-import { SignatureV4 } from '@aws-sdk/signature-v4';
-import { Sha256 } from '@aws-crypto/sha256-js';
-import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { HttpRequest } from '@aws-sdk/protocol-http';
+import * as CircuitBreaker from 'opossum';
+import { aws4Interceptor } from 'aws4-axios';
 
 // ==================== Validation Schemas ====================
 
@@ -138,7 +135,6 @@ export class ContentSchedulerClient {
   private client: AxiosInstance;
   private circuitBreaker: CircuitBreaker;
   private config: ContentSchedulerConfig;
-  private signer: SignatureV4;
 
   constructor(config: ContentSchedulerConfig) {
     this.config = {
@@ -147,14 +143,6 @@ export class ContentSchedulerClient {
       retryDelay: 1000,
       ...config,
     };
-
-    // Initialize AWS SigV4 signer
-    this.signer = new SignatureV4({
-      credentials: defaultProvider(),
-      region: process.env.AWS_REGION || 'us-east-1',
-      service: 'execute-api',
-      sha256: Sha256,
-    });
 
     // Initialize Axios client
     this.client = axios.create({
@@ -165,7 +153,19 @@ export class ContentSchedulerClient {
       },
     });
 
-    // Add request/response interceptors
+    // Add AWS SigV4 signing interceptor
+    const interceptor = aws4Interceptor({
+      options: {
+        region: process.env.AWS_REGION || 'us-east-1',
+        service: 'execute-api',
+      },
+      // Let aws4-axios use the default credential provider chain
+      // This will automatically use ECS task role credentials when running in ECS
+    });
+    
+    this.client.interceptors.request.use(interceptor);
+
+    // Add custom request/response interceptors for logging and request IDs
     this.setupInterceptors();
 
     // Initialize circuit breaker
@@ -534,66 +534,9 @@ export class ContentSchedulerClient {
    * Setup Axios interceptors with AWS SigV4 signing
    */
   private setupInterceptors(): void {
-    // Request interceptor
+    // Request interceptor for adding custom headers
     this.client.interceptors.request.use(
-      async (config) => {
-        // Build the full URL with query parameters
-        let fullUrl = config.url || '';
-        
-        // If there are params, add them to the URL
-        if (config.params && Object.keys(config.params).length > 0) {
-          const searchParams = new URLSearchParams();
-          Object.entries(config.params).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-              searchParams.append(key, String(value));
-            }
-          });
-          const queryString = searchParams.toString();
-          if (queryString) {
-            fullUrl += (fullUrl.includes('?') ? '&' : '?') + queryString;
-          }
-        }
-        
-        // Parse URL to get hostname and path
-        const url = new URL(fullUrl, config.baseURL);
-        
-        // Prepare the body if it exists
-        const body = config.data ? JSON.stringify(config.data) : undefined;
-        
-        // Create HTTP request for signing
-        const requestOptions: any = {
-          method: config.method?.toUpperCase() || 'GET',
-          protocol: url.protocol,
-          hostname: url.hostname,
-          path: url.pathname + url.search,
-          headers: {
-            'host': url.hostname,
-            'content-type': 'application/json',
-          },
-        };
-        
-        // Only add port if it exists
-        if (url.port) {
-          requestOptions.port = parseInt(url.port);
-        }
-        
-        // Add body to the request options if it exists
-        if (body) {
-          requestOptions.body = body;
-          // Ensure content-length header is set for body
-          requestOptions.headers['content-length'] = Buffer.byteLength(body).toString();
-        }
-        
-        const request = new HttpRequest(requestOptions);
-
-        // Sign the request with AWS SigV4
-        const signedRequest = await this.signer.sign(request);
-        
-        // Apply signed headers to axios config
-        Object.entries(signedRequest.headers).forEach(([key, value]) => {
-          config.headers[key] = value;
-        });
-        
+      (config) => {
         // Add request ID for tracing
         config.headers['X-Request-ID'] = this.generateRequestId();
         
@@ -605,7 +548,7 @@ export class ContentSchedulerClient {
       (error) => Promise.reject(error)
     );
 
-    // Response interceptor
+    // Response interceptor for logging
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {

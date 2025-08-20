@@ -39,12 +39,12 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
       className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
       onClick={() => navigate(`/posts/${content.id}`)}
     >
-      {(content.cdnImageUrl || content.imageUrl) && (
+      {content.cdnImageUrl && (
         <div className="aspect-w-16 aspect-h-9">
           <OptimizedImage
-            src={content.cdnImageUrl || content.imageUrl || ''}
+            src={content.cdnImageUrl}
             cdnUrl={content.cdnImageUrl}
-            fallbackUrl={content.imageUrl || undefined}
+            fallbackUrl={undefined}
             alt="Generated content"
             className="w-full h-48 object-cover"
             aspectRatio="landscape"

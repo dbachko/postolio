@@ -123,8 +123,7 @@ export class RetentionManager {
           },
           data: {
             s3ImageKey: null,
-            cdnImageUrl: null,
-            imageUrl: null // Also clear original URL for full cleanup
+            cdnImageUrl: null
           }
         })
 
