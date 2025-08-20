@@ -6,11 +6,12 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import CircuitBreaker from 'opossum';
-import { SignatureV4 } from '@aws-sdk/signature-v4';
-import { Sha256 } from '@aws-crypto/sha256-js';
-import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { HttpRequest } from '@aws-sdk/protocol-http';
+import { aws4Interceptor } from 'aws4-axios';
+import * as https from 'https';
+// Using require for opossum due to ESM/CommonJS compatibility issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const CircuitBreaker = require('opossum');
+import type { Options as CircuitBreakerOptions } from 'opossum';
 
 // ==================== Validation Schemas ====================
 
@@ -127,7 +128,7 @@ export interface ContentSchedulerConfig {
   timeout?: number;
   maxRetries?: number;
   retryDelay?: number;
-  circuitBreakerOptions?: CircuitBreaker.Options;
+  circuitBreakerOptions?: CircuitBreakerOptions;
   // User context for multi-tenant support
   userId?: string;
 }
@@ -136,9 +137,9 @@ export interface ContentSchedulerConfig {
 
 export class ContentSchedulerClient {
   private client: AxiosInstance;
-  private circuitBreaker: CircuitBreaker;
+  private circuitBreaker: any; // CircuitBreaker instance
   private config: ContentSchedulerConfig;
-  private signer: SignatureV4;
+  private cache: Map<string, { data: any; timestamp: number; etag?: string }>;
 
   constructor(config: ContentSchedulerConfig) {
     this.config = {
@@ -148,24 +149,39 @@ export class ContentSchedulerClient {
       ...config,
     };
 
-    // Initialize AWS SigV4 signer
-    this.signer = new SignatureV4({
-      credentials: defaultProvider(),
-      region: process.env.AWS_REGION || 'us-east-1',
-      service: 'execute-api',
-      sha256: Sha256,
-    });
+    // Initialize cache for response caching
+    this.cache = new Map();
 
-    // Initialize Axios client
+    // Initialize Axios client with connection keep-alive for better performance
     this.client = axios.create({
       baseURL: this.config.baseURL,
       timeout: this.config.timeout || 10000,
       headers: {
         'Content-Type': 'application/json',
       },
+      // Add HTTPS agent with keep-alive for persistent connections
+      httpsAgent: new https.Agent({
+        keepAlive: true,
+        keepAliveMsecs: 1000,
+        maxSockets: 50,
+        maxFreeSockets: 10,
+        timeout: 60000,
+      }),
     });
 
-    // Add request/response interceptors
+    // Add AWS SigV4 signing interceptor
+    const interceptor = aws4Interceptor({
+      options: {
+        region: process.env.AWS_REGION || 'us-east-1',
+        service: 'execute-api',
+      },
+      // Let aws4-axios use the default credential provider chain
+      // This will automatically use ECS task role credentials when running in ECS
+    });
+    
+    this.client.interceptors.request.use(interceptor);
+
+    // Add custom request/response interceptors for logging and request IDs
     this.setupInterceptors();
 
     // Initialize circuit breaker
@@ -236,15 +252,24 @@ export class ContentSchedulerClient {
   }
 
   /**
-   * Get a specific schedule
+   * Get a specific schedule with caching
    */
   async getSchedule(id: string): Promise<Schedule> {
+    const cacheKey = `GET:/schedules/${id}`;
+    const cached = this.getCachedResponse(cacheKey);
+    
+    if (cached) {
+      return cached;
+    }
+    
     return this.executeWithCircuitBreaker(async () => {
       const response = await this.retryWithBackoff(
         () => this.client.get(`/schedules/${id}`)
       );
       
-      return ScheduleSchema.parse(response.data);
+      const result = ScheduleSchema.parse(response.data);
+      this.setCachedResponse(cacheKey, result, response.headers.etag);
+      return result;
     });
   }
 
@@ -534,78 +559,35 @@ export class ContentSchedulerClient {
    * Setup Axios interceptors with AWS SigV4 signing
    */
   private setupInterceptors(): void {
-    // Request interceptor
+    // Request interceptor for adding custom headers and distributed tracing
     this.client.interceptors.request.use(
-      async (config) => {
-        // Build the full URL with query parameters
-        let fullUrl = config.url || '';
-        
-        // If there are params, add them to the URL
-        if (config.params && Object.keys(config.params).length > 0) {
-          const searchParams = new URLSearchParams();
-          Object.entries(config.params).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-              searchParams.append(key, String(value));
-            }
-          });
-          const queryString = searchParams.toString();
-          if (queryString) {
-            fullUrl += (fullUrl.includes('?') ? '&' : '?') + queryString;
-          }
-        }
-        
-        // Parse URL to get hostname and path
-        const url = new URL(fullUrl, config.baseURL);
-        
-        // Prepare the body if it exists
-        const body = config.data ? JSON.stringify(config.data) : undefined;
-        
-        // Create HTTP request for signing
-        const requestOptions: any = {
-          method: config.method?.toUpperCase() || 'GET',
-          protocol: url.protocol,
-          hostname: url.hostname,
-          path: url.pathname + url.search,
-          headers: {
-            'host': url.hostname,
-            'content-type': 'application/json',
-          },
-        };
-        
-        // Only add port if it exists
-        if (url.port) {
-          requestOptions.port = parseInt(url.port);
-        }
-        
-        // Add body to the request options if it exists
-        if (body) {
-          requestOptions.body = body;
-          // Ensure content-length header is set for body
-          requestOptions.headers['content-length'] = Buffer.byteLength(body).toString();
-        }
-        
-        const request = new HttpRequest(requestOptions);
-
-        // Sign the request with AWS SigV4
-        const signedRequest = await this.signer.sign(request);
-        
-        // Apply signed headers to axios config
-        Object.entries(signedRequest.headers).forEach(([key, value]) => {
-          config.headers[key] = value;
-        });
+      (config) => {
+        const requestId = this.generateRequestId();
         
         // Add request ID for tracing
-        config.headers['X-Request-ID'] = this.generateRequestId();
+        config.headers['X-Request-ID'] = requestId;
         
         // Add timestamp
         config.headers['X-Request-Timestamp'] = new Date().toISOString();
+        
+        // Add distributed tracing headers (AWS X-Ray compatible)
+        config.headers['X-Amzn-Trace-Id'] = `Root=1-${Math.floor(Date.now() / 1000).toString(16)}-${requestId.replace(/-/g, '').substring(0, 24)}`;
+        
+        // Add caller context for better debugging
+        config.headers['X-Caller-Service'] = 'postolio-backend';
+        config.headers['X-Caller-Version'] = process.env.APP_VERSION || '1.0.0';
+        
+        // Add user context if available
+        if (this.config.userId) {
+          config.headers['X-User-Context'] = this.config.userId;
+        }
         
         return config;
       },
       (error) => Promise.reject(error)
     );
 
-    // Response interceptor
+    // Response interceptor for logging
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
@@ -713,8 +695,44 @@ export class ContentSchedulerClient {
   /**
    * Get circuit breaker stats
    */
-  getCircuitBreakerStats(): CircuitBreaker.Stats {
+  getCircuitBreakerStats(): any {
     return this.circuitBreaker.stats;
+  }
+
+  /**
+   * Get cached response if valid
+   */
+  private getCachedResponse(key: string): any | null {
+    const cached = this.cache.get(key);
+    if (!cached) return null;
+    
+    // Check if cache is still valid (5 minutes TTL)
+    const now = Date.now();
+    if (now - cached.timestamp > 5 * 60 * 1000) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return cached.data;
+  }
+
+  /**
+   * Set cached response
+   */
+  private setCachedResponse(key: string, data: any, etag?: string): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      ...(etag ? { etag } : {}),
+    });
+    
+    // Limit cache size to prevent memory issues
+    if (this.cache.size > 100) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) {
+        this.cache.delete(firstKey);
+      }
+    }
   }
 }
 

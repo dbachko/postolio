@@ -92,7 +92,7 @@ export class SchedulerAdapter {
           scheduledTime: scheduledTimeUTC.toISOString(),
           content: {
             caption: content.caption,
-            mediaUrl: content.imageUrl || content.cdnImageUrl || undefined,
+            mediaUrl: content.cdnImageUrl || undefined,
             hashtags: content.hashtags,
           },
           metadata: {

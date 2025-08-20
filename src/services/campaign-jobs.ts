@@ -166,8 +166,6 @@ class CampaignJobService {
         console.log('Saving post to database:', {
           caption: post.caption?.substring(0, 50) + '...',
           hashtags: post.hashtags?.length || 0,
-          imageUrl: post.imageUrl?.substring(0, 80) + '...' || 'Missing',
-          imageUrlLength: post.imageUrl?.length || 0,
           s3ImageKey: post.s3ImageKey || 'NOT SET',
           cdnImageUrl: post.cdnImageUrl?.substring(0, 80) + '...' || 'NOT SET',
           hasS3Fields: !!(post.s3ImageKey && post.cdnImageUrl)
@@ -177,7 +175,6 @@ class CampaignJobService {
           data: {
             caption: post.caption,
             hashtags: post.hashtags,
-            imageUrl: post.imageUrl ?? null,
             s3ImageKey: post.s3ImageKey ?? null,
             cdnImageUrl: post.cdnImageUrl ?? null,
             imageRegion: post.imageRegion ?? null,

@@ -25,7 +25,7 @@ interface PostEditorProps {
 interface FormData {
   caption: string
   hashtags: string[]
-  imageUrl: string
+  cdnImageUrl: string
   scheduledAt: string
 }
 
@@ -34,7 +34,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
   const [formData, setFormData] = useState<FormData>({
     caption: '',
     hashtags: [],
-    imageUrl: '',
+    cdnImageUrl: '',
     scheduledAt: ''
   })
   const [hashtagInput, setHashtagInput] = useState('')
@@ -68,7 +68,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       setFormData({
         caption: content.caption || '',
         hashtags: content.hashtags || [],
-        imageUrl: content.imageUrl || '',
+        cdnImageUrl: content.cdnImageUrl || '',
         scheduledAt: content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
       })
       setHashtagInput((content.hashtags || []).join(' '))
@@ -82,7 +82,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       setFormData({
         caption: '',
         hashtags: [],
-        imageUrl: '',
+        cdnImageUrl: '',
         scheduledAt: ''
       })
       setHashtagInput('')
@@ -119,7 +119,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         setFormData({
           caption: content.caption || '',
           hashtags: content.hashtags || [],
-          imageUrl: content.imageUrl || '',
+          cdnImageUrl: content.cdnImageUrl || '',
           scheduledAt: content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
         })
         setHashtagInput((content.hashtags || []).join(' '))
@@ -135,7 +135,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       contentId: string
       caption?: string
       hashtags?: string[]
-      imageUrl?: string
+      cdnImageUrl?: string
       scheduledAt?: string
     }) => {
       // Critical logging before mutation
@@ -144,7 +144,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         caption: data.caption,
         captionLength: data.caption?.length || 0,
         hashtags: data.hashtags,
-        imageUrl: data.imageUrl,
+        cdnImageUrl: data.cdnImageUrl,
         scheduledAt: data.scheduledAt,
         scheduledAtType: typeof data.scheduledAt
       })
@@ -252,7 +252,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         contentId: content.id, 
         originalCaption: originalCaption.substring(0, 30) + '...', 
         newCaption: debouncedFormData.caption.substring(0, 30) + '...',
-        imageUrl: debouncedFormData.imageUrl,
+        cdnImageUrl: debouncedFormData.cdnImageUrl,
         scheduledAt: debouncedFormData.scheduledAt,
         originalScheduledAt: originalScheduledAt,
         timestamp: new Date().toISOString()
@@ -263,7 +263,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         contentId: content.id,
         caption: debouncedFormData.caption,
         hashtags: debouncedFormData.hashtags,
-        imageUrl: debouncedFormData.imageUrl || undefined,
+        cdnImageUrl: debouncedFormData.cdnImageUrl || undefined,
         scheduledAt: debouncedFormData.scheduledAt // Send empty string if cleared, datetime string if set
       })
     }
@@ -353,7 +353,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         contentId: content.id,
         caption: formData.caption,
         hashtags: formData.hashtags,
-        imageUrl: formData.imageUrl || undefined,
+        cdnImageUrl: formData.cdnImageUrl || undefined,
         scheduledAt: value // Use the new value directly
       })
     }
@@ -497,7 +497,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
           <div className="space-y-2">
             <Label>Post Image</Label>
             <ImageUploader
-              value={formData.imageUrl || content.cdnImageUrl || content.imageUrl || undefined}
+              value={formData.cdnImageUrl || content.cdnImageUrl || undefined}
               onChange={handleImageChange}
               maxSizeInMB={10}
               acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}

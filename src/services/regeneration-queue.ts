@@ -122,7 +122,10 @@ const regenerationWorker = new Worker(
             data: {
               caption: newContent.caption,
               hashtags: newContent.hashtags,
-              imageUrl: newContent.imageUrl || newContent.cdnImageUrl || null,
+              cdnImageUrl: newContent.cdnImageUrl || null,
+              s3ImageKey: newContent.s3ImageKey || null,
+              imageRegion: newContent.imageRegion || null,
+              retentionExpiresAt: newContent.retentionExpiresAt || null,
               generationParams: {
                 ...(existingContent.generationParams as any || {}),
                 regeneratedAt: new Date().toISOString(),

@@ -29,7 +29,7 @@ export interface InstagramProfile {
 }
 
 export interface PublishMediaRequest {
-  imageUrl: string
+  cdnImageUrl: string
   caption: string
   hashtags: string[]
 }
@@ -267,7 +267,7 @@ class InstagramService {
       const containerUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/media`
 
       const containerData = {
-        image_url: request.imageUrl,
+        image_url: request.cdnImageUrl,
         caption: caption,
         access_token: brand.instagramAccessToken,
       }

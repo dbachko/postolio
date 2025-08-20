@@ -295,7 +295,6 @@ class CampaignService {
           data: {
             caption: post.caption,
             hashtags: post.hashtags,
-            imageUrl: post.imageUrl ?? null,
             s3ImageKey: post.s3ImageKey ?? null,
             cdnImageUrl: post.cdnImageUrl ?? null,
             imageRegion: post.imageRegion ?? null,
@@ -512,7 +511,6 @@ class CampaignService {
               id: true,
               caption: true,
               hashtags: true,
-              imageUrl: true,
               s3ImageKey: true,
               cdnImageUrl: true,
               imageRegion: true,
@@ -785,7 +783,6 @@ class CampaignService {
               id: true,
               caption: true,
               hashtags: true,
-              imageUrl: true,
               s3ImageKey: true,
               cdnImageUrl: true,
               imageRegion: true,
