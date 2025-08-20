@@ -240,9 +240,11 @@ export class ContentSchedulerClient {
       // Validate input
       const validatedData = CreateScheduleInputSchema.parse(data);
       
-      // Make API call
+      // NOTE: Do NOT prefix with leading slash. Axios treats a URL starting with '/' as
+      // absolute (replacing the baseURL path). We need to preserve the API stage (e.g. /dev)
+      // contained in baseURL. Using 'schedules' ensures the request becomes `${baseURL}/schedules`.
       const response = await this.retryWithBackoff(
-        () => this.client.post('/schedules', validatedData)
+        () => this.client.post('schedules', validatedData)
       );
       
       // Validate and return response
@@ -258,9 +260,9 @@ export class ContentSchedulerClient {
       // Validate input
       const validatedData = UpdateScheduleInputSchema.parse(data);
       
-      // Make API call
+      // Preserve stage path by omitting leading slash
       const response = await this.retryWithBackoff(
-        () => this.client.patch(`/schedules/${id}`, validatedData)
+        () => this.client.patch(`schedules/${id}`, validatedData)
       );
       
       // Validate and return response
@@ -274,7 +276,7 @@ export class ContentSchedulerClient {
   async deleteSchedule(id: string): Promise<void> {
     return this.executeWithCircuitBreaker(async () => {
       await this.retryWithBackoff(
-        () => this.client.delete(`/schedules/${id}`)
+        () => this.client.delete(`schedules/${id}`)
       );
     });
   }
@@ -283,7 +285,7 @@ export class ContentSchedulerClient {
    * Get a specific schedule with caching
    */
   async getSchedule(id: string): Promise<Schedule> {
-    const cacheKey = `GET:/schedules/${id}`;
+  const cacheKey = `GET:schedules/${id}`; // match path without leading slash
     const cached = this.getCachedResponse(cacheKey);
     
     if (cached) {
@@ -292,7 +294,7 @@ export class ContentSchedulerClient {
     
     return this.executeWithCircuitBreaker(async () => {
       const response = await this.retryWithBackoff(
-        () => this.client.get(`/schedules/${id}`)
+        () => this.client.get(`schedules/${id}`)
       );
       
       const result = ScheduleSchema.parse(response.data);
@@ -311,7 +313,7 @@ export class ContentSchedulerClient {
       
       // Make API call
       const response = await this.retryWithBackoff(
-        () => this.client.get('/schedules', { params: validatedParams })
+        () => this.client.get('schedules', { params: validatedParams })
       );
       
       // Validate and return response
@@ -711,7 +713,7 @@ export class ContentSchedulerClient {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await this.client.get('/health', {
+  const response = await this.client.get('health', {
         timeout: 5000,
       });
       return response.status === 200;
