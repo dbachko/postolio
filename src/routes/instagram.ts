@@ -231,7 +231,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
       }
 
       // Enhanced content validation
-      if (!content.imageUrl) {
+      if (!content.cdnImageUrl && !content.s3ImageKey) {
         return reply.status(400).send({
           error: 'Image URL is required for Instagram posting',
           details: 'Content must have a valid image before publishing',
@@ -257,7 +257,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
 
       // Publish to Instagram
       const publishResult = await instagramService.publishMedia(content.brand, {
-        imageUrl: content.imageUrl,
+        cdnImageUrl: content.cdnImageUrl || '', // Use CDN URL for Instagram publishing
         caption: content.caption,
         hashtags: content.hashtags,
       })

@@ -218,7 +218,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
     }
 
     // Additional safety check: ensure we have meaningful form data
-    if (debouncedFormData.caption === '' && debouncedFormData.hashtags.length === 0 && debouncedFormData.imageUrl === '') {
+    if (debouncedFormData.caption === '' && debouncedFormData.hashtags.length === 0 && debouncedFormData.cdnImageUrl === '') {
       console.log('Skipping autosave: Form data appears to be empty initial state')
       return
     }
@@ -226,13 +226,13 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
     // Check if form data has actually changed from original content
     const originalCaption = content.caption || ''
     const originalHashtags = content.hashtags || []
-    const originalImageUrl = content.imageUrl || ''
+    const originalCdnImageUrl = content.cdnImageUrl || ''
     const originalScheduledAt = content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
 
     const hasChanges = 
       debouncedFormData.caption !== originalCaption ||
       JSON.stringify(debouncedFormData.hashtags) !== JSON.stringify(originalHashtags) ||
-      debouncedFormData.imageUrl !== originalImageUrl ||
+      debouncedFormData.cdnImageUrl !== originalCdnImageUrl ||
       debouncedFormData.scheduledAt !== originalScheduledAt
 
     if (hasChanges) {
@@ -276,7 +276,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
   const handleImageChange = async (fileOrUrl: string | File) => {
     if (typeof fileOrUrl === 'string') {
       // Direct URL update (e.g., when removing the image)
-      setFormData(prev => ({ ...prev, imageUrl: fileOrUrl }))
+      setFormData(prev => ({ ...prev, cdnImageUrl: fileOrUrl }))
       
       // If it's an empty string, it means the user removed the image
       // This will trigger the auto-save via the debounced form data
@@ -289,7 +289,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       }
       const objectUrl = URL.createObjectURL(fileOrUrl)
       objectUrlRef.current = objectUrl
-      setFormData(prev => ({ ...prev, imageUrl: objectUrl }))
+      setFormData(prev => ({ ...prev, cdnImageUrl: objectUrl }))
       
       // Upload to server
       if (content) {
@@ -298,10 +298,10 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
           const response = await apiClient.uploadContentImage(content.id, fileOrUrl)
           if (response.success && response.content) {
             // Update with the server's response - use cdnImageUrl if available
-            const newImageUrl = response.content.cdnImageUrl || response.content.imageUrl || objectUrl
+            const newImageUrl = response.content.cdnImageUrl || objectUrl
             setFormData(prev => ({ 
               ...prev, 
-              imageUrl: newImageUrl 
+              cdnImageUrl: newImageUrl 
             }))
             setSaveStatus('saved')
             setLastSaved(new Date())
@@ -315,7 +315,6 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
             // Update the content in cache without mutating the original
             updateContentInCache({
               ...content,
-              imageUrl: response.content.imageUrl,
               cdnImageUrl: response.content.cdnImageUrl
             })
             
@@ -329,7 +328,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
           console.error('Failed to upload image:', error)
           setSaveStatus('error')
           // Revert to previous image on error
-          setFormData(prev => ({ ...prev, imageUrl: content.imageUrl || '' }))
+          setFormData(prev => ({ ...prev, cdnImageUrl: content.cdnImageUrl || '' }))
           setTimeout(() => {
             setSaveStatus('idle')
           }, 3000)

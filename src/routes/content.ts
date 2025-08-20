@@ -33,7 +33,7 @@ interface UpdateContentBody {
   contentId: string
   caption?: string
   hashtags?: string[]
-  imageUrl?: string
+  cdnImageUrl?: string
   scheduledAt?: string
 }
 
@@ -312,7 +312,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           caption: true,
           hashtags: true,
-          imageUrl: true,
           s3ImageKey: true,
           cdnImageUrl: true,
           imageRegion: true,
@@ -373,7 +372,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           caption: true,
           hashtags: true,
-          imageUrl: true,
           status: true,
           scheduledAt: true,
           updatedAt: true,
@@ -468,7 +466,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       const decoded = verifyJWT(token)
       const userId = decoded.id
 
-      const { contentId, caption, hashtags, imageUrl, scheduledAt } = request.body
+      const { contentId, caption, hashtags, cdnImageUrl, scheduledAt } = request.body
 
       // Verify user owns the content through brand ownership
       const content = await prisma.content.findFirst({
@@ -488,12 +486,12 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       const originalContent: {
         caption: string
         hashtags: string[]
-        imageUrl?: string
+        cdnImageUrl?: string | null
         scheduledAt?: string
       } = {
         caption: content.caption,
         hashtags: content.hashtags,
-        ...(content.imageUrl ? { imageUrl: content.imageUrl } : {}),
+        ...(content.cdnImageUrl ? { cdnImageUrl: content.cdnImageUrl } : {}),
         ...(content.scheduledAt ? { scheduledAt: content.scheduledAt.toISOString() } : {}),
       }
 
@@ -513,10 +511,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         updateData.caption = caption.trim() // Ensure we store trimmed caption
       }
       if (hashtags !== undefined) updateData.hashtags = hashtags
-      if (imageUrl !== undefined) {
-        updateData.imageUrl = imageUrl
-        // If imageUrl is empty, also clear S3-related fields
-        if (imageUrl === '' || imageUrl === null) {
+      if (cdnImageUrl !== undefined) {
+        updateData.cdnImageUrl = cdnImageUrl
+        // If cdnImageUrl is empty, also clear S3-related fields
+        if (cdnImageUrl === '' || cdnImageUrl === null) {
           updateData.s3ImageKey = null
           updateData.cdnImageUrl = null
           updateData.imageRegion = null
@@ -557,7 +555,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           caption: true,
           hashtags: true,
-          imageUrl: true,
+          cdnImageUrl: true,
           status: true,
           scheduledAt: true,
           postedAt: true,
@@ -632,7 +630,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       const hasChanges =
         (caption !== undefined && caption !== originalContent.caption) ||
         (hashtags !== undefined && JSON.stringify(hashtags) !== JSON.stringify(originalContent.hashtags)) ||
-        (imageUrl !== undefined && imageUrl !== originalContent.imageUrl) ||
+        (cdnImageUrl !== undefined && cdnImageUrl !== originalContent.cdnImageUrl) ||
         (scheduledAt !== undefined && scheduledAt !== originalContent.scheduledAt)
 
       if (hasChanges) {
@@ -640,12 +638,12 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           const editedContent: {
             caption: string
             hashtags: string[]
-            imageUrl?: string
+            cdnImageUrl?: string | null
             scheduledAt?: string
           } = {
             caption: updatedContent.caption,
             hashtags: updatedContent.hashtags,
-            ...(updatedContent.imageUrl ? { imageUrl: updatedContent.imageUrl } : {}),
+            ...(updatedContent.cdnImageUrl ? { cdnImageUrl: updatedContent.cdnImageUrl } : {}),
             ...(updatedContent.scheduledAt ? { scheduledAt: updatedContent.scheduledAt.toISOString() } : {}),
           }
 
@@ -719,7 +717,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           caption: true,
           hashtags: true,
-          imageUrl: true,
           s3ImageKey: true,
           cdnImageUrl: true,
           imageRegion: true,
@@ -840,7 +837,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         
         // Update content with S3 URLs or fallback
         const updateData: any = {
-          imageUrl: imageUrlToStore,
+          cdnImageUrl: imageUrlToStore,
         }
         
         // Only add S3 fields if upload succeeded
@@ -858,8 +855,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             id: true,
             caption: true,
             hashtags: true,
-            imageUrl: true,
-            s3ImageKey: true,
+              s3ImageKey: true,
             cdnImageUrl: true,
             status: true,
             scheduledAt: true,
