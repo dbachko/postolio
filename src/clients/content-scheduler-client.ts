@@ -557,6 +557,9 @@ export class ContentSchedulerClient {
         // Parse URL to get hostname and path
         const url = new URL(fullUrl, config.baseURL);
         
+        // Prepare the body if it exists
+        const body = config.data ? JSON.stringify(config.data) : undefined;
+        
         // Create HTTP request for signing
         const requestOptions: any = {
           method: config.method?.toUpperCase() || 'GET',
@@ -574,9 +577,11 @@ export class ContentSchedulerClient {
           requestOptions.port = parseInt(url.port);
         }
         
-        // Only add body if it exists
-        if (config.data) {
-          requestOptions.body = JSON.stringify(config.data);
+        // Add body to the request options if it exists
+        if (body) {
+          requestOptions.body = body;
+          // Ensure content-length header is set for body
+          requestOptions.headers['content-length'] = Buffer.byteLength(body).toString();
         }
         
         const request = new HttpRequest(requestOptions);
