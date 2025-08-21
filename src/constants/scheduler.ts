@@ -73,5 +73,12 @@ export function formatEventBridgeScheduleTime(dateInput: string | Date): string 
   }
   
   // Convert to ISO string and remove milliseconds and timezone
-  return date.toISOString().split('.')[0];
+  const isoString = date.toISOString();
+  const dateTimePart = isoString.split('.')[0];
+  
+  if (!dateTimePart) {
+    throw new Error(`Failed to format date: ${isoString}`);
+  }
+  
+  return dateTimePart;
 }
