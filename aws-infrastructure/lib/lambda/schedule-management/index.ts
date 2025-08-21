@@ -6,6 +6,7 @@ import { DynamoDBDocumentClient, PutCommand, GetCommand, DeleteCommand, QueryCom
 import { SchedulerClient, CreateScheduleCommand, DeleteScheduleCommand } from '@aws-sdk/client-scheduler';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { randomUUID } from 'crypto';
+import { getDynamoDBConfig, SCHEDULE_STATUS } from './config';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'schedule-management' });
@@ -212,7 +213,7 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
       contentId: validatedData.contentId,
       platform: validatedData.platform,
       scheduledAt,
-      status: 'scheduled',
+      status: SCHEDULE_STATUS.SCHEDULED,
       contentType: validatedData.contentType || 'image',
       videoUrl: validatedData.videoUrl,
       caption: validatedData.caption,
@@ -274,18 +275,27 @@ async function getSchedule(scheduleId: string): Promise<APIGatewayProxyResult> {
 
 async function listSchedules(queryParams: any): Promise<APIGatewayProxyResult> {
   const brandId = queryParams?.brandId;
-  const status = queryParams?.status || 'scheduled';
+  const status = queryParams?.status || SCHEDULE_STATUS.SCHEDULED;
   const limit = parseInt(queryParams?.limit || '50');
   
   logger.info('Listing schedules', { brandId, status, limit });
   
   try {
+    const dbConfig = getDynamoDBConfig();
+    
     // Query schedules by brand if brandId provided
     if (brandId) {
+      const brandIndex = dbConfig.indexes.brand;
+      logger.info('Using brand index for query', { 
+        indexName: brandIndex.name, 
+        partitionKey: brandIndex.partitionKey,
+        brandId 
+      });
+      
       const result = await docClient.send(new QueryCommand({
-        TableName: process.env.SCHEDULES_TABLE!,
-        IndexName: 'gsi1',
-        KeyConditionExpression: 'gsi1pk = :brandId',
+        TableName: dbConfig.tableName,
+        IndexName: brandIndex.name,
+        KeyConditionExpression: `${brandIndex.partitionKey} = :brandId`,
         FilterExpression: '#status = :status',
         ExpressionAttributeNames: {
           '#status': 'status',
