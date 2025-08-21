@@ -86,8 +86,6 @@ export class SchedulerAdapter {
         const mediaUrls: string[] = [];
         if (content.cdnImageUrl) {
           mediaUrls.push(content.cdnImageUrl);
-        } else if (content.imageUrl) {
-          mediaUrls.push(content.imageUrl);
         }
 
         const schedule = await this.client.createSchedule({
