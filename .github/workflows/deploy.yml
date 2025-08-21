@@ -239,7 +239,7 @@ jobs:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
 
-      - name: Force ECS service deployment
+      - name: Verify ECS deployment status
         run: |
           # Helper function to get CloudFormation stack output
           get_stack_output() {
@@ -249,7 +249,7 @@ jobs:
               --output text 2>/dev/null || echo ""
           }
           
-          # Get cluster and service names from stack outputs (with fallback for older stacks)
+          # Get cluster and service names from stack outputs
           CLUSTER_NAME=$(get_stack_output "EcsClusterName")
           SERVICE_NAME=$(get_stack_output "EcsServiceName")
           
@@ -262,17 +262,20 @@ jobs:
           fi
           
           if [ -n "$CLUSTER_NAME" ] && [ -n "$SERVICE_NAME" ]; then
-            echo "Forcing new deployment for cluster: $CLUSTER_NAME, service: $SERVICE_NAME"
-            aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment
-            echo "✅ ECS service deployment triggered successfully"
+            echo "📊 Checking ECS service deployment status..."
+            echo "Cluster: $CLUSTER_NAME"
+            echo "Service: $SERVICE_NAME"
             
-            # Wait for service to stabilize
-            echo "⏳ Waiting for ECS service to stabilize..."
-            aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" || true
-            echo "✅ ECS service deployment completed"
+            # Check current deployment status
+            aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" \
+              --query 'services[0].deployments[?status==`PRIMARY`].[status,runningCount,desiredCount,taskDefinition]' \
+              --output table
+            
+            echo "✅ CDK deployment completed - ECS rolling update should be in progress"
+            echo "💡 ECS will automatically update tasks with new image tag: ${{ github.sha }}"
           else
-            echo "⚠️ Could not determine ECS cluster or service names, skipping force deployment"
-            echo "Note: The CDK deploy should have already triggered the deployment with the new image tag"
+            echo "⚠️ Could not determine ECS cluster or service names"
+            echo "✅ CDK deployment completed successfully"
           fi
 
   deploy-frontend:
