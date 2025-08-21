@@ -116,7 +116,10 @@ export interface CampaignTemplate {
   isPublic: boolean
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://localhost:3000'
+// API base URL configuration
+// Empty string means use relative URLs (for development with proxy)
+// Full URL for production or explicit configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 class ApiClient {
   private token: string | null = null
