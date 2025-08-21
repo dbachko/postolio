@@ -566,9 +566,9 @@ class CampaignService {
     
     while (current <= endDate) {
       // Create a date string in YYYY-MM-DD format for the current date
-      const year = current.getFullYear()
-      const month = String(current.getMonth() + 1).padStart(2, '0')
-      const day = String(current.getDate()).padStart(2, '0')
+  const _year = current.getFullYear() // unused - retained for clarity of date construction
+  const _month = String(current.getMonth() + 1).padStart(2, '0')
+  const _day = String(current.getDate()).padStart(2, '0')
       const dateString = new Date(
         current.getFullYear(),
         current.getMonth(),

@@ -8,7 +8,6 @@ import learningService from '../services/learning.js'
 import { uploadImageBufferToS3, type ImageMetadata } from '../services/s3-image.js'
 import { computePlaceholders } from '../services/placeholderService.js'
 import { schedulerService } from '../services/scheduler.js'
-import { TimezoneService } from '../services/timezone.js'
 
 import { getDatabaseClient } from '../config/database.js'
 

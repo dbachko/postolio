@@ -128,6 +128,8 @@ export interface ContentSchedulerConfig {
   circuitBreakerOptions?: CircuitBreakerOptions;
   // User context for multi-tenant support
   userId?: string;
+  /** Enable verbose debug logging for scheduler HTTP calls */
+  debugLogging?: boolean;
 }
 
 // ==================== Main Client Class ====================
@@ -137,6 +139,8 @@ export class ContentSchedulerClient {
   private circuitBreaker: any; // CircuitBreaker instance
   private config: ContentSchedulerConfig;
   private cache: Map<string, { data: any; timestamp: number; etag?: string }>;
+  private debug: boolean;
+  private region: string;
 
   constructor(config: ContentSchedulerConfig) {
     this.config = {
@@ -152,7 +156,7 @@ export class ContentSchedulerClient {
     const normalizedBaseURL = this.config.baseURL.replace(/\/+$/, '');
 
     // Infer AWS region from execute-api hostname if possible (fallback to env or us-east-1)
-    const inferredRegion: string = (() => {
+  const inferredRegion: string = (() => {
       try {
         const host = new URL(normalizedBaseURL).hostname;
         const match = host.match(/execute-api\.([a-z0-9-]+)\.amazonaws\.com$/);
@@ -160,6 +164,8 @@ export class ContentSchedulerClient {
       } catch { /* ignore parse errors */ }
       return process.env.AWS_REGION || 'us-east-1';
     })();
+  this.region = inferredRegion;
+  this.debug = this.config.debugLogging ?? true; // default on for now per request for comprehensive logging
 
     // Initialize Axios client with connection keep-alive for better performance
     this.client = axios.create({
@@ -196,6 +202,12 @@ export class ContentSchedulerClient {
         const normalizedPath = pathPart.replace(/\/+/g, '/');
         req.url = queryPart ? `${normalizedPath}?${queryPart}` : normalizedPath;
       }
+      // Attach timing metadata
+      (req as any).__meta = {
+        start: Date.now(),
+        id: this.generateRequestId(),
+        attempt: 0,
+      };
       return req;
     });
 
@@ -240,9 +252,11 @@ export class ContentSchedulerClient {
       // Validate input
       const validatedData = CreateScheduleInputSchema.parse(data);
       
-      // Make API call
+      // NOTE: Do NOT prefix with leading slash. Axios treats a URL starting with '/' as
+      // absolute (replacing the baseURL path). We need to preserve the API stage (e.g. /dev)
+      // contained in baseURL. Using 'schedules' ensures the request becomes `${baseURL}/schedules`.
       const response = await this.retryWithBackoff(
-        () => this.client.post('/schedules', validatedData)
+        () => this.client.post('schedules', validatedData)
       );
       
       // Validate and return response
@@ -258,9 +272,9 @@ export class ContentSchedulerClient {
       // Validate input
       const validatedData = UpdateScheduleInputSchema.parse(data);
       
-      // Make API call
+      // Preserve stage path by omitting leading slash
       const response = await this.retryWithBackoff(
-        () => this.client.patch(`/schedules/${id}`, validatedData)
+        () => this.client.patch(`schedules/${id}`, validatedData)
       );
       
       // Validate and return response
@@ -274,7 +288,7 @@ export class ContentSchedulerClient {
   async deleteSchedule(id: string): Promise<void> {
     return this.executeWithCircuitBreaker(async () => {
       await this.retryWithBackoff(
-        () => this.client.delete(`/schedules/${id}`)
+        () => this.client.delete(`schedules/${id}`)
       );
     });
   }
@@ -283,7 +297,7 @@ export class ContentSchedulerClient {
    * Get a specific schedule with caching
    */
   async getSchedule(id: string): Promise<Schedule> {
-    const cacheKey = `GET:/schedules/${id}`;
+  const cacheKey = `GET:schedules/${id}`; // match path without leading slash
     const cached = this.getCachedResponse(cacheKey);
     
     if (cached) {
@@ -292,7 +306,7 @@ export class ContentSchedulerClient {
     
     return this.executeWithCircuitBreaker(async () => {
       const response = await this.retryWithBackoff(
-        () => this.client.get(`/schedules/${id}`)
+        () => this.client.get(`schedules/${id}`)
       );
       
       const result = ScheduleSchema.parse(response.data);
@@ -311,7 +325,7 @@ export class ContentSchedulerClient {
       
       // Make API call
       const response = await this.retryWithBackoff(
-        () => this.client.get('/schedules', { params: validatedParams })
+        () => this.client.get('schedules', { params: validatedParams })
       );
       
       // Validate and return response
@@ -484,16 +498,35 @@ export class ContentSchedulerClient {
       return await fn();
     } catch (error) {
       if (attempt >= (this.config.maxRetries || 3)) {
+        if (this.debug) {
+          this.log('warn', 'scheduler.retry.maxAttemptsReached', {
+            attempts: attempt + 1,
+            error: this.summarizeError(error),
+          });
+        }
         throw error;
       }
 
       // Check if error is retryable
       if (this.isRetryableError(error)) {
         const delay = this.calculateBackoffDelay(attempt);
+        if (this.debug) {
+          this.log('info', 'scheduler.retry.backoff', {
+            attempt: attempt + 1,
+            delayMs: delay,
+            error: this.summarizeError(error),
+          });
+        }
         await this.sleep(delay);
         return this.retryWithBackoff(fn, attempt + 1);
       }
 
+      if (this.debug) {
+        this.log('info', 'scheduler.retry.nonRetryable', {
+          attempt: attempt + 1,
+          error: this.summarizeError(error),
+        });
+      }
       throw error;
     }
   }
@@ -534,6 +567,13 @@ export class ContentSchedulerClient {
    */
   private handleAxiosError(error: AxiosError): SchedulerError {
     if (!error.response) {
+      if (this.debug) {
+        this.log('error', 'scheduler.http.networkError', {
+          message: error.message,
+          code: error.code,
+          isAxiosError: true,
+        });
+      }
       return new NetworkError('Network error occurred', {
         code: error.code,
         message: error.message,
@@ -559,6 +599,12 @@ export class ContentSchedulerClient {
     }
 
     if (status === 403) {
+      if (this.debug) {
+        this.log('warn', 'scheduler.http.forbidden', {
+          status,
+          data,
+        });
+      }
       return new SchedulerError('Forbidden', 'FORBIDDEN', 403);
     }
 
@@ -590,7 +636,9 @@ export class ContentSchedulerClient {
     // Request interceptor for adding custom headers and distributed tracing
     this.client.interceptors.request.use(
       (config) => {
-        const requestId = this.generateRequestId();
+  // Reuse meta id if created earlier; otherwise generate
+  const meta = (config as any).__meta || { id: this.generateRequestId(), start: Date.now(), attempt: 0 };
+  const requestId = meta.id;
         
         // Add request ID for tracing
         config.headers['X-Request-ID'] = requestId;
@@ -610,6 +658,19 @@ export class ContentSchedulerClient {
           config.headers['X-User-Context'] = this.config.userId;
         }
         
+        if (this.debug) {
+          const fullUrl = this.composeFullUrl(config.baseURL || this.config.baseURL, config.url || '');
+          this.log('info', 'scheduler.http.request', {
+            id: requestId,
+            method: (config.method || 'get').toUpperCase(),
+            url: config.url,
+            baseURL: config.baseURL || this.config.baseURL,
+            fullUrl,
+            region: this.region,
+            timeout: config.timeout,
+            attempt: meta.attempt + 1,
+          });
+        }
         return config;
       },
       (error) => Promise.reject(error)
@@ -617,16 +678,36 @@ export class ContentSchedulerClient {
 
     // Response interceptor for logging
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        if (this.debug) {
+          const meta = (response.config as any).__meta;
+          const duration = meta ? Date.now() - meta.start : undefined;
+          this.log('info', 'scheduler.http.response', {
+            id: meta?.id,
+            method: (response.config.method || 'get').toUpperCase(),
+            url: response.config.url,
+            status: response.status,
+            durationMs: duration,
+            size: this.safeSize(response.data),
+          });
+        }
+        return response;
+      },
       (error) => {
-        // Log error for debugging
-        console.error('Scheduler API error:', {
-          url: error.config?.url,
-          method: error.config?.method,
-          status: error.response?.status,
-          data: error.response?.data,
-        });
-        
+        if (this.debug) {
+          const cfg = error.config || {};
+          const meta = (cfg as any).__meta;
+          const duration = meta ? Date.now() - meta.start : undefined;
+          this.log('error', 'scheduler.http.error', {
+            id: meta?.id,
+            method: (cfg.method || 'get').toUpperCase(),
+            url: cfg.url,
+            status: error.response?.status,
+            durationMs: duration,
+            data: error.response?.data,
+            message: error.message,
+          });
+        }
         return Promise.reject(error);
       }
     );
@@ -697,6 +778,47 @@ export class ContentSchedulerClient {
     return `req_${randomUUID()}`;
   }
 
+  /** Log helper */
+  private log(level: 'info' | 'warn' | 'error' | 'debug', event: string, details: Record<string, any>): void {
+    // Simple structured logger; could later integrate with pino
+    const payload = {
+      level,
+      time: new Date().toISOString(),
+      event,
+      ...details,
+    };
+    (console as any)[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](JSON.stringify(payload));
+  }
+
+  private summarizeError(err: any): Record<string, any> {
+    if (!err) return { type: 'unknown' };
+    if (axios.isAxiosError(err)) {
+      return {
+        type: 'AxiosError',
+        message: err.message,
+        code: err.code,
+        status: err.response?.status,
+        data: err.response?.data && this.safeSize(err.response.data) < 2048 ? err.response.data : undefined,
+      };
+    }
+    if (err instanceof Error) return { type: err.name, message: err.message };
+    return { type: typeof err, value: String(err) };
+  }
+
+  private composeFullUrl(base: string, path: string): string {
+    if (!base.endsWith('/') && !path.startsWith('/')) return base + '/' + path;
+    if (base.endsWith('/') && path.startsWith('/')) return base + path.substring(1);
+    return base + path;
+  }
+
+  private safeSize(data: any): number {
+    try {
+      if (data == null) return 0;
+      if (typeof data === 'string') return data.length;
+      return JSON.stringify(data).length;
+    } catch { return 0; }
+  }
+
   /**
    * Sleep utility for delays
    */
@@ -711,7 +833,7 @@ export class ContentSchedulerClient {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await this.client.get('/health', {
+  const response = await this.client.get('health', {
         timeout: 5000,
       });
       return response.status === 200;
