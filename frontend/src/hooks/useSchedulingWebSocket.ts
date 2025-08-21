@@ -189,7 +189,7 @@ export function useSchedulingWebSocket({
   }, [])
 
   // Connect to WebSocket
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     // Guard against multiple simultaneous connections
     if (isConnectingRef.current || wsRef.current?.readyState === WebSocket.OPEN) {
       return
@@ -210,9 +210,33 @@ export function useSchedulingWebSocket({
 
       handleConnectionChange('connecting')
 
-      // Use relative path - Vite will proxy in dev, production will use same origin
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const ws = new WebSocket(`${protocol}//${window.location.host}/ws`)
+      // Fetch WebSocket configuration from backend
+      let wsUrl = ''
+      try {
+        const response = await fetch('/api/config/websocket', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        
+        if (response.ok) {
+          const config = await response.json()
+          if (!config.useRelative && config.wsUrl) {
+            wsUrl = config.wsUrl
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to fetch WebSocket config, using default:', error)
+      }
+      
+      // Use configured URL or fall back to relative path
+      if (!wsUrl) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+        wsUrl = `${protocol}//${window.location.host}/ws`
+      }
+      
+      console.log('Connecting to WebSocket at:', wsUrl)
+      const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
         console.log('WebSocket connected')
