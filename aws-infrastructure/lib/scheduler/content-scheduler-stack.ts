@@ -14,7 +14,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as cognito from 'aws-cdk-lib/aws-cognito';
+// Cognito removed - using IAM SigV4 authentication
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NagSuppressions } from 'cdk-nag';
@@ -30,7 +30,6 @@ export class ContentSchedulerStack extends cdk.Stack {
   public readonly api: apigateway.RestApi;
   public readonly schedulesTable: dynamodb.Table;
   public readonly videoBucket: s3.Bucket;
-  public readonly userPool: cognito.UserPool;
 
   constructor(scope: Construct, id: string, props: ContentSchedulerStackProps) {
     super(scope, id, props);
@@ -47,86 +46,9 @@ export class ContentSchedulerStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // ==================== Cognito User Pool (API Authentication) ====================
-    
-    this.userPool = new cognito.UserPool(this, 'UserPool', {
-      userPoolName: `${prefix}-users`,
-      selfSignUpEnabled: false,
-      signInAliases: { email: true },
-      autoVerify: { email: true },
-      passwordPolicy: {
-        minLength: 12,
-        requireLowercase: true,
-        requireUppercase: true,
-        requireDigits: true,
-        requireSymbols: true,
-      },
-      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
-
-    const userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
-      userPool: this.userPool,
-      authFlows: {
-        userPassword: true,
-        userSrp: true,
-      },
-      generateSecret: false,
-    });
-
-    // Create Cognito domain for OAuth2 endpoints
-  const _userPoolDomain = new cognito.UserPoolDomain(this, 'UserPoolDomain', {
-      userPool: this.userPool,
-      cognitoDomain: {
-        domainPrefix: prefix,
-      },
-    });
-
-    // Create a resource server for OAuth2 scopes
-    const resourceServer = new cognito.UserPoolResourceServer(this, 'ResourceServer', {
-      userPool: this.userPool,
-      identifier: 'scheduler',
-      scopes: [
-        {
-          scopeName: 'admin',
-          scopeDescription: 'Full admin access to scheduler API',
-        },
-      ],
-    });
-
-    // Create a service-to-service app client with client credentials flow
-    const serviceClient = new cognito.UserPoolClient(this, 'ServiceClient', {
-      userPool: this.userPool,
-      userPoolClientName: `${prefix}-service-client`,
-      authFlows: {
-        userPassword: false,
-        userSrp: false,
-      },
-      generateSecret: true, // Required for client credentials flow
-      oAuth: {
-        flows: {
-          clientCredentials: true, // Enable machine-to-machine auth
-        },
-        scopes: [cognito.OAuthScope.resourceServer(resourceServer, {
-          scopeName: 'admin',
-          scopeDescription: 'Full admin access to scheduler API',
-        })],
-      },
-    });
-
-    // Store service client credentials in Secrets Manager (API URL will be added later)
-    const serviceClientSecret = new secretsmanager.Secret(this, 'ServiceClientSecret', {
-      secretName: `${prefix}-service-credentials`,
-      description: 'Credentials for service-to-service authentication',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({
-          userPoolId: this.userPool.userPoolId,
-          clientId: serviceClient.userPoolClientId,
-        }),
-        generateStringKey: 'clientSecret',
-        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
-      },
-    });
+    // ==================== IAM SigV4 Authentication (No Cognito) ====================
+    // This microservice uses IAM SigV4 authentication instead of Cognito.
+    // The main Postolio application authenticates using AWS IAM roles/credentials.
 
     // ==================== DynamoDB Tables with PITR ====================
     
@@ -473,6 +395,22 @@ export class ContentSchedulerStack extends cdk.Stack {
     scheduleManagementLambda.addEnvironment('PUBLISHER_LAMBDA_ARN', publisherLambda.functionArn);
     scheduleManagementLambda.addEnvironment('SCHEDULER_ROLE_ARN', schedulerRole.roleArn);
 
+    // ==================== API Gateway CloudWatch Logging Role ====================
+    
+    // Create IAM role for API Gateway CloudWatch logging (account-level setting)
+    const apiGatewayCloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs'),
+      ],
+      description: 'Role for API Gateway to write logs to CloudWatch',
+    });
+
+    // Configure account-level CloudWatch logging for API Gateway
+    const cfnAccount = new apigateway.CfnAccount(this, 'ApiGatewayAccount', {
+      cloudWatchRoleArn: apiGatewayCloudWatchRole.roleArn,
+    });
+
     // ==================== API Gateway with Request Validation ====================
     
     this.api = new apigateway.RestApi(this, 'SchedulerApi', {
@@ -514,6 +452,9 @@ export class ContentSchedulerStack extends cdk.Stack {
         allowHeaders: ['Content-Type', 'Authorization'],
       },
     });
+
+    // Ensure API deployment happens after account configuration
+    this.api.node.addDependency(cfnAccount);
 
     // NO AUTHORIZER NEEDED - Using IAM SigV4 authentication
     // This provides secure service-to-service authentication using AWS credentials
@@ -757,17 +698,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       exportName: `${prefix}-api-arn`,
     });
 
-    new cdk.CfnOutput(this, 'UserPoolId', {
-      value: this.userPool.userPoolId,
-      description: 'Cognito User Pool ID',
-      exportName: `${prefix}-user-pool-id`,
-    });
-
-    new cdk.CfnOutput(this, 'UserPoolClientId', {
-      value: userPoolClient.userPoolClientId,
-      description: 'Cognito User Pool Client ID',
-      exportName: `${prefix}-user-pool-client-id`,
-    });
+    // Cognito outputs removed - using IAM SigV4 authentication
 
     new cdk.CfnOutput(this, 'SchedulesTableName', {
       value: this.schedulesTable.tableName,
@@ -781,10 +712,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       exportName: `${prefix}-video-bucket`,
     });
 
-    new cdk.CfnOutput(this, 'ServiceClientSecretArn', {
-      value: serviceClientSecret.secretArn,
-      description: 'ARN of the service client credentials secret',
-      exportName: `${prefix}-service-secret-arn`,
-    });
+    // Service client secret removed - using IAM SigV4 authentication
   }
 }
