@@ -3,6 +3,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { verifyJWT } from '../services/jwt.js'
 import { analyticsService } from '../services/analytics.js'
 import { schedulerService } from '../services/scheduler.js'
+import { schedulerAdapter } from '../services/scheduler-adapter.js'
 
 import { getDatabaseClient } from '../config/database.js'
 
@@ -136,9 +137,9 @@ const analytics: FastifyPluginAsync = async function (fastify) {
       const user = authenticateRequest(request, reply)
       if (!user) return
 
-      const { contentId, scheduledTime } = request.body as {
+      const { contentId, customTime } = request.body as {
         contentId: string
-        scheduledTime?: string
+        customTime?: string
       }
 
       if (!contentId) {
@@ -165,13 +166,14 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({ error: 'Content must be in draft status before scheduling' })
       }
 
-      const customTime = scheduledTime ? new Date(scheduledTime) : undefined
-      const result = await schedulerService.scheduleContent(contentId, customTime)
+      const customTimeDate = customTime ? new Date(customTime) : undefined
+      const result = await schedulerAdapter.scheduleContent(contentId, customTimeDate, user.id)
       
       if (result.success) {
         reply.send({ 
           success: true,
-          scheduledPost: result.scheduledPost
+          scheduleId: result.scheduleId,
+          brandId: result.brandId
         })
       } else {
         reply.status(400).send({ 

@@ -46,7 +46,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
   })
 
   // WebSocket route handler
-  fastify.get('/ws', { websocket: true }, (connection, req: FastifyRequest) => {
+  fastify.get('/ws', { websocket: true }, (connection, _req: FastifyRequest) => {
     const socket = connection as AuthenticatedSocket
     socket.isAlive = true
 
@@ -104,7 +104,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
   // Start heartbeat monitoring
   if (!heartbeatInterval) {
     heartbeatInterval = setInterval(() => {
-      connections.forEach((sockets, room) => {
+      connections.forEach((sockets, _room) => {
         sockets.forEach(socket => {
           if (socket.isAlive === false) {
             cleanupSocket(socket)
@@ -242,7 +242,7 @@ function handleSubscribe(socket: AuthenticatedSocket, message: WebSocketMessage)
   }))
 }
 
-function handleUnsubscribe(socket: AuthenticatedSocket, message: WebSocketMessage) {
+function handleUnsubscribe(socket: AuthenticatedSocket, _message: WebSocketMessage) {
   if (socket.brandId) {
     const room = `brand:${socket.brandId}`
     connections.get(room)?.delete(socket)

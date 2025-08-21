@@ -1,148 +1,84 @@
 import React from 'react'
-import { Wifi, WifiOff, AlertCircle, Loader2 } from 'lucide-react'
+import { AlertCircle, Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import type { ConnectionStatus as ConnectionStatusType } from '../types/websocket'
 import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket'
 
 interface ConnectionStatusProps {
-  status: ConnectionStatusType
-  lastUpdate: Date | null
+  status?: ConnectionStatusType
+  lastUpdate?: Date | null
   onReconnect?: () => void
   className?: string
   compact?: boolean
   queueSize?: number
+  retryCount?: number
+  retryIn?: number
 }
 
 export function ConnectionStatus({
   status,
-  lastUpdate,
   onReconnect,
   className,
-  compact = false,
-  queueSize = 0
+  queueSize = 0,
+  retryCount = 0,
+  retryIn = 0
 }: ConnectionStatusProps) {
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'connecting':
-        return <Loader2 className="h-4 w-4 animate-spin" />
-      case 'connected':
-        return <Wifi className="h-4 w-4" />
-      case 'disconnected':
-        return <WifiOff className="h-4 w-4" />
-      case 'error':
-        return <AlertCircle className="h-4 w-4" />
-    }
-  }
-
-  const getStatusColor = () => {
-    switch (status) {
-      case 'connecting':
-        return 'text-yellow-600 bg-yellow-50 border-yellow-200'
-      case 'connected':
-        return 'text-green-600 bg-green-50 border-green-200'
-      case 'disconnected':
-        return 'text-gray-600 bg-gray-50 border-gray-200'
-      case 'error':
-        return 'text-red-600 bg-red-50 border-red-200'
-    }
-  }
-
-  const getStatusText = () => {
-    switch (status) {
-      case 'connecting':
-        return 'Connecting...'
-      case 'connected':
-        return 'Live updates active'
-      case 'disconnected':
-        return 'Offline'
-      case 'error':
-        return 'Connection error'
-    }
-  }
-
-  const formatLastUpdate = () => {
-    if (!lastUpdate) return null
-    
-    const now = new Date()
-    const diff = now.getTime() - lastUpdate.getTime()
-    
-    if (diff < 60000) {
-      return 'Just now'
-    } else if (diff < 3600000) {
-      const minutes = Math.floor(diff / 60000)
-      return `${minutes}m ago`
-    } else if (diff < 86400000) {
-      const hours = Math.floor(diff / 3600000)
-      return `${hours}h ago`
-    } else {
-      return lastUpdate.toLocaleDateString()
-    }
-  }
-
-  if (compact) {
-    // Compact mode - just an icon with tooltip
+  // Enhanced connection status following the SCHEDULING_STATUS_PLAN.md specification
+  if (status === 'connected') {
     return (
-      <div
-        className={cn(
-          'inline-flex items-center justify-center p-1.5 rounded-full transition-colors',
-          getStatusColor(),
-          className
-        )}
-        title={`${getStatusText()}${lastUpdate ? ` • Last update: ${formatLastUpdate()}` : ''}`}
-      >
-        {getStatusIcon()}
+      <div className={cn(
+        "fixed top-4 right-4 flex items-center gap-2 text-sm",
+        className
+      )}>
+        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+        <span className="text-gray-600">Live</span>
       </div>
     )
   }
-
+  
   return (
-    <div
-      className={cn(
-        'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm border transition-colors',
-        getStatusColor(),
-        className
+    <div className={cn(
+      "fixed top-4 right-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3",
+      className
+    )}>
+      <div className="flex items-center gap-2">
+        {status === 'connecting' ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin text-yellow-600" />
+            <span className="text-sm text-yellow-800">
+              Reconnecting... ({retryCount}/3)
+            </span>
+          </>
+        ) : (
+          <>
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            <span className="text-sm text-red-800">Connection lost</span>
+            {onReconnect && (
+              <button 
+                onClick={onReconnect}
+                className="ml-2 text-xs bg-red-100 px-2 py-1 rounded hover:bg-red-200 transition-colors"
+              >
+                Reconnect
+              </button>
+            )}
+          </>
+        )}
+      </div>
+      {retryIn > 0 && (
+        <div className="text-xs text-gray-600 mt-1">
+          Next retry in {Math.ceil(retryIn / 1000)}s
+        </div>
       )}
-    >
-      {getStatusIcon()}
-      
-      <span className="font-medium">
-        {getStatusText()}
-      </span>
-      
-      {lastUpdate && status === 'connected' && (
-        <span className="text-xs opacity-75">
-          • {formatLastUpdate()}
-        </span>
-      )}
-      
       {queueSize > 0 && (
-        <span className="text-xs opacity-75">
-          • {queueSize} queued
-        </span>
-      )}
-      
-      {status === 'disconnected' && onReconnect && (
-        <button
-          onClick={onReconnect}
-          className="ml-1 text-xs underline hover:no-underline"
-        >
-          Reconnect
-        </button>
-      )}
-      
-      {status === 'error' && onReconnect && (
-        <button
-          onClick={onReconnect}
-          className="ml-1 text-xs underline hover:no-underline"
-        >
-          Retry
-        </button>
+        <div className="text-xs text-gray-600 mt-1">
+          {queueSize} action{queueSize !== 1 ? 's' : ''} queued for when reconnected
+        </div>
       )}
     </div>
   )
 }
 
-// Optional: Export a hook that combines useSchedulingWebSocket with ConnectionStatus
+// Enhanced hook that provides all connection status data
 export function useConnectionStatus() {
   const [mounted, setMounted] = React.useState(false)
   
@@ -159,7 +95,9 @@ export function useConnectionStatus() {
       connectionStatus: 'disconnected' as ConnectionStatusType,
       lastUpdate: null,
       reconnect: () => {},
-      queueSize: 0
+      queueSize: 0,
+      retryCount: 0,
+      retryIn: 0
     }
   }
   
@@ -167,6 +105,32 @@ export function useConnectionStatus() {
     connectionStatus: hookResult.connectionStatus,
     lastUpdate: hookResult.lastUpdate,
     reconnect: hookResult.reconnect,
-    queueSize: hookResult.queueSize
+    queueSize: hookResult.queueSize,
+    retryCount: hookResult.retryCount || 0,
+    retryIn: hookResult.retryIn || 0
   }
+}
+
+// Component that uses the hook automatically
+export function AutoConnectionStatus({ className }: { className?: string }) {
+  const {
+    connectionStatus,
+    lastUpdate,
+    reconnect,
+    queueSize,
+    retryCount,
+    retryIn
+  } = useConnectionStatus()
+  
+  return (
+    <ConnectionStatus
+      status={connectionStatus}
+      lastUpdate={lastUpdate}
+      onReconnect={reconnect}
+      queueSize={queueSize}
+      retryCount={retryCount}
+      retryIn={retryIn}
+      className={className}
+    />
+  )
 }

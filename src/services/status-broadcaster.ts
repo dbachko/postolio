@@ -78,7 +78,7 @@ export class StatusBroadcaster {
         'COUNT', limit.toString()
       )
 
-      return events.map(([id, fields]) => {
+      return events.map(([_id, fields]) => {
         const data = this.parseStreamFields(fields)
         return {
           type: 'status_change' as const,
@@ -169,8 +169,8 @@ export class StatusBroadcaster {
 
       try {
         await pipeline.exec()
-      } catch (error) {
-        this.fastify.log.error({ error, brandId }, 'Failed to store batch events')
+      } catch (_error) {
+        this.fastify.log.error({ error: _error, brandId }, 'Failed to store batch events')
       }
 
       // Broadcast batch update to WebSocket clients

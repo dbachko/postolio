@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useBrandStore } from '../stores/brandStore'
 import { useQueryClient } from '@tanstack/react-query'
 import { useOfflineQueue } from './useOfflineQueue'
+import { toast } from 'sonner'
 import type {
   ConnectionStatus,
   StatusUpdateEvent,
@@ -30,6 +31,7 @@ export function useSchedulingWebSocket({
   
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected')
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [retryIn, setRetryIn] = useState<number>(0)
   
   const getToken = useAuthStore(state => state.getToken)
   const token = getToken()
@@ -94,6 +96,30 @@ export function useSchedulingWebSocket({
     if (event.type === 'status_update' && 'contentId' in event.data) {
       const contentId = event.data.contentId
       const newStatus = event.data.newStatus
+      const metadata = event.data.metadata
+      
+      // Show toast notifications for important status changes
+      if (newStatus === 'published') {
+        toast.success('Content published successfully!', {
+          description: 'Your content is now live on Instagram',
+          duration: 5000,
+        })
+      } else if (newStatus === 'failed') {
+        toast.error('Publishing failed', {
+          description: metadata?.error || 'Content could not be published to Instagram',
+          duration: 8000,
+        })
+      } else if (newStatus === 'scheduled' && !metadata?.isOptimistic) {
+        toast.success('Content scheduled!', {
+          description: 'Your content has been scheduled for posting',
+          duration: 3000,
+        })
+      } else if (newStatus === 'draft' && metadata?.isRollback) {
+        toast.warning('Scheduling failed', {
+          description: metadata?.error || 'Content has been returned to draft status',
+          duration: 5000,
+        })
+      }
       
       // Update content in cache
       queryClient.setQueriesData(
@@ -179,17 +205,13 @@ export function useSchedulingWebSocket({
         console.log('WebSocket connected')
         handleConnectionChange('connected')
         reconnectAttemptsRef.current = 0
+        setRetryIn(0) // Clear retry countdown
 
-        // Authenticate
+        // Authenticate and subscribe to brand room
         ws.send(JSON.stringify({
           type: 'auth',
-          token
-        }))
-
-        // Subscribe to brand room
-        ws.send(JSON.stringify({
-          type: 'subscribe',
-          room: `brand:${selectedBrand.id}`
+          token,
+          brandId: selectedBrand.id
         }))
 
         // Start heartbeat
@@ -262,7 +284,23 @@ export function useSchedulingWebSocket({
           
           console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`)
           
+          // Set retry countdown
+          setRetryIn(delay)
+          
+          // Countdown timer
+          const countdownInterval = setInterval(() => {
+            setRetryIn(prev => {
+              if (prev <= 100) {
+                clearInterval(countdownInterval)
+                return 0
+              }
+              return prev - 100
+            })
+          }, 100)
+          
           reconnectTimeoutRef.current = setTimeout(() => {
+            clearInterval(countdownInterval)
+            setRetryIn(0)
             connect()
           }, delay)
         } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
@@ -278,7 +316,7 @@ export function useSchedulingWebSocket({
         new ConnectionError('Failed to create WebSocket connection')
       handleWebSocketError(connectionError)
     }
-  }, [token, selectedBrand?.id, enabled, handleStatusUpdate, calculateReconnectDelay, maxReconnectAttempts, heartbeatInterval, handleConnectionChange, handleWebSocketError, offlineQueue, messageFilter])
+  }, [token, selectedBrand?.id, enabled, handleStatusUpdate, calculateReconnectDelay, maxReconnectAttempts, heartbeatInterval, handleConnectionChange, handleWebSocketError, messageFilter])
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
@@ -316,19 +354,36 @@ export function useSchedulingWebSocket({
         clearInterval(heartbeatIntervalRef.current)
       }
       // Close WebSocket connection
-      disconnect()
+      if (wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
+      }
+      setConnectionStatus('disconnected')
     }
-  }, [enabled, token, selectedBrand?.id]) // Removed connect/disconnect to avoid circular dependency
+  }, [enabled, token, selectedBrand?.id, connect, disconnect])
 
   // Manual reconnect function (stable reference using react-use-websocket pattern)
   const reconnect = useCallback(() => {
+    // Prevent race conditions by clearing any pending reconnect
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = undefined
+    }
+    
+    // Reset state
     reconnectAttemptsRef.current = 0
+    setRetryIn(0)
+    
+    // Disconnect cleanly
     disconnect()
-    // Use requestAnimationFrame for better timing (react-use pattern)
-    requestAnimationFrame(() => {
-      setTimeout(connect, 100)
-    })
-  }, [connect, disconnect])
+    
+    // Reconnect after a short delay to ensure clean state
+    setTimeout(() => {
+      if (enabled && token && selectedBrand) {
+        connect()
+      }
+    }, 100)
+  }, [connect, disconnect, enabled, token, selectedBrand])
 
   // Helper function to queue action when offline
   const queueAction = useCallback((type: 'schedule' | 'reschedule' | 'cancel', payload: any) => {
@@ -345,6 +400,8 @@ export function useSchedulingWebSocket({
     disconnect,
     queueAction,
     queueSize: offlineQueue.getQueueSize(),
-    clearQueue: offlineQueue.clearQueue
+    clearQueue: offlineQueue.clearQueue,
+    retryCount: reconnectAttemptsRef.current,
+    retryIn
   }
 }

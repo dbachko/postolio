@@ -5,7 +5,9 @@ import { apiClient, type Content } from '../lib/api'
 import { OptimizedImage } from './OptimizedImage'
 import { formatInUserTimezone } from '../lib/timezone'
 import { useTimezone } from '../contexts/TimezoneContext'
-import { Loader2 } from 'lucide-react'
+import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket'
+import { StatusBadge } from './StatusBadge'
+import { Loader2, AlertTriangle } from 'lucide-react'
 
 interface ContentCardProps {
   content: Content
@@ -17,9 +19,11 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
   const [publishError, setPublishError] = useState<string | null>(null)
   const [localStatus, setLocalStatus] = useState(content.status)
   const [isTransitioning, setIsTransitioning] = useState(false)
+  const [isScheduling, setIsScheduling] = useState(false)
   const queryClient = useQueryClient()
   const { timezone } = useTimezone()
   const navigate = useNavigate()
+  const { connectionStatus } = useSchedulingWebSocket()
 
   // Update local status when content prop changes (from real-time updates)
   useEffect(() => {
@@ -48,14 +52,40 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
     },
   })
 
+  const scheduleMutation = useMutation({
+    mutationFn: (contentId: string) => apiClient.scheduleContent(contentId),
+    onMutate: () => {
+      setIsScheduling(true)
+    },
+    onSuccess: () => {
+      setIsScheduling(false)
+      queryClient.invalidateQueries({ queryKey: ['content', 'scheduled', brandId] })
+      queryClient.invalidateQueries({ queryKey: ['content', 'pending', brandId] })
+    },
+    onError: (error: Error) => {
+      setIsScheduling(false)
+      const errorMessage = error?.message || 'Failed to schedule content. Please try again.'
+      setPublishError(errorMessage)
+    },
+  })
+
   const handlePublish = () => {
     setPublishError(null)
     publishMutation.mutate(content.id)
   }
 
+  const handleSchedule = () => {
+    setPublishError(null)
+    scheduleMutation.mutate(content.id)
+  }
+
+  const isConnected = connectionStatus === 'connected'
+
   return (
     <div 
-      className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+      className={`bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-all ${
+        !isConnected ? 'opacity-75' : ''
+      }`}
       onClick={() => navigate(`/posts/${content.id}`)}
     >
       {content.cdnImageUrl && (
@@ -72,6 +102,14 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
       )}
       
       <div className="p-4">
+        {/* Stale data indicator */}
+        {!isConnected && content.status === 'scheduled' && (
+          <div className="flex items-center gap-2 text-xs text-yellow-600 mb-2 p-2 bg-yellow-50 rounded">
+            <AlertTriangle className="w-4 h-4" />
+            <span>Status may not be current - connection lost</span>
+          </div>
+        )}
+        
         <div className="mb-3">
           <p className="text-gray-900 text-sm leading-relaxed">
             {content.caption}
@@ -93,29 +131,17 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-500 ${
-                isTransitioning ? 'scale-110 ring-2 ring-offset-2' : ''
-              } ${
-                localStatus === 'draft'
-                  ? 'bg-gray-100 text-gray-800'
-                  : localStatus === 'scheduled'
-                  ? 'bg-blue-100 text-blue-800 ring-blue-400'
-                  : localStatus === 'published'
-                  ? 'bg-green-100 text-green-800 ring-green-400'
-                  : localStatus === 'failed'
-                  ? 'bg-red-100 text-red-800 ring-red-400'
-                  : localStatus === 'skipped'
-                  ? 'bg-yellow-100 text-yellow-800 ring-yellow-400'
-                  : 'bg-gray-100 text-gray-800'
+            <StatusBadge 
+              status={localStatus}
+              isLoading={isScheduling || isOptimistic}
+              retryCount={0}
+              className={`transition-all duration-500 ${
+                isTransitioning ? 'scale-110 ring-2 ring-offset-2 ring-blue-400' : ''
               }`}
-            >
-              {localStatus.charAt(0).toUpperCase() + localStatus.slice(1)}
-            </span>
+            />
             
             {isOptimistic && (
               <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Loader2 className="w-3 h-3 animate-spin" />
                 <span>Updating...</span>
               </div>
             )}
@@ -128,16 +154,33 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
           </div>
 
 
-          {(content.status === 'draft' || content.status === 'scheduled') && (
+          {content.status === 'draft' && (
             <div className="flex flex-col space-y-2">
               <div className="flex space-x-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleSchedule()
+                  }}
+                  className="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={isScheduling || !isConnected}
+                >
+                  {isScheduling ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Scheduling...
+                    </>
+                  ) : (
+                    'Schedule'
+                  )}
+                </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
                     handlePublish()
                   }}
                   className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded text-sm hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  disabled={publishMutation.isPending}
+                  disabled={publishMutation.isPending || !isConnected}
                 >
                   {publishMutation.isPending ? (
                     <>
@@ -151,11 +194,16 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
                         <path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/>
                         <circle cx="17.5" cy="6.5" r="1"/>
                       </svg>
-                      Publish to Instagram
+                      Publish Now
                     </>
                   )}
                 </button>
               </div>
+              {!isConnected && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
+                  <p className="text-xs text-yellow-800">Actions disabled - waiting for connection</p>
+                </div>
+              )}
               {publishError && (
                 <div className="bg-red-50 border border-red-200 rounded p-2">
                   <p className="text-xs text-red-800">{publishError}</p>
