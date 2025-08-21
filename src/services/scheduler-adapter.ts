@@ -8,12 +8,14 @@ import { ContentSchedulerClient, ContentSchedulerConfig } from '../clients/conte
 import { SCHEDULER_TIME_INTERVALS, SYNC_TOLERANCE } from '../constants/scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
 import { TimezoneService } from './timezone.js';
+import type { StatusBroadcaster } from './status-broadcaster.js';
 
 const prisma = getDatabaseClient();
 
 export class SchedulerAdapter {
-  private client: ContentSchedulerClient;
+  public client: ContentSchedulerClient; // Made public for testing
   private static instance: SchedulerAdapter | null = null;
+  private broadcaster: StatusBroadcaster | null = null;
 
   constructor(config?: Partial<ContentSchedulerConfig>) {
     // Initialize with environment config
@@ -23,6 +25,13 @@ export class SchedulerAdapter {
       maxRetries: 3,
       ...config,
     });
+  }
+
+  /**
+   * Set the status broadcaster for real-time updates
+   */
+  setBroadcaster(broadcaster: StatusBroadcaster): void {
+    this.broadcaster = broadcaster;
   }
 
   /**
@@ -80,7 +89,18 @@ export class SchedulerAdapter {
         scheduledTimeUTC = TimezoneService.toUTC(defaultTimeLocal, brandTimezone);
       }
 
-      // 4. Create schedule in AWS microservice (AWS expects UTC time)
+      // 4. Broadcast optimistic update (before actual scheduling)
+      if (this.broadcaster) {
+        await this.broadcaster.broadcastStatusChange(
+          content.id,
+          content.brandId,
+          content.status as ContentStatus,
+          'scheduled',
+          { isOptimistic: true }
+        );
+      }
+
+      // 5. Create schedule in AWS microservice (AWS expects UTC time)
       try {
         // Prepare media URLs array (Lambda supports multiple images for carousels)
         const mediaUrls: string[] = [];
@@ -126,6 +146,21 @@ export class SchedulerAdapter {
         const localTimeDisplay = TimezoneService.formatWithTimezone(scheduledTimeUTC, brandTimezone);
         console.log(`Content ${contentId} scheduled successfully for ${localTimeDisplay}`);
         
+        // 6. Broadcast confirmation
+        if (this.broadcaster) {
+          await this.broadcaster.broadcastStatusChange(
+            content.id,
+            content.brandId,
+            content.status as ContentStatus,
+            'scheduled',
+            { 
+              scheduleId: schedule.scheduleId,
+              scheduledAt: scheduledTimeUTC.toISOString(),
+              timezone: brandTimezone
+            }
+          );
+        }
+        
         return { success: true, scheduleId: schedule.scheduleId, brandId: content.brandId };
       } catch (schedulerError) {
         console.error('Failed to create schedule in AWS:', schedulerError);
@@ -137,6 +172,20 @@ export class SchedulerAdapter {
             schedulingError: `AWS Scheduler error: ${schedulerError instanceof Error ? schedulerError.message : 'Unknown error'}`,
           },
         });
+        
+        // 7. Rollback optimistic update on failure
+        if (this.broadcaster) {
+          await this.broadcaster.broadcastStatusChange(
+            content.id,
+            content.brandId,
+            'scheduled',
+            content.status as ContentStatus,
+            { 
+              error: schedulerError instanceof Error ? schedulerError.message : 'Unknown error',
+              isRollback: true
+            }
+          );
+        }
         
         return { 
           success: false, 

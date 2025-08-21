@@ -1,21 +1,40 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { apiClient, type Content } from '../lib/api'
 import { OptimizedImage } from './OptimizedImage'
 import { formatInUserTimezone } from '../lib/timezone'
 import { useTimezone } from '../contexts/TimezoneContext'
+import { Loader2 } from 'lucide-react'
 
 interface ContentCardProps {
   content: Content
   brandId: string
+  isOptimistic?: boolean
 }
 
-export function ContentCard({ content, brandId }: ContentCardProps) {
+export function ContentCard({ content, brandId, isOptimistic = false }: ContentCardProps) {
   const [publishError, setPublishError] = useState<string | null>(null)
+  const [localStatus, setLocalStatus] = useState(content.status)
+  const [isTransitioning, setIsTransitioning] = useState(false)
   const queryClient = useQueryClient()
   const { timezone } = useTimezone()
   const navigate = useNavigate()
+
+  // Update local status when content prop changes (from real-time updates)
+  useEffect(() => {
+    if (content.status !== localStatus) {
+      setIsTransitioning(true)
+      setLocalStatus(content.status)
+      
+      // Remove transition effect after animation
+      const timer = setTimeout(() => {
+        setIsTransitioning(false)
+      }, 500)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [content.status])
 
   const publishMutation = useMutation({
     mutationFn: (contentId: string) => apiClient.publishToInstagram(contentId),
@@ -73,23 +92,40 @@ export function ContentCard({ content, brandId }: ContentCardProps) {
         </div>
 
         <div className="flex items-center justify-between">
-          <span
-            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              content.status === 'draft'
-                ? 'bg-gray-100 text-gray-800'
-                : content.status === 'scheduled'
-                ? 'bg-blue-100 text-blue-800'
-                : content.status === 'published'
-                ? 'bg-green-100 text-green-800'
-                : content.status === 'failed'
-                ? 'bg-red-100 text-red-800'
-                : content.status === 'skipped'
-                ? 'bg-yellow-100 text-yellow-800'
-                : 'bg-gray-100 text-gray-800'
-            }`}
-          >
-            {content.status.charAt(0).toUpperCase() + content.status.slice(1)}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-500 ${
+                isTransitioning ? 'scale-110 ring-2 ring-offset-2' : ''
+              } ${
+                localStatus === 'draft'
+                  ? 'bg-gray-100 text-gray-800'
+                  : localStatus === 'scheduled'
+                  ? 'bg-blue-100 text-blue-800 ring-blue-400'
+                  : localStatus === 'published'
+                  ? 'bg-green-100 text-green-800 ring-green-400'
+                  : localStatus === 'failed'
+                  ? 'bg-red-100 text-red-800 ring-red-400'
+                  : localStatus === 'skipped'
+                  ? 'bg-yellow-100 text-yellow-800 ring-yellow-400'
+                  : 'bg-gray-100 text-gray-800'
+              }`}
+            >
+              {localStatus.charAt(0).toUpperCase() + localStatus.slice(1)}
+            </span>
+            
+            {isOptimistic && (
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Updating...</span>
+              </div>
+            )}
+            
+            {isTransitioning && !isOptimistic && (
+              <span className="text-xs text-green-600 font-medium animate-pulse">
+                Updated
+              </span>
+            )}
+          </div>
 
 
           {(content.status === 'draft' || content.status === 'scheduled') && (
