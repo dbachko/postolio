@@ -184,6 +184,7 @@ export class ContentSchedulerClient {
     });
 
     // Pre-signing request interceptor: clean headers & canonicalize URL path
+    // (Must run BEFORE we add headers and BEFORE SigV4 signing)
     this.client.interceptors.request.use((req) => {
       if (req.headers) {
         // Remove any stale Authorization header to prevent signature conflicts
@@ -211,7 +212,14 @@ export class ContentSchedulerClient {
       return req;
     });
 
-    // Add AWS SigV4 signing interceptor AFTER cleanup interceptor
+    // Add custom request/response interceptors for logging + header enrichment
+    // IMPORTANT: These MUST be registered BEFORE the SigV4 interceptor so that
+    // all added headers (trace IDs, request IDs, user context) are included in
+    // the canonical request that is signed. Previously the signing interceptor
+    // ran earlier causing signature mismatches and API Gateway 403 (Missing Authentication Token).
+    this.setupInterceptors();
+
+    // Finally add AWS SigV4 signing interceptor LAST to sign the fully-prepared request
     const sigv4Interceptor = aws4Interceptor({
       options: {
         region: inferredRegion,
@@ -220,9 +228,6 @@ export class ContentSchedulerClient {
       // Default credential provider chain (ECS task role / environment / shared config)
     });
     this.client.interceptors.request.use(sigv4Interceptor);
-
-    // Add custom request/response interceptors for logging and request IDs
-    this.setupInterceptors();
 
     // Initialize circuit breaker
     this.circuitBreaker = new CircuitBreaker(
@@ -603,6 +608,12 @@ export class ContentSchedulerClient {
         this.log('warn', 'scheduler.http.forbidden', {
           status,
           data,
+          baseURL: this.config.baseURL,
+          fullUrl: this.composeFullUrl(this.config.baseURL, error.config?.url || ''),
+          region: this.region,
+          hint: data && (data as any).message === 'Missing Authentication Token'
+            ? 'Check that the request path preserves the API stage (e.g. /dev). Leading slashes on axios request URLs can strip the stage.'
+            : undefined,
         });
       }
       return new SchedulerError('Forbidden', 'FORBIDDEN', 403);

@@ -75,7 +75,7 @@ export class ContentSchedulerStack extends cdk.Stack {
     });
 
     // Create Cognito domain for OAuth2 endpoints
-    const userPoolDomain = new cognito.UserPoolDomain(this, 'UserPoolDomain', {
+  const _userPoolDomain = new cognito.UserPoolDomain(this, 'UserPoolDomain', {
       userPool: this.userPool,
       cognitoDomain: {
         domainPrefix: prefix,
@@ -465,7 +465,7 @@ export class ContentSchedulerStack extends cdk.Stack {
     publisherLambda.grantInvoke(schedulerRole);
 
     // Create scheduler group
-    const schedulerGroup = new scheduler.CfnScheduleGroup(this, 'SchedulerGroup', {
+  const _schedulerGroup = new scheduler.CfnScheduleGroup(this, 'SchedulerGroup', {
       name: `${prefix}-schedules`,
     });
 
@@ -481,9 +481,30 @@ export class ContentSchedulerStack extends cdk.Stack {
       deployOptions: {
         stageName: environment,
         tracingEnabled: true,
-        // Disable logging to avoid CloudWatch Logs role issue
-        loggingLevel: apigateway.MethodLoggingLevel.OFF,
+        // Enable INFO level execution logging & access logs for 403 diagnostics
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
         metricsEnabled: true,
+        accessLogDestination: new apigateway.LogGroupLogDestination(new logs.LogGroup(this, 'SchedulerApiAccessLogs', {
+          logGroupName: `/aws/apigateway/${prefix}-api-access`,
+          retention: logs.RetentionDays.ONE_WEEK,
+          removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+        })),
+        accessLogFormat: apigateway.AccessLogFormat.custom(JSON.stringify({
+          requestId: '$context.requestId',
+          ip: '$context.identity.sourceIp',
+          requestTime: '$context.requestTime',
+          httpMethod: '$context.httpMethod',
+          resourcePath: '$context.resourcePath',
+          path: '$context.path',
+          status: '$context.status',
+          protocol: '$context.protocol',
+          integrationStatus: '$context.integrationStatus',
+          errorMessage: '$context.error.message',
+          responseLength: '$context.responseLength',
+          userAgent: '$context.identity.userAgent',
+          caller: '$context.identity.caller',
+          user: '$context.identity.user'
+        })),
         throttlingBurstLimit: 1000,
         throttlingRateLimit: 500,
       },
