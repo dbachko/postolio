@@ -89,6 +89,13 @@ jobs:
         working-directory: aws-infrastructure
         run: npm ci
 
+      - name: Install PowerTools layer dependencies
+        working-directory: aws-infrastructure/lib/layers/powertools/nodejs
+        run: |
+          echo "Installing PowerTools layer dependencies..."
+          npm ci || npm install
+          echo "PowerTools layer dependencies installed"
+
       - name: TypeScript compilation check
         working-directory: aws-infrastructure
         run: npx tsc --noEmit
@@ -162,6 +169,13 @@ jobs:
       - name: Install dependencies
         working-directory: aws-infrastructure
         run: npm ci
+
+      - name: Install PowerTools layer dependencies
+        working-directory: aws-infrastructure/lib/layers/powertools/nodejs
+        run: |
+          echo "Installing PowerTools layer dependencies..."
+          npm ci || npm install
+          echo "PowerTools layer dependencies installed"
 
       - name: Install AWS CDK
         run: npm install -g aws-cdk
@@ -246,6 +260,13 @@ jobs:
         working-directory: aws-infrastructure
         run: npm ci
 
+      - name: Install PowerTools layer dependencies
+        working-directory: aws-infrastructure/lib/layers/powertools/nodejs
+        run: |
+          echo "Installing PowerTools layer dependencies..."
+          npm ci || npm install
+          echo "PowerTools layer dependencies installed"
+
       - name: Install AWS CDK
         run: npm install -g aws-cdk
 
@@ -300,6 +321,13 @@ jobs:
       - name: Install dependencies
         working-directory: aws-infrastructure
         run: npm ci
+
+      - name: Install PowerTools layer dependencies
+        working-directory: aws-infrastructure/lib/layers/powertools/nodejs
+        run: |
+          echo "Installing PowerTools layer dependencies..."
+          npm ci || npm install
+          echo "PowerTools layer dependencies installed"
 
       - name: Install AWS CDK
         run: npm install -g aws-cdk

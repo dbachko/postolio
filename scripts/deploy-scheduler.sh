@@ -49,6 +49,21 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
+# Install PowerTools layer dependencies
+POWERTOOLS_DIR="lib/layers/powertools/nodejs"
+if [ -d "$POWERTOOLS_DIR" ]; then
+    echo -e "${YELLOW}Installing PowerTools layer dependencies...${NC}"
+    cd "$POWERTOOLS_DIR"
+    if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ]; then
+        npm install
+        echo -e "${GREEN}✓ PowerTools layer dependencies installed${NC}"
+    else
+        npm ci
+        echo -e "${GREEN}✓ PowerTools layer dependencies updated${NC}"
+    fi
+    cd - > /dev/null
+fi
+
 # Bootstrap CDK if needed using dedicated check script
 echo -e "${YELLOW}Checking CDK bootstrap status...${NC}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
