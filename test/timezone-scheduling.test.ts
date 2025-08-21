@@ -1,17 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { TimezoneService } from '../src/services/timezone.js';
-
-// Recreate the function locally to test timezone behavior
-function formatEventBridgeScheduleTime(dateInput: string | Date): string {
-  const date = new Date(dateInput);
-  if (isNaN(date.getTime())) {
-    throw new Error(`Invalid date input: ${dateInput}`);
-  }
-  
-  // Convert to ISO string and remove milliseconds and timezone
-  return date.toISOString().split('.')[0];
-}
+import { formatEventBridgeScheduleTime } from '../src/constants/scheduler.js';
 
 describe('Timezone-Aware Scheduling', () => {
   test('should preserve timezone context through the scheduling pipeline', () => {

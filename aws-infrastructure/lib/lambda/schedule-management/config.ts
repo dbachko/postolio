@@ -53,6 +53,9 @@ export type ScheduleStatus = typeof SCHEDULE_STATUS[keyof typeof SCHEDULE_STATUS
 /**
  * Format a date for EventBridge Scheduler at() expression
  * EventBridge expects format: yyyy-MM-dd'T'HH:mm:ss (no milliseconds, no timezone)
+ * 
+ * Note: This function is duplicated in src/constants/scheduler.ts for the main application.
+ * Keep both implementations in sync.
  */
 export function formatEventBridgeScheduleTime(dateInput: string | Date): string {
   const date = new Date(dateInput);

@@ -213,7 +213,7 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
     contentId: validatedData.contentId 
   });
 
-  // Store in DynamoDB
+  // Store in DynamoDB first
   await docClient.send(new PutCommand({
     TableName: process.env.SCHEDULES_TABLE!,
     Item: {
@@ -238,7 +238,7 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
     },
   }));
 
-  // Create EventBridge schedule
+  // Create EventBridge schedule - with rollback on failure
   try {
     await schedulerClient.send(new CreateScheduleCommand({
       Name: `schedule-${scheduleId}`,
@@ -261,12 +261,32 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
       groupName: process.env.SCHEDULER_GROUP_NAME
     });
   } catch (error) {
-    logger.error('Failed to create EventBridge schedule', {
+    logger.error('Failed to create EventBridge schedule, rolling back DynamoDB entry', {
       error,
       scheduleId,
       scheduleExpression: `at(${eventBridgeScheduleTime})`,
       groupName: process.env.SCHEDULER_GROUP_NAME
     });
+    
+    // Rollback: Delete the DynamoDB entry since EventBridge schedule failed
+    try {
+      await docClient.send(new DeleteCommand({
+        TableName: process.env.SCHEDULES_TABLE!,
+        Key: {
+          pk: `SCHEDULE#${scheduleId}`,
+          sk: 'METADATA',
+        },
+      }));
+      logger.info('Successfully rolled back DynamoDB entry', { scheduleId });
+    } catch (rollbackError) {
+      logger.error('Failed to rollback DynamoDB entry', { 
+        scheduleId, 
+        originalError: error,
+        rollbackError 
+      });
+      // Continue to throw original error even if rollback fails
+    }
+    
     throw error;
   }
 
