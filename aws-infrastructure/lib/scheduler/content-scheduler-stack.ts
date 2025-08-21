@@ -395,6 +395,31 @@ export class ContentSchedulerStack extends cdk.Stack {
     scheduleManagementLambda.addEnvironment('PUBLISHER_LAMBDA_ARN', publisherLambda.functionArn);
     scheduleManagementLambda.addEnvironment('SCHEDULER_ROLE_ARN', schedulerRole.roleArn);
 
+    // Grant Lambda permission to create/manage EventBridge schedules
+    scheduleManagementLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'scheduler:CreateSchedule',
+        'scheduler:UpdateSchedule',
+        'scheduler:GetSchedule',
+        'scheduler:DeleteSchedule',
+        'scheduler:ListSchedules',
+      ],
+      resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/${prefix}-schedules/*`],
+    }));
+
+    // Grant Lambda permission to pass the scheduler role to EventBridge
+    scheduleManagementLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['iam:PassRole'],
+      resources: [schedulerRole.roleArn],
+      conditions: {
+        StringEquals: {
+          'iam:PassedToService': 'scheduler.amazonaws.com',
+        },
+      },
+    }));
+
     // ==================== API Gateway CloudWatch Logging Role ====================
     
     // Create IAM role for API Gateway CloudWatch logging (account-level setting)
