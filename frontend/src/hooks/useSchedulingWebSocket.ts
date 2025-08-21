@@ -28,6 +28,8 @@ export function useSchedulingWebSocket({
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const reconnectAttemptsRef = useRef(0)
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined)
+  const isConnectingRef = useRef(false) // Guard against multiple simultaneous connections
+  const countdownIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined)
   
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected')
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
@@ -185,27 +187,42 @@ export function useSchedulingWebSocket({
 
   // Connect to WebSocket
   const connect = useCallback(() => {
+    // Guard against multiple simultaneous connections
+    if (isConnectingRef.current || wsRef.current?.readyState === WebSocket.OPEN) {
+      return
+    }
+    
     if (!token || !selectedBrand || !enabled) {
       return
     }
 
+    isConnectingRef.current = true
+
     try {
       // Clean up existing connection
-      if (wsRef.current) {
+      if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
         wsRef.current.close()
+        wsRef.current = null
       }
 
       handleConnectionChange('connecting')
 
+      // Use relative path - Vite will proxy in dev, production will use same origin
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const host = window.location.host
-      const ws = new WebSocket(`${protocol}//${host}/ws`)
+      const ws = new WebSocket(`${protocol}//${window.location.host}/ws`)
 
       ws.onopen = () => {
         console.log('WebSocket connected')
+        isConnectingRef.current = false // Reset connecting flag
         handleConnectionChange('connected')
         reconnectAttemptsRef.current = 0
         setRetryIn(0) // Clear retry countdown
+        
+        // Clear countdown interval if exists
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current)
+          countdownIntervalRef.current = undefined
+        }
 
         // Authenticate and subscribe to brand room
         ws.send(JSON.stringify({
@@ -264,17 +281,26 @@ export function useSchedulingWebSocket({
       }
 
       ws.onerror = (error) => {
+        isConnectingRef.current = false // Reset connecting flag on error
         handleWebSocketError(error)
       }
 
       ws.onclose = (event) => {
         console.log('WebSocket disconnected', event.code, event.reason)
+        isConnectingRef.current = false // Reset connecting flag on close
         handleConnectionChange('disconnected')
         wsRef.current = null
 
         // Clear heartbeat
         if (heartbeatIntervalRef.current) {
           clearInterval(heartbeatIntervalRef.current)
+          heartbeatIntervalRef.current = undefined
+        }
+        
+        // Clear any existing countdown
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current)
+          countdownIntervalRef.current = undefined
         }
 
         // Attempt reconnection if enabled and not at max attempts
@@ -287,11 +313,19 @@ export function useSchedulingWebSocket({
           // Set retry countdown
           setRetryIn(delay)
           
+          // Clear any existing countdown interval
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current)
+          }
+          
           // Countdown timer
-          const countdownInterval = setInterval(() => {
+          countdownIntervalRef.current = setInterval(() => {
             setRetryIn(prev => {
               if (prev <= 100) {
-                clearInterval(countdownInterval)
+                if (countdownIntervalRef.current) {
+                  clearInterval(countdownIntervalRef.current)
+                  countdownIntervalRef.current = undefined
+                }
                 return 0
               }
               return prev - 100
@@ -299,7 +333,10 @@ export function useSchedulingWebSocket({
           }, 100)
           
           reconnectTimeoutRef.current = setTimeout(() => {
-            clearInterval(countdownInterval)
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current)
+              countdownIntervalRef.current = undefined
+            }
             setRetryIn(0)
             connect()
           }, delay)
@@ -316,16 +353,25 @@ export function useSchedulingWebSocket({
         new ConnectionError('Failed to create WebSocket connection')
       handleWebSocketError(connectionError)
     }
-  }, [token, selectedBrand?.id, enabled, handleStatusUpdate, calculateReconnectDelay, maxReconnectAttempts, heartbeatInterval, handleConnectionChange, handleWebSocketError, messageFilter])
+  }, [token, selectedBrand?.id, enabled, handleStatusUpdate, calculateReconnectDelay, maxReconnectAttempts, heartbeatInterval, handleConnectionChange, handleWebSocketError, messageFilter, offlineQueue])
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
+    isConnectingRef.current = false // Reset connecting flag
+    
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = undefined
     }
     
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current)
+      heartbeatIntervalRef.current = undefined
+    }
+    
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
+      countdownIntervalRef.current = undefined
     }
     
     if (wsRef.current) {
@@ -334,9 +380,10 @@ export function useSchedulingWebSocket({
     }
     
     setConnectionStatus('disconnected')
+    setRetryIn(0)
   }, [])
 
-  // Effect to manage connection lifecycle
+  // Effect to manage connection lifecycle - NO connect/disconnect in deps to prevent loops
   useEffect(() => {
     if (enabled && token && selectedBrand) {
       connect()
@@ -346,12 +393,20 @@ export function useSchedulingWebSocket({
 
     // Cleanup function using react-use pattern for proper unmounting
     return () => {
+      isConnectingRef.current = false
+      
       // Clear all timeouts and intervals
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = undefined
       }
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current)
+        heartbeatIntervalRef.current = undefined
+      }
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
+        countdownIntervalRef.current = undefined
       }
       // Close WebSocket connection
       if (wsRef.current) {
@@ -359,8 +414,10 @@ export function useSchedulingWebSocket({
         wsRef.current = null
       }
       setConnectionStatus('disconnected')
+      setRetryIn(0)
     }
-  }, [enabled, token, selectedBrand?.id, connect, disconnect])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, token, selectedBrand?.id]) // Intentionally omit connect/disconnect to prevent loops
 
   // Manual reconnect function (stable reference using react-use-websocket pattern)
   const reconnect = useCallback(() => {
@@ -370,12 +427,29 @@ export function useSchedulingWebSocket({
       reconnectTimeoutRef.current = undefined
     }
     
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
+      countdownIntervalRef.current = undefined
+    }
+    
     // Reset state
+    isConnectingRef.current = false
     reconnectAttemptsRef.current = 0
     setRetryIn(0)
     
-    // Disconnect cleanly
-    disconnect()
+    // Close existing connection
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+    
+    // Clear intervals
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current)
+      heartbeatIntervalRef.current = undefined
+    }
+    
+    setConnectionStatus('disconnected')
     
     // Reconnect after a short delay to ensure clean state
     setTimeout(() => {
@@ -383,7 +457,8 @@ export function useSchedulingWebSocket({
         connect()
       }
     }, 100)
-  }, [connect, disconnect, enabled, token, selectedBrand])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, token, selectedBrand?.id]) // Stable deps only
 
   // Helper function to queue action when offline
   const queueAction = useCallback((type: 'schedule' | 'reschedule' | 'cancel', payload: any) => {
