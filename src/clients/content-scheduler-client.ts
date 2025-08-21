@@ -10,6 +10,7 @@ import { aws4Interceptor } from 'aws4-axios';
 import * as https from 'https';
 import CircuitBreaker from 'opossum';
 import type { Options as CircuitBreakerOptions } from 'opossum';
+import { defaultProvider } from '@aws-sdk/credential-provider-node';
 
 // ==================== Validation Schemas ====================
 
@@ -183,17 +184,16 @@ export class ContentSchedulerClient {
       }),
     });
 
-    // Pre-signing request interceptor: clean headers & canonicalize URL path
+    // Pre-signing request interceptor: canonicalize URL path and attach metadata
     // (Must run BEFORE we add headers and BEFORE SigV4 signing)
     this.client.interceptors.request.use((req) => {
+      // NOTE: Do NOT delete Authorization header here - it will be added by SigV4 interceptor
+      // Only clean up Host header as it's set by the HTTP agent
       if (req.headers) {
-        // Remove any stale Authorization header to prevent signature conflicts
-        delete (req.headers as any)['Authorization'];
-        delete (req.headers as any)['authorization'];
-        // Host header is set by the HTTP agent; ensure we don't duplicate
         delete (req.headers as any)['Host'];
         delete (req.headers as any)['host'];
       }
+      
       // Avoid accidental double slashes which break canonical request
       if (req.url) {
         // Preserve query string while normalizing path
@@ -203,6 +203,7 @@ export class ContentSchedulerClient {
         const normalizedPath = pathPart.replace(/\/+/g, '/');
         req.url = queryPart ? `${normalizedPath}?${queryPart}` : normalizedPath;
       }
+      
       // Attach timing metadata
       (req as any).__meta = {
         start: Date.now(),
@@ -220,13 +221,52 @@ export class ContentSchedulerClient {
     this.setupInterceptors();
 
     // Finally add AWS SigV4 signing interceptor LAST to sign the fully-prepared request
+    // We need to ensure the interceptor uses the correct credentials and region
+    
+    // Create a credential provider adapter that works with aws4-axios
+    const credentialProvider = defaultProvider();
+    const credentialsAdapter = {
+      getCredentials: async () => {
+        try {
+          const awsCredentials = await credentialProvider();
+          // aws4-axios expects sessionToken to be string or absent, not undefined
+          const creds: any = {
+            accessKeyId: awsCredentials.accessKeyId,
+            secretAccessKey: awsCredentials.secretAccessKey,
+          };
+          if (awsCredentials.sessionToken) {
+            creds.sessionToken = awsCredentials.sessionToken;
+          }
+          return creds;
+        } catch (error) {
+          console.error('[ContentSchedulerClient] Failed to get AWS credentials:', error);
+          return undefined;
+        }
+      }
+    };
+    
     const sigv4Interceptor = aws4Interceptor({
       options: {
         region: inferredRegion,
         service: 'execute-api',
       },
-      // Default credential provider chain (ECS task role / environment / shared config)
+      // Use the adapter to provide credentials to aws4-axios
+      credentials: credentialsAdapter,
     });
+    
+    // Add debug logging for SigV4 signing
+    if (this.debug) {
+      console.log('[ContentSchedulerClient] Configuring SigV4 signing:', {
+        region: inferredRegion,
+        service: 'execute-api',
+        baseURL: normalizedBaseURL,
+        AWS_REGION: process.env.AWS_REGION,
+        AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION,
+        // Check if we're running in ECS by looking for task metadata endpoint
+        isECS: !!process.env.ECS_CONTAINER_METADATA_URI_V4,
+      });
+    }
+    
     this.client.interceptors.request.use(sigv4Interceptor);
 
     // Initialize circuit breaker
@@ -671,6 +711,17 @@ export class ContentSchedulerClient {
         
         if (this.debug) {
           const fullUrl = this.composeFullUrl(config.baseURL || this.config.baseURL, config.url || '');
+          
+          // Log Authorization header to verify SigV4 signing
+          const hasAuth = !!(config.headers['Authorization'] || config.headers['authorization']);
+          if (!hasAuth && (config.method || 'get').toUpperCase() !== 'OPTIONS') {
+            console.warn('[ContentSchedulerClient] Warning: No Authorization header present before request', {
+              url: config.url,
+              fullUrl,
+              headers: Object.keys(config.headers || {}),
+            });
+          }
+          
           this.log('info', 'scheduler.http.request', {
             id: requestId,
             method: (config.method || 'get').toUpperCase(),
@@ -709,6 +760,20 @@ export class ContentSchedulerClient {
           const cfg = error.config || {};
           const meta = (cfg as any).__meta;
           const duration = meta ? Date.now() - meta.start : undefined;
+          
+          // Special handling for authentication errors
+          if (error.response?.status === 403 && error.response?.data?.message === 'Missing Authentication Token') {
+            console.error('[ContentSchedulerClient] Authentication Error - Missing or invalid SigV4 signature:', {
+              url: cfg.url,
+              baseURL: cfg.baseURL,
+              fullURL: this.composeFullUrl(cfg.baseURL || this.config.baseURL, cfg.url || ''),
+              headers: cfg.headers,
+              AWS_REGION: process.env.AWS_REGION,
+              isECS: !!process.env.ECS_CONTAINER_METADATA_URI_V4,
+              errorData: error.response?.data,
+            });
+          }
+          
           this.log('error', 'scheduler.http.error', {
             id: meta?.id,
             method: (cfg.method || 'get').toUpperCase(),

@@ -206,61 +206,62 @@ bootstrap_cdk() {
     # Get AWS account and region
     AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
     
-    # Check if bootstrap stack exists - try multiple ways to detect it
-    if ! aws cloudformation describe-stacks --stack-name CDKToolkit --region $AWS_REGION &> /dev/null && \
-       ! aws s3api head-bucket --bucket "cdk-hnb659fds-assets-$AWS_ACCOUNT-$AWS_REGION" &> /dev/null; then
-        echo -e "${YELLOW}CDK is not bootstrapped for account $AWS_ACCOUNT in region $AWS_REGION${NC}"
-        
-        # Validate permissions before attempting bootstrap
-        if ! validate_bootstrap_permissions; then
-            echo -e "${RED}❌ CDK bootstrap failed: Insufficient permissions${NC}"
-            echo
-            echo -e "${YELLOW}Solutions:${NC}"
-            echo "1. Ask your AWS administrator to add the required permissions to your IAM user"
-            echo "2. Use an IAM role with broader permissions: aws sts assume-role ..."
-            echo "3. Ask an administrator to run the bootstrap command:"
-            echo "   cdk bootstrap aws://$AWS_ACCOUNT/$AWS_REGION"
-            echo "4. Use AWS CloudShell (if available) which may have broader default permissions"
-            echo "5. Use the dedicated bootstrap script: ./scripts/bootstrap-cdk.sh"
-            echo
-            echo "For detailed permissions, see: docs/AWS_DEPLOYMENT_STRATEGY.md"
-            echo
-            echo -e "${YELLOW}Alternative: Manual Bootstrap${NC}"
-            echo "If you have access to the AWS Console:"
-            echo "1. Go to CloudFormation service"
-            echo "2. Create a new stack using CDKToolkit template"
-            echo "3. Use this S3 template URL:"
-            echo "   https://s3.us-west-2.amazonaws.com/cdk-assets-us-east-1/toolkit-bootstrap-template.json"
-            echo
-            return 1
-        fi
-        
-        echo -e "${YELLOW}Bootstrapping CDK for account $AWS_ACCOUNT in region $AWS_REGION...${NC}"
-        echo "This may take 2-5 minutes..."
-        
-        # Attempt bootstrap with better error handling
-        if ! npx cdk bootstrap aws://$AWS_ACCOUNT/$AWS_REGION; then
-            echo -e "${RED}❌ CDK bootstrap failed${NC}"
-            echo
-            echo -e "${YELLOW}Common solutions:${NC}"
-            echo "1. Check your IAM permissions (see validate_bootstrap_permissions output above)"
-            echo "2. Verify you're using the correct AWS account and region"
-            echo "3. Check if there's a service limit preventing resource creation"
-            echo "4. Try running with verbose output: npx cdk bootstrap --verbose aws://$AWS_ACCOUNT/$AWS_REGION"
-            echo
-            echo "If the error mentions 'AccessDenied' for CreateChangeSet:"
-            echo "  Your IAM user needs cloudformation:CreateChangeSet permission"
-            echo
-            echo "For help with IAM permissions, see:"
-            echo "  docs/AWS_DEPLOYMENT_STRATEGY.md (section: IAM User for CI/CD)"
-            echo
-            return 1
-        fi
-        
-        echo -e "${GREEN}✅ CDK bootstrap completed successfully${NC}"
-    else
-        echo -e "${GREEN}✅ CDK already bootstrapped${NC}"
+    # Use dedicated check script for consistency
+    if ! "$PROJECT_ROOT/scripts/check-cdk-bootstrap.sh" "$AWS_ACCOUNT" "$AWS_REGION"; then
+        echo -e "${GREEN}✅ CDK already bootstrapped - skipping${NC}"
+        return 0
     fi
+    
+    # Bootstrap is needed
+    echo -e "${YELLOW}CDK bootstrap required for account $AWS_ACCOUNT in region $AWS_REGION${NC}"
+    
+    # Validate permissions before attempting bootstrap
+    if ! validate_bootstrap_permissions; then
+        echo -e "${RED}❌ CDK bootstrap failed: Insufficient permissions${NC}"
+        echo
+        echo -e "${YELLOW}Solutions:${NC}"
+        echo "1. Ask your AWS administrator to add the required permissions to your IAM user"
+        echo "2. Use an IAM role with broader permissions: aws sts assume-role ..."
+        echo "3. Ask an administrator to run the bootstrap command:"
+        echo "   cdk bootstrap aws://$AWS_ACCOUNT/$AWS_REGION"
+        echo "4. Use AWS CloudShell (if available) which may have broader default permissions"
+        echo "5. Use the dedicated bootstrap script: ./scripts/bootstrap-cdk.sh"
+        echo
+        echo "For detailed permissions, see: docs/AWS_DEPLOYMENT_STRATEGY.md"
+        echo
+        echo -e "${YELLOW}Alternative: Manual Bootstrap${NC}"
+        echo "If you have access to the AWS Console:"
+        echo "1. Go to CloudFormation service"
+        echo "2. Create a new stack using CDKToolkit template"
+        echo "3. Use this S3 template URL:"
+        echo "   https://s3.us-west-2.amazonaws.com/cdk-assets-us-east-1/toolkit-bootstrap-template.json"
+        echo
+        return 1
+    fi
+    
+    echo -e "${YELLOW}Bootstrapping CDK for account $AWS_ACCOUNT in region $AWS_REGION...${NC}"
+    echo "This may take 2-5 minutes..."
+    
+    # Attempt bootstrap with better error handling
+    if ! npx cdk bootstrap aws://$AWS_ACCOUNT/$AWS_REGION; then
+        echo -e "${RED}❌ CDK bootstrap failed${NC}"
+        echo
+        echo -e "${YELLOW}Common solutions:${NC}"
+        echo "1. Check your IAM permissions (see validate_bootstrap_permissions output above)"
+        echo "2. Verify you're using the correct AWS account and region"
+        echo "3. Check if there's a service limit preventing resource creation"
+        echo "4. Try running with verbose output: npx cdk bootstrap --verbose aws://$AWS_ACCOUNT/$AWS_REGION"
+        echo
+        echo "If the error mentions 'AccessDenied' for CreateChangeSet:"
+        echo "  Your IAM user needs cloudformation:CreateChangeSet permission"
+        echo
+        echo "For help with IAM permissions, see:"
+        echo "  docs/AWS_DEPLOYMENT_STRATEGY.md (section: IAM User for CI/CD)"
+        echo
+        return 1
+    fi
+    
+    echo -e "${GREEN}✅ CDK bootstrap completed successfully${NC}"
 }
 
 # Ensure ECR repository exists (CDK manages it, but we need to check)

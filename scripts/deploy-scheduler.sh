@@ -49,13 +49,14 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-# Bootstrap CDK if needed
+# Bootstrap CDK if needed using dedicated check script
 echo -e "${YELLOW}Checking CDK bootstrap status...${NC}"
-if ! aws cloudformation describe-stacks --stack-name CDKToolkit --region $AWS_REGION > /dev/null 2>&1; then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! "$SCRIPT_DIR/check-cdk-bootstrap.sh" "$ACCOUNT_ID" "$AWS_REGION"; then
+    echo -e "${GREEN}✓ CDK already bootstrapped - skipping${NC}"
+else
     echo -e "${YELLOW}Bootstrapping CDK...${NC}"
     npx cdk bootstrap aws://$ACCOUNT_ID/$AWS_REGION
-else
-    echo -e "${GREEN}✓ CDK already bootstrapped${NC}"
 fi
 
 # Define stack name variable for consistency

@@ -166,10 +166,24 @@ jobs:
       - name: Install AWS CDK
         run: npm install -g aws-cdk
 
+      - name: Check if CDK bootstrap is needed
+        id: check-bootstrap
+        run: |
+          if ./scripts/check-cdk-bootstrap.sh ${{ secrets.AWS_ACCOUNT_ID }} ${{ env.AWS_REGION }}; then
+            echo "bootstrap_needed=true" >> $GITHUB_OUTPUT
+            echo "CDK bootstrap is required"
+          else
+            echo "bootstrap_needed=false" >> $GITHUB_OUTPUT
+            echo "CDK bootstrap is already complete"
+          fi
+        continue-on-error: true
+
       - name: Bootstrap CDK (if needed)
+        if: steps.check-bootstrap.outputs.bootstrap_needed == 'true'
         working-directory: aws-infrastructure
         run: |
-          npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }} || true
+          echo "Bootstrapping CDK for aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}..."
+          npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
         env:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
