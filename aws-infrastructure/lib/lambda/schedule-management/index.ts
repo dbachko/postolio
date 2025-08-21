@@ -6,7 +6,7 @@ import { DynamoDBDocumentClient, PutCommand, GetCommand, DeleteCommand, QueryCom
 import { SchedulerClient, CreateScheduleCommand, DeleteScheduleCommand } from '@aws-sdk/client-scheduler';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { randomUUID } from 'crypto';
-import { getDynamoDBConfig, SCHEDULE_STATUS } from './config';
+import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from './config';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'schedule-management' });
@@ -201,6 +201,17 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
   const validatedData = validation.data!;
   const scheduleId = `SCH_${Date.now()}_${randomUUID()}`;
   const scheduledAt = new Date(validatedData.scheduledAt).toISOString();
+  
+  // Format date for EventBridge Scheduler
+  const eventBridgeScheduleTime = formatEventBridgeScheduleTime(validatedData.scheduledAt);
+  
+  logger.info('Creating schedule', { 
+    scheduleId, 
+    scheduledAt, 
+    eventBridgeScheduleTime,
+    brandId: validatedData.brandId,
+    contentId: validatedData.contentId 
+  });
 
   // Store in DynamoDB
   await docClient.send(new PutCommand({
@@ -228,20 +239,36 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
   }));
 
   // Create EventBridge schedule
-  await schedulerClient.send(new CreateScheduleCommand({
-    Name: `schedule-${scheduleId}`,
-    GroupName: process.env.SCHEDULER_GROUP_NAME,
-    ScheduleExpression: `at(${scheduledAt})`,
-    Target: {
-      Arn: process.env.PUBLISHER_LAMBDA_ARN,
-      RoleArn: process.env.SCHEDULER_ROLE_ARN,
-      Input: JSON.stringify({ scheduleId }),
-    },
-    FlexibleTimeWindow: {
-      Mode: 'OFF',
-    },
-    Description: `Content publishing schedule for ${scheduleId}`,
-  }));
+  try {
+    await schedulerClient.send(new CreateScheduleCommand({
+      Name: `schedule-${scheduleId}`,
+      GroupName: process.env.SCHEDULER_GROUP_NAME,
+      ScheduleExpression: `at(${eventBridgeScheduleTime})`,
+      Target: {
+        Arn: process.env.PUBLISHER_LAMBDA_ARN,
+        RoleArn: process.env.SCHEDULER_ROLE_ARN,
+        Input: JSON.stringify({ scheduleId }),
+      },
+      FlexibleTimeWindow: {
+        Mode: 'OFF',
+      },
+      Description: `Content publishing schedule for ${scheduleId}`,
+    }));
+    
+    logger.info('EventBridge schedule created successfully', { 
+      scheduleId, 
+      scheduleExpression: `at(${eventBridgeScheduleTime})`,
+      groupName: process.env.SCHEDULER_GROUP_NAME
+    });
+  } catch (error) {
+    logger.error('Failed to create EventBridge schedule', {
+      error,
+      scheduleId,
+      scheduleExpression: `at(${eventBridgeScheduleTime})`,
+      groupName: process.env.SCHEDULER_GROUP_NAME
+    });
+    throw error;
+  }
 
   logger.info('Schedule created successfully', { scheduleId });
 
@@ -374,6 +401,15 @@ async function updateSchedule(scheduleId: string, data: any): Promise<APIGateway
     // If scheduledAt changed, we need to update EventBridge
     if (data.scheduledAt && data.scheduledAt !== existingSchedule.Item.scheduledAt) {
       const newScheduledAt = new Date(data.scheduledAt).toISOString();
+      // Format date for EventBridge Scheduler
+      const eventBridgeScheduleTime = formatEventBridgeScheduleTime(data.scheduledAt);
+      
+      logger.info('Updating schedule time', { 
+        scheduleId, 
+        oldTime: existingSchedule.Item.scheduledAt,
+        newTime: newScheduledAt,
+        eventBridgeTime: eventBridgeScheduleTime
+      });
       
       // Delete old EventBridge schedule
       try {
@@ -389,7 +425,7 @@ async function updateSchedule(scheduleId: string, data: any): Promise<APIGateway
       await schedulerClient.send(new CreateScheduleCommand({
         Name: `schedule-${scheduleId}`,
         GroupName: process.env.SCHEDULER_GROUP_NAME,
-        ScheduleExpression: `at(${newScheduledAt})`,
+        ScheduleExpression: `at(${eventBridgeScheduleTime})`,
         Target: {
           Arn: process.env.PUBLISHER_LAMBDA_ARN,
           RoleArn: process.env.SCHEDULER_ROLE_ARN,
