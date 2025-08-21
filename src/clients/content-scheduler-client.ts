@@ -134,14 +134,12 @@ export interface ContentSchedulerConfig {
 // ==================== Main Client Class ====================
 
 export class ContentSchedulerClient {
-  private client!: AxiosInstance;
+  private client: AxiosInstance;
   private circuitBreaker: any; // CircuitBreaker instance
   private config: ContentSchedulerConfig;
   private cache: Map<string, { data: any; timestamp: number; etag?: string }>;
-  private initialized: Promise<void>;
 
   constructor(config: ContentSchedulerConfig) {
-    // Initialize synchronous properties first
     this.config = {
       timeout: 10000,
       maxRetries: 3,
@@ -151,12 +149,6 @@ export class ContentSchedulerClient {
 
     // Initialize cache for response caching
     this.cache = new Map();
-
-    // Initialize and store the async initialization promise
-    this.initialized = this.initialize();
-  }
-
-  private async initialize(): Promise<void> {
 
     // Initialize Axios client with connection keep-alive for better performance
     this.client = axios.create({
@@ -176,32 +168,15 @@ export class ContentSchedulerClient {
     });
 
     // Add AWS SigV4 signing interceptor
-    // In ECS, we need to explicitly provide credentials from the SDK
-    // aws4-axios doesn't automatically detect ECS task role credentials
-    let interceptorConfig: any = {
+    const interceptor = aws4Interceptor({
       options: {
         region: process.env.AWS_REGION || 'us-east-1',
         service: 'execute-api',
       },
-    };
-
-    // Check if we're running in ECS (AWS_EXECUTION_ENV is set by ECS)
-    if (process.env.AWS_EXECUTION_ENV || process.env.ECS_CONTAINER_METADATA_URI_V4) {
-      // Import AWS SDK credential providers dynamically
-      const { fromNodeProviderChain } = await import('@aws-sdk/credential-providers');
-      
-      // Create a credential provider that will use ECS task role
-      const credentialsProvider = fromNodeProviderChain();
-      
-      // Pass the credential provider to aws4-axios
-      interceptorConfig.credentials = credentialsProvider;
-      
-      console.log('ContentSchedulerClient: Using ECS task role credentials');
-    } else {
-      console.log('ContentSchedulerClient: Using default AWS credential chain');
-    }
+      // Let aws4-axios use the default credential provider chain
+      // This will automatically use ECS task role credentials when running in ECS
+    });
     
-    const interceptor = aws4Interceptor(interceptorConfig);
     this.client.interceptors.request.use(interceptor);
 
     // Add custom request/response interceptors for logging and request IDs
@@ -228,17 +203,9 @@ export class ContentSchedulerClient {
   // ==================== Public Methods ====================
 
   /**
-   * Ensure client is initialized before any operation
-   */
-  private async ensureInitialized(): Promise<void> {
-    await this.initialized;
-  }
-
-  /**
    * Create a new schedule
    */
   async createSchedule(data: CreateScheduleInput): Promise<Schedule> {
-    await this.ensureInitialized();
     return this.executeWithCircuitBreaker(async () => {
       // Validate input
       const validatedData = CreateScheduleInputSchema.parse(data);
@@ -257,7 +224,6 @@ export class ContentSchedulerClient {
    * Update an existing schedule
    */
   async updateSchedule(id: string, data: UpdateScheduleInput): Promise<Schedule> {
-    await this.ensureInitialized();
     return this.executeWithCircuitBreaker(async () => {
       // Validate input
       const validatedData = UpdateScheduleInputSchema.parse(data);
@@ -276,7 +242,6 @@ export class ContentSchedulerClient {
    * Delete a schedule
    */
   async deleteSchedule(id: string): Promise<void> {
-    await this.ensureInitialized();
     return this.executeWithCircuitBreaker(async () => {
       await this.retryWithBackoff(
         () => this.client.delete(`/schedules/${id}`)
@@ -288,7 +253,6 @@ export class ContentSchedulerClient {
    * Get a specific schedule with caching
    */
   async getSchedule(id: string): Promise<Schedule> {
-    await this.ensureInitialized();
     const cacheKey = `GET:/schedules/${id}`;
     const cached = this.getCachedResponse(cacheKey);
     
@@ -311,7 +275,6 @@ export class ContentSchedulerClient {
    * List schedules with filters
    */
   async listSchedules(params: ListSchedulesParams = { limit: 20 }): Promise<ScheduleList> {
-    await this.ensureInitialized();
     return this.executeWithCircuitBreaker(async () => {
       // Validate parameters
       const validatedParams = ListSchedulesParamsSchema.parse(params);
@@ -717,7 +680,6 @@ export class ContentSchedulerClient {
    * Check if the scheduler service is healthy
    */
   async healthCheck(): Promise<boolean> {
-    await this.ensureInitialized();
     try {
       const response = await this.client.get('/health', {
         timeout: 5000,
@@ -776,8 +738,6 @@ export class ContentSchedulerClient {
 
 /**
  * Create a new ContentSchedulerClient instance
- * Note: The client initializes asynchronously but returns immediately.
- * All public methods will wait for initialization to complete.
  */
 export function createSchedulerClient(config: ContentSchedulerConfig): ContentSchedulerClient {
   return new ContentSchedulerClient(config);
