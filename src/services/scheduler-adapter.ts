@@ -17,10 +17,8 @@ export class SchedulerAdapter {
 
   constructor(config?: Partial<ContentSchedulerConfig>) {
     // Initialize with environment config
-    const apiKey = process.env.SCHEDULER_API_KEY;
     this.client = new ContentSchedulerClient({
       baseURL: process.env.SCHEDULER_API_URL || 'http://localhost:4000',
-      ...(apiKey && { apiKey }),
       timeout: 30000,
       maxRetries: 3,
       ...config,

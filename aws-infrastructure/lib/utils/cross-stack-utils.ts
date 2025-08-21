@@ -30,7 +30,6 @@ export interface StackMetadata {
 
 export interface SchedulerConfig {
   apiUrl: string;
-  apiKey: string;
   endpoints?: Record<string, string>;
   timeout?: number;
   retryAttempts?: number;
@@ -153,10 +152,9 @@ export class SchedulerIntegration {
   /**
    * Export scheduler configuration for consumption by other stacks
    */
-  exportSchedulerConfig(apiUrl: string, apiKey: string, endpoints?: Record<string, string>): void {
+  exportSchedulerConfig(apiUrl: string, endpoints?: Record<string, string>): void {
     // Export individual values
     this.configManager.exportValue('scheduler-api-url', apiUrl, 'ContentScheduler API URL');
-    this.configManager.exportValue('scheduler-api-key', apiKey, 'ContentScheduler API Key');
     
     if (endpoints) {
       this.configManager.exportValue(
@@ -168,7 +166,6 @@ export class SchedulerIntegration {
 
     // Also store in Parameter Store for external access
     this.configManager.storeParameter('scheduler-api-url', apiUrl);
-    this.configManager.storeParameter('scheduler-api-key', apiKey);
   }
 
   /**
@@ -176,17 +173,15 @@ export class SchedulerIntegration {
    */
   importSchedulerConfig(sourceStackName: string): SchedulerConfig {
     const apiUrl = this.configManager.importValue(sourceStackName, 'scheduler-api-url');
-    const apiKey = this.configManager.importValue(sourceStackName, 'scheduler-api-key');
     
     let endpoints: Record<string, string> | undefined;
-    try {
+  try {
       const endpointsJson = this.configManager.importValue(sourceStackName, 'scheduler-endpoints');
       endpoints = JSON.parse(endpointsJson);
-    } catch (e) {
+  } catch {
       // Endpoints not available, continue without them
     }
-
-    return { apiUrl, apiKey, endpoints };
+    return { apiUrl, endpoints } as SchedulerConfig;
   }
 
   /**
@@ -199,7 +194,6 @@ export class SchedulerIntegration {
     const secretConfig = {
       // Scheduler configuration
       schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerConfig.apiUrl),
-      schedulerApiKey: cdk.SecretValue.unsafePlainText(schedulerConfig.apiKey),
       ...additionalSecrets,
     };
 
@@ -370,13 +364,7 @@ export class EnvironmentConfigHelper {
 /**
  * Generate a secure API key based on stack information
  */
-export function generateApiKey(stack: cdk.Stack, prefix: string = ''): string {
-  const parts = [prefix, stack.stackName];
-  return cdk.Fn.join('-', [
-    ...parts.filter(Boolean),
-    cdk.Fn.select(0, cdk.Fn.split('-', cdk.Fn.select(2, cdk.Fn.split('/', cdk.Aws.STACK_ID))))
-  ]);
-}
+// (Removed) generateApiKey utility – API keys deprecated in favor of SigV4 IAM auth
 
 /**
  * Create consistent export names across stacks
