@@ -292,9 +292,28 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
 
   logger.info('Schedule created successfully', { scheduleId });
 
+  // Return complete schedule object that matches client expectations
+  const scheduleResponse = {
+    scheduleId,
+    contentId: validatedData.contentId,
+    brandId: validatedData.brandId,
+    userId: validatedData.userId,
+    platform: validatedData.platform,
+    scheduledAt,
+    contentType: validatedData.contentType || 'image',
+    videoUrl: validatedData.videoUrl,
+    caption: validatedData.caption,
+    hashtags: validatedData.hashtags,
+    mediaUrls: validatedData.mediaUrls,
+    status: SCHEDULE_STATUS.SCHEDULED,
+    retryCount: 0,
+    metadata: validatedData.metadata,
+    createdAt: new Date().toISOString(),
+  };
+
   return {
     statusCode: 201,
-    body: JSON.stringify({ scheduleId, message: 'Schedule created successfully' }),
+    body: JSON.stringify(scheduleResponse),
   };
 }
 
@@ -469,13 +488,31 @@ async function updateSchedule(scheduleId: string, data: any): Promise<APIGateway
     
     logger.info('Schedule updated successfully', { scheduleId });
     
+    // Return complete schedule object that matches client expectations
+    const scheduleResponse = {
+      scheduleId: updatedItem.scheduleId,
+      contentId: updatedItem.contentId,
+      brandId: updatedItem.brandId,
+      userId: updatedItem.userId,
+      platform: updatedItem.platform,
+      scheduledAt: updatedItem.scheduledAt,
+      contentType: updatedItem.contentType,
+      videoUrl: updatedItem.videoUrl,
+      caption: updatedItem.caption,
+      hashtags: updatedItem.hashtags,
+      mediaUrls: updatedItem.mediaUrls,
+      status: updatedItem.status,
+      retryCount: updatedItem.retryCount || 0,
+      metadata: updatedItem.metadata,
+      createdAt: updatedItem.createdAt,
+      updatedAt: updatedItem.updatedAt,
+      publishedAt: updatedItem.publishedAt,
+      errorMessage: updatedItem.errorMessage,
+    };
+    
     return {
       statusCode: 200,
-      body: JSON.stringify({ 
-        scheduleId,
-        message: 'Schedule updated successfully',
-        data: updatedItem,
-      }),
+      body: JSON.stringify(scheduleResponse),
     };
   } catch (error) {
     logger.error('Error updating schedule', error as Error);
