@@ -87,9 +87,19 @@ export function ConnectionStatusProvider({ children }: { children: React.ReactNo
   
   React.useEffect(() => {
     setMounted(true)
-  }, [])
+    
+    // Cleanup on unmount only
+    return () => {
+      setMounted(false)
+    }
+  }, []) // Empty deps - only run once
   
-  const hookResult = useSchedulingWebSocket({ enabled: mounted })
+  // Use WebSocket hook at app level - won't re-render on navigation
+  const hookResult = useSchedulingWebSocket({ 
+    enabled: mounted,
+    // Prevent reconnection on every render
+    maxReconnectAttempts: 5
+  })
   
   return (
     <ConnectionStatusContext.Provider value={hookResult}>

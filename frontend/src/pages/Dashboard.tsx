@@ -7,26 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/PageHeader'
 import { useBrandStore } from '../stores/brandStore'
-import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket'
-import { ConnectionStatus } from '../components/ConnectionStatus'
+import { useConnectionStatus, ConnectionStatus } from '../components/ConnectionStatus'
 
 export function Dashboard() {
   const navigate = useNavigate()
   const { brands, selectedBrand, setBrands, initializeSelectedBrand, setSelectedBrand } = useBrandStore()
   
-  // WebSocket connection for real-time updates
-  const { connectionStatus, lastUpdate, reconnect, queueSize } = useSchedulingWebSocket({
-    enabled: !!selectedBrand,
-    onStatusUpdate: (event) => {
-      console.log('Real-time status update:', event)
-    },
-    onConnectionChange: (status) => {
-      console.log('Connection status changed:', status)
-    },
-    onError: (error) => {
-      console.error('WebSocket error:', error)
-    }
-  })
+  // Use shared WebSocket connection from context
+  const { connectionStatus, lastUpdate, reconnect, queueSize } = useConnectionStatus()
 
   const { data: brandsData, isLoading: brandsLoading } = useQuery({
     queryKey: ['brands'],

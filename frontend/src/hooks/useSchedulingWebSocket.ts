@@ -39,6 +39,9 @@ export function useSchedulingWebSocket({
   const token = getToken()
   const selectedBrand = useBrandStore(state => state.selectedBrand)
   const queryClient = useQueryClient()
+  
+  // Track previous brand to detect actual changes
+  const previousBrandRef = useRef<string | undefined>(undefined)
 
   // Offline queue for scheduling actions
   const offlineQueue = useOfflineQueue({
@@ -383,38 +386,55 @@ export function useSchedulingWebSocket({
     setRetryIn(0)
   }, [])
 
-  // Effect to manage connection lifecycle - NO connect/disconnect in deps to prevent loops
+  // Effect to manage connection lifecycle - only reconnect on actual brand changes
   useEffect(() => {
+    const brandChanged = previousBrandRef.current !== undefined && 
+                        previousBrandRef.current !== selectedBrand?.id
+    
+    // Only connect/disconnect on initial mount or actual brand change
     if (enabled && token && selectedBrand) {
-      connect()
-    } else {
+      // If brand actually changed, disconnect and reconnect
+      if (brandChanged && wsRef.current) {
+        console.log('Brand changed, reconnecting WebSocket...')
+        disconnect()
+        setTimeout(() => connect(), 100)
+      } else if (!wsRef.current) {
+        // Initial connection
+        connect()
+      }
+      previousBrandRef.current = selectedBrand.id
+    } else if (!enabled || !token || !selectedBrand) {
       disconnect()
+      previousBrandRef.current = undefined
     }
 
-    // Cleanup function using react-use pattern for proper unmounting
+    // Cleanup function - only runs on unmount
     return () => {
-      isConnectingRef.current = false
-      
-      // Clear all timeouts and intervals
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-        reconnectTimeoutRef.current = undefined
+      // Don't disconnect on every re-render, only on actual unmount
+      if (!enabled) {
+        isConnectingRef.current = false
+        
+        // Clear all timeouts and intervals
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current)
+          reconnectTimeoutRef.current = undefined
+        }
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current)
+          heartbeatIntervalRef.current = undefined
+        }
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current)
+          countdownIntervalRef.current = undefined
+        }
+        // Close WebSocket connection
+        if (wsRef.current) {
+          wsRef.current.close()
+          wsRef.current = null
+        }
+        setConnectionStatus('disconnected')
+        setRetryIn(0)
       }
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current)
-        heartbeatIntervalRef.current = undefined
-      }
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current)
-        countdownIntervalRef.current = undefined
-      }
-      // Close WebSocket connection
-      if (wsRef.current) {
-        wsRef.current.close()
-        wsRef.current = null
-      }
-      setConnectionStatus('disconnected')
-      setRetryIn(0)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, token, selectedBrand?.id]) // Intentionally omit connect/disconnect to prevent loops

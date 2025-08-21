@@ -51,8 +51,8 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <TimezoneProvider>
-          <ConnectionStatusProvider>
+        <ConnectionStatusProvider>
+          <TimezoneProvider>
             <Router>
               <Routes>
           <Route path="/login" element={<Login />} />
@@ -191,8 +191,8 @@ function App() {
         </Routes>
         <Toaster position="bottom-left" />
       </Router>
-      </ConnectionStatusProvider>
       </TimezoneProvider>
+      </ConnectionStatusProvider>
     </QueryClientProvider>
     </ErrorBoundary>
   )
