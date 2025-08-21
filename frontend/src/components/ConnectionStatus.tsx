@@ -78,19 +78,32 @@ export function ConnectionStatus({
   )
 }
 
-// Enhanced hook that provides all connection status data
-export function useConnectionStatus() {
+// Context for connection status to ensure singleton WebSocket
+const ConnectionStatusContext = React.createContext<ReturnType<typeof useSchedulingWebSocket> | null>(null)
+
+// Provider component to ensure singleton WebSocket connection
+export function ConnectionStatusProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = React.useState(false)
   
   React.useEffect(() => {
     setMounted(true)
   }, [])
   
-  // Use proper hook import with SSR safety
   const hookResult = useSchedulingWebSocket({ enabled: mounted })
   
-  // Return safe defaults when not mounted (SSR safety)
-  if (!mounted) {
+  return (
+    <ConnectionStatusContext.Provider value={hookResult}>
+      {children}
+    </ConnectionStatusContext.Provider>
+  )
+}
+
+// Enhanced hook that provides all connection status data
+export function useConnectionStatus() {
+  const context = React.useContext(ConnectionStatusContext)
+  
+  // SSR safety: if context is null, return safe defaults
+  if (!context) {
     return {
       connectionStatus: 'disconnected' as ConnectionStatusType,
       lastUpdate: null,
@@ -102,12 +115,12 @@ export function useConnectionStatus() {
   }
   
   return {
-    connectionStatus: hookResult.connectionStatus,
-    lastUpdate: hookResult.lastUpdate,
-    reconnect: hookResult.reconnect,
-    queueSize: hookResult.queueSize,
-    retryCount: hookResult.retryCount || 0,
-    retryIn: hookResult.retryIn || 0
+    connectionStatus: context.connectionStatus,
+    lastUpdate: context.lastUpdate,
+    reconnect: context.reconnect,
+    queueSize: context.queueSize,
+    retryCount: context.retryCount || 0,
+    retryIn: context.retryIn || 0
   }
 }
 

@@ -32,17 +32,36 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
     }
   })
 
-  // Add broadcast decorator to fastify instance
+  // Add broadcast decorator to fastify instance with batched sending for performance
   fastify.decorate('broadcastToRoom', (room: string, message: any) => {
     const sockets = connections.get(room)
-    if (!sockets) return
+    if (!sockets || sockets.size === 0) return
 
     const data = JSON.stringify(message)
-    sockets.forEach(socket => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(data)
+    const BATCH_SIZE = 100 // Send to 100 sockets at a time
+    const socketArray = Array.from(sockets)
+    let index = 0
+
+    function sendBatch() {
+      const batch = socketArray.slice(index, index + BATCH_SIZE)
+      batch.forEach(socket => {
+        if (socket.readyState === WebSocket.OPEN) {
+          try {
+            socket.send(data)
+          } catch (error) {
+            fastify.log.error({ error, room }, 'Failed to send message to socket')
+          }
+        }
+      })
+      index += BATCH_SIZE
+      
+      // Schedule next batch asynchronously
+      if (index < socketArray.length) {
+        setImmediate(sendBatch)
       }
-    })
+    }
+    
+    sendBatch()
   })
 
   // WebSocket route handler

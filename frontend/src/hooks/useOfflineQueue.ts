@@ -71,10 +71,12 @@ export function useOfflineQueue({
     }
   }, [])
 
-  // Add action to queue with better ID generation
+  // Add action to queue with crypto.randomUUID for unique IDs
   const enqueue = useCallback((type: QueuedAction['type'], payload: any, actionMaxRetries?: number) => {
     const action: QueuedAction = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Better ID generation
+      id: typeof crypto !== 'undefined' && crypto.randomUUID 
+        ? crypto.randomUUID() 
+        : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Fallback for older browsers
       type,
       payload,
       timestamp: Date.now(),

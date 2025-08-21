@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
 import { useAuthStore } from './stores/authStore'
 import { TimezoneProvider } from './contexts/TimezoneContext'
+import { ConnectionStatusProvider } from './components/ConnectionStatus'
 import { UltraThinLayout as Layout } from './components/UltraThinLayout'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
@@ -51,8 +52,9 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TimezoneProvider>
-          <Router>
-            <Routes>
+          <ConnectionStatusProvider>
+            <Router>
+              <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -189,6 +191,7 @@ function App() {
         </Routes>
         <Toaster position="bottom-left" />
       </Router>
+      </ConnectionStatusProvider>
       </TimezoneProvider>
     </QueryClientProvider>
     </ErrorBoundary>
