@@ -13,7 +13,7 @@ interface WebSocketMessage {
 
 interface AuthenticatedSocket extends WebSocket {
   userId?: string
-  brandId?: string
+  brandId?: string | undefined
   isAlive?: boolean
 }
 
@@ -148,10 +148,22 @@ async function handleAuth(
     return
   }
 
+  // Validate JWT_SECRET is configured
+  const jwtSecret = process.env.JWT_SECRET
+  if (!jwtSecret) {
+    fastify.log.error('JWT_SECRET environment variable is not configured')
+    socket.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'Server configuration error' 
+    }))
+    socket.close(1011, 'Server configuration error')
+    return
+  }
+
   try {
     const decoded = jwt.verify(
       message.token, 
-      process.env.JWT_SECRET!
+      jwtSecret
     ) as { userId: string }
     
     socket.userId = decoded.userId

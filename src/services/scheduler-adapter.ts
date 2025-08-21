@@ -13,7 +13,7 @@ import type { StatusBroadcaster } from './status-broadcaster.js';
 const prisma = getDatabaseClient();
 
 export class SchedulerAdapter {
-  public client: ContentSchedulerClient; // Made public for testing
+  private client: ContentSchedulerClient;
   private static instance: SchedulerAdapter | null = null;
   private broadcaster: StatusBroadcaster | null = null;
 
@@ -32,6 +32,14 @@ export class SchedulerAdapter {
    */
   setBroadcaster(broadcaster: StatusBroadcaster): void {
     this.broadcaster = broadcaster;
+  }
+
+  /**
+   * Get the client instance (for testing purposes only)
+   * @internal
+   */
+  getClient(): ContentSchedulerClient {
+    return this.client;
   }
 
   /**

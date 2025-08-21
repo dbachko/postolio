@@ -70,7 +70,7 @@ describe('Scheduler Integration with StatusBroadcaster', () => {
       status: 'scheduled'
     }))
 
-    schedulerAdapter.client.createSchedule = mockCreateSchedule
+    schedulerAdapter.getClient().createSchedule = mockCreateSchedule
 
     // Schedule the content
     const result = await schedulerAdapter.scheduleContent(
@@ -123,7 +123,7 @@ describe('Scheduler Integration with StatusBroadcaster', () => {
       throw new Error('Scheduling failed')
     })
 
-    schedulerAdapter.client.createSchedule = mockCreateSchedule
+    schedulerAdapter.getClient().createSchedule = mockCreateSchedule
 
     // Try to schedule the content
     const result = await schedulerAdapter.scheduleContent(

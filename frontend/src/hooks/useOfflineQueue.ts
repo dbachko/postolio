@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useCallback, useEffect, useMemo } from 'react'
 
 export interface QueuedAction {
   id: string
@@ -6,6 +6,7 @@ export interface QueuedAction {
   payload: any
   timestamp: number
   retries: number
+  maxRetries?: number // Allow per-action max retries
 }
 
 interface UseOfflineQueueOptions {
@@ -23,37 +24,62 @@ export function useOfflineQueue({
 }: UseOfflineQueueOptions = {}) {
   const queueRef = useRef<QueuedAction[]>([])
   const processingRef = useRef(false)
-  const retryTimeoutRef = useRef<NodeJS.Timeout>()
+  const retryTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
 
-  // Load queue from localStorage on mount
+  // Mount effect using react-use pattern for initial load
   useEffect(() => {
-    const savedQueue = localStorage.getItem('offlineQueue')
-    if (savedQueue) {
-      try {
-        queueRef.current = JSON.parse(savedQueue)
-      } catch (error) {
-        console.error('Failed to load offline queue:', error)
+    const loadQueue = () => {
+      const savedQueue = localStorage.getItem('offlineQueue')
+      if (savedQueue) {
+        try {
+          const parsed = JSON.parse(savedQueue)
+          // Validate queue structure
+          if (Array.isArray(parsed)) {
+            queueRef.current = parsed.filter(action => 
+              action && typeof action === 'object' && action.id && action.type
+            )
+          }
+        } catch (error) {
+          console.error('Failed to load offline queue:', error)
+          // Clear corrupted data
+          localStorage.removeItem('offlineQueue')
+        }
+      }
+    }
+    
+    loadQueue()
+  }, [])
+
+  // Save queue to localStorage with error handling
+  const saveQueue = useCallback(() => {
+    try {
+      // Check localStorage availability (react-use pattern)
+      if (typeof Storage !== 'undefined') {
+        localStorage.setItem('offlineQueue', JSON.stringify(queueRef.current))
+      }
+    } catch (error) {
+      console.error('Failed to save offline queue:', error instanceof Error ? error.message : error)
+      // Handle quota exceeded or other localStorage errors
+      if (error instanceof Error && error.name === 'QuotaExceededError') {
+        console.warn('LocalStorage quota exceeded, clearing old queue data')
+        try {
+          localStorage.removeItem('offlineQueue')
+        } catch (clearError) {
+          console.error('Failed to clear corrupted queue:', clearError instanceof Error ? clearError.message : clearError)
+        }
       }
     }
   }, [])
 
-  // Save queue to localStorage
-  const saveQueue = useCallback(() => {
-    try {
-      localStorage.setItem('offlineQueue', JSON.stringify(queueRef.current))
-    } catch (error) {
-      console.error('Failed to save offline queue:', error)
-    }
-  }, [])
-
-  // Add action to queue
-  const enqueue = useCallback((type: QueuedAction['type'], payload: any) => {
+  // Add action to queue with better ID generation
+  const enqueue = useCallback((type: QueuedAction['type'], payload: any, actionMaxRetries?: number) => {
     const action: QueuedAction = {
-      id: `${Date.now()}-${Math.random()}`,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Better ID generation
       type,
       payload,
       timestamp: Date.now(),
-      retries: 0
+      retries: 0,
+      maxRetries: actionMaxRetries
     }
     
     queueRef.current.push(action)
@@ -70,12 +96,15 @@ export function useOfflineQueue({
     saveQueue()
   }, [saveQueue])
 
-  // Process a single action
+  // Process a single action with enhanced error handling
   const processAction = useCallback(async (action: QueuedAction): Promise<boolean> => {
     if (!onProcess) {
       console.warn('No onProcess handler provided for offline queue')
       return false
     }
+
+    // Use action-specific max retries or default
+    const actionMaxRetries = action.maxRetries ?? maxRetries
 
     try {
       const success = await onProcess(action)
@@ -88,7 +117,7 @@ export function useOfflineQueue({
       // If not successful but no error thrown, retry
       action.retries++
       
-      if (action.retries >= maxRetries) {
+      if (action.retries >= actionMaxRetries) {
         console.error(`Max retries reached for action ${action.id}`)
         onError?.(action, new Error('Max retries exceeded'))
         dequeue(action.id)
@@ -102,7 +131,7 @@ export function useOfflineQueue({
       
       action.retries++
       
-      if (action.retries >= maxRetries) {
+      if (action.retries >= actionMaxRetries) {
         onError?.(action, error as Error)
         dequeue(action.id)
         return false
@@ -127,13 +156,14 @@ export function useOfflineQueue({
       for (const action of [...queueRef.current]) {
         const success = await processAction(action)
         
-        if (!success && action.retries < maxRetries) {
-          // Schedule retry with exponential backoff + jitter
+        const actionMaxRetries = action.maxRetries ?? maxRetries
+        if (!success && action.retries < actionMaxRetries) {
+          // Schedule retry with exponential backoff + jitter (react-use-websocket pattern)
           const baseDelay = retryDelay * Math.pow(2, action.retries - 1)
           const jitter = Math.random() * 0.3 * baseDelay // Add 30% jitter
           const delay = Math.min(baseDelay + jitter, 30000) // Cap at 30 seconds
           
-          console.log(`Retrying action ${action.id} in ${Math.round(delay)}ms (attempt ${action.retries + 1}/${maxRetries})`)
+          console.log(`Retrying action ${action.id} in ${Math.round(delay)}ms (attempt ${action.retries + 1}/${actionMaxRetries})`)
           
           retryTimeoutRef.current = setTimeout(() => {
             processQueue()
@@ -169,21 +199,34 @@ export function useOfflineQueue({
     return [...queueRef.current]
   }, [])
 
-  // Clean up on unmount
+  // Clean up on unmount using react-use pattern
   useEffect(() => {
     return () => {
+      // Clear all timeouts and save final state
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current)
+      }
+      // Save queue one final time before unmount
+      try {
+        if (typeof Storage !== 'undefined' && queueRef.current.length > 0) {
+          localStorage.setItem('offlineQueue', JSON.stringify(queueRef.current))
+        }
+      } catch (error) {
+        console.error('Failed to save queue on unmount:', error)
       }
     }
   }, [])
 
-  return {
+  // Memoize return object to prevent unnecessary re-renders (react-use pattern)
+  return useMemo(() => ({
     enqueue,
     dequeue,
     processQueue,
     clearQueue,
     getQueueSize,
-    getQueue
-  }
+    getQueue,
+    // Add status indicators
+    isProcessing: () => processingRef.current,
+    hasRetryScheduled: () => !!retryTimeoutRef.current
+  }), [enqueue, dequeue, processQueue, clearQueue, getQueueSize, getQueue])
 }

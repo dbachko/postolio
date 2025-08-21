@@ -1,7 +1,8 @@
 import React from 'react'
 import { Wifi, WifiOff, AlertCircle, Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils'
-import { ConnectionStatus as ConnectionStatusType } from '../types/websocket'
+import type { ConnectionStatus as ConnectionStatusType } from '../types/websocket'
+import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket'
 
 interface ConnectionStatusProps {
   status: ConnectionStatusType
@@ -149,15 +150,23 @@ export function useConnectionStatus() {
     setMounted(true)
   }, [])
   
-  // Import dynamically to avoid SSR issues
-  const { connectionStatus, lastUpdate, reconnect, queueSize } = mounted 
-    ? require('../hooks/useSchedulingWebSocket').useSchedulingWebSocket()
-    : { connectionStatus: 'disconnected' as ConnectionStatusType, lastUpdate: null, reconnect: () => {}, queueSize: 0 }
+  // Use proper hook import with SSR safety
+  const hookResult = useSchedulingWebSocket({ enabled: mounted })
+  
+  // Return safe defaults when not mounted (SSR safety)
+  if (!mounted) {
+    return {
+      connectionStatus: 'disconnected' as ConnectionStatusType,
+      lastUpdate: null,
+      reconnect: () => {},
+      queueSize: 0
+    }
+  }
   
   return {
-    connectionStatus,
-    lastUpdate,
-    reconnect,
-    queueSize
+    connectionStatus: hookResult.connectionStatus,
+    lastUpdate: hookResult.lastUpdate,
+    reconnect: hookResult.reconnect,
+    queueSize: hookResult.queueSize
   }
 }

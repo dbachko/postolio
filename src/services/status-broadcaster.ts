@@ -82,13 +82,13 @@ export class StatusBroadcaster {
         const data = this.parseStreamFields(fields)
         return {
           type: 'status_change' as const,
-          contentId: data.contentId,
-          oldStatus: data.oldStatus as ContentStatus,
-          newStatus: data.newStatus as ContentStatus,
+          contentId: data.contentId || '',
+          oldStatus: (data.oldStatus || 'draft') as ContentStatus,
+          newStatus: (data.newStatus || 'draft') as ContentStatus,
           metadata: data.metadata ? JSON.parse(data.metadata) : undefined,
-          timestamp: new Date(parseInt(data.timestamp)).toISOString()
+          timestamp: new Date(parseInt(data.timestamp || '0')).toISOString()
         }
-      })
+      }).filter(event => event.contentId !== '')
     } catch (error) {
       this.fastify.log.error({ error, brandId }, 'Failed to get recent events')
       return []
@@ -109,7 +109,7 @@ export class StatusBroadcaster {
       const toDelete: string[] = []
       for (const [id, fields] of events) {
         const data = this.parseStreamFields(fields)
-        const timestamp = parseInt(data.timestamp)
+        const timestamp = parseInt(data.timestamp || '0')
         if (timestamp < sevenDaysAgo) {
           toDelete.push(id)
         }
@@ -200,12 +200,18 @@ export class StatusBroadcaster {
     newestEvent: string | null
   }> {
     try {
-      const info = await this.redis.xinfo('STREAM', `events:${brandId}`)
+      const info = await this.redis.xinfo('STREAM', `events:${brandId}`) as any[]
       
       return {
-        totalEvents: info[1] as number, // length field
-        oldestEvent: info[3] ? new Date(parseInt(info[3].split('-')[0])).toISOString() : null,
-        newestEvent: info[5] ? new Date(parseInt(info[5].split('-')[0])).toISOString() : null
+        totalEvents: (info[1] as number) || 0, // length field
+        oldestEvent: info[3] && typeof info[3] === 'string' ? (() => {
+          const parts = info[3].split('-')
+          return parts[0] ? new Date(parseInt(parts[0])).toISOString() : null
+        })() : null,
+        newestEvent: info[5] && typeof info[5] === 'string' ? (() => {
+          const parts = info[5].split('-')
+          return parts[0] ? new Date(parseInt(parts[0])).toISOString() : null
+        })() : null
       }
     } catch (error) {
       // Stream doesn't exist yet
@@ -223,7 +229,11 @@ export class StatusBroadcaster {
   private parseStreamFields(fields: string[]): Record<string, string> {
     const result: Record<string, string> = {}
     for (let i = 0; i < fields.length; i += 2) {
-      result[fields[i]] = fields[i + 1]
+      const key = fields[i]
+      const value = fields[i + 1]
+      if (key && value !== undefined) {
+        result[key] = value
+      }
     }
     return result
   }
