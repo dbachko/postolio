@@ -530,8 +530,6 @@ export class PostolioStack extends cdk.Stack {
           OPENAI_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'openaiApiKey'),
           FACEBOOK_APP_ID: ecs.Secret.fromSecretsManager(appSecrets, 'facebookAppId'),
           FACEBOOK_APP_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'facebookAppSecret'),
-          NODE_ENV: ecs.Secret.fromSecretsManager(appSecrets, 'nodeEnv'),
-          PORT: ecs.Secret.fromSecretsManager(appSecrets, 'port'),
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
           INSTAGRAM_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecrets, 'instagramRedirectUri'),
           PUBLISHER_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'publisherApiKey'),
@@ -552,6 +550,7 @@ export class PostolioStack extends cdk.Stack {
           USE_AWS_SES: 'true', // Use SES in production
           SES_FROM_EMAIL: domainName ? `noreply@${domainName}` : 'noreply@postolio.example',
           NODE_ENV: environment === 'prod' ? 'production' : environment,
+          PORT: '3000',
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: 'postolio',
