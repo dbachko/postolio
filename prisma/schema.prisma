@@ -23,6 +23,13 @@ model User {
   scheduledDeletion DateTime?
   timezone             String?            // User's preferred timezone (null = auto-detect)
   timezoneAutoDetected Boolean            @default(true) // Whether to auto-detect timezone
+  
+  // OAuth fields
+  googleId          String?            @unique // Google OAuth ID
+  facebookId        String?            @unique // Facebook OAuth ID  
+  profilePicture    String?            // Profile picture URL from OAuth provider
+  emailVerified     Boolean            @default(false) // Email verification status
+  
   brands            Brand[]
   campaignTemplates CampaignTemplate[]
   modifiedCampaigns Campaign[]
@@ -70,6 +77,7 @@ model Content {
   instagramPostId    String?
   analytics          Json?
   schedulingError    String?
+  imageUrl           String?       // Legacy field for backward compatibility
   cdnImageUrl        String?
   imageRegion        String?
   retentionExpiresAt DateTime?

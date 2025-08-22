@@ -10,6 +10,7 @@ import authPlugin from './plugins/auth.js'
 import monitoringPlugin from './plugins/monitoring.js'
 import websocketPlugin from './plugins/websocket.js'
 import authRoutes from './routes/auth.js'
+import googleOAuthRoutes from './routes/google-oauth.js'
 import monitoringRoutes from './routes/monitoring.js'
 import instagramOAuthRoutes from './routes/instagram-oauth.js'
 import brandsRoutes from './routes/brands.js'
@@ -105,6 +106,7 @@ export function buildFastify(): FastifyInstance {
   // Register routes WITH /api prefix - CloudFront forwards full paths to backend
   app.register(monitoringRoutes, { prefix: '/api/monitoring' })
   app.register(authRoutes, { prefix: '/api/auth' })
+  app.register(googleOAuthRoutes, { prefix: '/api/auth' })
   app.register(userRoutes) // User routes include their own /api prefix
   app.register(instagramOAuthRoutes, { prefix: '/api/auth/instagram' })
   app.register(brandsRoutes, { prefix: '/api/brands' })

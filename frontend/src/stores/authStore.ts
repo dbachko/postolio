@@ -10,6 +10,8 @@ interface AuthState {
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
   getToken: () => string | null
+  setUser: (user: User) => void
+  setToken: (token: string) => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -69,5 +71,14 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   getToken: () => {
     return localStorage.getItem('auth_token')
+  },
+
+  setUser: (user: User) => {
+    set({ user, isAuthenticated: true })
+  },
+
+  setToken: (token: string) => {
+    apiClient.setToken(token)
+    localStorage.setItem('auth_token', token)
   },
 }))

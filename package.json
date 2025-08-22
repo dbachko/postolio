@@ -41,6 +41,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/websocket": "^11.2.0",
     "@prisma/client": "^6.2.0",
+    "@react-oauth/google": "^0.12.2",
     "aws4-axios": "^3.4.0",
     "axios": "^1.11.0",
     "bcrypt": "^5.1.1",
