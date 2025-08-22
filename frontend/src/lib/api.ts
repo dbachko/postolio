@@ -498,6 +498,25 @@ class ApiClient {
   // Content endpoints (fixed duplicate method - keeping the correct one)
   /* Note: updateContent is already defined above at line 368-379 with PUT method */
 
+  async deletePost(postId: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/api/content/post/${postId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async schedulePost(postId: string, scheduledAt: string): Promise<{ success: boolean; content: Content }> {
+    return this.request(`/api/content/post/${postId}/schedule`, {
+      method: 'POST',
+      body: JSON.stringify({ scheduledAt }),
+    })
+  }
+
+  async publishPostNow(postId: string): Promise<{ success: boolean; content: Content }> {
+    return this.request(`/api/content/post/${postId}/publish-now`, {
+      method: 'POST',
+    })
+  }
+
   // Calendar endpoints
   async getCalendarContent(brandId: string, month?: string): Promise<{
     success: boolean
