@@ -534,6 +534,15 @@ export class PostolioStack extends cdk.Stack {
           PORT: ecs.Secret.fromSecretsManager(appSecrets, 'port'),
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
           PUBLISHER_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'publisherApiKey'),
+          // Google OAuth secrets from platform credentials
+          GOOGLE_CLIENT_ID: ecs.Secret.fromSecretsManager(
+            secretsmanager.Secret.fromSecretNameV2(this, 'PlatformCredentials', 'postolio-scheduler-dev-platform-credentials'),
+            'google.clientId'
+          ),
+          GOOGLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(
+            secretsmanager.Secret.fromSecretNameV2(this, 'PlatformCredentials2', 'postolio-scheduler-dev-platform-credentials'),
+            'google.clientSecret'
+          ),
         },
         environment: {
           DB_HOST: database.instanceEndpoint.hostname,
