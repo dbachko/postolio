@@ -414,36 +414,13 @@ export class SchedulerAdapter {
 
   // ==================== Private Helper Methods ====================
 
-  private removeSensitiveMetadata(schedule: any): any {
-    if (!schedule.metadata) {
-      return schedule;
-    }
-
-    // Create a copy of the schedule
-    const cleanedSchedule = { ...schedule };
-    
-    // Remove sensitive fields from metadata
-    const { 
-      instagramAccessToken, 
-      instagramAccountId, 
-      instagramPageId,
-      ...cleanMetadata 
-    } = cleanedSchedule.metadata;
-    
-    cleanedSchedule.metadata = cleanMetadata;
-    
-    return cleanedSchedule;
-  }
-
   private mergeScheduledContent(awsSchedules: any[], localContent: any[]): any[] {
     const contentMap = new Map();
     
     // Add AWS schedules
     for (const schedule of awsSchedules) {
-      // Remove sensitive data from metadata before storing
-      const cleanedSchedule = this.removeSensitiveMetadata(schedule);
       contentMap.set(schedule.contentId, {
-        ...cleanedSchedule,
+        ...schedule,
         source: 'aws',
       });
     }
