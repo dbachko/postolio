@@ -70,20 +70,22 @@ export function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl text-center">Create your account</CardTitle>
-          <CardDescription className="text-center">
-            Or{' '}
-            <Link
-              to="/login"
-              className="font-medium text-primary hover:underline"
-            >
-              sign in to your existing account
-            </Link>
-          </CardDescription>
-        </CardHeader>
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Main content */}
+      <div className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl text-center">Create your account</CardTitle>
+            <CardDescription className="text-center">
+              Or{' '}
+              <Link
+                to="/login"
+                className="font-medium text-primary hover:underline"
+              >
+                sign in to your existing account
+              </Link>
+            </CardDescription>
+          </CardHeader>
         <CardContent>
           {/* Google OAuth */}
           <div className="mb-6">
@@ -204,9 +206,10 @@ export function Register() {
           </form>
         </CardContent>
       </Card>
+      </div>
       
       {/* Footer */}
-      <div className="mt-8 text-center">
+      <footer className="py-6 px-4 border-t">
         <div className="flex justify-center items-center text-sm text-muted-foreground space-x-4">
           <span>© 2024 Postolio</span>
           <span>•</span>
@@ -231,7 +234,7 @@ export function Register() {
             Legal
           </a>
         </div>
-      </div>
+      </footer>
     </div>
   )
 }

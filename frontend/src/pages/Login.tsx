@@ -111,9 +111,8 @@ export function Login() {
       </div>
       
       {/* Footer */}
-      <footer className="bg-card border-t">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-center items-center text-sm text-muted-foreground space-x-4">
+      <footer className="py-6 px-4 border-t">
+        <div className="flex justify-center items-center text-sm text-muted-foreground space-x-4">
             <span>© 2024 Postolio</span>
             <span>•</span>
             <Link 
@@ -137,7 +136,6 @@ export function Login() {
               Legal
             </a>
           </div>
-        </div>
       </footer>
     </div>
   )
