@@ -7,6 +7,9 @@
 import { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
 import { createPublisherAuth } from '../middleware/publisher-auth.js';
+import { getDatabaseClient } from '../config/database.js';
+
+const prisma = getDatabaseClient();
 
 const publisher: FastifyPluginAsync = async function (fastify) {
   // Retrieve API key inside plugin function for better security
@@ -36,6 +39,137 @@ const publisher: FastifyPluginAsync = async function (fastify) {
     apiKey: PUBLISHER_API_KEY,
     requireHttps: process.env.NODE_ENV === 'production',
     ...(allowedIPs && { allowedIPs })
+  });
+
+  /**
+   * Get fresh content details for publishing
+   * This endpoint is called by the AWS publisher Lambda at publish time
+   * to ensure we always publish the latest edited content
+   */
+  fastify.post('/content', {
+    preHandler: authMiddleware,
+    schema: {
+      body: {
+        type: 'object',
+        required: ['contentId'],
+        properties: {
+          contentId: { type: 'string', format: 'uuid' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            content: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                caption: { type: 'string' },
+                hashtags: { type: 'array', items: { type: 'string' } },
+                mediaUrls: { type: 'array', items: { type: 'string' } },
+                cdnImageUrl: { type: 'string' },
+                imageUrl: { type: 'string' },
+                brandId: { type: 'string' },
+                contentType: { type: 'string' }
+              }
+            },
+            timestamp: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async function (request, reply) {
+    try {
+      const { contentId } = request.body as { contentId: string };
+
+      if (!contentId) {
+        return reply.status(400).send({ 
+          error: 'Bad Request',
+          message: 'contentId is required' 
+        });
+      }
+
+      // Fetch fresh content from database
+      const content = await prisma.content.findUnique({
+        where: { id: contentId },
+        select: {
+          id: true,
+          caption: true,
+          hashtags: true,
+          imageUrl: true,
+          cdnImageUrl: true,
+          brandId: true,
+          status: true,
+          brand: {
+            select: {
+              name: true
+            }
+          }
+        }
+      });
+
+      if (!content) {
+        return reply.status(404).send({ 
+          error: 'Not Found',
+          message: `Content not found: ${contentId}`,
+          contentId 
+        });
+      }
+
+      // Check if content is in a publishable state
+      if (content.status !== 'scheduled') {
+        return reply.status(400).send({
+          error: 'Bad Request',
+          message: `Content ${contentId} is not scheduled for publishing (status: ${content.status})`,
+          contentId,
+          status: content.status
+        });
+      }
+
+      // Prepare media URLs array
+      const mediaUrls: string[] = [];
+      if (content.cdnImageUrl) {
+        mediaUrls.push(content.cdnImageUrl);
+      } else if (content.imageUrl) {
+        mediaUrls.push(content.imageUrl);
+      }
+
+      // Log for monitoring (without exposing content details)
+      fastify.log.info({
+        event: 'publisher_content_fetched',
+        contentId,
+        brandId: content.brandId,
+        brandName: content.brand.name,
+        hasCaption: !!content.caption,
+        hashtagCount: content.hashtags.length,
+        mediaCount: mediaUrls.length,
+        timestamp: new Date().toISOString(),
+        source: request.headers['x-request-id'] || 'unknown'
+      });
+
+      // Return fresh content details
+      reply.send({
+        success: true,
+        content: {
+          id: content.id,
+          caption: content.caption,
+          hashtags: content.hashtags,
+          mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+          cdnImageUrl: content.cdnImageUrl,
+          imageUrl: content.imageUrl,
+          brandId: content.brandId,
+          contentType: 'image' // Default for now, could be expanded
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Publisher content error:', error);
+      reply.status(500).send({
+        error: 'Internal Server Error',
+        message: error instanceof Error ? error.message : 'Failed to fetch content',
+      });
+    }
   });
 
   /**

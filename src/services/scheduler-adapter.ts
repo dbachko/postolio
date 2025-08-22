@@ -110,12 +110,6 @@ export class SchedulerAdapter {
 
       // 5. Create schedule in AWS microservice (AWS expects UTC time)
       try {
-        // Prepare media URLs array (Lambda supports multiple images for carousels)
-        const mediaUrls: string[] = [];
-        if (content.cdnImageUrl) {
-          mediaUrls.push(content.cdnImageUrl);
-        }
-
         const schedule = await this.client.createSchedule({
           contentId: content.id,
           brandId: content.brandId,
@@ -123,16 +117,14 @@ export class SchedulerAdapter {
           platform: 'instagram', // Default for now, could expand to other platforms
           scheduledAt: scheduledTimeUTC.toISOString(), // Lambda expects 'scheduledAt'
           contentType: 'image', // Default to image, could be video/carousel/reel/story
-          caption: content.caption,
-          hashtags: content.hashtags,
-          mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
-          // videoUrl would be set here for video content
+          // DO NOT store content details here - they can change if user edits content
+          // Publisher Lambda should fetch fresh content from database at publish time
+          // using contentId to ensure we always publish the latest edited content
           metadata: {
             timezone: brandTimezone,
             localTime: customTime ? customTime.toISOString() : undefined,
-            // DO NOT store credentials here - they can change if user reconnects
-            // Publisher Lambda should fetch fresh credentials from database at publish time
-            // using brandId to ensure we always have valid tokens
+            // Content details (caption, hashtags, mediaUrls) intentionally NOT stored
+            // Publisher Lambda will fetch fresh content via /api/publisher/content endpoint
           },
         });
 
