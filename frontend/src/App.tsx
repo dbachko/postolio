@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { useAuthStore } from './stores/authStore'
 import { TimezoneProvider } from './contexts/TimezoneContext'
 import { ConnectionStatusProvider } from './components/ConnectionStatus'
+import { ConnectionIndicator, MobileConnectionBanner } from './components/ConnectionIndicator'
 import { UltraThinLayout as Layout } from './components/UltraThinLayout'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
@@ -190,6 +191,8 @@ function App() {
           } />
         </Routes>
         <Toaster position="bottom-left" />
+        <ConnectionIndicator />
+        <MobileConnectionBanner />
       </Router>
       </TimezoneProvider>
       </ConnectionStatusProvider>
