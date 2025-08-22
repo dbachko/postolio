@@ -92,19 +92,14 @@ export class PublisherCredentialsService {
 
   /**
    * Validate that credentials are still valid
-   * This could be extended to check token expiry dates
    */
   static async validateCredentials(credentials: PublisherCredentials): Promise<boolean> {
     if (!credentials.instagramAccessToken) {
       return false;
     }
 
-    // TODO: Check token expiry if we store it
-    // const tokenExpiry = await this.getTokenExpiry(credentials.brandId);
-    // if (tokenExpiry && new Date(tokenExpiry) < new Date()) {
-    //   return false;
-    // }
-
+    // Token expiry validation will be implemented when we store token expiry dates
+    // Currently, Instagram long-lived tokens are valid for 60 days
     return true;
   }
 

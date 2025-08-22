@@ -8,14 +8,10 @@ import { FastifyPluginAsync } from 'fastify';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
 import { createPublisherAuth } from '../middleware/publisher-auth.js';
 
-// API key authentication for Lambda-to-API communication
-const PUBLISHER_API_KEY = process.env.PUBLISHER_API_KEY;
-
-if (!PUBLISHER_API_KEY) {
-  console.error('❌ PUBLISHER_API_KEY not configured. Publisher endpoint disabled.');
-}
-
 const publisher: FastifyPluginAsync = async function (fastify) {
+  // Retrieve API key inside plugin function for better security
+  const PUBLISHER_API_KEY = process.env.PUBLISHER_API_KEY;
+  
   // Only enable if API key is configured
   if (!PUBLISHER_API_KEY) {
     fastify.log.warn('Publisher endpoint disabled - PUBLISHER_API_KEY not configured');
@@ -96,16 +92,12 @@ const publisher: FastifyPluginAsync = async function (fastify) {
         });
       }
 
-      // Log for debugging and monitoring (without exposing full token)
-      const tokenPreview = credentials.instagramAccessToken 
-        ? `${credentials.instagramAccessToken.substring(0, 10)}...` 
-        : 'null';
-      
+      // Log for monitoring (without exposing any token information)
       fastify.log.info({
         event: 'publisher_credentials_fetched',
         brandId,
         brandName: credentials.brandName,
-        hasToken: !!credentials.instagramAccessToken,
+        hasCredentials: !!credentials.instagramAccessToken,
         timestamp: new Date().toISOString(),
         source: request.headers['x-request-id'] || 'unknown'
       });

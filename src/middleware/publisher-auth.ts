@@ -67,11 +67,19 @@ export function createPublisherAuth(options: PublisherAuthOptions) {
 
     // 4. Optional IP allowlist
     if (options.allowedIPs && options.allowedIPs.length > 0) {
-      const clientIP = request.ip;
+      // Get the real client IP, checking X-Forwarded-For header for load balancers
+      // X-Forwarded-For format: "client, proxy1, proxy2"
+      const forwardedFor = request.headers['x-forwarded-for'] as string;
+      const clientIP = forwardedFor 
+        ? forwardedFor.split(',')[0].trim() // Get the original client IP
+        : request.ip;
+      
       if (!options.allowedIPs.includes(clientIP)) {
         request.log.warn({
           event: 'publisher_ip_blocked',
           ip: clientIP,
+          forwardedFor: forwardedFor,
+          directIP: request.ip,
           timestamp: new Date().toISOString()
         });
         
