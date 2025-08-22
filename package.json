@@ -55,6 +55,7 @@
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.2.1",
     "fastify": "^5.2.0",
+    "google-auth-library": "^10.2.1",
     "instagram-graph-api": "^7.0.0",
     "ioredis": "^5.6.1",
     "jsonwebtoken": "^9.0.2",
