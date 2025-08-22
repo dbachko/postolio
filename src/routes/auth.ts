@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import bcrypt from 'bcrypt'
 import { signJWT, verifyJWT } from '../services/jwt.js'
 import { getDatabaseClient } from '../config/database.js'
+import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js'
 
 
 const prisma = getDatabaseClient()
@@ -18,8 +19,10 @@ interface LoginBody {
 }
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
-  // User registration
-  fastify.post<{ Body: RegisterBody }>('/register', async (request, reply) => {
+  // User registration with rate limiting
+  fastify.post<{ Body: RegisterBody }>('/register', {
+    preHandler: enhancedRateLimiters.register()
+  }, async (request, reply) => {
     const { email, password, name } = request.body
 
     // Check if user exists
@@ -64,14 +67,34 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       maxAge: 7 * 24 * 60 * 60 // 7 days
     })
 
+    // Send welcome and verification emails (non-blocking)
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      Promise.all([
+        import('../services/email.js'),
+        import('../services/email-verification.js')
+      ]).then(([{ EmailService }, { EmailVerificationService }]) => {
+        // Send welcome email
+        EmailService.sendWelcomeEmail(user.email, user.name || undefined).catch(error => {
+          console.error('Failed to send welcome email:', error)
+        })
+        
+        // Send verification email
+        EmailVerificationService.sendVerificationEmail(user.id).catch(error => {
+          console.error('Failed to send verification email:', error)
+        })
+      })
+    }
+
     return reply.code(201).send({
       token,
       user
     })
   })
 
-  // User login
-  fastify.post<{ Body: LoginBody }>('/login', async (request, reply) => {
+  // User login with rate limiting
+  fastify.post<{ Body: LoginBody }>('/login', {
+    preHandler: enhancedRateLimiters.login()
+  }, async (request, reply) => {
     const { email, password } = request.body
 
     // Find user with password for verification

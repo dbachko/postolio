@@ -9,6 +9,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter'
 import { FormField } from '@/components/forms/FormField'
 import { GoogleSignIn } from '@/components/auth/GoogleSignIn'
+import { FacebookSignIn } from '@/components/auth/FacebookSignIn'
+import { MagicLinkForm } from '@/components/auth/MagicLinkForm'
 import { validationRules } from '../utils/validation'
 import { TIMEOUTS } from '../constants/timeouts'
 import { Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react'
@@ -24,6 +26,7 @@ export function Register() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showMagicLink, setShowMagicLink] = useState(false)
   
   const { register: registerUser } = useAuthStore()
   const navigate = useNavigate()
@@ -87,9 +90,10 @@ export function Register() {
             </CardDescription>
           </CardHeader>
         <CardContent>
-          {/* Google OAuth */}
-          <div className="mb-6">
+          {/* OAuth Providers */}
+          <div className="space-y-3 mb-6">
             <GoogleSignIn mode="signup" />
+            <FacebookSignIn mode="signup" />
           </div>
           
           {/* Divider */}
@@ -99,11 +103,27 @@ export function Register() {
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-background px-2 text-muted-foreground">
-                Or continue with email
+                Or continue with
               </span>
             </div>
           </div>
           
+          {/* Magic Link Option */}
+          {showMagicLink ? (
+            <>
+              <MagicLinkForm mode="signup" onSuccess={() => navigate('/dashboard')} />
+              <div className="text-center mt-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMagicLink(false)}
+                >
+                  Use email and password instead
+                </Button>
+              </div>
+            </>
+          ) : (
           <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
             {error && (
               <Alert variant="destructive">
@@ -186,6 +206,18 @@ export function Register() {
               {isLoading ? 'Creating account...' : 'Create account'}
             </Button>
             
+            {/* Magic Link Alternative */}
+            <div className="text-center">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowMagicLink(true)}
+              >
+                Or sign up with magic link (no password)
+              </Button>
+            </div>
+            
             {/* Privacy Policy Notice */}
             <div className="text-xs text-center text-muted-foreground mt-4">
               By creating an account, you agree to our{' '}
@@ -204,6 +236,7 @@ export function Register() {
               </Link>
             </div>
           </form>
+          )}
         </CardContent>
       </Card>
       </div>

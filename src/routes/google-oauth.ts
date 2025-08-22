@@ -3,6 +3,7 @@ import { OAuth2Client } from 'google-auth-library'
 import { signJWT } from '../services/jwt.js'
 import { getDatabaseClient } from '../config/database.js'
 import bcrypt from 'bcrypt'
+import { randomBytes } from 'crypto'
 
 const prisma = getDatabaseClient()
 
@@ -88,16 +89,14 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         }
       } else {
         // Create new user with Google OAuth
-        // Generate a random password for OAuth users (they won't use it)
-        const randomPassword = await bcrypt.hash(
-          Math.random().toString(36).slice(-16) + Math.random().toString(36).slice(-16),
-          10
-        )
+        // Generate a cryptographically secure random password for OAuth users
+        const secureRandomPassword = randomBytes(32).toString('hex')
+        const hashedPassword = await bcrypt.hash(secureRandomPassword, 10)
 
         user = await prisma.user.create({
           data: {
             email: googleUserInfo.email,
-            password: randomPassword,
+            password: hashedPassword,
             name: googleUserInfo.name,
             googleId: googleUserInfo.id,
             profilePicture: googleUserInfo.picture || null,
