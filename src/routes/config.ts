@@ -13,10 +13,10 @@ export default async function configRoutes(fastify: FastifyInstance) {
     if (nodeEnv === 'production' && wsDomain) {
       // Use WebSocket subdomain for direct ALB connection
       // postolio.example points directly to ALB with proper SSL certificate
-      wsUrl = `wss://${wsDomain}/ws`
+      wsUrl = `wss://${wsDomain}`
     } else {
-      // In development or if WS_DOMAIN not set, use relative path
-      wsUrl = '' // Empty means use same origin (Vite proxy handles it)
+      // In development or if WS_DOMAIN not set, use relative path with /ws
+      wsUrl = '' // Empty means use same origin with /ws path (Vite proxy handles it)
     }
     
     return reply.send({
