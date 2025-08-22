@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useConnectionStatus } from './ConnectionStatus'
 import { toast } from 'sonner'
 import { WifiOff, Wifi, AlertCircle } from 'lucide-react'
@@ -12,15 +12,14 @@ import { WifiOff, Wifi, AlertCircle } from 'lucide-react'
  * - Failed: Show action required modal
  */
 export function ConnectionIndicator() {
-  const connectionStatus = useConnectionStatus()
-  const [showIndicator, setShowIndicator] = useState(false)
+  const { connectionStatus, retryIn, reconnect } = useConnectionStatus()
   const [disconnectedDuration, setDisconnectedDuration] = useState(0)
   const [toastId, setToastId] = useState<string | number | undefined>()
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined
     
-    if (!connectionStatus?.isConnected) {
+    if (connectionStatus !== 'connected') {
       // Start counting disconnection duration
       const startTime = Date.now()
       interval = setInterval(() => {
@@ -28,9 +27,7 @@ export function ConnectionIndicator() {
         setDisconnectedDuration(duration)
         
         // Progressive disclosure based on duration
-        if (duration >= 3 && duration < 10) {
-          setShowIndicator(true)
-        } else if (duration >= 10 && !toastId) {
+        if (duration >= 10 && !toastId) {
           // Show persistent toast for extended disconnection
           const id = toast.warning(
             <div className="flex items-center gap-2">
@@ -42,9 +39,9 @@ export function ConnectionIndicator() {
             </div>,
             {
               duration: Infinity,
-              action: connectionStatus.retryIn && connectionStatus.retryIn > 0 ? {
-                label: `Retry (${connectionStatus.retryIn}s)`,
-                onClick: () => connectionStatus.connect?.()
+              action: retryIn && retryIn > 0 ? {
+                label: `Retry (${retryIn}s)`,
+                onClick: () => reconnect()
               } : undefined,
             }
           )
@@ -53,7 +50,6 @@ export function ConnectionIndicator() {
       }, 1000)
     } else {
       // Connected - clear everything
-      setShowIndicator(false)
       setDisconnectedDuration(0)
       
       // Dismiss toast if exists
@@ -72,10 +68,10 @@ export function ConnectionIndicator() {
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [connectionStatus?.isConnected, connectionStatus?.retryIn, toastId])
+  }, [connectionStatus, retryIn, reconnect, toastId])
 
   // Don't render anything when connected or in first 3 seconds
-  if (connectionStatus?.isConnected || disconnectedDuration < 3) {
+  if (connectionStatus === 'connected' || disconnectedDuration < 3) {
     return null
   }
 
@@ -86,13 +82,13 @@ export function ConnectionIndicator() {
         className="fixed bottom-4 right-4 z-40 p-2 cursor-pointer group"
         onClick={() => {
           toast.info(
-            connectionStatus.isReconnecting 
-              ? `Reconnecting... ${connectionStatus.retryIn ? `(${connectionStatus.retryIn}s)` : ''}`
+            connectionStatus === 'connecting' 
+              ? `Reconnecting... ${retryIn ? `(${retryIn}s)` : ''}`
               : 'Connection lost. Attempting to reconnect...',
             { duration: 3000 }
           )
         }}
-        title={connectionStatus.isReconnecting ? 'Reconnecting...' : 'Connection lost'}
+        title={connectionStatus === 'connecting' ? 'Reconnecting...' : 'Connection lost'}
       >
         <div className="relative">
           {/* Pulsing dot */}
@@ -101,7 +97,7 @@ export function ConnectionIndicator() {
           {/* Hover tooltip */}
           <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block">
             <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
-              {connectionStatus.isReconnecting ? 'Reconnecting...' : 'Connection interrupted'}
+              {connectionStatus === 'connecting' ? 'Reconnecting...' : 'Connection interrupted'}
             </div>
           </div>
         </div>
@@ -117,20 +113,20 @@ export function ConnectionIndicator() {
  * Mobile-optimized connection banner (only shows on mobile for better visibility)
  */
 export function MobileConnectionBanner() {
-  const connectionStatus = useConnectionStatus()
+  const { connectionStatus } = useConnectionStatus()
   const [show, setShow] = useState(false)
 
   useEffect(() => {
     // Only show on mobile devices when disconnected for > 5 seconds
     const isMobile = window.innerWidth < 768
     
-    if (isMobile && !connectionStatus?.isConnected) {
+    if (isMobile && connectionStatus !== 'connected') {
       const timer = setTimeout(() => setShow(true), 5000)
       return () => clearTimeout(timer)
     } else {
       setShow(false)
     }
-  }, [connectionStatus?.isConnected])
+  }, [connectionStatus])
 
   if (!show) return null
 
