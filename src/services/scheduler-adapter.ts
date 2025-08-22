@@ -82,17 +82,23 @@ export class SchedulerAdapter {
 
       // 4. Create schedule in AWS microservice (AWS expects UTC time)
       try {
+        // Prepare media URLs array (Lambda supports multiple images for carousels)
+        const mediaUrls: string[] = [];
+        if (content.cdnImageUrl) {
+          mediaUrls.push(content.cdnImageUrl);
+        }
+
         const schedule = await this.client.createSchedule({
           contentId: content.id,
           brandId: content.brandId,
           userId: userId || content.brand.userId,
-          platform: 'instagram', // Default for now
-          scheduledTime: scheduledTimeUTC.toISOString(),
-          content: {
-            caption: content.caption,
-            mediaUrl: content.cdnImageUrl || undefined,
-            hashtags: content.hashtags,
-          },
+          platform: 'instagram', // Default for now, could expand to other platforms
+          scheduledAt: scheduledTimeUTC.toISOString(), // Lambda expects 'scheduledAt'
+          contentType: 'image', // Default to image, could be video/carousel/reel/story
+          caption: content.caption,
+          hashtags: content.hashtags,
+          mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+          // videoUrl would be set here for video content
           metadata: {
             timezone: brandTimezone,
             localTime: customTime ? customTime.toISOString() : undefined,
@@ -109,7 +115,7 @@ export class SchedulerAdapter {
             schedulingError: null,
             generationParams: {
               ...(content.generationParams as any || {}),
-              scheduleId: schedule.id,
+              scheduleId: schedule.scheduleId,
               scheduledTimezone: brandTimezone,
               scheduledLocalTime: customTime ? customTime.toISOString() : undefined,
             },
@@ -120,7 +126,7 @@ export class SchedulerAdapter {
         const localTimeDisplay = TimezoneService.formatWithTimezone(scheduledTimeUTC, brandTimezone);
         console.log(`Content ${contentId} scheduled successfully for ${localTimeDisplay}`);
         
-        return { success: true, scheduleId: schedule.id, brandId: content.brandId };
+        return { success: true, scheduleId: schedule.scheduleId, brandId: content.brandId };
       } catch (schedulerError) {
         console.error('Failed to create schedule in AWS:', schedulerError);
         
@@ -381,7 +387,7 @@ export class SchedulerAdapter {
   }
 
   private async getLocalSchedulingStats(brandId: string): Promise<any> {
-    const [pending, scheduled, published, failed] = await Promise.all([
+    const [draft, scheduled, published, failed] = await Promise.all([
       prisma.content.count({
         where: { brandId, status: 'draft' },
       }),
@@ -397,11 +403,11 @@ export class SchedulerAdapter {
     ]);
 
     return {
-      pending,
+      draft,
       scheduled,
       published,
       failed,
-      total: pending + scheduled + published + failed,
+      total: draft + scheduled + published + failed,
     };
   }
 
@@ -410,7 +416,7 @@ export class SchedulerAdapter {
     
     // Check if key metrics are within acceptable range (allow small differences)
     return (
-      Math.abs((awsStats.pending || 0) - (localStats.pending || 0)) <= SYNC_TOLERANCE &&
+      Math.abs((awsStats.scheduled || 0) - (localStats.scheduled || 0)) <= SYNC_TOLERANCE &&
       Math.abs((awsStats.published || 0) - (localStats.published || 0)) <= SYNC_TOLERANCE
     );
   }

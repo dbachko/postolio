@@ -14,30 +14,52 @@ import { defaultProvider } from '@aws-sdk/credential-provider-node';
 
 // ==================== Validation Schemas ====================
 
-const PlatformSchema = z.enum(['instagram', 'tiktok', 'youtube']);
-const ScheduleStatusSchema = z.enum(['pending', 'processing', 'published', 'failed', 'cancelled']);
+const PlatformSchema = z.enum(['instagram', 'facebook', 'twitter', 'linkedin', 'youtube']);
+const ScheduleStatusSchema = z.enum(['scheduled', 'processing', 'published', 'failed', 'cancelled']);
+const ContentTypeSchema = z.enum(['image', 'video', 'carousel', 'reel', 'story']);
 
-const ContentDataSchema = z.object({
-  caption: z.string(),
-  mediaUrl: z.string().url().optional(),
-  hashtags: z.array(z.string()).optional(),
-  mediaType: z.enum(['image', 'video', 'carousel']).optional(),
-  thumbnailUrl: z.string().url().optional(),
-});
-
-const ScheduleSchema = z.object({
-  id: z.string(),
+// Schema that matches Lambda's expected format
+const CreateScheduleInputSchema = z.object({
   contentId: z.string(),
   brandId: z.string(),
-  userId: z.string(),
+  userId: z.string().optional(),
   platform: PlatformSchema,
-  scheduledTime: z.string().datetime(),
-  content: ContentDataSchema,
+  scheduledAt: z.string().datetime(), // Changed from scheduledTime to scheduledAt
+  contentType: ContentTypeSchema.optional(),
+  videoUrl: z.string().url().optional(),
+  caption: z.string().optional(),
+  hashtags: z.array(z.string()).optional(),
+  mediaUrls: z.array(z.string().url()).optional(), // Array of URLs for carousel/multiple images
+  metadata: z.record(z.unknown()).optional(),
+});
+
+const UpdateScheduleInputSchema = z.object({
+  scheduledAt: z.string().datetime().optional(), // Changed from scheduledTime
+  caption: z.string().optional(),
+  hashtags: z.array(z.string()).optional(),
+  mediaUrls: z.array(z.string().url()).optional(),
+  status: ScheduleStatusSchema.optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+// Response schema from Lambda
+const ScheduleSchema = z.object({
+  scheduleId: z.string(),
+  contentId: z.string(),
+  brandId: z.string(),
+  userId: z.string().optional(),
+  platform: PlatformSchema,
+  scheduledAt: z.string().datetime(),
+  contentType: ContentTypeSchema,
+  videoUrl: z.string().url().optional(),
+  caption: z.string().optional(),
+  hashtags: z.array(z.string()).optional(),
+  mediaUrls: z.array(z.string().url()).optional(),
   status: ScheduleStatusSchema,
   retryCount: z.number().default(0),
   metadata: z.record(z.unknown()).optional(),
   createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  updatedAt: z.string().datetime().optional(),
   publishedAt: z.string().datetime().optional(),
   errorMessage: z.string().optional(),
 });
@@ -46,23 +68,6 @@ const ScheduleListSchema = z.object({
   schedules: z.array(ScheduleSchema),
   nextToken: z.string().optional(),
   total: z.number(),
-});
-
-const CreateScheduleInputSchema = z.object({
-  contentId: z.string(),
-  brandId: z.string(),
-  userId: z.string(),
-  platform: PlatformSchema,
-  scheduledTime: z.string().datetime(),
-  content: ContentDataSchema,
-  metadata: z.record(z.unknown()).optional(),
-});
-
-const UpdateScheduleInputSchema = z.object({
-  scheduledTime: z.string().datetime().optional(),
-  content: ContentDataSchema.optional(),
-  status: ScheduleStatusSchema.optional(),
-  metadata: z.record(z.unknown()).optional(),
 });
 
 const ListSchedulesParamsSchema = z.object({
@@ -80,7 +85,7 @@ const ListSchedulesParamsSchema = z.object({
 
 export type Platform = z.infer<typeof PlatformSchema>;
 export type ScheduleStatus = z.infer<typeof ScheduleStatusSchema>;
-export type ContentData = z.infer<typeof ContentDataSchema>;
+export type ContentType = z.infer<typeof ContentTypeSchema>;
 export type Schedule = z.infer<typeof ScheduleSchema>;
 export type ScheduleList = z.infer<typeof ScheduleListSchema>;
 export type CreateScheduleInput = z.infer<typeof CreateScheduleInputSchema>;
@@ -390,8 +395,8 @@ export class ContentSchedulerClient {
    */
   async reschedule(id: string, newTime: Date): Promise<Schedule> {
     return this.updateSchedule(id, { 
-      scheduledTime: newTime.toISOString(),
-      status: 'pending' 
+      scheduledAt: newTime.toISOString(),
+      status: 'scheduled' 
     });
   }
 
@@ -415,7 +420,7 @@ export class ContentSchedulerClient {
     const now = new Date();
     const result = await this.listSchedules({
       brandId,
-      status: 'pending',
+      status: 'scheduled', // Changed from 'pending' to match Lambda
       startTime: now.toISOString(),
       limit,
     });
@@ -427,14 +432,14 @@ export class ContentSchedulerClient {
    * Get scheduling statistics
    */
   async getSchedulingStats(brandId: string): Promise<{
-    pending: number;
+    scheduled: number;
     published: number;
     failed: number;
     cancelled: number;
     processing: number;
   }> {
     // Fetch counts for each status in parallel
-    const statuses: ScheduleStatus[] = ['pending', 'published', 'failed', 'cancelled', 'processing'];
+    const statuses: ScheduleStatus[] = ['scheduled', 'published', 'failed', 'cancelled', 'processing'];
     
     const results = await Promise.all(
       statuses.map(status =>
@@ -448,7 +453,7 @@ export class ContentSchedulerClient {
 
     // Build stats object from parallel results
     const stats: Record<ScheduleStatus, number> = {
-      pending: 0,
+      scheduled: 0,
       published: 0,
       failed: 0,
       cancelled: 0,
