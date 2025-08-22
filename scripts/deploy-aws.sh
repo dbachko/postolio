@@ -653,6 +653,7 @@ update_secrets() {
     echo "- port: 3000 (already set)"
     echo "- redisUrl: Redis connection URL (update with actual Redis endpoint after deployment)"
     echo "- instagramRedirectUri: Instagram OAuth callback (automatically configured)"
+    echo "- publisherApiKey: API key for Lambda publisher (automatically generated)"
     echo ""
     echo "Database connection is automatically configured from RDS credentials."
     echo ""

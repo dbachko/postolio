@@ -331,6 +331,15 @@ export class PostolioStack extends cdk.Stack {
         instagramRedirectUri: cdk.SecretValue.unsafePlainText(`https://${domainName || 'PLACEHOLDER_DOMAIN'}/auth/instagram/callback`),
   // ContentScheduler integration (SigV4 IAM auth only; API key deprecated)
   schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
+        // Publisher API key for Lambda-to-API authentication
+        publisherApiKey: cdk.SecretValue.unsafePlainText(
+          cdk.Fn.base64(cdk.Fn.join('', [
+            'publisher-',
+            cdk.Fn.select(2, cdk.Fn.split('-', cdk.Fn.select(2, cdk.Fn.split('/', cdk.Aws.STACK_ID)))),
+            '-',
+            cdk.Fn.select(0, cdk.Fn.split('-', cdk.Aws.STACK_ID))
+          ]))
+        ),
       },
     })
 
@@ -506,6 +515,7 @@ export class PostolioStack extends cdk.Stack {
           PORT: ecs.Secret.fromSecretsManager(appSecrets, 'port'),
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
           INSTAGRAM_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecrets, 'instagramRedirectUri'),
+          PUBLISHER_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'publisherApiKey'),
         },
         environment: {
           DB_HOST: database.instanceEndpoint.hostname,
