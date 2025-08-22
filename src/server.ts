@@ -8,6 +8,7 @@ import fs from 'fs'
 import path from 'path'
 import authPlugin from './plugins/auth.js'
 import monitoringPlugin from './plugins/monitoring.js'
+import websocketPlugin from './plugins/websocket.js'
 import authRoutes from './routes/auth.js'
 import monitoringRoutes from './routes/monitoring.js'
 import instagramOAuthRoutes from './routes/instagram-oauth.js'
@@ -33,6 +34,9 @@ import { autopilotService } from './services/autopilot.js'
 import { schedulerService } from './services/scheduler.js'
 import { ensureDatabaseSchema } from './config/database-setup.js'
 import { getRetentionManager } from './services/retention-manager.js'
+import Redis from 'ioredis'
+import { StatusBroadcaster } from './services/status-broadcaster.js'
+import { schedulerAdapter } from './services/scheduler-adapter.js'
 
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
@@ -94,6 +98,7 @@ export function buildFastify(): FastifyInstance {
   app.register(helmet)
   app.register(monitoringPlugin)
   app.register(authPlugin)
+  app.register(websocketPlugin)
 
   // Register routes WITH /api prefix - CloudFront forwards full paths to backend
   app.register(monitoringRoutes, { prefix: '/api/monitoring' })
@@ -132,6 +137,7 @@ export function buildFastify(): FastifyInstance {
 // Start server if this file is run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   const app = buildFastify()
+  let redis: Redis | null = null
 
   // Graceful shutdown handling
   const signals = ['SIGTERM', 'SIGINT']
@@ -141,6 +147,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       try {
         // Background services now managed by EventBridge
         // No need to stop services here
+        
+        // Close Redis connection
+        if (redis) {
+          await redis.quit()
+          app.log.info('Redis connection closed')
+        }
         
         // Close server
         await app.close()
@@ -175,6 +187,24 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       
       // Background services now managed by EventBridge
       // Services are triggered by AWS Lambda/EventBridge, not started here
+      
+      // Initialize Redis and StatusBroadcaster for WebSocket real-time updates
+      redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+        maxRetriesPerRequest: 3,
+        enableReadyCheck: true,
+        reconnectOnError: (err) => {
+          const targetError = 'READONLY'
+          if (err.message.includes(targetError)) {
+            // Only reconnect when the error contains "READONLY"
+            return true
+          }
+          return false
+        }
+      })
+      
+      const statusBroadcaster = new StatusBroadcaster(app, redis)
+      schedulerAdapter.setBroadcaster(statusBroadcaster)
+      app.log.info('✅ WebSocket real-time updates initialized')
       
       // Initialize retention manager
       const retentionManager = getRetentionManager(app)

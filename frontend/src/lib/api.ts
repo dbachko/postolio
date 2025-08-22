@@ -411,6 +411,16 @@ class ApiClient {
     })
   }
 
+  async scheduleContent(contentId: string, customTime?: string): Promise<{ success: boolean; scheduleId?: string; brandId?: string; error?: string }> {
+    return this.request('/api/analytics/schedule', {
+      method: 'POST',
+      body: JSON.stringify({
+        contentId,
+        customTime,
+      }),
+    })
+  }
+
   async updateContent(data: {
     contentId: string
     caption?: string

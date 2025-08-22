@@ -54,6 +54,18 @@ export default defineConfig({
             console.log(`📜 Proxying legal: ${req.method} ${req.url} → https://localhost:3000${proxyReq.path}`)
           })
         }
+      },
+      // Proxy WebSocket connections
+      '/ws': {
+        target: 'wss://localhost:3000',
+        ws: true,
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy: any) => {
+          proxy.on('upgrade', (req: any) => {
+            console.log(`🔌 WebSocket upgrade: ${req.url}`)
+          })
+        }
       }
     }
   }
