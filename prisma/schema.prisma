@@ -25,10 +25,17 @@ model User {
   timezoneAutoDetected Boolean            @default(true) // Whether to auto-detect timezone
   
   // OAuth fields
-  googleId          String?            @unique // Google OAuth ID
-  facebookId        String?            @unique // Facebook OAuth ID  
-  profilePicture    String?            // Profile picture URL from OAuth provider
-  emailVerified     Boolean            @default(false) // Email verification status
+  googleId          String?            @unique @map("googleid") // Google OAuth ID
+  facebookId        String?            @unique @map("facebookid") // Facebook OAuth ID  
+  profilePicture    String?            @map("profilepicture") // Profile picture URL from OAuth provider
+  emailVerified     Boolean            @default(false) @map("emailverified") // Email verification status
+  
+  // Two-factor authentication fields
+  twoFactorEnabled     Boolean        @default(false) @map("twofactorenabled")
+  twoFactorMethod      String?        @map("twofactormethod") // 'totp', 'email', 'sms'
+  twoFactorSecret      String?        @map("twofactorsecret") // Secret for TOTP
+  twoFactorBackupCodes Json?          @map("twofactorbackupcodes") // Array of hashed backup codes
+  twoFactorPhoneNumber String?        @map("twofactorphonenumber") // Phone number for SMS 2FA
   
   brands            Brand[]
   campaignTemplates CampaignTemplate[]
@@ -152,4 +159,23 @@ enum CampaignStatus {
   completed
   failed
   processing
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String?  @map("userid")
+  email        String?
+  eventType    String   @map("eventtype")
+  ipAddress    String?  @map("ipaddress")
+  userAgent    String?  @map("useragent")
+  metadata     Json     @default("{}")
+  success      Boolean  @default(true)
+  errorMessage String?  @map("errormessage")
+  createdAt    DateTime @default(now()) @map("createdat")
+
+  @@index([userId])
+  @@index([email])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

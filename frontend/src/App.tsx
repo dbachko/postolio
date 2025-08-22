@@ -24,6 +24,7 @@ import { TermsOfService } from './pages/TermsOfService'
 import { DataDeletion } from './pages/DataDeletion'
 import { MagicLinkVerify } from './pages/MagicLinkVerify'
 import { EmailVerify } from './pages/EmailVerify'
+import { PasswordReset } from './pages/PasswordReset'
 import { useEffect, lazy, Suspense } from 'react'
 import { ErrorBoundary } from './components/ErrorBoundary'
 const PostDetail = lazy(() => import('./pages/PostDetail'))
@@ -64,6 +65,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/auth/magic-link" element={<MagicLinkVerify />} />
           <Route path="/auth/verify-email" element={<EmailVerify />} />
+          <Route path="/password/reset" element={<PasswordReset />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route path="/legal/data-deletion" element={<DataDeletion />} />

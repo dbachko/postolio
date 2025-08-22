@@ -29,14 +29,115 @@ export function getDatabaseUrl(): string {
 let prismaInstance: PrismaClient | null = null
 
 /**
- * Get or create the database client instance
+ * Get or create the database client instance with connection pooling
  */
 export function getDatabaseClient(): PrismaClient {
   if (!prismaInstance) {
-    prismaInstance = new PrismaClient()
+    // Enhanced Prisma configuration with connection pooling
+    prismaInstance = new PrismaClient({
+      log: process.env.NODE_ENV === 'development' 
+        ? ['query', 'info', 'warn', 'error']
+        : ['warn', 'error'],
+      
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL || getDatabaseUrl(),
+        },
+      },
+      
+      // Note: Connection pool configuration moved to environment variables
+      // DATABASE_URL should include connection pool parameters
+    })
+
+    // Connection event handlers
+    prismaInstance.$on('query' as never, (e: any) => {
+      if (process.env.LOG_QUERIES === 'true') {
+        console.log('Query: ' + e.query)
+        console.log('Duration: ' + e.duration + 'ms')
+      }
+    })
+
+    // Graceful shutdown handlers
+    const gracefulShutdown = async () => {
+      console.log('🔌 Disconnecting from database...')
+      try {
+        await prismaInstance?.$disconnect()
+        console.log('✅ Database disconnected successfully')
+      } catch (error) {
+        console.error('❌ Error disconnecting from database:', error)
+      }
+    }
+
+    // Handle process termination
+    process.on('SIGINT', gracefulShutdown)
+    process.on('SIGTERM', gracefulShutdown)
+    process.on('beforeExit', gracefulShutdown)
   }
   
   return prismaInstance
+}
+
+/**
+ * Explicit database disconnect for testing
+ */
+export async function disconnectDatabase(): Promise<void> {
+  if (prismaInstance) {
+    await prismaInstance.$disconnect()
+    prismaInstance = null
+  }
+}
+
+/**
+ * Health check for database connection
+ */
+export async function checkDatabaseHealth(): Promise<{ 
+  status: 'healthy' | 'unhealthy'
+  latency?: number
+  error?: string 
+}> {
+  try {
+    const start = Date.now()
+    const client = getDatabaseClient()
+    await client.$queryRaw`SELECT 1`
+    const latency = Date.now() - start
+    
+    return {
+      status: 'healthy',
+      latency
+    }
+  } catch (error) {
+    return {
+      status: 'unhealthy',
+      error: error instanceof Error ? error.message : 'Unknown database error'
+    }
+  }
+}
+
+/**
+ * Get database connection metrics
+ */
+export async function getDatabaseMetrics(): Promise<{
+  connectionCount?: number
+  queriesExecuted?: number
+  averageQueryTime?: number
+}> {
+  try {
+    // Get current connection count from PostgreSQL
+    const client = getDatabaseClient()
+    const result = await client.$queryRaw`
+      SELECT count(*) as connections 
+      FROM pg_stat_activity 
+      WHERE state = 'active'
+    ` as any[]
+    
+    return {
+      connectionCount: result?.[0]?.connections || 0,
+      // Additional metrics can be added here
+    }
+  } catch (error) {
+    console.error('Failed to get database metrics:', error)
+    return {}
+  }
 }
 
 // Export the client instance for backward compatibility

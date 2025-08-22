@@ -9,7 +9,10 @@ interface VerifyEmailBody {
 const emailVerificationRoutes: FastifyPluginAsync = async (fastify) => {
   // Send verification email (authenticated route with rate limiting)
   fastify.post('/email/send-verification', {
-    preHandler: [fastify.authenticate, enhancedRateLimiters.emailVerification()]
+    preHandler: [
+      ...(fastify.authenticate ? [fastify.authenticate] : []),
+      enhancedRateLimiters.emailVerification()
+    ]
   }, async (request, reply) => {
     const userId = request.user.id
 

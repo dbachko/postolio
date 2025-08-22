@@ -3,6 +3,7 @@ import type { Transporter } from 'nodemailer'
 import type Mail from 'nodemailer/lib/mailer'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
 import * as aws from '@aws-sdk/credential-provider-node'
+import CircuitBreaker from 'opossum'
 
 /**
  * Centralized email service with AWS SES for production
@@ -12,19 +13,97 @@ export class EmailService {
   private static transporter: Transporter | null = null
   private static sesClient: SESClient | null = null
   private static useAWSSES: boolean = process.env.USE_AWS_SES === 'true' || process.env.NODE_ENV === 'production'
+  private static sesCircuitBreaker: CircuitBreaker | null = null
+  private static smtpCircuitBreaker: CircuitBreaker | null = null
+
+  /**
+   * Initialize AWS SES circuit breaker
+   */
+  private static getSESCircuitBreaker(): CircuitBreaker {
+    if (!this.sesCircuitBreaker) {
+      const sesAction = async (command: SendEmailCommand) => {
+        const client = this.getSESClient()
+        return await client.send(command)
+      }
+
+      this.sesCircuitBreaker = new CircuitBreaker(sesAction, {
+        timeout: 30000, // 30 seconds
+        errorThresholdPercentage: 50,
+        resetTimeout: 60000, // 1 minute
+        name: 'AWS-SES',
+        rollingCountTimeout: 10000,
+        rollingCountBuckets: 10
+      })
+
+      // Event listeners for monitoring
+      this.sesCircuitBreaker.on('open', () => {
+        console.warn('⚠️ AWS SES circuit breaker opened - falling back to SMTP')
+      })
+
+      this.sesCircuitBreaker.on('halfOpen', () => {
+        console.info('🔄 AWS SES circuit breaker half-open - testing service')
+      })
+
+      this.sesCircuitBreaker.on('close', () => {
+        console.info('✅ AWS SES circuit breaker closed - service restored')
+      })
+
+      this.sesCircuitBreaker.on('fallback', () => {
+        console.warn('🔄 AWS SES fallback triggered')
+      })
+    }
+    return this.sesCircuitBreaker
+  }
+
+  /**
+   * Initialize SMTP circuit breaker
+   */
+  private static getSMTPCircuitBreaker(): CircuitBreaker {
+    if (!this.smtpCircuitBreaker) {
+      const smtpAction = async (mailOptions: Mail.Options) => {
+        const transporter = this.getTransporter()
+        return await transporter.sendMail(mailOptions)
+      }
+
+      this.smtpCircuitBreaker = new CircuitBreaker(smtpAction, {
+        timeout: 30000, // 30 seconds
+        errorThresholdPercentage: 50,
+        resetTimeout: 60000, // 1 minute
+        name: 'SMTP',
+        rollingCountTimeout: 10000,
+        rollingCountBuckets: 10
+      })
+
+      // Event listeners for monitoring
+      this.smtpCircuitBreaker.on('open', () => {
+        console.error('❌ SMTP circuit breaker opened - email service unavailable')
+      })
+
+      this.smtpCircuitBreaker.on('close', () => {
+        console.info('✅ SMTP circuit breaker closed - email service restored')
+      })
+    }
+    return this.smtpCircuitBreaker
+  }
 
   /**
    * Initialize AWS SES client
    */
   private static getSESClient(): SESClient {
     if (!this.sesClient) {
-      this.sesClient = new SESClient({
+      const config: any = {
         region: process.env.AWS_REGION || 'us-east-1',
-        credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? {
+      }
+      
+      // Only add credentials if they exist
+      if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+        config.credentials = {
           accessKeyId: process.env.AWS_ACCESS_KEY_ID,
           secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        } : undefined, // Use IAM role in production
-      })
+        }
+      }
+      
+      this.sesClient = new SESClient(config)
     }
     return this.sesClient
   }
@@ -60,11 +139,9 @@ export class EmailService {
   }
 
   /**
-   * Send email via AWS SES
+   * Send email via AWS SES with circuit breaker
    */
   private static async sendViaSES(options: Mail.Options): Promise<void> {
-    const ses = this.getSESClient()
-    
     // Convert nodemailer options to SES format
     const from = typeof options.from === 'string' 
       ? options.from 
@@ -97,7 +174,27 @@ export class EmailService {
       },
     })
     
-    await ses.send(command)
+    // Use circuit breaker for SES calls
+    const sesCircuitBreaker = this.getSESCircuitBreaker()
+    
+    // Set up fallback to SMTP if SES fails
+    sesCircuitBreaker.fallback(async () => {
+      console.warn('SES circuit breaker triggered, falling back to SMTP')
+      if (this.isConfigured()) {
+        return await this.sendViaSMTP(options)
+      }
+      throw new Error('Both SES and SMTP are unavailable')
+    })
+    
+    await sesCircuitBreaker.fire(command)
+  }
+
+  /**
+   * Send email via SMTP with circuit breaker
+   */
+  private static async sendViaSMTP(options: Mail.Options): Promise<any> {
+    const smtpCircuitBreaker = this.getSMTPCircuitBreaker()
+    return await smtpCircuitBreaker.fire(options)
   }
 
   /**
@@ -121,8 +218,7 @@ export class EmailService {
       if (this.useAWSSES) {
         await this.sendViaSES(options)
       } else {
-        const transporter = this.getTransporter()
-        await transporter.sendMail(options)
+        await this.sendViaSMTP(options)
       }
       
       return { success: true }
@@ -333,9 +429,61 @@ If you didn't request this email, you can safely ignore it.
   }
 
   /**
-   * Send a welcome email to new users
+   * Send two-factor authentication code (async via queue)
+   */
+  static async sendTwoFactorCode(email: string, code: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { emailQueue } = await import('./email-queue.js')
+      await emailQueue.addTwoFactorEmail(email, code, { priority: 'critical' })
+      return { success: true }
+    } catch (error) {
+      console.error('Failed to queue 2FA email:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  }
+
+  /**
+   * Send two-factor authentication code (immediate)
+   */
+  static async sendTwoFactorCodeImmediate(email: string, code: string): Promise<{ success: boolean; error?: string }> {
+    const { html, text } = this.generateEmailTemplate({
+      title: 'Two-Factor Authentication Code',
+      content: `
+        <p>Your verification code for Postolio is:</p>
+        <div style="background-color: #f3f4f6; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 6px;">
+          ${code}
+        </div>
+        <p>This code will expire in 5 minutes.</p>
+      `,
+      warning: 'If you didn\'t request this code, please secure your account immediately.'
+    })
+
+    return this.sendEmail({
+      to: email,
+      subject: 'Your Postolio Verification Code',
+      html,
+      text
+    })
+  }
+
+  /**
+   * Send a welcome email to new users (async via queue)
    */
   static async sendWelcomeEmail(email: string, name?: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { emailQueue } = await import('./email-queue.js')
+      await emailQueue.addWelcomeEmail(email, name)
+      return { success: true }
+    } catch (error) {
+      console.error('Failed to queue welcome email:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  }
+
+  /**
+   * Send a welcome email to new users (immediate)
+   */
+  static async sendWelcomeEmailImmediate(email: string, name?: string): Promise<{ success: boolean; error?: string }> {
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
     
     const { html, text } = this.generateEmailTemplate({

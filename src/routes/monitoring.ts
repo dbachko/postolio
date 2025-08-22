@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify'
 import { monitoringService } from '../services/monitoring.js'
+import { checkDatabaseHealth, getDatabaseMetrics } from '../config/database.js'
 
 const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   // Get system metrics
@@ -61,7 +62,7 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
     }
   })
 
-  // Health check with metrics
+  // Enhanced health check with all services
   fastify.get('/health', async function () {
     const metrics = monitoringService.getMetrics()
     const errors = monitoringService.getErrors()
@@ -71,13 +72,105 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
     const recentErrors = errors.filter((e) => e.timestamp >= oneMinuteAgo)
     const isHealthy = recentErrors.length < 10 // Threshold: less than 10 errors per minute
 
+    // Check database health
+    const dbHealth = await checkDatabaseHealth()
+    
+    // Check email queue health
+    let emailQueueHealth: any = { status: 'unknown' }
+    try {
+      const { emailQueue } = await import('../services/email-queue.js')
+      const queueStats = await emailQueue.getQueueStats()
+      emailQueueHealth = {
+        status: 'healthy',
+        ...queueStats
+      }
+    } catch (error) {
+      emailQueueHealth = {
+        status: 'unhealthy',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }
+
     return {
-      status: isHealthy ? 'healthy' : 'degraded',
+      status: isHealthy && dbHealth.status === 'healthy' ? 'healthy' : 'degraded',
       timestamp: now.toISOString(),
       uptime: process.uptime(),
-      totalRequests: metrics.length,
-      recentErrors: recentErrors.length,
-      memoryUsage: process.memoryUsage(),
+      services: {
+        api: {
+          status: isHealthy ? 'healthy' : 'degraded',
+          totalRequests: metrics.length,
+          recentErrors: recentErrors.length,
+        },
+        database: dbHealth,
+        emailQueue: emailQueueHealth,
+      },
+      system: {
+        memoryUsage: process.memoryUsage(),
+        cpuUsage: process.cpuUsage(),
+      }
+    }
+  })
+
+  // Database-specific metrics
+  fastify.get('/metrics/database', async function () {
+    const health = await checkDatabaseHealth()
+    const metrics = await getDatabaseMetrics()
+    
+    return {
+      timestamp: new Date().toISOString(),
+      health,
+      metrics,
+    }
+  })
+
+  // Email queue metrics
+  fastify.get('/metrics/email-queue', async function () {
+    try {
+      const { emailQueue } = await import('../services/email-queue.js')
+      const stats = await emailQueue.getQueueStats()
+      const failedJobs = await emailQueue.getFailedJobs(5)
+      
+      return {
+        timestamp: new Date().toISOString(),
+        stats,
+        recentFailures: failedJobs.map(job => ({
+          id: job.id,
+          type: job.data.type,
+          to: job.data.to,
+          error: job.failedReason,
+          attemptsMade: job.attemptsMade,
+          processedOn: job.processedOn,
+        }))
+      }
+    } catch (error) {
+      return {
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 'unavailable'
+      }
+    }
+  })
+
+  // Circuit breaker status
+  fastify.get('/metrics/circuit-breakers', async function () {
+    try {
+      const { EmailService } = await import('../services/email.js')
+      
+      // Get circuit breaker stats if available
+      return {
+        timestamp: new Date().toISOString(),
+        circuitBreakers: {
+          email: {
+            status: 'monitored',
+            note: 'Circuit breaker status available in email service logs'
+          }
+        }
+      }
+    } catch (error) {
+      return {
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
     }
   })
 }

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
 import { GoogleSignIn } from '@/components/auth/GoogleSignIn'
 import { FacebookSignIn } from '@/components/auth/FacebookSignIn'
 import { MagicLinkForm } from '@/components/auth/MagicLinkForm'
@@ -13,6 +14,7 @@ import { MagicLinkForm } from '@/components/auth/MagicLinkForm'
 export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [showMagicLink, setShowMagicLink] = useState(false)
@@ -26,7 +28,7 @@ export function Login() {
     setError('')
 
     try {
-      await login(email, password)
+      await login(email, password, rememberMe)
       navigate('/dashboard')
     } catch (error) {
       setError('Invalid email or password')
@@ -106,7 +108,15 @@ export function Login() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link 
+                    to="/password/reset" 
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <Input
                   id="password"
                   name="password"
@@ -117,6 +127,19 @@ export function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                 />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="remember" 
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                />
+                <Label 
+                  htmlFor="remember" 
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Remember me for 30 days
+                </Label>
               </div>
               <Button
                 type="submit"
