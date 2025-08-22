@@ -517,6 +517,7 @@ export class PostolioStack extends cdk.Stack {
           // Trim any trailing slash at runtime via container entrypoint logic (client also normalizes)
           SCHEDULER_API_URL: schedulerApiUrl,
           SCHEDULER_API_STAGE: environment,
+          ALB_DOMAIN: '', // Will be set after ALB is created
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: 'postolio',
@@ -562,6 +563,10 @@ export class PostolioStack extends cdk.Stack {
       healthyThresholdCount: 2, // Reduced from 5 to speed up healthy status
       unhealthyThresholdCount: 3, // Increased from 2 to be more tolerant
     })
+    
+    // Enable WebSocket support on target group
+    // WebSocket connections require stickiness for proper session handling
+    fargateService.targetGroup.enableCookieStickiness(cdk.Duration.hours(1))
 
     // Configure ECS service deployment settings
     const cfnServiceConfig = fargateService.service.node.defaultChild as ecs.CfnService
@@ -671,11 +676,17 @@ export class PostolioStack extends cdk.Stack {
 
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', distributionProps)
     
-    // Add CloudFront distribution ID to ECS task environment
+    // Add CloudFront distribution ID and ALB domain to ECS task environment
     // We need to update the container definition after it's created
     fargateService.taskDefinition.defaultContainer?.addEnvironment(
       'CLOUDFRONT_DISTRIBUTION_ID',
       distribution.distributionId
+    )
+    
+    // Add ALB domain for WebSocket connections
+    fargateService.taskDefinition.defaultContainer?.addEnvironment(
+      'ALB_DOMAIN',
+      fargateService.loadBalancer.loadBalancerDnsName
     )
 
     // Update existing DNS record for postolio.example to point to CloudFront (unified domain)
@@ -695,6 +706,13 @@ export class PostolioStack extends cdk.Stack {
       })
     }
 
+    // Output ALB DNS for WebSocket connections
+    new cdk.CfnOutput(this, 'ALBDomainName', {
+      value: fargateService.loadBalancer.loadBalancerDnsName,
+      description: 'Application Load Balancer DNS name for WebSocket connections',
+      exportName: `postolio-${environment}-alb-dns`,
+    })
+    
     // Outputs
     new cdk.CfnOutput(this, 'ECRRepository', {
       value: ecrRepository.repositoryUri,
