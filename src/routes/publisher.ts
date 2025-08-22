@@ -6,28 +6,74 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
-import crypto from 'crypto';
+import { createPublisherAuth } from '../middleware/publisher-auth.js';
 
-// Simple API key authentication for Lambda-to-API communication
-const PUBLISHER_API_KEY = process.env.PUBLISHER_API_KEY || 'default-publisher-key';
+// API key authentication for Lambda-to-API communication
+const PUBLISHER_API_KEY = process.env.PUBLISHER_API_KEY;
+
+if (!PUBLISHER_API_KEY) {
+  console.error('❌ PUBLISHER_API_KEY not configured. Publisher endpoint disabled.');
+}
 
 const publisher: FastifyPluginAsync = async function (fastify) {
+  // Only enable if API key is configured
+  if (!PUBLISHER_API_KEY) {
+    fastify.log.warn('Publisher endpoint disabled - PUBLISHER_API_KEY not configured');
+    return;
+  }
+
+  // Rate limiting for security (max 100 requests per minute per API key)
+  fastify.register(import('@fastify/rate-limit'), {
+    max: 100,
+    timeWindow: '1 minute',
+    keyGenerator: (request) => {
+      // Use API key as rate limit key for Lambda
+      return request.headers['x-api-key'] as string || request.ip;
+    }
+  });
+
+  // Apply authentication middleware
+  const authMiddleware = createPublisherAuth({
+    apiKey: PUBLISHER_API_KEY,
+    requireHttps: process.env.NODE_ENV === 'production',
+    allowedIPs: process.env.PUBLISHER_ALLOWED_IPS?.split(',').map(ip => ip.trim())
+  });
+
   /**
    * Get publishing credentials for a brand
    * This endpoint is called by the AWS publisher Lambda at publish time
    */
-  fastify.post('/credentials', async function (request, reply) {
-    try {
-      // Verify API key
-      const apiKey = request.headers['x-api-key'] as string;
-      
-      if (!apiKey || apiKey !== PUBLISHER_API_KEY) {
-        return reply.status(401).send({ 
-          error: 'Unauthorized',
-          message: 'Invalid API key'
-        });
+  fastify.post('/credentials', {
+    preHandler: authMiddleware,
+    schema: {
+      body: {
+        type: 'object',
+        required: ['brandId'],
+        properties: {
+          brandId: { type: 'string', format: 'uuid' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            credentials: {
+              type: 'object',
+              properties: {
+                instagramAccessToken: { type: 'string' },
+                instagramAccountId: { type: 'string' },
+                instagramPageId: { type: 'string' }
+              }
+            },
+            brandName: { type: 'string' },
+            timestamp: { type: 'string' }
+          }
+        }
       }
-
+    }
+  }, async function (request, reply) {
+    try {
       const { brandId } = request.body as { brandId: string };
 
       if (!brandId) {
@@ -48,11 +94,19 @@ const publisher: FastifyPluginAsync = async function (fastify) {
         });
       }
 
-      // Log for debugging (without exposing full token)
+      // Log for debugging and monitoring (without exposing full token)
       const tokenPreview = credentials.instagramAccessToken 
         ? `${credentials.instagramAccessToken.substring(0, 10)}...` 
         : 'null';
-      console.log(`Publisher credentials fetched for brand ${brandId} (${credentials.brandName}), token: ${tokenPreview}`);
+      
+      fastify.log.info({
+        event: 'publisher_credentials_fetched',
+        brandId,
+        brandName: credentials.brandName,
+        hasToken: !!credentials.instagramAccessToken,
+        timestamp: new Date().toISOString(),
+        source: request.headers['x-request-id'] || 'unknown'
+      });
 
       // Return credentials
       reply.send({

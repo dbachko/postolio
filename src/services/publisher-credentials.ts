@@ -5,6 +5,7 @@
  */
 
 import { getDatabaseClient } from '../config/database.js';
+import { getRedisClient } from '../services/redis.js';
 
 const prisma = getDatabaseClient();
 
@@ -15,14 +16,34 @@ export interface PublisherCredentials {
   brandName: string;
 }
 
+// Cache TTL: 5 minutes (credentials rarely change)
+const CACHE_TTL_SECONDS = 300;
+
 export class PublisherCredentialsService {
   /**
-   * Fetch fresh Instagram credentials for a brand
+   * Fetch fresh Instagram credentials for a brand with caching
    * This should be called by the publisher Lambda at publish time
    * to ensure we always have the latest valid credentials
    */
   static async getCredentialsForBrand(brandId: string): Promise<PublisherCredentials | null> {
     try {
+      // Try cache first
+      const redis = getRedisClient();
+      const cacheKey = `publisher:credentials:${brandId}`;
+      
+      if (redis) {
+        try {
+          const cached = await redis.get(cacheKey);
+          if (cached) {
+            console.log(`Cache hit for brand ${brandId} credentials`);
+            return JSON.parse(cached);
+          }
+        } catch (cacheError) {
+          console.warn('Redis cache read failed, falling back to database:', cacheError);
+        }
+      }
+
+      // Cache miss - fetch from database
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
         select: {
@@ -45,12 +66,24 @@ export class PublisherCredentialsService {
         return null;
       }
 
-      return {
+      const credentials = {
         instagramAccessToken: brand.instagramAccessToken,
         instagramAccountId: brand.instagramAccountId,
         instagramPageId: brand.instagramPageId,
         brandName: brand.name,
       };
+
+      // Cache the result
+      if (redis) {
+        try {
+          await redis.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(credentials));
+          console.log(`Cached credentials for brand ${brandId} (TTL: ${CACHE_TTL_SECONDS}s)`);
+        } catch (cacheError) {
+          console.warn('Redis cache write failed:', cacheError);
+        }
+      }
+
+      return credentials;
     } catch (error) {
       console.error('Error fetching publisher credentials:', error);
       return null;
@@ -94,5 +127,22 @@ export class PublisherCredentialsService {
     }
 
     return credentials;
+  }
+
+  /**
+   * Invalidate cached credentials when Instagram is reconnected
+   * Call this when user updates their Instagram connection
+   */
+  static async invalidateCredentialsCache(brandId: string): Promise<void> {
+    const redis = getRedisClient();
+    if (!redis) return;
+
+    const cacheKey = `publisher:credentials:${brandId}`;
+    try {
+      await redis.del(cacheKey);
+      console.log(`Invalidated credential cache for brand ${brandId}`);
+    } catch (error) {
+      console.error('Failed to invalidate cache:', error);
+    }
   }
 }
