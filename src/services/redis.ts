@@ -114,7 +114,26 @@ class RedisService {
       this.client = null
     }
   }
+
+  getClient(): Redis | null {
+    return this.client
+  }
+
+  async setex(key: string, ttl: number, value: string): Promise<boolean> {
+    if (!this.client) {
+      return false
+    }
+
+    try {
+      await this.client.setex(key, ttl, value)
+      return true
+    } catch (error) {
+      console.error('Redis SETEX error:', error)
+      return false
+    }
+  }
 }
 
 
 export const redisService = new RedisService()
+export const getRedisClient = () => redisService.getClient()

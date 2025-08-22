@@ -4,7 +4,7 @@
  * This ensures the Lambda always gets fresh credentials at publish time
  */
 
-import { FastifyPluginAsync } from 'fastify';
+import { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
 import { createPublisherAuth } from '../middleware/publisher-auth.js';
 
@@ -19,10 +19,10 @@ const publisher: FastifyPluginAsync = async function (fastify) {
   }
 
   // Rate limiting for security (max 100 requests per minute per API key)
-  fastify.register(import('@fastify/rate-limit'), {
+  await fastify.register(import('@fastify/rate-limit'), {
     max: 100,
     timeWindow: '1 minute',
-    keyGenerator: (request) => {
+    keyGenerator: (request: FastifyRequest) => {
       // Use API key as rate limit key for Lambda
       return request.headers['x-api-key'] as string || request.ip;
     }
@@ -31,10 +31,11 @@ const publisher: FastifyPluginAsync = async function (fastify) {
   // Apply authentication middleware
   // Optional: Set PUBLISHER_ALLOWED_IPS env var to restrict to specific IPs (comma-separated)
   // Example: PUBLISHER_ALLOWED_IPS="10.0.0.1,10.0.0.2" for Lambda NAT Gateway IPs
+  const allowedIPs = process.env.PUBLISHER_ALLOWED_IPS?.split(',').filter(Boolean).map(ip => ip.trim());
   const authMiddleware = createPublisherAuth({
     apiKey: PUBLISHER_API_KEY,
     requireHttps: process.env.NODE_ENV === 'production',
-    allowedIPs: process.env.PUBLISHER_ALLOWED_IPS?.split(',').filter(Boolean).map(ip => ip.trim())
+    ...(allowedIPs && { allowedIPs })
   });
 
   /**
