@@ -88,16 +88,18 @@ export class ContentSchedulerStack extends cdk.Stack {
     }
 
     // GSI for querying by brand
+    const brandIndexName = 'GSI1'; // Keep existing name for now
     this.schedulesTable.addGlobalSecondaryIndex({
-      indexName: 'GSI1',
+      indexName: brandIndexName,
       partitionKey: { name: 'gsi1pk', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'gsi1sk', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
     // GSI for querying by status
+    const statusIndexName = 'GSI2'; // Keep existing name for now
     this.schedulesTable.addGlobalSecondaryIndex({
-      indexName: 'GSI2',
+      indexName: statusIndexName,
       partitionKey: { name: 'status', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'scheduledAt', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL,
@@ -232,6 +234,8 @@ export class ContentSchedulerStack extends cdk.Stack {
     const lambdaEnvironment = {
       ENVIRONMENT: environment,
       SCHEDULES_TABLE: this.schedulesTable.tableName,
+      SCHEDULES_TABLE_BRAND_INDEX: brandIndexName,
+      SCHEDULES_TABLE_STATUS_INDEX: statusIndexName,
       RETRY_QUEUE_TABLE: retryQueueTable.tableName,
       AUDIT_LOG_TABLE: auditLogTable.tableName,
       VIDEO_BUCKET: this.videoBucket.bucketName,
