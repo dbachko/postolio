@@ -4,6 +4,12 @@ import { format } from 'date-fns'
 import { apiClient, type Content } from '../lib/api'
 import { useDebounce } from '../hooks/useDebounce'
 import { ImageUploader } from './ImageUploader'
+import { PostCaptionEditor } from './PostCaptionEditor'
+import { PostHashtagEditor } from './PostHashtagEditor'
+import { PostScheduler } from './PostScheduler'
+import { PostStatusCard } from './PostStatusCard'
+import { PostSaveIndicator, type SaveStatus } from './PostSaveIndicator'
+import { PostLearningFeedback } from './PostLearningFeedback'
 import {
   Dialog,
   DialogContent,
@@ -11,12 +17,8 @@ import {
   DialogTitle,
 } from './ui/dialog'
 import { Label } from './ui/label'
-import { Input } from './ui/input'
-import { Textarea } from './ui/textarea'
-import { Badge } from './ui/badge'
-import { Loader2, Save, CheckCircle2, AlertCircle, Brain, Sparkles, X } from 'lucide-react'
 
-interface PostEditorProps {
+interface PostEditorModalProps {
   content: Content | null
   isOpen: boolean
   onClose: () => void
@@ -29,7 +31,7 @@ interface FormData {
   scheduledAt: string
 }
 
-export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
+export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalProps) {
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState<FormData>({
     caption: '',
@@ -37,8 +39,7 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
     cdnImageUrl: '',
     scheduledAt: ''
   })
-  const [hashtagInput, setHashtagInput] = useState('')
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const objectUrlRef = useRef<string | null>(null) // Track object URLs for cleanup
   const [learningFeedback, setLearningFeedback] = useState<{
@@ -71,7 +72,6 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         cdnImageUrl: content.cdnImageUrl || '',
         scheduledAt: content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
       })
-      setHashtagInput((content.hashtags || []).join(' '))
     }
   }, [content, isOpen])
 
@@ -85,7 +85,6 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
         cdnImageUrl: '',
         scheduledAt: ''
       })
-      setHashtagInput('')
       setLearningFeedback({ isVisible: false, message: '' })
       setSaveStatus('idle')
       // Clean up object URL when modal closes
@@ -122,7 +121,6 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
           cdnImageUrl: content.cdnImageUrl || '',
           scheduledAt: content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
         })
-        setHashtagInput((content.hashtags || []).join(' '))
       }
     }
   }, [content, isOpen]) // Removed formData.caption to prevent unnecessary effects
@@ -273,6 +271,10 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
     setFormData(prev => ({ ...prev, caption: value }))
   }
 
+  const handleHashtagsChange = (hashtags: string[]) => {
+    setFormData(prev => ({ ...prev, hashtags }))
+  }
+
   const handleImageChange = async (fileOrUrl: string | File) => {
     if (typeof fileOrUrl === 'string') {
       // Direct URL update (e.g., when removing the image)
@@ -358,55 +360,14 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
     }
   }
 
-  const handleHashtagInputChange = (value: string) => {
-    setHashtagInput(value)
-    
-    // Parse hashtags from input
-    const hashtags = value
-      .split(/\s+/)
-      .filter(tag => tag.trim().length > 0)
-      .map(tag => tag.startsWith('#') ? tag : `#${tag}`)
-      .filter(tag => tag.length > 1)
-    
-    setFormData(prev => ({ ...prev, hashtags }))
-  }
-
-  const removeHashtag = (index: number) => {
-    const newHashtags = formData.hashtags.filter((_, i) => i !== index)
-    setFormData(prev => ({ ...prev, hashtags: newHashtags }))
-    setHashtagInput(newHashtags.join(' '))
-  }
-
   const handleClose = () => {
     setSaveStatus('idle')
     setLastSaved(null)
     onClose()
   }
 
-  const getSaveStatusIcon = () => {
-    switch (saveStatus) {
-      case 'saving':
-        return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-      case 'saved':
-        return <CheckCircle2 className="w-4 h-4 text-green-500" />
-      case 'error':
-        return <AlertCircle className="w-4 h-4 text-red-500" />
-      default:
-        return <Save className="w-4 h-4 text-gray-400" />
-    }
-  }
-
-  const getSaveStatusText = () => {
-    switch (saveStatus) {
-      case 'saving':
-        return 'Saving...'
-      case 'saved':
-        return 'AI is learning from your edits and improving future content...'
-      case 'error':
-        return 'Failed to save'
-      default:
-        return lastSaved ? `Last saved: ${format(lastSaved, 'HH:mm:ss')}` : 'Auto-save enabled'
-    }
+  const handleDismissLearning = () => {
+    setLearningFeedback({ isVisible: false, message: '' })
   }
 
   if (!content) return null
@@ -416,81 +377,31 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Post</DialogTitle>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            {getSaveStatusIcon()}
-            <span>{getSaveStatusText()}</span>
-          </div>
+          <PostSaveIndicator
+            status={saveStatus}
+            lastSaved={lastSaved}
+            showAILearningMessage={saveStatus === 'saved'}
+          />
         </DialogHeader>
 
-        {/* Learning Feedback Banner */}
-        {learningFeedback.isVisible && (
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mb-4 animate-in slide-in-from-top duration-300">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Brain className="w-5 h-5 text-blue-600" />
-                <Sparkles className="w-4 h-4 text-purple-600" />
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-medium text-gray-900">
-                  {learningFeedback.message}
-                </div>
-                {learningFeedback.appliedToFuturePosts && (
-                  <div className="text-xs text-gray-600 mt-1">
-                    Improvements applied to ~{learningFeedback.appliedToFuturePosts} future posts
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => setLearningFeedback({ isVisible: false, message: '' })}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-                aria-label="Dismiss learning notification"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
+        <PostLearningFeedback
+          isVisible={learningFeedback.isVisible}
+          message={learningFeedback.message}
+          appliedToFuturePosts={learningFeedback.appliedToFuturePosts}
+          onDismiss={handleDismissLearning}
+          className="mb-4"
+        />
 
         <div className="space-y-6">
-          {/* Caption */}
-          <div className="space-y-2">
-            <Label htmlFor="caption">Caption</Label>
-            <Textarea
-              id="caption"
-              value={formData.caption}
-              onChange={(e) => handleCaptionChange(e.target.value)}
-              placeholder="Write your caption..."
-              className="min-h-32 resize-none"
-            />
-            <div className="text-xs text-gray-500 text-right">
-              {formData.caption.length} characters
-            </div>
-          </div>
+          <PostCaptionEditor
+            value={formData.caption}
+            onChange={handleCaptionChange}
+          />
 
-          {/* Hashtags */}
-          <div className="space-y-2">
-            <Label htmlFor="hashtags">Hashtags</Label>
-            <Input
-              id="hashtags"
-              value={hashtagInput}
-              onChange={(e) => handleHashtagInputChange(e.target.value)}
-              placeholder="Add hashtags separated by spaces (e.g., #fashion #style #ootd)"
-            />
-            {formData.hashtags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {formData.hashtags.map((hashtag, index) => (
-                  <Badge
-                    key={index}
-                    variant="secondary"
-                    className="cursor-pointer hover:bg-red-100 hover:text-red-800"
-                    onClick={() => removeHashtag(index)}
-                  >
-                    {hashtag} ×
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
+          <PostHashtagEditor
+            hashtags={formData.hashtags}
+            onChange={handleHashtagsChange}
+          />
 
           {/* Image Upload */}
           <div className="space-y-2">
@@ -503,53 +414,15 @@ export function PostEditor({ content, isOpen, onClose }: PostEditorProps) {
             />
           </div>
 
-          {/* Scheduled Time */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="scheduledAt">Scheduled Time</Label>
-              {formData.scheduledAt && (
-                <button
-                  type="button"
-                  onClick={() => handleScheduledAtChange('')}
-                  className="text-xs text-gray-500 hover:text-red-600"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-            <Input
-              id="scheduledAt"
-              type="datetime-local"
-              value={formData.scheduledAt}
-              onChange={(e) => handleScheduledAtChange(e.target.value)}
-            />
-            {formData.scheduledAt && (
-              <div className="text-xs text-gray-500">
-                Scheduled for: {format(new Date(formData.scheduledAt), 'EEEE, MMMM d, yyyy \'at\' h:mm a')}
-              </div>
-            )}
-          </div>
+          <PostScheduler
+            value={formData.scheduledAt}
+            onChange={handleScheduledAtChange}
+          />
 
-          {/* Post Status */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="text-sm font-medium text-gray-700 mb-2">Post Status</div>
-            <div className="flex items-center gap-2">
-              <Badge 
-                variant={
-                  content.status === 'draft' ? 'secondary' :
-                  content.status === 'scheduled' ? 'default' :
-                  content.status === 'published' ? 'secondary' :
-                  content.status === 'failed' ? 'destructive' :
-                  content.status === 'skipped' ? 'outline' : 'secondary'
-                }
-              >
-                {content.status.charAt(0).toUpperCase() + content.status.slice(1)}
-              </Badge>
-              <span className="text-xs text-gray-500">
-                Created: {format(new Date(content.createdAt), 'MMM d, yyyy \'at\' h:mm a')}
-              </span>
-            </div>
-          </div>
+          <PostStatusCard
+            status={content.status as 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'}
+            createdAt={content.createdAt}
+          />
         </div>
       </DialogContent>
     </Dialog>

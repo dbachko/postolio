@@ -10,7 +10,7 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Alert, AlertDescription } from '../components/ui/alert'
-import { PostEditor } from '../components/PostEditor'
+import { PostEditorModal } from '../components/PostEditorModal'
 import { TemplateSelector } from '../components/TemplateSelector'
 import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal'
 import { CampaignAnalytics } from '../components/CampaignAnalytics'
@@ -1106,7 +1106,7 @@ export function Campaigns() {
       )}
 
       {/* Post Editor Modal */}
-      <PostEditor
+      <PostEditorModal
         content={selectedPost}
         isOpen={isPostEditorOpen}
         onClose={() => {

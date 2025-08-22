@@ -533,7 +533,6 @@ export class PostolioStack extends cdk.Stack {
           NODE_ENV: ecs.Secret.fromSecretsManager(appSecrets, 'nodeEnv'),
           PORT: ecs.Secret.fromSecretsManager(appSecrets, 'port'),
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
-          INSTAGRAM_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecrets, 'instagramRedirectUri'),
           PUBLISHER_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'publisherApiKey'),
         },
         environment: {
@@ -541,6 +540,9 @@ export class PostolioStack extends cdk.Stack {
           DB_PORT: database.instanceEndpoint.port.toString(),
           DB_NAME: 'postolio',
           CORS_ORIGIN: apiDomainName, // Use unified domain instead of CloudFront domain
+          INSTAGRAM_REDIRECT_URI: `https://${apiDomainName}/api/auth/instagram/callback`,
+          GOOGLE_REDIRECT_URI: `https://${apiDomainName}/api/auth/google/callback`,
+          FACEBOOK_REDIRECT_URI: `https://${apiDomainName}/api/auth/facebook/callback`,
           S3_IMAGES_BUCKET: imagesBucket.bucketName,
           AWS_REGION: cdk.Aws.REGION,
           CLOUDFRONT_DOMAIN: apiDomainName, // Will be updated after distribution creation
