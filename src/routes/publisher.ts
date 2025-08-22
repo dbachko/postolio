@@ -73,7 +73,6 @@ const publisher: FastifyPluginAsync = async function (fastify) {
                   minItems: 0
                 },
                 cdnImageUrl: { type: 'string', format: 'uri' },
-                imageUrl: { type: 'string', format: 'uri' },
                 brandId: { type: 'string', format: 'uuid' },
                 contentType: { 
                   type: 'string',
@@ -142,7 +141,6 @@ const publisher: FastifyPluginAsync = async function (fastify) {
           hashtags: content.hashtags,
           mediaUrls: content.mediaUrls.length > 0 ? content.mediaUrls : undefined,
           cdnImageUrl: content.cdnImageUrl,
-          imageUrl: content.imageUrl,
           brandId: content.brandId,
           contentType: content.contentType
         },

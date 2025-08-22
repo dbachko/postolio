@@ -44,7 +44,6 @@ describe('PublisherContentService', () => {
         hashtags: ['#test', '#publisher', '#content'],
         status: 'scheduled',
         cdnImageUrl: 'https://example.com/test-image.jpg',
-        imageUrl: 'https://backup.example.com/test-image.jpg',
         generationParams: {
           contentType: 'image',
           theme: 'test'
@@ -99,14 +98,14 @@ describe('PublisherContentService', () => {
     expect(content).toBeNull();
   });
 
-  test('should prioritize CDN URLs over regular image URLs', async () => {
+  test('should include CDN URL in media URLs', async () => {
     const content = await PublisherContentService.getContentForPublishing(testContentId);
     
-    expect(content?.mediaUrls[0]).toBe('https://example.com/test-image.jpg'); // CDN URL first
-    expect(content?.mediaUrls).toHaveLength(1); // Should not include backup URL when CDN exists
+    expect(content?.mediaUrls[0]).toBe('https://example.com/test-image.jpg'); // CDN URL
+    expect(content?.mediaUrls).toHaveLength(1); // Only CDN URL
   });
 
-  test('should fallback to imageUrl when cdnImageUrl is not available', async () => {
+  test('should return null when cdnImageUrl is not available', async () => {
     // Update content to remove CDN URL
     await prisma.content.update({
       where: { id: testContentId },
@@ -115,7 +114,7 @@ describe('PublisherContentService', () => {
 
     const content = await PublisherContentService.getContentForPublishing(testContentId);
     
-    expect(content?.mediaUrls[0]).toBe('https://backup.example.com/test-image.jpg');
+    expect(content).toBeNull(); // Content should be invalid without media URLs
   });
 
   test('should detect content type from generation params', async () => {
@@ -162,7 +161,6 @@ describe('PublisherContentService', () => {
         hashtags: ['#test'],
         status: 'scheduled',
         cdnImageUrl: 'invalid-url',
-        imageUrl: 'also-invalid',
       },
     });
 

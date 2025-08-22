@@ -15,7 +15,6 @@ export interface PublisherContent {
   hashtags: string[];
   mediaUrls: string[];
   cdnImageUrl: string | null;
-  imageUrl: string | null;
   brandId: string;
   contentType: 'image' | 'video' | 'carousel' | 'reel' | 'story';
   brandName: string;
@@ -60,7 +59,6 @@ export class PublisherContentService {
           id: true,
           caption: true,
           hashtags: true,
-          imageUrl: true,
           cdnImageUrl: true,
           brandId: true,
           status: true,
@@ -99,7 +97,6 @@ export class PublisherContentService {
         hashtags: content.hashtags,
         mediaUrls,
         cdnImageUrl: content.cdnImageUrl,
-        imageUrl: content.imageUrl,
         brandId: content.brandId,
         contentType,
         brandName: content.brand.name,
@@ -142,7 +139,7 @@ export class PublisherContentService {
       };
     }
 
-    if (!content.cdnImageUrl && !content.imageUrl) {
+    if (!content.cdnImageUrl) {
       return {
         isValid: false,
         error: `Content ${content.id} has no media URLs`,
@@ -159,11 +156,9 @@ export class PublisherContentService {
   static prepareMediaUrls(content: any): string[] {
     const mediaUrls: string[] = [];
     
-    // Prefer CDN URLs for better performance
+    // Add CDN URL if available
     if (content.cdnImageUrl) {
       mediaUrls.push(content.cdnImageUrl);
-    } else if (content.imageUrl) {
-      mediaUrls.push(content.imageUrl);
     }
 
     // Validate URLs
