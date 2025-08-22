@@ -61,3 +61,17 @@ export function getPostingIntervalMs(frequency: 'daily' | 'every-other-day' | 'w
       return SCHEDULER_TIME_INTERVALS.DAILY_INTERVAL_MS;
   }
 }
+
+/**
+ * Format a date for EventBridge Scheduler at() expression
+ * EventBridge expects format: yyyy-MM-dd'T'HH:mm:ss (no milliseconds, no timezone)
+ */
+export function formatEventBridgeScheduleTime(dateInput: string | Date): string {
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) {
+    throw new Error(`Invalid date input: ${dateInput}`);
+  }
+  
+  // Convert to ISO string and remove milliseconds and timezone
+  return date.toISOString().split('.')[0];
+}
