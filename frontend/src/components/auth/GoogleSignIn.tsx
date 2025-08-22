@@ -17,6 +17,23 @@ export function GoogleSignIn({ mode, onSuccess, onError }: GoogleSignInProps) {
   const [isLoading, setIsLoading] = useState(false)
   const { setUser, setToken } = useAuthStore()
   const navigate = useNavigate()
+  
+  // Check if Google OAuth is configured
+  const isConfigured = import.meta.env.VITE_GOOGLE_CLIENT_ID && 
+                       import.meta.env.VITE_GOOGLE_CLIENT_ID !== ''
+  
+  if (!isConfigured) {
+    return (
+      <div className="w-full p-3 text-center border rounded-md bg-muted/50">
+        <p className="text-sm text-muted-foreground">
+          Google Sign-In not configured
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          See GOOGLE_OAUTH_SETUP.md for instructions
+        </p>
+      </div>
+    )
+  }
 
   const handleGoogleResponse = useCallback(async (credentialResponse: CredentialResponse) => {
     if (!credentialResponse.credential) {
