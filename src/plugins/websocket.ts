@@ -65,7 +65,10 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
   })
 
   // WebSocket route handler
-  fastify.get('/ws', { websocket: true }, (connection, _req: FastifyRequest) => {
+  // In production with postolio.example subdomain, this handles root path
+  // In development, this handles /ws path (Vite proxy configuration)
+  const wsPath = process.env.WS_DOMAIN ? '/' : '/ws'
+  fastify.get(wsPath, { websocket: true }, (connection, _req: FastifyRequest) => {
     const socket = connection as AuthenticatedSocket
     socket.isAlive = true
 

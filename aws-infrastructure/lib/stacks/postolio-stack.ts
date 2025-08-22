@@ -306,9 +306,10 @@ export class PostolioStack extends cdk.Stack {
       zoneName: 'postolio.example',
     })
 
-    // SSL Certificate for API domain
+    // SSL Certificate for API domain and WebSocket subdomain
     const apiCertificate = new acm.Certificate(this, 'ApiCertificate', {
       domainName: apiDomainName,
+      subjectAlternativeNames: ['postolio.example'], // Add WebSocket subdomain
       validation: acm.CertificateValidation.fromDns(apiHostedZone),
     })
 
@@ -517,7 +518,7 @@ export class PostolioStack extends cdk.Stack {
           // Trim any trailing slash at runtime via container entrypoint logic (client also normalizes)
           SCHEDULER_API_URL: schedulerApiUrl,
           SCHEDULER_API_STAGE: environment,
-          ALB_DOMAIN: '', // Will be set after ALB is created
+          WS_DOMAIN: 'postolio.example', // WebSocket subdomain
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: 'postolio',
@@ -683,11 +684,6 @@ export class PostolioStack extends cdk.Stack {
       distribution.distributionId
     )
     
-    // Add ALB domain for WebSocket connections
-    fargateService.taskDefinition.defaultContainer?.addEnvironment(
-      'ALB_DOMAIN',
-      fargateService.loadBalancer.loadBalancerDnsName
-    )
 
     // Update existing DNS record for postolio.example to point to CloudFront (unified domain)
     // Note: We reuse the existing ApiDomainRecord logical ID to update the existing record
@@ -706,11 +702,26 @@ export class PostolioStack extends cdk.Stack {
       })
     }
 
+    // Create Route53 record for WebSocket subdomain pointing directly to ALB
+    new route53.ARecord(this, 'WebSocketDnsRecord', {
+      zone: apiHostedZone,
+      recordName: 'ws',
+      target: route53.RecordTarget.fromAlias(
+        new route53Targets.LoadBalancerTarget(fargateService.loadBalancer)
+      ),
+      comment: 'WebSocket subdomain pointing directly to ALB (bypasses CloudFront)',
+    })
+
     // Output ALB DNS for WebSocket connections
     new cdk.CfnOutput(this, 'ALBDomainName', {
       value: fargateService.loadBalancer.loadBalancerDnsName,
       description: 'Application Load Balancer DNS name for WebSocket connections',
       exportName: `postolio-${environment}-alb-dns`,
+    })
+    
+    new cdk.CfnOutput(this, 'WebSocketDomain', {
+      value: 'postolio.example',
+      description: 'WebSocket domain for direct ALB connections',
     })
     
     // Outputs
