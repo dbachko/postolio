@@ -33,10 +33,12 @@ const publisher: FastifyPluginAsync = async function (fastify) {
   });
 
   // Apply authentication middleware
+  // Optional: Set PUBLISHER_ALLOWED_IPS env var to restrict to specific IPs (comma-separated)
+  // Example: PUBLISHER_ALLOWED_IPS="10.0.0.1,10.0.0.2" for Lambda NAT Gateway IPs
   const authMiddleware = createPublisherAuth({
     apiKey: PUBLISHER_API_KEY,
     requireHttps: process.env.NODE_ENV === 'production',
-    allowedIPs: process.env.PUBLISHER_ALLOWED_IPS?.split(',').map(ip => ip.trim())
+    allowedIPs: process.env.PUBLISHER_ALLOWED_IPS?.split(',').filter(Boolean).map(ip => ip.trim())
   });
 
   /**
