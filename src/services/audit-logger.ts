@@ -167,9 +167,9 @@ export class AuditLogger {
     // Check for forwarded IP (when behind proxy/load balancer)
     const forwarded = request.headers['x-forwarded-for']
     if (forwarded && typeof forwarded === 'string') {
-      return forwarded.split(',')[0].trim()
+      return forwarded.split(',')[0]?.trim() || 'unknown'
     } else if (forwarded && Array.isArray(forwarded) && forwarded[0]) {
-      return forwarded[0].split(',')[0].trim()
+      return forwarded[0].split(',')[0]?.trim() || 'unknown'
     }
 
     // Check for real IP header (CloudFront, Nginx)

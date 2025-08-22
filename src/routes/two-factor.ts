@@ -6,7 +6,7 @@ import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js'
 
 const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
   // Temporary auth check - will be replaced when auth plugin loads properly
-  const tempAuth = async (request: any, reply: any) => {
+  const tempAuth = async (_request: any, _reply: any) => {
     // Skip auth for now - just for server startup
     return
   }
@@ -64,14 +64,14 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // Verify two-factor code during login
-  fastify.post('/2fa/verify', {
+  fastify.post<{ Body: { code: string; trustDevice: boolean } }>('/2fa/verify', {
     preHandler: [
       validateAndSanitize(twoFactorVerifySchema),
       enhancedRateLimiters.strict()
     ]
-  }, async (request: any, reply) => {
+  }, async (request, reply) => {
     const { code, trustDevice } = request.body
-    const userId = request.session?.pendingUserId // Set during login when 2FA is required
+    const userId = (request as any).session?.pendingUserId // Set during login when 2FA is required
     const ipAddress = request.ip
 
     if (!userId) {
@@ -90,9 +90,9 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // Complete login
-    delete request.session.pendingUserId
-    request.session.userId = userId
-    request.session.authenticated = true
+    delete (request as any).session.pendingUserId;
+    (request as any).session.userId = userId;
+    (request as any).session.authenticated = true
 
     // Set trusted device cookie if requested
     if (result.trustedToken) {

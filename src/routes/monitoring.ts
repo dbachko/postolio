@@ -154,7 +154,8 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   // Circuit breaker status
   fastify.get('/metrics/circuit-breakers', async function () {
     try {
-      const { EmailService } = await import('../services/email.js')
+      // Import but don't use directly - just checking it's available
+      await import('../services/email.js')
       
       // Get circuit breaker stats if available
       return {

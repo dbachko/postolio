@@ -2,7 +2,6 @@ import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import type Mail from 'nodemailer/lib/mailer'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
-import * as aws from '@aws-sdk/credential-provider-node'
 import CircuitBreaker from 'opossum'
 
 /**

@@ -16,7 +16,7 @@ export enum TwoFactorMethod {
   SMS = 'sms'        // SMS verification code (future implementation)
 }
 
-interface TwoFactorSetup {
+interface _TwoFactorSetup {
   userId: string
   method: TwoFactorMethod
   secret?: string
@@ -190,7 +190,7 @@ export class TwoFactorService {
   /**
    * Setup SMS 2FA (placeholder for future implementation)
    */
-  private static async setupSMS(userId: string, phoneNumber: string): Promise<{
+  private static async setupSMS(_userId: string, _phoneNumber: string): Promise<{
     success: boolean
     message?: string
   }> {
@@ -235,10 +235,11 @@ export class TwoFactorService {
             window: 2
           })
           break
-        case TwoFactorMethod.EMAIL:
+        case TwoFactorMethod.EMAIL: {
           const storedCode = await redis.get(`2fa-email-code:${userId}`)
           verified = storedCode === code
           break
+        }
         case TwoFactorMethod.SMS:
           // TODO: Implement SMS verification
           break
@@ -365,13 +366,14 @@ export class TwoFactorService {
               })
             }
             break
-          case TwoFactorMethod.EMAIL:
+          case TwoFactorMethod.EMAIL: {
             const storedCode = await redis.get(`2fa-email-code:${userId}`)
             verified = storedCode === code
             if (verified) {
               await redis.del(`2fa-email-code:${userId}`)
             }
             break
+          }
           case TwoFactorMethod.SMS:
             // TODO: Implement SMS verification
             break

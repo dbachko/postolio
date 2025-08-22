@@ -120,7 +120,7 @@ export function sanitizeInput(input: any): any {
   if (input && typeof input === 'object') {
     const sanitized: any = {}
     for (const key in input) {
-      if (input.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(input, key)) {
         sanitized[key] = sanitizeInput(input[key])
       }
     }

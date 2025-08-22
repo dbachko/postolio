@@ -213,7 +213,7 @@ export class StatusBroadcaster {
           return parts[0] ? new Date(parseInt(parts[0])).toISOString() : null
         })() : null
       }
-    } catch (error) {
+    } catch (_error) {
       // Stream doesn't exist yet
       return {
         totalEvents: 0,

@@ -23,7 +23,7 @@ const csrfPlugin: FastifyPluginAsync<CSRFOptions> = async (fastify, options = {}
   const {
     cookieName = 'csrf-token',
     headerName = 'x-csrf-token',
-    sessionKey = 'csrfSecret',
+    sessionKey: _sessionKey = 'csrfSecret',
     tokenLength = 32,
     ignoreMethods = ['GET', 'HEAD', 'OPTIONS'],
     expiryTime = 3600 // 1 hour in seconds

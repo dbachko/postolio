@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify'
 import bcrypt from 'bcrypt'
-import { signJWT, verifyJWT } from '../services/jwt.js'
+import { verifyJWT } from '../services/jwt.js'
 import { getDatabaseClient } from '../config/database.js'
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js'
 import { validateAndSanitize } from '../middleware/validation.js'
@@ -211,7 +211,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // Generate tokens with refresh token rotation
-    const { refreshToken, accessToken, family } = await RefreshTokenService.generateRefreshToken(
+    const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
       user.id,
       request.ip,
       request.headers['user-agent']
