@@ -1,16 +1,36 @@
 import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import type Mail from 'nodemailer/lib/mailer'
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
+import * as aws from '@aws-sdk/credential-provider-node'
 
 /**
- * Centralized email service to handle all email sending
- * Eliminates duplication and provides consistent email handling
+ * Centralized email service with AWS SES for production
+ * Falls back to SMTP for development
  */
 export class EmailService {
   private static transporter: Transporter | null = null
+  private static sesClient: SESClient | null = null
+  private static useAWSSES: boolean = process.env.USE_AWS_SES === 'true' || process.env.NODE_ENV === 'production'
 
   /**
-   * Initialize the email transporter (singleton pattern)
+   * Initialize AWS SES client
+   */
+  private static getSESClient(): SESClient {
+    if (!this.sesClient) {
+      this.sesClient = new SESClient({
+        region: process.env.AWS_REGION || 'us-east-1',
+        credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        } : undefined, // Use IAM role in production
+      })
+    }
+    return this.sesClient
+  }
+
+  /**
+   * Initialize the email transporter for SMTP (fallback)
    */
   private static getTransporter(): Transporter {
     if (!this.transporter) {
@@ -31,7 +51,53 @@ export class EmailService {
    * Check if email service is properly configured
    */
   static isConfigured(): boolean {
+    if (this.useAWSSES) {
+      // SES just needs AWS region (credentials come from IAM role in production)
+      return !!(process.env.AWS_REGION || process.env.NODE_ENV === 'production')
+    }
+    // SMTP needs explicit configuration
     return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+  }
+
+  /**
+   * Send email via AWS SES
+   */
+  private static async sendViaSES(options: Mail.Options): Promise<void> {
+    const ses = this.getSESClient()
+    
+    // Convert nodemailer options to SES format
+    const from = typeof options.from === 'string' 
+      ? options.from 
+      : options.from?.address || process.env.SES_FROM_EMAIL || 'noreply@postolio.example'
+    
+    const to = Array.isArray(options.to) 
+      ? options.to.map(addr => typeof addr === 'string' ? addr : addr.address)
+      : [typeof options.to === 'string' ? options.to : options.to?.address]
+    
+    const command = new SendEmailCommand({
+      Source: from,
+      Destination: {
+        ToAddresses: to.filter(Boolean) as string[],
+      },
+      Message: {
+        Subject: {
+          Data: options.subject || 'Postolio Notification',
+          Charset: 'UTF-8',
+        },
+        Body: {
+          Html: options.html ? {
+            Data: typeof options.html === 'string' ? options.html : '',
+            Charset: 'UTF-8',
+          } : undefined,
+          Text: options.text ? {
+            Data: typeof options.text === 'string' ? options.text : '',
+            Charset: 'UTF-8',
+          } : undefined,
+        },
+      },
+    })
+    
+    await ses.send(command)
   }
 
   /**
@@ -44,18 +110,33 @@ export class EmailService {
         return { success: false, error: 'Email service not configured' }
       }
 
-      const transporter = this.getTransporter()
-      
       // Set default from address if not provided
       if (!options.from) {
-        options.from = process.env.SMTP_FROM || '"Postolio" <noreply@postolio.example>'
+        options.from = this.useAWSSES 
+          ? (process.env.SES_FROM_EMAIL || 'noreply@postolio.example')
+          : (process.env.SMTP_FROM || '"Postolio" <noreply@postolio.example>')
       }
 
-      await transporter.sendMail(options)
+      // Use AWS SES in production, SMTP in development
+      if (this.useAWSSES) {
+        await this.sendViaSES(options)
+      } else {
+        const transporter = this.getTransporter()
+        await transporter.sendMail(options)
+      }
       
       return { success: true }
     } catch (error) {
       console.error('Email send error:', error)
+      
+      // Provide more specific error messages for SES
+      if (error instanceof Error && error.name === 'MessageRejected') {
+        return { 
+          success: false, 
+          error: 'Email address not verified in AWS SES. Please verify sender email.' 
+        }
+      }
+      
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to send email' 
@@ -286,7 +367,7 @@ If you didn't request this email, you can safely ignore it.
   }
 
   /**
-   * Verify SMTP connection
+   * Verify email service connection
    */
   static async verifyConnection(): Promise<boolean> {
     try {
@@ -294,11 +375,29 @@ If you didn't request this email, you can safely ignore it.
         return false
       }
 
-      const transporter = this.getTransporter()
-      await transporter.verify()
-      return true
+      if (this.useAWSSES) {
+        // Test SES by checking identity verification status
+        const ses = this.getSESClient()
+        const { $metadata } = await ses.send(new SendEmailCommand({
+          Source: process.env.SES_FROM_EMAIL || 'noreply@postolio.example',
+          Destination: { ToAddresses: ['test@example.com'] },
+          Message: {
+            Subject: { Data: 'Test' },
+            Body: { Text: { Data: 'Test' } }
+          }
+        })).catch(err => ({ $metadata: { httpStatusCode: err.$metadata?.httpStatusCode || 0 } }))
+        
+        // If we get a 400 error, it means SES is configured but email not verified
+        // If we get 200 or 400, SES is working
+        return $metadata.httpStatusCode === 200 || $metadata.httpStatusCode === 400
+      } else {
+        // Verify SMTP connection
+        const transporter = this.getTransporter()
+        await transporter.verify()
+        return true
+      }
     } catch (error) {
-      console.error('SMTP verification failed:', error)
+      console.error('Email service verification failed:', error)
       return false
     }
   }

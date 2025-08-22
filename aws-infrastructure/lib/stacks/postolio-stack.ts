@@ -373,6 +373,18 @@ export class PostolioStack extends cdk.Stack {
       actions: ['cloudfront:CreateInvalidation'],
       resources: ['*'], // Will be restricted to specific distribution after creation
     }))
+    
+    // Grant permissions for AWS SES email sending
+    taskRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'ses:SendEmail',
+        'ses:SendRawEmail',
+        'ses:GetIdentityVerificationAttributes',
+        'ses:VerifyEmailIdentity'
+      ],
+      resources: ['*'], // SES resources are global
+    }))
 
     // Custom task execution role policy
     const taskExecutionRolePolicy = new iam.PolicyDocument({
@@ -536,6 +548,10 @@ export class PostolioStack extends cdk.Stack {
           SCHEDULER_API_URL: schedulerApiUrl,
           SCHEDULER_API_STAGE: environment,
           WS_DOMAIN: 'postolio.example', // WebSocket subdomain
+          // AWS SES configuration
+          USE_AWS_SES: 'true', // Use SES in production
+          SES_FROM_EMAIL: domainName ? `noreply@${domainName}` : 'noreply@postolio.example',
+          NODE_ENV: environment === 'prod' ? 'production' : environment,
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: 'postolio',
