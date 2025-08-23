@@ -1,67 +1,32 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/authStore'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle, AlertCircle } from 'lucide-react'
 import { TIMEOUTS } from '@/constants/timeouts'
+import type { FacebookAuthResponse, FacebookLoginResponse } from '@/types/oauth'
 
-interface FacebookSignInProps {
+interface FacebookSignInIsolatedProps {
   mode: 'signin' | 'signup' | 'link'
   onSuccess?: () => void
   onError?: (error: string) => void
 }
 
-declare global {
-  interface Window {
-    fbAsyncInit: () => void
-    FB: any
-  }
-}
-
-export function FacebookSignIn({ mode, onSuccess, onError }: FacebookSignInProps) {
+export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSignInIsolatedProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isSDKLoaded, setIsSDKLoaded] = useState(false)
   const { setUser, setToken } = useAuthStore()
   const navigate = useNavigate()
+  const sdkLoadedRef = useRef(false)
   
   // Check if Facebook OAuth is configured
   const isConfigured = import.meta.env.VITE_FACEBOOK_APP_ID && 
                        import.meta.env.VITE_FACEBOOK_APP_ID !== ''
 
-  useEffect(() => {
-    if (!isConfigured || isSDKLoaded) return
-
-    // Load Facebook SDK
-    window.fbAsyncInit = function() {
-      window.FB.init({
-        appId: import.meta.env.VITE_FACEBOOK_APP_ID,
-        cookie: true,
-        xfbml: true,
-        version: 'v18.0'
-      })
-      setIsSDKLoaded(true)
-    }
-
-    // Load the SDK asynchronously
-    const script = document.createElement('script')
-    script.src = 'https://connect.facebook.net/en_US/sdk.js'
-    script.async = true
-    script.defer = true
-    document.body.appendChild(script)
-
-    return () => {
-      // Cleanup
-      const fbScript = document.querySelector('script[src*="facebook.net"]')
-      if (fbScript) {
-        document.body.removeChild(fbScript)
-      }
-    }
-  }, [isConfigured, isSDKLoaded])
-
-  const handleFacebookResponse = useCallback(async (authResponse: any) => {
-    if (!authResponse || !authResponse.code) {
-      const errorMsg = 'No authorization code received from Facebook'
+  const handleFacebookResponse = useCallback(async (authResponse: FacebookAuthResponse) => {
+    if (!authResponse || !authResponse.accessToken) {
+      const errorMsg = 'No access token received from Facebook'
       onError?.(errorMsg)
       toast.error('Facebook sign-in failed', {
         description: errorMsg,
@@ -73,7 +38,7 @@ export function FacebookSignIn({ mode, onSuccess, onError }: FacebookSignInProps
     setIsLoading(true)
     
     try {
-      const endpoint = mode === 'link' ? '/api/auth/facebook/link' : '/api/auth/facebook/callback'
+      const endpoint = mode === 'link' ? '/api/auth/facebook/link' : '/api/auth/facebook/verify'
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -85,8 +50,8 @@ export function FacebookSignIn({ mode, onSuccess, onError }: FacebookSignInProps
         },
         credentials: 'include',
         body: JSON.stringify({
-          code: authResponse.code,
-          redirectUri: window.location.origin + '/api/auth/facebook/callback'
+          accessToken: authResponse.accessToken,
+          userID: authResponse.userID
         })
       })
 
@@ -133,7 +98,7 @@ export function FacebookSignIn({ mode, onSuccess, onError }: FacebookSignInProps
   }, [mode, navigate, onError, onSuccess, setToken, setUser])
 
   const handleFacebookLogin = useCallback(() => {
-    if (!isSDKLoaded || !window.FB) {
+    if (!window.FB || !isSDKLoaded) {
       toast.error('Facebook SDK not loaded', {
         description: 'Please try again in a moment',
         icon: <AlertCircle className="text-red-500" />,
@@ -143,28 +108,92 @@ export function FacebookSignIn({ mode, onSuccess, onError }: FacebookSignInProps
 
     setIsLoading(true)
 
-    window.FB.login(
-      (response: any) => {
+    try {
+      window.FB.login((response: FacebookLoginResponse) => {
         if (response.authResponse) {
           handleFacebookResponse(response.authResponse)
         } else {
           setIsLoading(false)
-          const errorMsg = 'Facebook sign-in was cancelled'
-          onError?.(errorMsg)
-          toast.error('Sign-in cancelled', {
-            description: errorMsg,
-            icon: <AlertCircle className="text-red-500" />,
-          })
+          if (response.status !== 'unknown') {
+            toast.error('Facebook sign-in cancelled', {
+              icon: <AlertCircle className="text-red-500" />,
+            })
+          }
         }
-      },
-      { 
-        scope: 'email,public_profile',
-        auth_type: 'rerequest',
-        return_scopes: true
+      }, { scope: 'public_profile,email' })
+    } catch (error) {
+      setIsLoading(false)
+      console.error('Facebook login error:', error)
+      toast.error('Facebook sign-in failed', {
+        description: 'An unexpected error occurred',
+        icon: <AlertCircle className="text-red-500" />,
+      })
+    }
+  }, [isSDKLoaded, handleFacebookResponse])
+
+  useEffect(() => {
+    if (!isConfigured || sdkLoadedRef.current) return
+
+    // Check if SDK is already loaded
+    if (window.FB) {
+      setIsSDKLoaded(true)
+      sdkLoadedRef.current = true
+      return
+    }
+
+    // Create a unique callback for this instance
+    const callbackName = `fbAsyncInit_${Date.now()}`
+    
+    // Store the old fbAsyncInit if it exists
+    const oldInit = window.fbAsyncInit
+
+    window.fbAsyncInit = function() {
+      // Call the old init if it existed
+      if (oldInit && typeof oldInit === 'function') {
+        oldInit()
       }
-    )
-  }, [isSDKLoaded, handleFacebookResponse, onError])
-  
+
+      try {
+        window.FB?.init({
+          appId: import.meta.env.VITE_FACEBOOK_APP_ID,
+          cookie: true,
+          xfbml: false, // Don't parse XFBML to avoid DOM manipulation
+          version: 'v18.0',
+          autoLogAppEvents: false
+        })
+        
+        setIsSDKLoaded(true)
+        sdkLoadedRef.current = true
+      } catch (error) {
+        console.error('Failed to initialize Facebook SDK:', error)
+        onError?.('Failed to initialize Facebook Sign-In')
+      }
+    }
+
+    // Check if script already exists
+    const existingScript = document.querySelector('script[src*="facebook.net/en_US/sdk.js"]')
+    if (existingScript) {
+      // SDK script exists but hasn't loaded yet
+      return
+    }
+
+    // Load the SDK asynchronously
+    const script = document.createElement('script')
+    script.src = 'https://connect.facebook.net/en_US/sdk.js'
+    script.async = true
+    script.defer = true
+    script.id = 'facebook-jssdk'
+    
+    document.body.appendChild(script)
+
+    return () => {
+      // Cleanup is minimal to avoid conflicts
+      if (window.fbAsyncInit === window[callbackName as keyof Window]) {
+        window.fbAsyncInit = oldInit
+      }
+    }
+  }, [isConfigured, onError])
+
   if (!isConfigured) {
     return (
       <div className="w-full p-3 text-center border rounded-md bg-muted/50">

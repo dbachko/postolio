@@ -8,8 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter'
 import { FormField } from '@/components/forms/FormField'
-import { GoogleSignIn } from '@/components/auth/GoogleSignIn'
-import { FacebookSignIn } from '@/components/auth/FacebookSignIn'
+import { GoogleSignInIsolated } from '@/components/auth/GoogleSignInIsolated'
+import { FacebookSignInIsolated } from '@/components/auth/FacebookSignInIsolated'
 import { MagicLinkForm } from '@/components/auth/MagicLinkForm'
 import { validationRules } from '../utils/validation'
 import { TIMEOUTS } from '../constants/timeouts'
@@ -92,8 +92,8 @@ export function Register() {
         <CardContent>
           {/* OAuth Providers */}
           <div className="space-y-3 mb-6">
-            <GoogleSignIn mode="signup" />
-            <FacebookSignIn mode="signup" />
+            <GoogleSignInIsolated mode="signup" />
+            <FacebookSignInIsolated mode="signup" />
           </div>
           
           {/* Divider */}
