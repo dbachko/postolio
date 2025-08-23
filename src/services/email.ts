@@ -213,6 +213,14 @@ export class EmailService {
           : (process.env.SMTP_FROM || '"Postolio" <noreply@postolio.example>')
       }
 
+      // Add important headers to improve deliverability
+      if (!options.headers) {
+        options.headers = {}
+      }
+      options.headers['List-Unsubscribe'] = '<mailto:unsubscribe@postolio.example>'
+      options.headers['X-Priority'] = '3' // Normal priority
+      options.headers['Importance'] = 'Normal'
+
       // Use AWS SES in production, SMTP in development
       if (this.useAWSSES) {
         await this.sendViaSES(options)
@@ -361,21 +369,22 @@ If you didn't request this email, you can safely ignore it.
     const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${token}`
     
     const { html, text } = this.generateEmailTemplate({
-      title: 'Welcome to Postolio',
-      greeting: 'Hi there,',
+      title: isSignUp ? 'Complete Your Registration' : 'Your Secure Sign-In Link',
+      greeting: 'Hello,',
       content: isSignUp 
-        ? "You're almost done! Click the button below to complete your registration:"
-        : "Click the button below to securely sign in to your account:",
-      buttonText: isSignUp ? 'Complete Registration' : 'Sign In',
+        ? "Thank you for signing up for Postolio. Please click the button below to verify your email and complete your registration:"
+        : "We received a request to sign in to your Postolio account. Click the button below to continue:",
+      buttonText: isSignUp ? 'Verify Email & Complete Registration' : 'Sign In to Postolio',
       buttonUrl: magicLinkUrl,
-      warning: '<strong>⏱ This link expires in 15 minutes</strong><br>For security reasons, this magic link can only be used once.'
+      warning: '<strong>Security Notice:</strong> This link will expire in 15 minutes and can only be used once. If you did not request this link, please ignore this email.'
     })
 
     return this.sendEmail({
       to: email,
-      subject: isSignUp ? 'Complete your Postolio registration' : 'Sign in to Postolio',
+      subject: isSignUp ? 'Verify your email for Postolio' : 'Your Postolio sign-in link',
       html,
-      text
+      text,
+      replyTo: 'support@postolio.example' // Add reply-to address
     })
   }
 
