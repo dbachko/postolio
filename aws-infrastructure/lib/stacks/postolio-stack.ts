@@ -534,39 +534,60 @@ export class PostolioStack extends cdk.Stack {
         executionRole,
         taskRole,
         secrets: {
+          // Database credentials
           DB_USERNAME: ecs.Secret.fromSecretsManager(dbSecret, 'username'),
           DB_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password'),
+          
+          // Authentication secrets
           JWT_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'jwtSecret'),
+          
+          // API Keys (actual secrets)
           OPENAI_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'openaiApiKey'),
-          FACEBOOK_APP_ID: ecs.Secret.fromSecretsManager(appSecrets, 'facebookAppId'),
-          FACEBOOK_APP_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'facebookAppSecret'),
-          REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
           PUBLISHER_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'publisherApiKey'),
-          // Google OAuth secrets from main app secrets
-          GOOGLE_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecrets, 'googleClientId'),
+          
+          // OAuth Secrets (backend only - never exposed to frontend)
           GOOGLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'googleClientSecret'),
+          FACEBOOK_APP_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'facebookAppSecret'),
+          
+          // Database connection
+          REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
         },
         environment: {
+          // Database configuration
           DB_HOST: database.instanceEndpoint.hostname,
           DB_PORT: database.instanceEndpoint.port.toString(),
           DB_NAME: 'postolio',
+          
+          // OAuth Client IDs (public values from GitHub Environment Variables via CDK context)
+          GOOGLE_CLIENT_ID: this.node.tryGetContext('googleClientId') || process.env.GOOGLE_CLIENT_ID || '',
+          FACEBOOK_APP_ID: this.node.tryGetContext('facebookAppId') || process.env.FACEBOOK_APP_ID || '',
+          
+          // URLs and domains
           CORS_ORIGIN: apiDomainName, // Use unified domain instead of CloudFront domain
           FRONTEND_URL: `https://${apiDomainName}`, // Critical: Set frontend URL for emails
           INSTAGRAM_REDIRECT_URI: `https://${apiDomainName}/api/auth/instagram/callback`,
           GOOGLE_REDIRECT_URI: `https://${apiDomainName}/api/auth/google/callback`,
           FACEBOOK_REDIRECT_URI: `https://${apiDomainName}/api/auth/facebook/callback`,
+          
+          // AWS resources
           S3_IMAGES_BUCKET: imagesBucket.bucketName,
           AWS_REGION: cdk.Aws.REGION,
           CLOUDFRONT_DOMAIN: apiDomainName, // Will be updated after distribution creation
-          // Trim any trailing slash at runtime via container entrypoint logic (client also normalizes)
+          
+          // Service endpoints
           SCHEDULER_API_URL: schedulerApiUrl,
           SCHEDULER_API_STAGE: environment,
           WS_DOMAIN: 'postolio.example', // WebSocket subdomain
+          
           // AWS SES configuration
           USE_AWS_SES: 'true', // Use SES in production
           SES_FROM_EMAIL: 'noreply@postolio.example', // Use consistent sender address
-          NODE_ENV: environment === 'prod' ? 'production' : environment,
-          PORT: '3000',
+          
+          // Environment configuration (from GitHub Environment Variables via context)
+          NODE_ENV: this.node.tryGetContext('nodeEnv') || (environment === 'prod' ? 'production' : environment),
+          PORT: this.node.tryGetContext('port') || '3000',
+          LOG_LEVEL: this.node.tryGetContext('logLevel') || 'info',
+          ENABLE_MONITORING: this.node.tryGetContext('enableMonitoring') || 'false',
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: 'postolio',

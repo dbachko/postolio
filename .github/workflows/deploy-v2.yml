@@ -127,6 +127,8 @@ jobs:
             --context imageTag=${{ steps.vars.outputs.image_tag }} \
             --context environment=${{ needs.set-environment.outputs.environment }} \
             --context domainName=${{ vars.DOMAIN_NAME }} \
+            --context googleClientId=${{ vars.VITE_GOOGLE_CLIENT_ID }} \
+            --context facebookAppId=${{ vars.VITE_FACEBOOK_APP_ID }} \
             --context corsOrigin=${{ vars.CORS_ORIGIN || vars.VITE_API_URL }} \
             --context logLevel=${{ vars.LOG_LEVEL || 'info' }} \
             --context enableMonitoring=${{ vars.ENABLE_MONITORING || 'false' }}
