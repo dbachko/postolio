@@ -31,6 +31,7 @@ import dataDeletionRoutes from './routes/data-deletion.js'
 import { complianceRoutes } from './routes/compliance.js'
 import postDetailRoutes from './routes/post-detail.js'
 import configRoutes from './routes/config.js'
+import publisherRoutes from './routes/publisher.js'
 import { autopilotService } from './services/autopilot.js'
 import { schedulerService } from './services/scheduler.js'
 import { ensureDatabaseSchema } from './config/database-setup.js'
@@ -124,6 +125,7 @@ export function buildFastify(): FastifyInstance {
   app.register(complianceRoutes)
   app.register(postDetailRoutes) // Post detail routes don't need prefix, they include /api
   app.register(configRoutes) // Config routes include their own /api prefix
+  app.register(publisherRoutes, { prefix: '/api/publisher' }) // Publisher credentials endpoint
 
   // Health check endpoint for both load balancer health checks and API requests
   app.get('/health', async () => {

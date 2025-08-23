@@ -4,6 +4,7 @@ import { verifyJWT } from '../services/jwt.js'
 import crypto from 'crypto'
 
 import { getDatabaseClient } from '../config/database.js'
+import { PublisherCredentialsService } from '../services/publisher-credentials.js'
 
 const prisma = getDatabaseClient()
 
@@ -240,6 +241,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           },
         },
       })
+
+      // Invalidate cached credentials since user reconnected
+      await PublisherCredentialsService.invalidateCredentialsCache(brand.id)
 
       // Return HTML that closes the popup and notifies the parent
       const html = `

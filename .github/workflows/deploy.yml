@@ -228,6 +228,7 @@ jobs:
           # environment defaults to 'dev' if not specified via context
           # CRITICAL: useEcrImage=true ensures the deployed task uses the ECR image instead of base Node.js image
           # Pass the git SHA as the image tag to ensure new deployments use the latest code
+          # CDK will automatically generate PUBLISHER_API_KEY during deployment
           npm run cdk -- deploy Postolio-dev --require-approval never -c environment=dev -c useEcrImage=true -c imageTag=${{ github.sha }}
           
           # Deploy Content Scheduler Microservice (if it exists)

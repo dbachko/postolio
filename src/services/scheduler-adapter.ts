@@ -130,6 +130,9 @@ export class SchedulerAdapter {
           metadata: {
             timezone: brandTimezone,
             localTime: customTime ? customTime.toISOString() : undefined,
+            // DO NOT store credentials here - they can change if user reconnects
+            // Publisher Lambda should fetch fresh credentials from database at publish time
+            // using brandId to ensure we always have valid tokens
           },
         });
 

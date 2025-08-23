@@ -1,0 +1,143 @@
+/**
+ * Publisher Credentials Service
+ * Provides a secure way for the AWS publisher Lambda to fetch fresh Instagram credentials
+ * This ensures credentials are always up-to-date even if user reconnects their account
+ */
+
+import { getDatabaseClient } from '../config/database.js';
+import { getRedisClient } from '../services/redis.js';
+
+const prisma = getDatabaseClient();
+
+export interface PublisherCredentials {
+  instagramAccessToken: string | null;
+  instagramAccountId: string | null;
+  instagramPageId: string | null;
+  brandName: string;
+}
+
+// Cache TTL: 5 minutes (credentials rarely change)
+const CACHE_TTL_SECONDS = 300;
+
+export class PublisherCredentialsService {
+  /**
+   * Fetch fresh Instagram credentials for a brand with caching
+   * This should be called by the publisher Lambda at publish time
+   * to ensure we always have the latest valid credentials
+   */
+  static async getCredentialsForBrand(brandId: string): Promise<PublisherCredentials | null> {
+    try {
+      // Try cache first
+      const redis = getRedisClient();
+      const cacheKey = `publisher:credentials:${brandId}`;
+      
+      if (redis) {
+        try {
+          const cached = await redis.get(cacheKey);
+          if (cached) {
+            console.log(`Cache hit for brand ${brandId} credentials`);
+            return JSON.parse(cached);
+          }
+        } catch (cacheError) {
+          console.warn('Redis cache read failed, falling back to database:', cacheError);
+        }
+      }
+
+      // Cache miss - fetch from database
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: {
+          id: true,
+          name: true,
+          instagramAccessToken: true,
+          instagramAccountId: true,
+          instagramPageId: true,
+        },
+      });
+
+      if (!brand) {
+        console.error(`Brand not found: ${brandId}`);
+        return null;
+      }
+
+      // Check if Instagram is connected
+      if (!brand.instagramAccessToken || !brand.instagramAccountId) {
+        console.error(`Instagram not connected for brand: ${brandId}`);
+        return null;
+      }
+
+      const credentials = {
+        instagramAccessToken: brand.instagramAccessToken,
+        instagramAccountId: brand.instagramAccountId,
+        instagramPageId: brand.instagramPageId,
+        brandName: brand.name,
+      };
+
+      // Cache the result
+      if (redis) {
+        try {
+          await redis.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(credentials));
+          console.log(`Cached credentials for brand ${brandId} (TTL: ${CACHE_TTL_SECONDS}s)`);
+        } catch (cacheError) {
+          console.warn('Redis cache write failed:', cacheError);
+        }
+      }
+
+      return credentials;
+    } catch (error) {
+      console.error('Error fetching publisher credentials:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Validate that credentials are still valid
+   */
+  static async validateCredentials(credentials: PublisherCredentials): Promise<boolean> {
+    if (!credentials.instagramAccessToken) {
+      return false;
+    }
+
+    // Token expiry validation will be implemented when we store token expiry dates
+    // Currently, Instagram long-lived tokens are valid for 60 days
+    return true;
+  }
+
+  /**
+   * Get credentials for publishing
+   * This is the main method the publisher Lambda should call
+   */
+  static async getPublishingCredentials(brandId: string): Promise<PublisherCredentials | null> {
+    const credentials = await this.getCredentialsForBrand(brandId);
+    
+    if (!credentials) {
+      return null;
+    }
+
+    const isValid = await this.validateCredentials(credentials);
+    
+    if (!isValid) {
+      console.error(`Invalid credentials for brand ${brandId}`);
+      return null;
+    }
+
+    return credentials;
+  }
+
+  /**
+   * Invalidate cached credentials when Instagram is reconnected
+   * Call this when user updates their Instagram connection
+   */
+  static async invalidateCredentialsCache(brandId: string): Promise<void> {
+    const redis = getRedisClient();
+    if (!redis) return;
+
+    const cacheKey = `publisher:credentials:${brandId}`;
+    try {
+      await redis.del(cacheKey);
+      console.log(`Invalidated credential cache for brand ${brandId}`);
+    } catch (error) {
+      console.error('Failed to invalidate cache:', error);
+    }
+  }
+}

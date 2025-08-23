@@ -27,6 +27,17 @@ export interface PostolioStackProps extends cdk.StackProps {
 }
 
 export class PostolioStack extends cdk.Stack {
+  /**
+   * Generate a cryptographically secure random secret
+   * Used for auto-generating API keys when not provided via environment
+   */
+  private generateRandomSecret(): string {
+    // Use crypto.randomBytes for cryptographically secure random generation
+    // 32 bytes = 256 bits of entropy, converted to base64
+    const crypto = require('crypto');
+    return crypto.randomBytes(32).toString('base64');
+  }
+
   constructor(scope: Construct, id: string, props: PostolioStackProps) {
     super(scope, id, props)
 
@@ -331,6 +342,11 @@ export class PostolioStack extends cdk.Stack {
         instagramRedirectUri: cdk.SecretValue.unsafePlainText(`https://${domainName || 'PLACEHOLDER_DOMAIN'}/auth/instagram/callback`),
   // ContentScheduler integration (SigV4 IAM auth only; API key deprecated)
   schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
+        // Publisher API key for Lambda-to-API authentication
+        // Use a secure random value or provide via environment variable
+        publisherApiKey: cdk.SecretValue.unsafePlainText(
+          process.env.PUBLISHER_API_KEY || this.generateRandomSecret()
+        ),
       },
     })
 
@@ -506,6 +522,7 @@ export class PostolioStack extends cdk.Stack {
           PORT: ecs.Secret.fromSecretsManager(appSecrets, 'port'),
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
           INSTAGRAM_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecrets, 'instagramRedirectUri'),
+          PUBLISHER_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'publisherApiKey'),
         },
         environment: {
           DB_HOST: database.instanceEndpoint.hostname,
