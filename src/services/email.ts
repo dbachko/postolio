@@ -217,9 +217,11 @@ export class EmailService {
       if (!options.headers) {
         options.headers = {}
       }
-      options.headers['List-Unsubscribe'] = '<mailto:unsubscribe@postolio.example>'
-      options.headers['X-Priority'] = '3' // Normal priority
-      options.headers['Importance'] = 'Normal'
+      // Use type assertion for custom headers
+      const headers = options.headers as Record<string, string>
+      headers['List-Unsubscribe'] = '<mailto:unsubscribe@postolio.example>'
+      headers['X-Priority'] = '3' // Normal priority
+      headers['Importance'] = 'Normal'
 
       // Use AWS SES in production, SMTP in development
       if (this.useAWSSES) {

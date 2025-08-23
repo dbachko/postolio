@@ -310,6 +310,7 @@ Create a dedicated IAM user with programmatic access for the GitHub Actions pipe
                 "iam:TagRole",
                 "iam:UntagRole",
                 "iam:UpdateRole",
+                "iam:UpdateAssumeRolePolicy",
                 "sts:AssumeRole",
                 "sts:GetCallerIdentity"
             ],
