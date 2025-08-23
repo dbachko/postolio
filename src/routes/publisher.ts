@@ -6,6 +6,7 @@
 
 import { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
+import { PublisherContentService } from '../services/publisher-content.js';
 import { createPublisherAuth } from '../middleware/publisher-auth.js';
 
 const publisher: FastifyPluginAsync = async function (fastify) {
@@ -36,6 +37,131 @@ const publisher: FastifyPluginAsync = async function (fastify) {
     apiKey: PUBLISHER_API_KEY,
     requireHttps: process.env.NODE_ENV === 'production',
     ...(allowedIPs && { allowedIPs })
+  });
+
+  /**
+   * Get fresh content details for publishing
+   * This endpoint is called by the AWS publisher Lambda at publish time
+   * to ensure we always publish the latest edited content
+   */
+  fastify.post('/content', {
+    preHandler: authMiddleware,
+    schema: {
+      body: {
+        type: 'object',
+        required: ['contentId'],
+        properties: {
+          contentId: { type: 'string', format: 'uuid' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          required: ['success', 'content', 'timestamp'],
+          properties: {
+            success: { type: 'boolean' },
+            content: {
+              type: 'object',
+              required: ['id', 'caption', 'hashtags', 'brandId', 'contentType'],
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                caption: { type: 'string', minLength: 1 },
+                hashtags: { type: 'array', items: { type: 'string' } },
+                mediaUrls: { 
+                  type: 'array', 
+                  items: { type: 'string', format: 'uri' },
+                  minItems: 0
+                },
+                cdnImageUrl: { type: 'string', format: 'uri' },
+                imageUrl: { type: 'string', format: 'uri' },
+                brandId: { type: 'string', format: 'uuid' },
+                contentType: { 
+                  type: 'string',
+                  enum: ['image', 'video', 'carousel', 'reel', 'story']
+                }
+              }
+            },
+            timestamp: { type: 'string', format: 'date-time' }
+          }
+        },
+        400: {
+          type: 'object',
+          required: ['error', 'message'],
+          properties: {
+            error: { type: 'string' },
+            message: { type: 'string' },
+            contentId: { type: 'string' }
+          }
+        },
+        404: {
+          type: 'object',
+          required: ['error', 'message'],
+          properties: {
+            error: { type: 'string' },
+            message: { type: 'string' },
+            contentId: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async function (request, reply) {
+    try {
+      const { contentId } = request.body as { contentId: string };
+
+      // Fetch fresh content using service layer
+      const content = await PublisherContentService.getContentForPublishing(contentId);
+
+      if (!content) {
+        return reply.status(404).send({ 
+          error: 'Not Found',
+          message: `Content not found or not publishable: ${contentId}`,
+          contentId 
+        });
+      }
+
+      // Log for monitoring (structured logging)
+      fastify.log.info({
+        event: 'publisher_content_fetched',
+        contentId: content.id,
+        brandId: content.brandId,
+        brandName: content.brandName,
+        contentType: content.contentType,
+        hasCaption: !!content.caption,
+        hashtagCount: content.hashtags.length,
+        mediaCount: content.mediaUrls.length,
+        timestamp: new Date().toISOString(),
+        requestId: request.headers['x-request-id'] || 'unknown'
+      });
+
+      // Return fresh content details
+      reply.send({
+        success: true,
+        content: {
+          id: content.id,
+          caption: content.caption,
+          hashtags: content.hashtags,
+          mediaUrls: content.mediaUrls.length > 0 ? content.mediaUrls : undefined,
+          cdnImageUrl: content.cdnImageUrl,
+          imageUrl: content.imageUrl,
+          brandId: content.brandId,
+          contentType: content.contentType
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      fastify.log.error({
+        event: 'publisher_content_error',
+        contentId: (request.body as any)?.contentId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString()
+      });
+
+      reply.status(500).send({
+        error: 'Internal Server Error',
+        message: 'Failed to fetch content for publishing'
+      });
+    }
   });
 
   /**
