@@ -42,11 +42,16 @@ SECRET_JSON=$(aws secretsmanager get-secret-value \
     --output text \
     --region $AWS_REGION 2>/dev/null || echo "{}")
 
+# Function to extract a value from the secrets JSON
+extract_json_value() {
+    local json="$1"
+    local key="$2"
+    echo "$json" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('$key', ''))" 2>/dev/null || echo ""
+}
+
 # Extract OAuth credentials
-GOOGLE_CLIENT_ID=$(echo "$SECRET_JSON" | \
-    python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('googleClientId', ''))" 2>/dev/null || echo "")
-FACEBOOK_APP_ID=$(echo "$SECRET_JSON" | \
-    python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('facebookAppId', ''))" 2>/dev/null || echo "")
+GOOGLE_CLIENT_ID=$(extract_json_value "$SECRET_JSON" "googleClientId")
+FACEBOOK_APP_ID=$(extract_json_value "$SECRET_JSON" "facebookAppId")
 
 if [ -z "$GOOGLE_CLIENT_ID" ]; then
     echo -e "${YELLOW}⚠️  Google Client ID not found in Secrets Manager${NC}"

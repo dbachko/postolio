@@ -47,15 +47,22 @@ if [ -z "$SECRET_JSON" ]; then
     exit 1
 fi
 
+# Function to extract a value from the secrets JSON
+extract_json_value() {
+    local json="$1"
+    local key="$2"
+    echo "$json" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('$key', ''))" 2>/dev/null || echo ""
+}
+
 # Parse the JSON to get individual values
-GOOGLE_CLIENT_ID=$(echo "$SECRET_JSON" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('googleClientId', ''))" 2>/dev/null || echo "")
-FACEBOOK_APP_ID=$(echo "$SECRET_JSON" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('facebookAppId', ''))" 2>/dev/null || echo "")
+GOOGLE_CLIENT_ID=$(extract_json_value "$SECRET_JSON" "googleClientId")
+FACEBOOK_APP_ID=$(extract_json_value "$SECRET_JSON" "facebookAppId")
 
 # Determine API URL based on environment
 if [ "$ENVIRONMENT" = "prod" ]; then
     API_URL="https://postolio.example"
 elif [ "$ENVIRONMENT" = "dev" ]; then
-    API_URL="https://localhost:3000"
+    API_URL="http://localhost:3000"
 else
     API_URL="https://postolio.example"
 fi

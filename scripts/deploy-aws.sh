@@ -339,11 +339,16 @@ build_and_push_image() {
         --output text \
         --region $AWS_REGION 2>/dev/null || echo "{}")
     
+    # Function to extract a value from the secrets JSON
+    extract_json_value() {
+        local json="$1"
+        local key="$2"
+        echo "$json" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('$key', ''))" 2>/dev/null || echo ""
+    }
+    
     # Extract OAuth credentials
-    GOOGLE_CLIENT_ID=$(echo "$SECRET_JSON" | \
-        python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('googleClientId', ''))" 2>/dev/null || echo "")
-    FACEBOOK_APP_ID=$(echo "$SECRET_JSON" | \
-        python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('facebookAppId', ''))" 2>/dev/null || echo "")
+    GOOGLE_CLIENT_ID=$(extract_json_value "$SECRET_JSON" "googleClientId")
+    FACEBOOK_APP_ID=$(extract_json_value "$SECRET_JSON" "facebookAppId")
     
     # Build with OAuth credentials if available
     BUILD_ARGS=""
@@ -573,9 +578,15 @@ deploy_frontend() {
         --output text \
         --region $AWS_REGION 2>/dev/null || echo "{}")
     
+    # Function to extract a value from the secrets JSON
+    extract_json_value() {
+        local json="$1"
+        local key="$2"
+        echo "$json" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('$key', ''))" 2>/dev/null || echo ""
+    }
+    
     # Extract Google Client ID
-    GOOGLE_CLIENT_ID=$(echo "$SECRET_JSON" | \
-        python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('googleClientId', ''))" 2>/dev/null || echo "")
+    GOOGLE_CLIENT_ID=$(extract_json_value "$SECRET_JSON" "googleClientId")
     
     if [ -z "$GOOGLE_CLIENT_ID" ]; then
         echo -e "${YELLOW}⚠️  Google Client ID not found in Secrets Manager, Google Sign-In will be disabled${NC}"
@@ -584,8 +595,7 @@ deploy_frontend() {
     fi
     
     # Extract Facebook App ID
-    FACEBOOK_APP_ID=$(echo "$SECRET_JSON" | \
-        python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('facebookAppId', ''))" 2>/dev/null || echo "")
+    FACEBOOK_APP_ID=$(extract_json_value "$SECRET_JSON" "facebookAppId")
     
     if [ -z "$FACEBOOK_APP_ID" ]; then
         echo -e "${YELLOW}⚠️  Facebook App ID not found in Secrets Manager, Facebook Sign-In will be disabled${NC}"
