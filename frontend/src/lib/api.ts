@@ -783,6 +783,35 @@ class ApiClient {
     })
   }
 
+  async schedulePost(postId: string, data: {
+    scheduledAt: string
+  }): Promise<{
+    success: boolean
+    data: any
+  }> {
+    return this.request(`/api/content/${postId}/schedule`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async publishPost(postId: string): Promise<{
+    success: boolean
+    data: any
+  }> {
+    return this.request(`/api/content/${postId}/publish`, {
+      method: 'POST'
+    })
+  }
+
+  async deletePost(postId: string): Promise<{
+    success: boolean
+  }> {
+    return this.request(`/api/content/${postId}`, {
+      method: 'DELETE'
+    })
+  }
+
   // Campaign Analytics Methods
   async getCampaignMetrics(campaignId: string): Promise<{
     success: boolean

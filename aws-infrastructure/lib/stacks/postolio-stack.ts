@@ -340,8 +340,11 @@ export class PostolioStack extends cdk.Stack {
         nodeEnv: cdk.SecretValue.unsafePlainText('production'),
         port: cdk.SecretValue.unsafePlainText('3000'),
         instagramRedirectUri: cdk.SecretValue.unsafePlainText(`https://${domainName || 'PLACEHOLDER_DOMAIN'}/auth/instagram/callback`),
-  // ContentScheduler integration (SigV4 IAM auth only; API key deprecated)
-  schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
+        // Google OAuth credentials - to be set manually in AWS Secrets Manager
+        googleClientId: cdk.SecretValue.unsafePlainText('PLACEHOLDER_GOOGLE_CLIENT_ID'),
+        googleClientSecret: cdk.SecretValue.unsafePlainText('PLACEHOLDER_GOOGLE_CLIENT_SECRET'),
+        // ContentScheduler integration (SigV4 IAM auth only; API key deprecated)
+        schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
         // Publisher API key for Lambda-to-API authentication
         // Use a secure random value or provide via environment variable
         publisherApiKey: cdk.SecretValue.unsafePlainText(
@@ -531,14 +534,19 @@ export class PostolioStack extends cdk.Stack {
           FACEBOOK_APP_ID: ecs.Secret.fromSecretsManager(appSecrets, 'facebookAppId'),
           FACEBOOK_APP_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'facebookAppSecret'),
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
-          INSTAGRAM_REDIRECT_URI: ecs.Secret.fromSecretsManager(appSecrets, 'instagramRedirectUri'),
           PUBLISHER_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'publisherApiKey'),
+          // Google OAuth secrets from main app secrets
+          GOOGLE_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecrets, 'googleClientId'),
+          GOOGLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'googleClientSecret'),
         },
         environment: {
           DB_HOST: database.instanceEndpoint.hostname,
           DB_PORT: database.instanceEndpoint.port.toString(),
           DB_NAME: 'postolio',
           CORS_ORIGIN: apiDomainName, // Use unified domain instead of CloudFront domain
+          INSTAGRAM_REDIRECT_URI: `https://${apiDomainName}/api/auth/instagram/callback`,
+          GOOGLE_REDIRECT_URI: `https://${apiDomainName}/api/auth/google/callback`,
+          FACEBOOK_REDIRECT_URI: `https://${apiDomainName}/api/auth/facebook/callback`,
           S3_IMAGES_BUCKET: imagesBucket.bucketName,
           AWS_REGION: cdk.Aws.REGION,
           CLOUDFRONT_DOMAIN: apiDomainName, // Will be updated after distribution creation
