@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useMemo, memo, useEffect, useRef } from 'react'
-import { apiClient, type Content } from '../lib/api'
+import { apiClient } from '../lib/api'
 import { useDebounce } from '../hooks/useDebounce'
 import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -21,7 +21,6 @@ import {
   AlertCircle,
   CheckCircle,
   RefreshCw,
-  Save,
   X
 } from 'lucide-react'
 import { format } from 'date-fns'
@@ -407,7 +406,7 @@ export default function PostDetail() {
   // Quick action mutations
   const schedulePostMutation = useMutation({
     mutationFn: async (scheduledAt: string) => {
-      return apiClient.schedulePost(postId!, { scheduledAt })
+      return apiClient.schedulePost(postId!, scheduledAt)
     },
     onSuccess: () => {
       toast.success('Post scheduled successfully')
