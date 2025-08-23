@@ -24,7 +24,15 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build application
+# Accept build arguments for frontend environment variables
+ARG VITE_GOOGLE_CLIENT_ID
+ARG VITE_API_URL
+
+# Set environment variables for the build process
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+ENV VITE_API_URL=$VITE_API_URL
+
+# Build application with environment variables
 RUN npm run build
 
 # Production image with nginx

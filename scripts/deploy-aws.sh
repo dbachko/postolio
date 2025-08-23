@@ -328,7 +328,29 @@ build_and_push_image() {
     echo -e "${YELLOW}Building image with tag: $IMAGE_TAG${NC}"
     echo -e "${YELLOW}Image URI: $IMAGE_URI${NC}"
     
-    docker build -t "postolio:$IMAGE_TAG" .
+    # Fetch Google Client ID from AWS Secrets Manager for Docker build
+    echo -e "${YELLOW}Fetching Google Client ID for Docker build...${NC}"
+    SECRET_NAME="postolio/app-secrets/$ENVIRONMENT"
+    
+    GOOGLE_CLIENT_ID=$(aws secretsmanager get-secret-value \
+        --secret-id "$SECRET_NAME" \
+        --query 'SecretString' \
+        --output text \
+        --region $AWS_REGION 2>/dev/null | \
+        python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('googleClientId', ''))" 2>/dev/null || echo "")
+    
+    # Build with Google Client ID if available
+    if [ -n "$GOOGLE_CLIENT_ID" ]; then
+        echo -e "${GREEN}✅ Building Docker image with Google Client ID${NC}"
+        docker build \
+            --build-arg VITE_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
+            --build-arg VITE_API_URL="https://postolio.example" \
+            -t "postolio:$IMAGE_TAG" .
+    else
+        echo -e "${YELLOW}⚠️  Building Docker image without Google Client ID${NC}"
+        docker build -t "postolio:$IMAGE_TAG" .
+    fi
+    
     docker tag "postolio:$IMAGE_TAG" $IMAGE_URI
     docker tag "postolio:$IMAGE_TAG" $IMAGE_URI_LATEST
     
@@ -523,11 +545,34 @@ deploy_frontend() {
         echo -e "${GREEN}Using unified domain: $API_URL${NC}"
     fi
     
+    # Fetch Google Client ID from AWS Secrets Manager
+    echo -e "${YELLOW}Fetching Google Client ID from AWS Secrets Manager...${NC}"
+    SECRET_NAME="postolio/app-secrets/$ENVIRONMENT"
+    
+    # Try to get the Google Client ID from the secrets
+    GOOGLE_CLIENT_ID=$(aws secretsmanager get-secret-value \
+        --secret-id "$SECRET_NAME" \
+        --query 'SecretString' \
+        --output text \
+        --region $AWS_REGION 2>/dev/null | \
+        python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('googleClientId', ''))" 2>/dev/null || echo "")
+    
+    if [ -z "$GOOGLE_CLIENT_ID" ]; then
+        echo -e "${YELLOW}⚠️  Google Client ID not found in Secrets Manager, Google Sign-In will be disabled${NC}"
+    else
+        echo -e "${GREEN}✅ Google Client ID retrieved successfully${NC}"
+    fi
+    
     # Create production environment file
     echo "VITE_API_BASE_URL=$API_URL" > .env.production
     
+    # Add Google Client ID if available
+    if [ -n "$GOOGLE_CLIENT_ID" ]; then
+        echo "VITE_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> .env.production
+    fi
+    
     # Build frontend
-    echo -e "${YELLOW}Building frontend...${NC}"
+    echo -e "${YELLOW}Building frontend with environment variables...${NC}"
     if ! npm run build; then
         echo -e "${RED}❌ Frontend build failed${NC}"
         exit 1
