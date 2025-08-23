@@ -5,11 +5,13 @@ interface AuthState {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>
   register: (email: string, password: string, name?: string) => Promise<void>
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
   getToken: () => string | null
+  setUser: (user: User) => void
+  setToken: (token: string) => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -17,9 +19,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
 
-  login: async (email: string, password: string) => {
+  login: async (email: string, password: string, rememberMe?: boolean) => {
     try {
-      const response = await apiClient.login({ email, password })
+      const response = await apiClient.login({ email, password, rememberMe })
       apiClient.setToken(response.token)
       set({ user: response.user, isAuthenticated: true })
     } catch (error) {
@@ -69,5 +71,14 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   getToken: () => {
     return localStorage.getItem('auth_token')
+  },
+
+  setUser: (user: User) => {
+    set({ user, isAuthenticated: true })
+  },
+
+  setToken: (token: string) => {
+    apiClient.setToken(token)
+    localStorage.setItem('auth_token', token)
   },
 }))

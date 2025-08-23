@@ -2,24 +2,24 @@ import { FastifyPluginAsync } from 'fastify'
 import bcrypt from 'bcrypt'
 import { signJWT, verifyJWT } from '../services/jwt.js'
 import { getDatabaseClient } from '../config/database.js'
-
+import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js'
+import { validateAndSanitize } from '../middleware/validation.js'
+import { registerSchema, loginSchema, type RegisterInput, type LoginInput } from '../schemas/auth.js'
+import { AuditLogger, AuditEventType } from '../services/audit-logger.js'
+import { RefreshTokenService } from '../services/refresh-token.js'
+import Redis from 'ioredis'
 
 const prisma = getDatabaseClient()
-
-interface RegisterBody {
-  email: string
-  password: string
-  name?: string
-}
-
-interface LoginBody {
-  email: string
-  password: string
-}
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
-  // User registration
-  fastify.post<{ Body: RegisterBody }>('/register', async (request, reply) => {
+  // User registration with rate limiting and validation
+  fastify.post<{ Body: RegisterInput }>('/register', {
+    preHandler: [
+      validateAndSanitize(registerSchema),
+      enhancedRateLimiters.register()
+    ]
+  }, async (request, reply) => {
     const { email, password, name } = request.body
 
     // Check if user exists
@@ -49,30 +49,72 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
     })
 
-    // Generate JWT token
-    const token = signJWT({ 
-      id: user.id, 
-      email: user.email 
-    })
+    // Generate tokens with refresh token rotation
+    const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+      user.id,
+      request.ip,
+      request.headers['user-agent']
+    )
 
-    // Set HTTP-only cookie for enhanced security
-    reply.setCookie('auth_token', token, {
+    // Set access token in HTTP-only cookie
+    reply.setCookie('auth_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
+      maxAge: 15 * 60 // 15 minutes for access token
     })
 
+    // Set refresh token in separate HTTP-only cookie
+    reply.setCookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/api/auth/refresh', // Only sent to refresh endpoint
+      maxAge: 7 * 24 * 60 * 60 // 7 days for new users
+    })
+
+    // Log successful registration
+    await AuditLogger.logAuth(
+      AuditEventType.USER_REGISTER,
+      user.id,
+      user.email,
+      request,
+      { name: user.name }
+    )
+
+    // Send welcome and verification emails (non-blocking)
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      Promise.all([
+        import('../services/email.js'),
+        import('../services/email-verification.js')
+      ]).then(([{ EmailService }, { EmailVerificationService }]) => {
+        // Send welcome email
+        EmailService.sendWelcomeEmail(user.email, user.name || undefined).catch(error => {
+          console.error('Failed to send welcome email:', error)
+        })
+        
+        // Send verification email
+        EmailVerificationService.sendVerificationEmail(user.id).catch(error => {
+          console.error('Failed to send verification email:', error)
+        })
+      })
+    }
+
     return reply.code(201).send({
-      token,
+      token: accessToken,
       user
     })
   })
 
-  // User login
-  fastify.post<{ Body: LoginBody }>('/login', async (request, reply) => {
-    const { email, password } = request.body
+  // User login with rate limiting and validation
+  fastify.post<{ Body: LoginInput }>('/login', {
+    preHandler: [
+      validateAndSanitize(loginSchema),
+      enhancedRateLimiters.login()
+    ]
+  }, async (request, reply) => {
+    const { email, password, rememberMe } = request.body
 
     // Find user with password for verification
     const user = await prisma.user.findUnique({
@@ -86,75 +128,226 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
     })
 
-    if (!user) {
+    // Always perform password comparison to prevent timing attacks
+    // Use a dummy hash if user doesn't exist
+    const dummyHash = '$2b$10$dqyYw5XovLjpmkYNiRDEWuwKaRAvLaG45fnXE5b3KTccKZcRPka2m' // Hash of 'dummy'
+    const passwordToCheck = user?.password || dummyHash
+    const validPassword = await bcrypt.compare(password, passwordToCheck)
+
+    // Check both user existence and password validity
+    if (!user || !validPassword) {
+      // Log failed login attempt
+      await AuditLogger.logAuthFailure(
+        AuditEventType.USER_LOGIN_FAILED,
+        email,
+        request,
+        !user ? 'User not found' : 'Invalid password'
+      )
+      
+      // Check for account lockout
+      const shouldLock = await AuditLogger.checkAccountLockout(email)
+      if (shouldLock) {
+        return reply.code(423).send({ 
+          error: 'Account temporarily locked due to multiple failed login attempts. Please try again later.' 
+        })
+      }
+      
       return reply.code(401).send({ error: 'Invalid credentials' })
     }
 
-    // Verify password
-    const validPassword = await bcrypt.compare(password, user.password)
-    if (!validPassword) {
-      return reply.code(401).send({ error: 'Invalid credentials' })
-    }
-
-    // Generate JWT token
-    const token = signJWT({ 
-      id: user.id, 
-      email: user.email 
+    // Check if two-factor authentication is enabled
+    const userWithTwoFactor = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        twoFactorEnabled: true,
+        twoFactorMethod: true
+      }
     })
 
-    // Set HTTP-only cookie for enhanced security
-    reply.setCookie('auth_token', token, {
+    if (userWithTwoFactor?.twoFactorEnabled) {
+      // Check for trusted device token
+      const trustedDeviceToken = request.cookies?.trusted_device
+      if (trustedDeviceToken) {
+        const { TwoFactorService } = await import('../services/two-factor.js')
+        const trustedUserId = await TwoFactorService.isTrustedDevice(trustedDeviceToken)
+        
+        if (trustedUserId === user.id) {
+          // Trusted device, proceed with login
+        } else {
+          // Need 2FA verification
+          // Store pending authentication in Redis temporarily
+          const pendingKey = `2fa-pending:${email}`
+          await redis.setex(pendingKey, 300, user.id) // 5 minutes to complete 2FA
+          
+          // Send 2FA code if using email method
+          if (userWithTwoFactor.twoFactorMethod === 'email') {
+            const { TwoFactorService } = await import('../services/two-factor.js')
+            await TwoFactorService.sendEmailCode(user.id)
+          }
+          
+          return reply.code(200).send({
+            requiresTwoFactor: true,
+            method: userWithTwoFactor.twoFactorMethod,
+            message: 'Two-factor authentication required'
+          })
+        }
+      } else {
+        // Need 2FA verification
+        const pendingKey = `2fa-pending:${email}`
+        await redis.setex(pendingKey, 300, user.id) // 5 minutes to complete 2FA
+        
+        // Send 2FA code if using email method
+        if (userWithTwoFactor.twoFactorMethod === 'email') {
+          const { TwoFactorService } = await import('../services/two-factor.js')
+          await TwoFactorService.sendEmailCode(user.id)
+        }
+        
+        return reply.code(200).send({
+          requiresTwoFactor: true,
+          method: userWithTwoFactor.twoFactorMethod,
+          message: 'Two-factor authentication required'
+        })
+      }
+    }
+
+    // Generate tokens with refresh token rotation
+    const { refreshToken, accessToken, family } = await RefreshTokenService.generateRefreshToken(
+      user.id,
+      request.ip,
+      request.headers['user-agent']
+    )
+
+    // Set access token in HTTP-only cookie
+    reply.setCookie('auth_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
+      maxAge: 15 * 60 // 15 minutes for access token
     })
+
+    // Set refresh token in separate HTTP-only cookie
+    reply.setCookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/api/auth/refresh', // Only sent to refresh endpoint
+      maxAge: rememberMe 
+        ? 30 * 24 * 60 * 60  // 30 days if remember me
+        : 7 * 24 * 60 * 60   // 7 days otherwise
+    })
+
+    // Log successful login
+    await AuditLogger.logAuth(
+      AuditEventType.USER_LOGIN,
+      user.id,
+      user.email,
+      request
+    )
 
     // Return user without password
     const { password: _, ...userWithoutPassword } = user
 
     return reply.send({
-      token,
+      token: accessToken,
       user: userWithoutPassword
     })
   })
 
-  // Refresh token endpoint
-  fastify.post('/refresh', {
-    preHandler: fastify.authenticate
-  }, async (request: any, reply) => {
-    // After authenticate middleware, user is guaranteed to exist
-    const userId = request.user.id
-    const userEmail = request.user.email
+  // Refresh token endpoint with rotation
+  fastify.post('/refresh', async (request, reply) => {
+    const refreshToken = request.cookies?.refresh_token
     
-    // Generate new token with same payload
-    const newToken = signJWT({ 
-      id: userId, 
-      email: userEmail 
-    })
+    if (!refreshToken) {
+      return reply.code(401).send({ error: 'Refresh token required' })
+    }
     
-    // Set new HTTP-only cookie
-    reply.setCookie('auth_token', newToken, {
+    // Rotate refresh token
+    const result = await RefreshTokenService.rotateRefreshToken(
+      refreshToken,
+      request.ip,
+      request.headers['user-agent']
+    )
+    
+    if (!result) {
+      // Invalid or expired refresh token
+      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' })
+      reply.clearCookie('auth_token', { path: '/' })
+      return reply.code(401).send({ error: 'Invalid or expired refresh token' })
+    }
+    
+    // Set new access token
+    reply.setCookie('auth_token', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
+      maxAge: 15 * 60 // 15 minutes
     })
     
-    return reply.send({ token: newToken })
+    // Set new refresh token
+    reply.setCookie('refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/api/auth/refresh',
+      maxAge: 30 * 24 * 60 * 60 // 30 days
+    })
+    
+    return reply.send({ 
+      token: result.accessToken,
+      message: 'Token refreshed successfully'
+    })
   })
 
   // Logout endpoint
   fastify.post('/logout', async (request, reply) => {
-    // Clear the HTTP-only cookie
+    // Try to get user info for audit log
+    let userId: string | undefined
+    let email: string | undefined
+    
+    try {
+      const token = request.cookies?.auth_token || 
+                   request.headers.authorization?.substring(7)
+      if (token) {
+        const decoded = verifyJWT(token)
+        userId = decoded.id
+        email = decoded.email
+      }
+    } catch {
+      // User might have invalid token, still allow logout
+    }
+    
+    // Invalidate refresh token if present
+    const refreshToken = request.cookies?.refresh_token
+    if (refreshToken) {
+      await RefreshTokenService.invalidateRefreshToken(refreshToken)
+    }
+    
+    // Clear both cookies
     reply.clearCookie('auth_token', {
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax'
     })
+    
+    reply.clearCookie('refresh_token', {
+      path: '/api/auth/refresh',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    })
+    
+    // Log logout event if we have user info
+    if (userId && email) {
+      await AuditLogger.logAuth(
+        AuditEventType.USER_LOGOUT,
+        userId,
+        email,
+        request
+      )
+    }
     
     return reply.send({ success: true, message: 'Logged out successfully' })
   })

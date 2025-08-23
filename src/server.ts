@@ -7,9 +7,16 @@ import helmet from '@fastify/helmet'
 import fs from 'fs'
 import path from 'path'
 import authPlugin from './plugins/auth.js'
+import csrfPlugin from './middleware/csrf.js'
 import monitoringPlugin from './plugins/monitoring.js'
 import websocketPlugin from './plugins/websocket.js'
 import authRoutes from './routes/auth.js'
+import googleOAuthRoutes from './routes/google-oauth.js'
+import facebookOAuthRoutes from './routes/facebook-oauth.js'
+import magicLinkRoutes from './routes/magic-link.js'
+import emailVerificationRoutes from './routes/email-verification.js'
+import passwordResetRoutes from './routes/password-reset.js'
+import twoFactorRoutes from './routes/two-factor.js'
 import monitoringRoutes from './routes/monitoring.js'
 import instagramOAuthRoutes from './routes/instagram-oauth.js'
 import brandsRoutes from './routes/brands.js'
@@ -97,14 +104,45 @@ export function buildFastify(): FastifyInstance {
     secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET || 'default-secret-change-in-production',
     parseOptions: {}
   })
-  app.register(helmet)
+  // Security headers with helmet
+  app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Required for React development
+        imgSrc: ["'self'", "data:", "https:", "blob:"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        connectSrc: ["'self'", "https://api.openai.com", "https://graph.facebook.com", "https://www.googleapis.com"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+      },
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    },
+    noSniff: true,
+    xssFilter: true,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    frameguard: { action: "deny" },
+    hidePoweredBy: true
+  })
   app.register(monitoringPlugin)
   app.register(authPlugin)
+  // app.register(csrfPlugin) // CSRF protection middleware (temporarily disabled for Fastify 5.x compatibility)
   app.register(websocketPlugin)
 
   // Register routes WITH /api prefix - CloudFront forwards full paths to backend
   app.register(monitoringRoutes, { prefix: '/api/monitoring' })
   app.register(authRoutes, { prefix: '/api/auth' })
+  app.register(googleOAuthRoutes, { prefix: '/api/auth' })
+  app.register(facebookOAuthRoutes, { prefix: '/api/auth' })
+  app.register(magicLinkRoutes, { prefix: '/api/auth' })
+  app.register(emailVerificationRoutes, { prefix: '/api/auth' })
+  app.register(passwordResetRoutes, { prefix: '/api/auth' })
+  app.register(twoFactorRoutes, { prefix: '/api/auth' })
   app.register(userRoutes) // User routes include their own /api prefix
   app.register(instagramOAuthRoutes, { prefix: '/api/auth/instagram' })
   app.register(brandsRoutes, { prefix: '/api/brands' })

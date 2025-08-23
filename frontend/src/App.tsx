@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { GoogleOAuthProvider } from '@react-oauth/google'
 import { Toaster } from '@/components/ui/sonner'
 import { useAuthStore } from './stores/authStore'
 import { TimezoneProvider } from './contexts/TimezoneContext'
@@ -21,6 +22,9 @@ import { Settings } from './pages/Settings'
 import { PrivacyPolicy } from './pages/PrivacyPolicy'
 import { TermsOfService } from './pages/TermsOfService'
 import { DataDeletion } from './pages/DataDeletion'
+import { MagicLinkVerify } from './pages/MagicLinkVerify'
+import { EmailVerify } from './pages/EmailVerify'
+import { PasswordReset } from './pages/PasswordReset'
 import { useEffect, lazy, Suspense } from 'react'
 import { ErrorBoundary } from './components/ErrorBoundary'
 const PostDetail = lazy(() => import('./pages/PostDetail'))
@@ -51,13 +55,17 @@ function App() {
   
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <ConnectionStatusProvider>
-          <TimezoneProvider>
-            <Router>
-              <Routes>
+      <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}>
+        <QueryClientProvider client={queryClient}>
+          <ConnectionStatusProvider>
+            <TimezoneProvider>
+              <Router>
+                <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/auth/magic-link" element={<MagicLinkVerify />} />
+          <Route path="/auth/verify-email" element={<EmailVerify />} />
+          <Route path="/password/reset" element={<PasswordReset />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route path="/legal/data-deletion" element={<DataDeletion />} />
@@ -197,6 +205,7 @@ function App() {
       </TimezoneProvider>
       </ConnectionStatusProvider>
     </QueryClientProvider>
+    </GoogleOAuthProvider>
     </ErrorBoundary>
   )
 }

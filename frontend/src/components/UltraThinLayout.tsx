@@ -2,6 +2,7 @@ import { useState, type ReactNode, useEffect, useCallback, useRef, useMemo } fro
 import { useAuthStore } from '../stores/authStore'
 import { useBrandStore } from '../stores/brandStore'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { EmailVerificationBanner } from './EmailVerificationBanner'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -497,6 +498,9 @@ export function UltraThinLayout({ children }: LayoutProps) {
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+
+      {/* Email Verification Banner */}
+      <EmailVerificationBanner />
 
       {/* Main Content */}
       <main id="main-content" className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">

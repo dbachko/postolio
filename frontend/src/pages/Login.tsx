@@ -6,12 +6,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
+import { GoogleSignIn } from '@/components/auth/GoogleSignIn'
+import { FacebookSignIn } from '@/components/auth/FacebookSignIn'
+import { MagicLinkForm } from '@/components/auth/MagicLinkForm'
 
 export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showMagicLink, setShowMagicLink] = useState(false)
   
   const { login } = useAuthStore()
   const navigate = useNavigate()
@@ -22,7 +28,7 @@ export function Login() {
     setError('')
 
     try {
-      await login(email, password)
+      await login(email, password, rememberMe)
       navigate('/dashboard')
     } catch (error) {
       setError('Invalid email or password')
@@ -48,6 +54,40 @@ export function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* OAuth Providers */}
+            <div className="space-y-3 mb-6">
+              <GoogleSignIn mode="signin" />
+              <FacebookSignIn mode="signin" />
+            </div>
+            
+            {/* Divider */}
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+            
+            {/* Magic Link Option */}
+            {showMagicLink ? (
+              <>
+                <MagicLinkForm mode="signin" onSuccess={() => navigate('/dashboard')} />
+                <div className="text-center mt-4">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowMagicLink(false)}
+                  >
+                    Use email and password instead
+                  </Button>
+                </div>
+              </>
+            ) : (
             <form className="space-y-4" onSubmit={handleSubmit}>
               {error && (
                 <Alert variant="destructive">
@@ -68,7 +108,15 @@ export function Login() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link 
+                    to="/password/reset" 
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <Input
                   id="password"
                   name="password"
@@ -80,6 +128,19 @@ export function Login() {
                   placeholder="Enter your password"
                 />
               </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="remember" 
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                />
+                <Label 
+                  htmlFor="remember" 
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Remember me for 30 days
+                </Label>
+              </div>
               <Button
                 type="submit"
                 disabled={isLoading}
@@ -87,15 +148,27 @@ export function Login() {
               >
                 {isLoading ? 'Signing in...' : 'Sign in'}
               </Button>
+              
+              {/* Magic Link Alternative */}
+              <div className="text-center mt-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMagicLink(true)}
+                >
+                  Or sign in with magic link (no password)
+                </Button>
+              </div>
             </form>
+            )}
           </CardContent>
         </Card>
       </div>
       
       {/* Footer */}
-      <footer className="bg-card border-t">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-center items-center text-sm text-muted-foreground space-x-4">
+      <footer className="py-6 px-4 border-t">
+        <div className="flex justify-center items-center text-sm text-muted-foreground space-x-4">
             <span>© 2024 Postolio</span>
             <span>•</span>
             <Link 
@@ -119,7 +192,6 @@ export function Login() {
               Legal
             </a>
           </div>
-        </div>
       </footer>
     </div>
   )
