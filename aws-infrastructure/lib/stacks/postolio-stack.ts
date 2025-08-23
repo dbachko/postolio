@@ -326,30 +326,37 @@ export class PostolioStack extends cdk.Stack {
 
     // Placeholder for CloudFront distribution - will be created after ECS service
 
-    // Application secrets with ContentScheduler integration
+    // Application secrets - Only actual secrets, not public configuration
+    // Public OAuth client IDs are now managed via GitHub Environment Variables
     const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
-      description: 'Postolio application secrets',
+      description: 'Postolio application secrets (sensitive credentials only)',
       secretObjectValue: {
+        // Authentication secrets
         jwtSecret: cdk.SecretValue.unsafePlainText(
           cdk.Fn.select(2, cdk.Fn.split('-', cdk.Fn.select(2, cdk.Fn.split('/', cdk.Aws.STACK_ID))))
         ),
+        
+        // Database connection (contains password)
         redisUrl: cdk.SecretValue.unsafePlainText(`redis://${redis.attrRedisEndpointAddress}:6380`),
+        
+        // API Keys (actual secrets)
         openaiApiKey: cdk.SecretValue.unsafePlainText('PLACEHOLDER_OPENAI_KEY'),
-        facebookAppId: cdk.SecretValue.unsafePlainText('PLACEHOLDER_FACEBOOK_APP_ID'),
-        facebookAppSecret: cdk.SecretValue.unsafePlainText('PLACEHOLDER_FACEBOOK_APP_SECRET'),
-        nodeEnv: cdk.SecretValue.unsafePlainText('production'),
-        port: cdk.SecretValue.unsafePlainText('3000'),
-        instagramRedirectUri: cdk.SecretValue.unsafePlainText(`https://${domainName || 'PLACEHOLDER_DOMAIN'}/auth/instagram/callback`),
-        // Google OAuth credentials - to be set manually in AWS Secrets Manager
-        googleClientId: cdk.SecretValue.unsafePlainText('PLACEHOLDER_GOOGLE_CLIENT_ID'),
+        
+        // OAuth Secrets (backend only - never exposed to frontend)
         googleClientSecret: cdk.SecretValue.unsafePlainText('PLACEHOLDER_GOOGLE_CLIENT_SECRET'),
-        // ContentScheduler integration (SigV4 IAM auth only; API key deprecated)
-        schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
-        // Publisher API key for Lambda-to-API authentication
-        // Use a secure random value or provide via environment variable
+        facebookAppSecret: cdk.SecretValue.unsafePlainText('PLACEHOLDER_FACEBOOK_APP_SECRET'),
+        
+        // Internal service authentication
         publisherApiKey: cdk.SecretValue.unsafePlainText(
           process.env.PUBLISHER_API_KEY || this.generateRandomSecret()
         ),
+        
+        // NOTE: The following are now in GitHub Environment Variables:
+        // - googleClientId (VITE_GOOGLE_CLIENT_ID) - public OAuth client ID
+        // - facebookAppId (VITE_FACEBOOK_APP_ID) - public Facebook app ID
+        // - nodeEnv (NODE_ENV) - environment configuration
+        // - port (PORT) - server port configuration
+        // - schedulerApiUrl (SCHEDULER_API_URL) - service endpoint
       },
     })
 
