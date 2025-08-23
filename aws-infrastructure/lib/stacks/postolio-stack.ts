@@ -340,8 +340,11 @@ export class PostolioStack extends cdk.Stack {
         nodeEnv: cdk.SecretValue.unsafePlainText('production'),
         port: cdk.SecretValue.unsafePlainText('3000'),
         instagramRedirectUri: cdk.SecretValue.unsafePlainText(`https://${domainName || 'PLACEHOLDER_DOMAIN'}/auth/instagram/callback`),
-  // ContentScheduler integration (SigV4 IAM auth only; API key deprecated)
-  schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
+        // Google OAuth credentials - to be set manually in AWS Secrets Manager
+        googleClientId: cdk.SecretValue.unsafePlainText('PLACEHOLDER_GOOGLE_CLIENT_ID'),
+        googleClientSecret: cdk.SecretValue.unsafePlainText('PLACEHOLDER_GOOGLE_CLIENT_SECRET'),
+        // ContentScheduler integration (SigV4 IAM auth only; API key deprecated)
+        schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
         // Publisher API key for Lambda-to-API authentication
         // Use a secure random value or provide via environment variable
         publisherApiKey: cdk.SecretValue.unsafePlainText(
@@ -534,15 +537,9 @@ export class PostolioStack extends cdk.Stack {
           PORT: ecs.Secret.fromSecretsManager(appSecrets, 'port'),
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
           PUBLISHER_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'publisherApiKey'),
-          // Google OAuth secrets from platform credentials
-          GOOGLE_CLIENT_ID: ecs.Secret.fromSecretsManager(
-            secretsmanager.Secret.fromSecretNameV2(this, 'PlatformCredentials', 'postolio-scheduler-dev-platform-credentials'),
-            'google.clientId'
-          ),
-          GOOGLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(
-            secretsmanager.Secret.fromSecretNameV2(this, 'PlatformCredentials2', 'postolio-scheduler-dev-platform-credentials'),
-            'google.clientSecret'
-          ),
+          // Google OAuth secrets from main app secrets
+          GOOGLE_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecrets, 'googleClientId'),
+          GOOGLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'googleClientSecret'),
         },
         environment: {
           DB_HOST: database.instanceEndpoint.hostname,
