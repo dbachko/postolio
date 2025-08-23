@@ -31,22 +31,35 @@ if ! aws sts get-caller-identity &> /dev/null; then
     exit 1
 fi
 
-# Fetch Google Client ID from AWS Secrets Manager
-echo -e "${YELLOW}Fetching Google Client ID from AWS Secrets Manager...${NC}"
+# Fetch OAuth credentials from AWS Secrets Manager
+echo -e "${YELLOW}Fetching OAuth credentials from AWS Secrets Manager...${NC}"
 SECRET_NAME="postolio/app-secrets/$ENVIRONMENT"
 
-GOOGLE_CLIENT_ID=$(aws secretsmanager get-secret-value \
+# Get the full secret JSON
+SECRET_JSON=$(aws secretsmanager get-secret-value \
     --secret-id "$SECRET_NAME" \
     --query 'SecretString' \
     --output text \
-    --region $AWS_REGION 2>/dev/null | \
+    --region $AWS_REGION 2>/dev/null || echo "{}")
+
+# Extract OAuth credentials
+GOOGLE_CLIENT_ID=$(echo "$SECRET_JSON" | \
     python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('googleClientId', ''))" 2>/dev/null || echo "")
+FACEBOOK_APP_ID=$(echo "$SECRET_JSON" | \
+    python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('facebookAppId', ''))" 2>/dev/null || echo "")
 
 if [ -z "$GOOGLE_CLIENT_ID" ]; then
     echo -e "${YELLOW}⚠️  Google Client ID not found in Secrets Manager${NC}"
     echo -e "${YELLOW}Google Sign-In will be disabled in the frontend${NC}"
 else
     echo -e "${GREEN}✅ Google Client ID retrieved successfully${NC}"
+fi
+
+if [ -z "$FACEBOOK_APP_ID" ]; then
+    echo -e "${YELLOW}⚠️  Facebook App ID not found in Secrets Manager${NC}"
+    echo -e "${YELLOW}Facebook Sign-In will be disabled in the frontend${NC}"
+else
+    echo -e "${GREEN}✅ Facebook App ID retrieved successfully${NC}"
 fi
 
 # Determine API URL based on environment
@@ -63,20 +76,27 @@ echo -e "${YELLOW}API URL: $API_URL${NC}"
 cd "$PROJECT_ROOT/frontend"
 
 # Build Docker image with build arguments
+BUILD_ARGS="--build-arg VITE_API_URL=$API_URL"
+
 if [ -n "$GOOGLE_CLIENT_ID" ]; then
-    echo -e "${GREEN}Building with Google OAuth enabled${NC}"
-    docker build \
-        --build-arg VITE_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
-        --build-arg VITE_API_URL="$API_URL" \
-        -t "postolio-frontend:$ENVIRONMENT" \
-        -f Dockerfile .
+    echo -e "${GREEN}✅ Building with Google OAuth enabled${NC}"
+    BUILD_ARGS="$BUILD_ARGS --build-arg VITE_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID"
 else
-    echo -e "${YELLOW}Building without Google OAuth${NC}"
-    docker build \
-        --build-arg VITE_API_URL="$API_URL" \
-        -t "postolio-frontend:$ENVIRONMENT" \
-        -f Dockerfile .
+    echo -e "${YELLOW}⚠️  Building without Google OAuth${NC}"
 fi
+
+if [ -n "$FACEBOOK_APP_ID" ]; then
+    echo -e "${GREEN}✅ Building with Facebook OAuth enabled${NC}"
+    BUILD_ARGS="$BUILD_ARGS --build-arg VITE_FACEBOOK_APP_ID=$FACEBOOK_APP_ID"
+else
+    echo -e "${YELLOW}⚠️  Building without Facebook OAuth${NC}"
+fi
+
+echo -e "${YELLOW}Building Docker image with OAuth credentials...${NC}"
+docker build \
+    $BUILD_ARGS \
+    -t "postolio-frontend:$ENVIRONMENT" \
+    -f Dockerfile .
 
 echo -e "${GREEN}✅ Frontend Docker image built successfully${NC}"
 echo -e "${GREEN}Image tagged as: postolio-frontend:$ENVIRONMENT${NC}"

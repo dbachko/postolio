@@ -49,6 +49,7 @@ fi
 
 # Parse the JSON to get individual values
 GOOGLE_CLIENT_ID=$(echo "$SECRET_JSON" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('googleClientId', ''))" 2>/dev/null || echo "")
+FACEBOOK_APP_ID=$(echo "$SECRET_JSON" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('facebookAppId', ''))" 2>/dev/null || echo "")
 
 # Determine API URL based on environment
 if [ "$ENVIRONMENT" = "prod" ]; then
@@ -77,6 +78,15 @@ if [ -n "$GOOGLE_CLIENT_ID" ]; then
 else
     echo "# VITE_GOOGLE_CLIENT_ID not configured in AWS Secrets Manager" >> "$FRONTEND_ENV_FILE"
     echo -e "${YELLOW}⚠️  Google OAuth not configured${NC}"
+fi
+
+# Add Facebook App ID if available
+if [ -n "$FACEBOOK_APP_ID" ]; then
+    echo "VITE_FACEBOOK_APP_ID=$FACEBOOK_APP_ID" >> "$FRONTEND_ENV_FILE"
+    echo -e "${GREEN}✅ Facebook OAuth configured${NC}"
+else
+    echo "# VITE_FACEBOOK_APP_ID not configured in AWS Secrets Manager" >> "$FRONTEND_ENV_FILE"
+    echo -e "${YELLOW}⚠️  Facebook OAuth not configured${NC}"
 fi
 
 echo -e "${GREEN}✅ Frontend environment file created: $FRONTEND_ENV_FILE${NC}"
