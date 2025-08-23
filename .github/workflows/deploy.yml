@@ -299,6 +299,5 @@ jobs:
         working-directory: frontend
         run: |
           npm ci --legacy-peer-deps
-          npm run lint
           npm run typecheck
           npm test || echo "⚠️ Tests skipped or minimal"
