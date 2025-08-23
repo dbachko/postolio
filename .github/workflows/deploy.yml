@@ -2,10 +2,7 @@ name: Deploy to AWS
 
 on:
   push:
-    branches:
-      - main
-      - staging
-      - production
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -31,17 +28,16 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref }}" = "refs/heads/production" ]; then
-            echo "environment=prod" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-            echo "environment=staging" >> $GITHUB_OUTPUT
           else
+            # Always deploy to dev from main branch
             echo "environment=dev" >> $GITHUB_OUTPUT
           fi
 
   deploy:
     needs: set-environment
     runs-on: ubuntu-latest
+    # Only deploy from main branch (for dev) or manual workflow dispatch
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     environment: ${{ needs.set-environment.outputs.environment }}
     
     steps:
