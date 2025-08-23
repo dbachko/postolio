@@ -141,9 +141,7 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
 
     return () => {
       // Cleanup
-      if (script.parentNode) {
-        script.parentNode.removeChild(script)
-      }
+      script.remove()
       delete window.handleGoogleCallback
     }
   }, [isConfigured, isInitialized, handleGoogleResponse, mode, onError])

@@ -12,7 +12,13 @@ echo -e "${YELLOW}🔄 Updating frontend with Google OAuth credentials...${NC}"
 # Configuration
 ENVIRONMENT="dev"
 AWS_REGION="us-east-1"
-GOOGLE_CLIENT_ID="example-client.apps.googleusercontent.com"
+
+# Retrieve Google OAuth credentials from environment variables
+if [ -z "$GOOGLE_CLIENT_ID" ]; then
+    echo -e "${RED}❌ GOOGLE_CLIENT_ID environment variable is not set.${NC}"
+    echo -e "${YELLOW}💡 Set it with: export GOOGLE_CLIENT_ID=your-google-client-id${NC}"
+    exit 1
+fi
 
 # Get project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"

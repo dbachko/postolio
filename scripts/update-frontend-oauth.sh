@@ -12,8 +12,19 @@ echo -e "${YELLOW}🔄 Updating frontend with Google and Facebook OAuth credenti
 # Configuration
 ENVIRONMENT="dev"
 AWS_REGION="us-east-1"
-GOOGLE_CLIENT_ID="example-client.apps.googleusercontent.com"
-FACEBOOK_APP_ID="0000000000000000"
+
+# Retrieve OAuth credentials from environment variables
+if [ -z "$GOOGLE_CLIENT_ID" ]; then
+    echo -e "${RED}❌ GOOGLE_CLIENT_ID environment variable is not set.${NC}"
+    echo -e "${YELLOW}💡 Set it with: export GOOGLE_CLIENT_ID=your-google-client-id${NC}"
+    exit 1
+fi
+
+if [ -z "$FACEBOOK_APP_ID" ]; then
+    echo -e "${RED}❌ FACEBOOK_APP_ID environment variable is not set.${NC}"
+    echo -e "${YELLOW}💡 Set it with: export FACEBOOK_APP_ID=your-facebook-app-id${NC}"
+    exit 1
+fi
 
 # Get project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
