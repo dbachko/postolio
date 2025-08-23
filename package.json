@@ -20,6 +20,8 @@
     "start:all": "npm run dev:db && sleep 3 && concurrently \"npm run dev\" \"npm run dev:frontend\"",
     "lint": "eslint src/**/*.ts",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "deploy:aws:dev": "./scripts/deploy-aws.sh dev",
     "deploy:aws:prod": "./scripts/deploy-aws.sh prod",
     "deploy:aws:destroy": "./scripts/deploy-aws.sh prod destroy"
