@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useConnectionStatus } from './ConnectionStatus'
 import { toast } from 'sonner'
 import { WifiOff, Wifi, AlertCircle } from 'lucide-react'
+import { useAuthStore } from '../stores/authStore'
 
 /**
  * Minimal WebSocket connection indicator following progressive disclosure pattern:
@@ -13,11 +14,22 @@ import { WifiOff, Wifi, AlertCircle } from 'lucide-react'
  */
 export function ConnectionIndicator() {
   const { connectionStatus, retryIn, reconnect } = useConnectionStatus()
+  const { isAuthenticated } = useAuthStore()
   const [disconnectedDuration, setDisconnectedDuration] = useState(0)
   const [toastId, setToastId] = useState<string | number | undefined>()
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined
+    
+    // Only monitor connection if user is authenticated
+    if (!isAuthenticated) {
+      // Clean up any existing toasts if user logs out
+      if (toastId) {
+        toast.dismiss(toastId)
+        setToastId(undefined)
+      }
+      return
+    }
     
     if (connectionStatus !== 'connected') {
       // Start counting disconnection duration
@@ -57,7 +69,7 @@ export function ConnectionIndicator() {
         toast.dismiss(toastId)
         setToastId(undefined)
         
-        // Show success briefly
+        // Show success briefly (only for authenticated users)
         toast.success('Connection restored', {
           duration: 2000,
           icon: <Wifi className="h-4 w-4" />
@@ -68,14 +80,14 @@ export function ConnectionIndicator() {
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [connectionStatus, retryIn, reconnect, toastId])
+  }, [connectionStatus, retryIn, reconnect, toastId, isAuthenticated])
 
-  // Don't render anything when connected or in first 3 seconds
-  if (connectionStatus === 'connected' || disconnectedDuration < 3) {
+  // Don't render anything when not authenticated, connected, or in first 3 seconds
+  if (!isAuthenticated || connectionStatus === 'connected' || disconnectedDuration < 3) {
     return null
   }
 
-  // Subtle indicator for 3-10 seconds of disconnection
+  // Subtle indicator for 3-10 seconds of disconnection (only for authenticated users)
   if (disconnectedDuration < 10) {
     return (
       <div 
@@ -114,19 +126,20 @@ export function ConnectionIndicator() {
  */
 export function MobileConnectionBanner() {
   const { connectionStatus } = useConnectionStatus()
+  const { isAuthenticated } = useAuthStore()
   const [show, setShow] = useState(false)
 
   useEffect(() => {
-    // Only show on mobile devices when disconnected for > 5 seconds
+    // Only show on mobile devices when authenticated and disconnected for > 5 seconds
     const isMobile = window.innerWidth < 768
     
-    if (isMobile && connectionStatus !== 'connected') {
+    if (isMobile && isAuthenticated && connectionStatus !== 'connected') {
       const timer = setTimeout(() => setShow(true), 5000)
       return () => clearTimeout(timer)
     } else {
       setShow(false)
     }
-  }, [connectionStatus])
+  }, [connectionStatus, isAuthenticated])
 
   if (!show) return null
 
