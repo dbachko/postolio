@@ -107,7 +107,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
         }
 
         switch (message.type) {
-          case 'auth':
+          case 'auth': {
             const authResult = await handleAuth(socket, message, fastify)
             if (authResult) {
               isAuthenticated = true
@@ -117,6 +117,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
               }
             }
             break
+          }
           
           case 'ping':
             socket.send(JSON.stringify({ type: 'pong' }))
