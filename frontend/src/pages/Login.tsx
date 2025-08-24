@@ -7,8 +7,8 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
-import { GoogleSignIn } from '@/components/auth/GoogleSignIn'
-import { FacebookSignIn } from '@/components/auth/FacebookSignIn'
+import { GoogleSignInIsolated } from '@/components/auth/GoogleSignInIsolated'
+import { FacebookSignInIsolated } from '@/components/auth/FacebookSignInIsolated'
 import { MagicLinkForm } from '@/components/auth/MagicLinkForm'
 
 export function Login() {
@@ -56,8 +56,8 @@ export function Login() {
           <CardContent>
             {/* OAuth Providers */}
             <div className="space-y-3 mb-6">
-              <GoogleSignIn mode="signin" />
-              <FacebookSignIn mode="signin" />
+              <GoogleSignInIsolated mode="signin" />
+              <FacebookSignInIsolated mode="signin" />
             </div>
             
             {/* Divider */}
