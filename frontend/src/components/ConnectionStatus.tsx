@@ -3,6 +3,7 @@ import { AlertCircle, Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import type { ConnectionStatus as ConnectionStatusType } from '../types/websocket'
 import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket'
+import { useAuthStore } from '../stores/authStore'
 
 interface ConnectionStatusProps {
   status?: ConnectionStatusType
@@ -85,6 +86,9 @@ const ConnectionStatusContext = React.createContext<ReturnType<typeof useSchedul
 export function ConnectionStatusProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = React.useState(false)
   
+  // Use auth store to check authentication status
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
+  
   React.useEffect(() => {
     setMounted(true)
     
@@ -94,9 +98,9 @@ export function ConnectionStatusProvider({ children }: { children: React.ReactNo
     }
   }, []) // Empty deps - only run once
   
-  // Use WebSocket hook at app level - won't re-render on navigation
+  // Use WebSocket hook at app level - only enable if authenticated and mounted
   const hookResult = useSchedulingWebSocket({ 
-    enabled: mounted,
+    enabled: mounted && isAuthenticated,
     // Prevent reconnection on every render
     maxReconnectAttempts: 5
   })
