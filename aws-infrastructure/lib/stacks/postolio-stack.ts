@@ -544,6 +544,7 @@ export class PostolioStack extends cdk.Stack {
           DB_PORT: database.instanceEndpoint.port.toString(),
           DB_NAME: 'postolio',
           CORS_ORIGIN: apiDomainName, // Use unified domain instead of CloudFront domain
+          FRONTEND_URL: `https://${apiDomainName}`, // Critical: Set frontend URL for emails
           INSTAGRAM_REDIRECT_URI: `https://${apiDomainName}/api/auth/instagram/callback`,
           GOOGLE_REDIRECT_URI: `https://${apiDomainName}/api/auth/google/callback`,
           FACEBOOK_REDIRECT_URI: `https://${apiDomainName}/api/auth/facebook/callback`,
@@ -556,7 +557,7 @@ export class PostolioStack extends cdk.Stack {
           WS_DOMAIN: 'postolio.example', // WebSocket subdomain
           // AWS SES configuration
           USE_AWS_SES: 'true', // Use SES in production
-          SES_FROM_EMAIL: domainName ? `noreply@${domainName}` : 'noreply@postolio.example',
+          SES_FROM_EMAIL: 'noreply@postolio.example', // Use consistent sender address
           NODE_ENV: environment === 'prod' ? 'production' : environment,
           PORT: '3000',
         },
