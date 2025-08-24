@@ -244,7 +244,7 @@ export function Register() {
       {/* Footer */}
       <footer className="py-6 px-4 border-t">
         <div className="flex justify-center items-center text-sm text-muted-foreground space-x-4">
-          <span>© 2024 Postolio</span>
+          <span>© {new Date().getFullYear()} Postolio</span>
           <span>•</span>
           <Link 
             to="/privacy-policy" 
