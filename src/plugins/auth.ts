@@ -37,8 +37,14 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         await request.jwtVerify()
         // The jwtVerify() method sets request.user with the decoded token payload
       }
+      
+      // Validate that user object has required fields
+      if (!request.user || !request.user.id || !request.user.email) {
+        throw new Error('Invalid user token payload')
+      }
     } catch (error) {
-      reply.code(401).send({ error: 'Authentication required' })
+      // Send 401 response - Fastify will stop the request chain
+      return reply.code(401).send({ error: 'Authentication required' })
     }
   })
 }
