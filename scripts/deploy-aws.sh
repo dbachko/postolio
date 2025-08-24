@@ -395,10 +395,14 @@ redeploy_with_ecr_image() {
     echo -e "${YELLOW}Updating CDK stack to use ECR image with tag: $IMAGE_TAG...${NC}"
     
     # Deploy with ECR image using the specific tag to ensure new deployment
+    # User secrets are passed as context from environment variables
     npx cdk deploy Postolio-$ENVIRONMENT \
         --require-approval never \
         --context useEcrImage=true \
         --context imageTag="$IMAGE_TAG" \
+        --context openaiApiKey="${OPENAI_API_KEY:-}" \
+        --context googleClientSecret="${GOOGLE_CLIENT_SECRET:-}" \
+        --context facebookAppSecret="${FACEBOOK_APP_SECRET:-}" \
         --region $AWS_REGION
         
     if [ $? -eq 0 ]; then
@@ -487,12 +491,16 @@ deploy_infrastructure() {
     fi
     
     # Deploy the secure stack with ECR image using specific tag
+    # User secrets are passed as context from environment variables
     npx cdk deploy Postolio-$ENVIRONMENT \
         --context environment=$ENVIRONMENT \
         --context account=$(aws sts get-caller-identity --query Account --output text) \
         --context region=$AWS_REGION \
         --context useEcrImage=true \
         --context imageTag="$IMAGE_TAG" \
+        --context openaiApiKey="${OPENAI_API_KEY:-}" \
+        --context googleClientSecret="${GOOGLE_CLIENT_SECRET:-}" \
+        --context facebookAppSecret="${FACEBOOK_APP_SECRET:-}" \
         $DOMAIN_ARGS \
         --require-approval never
     
@@ -724,34 +732,48 @@ show_deployment_info() {
 
 # Update secrets
 update_secrets() {
-    echo -e "${YELLOW}Updating application secrets...${NC}"
+    echo -e "${YELLOW}Secret Configuration Information${NC}"
+    echo ""
+    echo -e "${GREEN}✅ Infrastructure secrets are automatically configured:${NC}"
+    echo "   - JWT_SECRET: Auto-generated from stack ID"
+    echo "   - REDIS_URL: Configured from ElastiCache endpoint"
+    echo "   - PUBLISHER_API_KEY: Auto-generated for Lambda"
+    echo "   - DB_USERNAME/DB_PASSWORD: Managed by RDS"
+    echo ""
+    echo -e "${YELLOW}⚠️  User secrets must be provided as environment variables:${NC}"
+    echo ""
+    if [ -z "$OPENAI_API_KEY" ]; then
+        echo -e "${RED}❌ OPENAI_API_KEY not set${NC}"
+        echo "   export OPENAI_API_KEY='your-openai-api-key'"
+    else
+        echo -e "${GREEN}✅ OPENAI_API_KEY is set${NC}"
+    fi
     
-    SECRET_ARN=$(aws cloudformation describe-stacks \
-        --stack-name Postolio-$ENVIRONMENT \
-        --query 'Stacks[0].Outputs[?OutputKey==`AppSecretsArn`].OutputValue' \
-        --output text \
-        --region $AWS_REGION)
+    if [ -z "$GOOGLE_CLIENT_SECRET" ]; then
+        echo -e "${YELLOW}⚠️  GOOGLE_CLIENT_SECRET not set (optional)${NC}"
+        echo "   export GOOGLE_CLIENT_SECRET='your-google-client-secret'"
+    else
+        echo -e "${GREEN}✅ GOOGLE_CLIENT_SECRET is set${NC}"
+    fi
     
-    echo "Please update the following secrets in AWS Secrets Manager:"
-    echo "Secret ARN: $SECRET_ARN"
+    if [ -z "$FACEBOOK_APP_SECRET" ]; then
+        echo -e "${YELLOW}⚠️  FACEBOOK_APP_SECRET not set (optional)${NC}"
+        echo "   export FACEBOOK_APP_SECRET='your-facebook-app-secret'"
+    else
+        echo -e "${GREEN}✅ FACEBOOK_APP_SECRET is set${NC}"
+    fi
+    
     echo ""
-    echo "Required secrets (all environment variables are now stored in Secrets Manager):"
-    echo "- openaiApiKey: Your OpenAI API key"
-    echo "- facebookAppId: Your Facebook/Meta App ID"
-    echo "- facebookAppSecret: Your Facebook/Meta App Secret"
-    echo "- nodeEnv: production (already set)"
-    echo "- port: 3000 (already set)"
-    echo "- redisUrl: Redis connection URL (update with actual Redis endpoint after deployment)"
-    echo "- instagramRedirectUri: Instagram OAuth callback (automatically configured)"
-    echo "- publisherApiKey: API key for Lambda publisher (automatically generated)"
+    echo "To set secrets for deployment:"
+    echo "1. Export environment variables before running this script:"
+    echo "   export OPENAI_API_KEY='sk-...'"
+    echo "   export GOOGLE_CLIENT_SECRET='...'"
+    echo "   export FACEBOOK_APP_SECRET='...'"
+    echo "   ./scripts/deploy-aws.sh $ENVIRONMENT"
     echo ""
-    echo "Database connection is automatically configured from RDS credentials."
-    echo ""
-    echo "Get the Redis endpoint for redisUrl:"
-    echo "aws cloudformation describe-stacks --stack-name Postolio-$ENVIRONMENT --query 'Stacks[0].Outputs[?OutputKey==\`RedisEndpoint\`].OutputValue' --output text --region $AWS_REGION"
-    echo ""
-    echo "You can update secrets using the AWS Console or AWS CLI:"
-    echo "aws secretsmanager update-secret --secret-id $SECRET_ARN --secret-string '{\"openaiApiKey\":\"YOUR_KEY\",\"facebookAppId\":\"YOUR_APP_ID\",\"facebookAppSecret\":\"YOUR_APP_SECRET\",\"redisUrl\":\"redis://REDIS_ENDPOINT:6380\"}'"
+    echo "2. Or create a .env file and source it:"
+    echo "   source .env"
+    echo "   ./scripts/deploy-aws.sh $ENVIRONMENT"
 }
 
 # Deploy ECR repository only first
