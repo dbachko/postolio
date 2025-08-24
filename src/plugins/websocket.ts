@@ -71,6 +71,22 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
   fastify.get(wsPath, { websocket: true }, (connection, _req: FastifyRequest) => {
     const socket = connection as AuthenticatedSocket
     socket.isAlive = true
+    
+    // Set a flag to track if the socket has been authenticated
+    let isAuthenticated = false
+    let authTimeout: NodeJS.Timeout | null = null
+
+    // Set a timeout for authentication (10 seconds)
+    authTimeout = setTimeout(() => {
+      if (!isAuthenticated) {
+        fastify.log.info('WebSocket connection closed due to authentication timeout')
+        socket.send(JSON.stringify({ 
+          type: 'error', 
+          message: 'Authentication required' 
+        }))
+        socket.close(1008, 'Authentication timeout')
+      }
+    }, 10000)
 
     // Handle pong responses for heartbeat
     socket.on('pong', () => {
@@ -81,10 +97,27 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
       try {
         const message: WebSocketMessage = JSON.parse(data.toString())
 
+        // Only allow auth and ping messages before authentication
+        if (!isAuthenticated && message.type !== 'auth' && message.type !== 'ping') {
+          socket.send(JSON.stringify({ 
+            type: 'error', 
+            message: 'Authentication required' 
+          }))
+          return
+        }
+
         switch (message.type) {
-          case 'auth':
-            await handleAuth(socket, message, fastify)
+          case 'auth': {
+            const authResult = await handleAuth(socket, message, fastify)
+            if (authResult) {
+              isAuthenticated = true
+              if (authTimeout) {
+                clearTimeout(authTimeout)
+                authTimeout = null
+              }
+            }
             break
+          }
           
           case 'ping':
             socket.send(JSON.stringify({ type: 'pong' }))
@@ -114,11 +147,19 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
     })
 
     socket.on('close', () => {
+      if (authTimeout) {
+        clearTimeout(authTimeout)
+        authTimeout = null
+      }
       cleanupSocket(socket)
     })
 
     socket.on('error', (error) => {
       fastify.log.error({ error }, 'WebSocket error')
+      if (authTimeout) {
+        clearTimeout(authTimeout)
+        authTimeout = null
+      }
       cleanupSocket(socket)
     })
   })
@@ -160,14 +201,14 @@ async function handleAuth(
   socket: AuthenticatedSocket, 
   message: WebSocketMessage,
   fastify: FastifyInstance
-) {
+): Promise<boolean> {
   if (!message.token) {
     socket.send(JSON.stringify({ 
       type: 'error', 
       message: 'Token required for authentication' 
     }))
     socket.close(1008, 'Authentication failed')
-    return
+    return false
   }
 
   // Validate JWT_SECRET is configured
@@ -179,7 +220,7 @@ async function handleAuth(
       message: 'Server configuration error' 
     }))
     socket.close(1011, 'Server configuration error')
-    return
+    return false
   }
 
   try {
@@ -215,6 +256,7 @@ async function handleAuth(
         timestamp: new Date().toISOString()
       }))
     }
+    return true
   } catch (error) {
     fastify.log.error({ error }, 'WebSocket authentication failed')
     socket.send(JSON.stringify({ 
@@ -222,6 +264,7 @@ async function handleAuth(
       message: 'Authentication failed' 
     }))
     socket.close(1008, 'Authentication failed')
+    return false
   }
 }
 

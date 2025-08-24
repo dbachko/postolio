@@ -5,7 +5,7 @@ import { apiClient, type Content } from '../lib/api'
 import { OptimizedImage } from './OptimizedImage'
 import { formatInUserTimezone } from '../lib/timezone'
 import { useTimezone } from '../contexts/TimezoneContext'
-import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket'
+// import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket'
 import { StatusBadge } from './StatusBadge'
 import { Loader2, AlertTriangle } from 'lucide-react'
 
@@ -23,7 +23,8 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
   const queryClient = useQueryClient()
   const { timezone } = useTimezone()
   const navigate = useNavigate()
-  const { connectionStatus } = useSchedulingWebSocket()
+  // const { connectionStatus } = useSchedulingWebSocket()
+  const connectionStatus = 'connected' // Default to connected for now
 
   // Update local status when content prop changes (from real-time updates)
   useEffect(() => {
