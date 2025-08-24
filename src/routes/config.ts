@@ -10,12 +10,12 @@ export default async function configRoutes(fastify: FastifyInstance) {
     // This bypasses CloudFront which doesn't support WebSocket protocol
     let wsUrl: string
     
-    if (nodeEnv === 'production' && wsDomain) {
+    if ((nodeEnv === 'production' || nodeEnv === 'dev') && wsDomain) {
       // Use WebSocket subdomain for direct ALB connection
       // postolio.example points directly to ALB with proper SSL certificate
       wsUrl = `wss://${wsDomain}`
     } else {
-      // In development or if WS_DOMAIN not set, use relative path with /ws
+      // In local development or if WS_DOMAIN not set, use relative path with /ws
       wsUrl = '' // Empty means use same origin with /ws path (Vite proxy handles it)
     }
     

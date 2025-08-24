@@ -27,9 +27,17 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   // Authentication decorator
   fastify.decorate('authenticate', async function (request: any, reply: any) {
     try {
-      await request.jwtVerify()
-      // The jwtVerify() method sets request.user with the decoded token payload
-    } catch {
+      // Check for token in Authorization header first
+      const authHeader = request.headers.authorization
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7)
+        request.user = await fastify.jwt.verify(token)
+      } else {
+        // Fall back to cookie-based authentication
+        await request.jwtVerify()
+        // The jwtVerify() method sets request.user with the decoded token payload
+      }
+    } catch (error) {
       reply.code(401).send({ error: 'Authentication required' })
     }
   })
