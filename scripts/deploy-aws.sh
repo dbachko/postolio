@@ -328,7 +328,51 @@ build_and_push_image() {
     echo -e "${YELLOW}Building image with tag: $IMAGE_TAG${NC}"
     echo -e "${YELLOW}Image URI: $IMAGE_URI${NC}"
     
-    docker build -t "postolio:$IMAGE_TAG" .
+    # Fetch OAuth credentials from AWS Secrets Manager for Docker build
+    echo -e "${YELLOW}Fetching OAuth credentials for Docker build...${NC}"
+    SECRET_NAME="postolio/app-secrets/$ENVIRONMENT"
+    
+    # Get the full secret JSON
+    SECRET_JSON=$(aws secretsmanager get-secret-value \
+        --secret-id "$SECRET_NAME" \
+        --query 'SecretString' \
+        --output text \
+        --region $AWS_REGION 2>/dev/null || echo "{}")
+    
+    # Function to extract a value from the secrets JSON
+    extract_json_value() {
+        local json="$1"
+        local key="$2"
+        echo "$json" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('$key', ''))" 2>/dev/null || echo ""
+    }
+    
+    # Extract OAuth credentials
+    GOOGLE_CLIENT_ID=$(extract_json_value "$SECRET_JSON" "googleClientId")
+    FACEBOOK_APP_ID=$(extract_json_value "$SECRET_JSON" "facebookAppId")
+    
+    # Build with OAuth credentials if available
+    BUILD_ARGS=""
+    if [ -n "$GOOGLE_CLIENT_ID" ]; then
+        echo -e "${GREEN}✅ Google Client ID found${NC}"
+        BUILD_ARGS="$BUILD_ARGS --build-arg VITE_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID"
+    else
+        echo -e "${YELLOW}⚠️  Google Client ID not found${NC}"
+    fi
+    
+    if [ -n "$FACEBOOK_APP_ID" ]; then
+        echo -e "${GREEN}✅ Facebook App ID found${NC}"
+        BUILD_ARGS="$BUILD_ARGS --build-arg VITE_FACEBOOK_APP_ID=$FACEBOOK_APP_ID"
+    else
+        echo -e "${YELLOW}⚠️  Facebook App ID not found${NC}"
+    fi
+    
+    # Build Docker image with available credentials
+    echo -e "${YELLOW}Building Docker image with OAuth credentials...${NC}"
+    docker build \
+        $BUILD_ARGS \
+        --build-arg VITE_API_URL="https://postolio.example" \
+        -t "postolio:$IMAGE_TAG" .
+    
     docker tag "postolio:$IMAGE_TAG" $IMAGE_URI
     docker tag "postolio:$IMAGE_TAG" $IMAGE_URI_LATEST
     
@@ -523,11 +567,57 @@ deploy_frontend() {
         echo -e "${GREEN}Using unified domain: $API_URL${NC}"
     fi
     
+    # Fetch OAuth credentials from AWS Secrets Manager
+    echo -e "${YELLOW}Fetching OAuth credentials from AWS Secrets Manager...${NC}"
+    SECRET_NAME="postolio/app-secrets/$ENVIRONMENT"
+    
+    # Get the full secret JSON
+    SECRET_JSON=$(aws secretsmanager get-secret-value \
+        --secret-id "$SECRET_NAME" \
+        --query 'SecretString' \
+        --output text \
+        --region $AWS_REGION 2>/dev/null || echo "{}")
+    
+    # Function to extract a value from the secrets JSON
+    extract_json_value() {
+        local json="$1"
+        local key="$2"
+        echo "$json" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('$key', ''))" 2>/dev/null || echo ""
+    }
+    
+    # Extract Google Client ID
+    GOOGLE_CLIENT_ID=$(extract_json_value "$SECRET_JSON" "googleClientId")
+    
+    if [ -z "$GOOGLE_CLIENT_ID" ]; then
+        echo -e "${YELLOW}⚠️  Google Client ID not found in Secrets Manager, Google Sign-In will be disabled${NC}"
+    else
+        echo -e "${GREEN}✅ Google Client ID retrieved successfully${NC}"
+    fi
+    
+    # Extract Facebook App ID
+    FACEBOOK_APP_ID=$(extract_json_value "$SECRET_JSON" "facebookAppId")
+    
+    if [ -z "$FACEBOOK_APP_ID" ]; then
+        echo -e "${YELLOW}⚠️  Facebook App ID not found in Secrets Manager, Facebook Sign-In will be disabled${NC}"
+    else
+        echo -e "${GREEN}✅ Facebook App ID retrieved successfully${NC}"
+    fi
+    
     # Create production environment file
     echo "VITE_API_BASE_URL=$API_URL" > .env.production
     
+    # Add Google Client ID if available
+    if [ -n "$GOOGLE_CLIENT_ID" ]; then
+        echo "VITE_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> .env.production
+    fi
+    
+    # Add Facebook App ID if available
+    if [ -n "$FACEBOOK_APP_ID" ]; then
+        echo "VITE_FACEBOOK_APP_ID=$FACEBOOK_APP_ID" >> .env.production
+    fi
+    
     # Build frontend
-    echo -e "${YELLOW}Building frontend...${NC}"
+    echo -e "${YELLOW}Building frontend with environment variables...${NC}"
     if ! npm run build; then
         echo -e "${RED}❌ Frontend build failed${NC}"
         exit 1
