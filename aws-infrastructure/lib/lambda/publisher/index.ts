@@ -24,7 +24,11 @@ const metrics = new Metrics({ namespace: 'ContentScheduler', serviceName: 'publi
 
 // Initialize AWS SDK clients
 const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: {
+    removeUndefinedValues: true
+  }
+});
 const secretsClient = tracer.captureAWSv3Client(new SecretsManagerClient({}));
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 
