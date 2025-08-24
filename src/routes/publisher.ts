@@ -51,7 +51,7 @@ const publisher: FastifyPluginAsync = async function (fastify) {
         type: 'object',
         required: ['contentId'],
         properties: {
-          contentId: { type: 'string', format: 'uuid' }
+          contentId: { type: 'string', minLength: 1 }
         }
       },
       response: {
@@ -173,7 +173,7 @@ const publisher: FastifyPluginAsync = async function (fastify) {
         type: 'object',
         required: ['brandId'],
         properties: {
-          brandId: { type: 'string', format: 'uuid' }
+          brandId: { type: 'string', minLength: 1 }
         }
       },
       response: {
