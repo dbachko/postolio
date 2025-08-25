@@ -39,6 +39,7 @@ const contentSchedulerStack = new ContentSchedulerStack(app, `ContentScheduler-$
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
+  publisherApiKey: app.node.tryGetContext('publisherApiKey') || process.env.PUBLISHER_API_KEY,
   description: `Content Scheduler Microservice - ${environment} environment`,
   tags: {
     Environment: environment,
@@ -65,7 +66,7 @@ const postolioStack = new PostolioStack(app, `Postolio-${environment}`, {
   },
 });
 
-// 3. Establish explicit dependency (CDK will detect this automatically, but being explicit is better)
+// 3. Establish explicit dependency - Postolio depends on ContentScheduler for API URL
 postolioStack.addDependency(contentSchedulerStack);
 
 // Apply CDK Nag security checks only for production

@@ -24,7 +24,11 @@ const metrics = new Metrics({ namespace: 'ContentScheduler', serviceName: 'publi
 
 // Initialize AWS SDK clients
 const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: {
+    removeUndefinedValues: true
+  }
+});
 const secretsClient = tracer.captureAWSv3Client(new SecretsManagerClient({}));
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 
@@ -69,33 +73,91 @@ class PlatformAdapterFactory {
 class InstagramAdapter implements PlatformAdapter {
   async publish(schedule: any, credentials: any, mediaUrl: string | null): Promise<PublishResult> {
     try {
-      // Instagram-specific publishing logic
-      const response = await fetch(`${process.env.MAIN_APP_API_URL}/api/instagram/publish`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Internal-Secret': process.env.INTERNAL_API_SECRET || '',
-        },
-        body: JSON.stringify({
-          brandId: schedule.brandId,
-          contentId: schedule.contentId,
-          caption: this.formatCaption(schedule.caption, schedule.hashtags),
-          mediaUrl: mediaUrl || schedule.imageUrl,
-          accessToken: credentials.accessToken,
-          pageId: credentials.pageId,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        return { success: false, error: `Instagram API error: ${error}` };
+      if (!mediaUrl) {
+        throw new Error('Media URL is required for Instagram publishing');
       }
 
-      const result = await response.json();
+      const formattedCaption = this.formatCaption(schedule.caption, schedule.hashtags);
+      
+      // Step 1: Create media container
+      const createMediaUrl = `https://graph.facebook.com/v23.0/${credentials.instagramAccountId}/media`;
+      const createMediaParams = new URLSearchParams({
+        image_url: mediaUrl,
+        caption: formattedCaption,
+        access_token: credentials.instagramAccessToken,
+      });
+
+      logger.info('Creating Instagram media container', { 
+        accountId: credentials.instagramAccountId,
+        hasMediaUrl: !!mediaUrl 
+      });
+
+      const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {
+        method: 'POST',
+      });
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        logger.error('Failed to create Instagram media container', { 
+          status: createResponse.status, 
+          error: errorText 
+        });
+        return { success: false, error: `Failed to create media: ${errorText}` };
+      }
+
+      const createResult = await createResponse.json();
+      const creationId = createResult.id;
+
+      if (!creationId) {
+        return { success: false, error: 'No creation ID returned from Instagram' };
+      }
+
+      // Step 2: Publish the media
+      const publishUrl = `https://graph.facebook.com/v23.0/${credentials.instagramAccountId}/media_publish`;
+      const publishParams = new URLSearchParams({
+        creation_id: creationId,
+        access_token: credentials.instagramAccessToken,
+      });
+
+      logger.info('Publishing Instagram media', { creationId });
+
+      const publishResponse = await fetch(`${publishUrl}?${publishParams}`, {
+        method: 'POST',
+      });
+
+      if (!publishResponse.ok) {
+        const errorText = await publishResponse.text();
+        logger.error('Failed to publish Instagram media', { 
+          status: publishResponse.status, 
+          error: errorText 
+        });
+        return { success: false, error: `Failed to publish: ${errorText}` };
+      }
+
+      const publishResult = await publishResponse.json();
+      const postId = publishResult.id;
+
+      // Step 3: Get the permalink
+      const permalinkUrl = `https://graph.facebook.com/v23.0/${postId}`;
+      const permalinkParams = new URLSearchParams({
+        fields: 'permalink',
+        access_token: credentials.instagramAccessToken,
+      });
+
+      const permalinkResponse = await fetch(`${permalinkUrl}?${permalinkParams}`);
+      let permalink = '';
+      
+      if (permalinkResponse.ok) {
+        const permalinkResult = await permalinkResponse.json();
+        permalink = permalinkResult.permalink || '';
+      }
+
+      logger.info('Instagram content published successfully', { postId, permalink });
+
       return {
         success: true,
-        platformPostId: result.id,
-        platformUrl: result.permalink,
+        platformPostId: postId,
+        platformUrl: permalink,
       };
     } catch (error) {
       logger.error('Instagram publishing failed', error as Error);
@@ -104,7 +166,7 @@ class InstagramAdapter implements PlatformAdapter {
   }
 
   validateCredentials(credentials: any): boolean {
-    return !!(credentials?.accessToken && credentials?.pageId);
+    return !!(credentials?.instagramAccessToken && credentials?.instagramAccountId);
   }
 
   formatContent(schedule: any): any {
@@ -198,13 +260,28 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       throw new Error(`Schedule not found: ${event.scheduleId}`);
     }
 
-    // Get platform credentials
-    const credentials = await getPlatformCredentials(schedule.platform);
+    // Get fresh content details from main app
+    const freshContent = await getContentDetails(schedule.contentId);
+    logger.info('Fetched fresh content', { contentId: schedule.contentId, brandId: schedule.brandId });
+
+    // Merge fresh content with schedule data
+    const mergedSchedule = {
+      ...schedule,
+      caption: freshContent.caption,
+      hashtags: freshContent.hashtags,
+      imageUrl: freshContent.cdnImageUrl || freshContent.mediaUrls?.[0],
+    };
+
+    // Get platform credentials from main app
+    const credentials = await getPlatformCredentials(schedule.brandId);
+    logger.info('Fetched credentials', { brandId: schedule.brandId, hasToken: !!credentials.instagramAccessToken });
 
     // If video content, get signed URL
     let mediaUrl = null;
     if (schedule.contentType === 'video' && schedule.videoUrl) {
       mediaUrl = await getSignedVideoUrl(schedule.videoUrl);
+    } else if (mergedSchedule.imageUrl) {
+      mediaUrl = mergedSchedule.imageUrl;
     }
 
     // Get platform adapter
@@ -216,7 +293,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     }
     
     // Publish to platform using adapter
-    const publishResult = await adapter.publish(schedule, credentials, mediaUrl);
+    const publishResult = await adapter.publish(mergedSchedule, credentials, mediaUrl);
     
     if (!publishResult.success) {
       throw new Error(publishResult.error || 'Publishing failed');
@@ -263,13 +340,62 @@ async function getSchedule(scheduleId: string): Promise<any> {
   return result.Item;
 }
 
-async function getPlatformCredentials(platform: string): Promise<any> {
-  const result = await secretsClient.send(new GetSecretValueCommand({
-    SecretId: process.env.PLATFORM_CREDENTIALS_SECRET!,
-  }));
+async function getPlatformCredentials(brandId: string): Promise<any> {
+  try {
+    const response = await fetch(`${process.env.MAIN_APP_API_URL}/api/publisher/credentials`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': process.env.PUBLISHER_API_KEY || '',
+      },
+      body: JSON.stringify({ brandId }),
+    });
 
-  const credentials = JSON.parse(result.SecretString!);
-  return credentials[platform];
+    if (!response.ok) {
+      const error = await response.text();
+      logger.error('Failed to fetch credentials from main app', { brandId, status: response.status, error });
+      throw new Error(`Failed to fetch credentials: ${error}`);
+    }
+
+    const data = await response.json();
+    if (!data.success || !data.credentials) {
+      throw new Error('Invalid credentials response from main app');
+    }
+
+    return data.credentials;
+  } catch (error) {
+    logger.error('Error fetching platform credentials', error as Error);
+    throw error;
+  }
+}
+
+async function getContentDetails(contentId: string): Promise<any> {
+  try {
+    const response = await fetch(`${process.env.MAIN_APP_API_URL}/api/publisher/content`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': process.env.PUBLISHER_API_KEY || '',
+      },
+      body: JSON.stringify({ contentId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      logger.error('Failed to fetch content from main app', { contentId, status: response.status, error });
+      throw new Error(`Failed to fetch content: ${error}`);
+    }
+
+    const data = await response.json();
+    if (!data.success || !data.content) {
+      throw new Error('Invalid content response from main app');
+    }
+
+    return data.content;
+  } catch (error) {
+    logger.error('Error fetching content details', error as Error);
+    throw error;
+  }
 }
 
 async function getSignedVideoUrl(videoKey: string): Promise<string> {

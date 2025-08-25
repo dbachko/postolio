@@ -24,6 +24,8 @@ import * as path from 'path';
 export interface ContentSchedulerStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
   alertEmail?: string;
+  mainAppApiUrl?: string;
+  publisherApiKey?: string;
 }
 
 export class ContentSchedulerStack extends cdk.Stack {
@@ -34,8 +36,17 @@ export class ContentSchedulerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ContentSchedulerStackProps) {
     super(scope, id, props);
 
-    const { environment, alertEmail } = props;
+    const { environment, alertEmail, mainAppApiUrl, publisherApiKey } = props;
     const prefix = `postolio-scheduler-${environment}`;
+    
+    // All environments use the production URL
+    const resolvedMainAppApiUrl = mainAppApiUrl || 'https://postolio.example';
+    
+    // Use publisher API key from props/context or generate a default
+    const resolvedPublisherApiKey = publisherApiKey || 
+                                    this.node.tryGetContext('publisherApiKey') || 
+                                    process.env.PUBLISHER_API_KEY || 
+                                    '';
 
     // ==================== KMS Keys ====================
     
@@ -240,7 +251,8 @@ export class ContentSchedulerStack extends cdk.Stack {
       AUDIT_LOG_TABLE: auditLogTable.tableName,
       VIDEO_BUCKET: this.videoBucket.bucketName,
       PLATFORM_CREDENTIALS_SECRET: platformCredentials.secretArn,
-      MAIN_APP_API_URL: process.env.MAIN_APP_API_URL || 'http://localhost:3000',
+      MAIN_APP_API_URL: resolvedMainAppApiUrl,
+      PUBLISHER_API_KEY: resolvedPublisherApiKey,
       POWERTOOLS_SERVICE_NAME: 'content-scheduler',
       POWERTOOLS_METRICS_NAMESPACE: 'ContentScheduler',
       LOG_LEVEL: environment === 'prod' ? 'INFO' : 'DEBUG',
