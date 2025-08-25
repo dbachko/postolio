@@ -1,7 +1,7 @@
 import { SQSEvent, SQSRecord } from 'aws-lambda'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
-import { KMSClient, DecryptCommand } from '@aws-sdk/client-kms'
+import { KMSClient, DecryptCommand, EncryptCommand } from '@aws-sdk/client-kms'
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge'
 import axios, { AxiosError } from 'axios'
 
@@ -220,9 +220,55 @@ async function refreshTikTokToken(
 }
 
 async function storeRefreshedToken(userId: string, brandId: string, token: any): Promise<void> {
-  // This would normally call back to the Token Service API
-  // For now, we'll skip this as it requires more setup
-  console.log('Would store refreshed token:', { userId, brandId, token })
+  // Encrypt new tokens
+  const encryptedAccessToken = await encryptData(token.accessToken)
+  const encryptedRefreshToken = token.refreshToken
+    ? await encryptData(token.refreshToken)
+    : null
+
+  // Calculate new expiry
+  const expiresAt = Date.now() + (token.expiresIn * 1000)
+
+  // Store in DynamoDB
+  await docClient.send(new PutCommand({
+    TableName: TOKEN_TABLE_NAME,
+    Item: {
+      pk: `${userId}#tiktok`,
+      sk: brandId,
+      platform: 'tiktok',
+      encryptedAccessToken,
+      encryptedRefreshToken,
+      expiresAt,
+      lastRefreshed: new Date().toISOString(),
+      ttl: Math.floor(expiresAt / 1000) + 86400, // TTL 1 day after expiry
+    },
+  }))
+
+  // Emit event for monitoring
+  await sendEvent('postolio.token', 'token.refreshed', {
+    userId,
+    brandId,
+    platform: 'tiktok',
+    expiresAt,
+    timestamp: new Date().toISOString(),
+  })
+
+  console.log('Token refreshed and stored successfully', {
+    userId,
+    brandId,
+    platform: 'tiktok',
+    expiresAt,
+  })
+}
+
+// Helper function for encryption
+async function encryptData(plainText: string): Promise<string> {
+  const result = await kmsClient.send(new EncryptCommand({
+    KeyId: KMS_KEY_ID,
+    Plaintext: Buffer.from(plainText),
+  }))
+
+  return Buffer.from(result.CiphertextBlob!).toString('base64')
 }
 
 async function publishToTikTok(

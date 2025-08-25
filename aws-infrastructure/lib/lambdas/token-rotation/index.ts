@@ -4,6 +4,7 @@ import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib
 import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms'
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge'
 import axios from 'axios'
+import { getSecretManager } from '../shared/secrets-manager'
 
 const dynamoClient = new DynamoDBClient({})
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
@@ -228,8 +229,12 @@ async function refreshInstagramToken(accessToken: string): Promise<RefreshResult
 
 async function refreshFacebookToken(currentToken: string, metadata: Record<string, any>): Promise<RefreshResult> {
   try {
-    const appId = metadata.appId || process.env.FACEBOOK_APP_ID
-    const appSecret = metadata.appSecret || process.env.FACEBOOK_APP_SECRET
+    // Get credentials from Secrets Manager
+    const secretManager = getSecretManager()
+    const secrets = await secretManager.getPlatformSecrets()
+    
+    const appId = metadata.appId || secrets.FACEBOOK_APP_ID
+    const appSecret = metadata.appSecret || secrets.FACEBOOK_APP_SECRET
     
     if (!appId || !appSecret) {
       throw new Error('Facebook app credentials not available')
