@@ -116,8 +116,14 @@ jobs:
           
       - name: Deploy infrastructure with CDK
         working-directory: aws-infrastructure
+        env:
+          # Pass user secrets as environment variables (CDK will pick them up)
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          FACEBOOK_APP_SECRET: ${{ secrets.FACEBOOK_APP_SECRET }}
         run: |
           # Deploy with environment-specific configuration
+          # User secrets are passed via environment variables above
           npx cdk deploy Postolio-${{ needs.set-environment.outputs.environment }} \
             --require-approval never \
             --context imageTag=${{ steps.vars.outputs.image_tag }} \
@@ -125,6 +131,9 @@ jobs:
             --context domainName=${{ vars.DOMAIN_NAME }} \
             --context googleClientId=${{ vars.VITE_GOOGLE_CLIENT_ID }} \
             --context facebookAppId=${{ vars.VITE_FACEBOOK_APP_ID }} \
+            --context openaiApiKey="${{ secrets.OPENAI_API_KEY }}" \
+            --context googleClientSecret="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+            --context facebookAppSecret="${{ secrets.FACEBOOK_APP_SECRET }}" \
             --context corsOrigin=${{ vars.CORS_ORIGIN || vars.VITE_API_URL }} \
             --context logLevel=${{ vars.LOG_LEVEL || 'info' }} \
             --context enableMonitoring=${{ vars.ENABLE_MONITORING || 'false' }}

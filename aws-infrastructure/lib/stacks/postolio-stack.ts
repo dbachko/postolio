@@ -332,35 +332,26 @@ export class PostolioStack extends cdk.Stack {
                            process.env.PUBLISHER_API_KEY || 
                            this.generateRandomSecret();
     
-    // Application secrets - Only actual secrets, not public configuration
-    // Public OAuth client IDs are now managed via GitHub Environment Variables
+    // Infrastructure secrets - Only CDK-generated or infrastructure-specific secrets
+    // User-provided secrets (OPENAI_API_KEY, etc.) are now passed as environment variables from GitHub Secrets
     const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
-      description: 'Postolio application secrets (sensitive credentials only)',
+      description: 'Postolio infrastructure secrets (CDK-generated only)',
       secretObjectValue: {
-        // Authentication secrets
+        // Authentication secrets (CDK-generated)
         jwtSecret: cdk.SecretValue.unsafePlainText(
           cdk.Fn.select(2, cdk.Fn.split('-', cdk.Fn.select(2, cdk.Fn.split('/', cdk.Aws.STACK_ID))))
         ),
         
-        // Database connection (contains password)
+        // Database connection (CDK-managed)
         redisUrl: cdk.SecretValue.unsafePlainText(`redis://${redis.attrRedisEndpointAddress}:6380`),
         
-        // API Keys (actual secrets)
-        openaiApiKey: cdk.SecretValue.unsafePlainText('PLACEHOLDER_OPENAI_KEY'),
-        
-        // OAuth Secrets (backend only - never exposed to frontend)
-        googleClientSecret: cdk.SecretValue.unsafePlainText('PLACEHOLDER_GOOGLE_CLIENT_SECRET'),
-        facebookAppSecret: cdk.SecretValue.unsafePlainText('PLACEHOLDER_FACEBOOK_APP_SECRET'),
-        
-        // Internal service authentication
+        // Internal service authentication (CDK-generated)
         publisherApiKey: cdk.SecretValue.unsafePlainText(publisherApiKey),
         
-        // NOTE: The following are now in GitHub Environment Variables:
-        // - googleClientId (VITE_GOOGLE_CLIENT_ID) - public OAuth client ID
-        // - facebookAppId (VITE_FACEBOOK_APP_ID) - public Facebook app ID
-        // - nodeEnv (NODE_ENV) - environment configuration
-        // - port (PORT) - server port configuration
-        // - schedulerApiUrl (SCHEDULER_API_URL) - service endpoint
+        // NOTE: User-provided secrets moved to environment variables:
+        // - openaiApiKey -> OPENAI_API_KEY (from GitHub Secrets)
+        // - googleClientSecret -> GOOGLE_CLIENT_SECRET (from GitHub Secrets)
+        // - facebookAppSecret -> FACEBOOK_APP_SECRET (from GitHub Secrets)
       },
     })
 
@@ -538,22 +529,13 @@ export class PostolioStack extends cdk.Stack {
         executionRole,
         taskRole,
         secrets: {
-          // Database credentials
+          // Database credentials (from AWS Secrets Manager)
           DB_USERNAME: ecs.Secret.fromSecretsManager(dbSecret, 'username'),
           DB_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password'),
           
-          // Authentication secrets
+          // Infrastructure secrets (from AWS Secrets Manager)
           JWT_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'jwtSecret'),
-          
-          // API Keys (actual secrets)
-          OPENAI_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'openaiApiKey'),
           PUBLISHER_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'publisherApiKey'),
-          
-          // OAuth Secrets (backend only - never exposed to frontend)
-          GOOGLE_CLIENT_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'googleClientSecret'),
-          FACEBOOK_APP_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'facebookAppSecret'),
-          
-          // Database connection
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
         },
         environment: {
@@ -561,6 +543,11 @@ export class PostolioStack extends cdk.Stack {
           DB_HOST: database.instanceEndpoint.hostname,
           DB_PORT: database.instanceEndpoint.port.toString(),
           DB_NAME: 'postolio',
+          
+          // User-provided secrets (from GitHub Secrets via CDK context)
+          OPENAI_API_KEY: this.node.tryGetContext('openaiApiKey') || process.env.OPENAI_API_KEY || '',
+          GOOGLE_CLIENT_SECRET: this.node.tryGetContext('googleClientSecret') || process.env.GOOGLE_CLIENT_SECRET || '',
+          FACEBOOK_APP_SECRET: this.node.tryGetContext('facebookAppSecret') || process.env.FACEBOOK_APP_SECRET || '',
           
           // OAuth Client IDs (public values from GitHub Environment Variables via CDK context)
           GOOGLE_CLIENT_ID: this.node.tryGetContext('googleClientId') || process.env.GOOGLE_CLIENT_ID || '',
