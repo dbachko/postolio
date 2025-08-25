@@ -326,6 +326,12 @@ export class PostolioStack extends cdk.Stack {
 
     // Placeholder for CloudFront distribution - will be created after ECS service
 
+    // Generate publisher API key once for sharing between stacks
+    // Use context or environment variable, or generate a random one
+    const publisherApiKey = this.node.tryGetContext('publisherApiKey') || 
+                           process.env.PUBLISHER_API_KEY || 
+                           this.generateRandomSecret();
+    
     // Application secrets - Only actual secrets, not public configuration
     // Public OAuth client IDs are now managed via GitHub Environment Variables
     const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
@@ -347,9 +353,7 @@ export class PostolioStack extends cdk.Stack {
         facebookAppSecret: cdk.SecretValue.unsafePlainText('PLACEHOLDER_FACEBOOK_APP_SECRET'),
         
         // Internal service authentication
-        publisherApiKey: cdk.SecretValue.unsafePlainText(
-          process.env.PUBLISHER_API_KEY || this.generateRandomSecret()
-        ),
+        publisherApiKey: cdk.SecretValue.unsafePlainText(publisherApiKey),
         
         // NOTE: The following are now in GitHub Environment Variables:
         // - googleClientId (VITE_GOOGLE_CLIENT_ID) - public OAuth client ID

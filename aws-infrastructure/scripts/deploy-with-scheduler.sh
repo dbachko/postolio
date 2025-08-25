@@ -14,6 +14,23 @@ echo "Environment: $ENVIRONMENT"
 echo "Image Tag: $IMAGE_TAG"
 echo "========================================="
 
+# Generate a consistent publisher API key for both stacks
+if [ -z "$PUBLISHER_API_KEY" ]; then
+  # Get existing key from secrets if available
+  SECRET_ARN=$(aws secretsmanager list-secrets --query "SecretList[?contains(Name, 'AppSecrets')].ARN" --output text 2>/dev/null)
+  if [ -n "$SECRET_ARN" ]; then
+    PUBLISHER_API_KEY=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --query SecretString --output text 2>/dev/null | jq -r '.publisherApiKey' 2>/dev/null)
+  fi
+  
+  # Generate new key if not found
+  if [ -z "$PUBLISHER_API_KEY" ] || [ "$PUBLISHER_API_KEY" == "null" ]; then
+    PUBLISHER_API_KEY=$(openssl rand -base64 32)
+    echo "Generated new PUBLISHER_API_KEY"
+  else
+    echo "Using existing PUBLISHER_API_KEY from secrets"
+  fi
+fi
+
 # Step 1: Deploy ContentScheduler stack first
 echo ""
 echo "Step 1: Deploying ContentScheduler stack..."
@@ -21,12 +38,13 @@ echo "-----------------------------------------"
 npx cdk deploy ContentScheduler-${ENVIRONMENT} \
   --require-approval never \
   --context environment=${ENVIRONMENT} \
+  --context publisherApiKey="${PUBLISHER_API_KEY}" \
   || { echo "ContentScheduler deployment failed"; exit 1; }
 
 echo ""
 echo "✅ ContentScheduler stack deployed successfully"
 
-# Step 2: Deploy Postolio stack with imported values
+# Step 2: Deploy Postolio stack with same publisher API key
 echo ""
 echo "Step 2: Deploying Postolio stack..."
 echo "-----------------------------------"
@@ -34,10 +52,11 @@ npx cdk deploy Postolio-${ENVIRONMENT} \
   --require-approval never \
   --context imageTag=${IMAGE_TAG} \
   --context environment=${ENVIRONMENT} \
+  --context publisherApiKey="${PUBLISHER_API_KEY}" \
   || { echo "Postolio deployment failed"; exit 1; }
 
 echo ""
-echo "✅ Postolio stack deployed successfully"
+echo "✅ ContentScheduler stack deployed successfully"
 
 # Step 3: Verify the deployment
 echo ""
