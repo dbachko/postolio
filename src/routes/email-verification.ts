@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify'
+import { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { EmailVerificationService } from '../services/email-verification.js'
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js'
 
@@ -6,15 +6,36 @@ interface VerifyEmailBody {
   token: string
 }
 
+interface AuthenticatedRequest extends FastifyRequest {
+  user?: {
+    id: string
+    email: string
+  }
+}
+
 const emailVerificationRoutes: FastifyPluginAsync = async (fastify) => {
   // Send verification email (authenticated route with rate limiting)
   fastify.post('/email/send-verification', {
-    preHandler: [
-      ...(fastify.authenticate ? [fastify.authenticate] : []),
-      enhancedRateLimiters.emailVerification()
-    ]
-  }, async (request, reply) => {
-    const userId = request.user.id
+    preHandler: async function(request: AuthenticatedRequest, reply) {
+      // Run authentication first
+      try {
+        if (this.authenticate) {
+          await this.authenticate(request, reply)
+          // If authenticate sent a response, don't continue
+          if (reply.sent) return
+        } else {
+          return reply.code(401).send({ error: 'Authentication required' })
+        }
+        // Then apply rate limiting
+        await enhancedRateLimiters.emailVerification()(request, reply)
+      } catch (error) {
+        // Authentication failed, response already sent
+        return
+      }
+    }
+  }, async (request: AuthenticatedRequest, reply) => {
+    // Authentication is guaranteed by preHandler, user will always be valid here
+    const userId = request.user!.id
 
     const result = await EmailVerificationService.sendVerificationEmail(userId)
 
@@ -51,9 +72,24 @@ const emailVerificationRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Get verification status (authenticated route)
   fastify.get('/email/verification-status', {
-    preHandler: fastify.authenticate
-  }, async (request, reply) => {
-    const userId = request.user.id
+    preHandler: async function(request: AuthenticatedRequest, reply) {
+      // Run authentication
+      try {
+        if (this.authenticate) {
+          await this.authenticate(request, reply)
+          // If authenticate sent a response, don't continue
+          if (reply.sent) return
+        } else {
+          return reply.code(401).send({ error: 'Authentication required' })
+        }
+      } catch (error) {
+        // Authentication failed, response already sent
+        return
+      }
+    }
+  }, async (request: AuthenticatedRequest, reply) => {
+    // Authentication is guaranteed by preHandler, user will always be valid here
+    const userId = request.user!.id
 
     const status = await EmailVerificationService.getVerificationStatus(userId)
 
