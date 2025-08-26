@@ -91,7 +91,7 @@ async function createSchedule(schedule: Schedule): Promise<any> {
   const shardKey = getShardKey(schedule.userId)
   
   // Generate schedule ID with embedded shard key for efficient lookups
-  const scheduleId = schedule.scheduleId || generateScheduleIdWithShard(schedule.userId)
+  const scheduleId = generateScheduleId(schedule.userId)
   
   // Store in DynamoDB
   const item = {
@@ -361,15 +361,7 @@ async function executeSchedule(scheduleId: string): Promise<any> {
 
 // Helper functions
 
-// Legacy function for backward compatibility
-function generateScheduleId(schedule: Partial<Schedule>): string {
-  const hash = createHash('sha256')
-  hash.update(`${schedule.contentId}-${schedule.scheduledAt}-${Date.now()}`)
-  return hash.digest('hex').substring(0, 16)
-}
-
-// New function that embeds shard key for efficient lookups
-function generateScheduleIdWithShard(userId: string): string {
+function generateScheduleId(userId: string): string {
   const shardKey = getShardKey(userId)
   const hash = createHash('sha256')
   hash.update(`${userId}-${Date.now()}-${Math.random()}`)
@@ -382,72 +374,31 @@ function getShardKey(userId: string): number {
   return hash.readUInt32BE(0) % 10 // 10 shards
 }
 
-function extractShardKeyFromScheduleId(scheduleId: string): number | null {
+function extractShardKeyFromScheduleId(scheduleId: string): number {
   const parts = scheduleId.split('-')
-  if (parts.length >= 2) {
-    const shardKey = parseInt(parts[0], 10)
-    if (!isNaN(shardKey) && shardKey >= 0 && shardKey < 10) {
-      return shardKey
-    }
+  const shardKey = parseInt(parts[0], 10)
+  if (isNaN(shardKey) || shardKey < 0 || shardKey >= 10) {
+    throw new Error(`Invalid schedule ID format: ${scheduleId}`)
   }
-  return null
+  return shardKey
 }
 
-async function getScheduleById(scheduleId: string, userId?: string): Promise<any> {
-  // Try to extract shard key from schedule ID first (for new schedules)
-  const embeddedShardKey = extractShardKeyFromScheduleId(scheduleId)
+async function getScheduleById(scheduleId: string): Promise<any> {
+  // Extract shard key from schedule ID (all schedules must have embedded shard key)
+  const shardKey = extractShardKeyFromScheduleId(scheduleId)
   
-  if (embeddedShardKey !== null) {
-    // Efficient single-shard query for new schedules
-    const result = await docClient.send(new QueryCommand({
-      TableName: SCHEDULE_TABLE_NAME,
-      KeyConditionExpression: 'pk = :pk AND contains(sk, :scheduleId)',
-      ExpressionAttributeValues: {
-        ':pk': `SHARD#${embeddedShardKey}`,
-        ':scheduleId': scheduleId,
-      },
-      Limit: 1,
-    }))
-    
-    if (result.Items && result.Items.length > 0) {
-      return result.Items[0]
-    }
-  } else if (userId) {
-    // If userId is provided, compute shard key for legacy schedules
-    const shardKey = getShardKey(userId)
-    const result = await docClient.send(new QueryCommand({
-      TableName: SCHEDULE_TABLE_NAME,
-      KeyConditionExpression: 'pk = :pk AND contains(sk, :scheduleId)',
-      ExpressionAttributeValues: {
-        ':pk': `SHARD#${shardKey}`,
-        ':scheduleId': scheduleId,
-      },
-      Limit: 1,
-    }))
-    
-    if (result.Items && result.Items.length > 0) {
-      return result.Items[0]
-    }
-  } else {
-    // Fallback: query all shards for legacy schedules without userId
-    for (let shard = 0; shard < 10; shard++) {
-      const result = await docClient.send(new QueryCommand({
-        TableName: SCHEDULE_TABLE_NAME,
-        KeyConditionExpression: 'pk = :pk AND contains(sk, :scheduleId)',
-        ExpressionAttributeValues: {
-          ':pk': `SHARD#${shard}`,
-          ':scheduleId': scheduleId,
-        },
-        Limit: 1,
-      }))
-      
-      if (result.Items && result.Items.length > 0) {
-        return result.Items[0]
-      }
-    }
-  }
+  // Efficient single-shard query
+  const result = await docClient.send(new QueryCommand({
+    TableName: SCHEDULE_TABLE_NAME,
+    KeyConditionExpression: 'pk = :pk AND contains(sk, :scheduleId)',
+    ExpressionAttributeValues: {
+      ':pk': `SHARD#${shardKey}`,
+      ':scheduleId': scheduleId,
+    },
+    Limit: 1,
+  }))
   
-  return null
+  return result.Items && result.Items.length > 0 ? result.Items[0] : null
 }
 
 async function sendEvent(source: string, detailType: string, detail: any): Promise<void> {
