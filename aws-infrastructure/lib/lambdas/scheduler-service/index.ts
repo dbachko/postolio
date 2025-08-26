@@ -176,7 +176,7 @@ async function updateSchedule(updates: any): Promise<any> {
   }
   
   // Update in DynamoDB
-  const updateExpression = []
+  const updateExpression: string[] = []
   const expressionAttributeNames: Record<string, string> = {}
   const expressionAttributeValues: Record<string, any> = {}
   

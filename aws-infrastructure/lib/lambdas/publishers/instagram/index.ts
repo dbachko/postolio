@@ -9,7 +9,7 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dyn
 import { KMSClient, DecryptCommand } from '@aws-sdk/client-kms'
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge'
 import { Logger } from '@aws-lambda-powertools/logger'
-import { Metrics, MetricUnits } from '@aws-lambda-powertools/metrics'
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics'
 import { Tracer } from '@aws-lambda-powertools/tracer'
 import axios, { AxiosError, AxiosInstance } from 'axios'
 import axiosRetry from 'axios-retry'
@@ -22,10 +22,10 @@ import {
   validateInput,
   ValidationError,
   type PublishRequest 
-} from '../shared/validation-schemas'
-import { TokenRefreshHandler } from '../shared/token-refresh-handler'
-import { CircuitBreaker, CircuitBreakerFactory } from '../shared/circuit-breaker'
-import { IdempotencyHandler, IdempotencyError } from '../shared/idempotency-handler'
+} from '../../shared/validation-schemas'
+import { TokenRefreshHandler } from '../../shared/token-refresh-handler'
+import { CircuitBreaker, CircuitBreakerFactory } from '../../shared/circuit-breaker'
+import { IdempotencyHandler, IdempotencyError } from '../../shared/idempotency-handler'
 
 // Initialize AWS clients
 const dynamoClient = new DynamoDBClient({})
@@ -58,16 +58,14 @@ const tokenRefreshHandler = new TokenRefreshHandler({
 const idempotencyHandler = new IdempotencyHandler(docClient, {
   tableName: IDEMPOTENCY_TABLE_NAME,
   ttlSeconds: 86400, // 24 hours
-  inProgressTtlSeconds: 300, // 5 minutes
-  maxRetries: 3,
 })
 
 // Initialize circuit breakers for Instagram API
-const instagramApiBreaker = CircuitBreakerFactory.getBreaker('instagram-api', {
-  timeout: 30000, // 30 seconds
-  errorThreshold: 5,
-  errorThresholdPercentage: 50,
+const circuitBreakerFactory = new CircuitBreakerFactory()
+const instagramApiBreaker = circuitBreakerFactory.getBreaker('instagram-api', {
+  failureThreshold: 5,
   resetTimeout: 60000, // 1 minute
+  monitoringPeriod: 60000 // 1 minute
 })
 
 // Configure axios with retry logic
@@ -105,12 +103,12 @@ interface TokenData {
 /**
  * Main Lambda handler
  */
-export const handler = tracer.captureLambdaHandler(async (event: SQSEvent): Promise<void> => {
+export const handler = async (event: SQSEvent): Promise<void> => {
   logger.info('Instagram Publisher Lambda invoked', {
     records: event.Records.length,
   })
   
-  metrics.addMetric('Invocations', MetricUnits.Count, 1)
+  metrics.addMetric('Invocations', MetricUnit.Count, 1)
   
   // Process messages in parallel with concurrency limit
   const results = await Promise.allSettled(
@@ -120,7 +118,7 @@ export const handler = tracer.captureLambdaHandler(async (event: SQSEvent): Prom
   // Check for failures
   const failures = results.filter(r => r.status === 'rejected')
   if (failures.length > 0) {
-    metrics.addMetric('BatchFailures', MetricUnits.Count, failures.length)
+    metrics.addMetric('BatchFailures', MetricUnit.Count, failures.length)
     
     // Throw error to trigger retry for failed messages
     const errorMessages = failures.map(f => 
@@ -131,7 +129,7 @@ export const handler = tracer.captureLambdaHandler(async (event: SQSEvent): Prom
   }
   
   metrics.publishStoredMetrics()
-})
+}
 
 /**
  * Process individual SQS message with full error handling
@@ -144,8 +142,7 @@ async function processMessage(record: SQSRecord): Promise<void> {
     // Validate input
     const request = validateInput(
       PublishRequestSchema,
-      JSON.parse(record.body),
-      'Invalid publish request'
+      JSON.parse(record.body)
     )
     
     logger.info('Processing publish request', {
@@ -156,25 +153,35 @@ async function processMessage(record: SQSRecord): Promise<void> {
     })
     
     // Generate idempotency key
-    const idempotencyKey = idempotencyHandler.generateKey({
-      contentId: request.contentId,
-      platform: request.platform,
-      brandId: request.brandId,
-      scheduledAt: request.metadata?.scheduledAt,
-    })
+    const idempotencyKey = request.idempotencyKey || `${request.contentId}-${request.platform}-${Date.now()}`
     
-    // Process with idempotency
-    await idempotencyHandler.processWithIdempotency(
+    // Check idempotency
+    const shouldProcess = await idempotencyHandler.checkAndRecord(
       idempotencyKey,
-      record.messageId,
-      async () => await publishContent(request),
       {
         contentId: request.contentId,
         platform: request.platform,
+        brandId: request.brandId,
+        scheduledAt: request.scheduledAt,
       }
     )
     
-    metrics.addMetric('SuccessfulPublish', MetricUnits.Count, 1)
+    if (!shouldProcess) {
+      logger.info('Duplicate request detected, skipping', {
+        idempotencyKey,
+        contentId: request.contentId,
+      })
+      metrics.addMetric('DuplicateMessages', MetricUnit.Count, 1)
+      return
+    }
+    
+    // Process the request
+    const result = await publishContent(request)
+    
+    // Mark complete
+    await idempotencyHandler.markComplete(idempotencyKey, result)
+    
+    metrics.addMetric('SuccessfulPublish', MetricUnit.Count, 1)
     
   } catch (error) {
     subsegment?.addError(error as Error)
@@ -182,18 +189,18 @@ async function processMessage(record: SQSRecord): Promise<void> {
     if (error instanceof ValidationError) {
       logger.error('Validation failed', {
         messageId: record.messageId,
-        errors: error.errors.errors,
+        errors: (error as ValidationError).errors.errors,
       })
-      metrics.addMetric('ValidationErrors', MetricUnits.Count, 1)
+      metrics.addMetric('ValidationErrors', MetricUnit.Count, 1)
       // Don't retry validation errors
       return
     }
     
-    if (error instanceof IdempotencyError && error.code === 'DUPLICATE_IN_PROGRESS') {
+    if (error instanceof IdempotencyError) {
       logger.info('Duplicate message detected, skipping', {
         messageId: record.messageId,
       })
-      metrics.addMetric('DuplicateMessages', MetricUnits.Count, 1)
+      metrics.addMetric('DuplicateMessages', MetricUnit.Count, 1)
       // Don't retry duplicates
       return
     }
@@ -203,7 +210,7 @@ async function processMessage(record: SQSRecord): Promise<void> {
       error: error instanceof Error ? error.message : 'Unknown error',
     })
     
-    metrics.addMetric('ProcessingErrors', MetricUnits.Count, 1)
+    metrics.addMetric('ProcessingErrors', MetricUnit.Count, 1)
     throw error
     
   } finally {
@@ -370,12 +377,13 @@ async function refreshAndStoreToken(
     })
     
     // Store refreshed token securely (no logging!)
-    await tokenRefreshHandler.storeRefreshedToken(
+    await tokenRefreshHandler.storeToken(
       userId,
       brandId,
       'instagram',
       {
         accessToken: response.data.access_token,
+        refreshToken: token.refreshToken, // Keep existing refresh token if not provided
         expiresIn: response.data.expires_in || 5184000, // 60 days default
       }
     )
@@ -389,7 +397,7 @@ async function refreshAndStoreToken(
       brandId,
       error: error instanceof Error ? error.message : 'Unknown error',
     })
-    metrics.addMetric('TokenRefreshFailures', MetricUnits.Count, 1)
+    metrics.addMetric('TokenRefreshFailures', MetricUnit.Count, 1)
     // Continue with existing token
   }
 }
@@ -410,7 +418,7 @@ async function publishToInstagram(
       throw new Error('Media URL is required for Instagram posts')
     }
     
-    const caption = formatCaption(content.caption, content.hashtags)
+    const caption = formatCaption(content.caption, content.hashtags || [])
     
     // Step 1: Create media container
     logger.info('Creating Instagram media container', { accountId })
@@ -459,7 +467,7 @@ async function publishToInstagram(
       }
     )
     
-    metrics.addMetric('InstagramPostsPublished', MetricUnits.Count, 1)
+    metrics.addMetric('InstagramPostsPublished', MetricUnit.Count, 1)
     
     return {
       id: mediaId,
@@ -474,7 +482,7 @@ async function publishToInstagram(
       
       // Handle rate limiting
       if (axiosError.response?.status === 429) {
-        metrics.addMetric('RateLimitErrors', MetricUnits.Count, 1)
+        metrics.addMetric('RateLimitErrors', MetricUnit.Count, 1)
         throw new Error('Instagram API rate limit exceeded')
       }
       

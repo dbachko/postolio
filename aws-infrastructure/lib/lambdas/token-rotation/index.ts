@@ -36,7 +36,7 @@ interface RefreshResult {
 export const handler = async (event: ScheduledEvent, context: Context): Promise<void> => {
   console.log('Token Rotation Lambda invoked', {
     time: event.time,
-    requestId: context.requestId,
+    requestId: context.awsRequestId,
   })
 
   try {

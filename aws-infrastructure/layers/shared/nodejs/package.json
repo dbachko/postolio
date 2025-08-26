@@ -1,0 +1,14 @@
+{
+  "name": "postolio-shared-layer",
+  "version": "1.0.0",
+  "description": "Shared dependencies for Postolio Lambda functions",
+  "private": true,
+  "dependencies": {
+    "@aws-lambda-powertools/logger": "^1.17.0",
+    "@aws-lambda-powertools/metrics": "^1.17.0",
+    "@aws-lambda-powertools/tracer": "^1.17.0",
+    "axios": "^1.6.5",
+    "axios-retry": "^4.0.0",
+    "zod": "^3.22.4"
+  }
+}

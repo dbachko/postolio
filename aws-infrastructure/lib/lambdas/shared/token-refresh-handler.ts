@@ -1,22 +1,9 @@
-/**
- * Shared Token Refresh Handler
- * Securely handles token refresh and storage across all publisher services
- */
-
-import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import { KMSClient, EncryptCommand } from '@aws-sdk/client-kms'
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
+import { KMSClient, DecryptCommand, EncryptCommand } from '@aws-sdk/client-kms'
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge'
-import { Logger } from '@aws-lambda-powertools/logger'
+import axios from 'axios'
 
-const logger = new Logger({ serviceName: 'token-refresh' })
-
-interface RefreshedToken {
-  accessToken: string
-  refreshToken?: string
-  expiresIn: number
-}
-
-interface TokenRefreshOptions {
+export interface TokenRefreshHandlerOptions {
   docClient: DynamoDBDocumentClient
   kmsClient: KMSClient
   eventBridgeClient: EventBridgeClient
@@ -25,89 +12,145 @@ interface TokenRefreshOptions {
   eventBusName: string
 }
 
+export interface Token {
+  accessToken: string
+  refreshToken?: string
+  expiresAt: number
+  needsRefresh: boolean
+}
+
 export class TokenRefreshHandler {
-  constructor(private options: TokenRefreshOptions) {}
+  constructor(private options: TokenRefreshHandlerOptions) {}
 
-  /**
-   * Securely store refreshed token in DynamoDB
-   * NEVER logs token values
-   */
-  async storeRefreshedToken(
-    userId: string,
-    brandId: string,
-    platform: string,
-    token: RefreshedToken
-  ): Promise<void> {
+  async getToken(userId: string, brandId: string, platform: string): Promise<Token | null> {
     try {
-      // Log the action but NEVER the token values
-      logger.info('Storing refreshed token', {
-        userId,
-        brandId,
-        platform,
-        // Only log non-sensitive metadata
-        expiresIn: token.expiresIn,
-        hasRefreshToken: !!token.refreshToken,
-      })
-
-      // Encrypt tokens
-      const encryptedAccessToken = await this.encryptData(token.accessToken)
-      const encryptedRefreshToken = token.refreshToken
-        ? await this.encryptData(token.refreshToken)
-        : undefined
-
-      // Calculate expiry
-      const expiresAt = Date.now() + (token.expiresIn * 1000)
-
-      // Update token in database
-      await this.options.docClient.send(new UpdateCommand({
+      const result = await this.options.docClient.send(new GetCommand({
         TableName: this.options.tokenTableName,
         Key: {
           pk: `${userId}#${platform}`,
           sk: brandId,
         },
-        UpdateExpression: 'SET encryptedAccessToken = :accessToken, expiresAt = :expiresAt, lastRefreshed = :lastRefreshed'
-          + (encryptedRefreshToken ? ', encryptedRefreshToken = :refreshToken' : ''),
-        ExpressionAttributeValues: {
-          ':accessToken': encryptedAccessToken,
-          ':expiresAt': expiresAt,
-          ':lastRefreshed': new Date().toISOString(),
-          ...(encryptedRefreshToken && { ':refreshToken': encryptedRefreshToken }),
-        },
       }))
 
-      // Send success event
-      await this.sendEvent('token.refreshed', {
-        userId,
-        brandId,
-        platform,
-        expiresAt,
-        timestamp: new Date().toISOString(),
-      })
+      if (!result.Item) {
+        return null
+      }
 
-      logger.info('Token refreshed successfully', {
-        userId,
-        brandId,
-        platform,
-        expiresAt: new Date(expiresAt).toISOString(),
-      })
+      // Decrypt tokens
+      const accessToken = await this.decryptData(result.Item.encryptedAccessToken)
+      const refreshToken = result.Item.encryptedRefreshToken 
+        ? await this.decryptData(result.Item.encryptedRefreshToken)
+        : undefined
+
+      // Check if token needs refresh (within 1 hour of expiry)
+      const needsRefresh = result.Item.expiresAt < (Date.now() + 3600000)
+
+      return {
+        accessToken,
+        refreshToken,
+        expiresAt: result.Item.expiresAt,
+        needsRefresh,
+      }
     } catch (error) {
-      logger.error('Failed to store refreshed token', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userId,
-        brandId,
+      console.error('Failed to get token', { userId, brandId, platform, error })
+      return null
+    }
+  }
+
+  async storeToken(
+    userId: string,
+    brandId: string,
+    platform: string,
+    token: {
+      accessToken: string
+      refreshToken?: string
+      expiresIn: number
+    }
+  ): Promise<void> {
+    const encryptedAccessToken = await this.encryptData(token.accessToken)
+    const encryptedRefreshToken = token.refreshToken 
+      ? await this.encryptData(token.refreshToken)
+      : undefined
+    
+    const expiresAt = Date.now() + (token.expiresIn * 1000)
+    const ttl = Math.floor(expiresAt / 1000) + 86400 // 1 day after expiry
+
+    await this.options.docClient.send(new PutCommand({
+      TableName: this.options.tokenTableName,
+      Item: {
+        pk: `${userId}#${platform}`,
+        sk: brandId,
         platform,
+        encryptedAccessToken,
+        encryptedRefreshToken,
+        expiresAt,
+        lastRefreshed: new Date().toISOString(),
+        ttl,
+      },
+    }))
+  }
+
+  async refreshToken(
+    userId: string,
+    brandId: string,
+    platform: string,
+    refreshFunction: (refreshToken: string) => Promise<any>
+  ): Promise<Token | null> {
+    const token = await this.getToken(userId, brandId, platform)
+    if (!token || !token.refreshToken) {
+      return null
+    }
+
+    try {
+      const newTokenData = await refreshFunction(token.refreshToken)
+      
+      await this.storeToken(userId, brandId, platform, {
+        accessToken: newTokenData.access_token,
+        refreshToken: newTokenData.refresh_token || token.refreshToken,
+        expiresIn: newTokenData.expires_in,
       })
 
-      // Send failure event
-      await this.sendEvent('token.refresh.failed', {
-        userId,
-        brandId,
-        platform,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString(),
-      })
+      // Emit token refreshed event
+      await this.options.eventBridgeClient.send(new PutEventsCommand({
+        Entries: [{
+          Source: 'postolio.token',
+          DetailType: 'token.refreshed',
+          Detail: JSON.stringify({
+            userId,
+            brandId,
+            platform,
+            refreshedAt: new Date().toISOString(),
+          }),
+          EventBusName: this.options.eventBusName,
+        }],
+      }))
 
-      throw error
+      return {
+        accessToken: newTokenData.access_token,
+        refreshToken: newTokenData.refresh_token || token.refreshToken,
+        expiresAt: Date.now() + (newTokenData.expires_in * 1000),
+        needsRefresh: false,
+      }
+    } catch (error) {
+      console.error('Token refresh failed', { userId, brandId, platform, error })
+      
+      // Emit token refresh failed event
+      await this.options.eventBridgeClient.send(new PutEventsCommand({
+        Entries: [{
+          Source: 'postolio.token',
+          DetailType: 'token.refresh.failed',
+          Detail: JSON.stringify({
+            userId,
+            brandId,
+            platform,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            failedAt: new Date().toISOString(),
+          }),
+          EventBusName: this.options.eventBusName,
+        }],
+      }))
+
+      return null
     }
   }
 
@@ -116,18 +159,13 @@ export class TokenRefreshHandler {
       KeyId: this.options.kmsKeyId,
       Plaintext: Buffer.from(data),
     }))
-
     return Buffer.from(result.CiphertextBlob!).toString('base64')
   }
 
-  private async sendEvent(detailType: string, detail: any): Promise<void> {
-    await this.options.eventBridgeClient.send(new PutEventsCommand({
-      Entries: [{
-        Source: 'postolio.token-manager',
-        DetailType: detailType,
-        Detail: JSON.stringify(detail),
-        EventBusName: this.options.eventBusName,
-      }],
+  private async decryptData(encryptedData: string): Promise<string> {
+    const result = await this.options.kmsClient.send(new DecryptCommand({
+      CiphertextBlob: Buffer.from(encryptedData, 'base64'),
     }))
+    return Buffer.from(result.Plaintext!).toString('utf-8')
   }
 }
