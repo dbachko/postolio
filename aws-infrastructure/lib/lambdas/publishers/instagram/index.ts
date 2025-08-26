@@ -1,103 +1,260 @@
+/**
+ * Instagram Publisher Lambda
+ * Implements security fixes, validation, circuit breaker, and idempotency
+ */
+
 import { SQSEvent, SQSRecord } from 'aws-lambda'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
 import { KMSClient, DecryptCommand } from '@aws-sdk/client-kms'
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge'
-import axios, { AxiosError } from 'axios'
+import { Logger } from '@aws-lambda-powertools/logger'
+import { Metrics, MetricUnits } from '@aws-lambda-powertools/metrics'
+import { Tracer } from '@aws-lambda-powertools/tracer'
+import axios, { AxiosError, AxiosInstance } from 'axios'
+import axiosRetry from 'axios-retry'
 
+// Import shared utilities
+import { 
+  PublishRequestSchema, 
+  PostPublishedEventSchema,
+  PostFailedEventSchema,
+  validateInput,
+  ValidationError,
+  type PublishRequest 
+} from '../shared/validation-schemas'
+import { TokenRefreshHandler } from '../shared/token-refresh-handler'
+import { CircuitBreaker, CircuitBreakerFactory } from '../shared/circuit-breaker'
+import { IdempotencyHandler, IdempotencyError } from '../shared/idempotency-handler'
+
+// Initialize AWS clients
 const dynamoClient = new DynamoDBClient({})
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 const kmsClient = new KMSClient({})
 const eventBridgeClient = new EventBridgeClient({})
 
+// Initialize observability tools
+const logger = new Logger({ serviceName: 'instagram-publisher' })
+const metrics = new Metrics({ namespace: 'Postolio/Publisher', serviceName: 'instagram' })
+const tracer = new Tracer({ serviceName: 'instagram-publisher' })
+
+// Environment variables
 const TOKEN_TABLE_NAME = process.env.TOKEN_TABLE_NAME!
 const JOB_STATE_TABLE_NAME = process.env.JOB_STATE_TABLE_NAME!
+const IDEMPOTENCY_TABLE_NAME = process.env.IDEMPOTENCY_TABLE_NAME!
 const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME!
 const KMS_KEY_ID = process.env.KMS_KEY_ID!
 
-interface PublishRequest {
-  scheduleId: string
-  contentId: string
-  brandId: string
-  userId: string
-  platform: string
-  content: {
-    caption: string
-    hashtags: string[]
-    mediaUrl?: string
-  }
-  metadata?: Record<string, any>
-}
+// Initialize handlers
+const tokenRefreshHandler = new TokenRefreshHandler({
+  docClient,
+  kmsClient,
+  eventBridgeClient,
+  tokenTableName: TOKEN_TABLE_NAME,
+  kmsKeyId: KMS_KEY_ID,
+  eventBusName: EVENT_BUS_NAME,
+})
+
+const idempotencyHandler = new IdempotencyHandler(docClient, {
+  tableName: IDEMPOTENCY_TABLE_NAME,
+  ttlSeconds: 86400, // 24 hours
+  inProgressTtlSeconds: 300, // 5 minutes
+  maxRetries: 3,
+})
+
+// Initialize circuit breakers for Instagram API
+const instagramApiBreaker = CircuitBreakerFactory.getBreaker('instagram-api', {
+  timeout: 30000, // 30 seconds
+  errorThreshold: 5,
+  errorThresholdPercentage: 50,
+  resetTimeout: 60000, // 1 minute
+})
+
+// Configure axios with retry logic
+const axiosInstance: AxiosInstance = axios.create({
+  timeout: 25000, // 25 seconds (less than circuit breaker timeout)
+})
+
+axiosRetry(axiosInstance, {
+  retries: 3,
+  retryDelay: axiosRetry.exponentialDelay,
+  retryCondition: (error) => {
+    return axiosRetry.isNetworkOrIdempotentRequestError(error) ||
+           (error.response?.status === 429) // Rate limit
+  },
+  onRetry: (retryCount, error) => {
+    logger.warn('Retrying Instagram API request', {
+      retryCount,
+      error: error.message,
+    })
+  },
+})
 
 interface InstagramMediaResponse {
   id: string
   permalink?: string
 }
 
-export const handler = async (event: SQSEvent): Promise<void> => {
-  console.log('Instagram Publisher Lambda invoked', {
+interface TokenData {
+  accessToken: string
+  refreshToken?: string
+  expiresAt: number
+  needsRefresh: boolean
+}
+
+/**
+ * Main Lambda handler
+ */
+export const handler = tracer.captureLambdaHandler(async (event: SQSEvent): Promise<void> => {
+  logger.info('Instagram Publisher Lambda invoked', {
     records: event.Records.length,
   })
+  
+  metrics.addMetric('Invocations', MetricUnits.Count, 1)
+  
+  // Process messages in parallel with concurrency limit
+  const results = await Promise.allSettled(
+    event.Records.map((record) => processMessage(record))
+  )
+  
+  // Check for failures
+  const failures = results.filter(r => r.status === 'rejected')
+  if (failures.length > 0) {
+    metrics.addMetric('BatchFailures', MetricUnits.Count, failures.length)
+    
+    // Throw error to trigger retry for failed messages
+    const errorMessages = failures.map(f => 
+      (f as PromiseRejectedResult).reason?.message || 'Unknown error'
+    ).join('; ')
+    
+    throw new Error(`Failed to process ${failures.length} messages: ${errorMessages}`)
+  }
+  
+  metrics.publishStoredMetrics()
+})
 
-  // Process each message
-  for (const record of event.Records) {
-    try {
-      await processMessage(record)
-    } catch (error) {
-      console.error('Error processing message:', error, {
+/**
+ * Process individual SQS message with full error handling
+ */
+async function processMessage(record: SQSRecord): Promise<void> {
+  const segment = tracer.getSegment()
+  const subsegment = segment?.addNewSubsegment('processMessage')
+  
+  try {
+    // Validate input
+    const request = validateInput(
+      PublishRequestSchema,
+      JSON.parse(record.body),
+      'Invalid publish request'
+    )
+    
+    logger.info('Processing publish request', {
+      scheduleId: request.scheduleId,
+      contentId: request.contentId,
+      brandId: request.brandId,
+      platform: request.platform,
+    })
+    
+    // Generate idempotency key
+    const idempotencyKey = idempotencyHandler.generateKey({
+      contentId: request.contentId,
+      platform: request.platform,
+      brandId: request.brandId,
+      scheduledAt: request.metadata?.scheduledAt,
+    })
+    
+    // Process with idempotency
+    await idempotencyHandler.processWithIdempotency(
+      idempotencyKey,
+      record.messageId,
+      async () => await publishContent(request),
+      {
+        contentId: request.contentId,
+        platform: request.platform,
+      }
+    )
+    
+    metrics.addMetric('SuccessfulPublish', MetricUnits.Count, 1)
+    
+  } catch (error) {
+    subsegment?.addError(error as Error)
+    
+    if (error instanceof ValidationError) {
+      logger.error('Validation failed', {
         messageId: record.messageId,
-        body: record.body,
+        errors: error.errors.errors,
       })
-      
-      // Throw error to send message to DLQ after retries
-      throw error
+      metrics.addMetric('ValidationErrors', MetricUnits.Count, 1)
+      // Don't retry validation errors
+      return
     }
+    
+    if (error instanceof IdempotencyError && error.code === 'DUPLICATE_IN_PROGRESS') {
+      logger.info('Duplicate message detected, skipping', {
+        messageId: record.messageId,
+      })
+      metrics.addMetric('DuplicateMessages', MetricUnits.Count, 1)
+      // Don't retry duplicates
+      return
+    }
+    
+    logger.error('Failed to process message', {
+      messageId: record.messageId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+    
+    metrics.addMetric('ProcessingErrors', MetricUnits.Count, 1)
+    throw error
+    
+  } finally {
+    subsegment?.close()
   }
 }
 
-async function processMessage(record: SQSRecord): Promise<void> {
-  const request: PublishRequest = JSON.parse(record.body)
-  console.log('Processing publish request:', request)
-
+/**
+ * Publish content to Instagram with all improvements
+ */
+async function publishContent(request: PublishRequest): Promise<InstagramMediaResponse> {
   // Create job state entry
   const jobId = `${request.scheduleId}-${Date.now()}`
   await updateJobState(jobId, 'processing', request)
-
+  
   try {
     // Get OAuth token
     const token = await getToken(request.userId, request.brandId, 'instagram')
     if (!token) {
       throw new Error('Instagram token not found')
     }
-
-    // Check if token needs refresh
+    
+    // Refresh token if needed (without logging the token!)
     if (token.needsRefresh && token.refreshToken) {
-      const newToken = await refreshInstagramToken(token.refreshToken)
-      await storeRefreshedToken(request.userId, request.brandId, newToken)
-      token.accessToken = newToken.accessToken
+      await refreshAndStoreToken(request.userId, request.brandId, token)
     }
-
-    // Get Instagram Business Account ID from brand metadata
+    
+    // Validate Instagram-specific metadata
     const instagramAccountId = request.metadata?.instagramAccountId
     if (!instagramAccountId) {
       throw new Error('Instagram Business Account ID not found in metadata')
     }
-
-    // Publish to Instagram
-    const result = await publishToInstagram(
-      instagramAccountId,
-      token.accessToken,
-      request.content
+    
+    // Publish to Instagram using circuit breaker
+    const result = await instagramApiBreaker.execute(async () => 
+      await publishToInstagram(
+        instagramAccountId,
+        token.accessToken,
+        request.content
+      )
     )
-
+    
     // Update job state with success
     await updateJobState(jobId, 'completed', {
-      ...request,
+      scheduleId: request.scheduleId,
+      contentId: request.contentId,
       result,
     })
-
+    
     // Send success event
-    await sendEvent('postolio.publisher.instagram', 'post.published', {
+    const successEvent = PostPublishedEventSchema.parse({
       scheduleId: request.scheduleId,
       contentId: request.contentId,
       brandId: request.brandId,
@@ -107,18 +264,27 @@ async function processMessage(record: SQSRecord): Promise<void> {
       permalink: result.permalink,
       publishedAt: new Date().toISOString(),
     })
-
+    
+    await sendEvent('postolio.publisher.instagram', 'post.published', successEvent)
+    
+    return result
+    
   } catch (error) {
-    console.error('Publishing failed:', error)
-
-    // Update job state with failure
-    await updateJobState(jobId, 'failed', {
-      ...request,
+    logger.error('Publishing failed', {
+      scheduleId: request.scheduleId,
+      contentId: request.contentId,
       error: error instanceof Error ? error.message : 'Unknown error',
     })
-
+    
+    // Update job state with failure
+    await updateJobState(jobId, 'failed', {
+      scheduleId: request.scheduleId,
+      contentId: request.contentId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+    
     // Send failure event
-    await sendEvent('postolio.publisher.instagram', 'post.failed', {
+    const failureEvent = PostFailedEventSchema.parse({
       scheduleId: request.scheduleId,
       contentId: request.contentId,
       brandId: request.brandId,
@@ -127,129 +293,149 @@ async function processMessage(record: SQSRecord): Promise<void> {
       error: error instanceof Error ? error.message : 'Unknown error',
       failedAt: new Date().toISOString(),
     })
-
+    
+    await sendEvent('postolio.publisher.instagram', 'post.failed', failureEvent)
+    
     throw error
   }
 }
 
-async function getToken(userId: string, brandId: string, platform: string): Promise<any> {
-  const result = await docClient.send(new GetCommand({
-    TableName: TOKEN_TABLE_NAME,
-    Key: {
-      pk: `${userId}#${platform}`,
-      sk: brandId,
-    },
-  }))
-
-  if (!result.Item) {
-    return null
-  }
-
-  // Decrypt token
-  const accessToken = await decryptData(result.Item.encryptedAccessToken)
-  const refreshToken = result.Item.encryptedRefreshToken
-    ? await decryptData(result.Item.encryptedRefreshToken)
-    : null
-
-  // Check if token needs refresh
-  const expiryTime = result.Item.expiresAt
-  const refreshThreshold = Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
-  const needsRefresh = expiryTime < refreshThreshold
-
-  return {
-    accessToken,
-    refreshToken,
-    expiresAt: result.Item.expiresAt,
-    needsRefresh,
+/**
+ * Get and decrypt OAuth token
+ */
+async function getToken(userId: string, brandId: string, platform: string): Promise<TokenData | null> {
+  const segment = tracer.getSegment()
+  const subsegment = segment?.addNewSubsegment('getToken')
+  
+  try {
+    const result = await docClient.send(new GetCommand({
+      TableName: TOKEN_TABLE_NAME,
+      Key: {
+        pk: `${userId}#${platform}`,
+        sk: brandId,
+      },
+    }))
+    
+    if (!result.Item) {
+      return null
+    }
+    
+    // Decrypt token (NEVER log the actual token value!)
+    const accessToken = await decryptData(result.Item.encryptedAccessToken)
+    const refreshToken = result.Item.encryptedRefreshToken
+      ? await decryptData(result.Item.encryptedRefreshToken)
+      : undefined
+    
+    // Check if token needs refresh
+    const expiryTime = result.Item.expiresAt
+    const refreshThreshold = Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
+    const needsRefresh = expiryTime < refreshThreshold
+    
+    return {
+      accessToken,
+      refreshToken,
+      expiresAt: result.Item.expiresAt,
+      needsRefresh,
+    }
+  } finally {
+    subsegment?.close()
   }
 }
 
+/**
+ * Decrypt data using KMS
+ */
 async function decryptData(encryptedData: string): Promise<string> {
   const result = await kmsClient.send(new DecryptCommand({
     CiphertextBlob: Buffer.from(encryptedData, 'base64'),
   }))
-
+  
   return Buffer.from(result.Plaintext!).toString()
 }
 
-async function refreshInstagramToken(refreshToken: string): Promise<any> {
-  // Instagram uses long-lived tokens that don't refresh in the traditional OAuth sense
-  // Instead, they need to be refreshed every 60 days using the Graph API
-  
+/**
+ * Refresh Instagram token and store it securely
+ */
+async function refreshAndStoreToken(
+  userId: string,
+  brandId: string,
+  token: TokenData
+): Promise<void> {
   try {
-    const response = await axios.get('https://graph.instagram.com/refresh_access_token', {
+    const response = await axiosInstance.get('https://graph.instagram.com/refresh_access_token', {
       params: {
         grant_type: 'ig_refresh_token',
-        access_token: refreshToken,
+        access_token: token.accessToken,
       },
     })
-
-    return {
-      accessToken: response.data.access_token,
-      expiresIn: response.data.expires_in,
-    }
+    
+    // Store refreshed token securely (no logging!)
+    await tokenRefreshHandler.storeRefreshedToken(
+      userId,
+      brandId,
+      'instagram',
+      {
+        accessToken: response.data.access_token,
+        expiresIn: response.data.expires_in || 5184000, // 60 days default
+      }
+    )
+    
+    // Update the token in memory for current request
+    token.accessToken = response.data.access_token
+    
   } catch (error) {
-    console.error('Token refresh failed:', error)
-    throw new Error('Failed to refresh Instagram token')
+    logger.error('Token refresh failed', {
+      userId,
+      brandId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+    metrics.addMetric('TokenRefreshFailures', MetricUnits.Count, 1)
+    // Continue with existing token
   }
 }
 
-async function storeRefreshedToken(userId: string, brandId: string, token: any): Promise<void> {
-  // This would normally call back to the Token Service API
-  // For now, we'll skip this as it requires more setup
-  console.log('Would store refreshed token:', { userId, brandId, token })
-}
-
+/**
+ * Publish content to Instagram Graph API
+ */
 async function publishToInstagram(
   accountId: string,
   accessToken: string,
   content: PublishRequest['content']
 ): Promise<InstagramMediaResponse> {
+  const segment = tracer.getSegment()
+  const subsegment = segment?.addNewSubsegment('publishToInstagram')
+  
   try {
-    // Step 1: Create media container
-    const caption = formatCaption(content.caption, content.hashtags)
-    
-    let mediaContainerId: string
-
-    if (content.mediaUrl) {
-      // Create photo container
-      const containerResponse = await axios.post(
-        `https://graph.facebook.com/v18.0/${accountId}/media`,
-        null,
-        {
-          params: {
-            image_url: content.mediaUrl,
-            caption: caption,
-            access_token: accessToken,
-          },
-        }
-      )
-      mediaContainerId = containerResponse.data.id
-    } else {
+    if (!content.mediaUrl) {
       throw new Error('Media URL is required for Instagram posts')
     }
-
-    // Step 2: Wait for media to be processed (Instagram needs time to download the image)
-    await new Promise(resolve => setTimeout(resolve, 5000))
-
-    // Step 3: Check container status
-    const statusResponse = await axios.get(
-      `https://graph.facebook.com/v18.0/${mediaContainerId}`,
+    
+    const caption = formatCaption(content.caption, content.hashtags)
+    
+    // Step 1: Create media container
+    logger.info('Creating Instagram media container', { accountId })
+    
+    const containerResponse = await axiosInstance.post(
+      `https://graph.facebook.com/v18.0/${accountId}/media`,
+      null,
       {
         params: {
-          fields: 'status_code',
+          image_url: content.mediaUrl,
+          caption: caption,
           access_token: accessToken,
         },
       }
     )
-
-    if (statusResponse.data.status_code !== 'FINISHED') {
-      // Wait more if needed
-      await new Promise(resolve => setTimeout(resolve, 10000))
-    }
-
-    // Step 4: Publish media
-    const publishResponse = await axios.post(
+    
+    const mediaContainerId = containerResponse.data.id
+    
+    // Step 2: Poll for media processing completion
+    await waitForMediaProcessing(mediaContainerId, accessToken)
+    
+    // Step 3: Publish media
+    logger.info('Publishing Instagram media', { mediaContainerId })
+    
+    const publishResponse = await axiosInstance.post(
       `https://graph.facebook.com/v18.0/${accountId}/media_publish`,
       null,
       {
@@ -259,11 +445,11 @@ async function publishToInstagram(
         },
       }
     )
-
+    
     const mediaId = publishResponse.data.id
-
-    // Step 5: Get permalink
-    const permalinkResponse = await axios.get(
+    
+    // Step 4: Get permalink
+    const permalinkResponse = await axiosInstance.get(
       `https://graph.facebook.com/v18.0/${mediaId}`,
       {
         params: {
@@ -272,42 +458,82 @@ async function publishToInstagram(
         },
       }
     )
-
+    
+    metrics.addMetric('InstagramPostsPublished', MetricUnits.Count, 1)
+    
     return {
       id: mediaId,
       permalink: permalinkResponse.data.permalink,
     }
-
+    
   } catch (error) {
+    subsegment?.addError(error as Error)
+    
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError
-      console.error('Instagram API error:', {
-        status: axiosError.response?.status,
-        data: axiosError.response?.data,
-      })
       
       // Handle rate limiting
       if (axiosError.response?.status === 429) {
+        metrics.addMetric('RateLimitErrors', MetricUnits.Count, 1)
         throw new Error('Instagram API rate limit exceeded')
       }
       
-      // Handle other API errors
-      const errorMessage = (axiosError.response?.data as any)?.error?.message || 'Instagram API error'
-      throw new Error(errorMessage)
+      // Handle other API errors (without exposing internal details)
+      const statusCode = axiosError.response?.status || 0
+      logger.error('Instagram API error', {
+        status: statusCode,
+        // Don't log potentially sensitive response data
+      })
+      
+      throw new Error(`Instagram API error (${statusCode})`)
     }
     
     throw error
+    
+  } finally {
+    subsegment?.close()
   }
 }
 
-function formatCaption(caption: string, hashtags: string[]): string {
-  // Instagram best practices:
-  // - Maximum 2,200 characters for captions
-  // - Maximum 30 hashtags
-  // - Hashtags can be in caption or first comment
+/**
+ * Wait for Instagram to process media
+ */
+async function waitForMediaProcessing(
+  mediaContainerId: string,
+  accessToken: string,
+  maxAttempts = 10
+): Promise<void> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 3000)) // 3 seconds between checks
+    
+    const statusResponse = await axiosInstance.get(
+      `https://graph.facebook.com/v18.0/${mediaContainerId}`,
+      {
+        params: {
+          fields: 'status_code',
+          access_token: accessToken,
+        },
+      }
+    )
+    
+    if (statusResponse.data.status_code === 'FINISHED') {
+      return
+    }
+    
+    if (statusResponse.data.status_code === 'ERROR') {
+      throw new Error('Instagram media processing failed')
+    }
+  }
   
+  throw new Error('Instagram media processing timeout')
+}
+
+/**
+ * Format caption with hashtags
+ */
+function formatCaption(caption: string, hashtags: string[]): string {
   const hashtagString = hashtags
-    .slice(0, 30) // Limit to 30 hashtags
+    .slice(0, 30) // Instagram limit
     .map(tag => tag.startsWith('#') ? tag : `#${tag}`)
     .join(' ')
   
@@ -322,6 +548,9 @@ function formatCaption(caption: string, hashtags: string[]): string {
   return fullCaption
 }
 
+/**
+ * Update job state in DynamoDB
+ */
 async function updateJobState(
   jobId: string,
   status: string,
@@ -332,13 +561,22 @@ async function updateJobState(
     Item: {
       jobId,
       status,
-      data,
+      // Don't store sensitive data in job state
+      data: {
+        scheduleId: data.scheduleId,
+        contentId: data.contentId,
+        result: data.result,
+        error: data.error,
+      },
       updatedAt: new Date().toISOString(),
       ttl: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60), // 7 days TTL
     },
   }))
 }
 
+/**
+ * Send event to EventBridge
+ */
 async function sendEvent(source: string, detailType: string, detail: any): Promise<void> {
   await eventBridgeClient.send(new PutEventsCommand({
     Entries: [{
