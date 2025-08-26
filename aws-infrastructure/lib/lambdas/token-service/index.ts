@@ -31,11 +31,32 @@ interface StoreTokenRequest {
   metadata?: Record<string, any>
 }
 
+// Helper function to filter sensitive headers
+function filterSensitiveHeaders(headers: { [key: string]: string | undefined }): { [key: string]: string | undefined } {
+  const SENSITIVE_HEADER_NAMES = [
+    'authorization',
+    'cookie',
+    'set-cookie',
+    'x-api-key',
+    'x-amz-security-token',
+    'proxy-authorization',
+    'x-auth-token',
+    'x-access-token'
+  ];
+  const filtered: { [key: string]: string | undefined } = {};
+  for (const key in headers) {
+    if (!SENSITIVE_HEADER_NAMES.includes(key.toLowerCase())) {
+      filtered[key] = headers[key];
+    }
+  }
+  return filtered;
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Token Service Lambda invoked', { 
     method: event.httpMethod,
     path: event.path,
-    headers: event.headers 
+    headers: filterSensitiveHeaders(event.headers)
   })
 
   try {

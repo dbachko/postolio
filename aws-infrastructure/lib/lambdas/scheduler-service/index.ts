@@ -87,11 +87,11 @@ export const handler = async (event: EventBridgeEvent<string, any>, context: Con
 async function createSchedule(schedule: Schedule): Promise<any> {
   console.log('Creating schedule:', schedule)
   
-  // Generate schedule ID if not provided
-  const scheduleId = schedule.scheduleId || generateScheduleId(schedule)
-  
   // Calculate shard key for distribution
   const shardKey = getShardKey(schedule.userId)
+  
+  // Generate schedule ID with embedded shard key for efficient lookups
+  const scheduleId = schedule.scheduleId || generateScheduleIdWithShard(schedule.userId)
   
   // Store in DynamoDB
   const item = {
@@ -361,10 +361,20 @@ async function executeSchedule(scheduleId: string): Promise<any> {
 
 // Helper functions
 
+// Legacy function for backward compatibility
 function generateScheduleId(schedule: Partial<Schedule>): string {
   const hash = createHash('sha256')
   hash.update(`${schedule.contentId}-${schedule.scheduledAt}-${Date.now()}`)
   return hash.digest('hex').substring(0, 16)
+}
+
+// New function that embeds shard key for efficient lookups
+function generateScheduleIdWithShard(userId: string): string {
+  const shardKey = getShardKey(userId)
+  const hash = createHash('sha256')
+  hash.update(`${userId}-${Date.now()}-${Math.random()}`)
+  // Include shard key in the schedule ID for efficient lookups
+  return `${shardKey}-${hash.digest('hex').substring(0, 15)}`
 }
 
 function getShardKey(userId: string): number {
@@ -372,21 +382,68 @@ function getShardKey(userId: string): number {
   return hash.readUInt32BE(0) % 10 // 10 shards
 }
 
-async function getScheduleById(scheduleId: string): Promise<any> {
-  // Query all shards (in production, store shard key with schedule ID)
-  for (let shard = 0; shard < 10; shard++) {
+function extractShardKeyFromScheduleId(scheduleId: string): number | null {
+  const parts = scheduleId.split('-')
+  if (parts.length >= 2) {
+    const shardKey = parseInt(parts[0], 10)
+    if (!isNaN(shardKey) && shardKey >= 0 && shardKey < 10) {
+      return shardKey
+    }
+  }
+  return null
+}
+
+async function getScheduleById(scheduleId: string, userId?: string): Promise<any> {
+  // Try to extract shard key from schedule ID first (for new schedules)
+  const embeddedShardKey = extractShardKeyFromScheduleId(scheduleId)
+  
+  if (embeddedShardKey !== null) {
+    // Efficient single-shard query for new schedules
     const result = await docClient.send(new QueryCommand({
       TableName: SCHEDULE_TABLE_NAME,
-      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
+      KeyConditionExpression: 'pk = :pk AND contains(sk, :scheduleId)',
       ExpressionAttributeValues: {
-        ':pk': `SHARD#${shard}`,
-        ':skPrefix': scheduleId,
+        ':pk': `SHARD#${embeddedShardKey}`,
+        ':scheduleId': scheduleId,
       },
       Limit: 1,
     }))
     
     if (result.Items && result.Items.length > 0) {
       return result.Items[0]
+    }
+  } else if (userId) {
+    // If userId is provided, compute shard key for legacy schedules
+    const shardKey = getShardKey(userId)
+    const result = await docClient.send(new QueryCommand({
+      TableName: SCHEDULE_TABLE_NAME,
+      KeyConditionExpression: 'pk = :pk AND contains(sk, :scheduleId)',
+      ExpressionAttributeValues: {
+        ':pk': `SHARD#${shardKey}`,
+        ':scheduleId': scheduleId,
+      },
+      Limit: 1,
+    }))
+    
+    if (result.Items && result.Items.length > 0) {
+      return result.Items[0]
+    }
+  } else {
+    // Fallback: query all shards for legacy schedules without userId
+    for (let shard = 0; shard < 10; shard++) {
+      const result = await docClient.send(new QueryCommand({
+        TableName: SCHEDULE_TABLE_NAME,
+        KeyConditionExpression: 'pk = :pk AND contains(sk, :scheduleId)',
+        ExpressionAttributeValues: {
+          ':pk': `SHARD#${shard}`,
+          ':scheduleId': scheduleId,
+        },
+        Limit: 1,
+      }))
+      
+      if (result.Items && result.Items.length > 0) {
+        return result.Items[0]
+      }
     }
   }
   

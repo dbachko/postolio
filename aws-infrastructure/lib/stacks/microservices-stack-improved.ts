@@ -261,7 +261,8 @@ export class ImprovedMicroservicesStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       layers: [sharedDependenciesLayer],
       logRetention: logs.RetentionDays.ONE_WEEK,
-      reservedConcurrentExecutions: 10, // Prevent runaway scaling
+      reservedConcurrentExecutions: 100, // Increased to handle higher load for 1M+ posts/month
+      provisionedConcurrentExecutions: 20, // Ensure baseline of warm instances for reduced cold starts
     })
 
     // Grant permissions
