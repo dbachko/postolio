@@ -69,10 +69,16 @@ const postolioStack = new PostolioStack(app, `Postolio-${environment}`, {
 // 3. Establish explicit dependency - Postolio depends on ContentScheduler for API URL
 postolioStack.addDependency(contentSchedulerStack);
 
-// Apply CDK Nag security checks only for production
-if (environment === 'prod') {
-  cdk.Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));
-}
+// Apply CDK Nag security checks to all environments
+// This ensures security best practices are followed during development
+cdk.Aspects.of(app).add(new AwsSolutionsChecks({ 
+  verbose: true,
+  reports: true,
+  logIgnores: false
+}));
+
+// Output CDK Nag compliance status
+console.log(`CDK Nag security checks enabled for ${environment} environment`);
 
 // Add comprehensive outputs for both stacks
 new cdk.CfnOutput(contentSchedulerStack, 'CrossStackReference', {

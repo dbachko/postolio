@@ -323,6 +323,36 @@ class InstagramService {
   }
 
   /**
+   * Get comments for a specific media post
+   */
+  async getPostComments(brand: BrandData, mediaId: string, limit: number = 25): Promise<{ data: any[], total: number }> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not connected for this brand')
+    }
+
+    try {
+      await this.checkRateLimit(brand.instagramAccountId!)
+
+      // First, get the total count
+      const countUrl = `https://graph.facebook.com/v23.0/${mediaId}?fields=comments_count&access_token=${brand.instagramAccessToken}`
+      const countResponse = await axios.get(countUrl)
+      const total = countResponse.data.comments_count || 0
+
+      // Then get the actual comments
+      const url = `https://graph.facebook.com/v23.0/${mediaId}/comments?fields=id,text,username,timestamp,like_count&limit=${limit}&access_token=${brand.instagramAccessToken}`
+      const response = await axios.get(url)
+
+      return {
+        data: response.data.data || [],
+        total
+      }
+    } catch (error) {
+      console.error('Failed to fetch post comments:', error)
+      throw new Error(`Failed to fetch post comments: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
    * Get account insights with caching
    */
   async getAccountInsights(brand: BrandData, timeRange: '7d' | '30d' | '90d' = '7d'): Promise<AnalyticsOverview> {

@@ -42,7 +42,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       if (!request.user || !request.user.id || !request.user.email) {
         throw new Error('Invalid user token payload')
       }
-    } catch (error) {
+    } catch {
       // Send 401 response - Fastify will stop the request chain
       return reply.code(401).send({ error: 'Authentication required' })
     }

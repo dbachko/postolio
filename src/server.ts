@@ -46,6 +46,8 @@ import { getRetentionManager } from './services/retention-manager.js'
 import Redis from 'ioredis'
 import { StatusBroadcaster } from './services/status-broadcaster.js'
 import { schedulerAdapter } from './services/scheduler-adapter.js'
+import { applyRateLimiting } from './middleware/rate-limit.js'
+import { getRedisClient } from './services/redis.js'
 
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
@@ -133,6 +135,15 @@ export function buildFastify(): FastifyInstance {
   app.register(authPlugin)
   // app.register(csrfPlugin) // CSRF protection middleware (temporarily disabled for Fastify 5.x compatibility)
   app.register(websocketPlugin)
+
+  // Apply rate limiting middleware
+  const redisClient = getRedisClient()
+  if (redisClient) {
+    applyRateLimiting(app, redisClient)
+    console.log('Rate limiting enabled with Redis backend')
+  } else {
+    console.warn('Rate limiting disabled - Redis not available')
+  }
 
   // Register routes WITH /api prefix - CloudFront forwards full paths to backend
   app.register(monitoringRoutes, { prefix: '/api/monitoring' })
