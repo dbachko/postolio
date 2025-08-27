@@ -116,6 +116,14 @@ export class ContentSchedulerStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
+    // GSI for direct schedule ID lookup (optimized for getScheduleById)
+    const scheduleIdIndexName = 'GSI-ScheduleId';
+    this.schedulesTable.addGlobalSecondaryIndex({
+      indexName: scheduleIdIndexName,
+      partitionKey: { name: 'scheduleId', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
     // Retry Queue Table with PITR
     const retryQueueTable = new dynamodb.Table(this, 'RetryQueueTable', {
       tableName: `${prefix}-retry-queue`,

@@ -272,7 +272,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       layers: [sharedLayer],
       logRetention: logs.RetentionDays.ONE_WEEK,
-      reservedConcurrentExecutions: 100,
+      reservedConcurrentExecutions: 500, // Increased from 100 to handle higher throughput
     })
     
     // Grant permissions
@@ -363,7 +363,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
         tracing: lambda.Tracing.ACTIVE,
         layers: [sharedLayer],
         logRetention: logs.RetentionDays.ONE_WEEK,
-        reservedConcurrentExecutions: 50,
+        reservedConcurrentExecutions: 200, // Increased from 50 to handle concurrent publishing
       })
       
       // Permissions
