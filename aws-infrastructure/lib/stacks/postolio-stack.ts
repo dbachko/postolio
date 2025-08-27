@@ -293,19 +293,14 @@ export class PostolioStack extends cdk.Stack {
       }
     }
 
-    // Create CloudFront OAI for secure S3 access
-    const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'OAI', {
-      comment: `OAI for ${environment} frontend bucket`,
+    // Create CloudFront OAC for secure S3 access (replacing deprecated OAI)
+    const frontendOAC = new cloudfront.S3OriginAccessControl(this, 'FrontendOAC', {
+      description: `OAC for ${environment} frontend bucket`,
+      signing: cloudfront.Signing.SIGV4_ALWAYS,
     })
 
-    // Update bucket policy to only allow CloudFront OAI access
-    frontendBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        actions: ['s3:GetObject'],
-        resources: [frontendBucket.arnForObjects('*')],
-        principals: [originAccessIdentity.grantPrincipal],
-      })
-    )
+    // Note: Bucket policy for OAC will be added after CloudFront distribution creation
+    // because we need the distribution ID
 
     // NOTE: Lambda@Edge removed due to production issues (403/502 errors)
     // Using CloudFront origin request rewriting instead for SPA routing
@@ -653,26 +648,20 @@ export class PostolioStack extends cdk.Stack {
       targetUtilizationPercent: 80,
     })
 
-    // Create OAI for images bucket
-    const imagesOAI = new cloudfront.OriginAccessIdentity(this, 'ImagesOAI', {
-      comment: `OAI for ${environment} images bucket`,
+    // Create OAC for images bucket (replacing deprecated OAI)
+    const imagesOAC = new cloudfront.S3OriginAccessControl(this, 'ImagesOAC', {
+      description: `OAC for ${environment} images bucket`,
+      signing: cloudfront.Signing.SIGV4_ALWAYS,
     })
 
-    // Grant OAI access to images bucket
-    imagesBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        actions: ['s3:GetObject'],
-        resources: [imagesBucket.arnForObjects('*')],
-        principals: [imagesOAI.grantPrincipal],
-      })
-    )
+    // Note: Bucket policy for OAC will be added after CloudFront distribution creation
 
     // CloudFront Distribution with multiple origins for same-domain architecture
     const distributionProps: any = {
       // Default behavior - serves frontend from S3
       defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessIdentity(frontendBucket, {
-          originAccessIdentity: originAccessIdentity,
+        origin: origins.S3BucketOrigin.withOriginAccessControl(frontendBucket, {
+          originAccessControl: frontendOAC,
         }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
@@ -694,8 +683,8 @@ export class PostolioStack extends cdk.Stack {
           compress: false,
         },
         '/images/*': {
-          origin: origins.S3BucketOrigin.withOriginAccessIdentity(imagesBucket, {
-            originAccessIdentity: imagesOAI,
+          origin: origins.S3BucketOrigin.withOriginAccessControl(imagesBucket, {
+            originAccessControl: imagesOAC,
           }),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
@@ -736,6 +725,39 @@ export class PostolioStack extends cdk.Stack {
     }
 
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', distributionProps)
+    
+    // Add bucket policies for OAC after distribution creation
+    // Frontend bucket policy for OAC
+    frontendBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudFrontServicePrincipalReadOnly',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+        actions: ['s3:GetObject'],
+        resources: [frontendBucket.arnForObjects('*')],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`,
+          },
+        },
+      })
+    )
+    
+    // Images bucket policy for OAC
+    imagesBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudFrontServicePrincipalReadOnly',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+        actions: ['s3:GetObject'],
+        resources: [imagesBucket.arnForObjects('*')],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`,
+          },
+        },
+      })
+    )
     
     // Add CloudFront distribution ID and ALB domain to ECS task environment
     // We need to update the container definition after it's created
@@ -897,6 +919,34 @@ export class PostolioStack extends cdk.Stack {
       }]
     )
 
+    // Suppress S3 frontend bucket OAC warning  
+    NagSuppressions.addResourceSuppressions(
+      frontendBucket,
+      [{
+        id: 'AwsSolutions-S5',
+        reason: 'Frontend bucket is secured with CloudFront OAC (Origin Access Control) which is the modern replacement for OAI. The bucket policy is added after distribution creation to avoid circular dependencies.'
+      }]
+    )
+
+    // Suppress TaskRole S3 wildcard permissions
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/TaskRole/DefaultPolicy/Resource`,
+      [{
+        id: 'AwsSolutions-IAM5',
+        reason: 'ECS task requires S3 operations for image storage and CloudFront/SES wildcard permissions',
+        appliesTo: [
+          'Action::s3:Abort*',
+          'Action::s3:DeleteObject*',
+          'Action::s3:GetBucket*',
+          'Action::s3:GetObject*',
+          'Action::s3:List*',
+          'Resource::<AIImagesBucket56BD98E8.Arn>/*',
+          'Resource::*', // For CloudFront invalidations and SES operations
+        ],
+      }]
+    )
+
     NagSuppressions.addResourceSuppressions(
       executionRole,
       [{
@@ -957,6 +1007,20 @@ export class PostolioStack extends cdk.Stack {
       [{
         id: 'AwsSolutions-RDS3',
         reason: 'Multi-AZ not required for development environment, enabled via configuration for production',
+      },
+      {
+        id: 'AwsSolutions-RDS10',
+        reason: 'Deletion protection disabled for development environment, enabled for production',
+      }]
+    )
+
+    // Suppress ECS Task Definition environment variables warning
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/PostolioService/TaskDef/Resource`,
+      [{
+        id: 'AwsSolutions-ECS2',
+        reason: 'Environment variables contain non-sensitive configuration. Sensitive data stored in Secrets Manager',
       }]
     )
 
@@ -988,7 +1052,7 @@ export class PostolioStack extends cdk.Stack {
       },
       {
         id: 'AwsSolutions-CFR5',
-        reason: 'S3 website origin requires HTTP protocol, secured by OAI',
+        reason: 'S3 website origin requires HTTP protocol, secured by OAC',
       }]
     )
 
