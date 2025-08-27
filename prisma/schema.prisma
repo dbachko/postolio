@@ -92,6 +92,10 @@ model Content {
   brand              Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   campaign           Campaign?     @relation(fields: [campaignId], references: [id])
 
+  @@index([brandId, status])
+  @@index([scheduledAt])
+  @@index([brandId, status, scheduledAt])
+  @@index([campaignId])
   @@map("content")
 }
 

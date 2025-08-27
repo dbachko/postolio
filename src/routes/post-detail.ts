@@ -2,6 +2,8 @@ import { FastifyPluginAsync } from 'fastify'
 import { getDatabaseClient } from '../config/database.js'
 import { authenticateRequest } from '../middleware/auth.js'
 import { instagramService } from '../services/instagram.js'
+import { PostDetailParamsSchema, PaginationSchema, validateRequest } from '../schemas/api-validation.js'
+import { successResponse, ErrorResponses, paginatedResponse } from '../utils/api-response.js'
 
 const prisma = getDatabaseClient()
 
@@ -15,7 +17,15 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
   
   // Get comprehensive post detail
   app.get<{ Params: PostDetailParams }>('/api/posts/:postId/detail', async (request, reply) => {
-    const { postId } = request.params
+    // Validate params
+    const paramsValidation = validateRequest(PostDetailParamsSchema, request.params)
+    if (!paramsValidation.success) {
+      return reply.code(400).send(
+        ErrorResponses.badRequest('Invalid request parameters', paramsValidation.errors)
+      )
+    }
+    
+    const { postId } = paramsValidation.data
     const userId = request.user!.id // User is guaranteed by middleware
 
     try {
@@ -29,10 +39,9 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       })
 
       if (!post) {
-        return reply.code(404).send({
-          success: false,
-          error: 'Post not found'
-        })
+        return reply.code(404).send(
+          ErrorResponses.notFound('Post')
+        )
       }
 
       // Check user has access to this post
@@ -44,28 +53,31 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       })
 
       if (!hasAccess) {
-        return reply.code(403).send({
-          success: false,
-          error: 'Access denied'
-        })
+        return reply.code(403).send(
+          ErrorResponses.forbidden('Access denied to this post')
+        )
       }
 
-      return reply.send({
-        success: true,
-        data: post
-      })
+      return reply.send(successResponse(post))
     } catch (error) {
       app.log.error('Error fetching post detail:', error)
-      return reply.code(500).send({
-        success: false,
-        error: 'Failed to fetch post detail'
-      })
+      return reply.code(500).send(
+        ErrorResponses.internalError('Failed to fetch post detail')
+      )
     }
   })
 
   // Get Instagram insights for a post
   app.get<{ Params: PostDetailParams }>('/api/posts/:postId/insights', async (request, reply) => {
-    const { postId } = request.params
+    // Validate params
+    const paramsValidation = validateRequest(PostDetailParamsSchema, request.params)
+    if (!paramsValidation.success) {
+      return reply.code(400).send(
+        ErrorResponses.badRequest('Invalid request parameters', paramsValidation.errors)
+      )
+    }
+    
+    const { postId } = paramsValidation.data
     const userId = request.user!.id // User is guaranteed by middleware
 
     try {
@@ -78,18 +90,16 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       })
 
       if (!post) {
-        return reply.code(404).send({
-          success: false,
-          error: 'Post not found'
-        })
+        return reply.code(404).send(
+          ErrorResponses.notFound('Post')
+        )
       }
 
       // Check user has access
       if (post.brand.userId !== userId) {
-        return reply.code(403).send({
-          success: false,
-          error: 'Access denied'
-        })
+        return reply.code(403).send(
+          ErrorResponses.forbidden('Access denied to this post')
+        )
       }
 
       // Initialize default metrics
@@ -127,27 +137,41 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      return reply.send({
-        success: true,
-        data: {
+      return reply.send(
+        successResponse({
           postId,
           metrics,
           lastUpdated: new Date().toISOString()
-        }
-      })
+        })
+      )
     } catch (error) {
       app.log.error('Error fetching post insights:', error)
-      return reply.code(500).send({
-        success: false,
-        error: 'Failed to fetch post insights'
-      })
+      return reply.code(500).send(
+        ErrorResponses.internalError('Failed to fetch post insights')
+      )
     }
   })
 
-  // Get comments for a post (mock for now, will integrate with Instagram later)
+  // Get comments for a post
   app.get<{ Params: PostDetailParams }>('/api/posts/:postId/comments', async (request, reply) => {
-    const { postId } = request.params
-    const { page = 1, limit = 20 } = request.query as { page?: number; limit?: number }
+    // Validate params
+    const paramsValidation = validateRequest(PostDetailParamsSchema, request.params)
+    if (!paramsValidation.success) {
+      return reply.code(400).send(
+        ErrorResponses.badRequest('Invalid request parameters', paramsValidation.errors)
+      )
+    }
+    
+    // Validate pagination
+    const paginationValidation = validateRequest(PaginationSchema, request.query)
+    if (!paginationValidation.success) {
+      return reply.code(400).send(
+        ErrorResponses.badRequest('Invalid pagination parameters', paginationValidation.errors)
+      )
+    }
+    
+    const { postId } = paramsValidation.data
+    const { page, limit } = paginationValidation.data
     const userId = request.user!.id // User is guaranteed by middleware
 
     try {
@@ -160,18 +184,16 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       })
 
       if (!post) {
-        return reply.code(404).send({
-          success: false,
-          error: 'Post not found'
-        })
+        return reply.code(404).send(
+          ErrorResponses.notFound('Post')
+        )
       }
 
       // Check user has access
       if (post.brand.userId !== userId) {
-        return reply.code(403).send({
-          success: false,
-          error: 'Access denied'
-        })
+        return reply.code(403).send(
+          ErrorResponses.forbidden('Access denied to this post')
+        )
       }
 
       // Initialize default values
@@ -208,10 +230,9 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       })
     } catch (error) {
       app.log.error('Error fetching post comments:', error)
-      return reply.code(500).send({
-        success: false,
-        error: 'Failed to fetch post comments'
-      })
+      return reply.code(500).send(
+        ErrorResponses.internalError('Failed to fetch post comments')
+      )
     }
   })
 }

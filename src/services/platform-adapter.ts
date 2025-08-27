@@ -148,20 +148,7 @@ export class InstagramAdapter implements PlatformAdapter {
   }
   
   async publish(content: PlatformContent, credentials: PlatformCredentials): Promise<PublishResult> {
-    // Feature flag for gradual rollout
-    const useRealAPI = process.env.USE_REAL_INSTAGRAM_API === 'true' || process.env.NODE_ENV === 'production'
-    
-    if (!useRealAPI) {
-      // Mock implementation for development
-      return {
-        platform: 'instagram',
-        postId: `ig_mock_${Date.now()}`,
-        permalink: `https://instagram.com/p/mock_${Date.now()}`,
-        publishedAt: new Date().toISOString(),
-      }
-    }
-    
-    // Real Instagram Graph API Implementation
+    // Instagram Graph API Implementation
     try {
       const instagramBusinessAccountId = credentials.metadata?.instagramBusinessAccountId
       if (!instagramBusinessAccountId) {
@@ -292,20 +279,7 @@ export class LinkedInAdapter implements PlatformAdapter {
   }
   
   async publish(content: PlatformContent, credentials: PlatformCredentials): Promise<PublishResult> {
-    // Feature flag for gradual rollout
-    const useRealAPI = process.env.USE_REAL_LINKEDIN_API === 'true' || process.env.NODE_ENV === 'production'
-    
-    if (!useRealAPI) {
-      // Mock implementation for development
-      return {
-        platform: 'linkedin',
-        postId: `li_mock_${Date.now()}`,
-        permalink: `https://linkedin.com/feed/update/mock_${Date.now()}`,
-        publishedAt: new Date().toISOString(),
-      }
-    }
-    
-    // Real LinkedIn API Implementation
+    // LinkedIn API Implementation
     try {
       const personUrn = credentials.metadata?.personUrn || credentials.metadata?.userId
       if (!personUrn) {
@@ -435,20 +409,7 @@ export class FacebookAdapter implements PlatformAdapter {
   }
   
   async publish(content: PlatformContent, credentials: PlatformCredentials): Promise<PublishResult> {
-    // Feature flag for gradual rollout
-    const useRealAPI = process.env.USE_REAL_FACEBOOK_API === 'true' || process.env.NODE_ENV === 'production'
-    
-    if (!useRealAPI) {
-      // Mock implementation for development
-      return {
-        platform: 'facebook',
-        postId: `fb_mock_${Date.now()}`,
-        permalink: `https://facebook.com/mock_${Date.now()}`,
-        publishedAt: new Date().toISOString(),
-      }
-    }
-    
-    // Real Facebook Graph API Implementation
+    // Facebook Graph API Implementation
     try {
       const pageId = credentials.metadata?.pageId
       if (!pageId) {
@@ -602,41 +563,12 @@ export class TikTokAdapter implements PlatformAdapter {
     }
   }
   
-  async publish(content: PlatformContent, credentials: PlatformCredentials): Promise<PublishResult> {
-    // TikTok API is in beta - return appropriate response
-    const isBetaEnabled = process.env.ENABLE_TIKTOK_BETA === 'true'
-    
-    if (!isBetaEnabled) {
-      // Return beta status response instead of throwing error
-      return {
-        platform: 'tiktok',
-        postId: `tiktok_beta_${Date.now()}`,
-        publishedAt: new Date().toISOString(),
-        metadata: {
-          status: 'beta',
-          message: 'TikTok publishing is in beta. Enable with ENABLE_TIKTOK_BETA=true'
-        }
-      }
-    }
-    
-    // Beta implementation - mock for now
-    // Real TikTok API requires video content and complex OAuth flow
-    return {
-      platform: 'tiktok',
-      postId: `tiktok_${Date.now()}`,
-      permalink: `https://www.tiktok.com/@mockuser/video/${Date.now()}`,
-      publishedAt: new Date().toISOString(),
-      metrics: {
-        impressions: Math.floor(Math.random() * 10000),
-        reach: Math.floor(Math.random() * 5000),
-        engagement: Math.floor(Math.random() * 500),
-      },
-      metadata: {
-        status: 'beta_mock',
-        videoRequired: true,
-        note: 'TikTok requires video content. Image posts are not supported.'
-      }
-    }
+  async publish(_content: PlatformContent, _credentials: PlatformCredentials): Promise<PublishResult> {
+    // TikTok API is not yet implemented
+    throw new Error(
+      'TikTok publishing is not yet supported. ' +
+      'TikTok requires video content and OAuth 2.0 integration which is currently under development.'
+    )
   }
   
   getRateLimits(): RateLimits {
@@ -685,7 +617,7 @@ export class PlatformAdapterFactory {
       try {
         const adapter = this.getAdapter(platform)
         results.set(platform, adapter.validateContent(content))
-      } catch (error) {
+      } catch (_error) {
         results.set(platform, {
           valid: false,
           errors: [`Platform ${platform} is not supported`],
@@ -701,7 +633,7 @@ export class PlatformAdapterFactory {
  * Platform Service for Fastify integration
  */
 export class PlatformService {
-  constructor(private fastify: FastifyInstance) {}
+  constructor(private _fastify: FastifyInstance) {}
   
   /**
    * Publish content to multiple platforms
