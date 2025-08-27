@@ -617,7 +617,7 @@ export class PlatformAdapterFactory {
       try {
         const adapter = this.getAdapter(platform)
         results.set(platform, adapter.validateContent(content))
-      } catch (_error) {
+      } catch {
         results.set(platform, {
           valid: false,
           errors: [`Platform ${platform} is not supported`],

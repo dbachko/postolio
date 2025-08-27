@@ -60,7 +60,7 @@ export const RateLimitTiers = {
   PASSWORD_RESET: {
     max: 3,
     timeWindow: '15 minutes',
-    keyGenerator: (req: FastifyRequest) => `reset:${req.body?.email || req.ip}`,
+    keyGenerator: (req: FastifyRequest) => `reset:${(req.body as any)?.email || req.ip}`,
     errorMessage: 'Too many password reset attempts. Please wait.',
   },
   
@@ -138,7 +138,7 @@ export function createRateLimiter(redisClient: any, tier: keyof typeof RateLimit
  */
 function parseTimeWindow(window: string): number {
   const match = window.match(/^(\d+)\s*(second|minute|hour)s?$/i)
-  if (!match) {
+  if (!match || !match[1] || !match[2]) {
     throw new Error(`Invalid time window: ${window}`)
   }
   

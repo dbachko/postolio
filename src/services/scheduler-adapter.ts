@@ -152,7 +152,7 @@ export class SchedulerAdapter {
               scheduledTimezone: brandTimezone,
               scheduledLocalTime: customTime ? customTime.toISOString() : undefined,
               awsScheduleCreated, // Track whether AWS schedule was created
-            } as GenerationParams,
+            } as any,
           },
         });
       } catch (dbError) {
@@ -198,7 +198,7 @@ export class SchedulerAdapter {
       }
       
       return awsScheduleCreated
-        ? { success: true, scheduleId, brandId: content.brandId }
+        ? { success: true, scheduleId: scheduleId!, brandId: content.brandId }
         : { success: false, error: 'AWS Scheduler unavailable - content not scheduled' };
         
     } catch (error) {
@@ -277,7 +277,7 @@ export class SchedulerAdapter {
             scheduleId: null,
             awsScheduleCreated: false,
             cancelledAt: new Date().toISOString(),
-          } as GenerationParams,
+          } as any,
         },
       });
 
@@ -353,7 +353,7 @@ export class SchedulerAdapter {
             scheduledTimezone: brandTimezone,
             rescheduledAt: new Date().toISOString(),
             rescheduledLocalTime: isLocalTime ? newTime.toISOString() : undefined,
-          } as GenerationParams,
+          } as any,
         },
       });
 
@@ -406,7 +406,7 @@ export class SchedulerAdapter {
       console.error('Error getting scheduled content:', error);
       
       // Fallback to local database
-      return prisma.content.findMany({
+      const content = await prisma.content.findMany({
         where: {
           brandId,
           status: 'scheduled',
@@ -415,6 +415,12 @@ export class SchedulerAdapter {
         orderBy: { scheduledAt: 'asc' },
         take: limit,
       });
+      
+      return content.map(c => ({
+        ...c,
+        status: c.status,
+        source: 'local' as const
+      }));
     }
   }
 
@@ -428,7 +434,14 @@ export class SchedulerAdapter {
   }> {
     try {
       // Get from AWS
-      const awsStats = await this.client.getSchedulingStats(brandId);
+      const awsRawStats = await this.client.getSchedulingStats(brandId);
+      
+      // Transform AWS stats to match expected format
+      const awsStats = {
+        total: awsRawStats.scheduled + awsRawStats.published + awsRawStats.failed + awsRawStats.cancelled + awsRawStats.processing,
+        upcoming: awsRawStats.scheduled + awsRawStats.processing,
+        failed: awsRawStats.failed
+      };
       
       // Also get from local database
       const localStats = await this.getLocalSchedulingStats(brandId);
@@ -514,7 +527,7 @@ export class SchedulerAdapter {
               inconsistencies,
               lastInconsistency: type,
               lastInconsistencyAt: new Date().toISOString(),
-            } as GenerationParams,
+            } as any,
           },
         });
       }
@@ -579,7 +592,7 @@ export class SchedulerAdapter {
     draft: number;
     published: number;
   }> {
-    const [draft, scheduled, published, failed] = await Promise.all([
+    const [draft, scheduled, published] = await Promise.all([
       prisma.content.count({
         where: { brandId, status: 'draft' },
       }),
@@ -589,17 +602,13 @@ export class SchedulerAdapter {
       prisma.content.count({
         where: { brandId, status: 'published' },
       }),
-      prisma.content.count({
-        where: { brandId, status: 'failed' },
-      }),
     ]);
 
     return {
       draft,
       scheduled,
       published,
-      failed,
-      total: draft + scheduled + published + failed,
+      total: draft + scheduled + published,
     };
   }
 
@@ -611,8 +620,8 @@ export class SchedulerAdapter {
     
     // Check if key metrics are within acceptable range (allow small differences)
     return (
-      Math.abs((awsStats.scheduled || 0) - (localStats.scheduled || 0)) <= SYNC_TOLERANCE &&
-      Math.abs((awsStats.published || 0) - (localStats.published || 0)) <= SYNC_TOLERANCE
+      Math.abs((awsStats.upcoming || 0) - (localStats.scheduled || 0)) <= SYNC_TOLERANCE &&
+      Math.abs((awsStats.total || 0) - (localStats.total || 0)) <= SYNC_TOLERANCE
     );
   }
 }

@@ -90,16 +90,24 @@ export function errorResponse(
   details?: string[] | Record<string, unknown>,
   meta?: Record<string, unknown>
 ): ApiErrorResponse {
-  return {
+  const response: ApiErrorResponse = {
     success: false,
     error,
-    code,
-    details,
     meta: {
       timestamp: new Date().toISOString(),
       ...meta,
     },
   }
+  
+  if (code !== undefined) {
+    response.code = code
+  }
+  
+  if (details !== undefined) {
+    response.details = details
+  }
+  
+  return response
 }
 
 /**

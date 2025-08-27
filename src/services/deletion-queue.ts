@@ -1,5 +1,4 @@
 import Bull from 'bull'
-import { PrismaClient } from '@prisma/client'
 import { getDatabaseClient } from '../config/database.js'
 import Redis from 'ioredis'
 
@@ -71,7 +70,7 @@ export class DeletionQueueService {
         }
 
         // Perform permanent deletion
-        const result = await this.permanentlyDeleteUser(userId)
+        await this.permanentlyDeleteUser(userId)
         
         return {
           success: true,
@@ -148,7 +147,7 @@ export class DeletionQueueService {
     // Run every day at 2 AM to check for scheduled deletions
     this.deletionQueue.add(
       'check-scheduled-deletions',
-      {},
+      { userId: '', scheduledDeletionDate: new Date(), email: '' } as DeletionJob,
       {
         repeat: {
           cron: '0 2 * * *', // 2 AM daily

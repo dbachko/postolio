@@ -28,7 +28,7 @@ const emailVerificationRoutes: FastifyPluginAsync = async (fastify) => {
         }
         // Then apply rate limiting
         await enhancedRateLimiters.emailVerification()(request, reply)
-      } catch (error) {
+      } catch {
         // Authentication failed, response already sent
         return
       }
@@ -82,7 +82,7 @@ const emailVerificationRoutes: FastifyPluginAsync = async (fastify) => {
         } else {
           return reply.code(401).send({ error: 'Authentication required' })
         }
-      } catch (error) {
+      } catch {
         // Authentication failed, response already sent
         return
       }

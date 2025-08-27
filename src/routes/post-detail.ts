@@ -163,15 +163,19 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
     }
     
     // Validate pagination
-    const paginationValidation = validateRequest(PaginationSchema, request.query)
-    if (!paginationValidation.success) {
+    const paginationResult = PaginationSchema.safeParse(request.query)
+    if (!paginationResult.success) {
+      const errors = paginationResult.error.issues.map(issue => {
+        const path = issue.path.join('.')
+        return path ? `${path}: ${issue.message}` : issue.message
+      })
       return reply.code(400).send(
-        ErrorResponses.badRequest('Invalid pagination parameters', paginationValidation.errors)
+        ErrorResponses.badRequest('Invalid pagination parameters', errors)
       )
     }
     
     const { postId } = paramsValidation.data
-    const { page, limit } = paginationValidation.data
+    const { page, limit } = paginationResult.data
     const userId = request.user!.id // User is guaranteed by middleware
 
     try {

@@ -535,11 +535,10 @@ If you didn't request this email, you can safely ignore it.
       day: 'numeric'
     })
 
-    const { html, text } = this.renderEmailTemplate({
+    const { html, text } = this.generateEmailTemplate({
       title: 'Account Deletion Scheduled',
       greeting: 'Your account has been scheduled for deletion',
-      message: `Your Postolio account has been scheduled for permanent deletion on ${formattedDate}.`,
-      additionalText: 'You have 30 days to recover your account if you change your mind. After this date, all your data will be permanently deleted and cannot be recovered.',
+      content: `Your Postolio account has been scheduled for permanent deletion on ${formattedDate}. You have 30 days to recover your account if you change your mind. After this date, all your data will be permanently deleted and cannot be recovered.`,
       buttonText: 'Recover Account',
       buttonUrl: `${baseUrl}/account/recover`
     })
@@ -563,11 +562,10 @@ If you didn't request this email, you can safely ignore it.
       day: 'numeric'
     })
 
-    const { html, text } = this.renderEmailTemplate({
+    const { html, text } = this.generateEmailTemplate({
       title: 'Account Deletion Scheduled',
       greeting: 'Your account has been scheduled for deletion',
-      message: `Your Postolio account has been scheduled for permanent deletion on ${formattedDate}.`,
-      additionalText: 'You have 30 days to recover your account if you change your mind. After this date, all your data will be permanently deleted and cannot be recovered.',
+      content: `Your Postolio account has been scheduled for permanent deletion on ${formattedDate}. You have 30 days to recover your account if you change your mind. After this date, all your data will be permanently deleted and cannot be recovered.`,
       buttonText: 'Recover Account',
       buttonUrl: `${baseUrl}/account/recover`
     })
