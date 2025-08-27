@@ -216,18 +216,14 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      return reply.send({
-        success: true,
-        data: {
+      return reply.send(
+        paginatedResponse(
           comments,
-          pagination: {
-            page: Number(page),
-            limit: Number(limit),
-            total,
-            pages: Math.ceil(total / Number(limit))
-          }
-        }
-      })
+          Number(page),
+          Number(limit),
+          total
+        )
+      )
     } catch (error) {
       app.log.error('Error fetching post comments:', error)
       return reply.code(500).send(

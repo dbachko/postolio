@@ -252,7 +252,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
       scheduledDeletion.setDate(scheduledDeletion.getDate() + 30)
       
       // Soft delete the user account
-      const _user = await prisma.user.update({
+      const user = await prisma.user.update({
         where: { id: userId },
         data: {
           deletedAt,
