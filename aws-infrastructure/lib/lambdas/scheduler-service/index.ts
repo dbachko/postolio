@@ -387,15 +387,17 @@ async function getScheduleById(scheduleId: string): Promise<any> {
   // Extract shard key from schedule ID (all schedules must have embedded shard key)
   const shardKey = extractShardKeyFromScheduleId(scheduleId)
   
-  // Efficient single-shard query
+  // Query using FilterExpression since contains() cannot be used in KeyConditionExpression
+  // Consider adding a GSI with scheduleId as partition key for direct lookup
   const result = await docClient.send(new QueryCommand({
     TableName: SCHEDULE_TABLE_NAME,
-    KeyConditionExpression: 'pk = :pk AND contains(sk, :scheduleId)',
+    KeyConditionExpression: 'pk = :pk',
+    FilterExpression: 'scheduleId = :scheduleId',
     ExpressionAttributeValues: {
       ':pk': `SHARD#${shardKey}`,
       ':scheduleId': scheduleId,
     },
-    Limit: 1,
+    Limit: 100, // Reasonable limit for single shard scan
   }))
   
   return result.Items && result.Items.length > 0 ? result.Items[0] : null

@@ -3,10 +3,29 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, PutCommand, GetCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb'
 import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms'
 import { createHash } from 'crypto'
+import { z } from 'zod'
+import { RateLimiter } from '../../services/rate-limiter'
 
-const dynamoClient = new DynamoDBClient({})
-const docClient = DynamoDBDocumentClient.from(dynamoClient)
-const kmsClient = new KMSClient({})
+// Initialize clients outside handler for connection reuse across invocations
+const dynamoClient = new DynamoDBClient({
+  maxAttempts: 3,
+  retryMode: 'adaptive',  // Adaptive retry with automatic backoff
+})
+
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: {
+    convertEmptyValues: false,
+    removeUndefinedValues: true,
+    convertClassInstanceToMap: false
+  }
+})
+
+const kmsClient = new KMSClient({
+  maxAttempts: 3,
+  retryMode: 'adaptive'
+})
+
+const rateLimiter = RateLimiter.getInstance()
 
 const TOKEN_TABLE_NAME = process.env.TOKEN_TABLE_NAME!
 const KMS_KEY_ID = process.env.KMS_KEY_ID!
@@ -31,33 +50,126 @@ interface StoreTokenRequest {
   metadata?: Record<string, any>
 }
 
-// Helper function to filter sensitive headers
-function filterSensitiveHeaders(headers: { [key: string]: string | undefined }): { [key: string]: string | undefined } {
-  const SENSITIVE_HEADER_NAMES = [
-    'authorization',
-    'cookie',
-    'set-cookie',
-    'x-api-key',
-    'x-amz-security-token',
-    'proxy-authorization',
-    'x-auth-token',
-    'x-access-token'
+// Zod validation schema for StoreTokenRequest
+const StoreTokenRequestSchema = z.object({
+  userId: z.string().min(1).max(100),
+  brandId: z.string().min(1).max(100),
+  platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'twitter']),
+  accessToken: z.string().min(10).max(10000),
+  refreshToken: z.string().min(10).max(10000).optional(),
+  expiresAt: z.number().positive().int(),
+  metadata: z.record(z.any()).optional()
+})
+
+// Helper function to get safe headers for logging (allowlist approach)
+function getSafeHeadersForLogging(headers: { [key: string]: string | undefined }): { [key: string]: string | undefined } {
+  // Only include explicitly safe headers in logs
+  const SAFE_HEADERS = [
+    'content-type',
+    'accept',
+    'user-agent',
+    'x-correlation-id',
+    'x-request-id',
+    'cloudfront-viewer-country',
+    'cloudfront-is-mobile-viewer'
   ];
-  const filtered: { [key: string]: string | undefined } = {};
-  for (const key in headers) {
-    if (!SENSITIVE_HEADER_NAMES.includes(key.toLowerCase())) {
-      filtered[key] = headers[key];
+  
+  const safeHeaders: { [key: string]: string | undefined } = {};
+  for (const safeName of SAFE_HEADERS) {
+    for (const key in headers) {
+      if (key.toLowerCase() === safeName) {
+        safeHeaders[key] = headers[key];
+        break;
+      }
     }
   }
-  return filtered;
+  return safeHeaders;
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Token Service Lambda invoked', { 
     method: event.httpMethod,
     path: event.path,
-    headers: filterSensitiveHeaders(event.headers)
+    headers: getSafeHeadersForLogging(event.headers)
   })
+
+  // IAM Authentication validation
+  // This Lambda should be invoked via API Gateway with IAM authorization
+  // or directly via Lambda with proper IAM roles
+  if (!event.requestContext?.identity?.userArn && !event.requestContext?.authorizer) {
+    console.error('Unauthorized request - missing IAM authentication')
+    return {
+      statusCode: 401,
+      body: JSON.stringify({ error: 'Unauthorized - IAM authentication required' }),
+    }
+  }
+
+  // Extract caller identity for audit logging
+  const callerIdentity = event.requestContext?.identity?.userArn || 
+                         event.requestContext?.authorizer?.principalId || 
+                         'unknown'
+  console.log('Authenticated caller:', callerIdentity)
+
+  // Extract user information for rate limiting
+  const sourceIp = event.requestContext?.identity?.sourceIp || event.headers['X-Forwarded-For'] || 'unknown'
+  const userId = event.headers['x-user-id'] || callerIdentity
+  const userTier = event.headers['x-user-tier'] || 'default'
+  
+  // Apply rate limiting
+  const rateLimitResult = await rateLimiter.checkUserRateLimit(
+    userId,
+    'token-service',
+    userTier
+  )
+  
+  if (!rateLimitResult.allowed) {
+    console.warn('Rate limit exceeded', { 
+      userId, 
+      sourceIp, 
+      remainingTokens: rateLimitResult.remainingTokens,
+      retryAfterMs: rateLimitResult.retryAfterMs
+    })
+    
+    return {
+      statusCode: 429,
+      headers: {
+        'Retry-After': String(Math.ceil(rateLimitResult.retryAfterMs! / 1000)),
+        'X-RateLimit-Remaining': String(rateLimitResult.remainingTokens),
+        'X-RateLimit-Reset': String(Math.floor(rateLimitResult.nextRefillAt / 1000)),
+      },
+      body: JSON.stringify({ 
+        error: 'Rate limit exceeded',
+        message: rateLimitResult.reason,
+        retryAfterSeconds: Math.ceil(rateLimitResult.retryAfterMs! / 1000)
+      }),
+    }
+  }
+  
+  // Also apply IP-based rate limiting for additional protection
+  const ipRateLimitResult = await rateLimiter.checkIPRateLimit(
+    sourceIp,
+    'token-service',
+    userTier
+  )
+  
+  if (!ipRateLimitResult.allowed) {
+    console.warn('IP rate limit exceeded', { 
+      sourceIp,
+      remainingTokens: ipRateLimitResult.remainingTokens 
+    })
+    
+    return {
+      statusCode: 429,
+      headers: {
+        'Retry-After': String(Math.ceil(ipRateLimitResult.retryAfterMs! / 1000)),
+        'X-RateLimit-Remaining': String(ipRateLimitResult.remainingTokens),
+      },
+      body: JSON.stringify({ 
+        error: 'Rate limit exceeded',
+        message: 'Too many requests from this IP address'
+      }),
+    }
+  }
 
   try {
     const method = event.httpMethod
@@ -96,13 +208,27 @@ async function storeToken(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
     }
   }
 
-  const request: StoreTokenRequest = JSON.parse(event.body)
-  
-  // Validate required fields
-  if (!request.userId || !request.brandId || !request.platform || !request.accessToken) {
+  // Parse and validate request with Zod schema
+  let request: StoreTokenRequest
+  try {
+    const parsed = JSON.parse(event.body)
+    request = StoreTokenRequestSchema.parse(parsed)
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ 
+          error: 'Invalid request data',
+          details: error.errors.map(e => ({
+            path: e.path.join('.'),
+            message: e.message
+          }))
+        }),
+      }
+    }
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Missing required fields' }),
+      body: JSON.stringify({ error: 'Invalid JSON in request body' }),
     }
   }
 

@@ -18,6 +18,8 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
 import { Construct } from 'constructs'
 import * as path from 'path'
+import { CloudWatchDashboards } from '../constructs/cloudwatch-dashboards'
+import { SecuredApiGateway } from '../constructs/secured-api-gateway'
 
 export interface PlatformMicroservicesStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod'
@@ -77,7 +79,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       timeToLiveAttribute: 'ttl',
     })
     
-    // Schedule Table with sharding
+    // Schedule Table with sharding and GSIs for efficient lookups
     this.scheduleTable = new dynamodb.Table(this, 'ScheduleTable', {
       tableName: `postolio-${environment}-schedules`,
       partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
@@ -87,6 +89,37 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       pointInTimeRecovery: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       timeToLiveAttribute: 'ttl',
+    })
+    
+    // Add GSI for schedule ID lookups
+    this.scheduleTable.addGlobalSecondaryIndex({
+      indexName: 'by-schedule-id',
+      partitionKey: { name: 'scheduleId', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    })
+    
+    // Add GSI for content ID lookups
+    this.scheduleTable.addGlobalSecondaryIndex({
+      indexName: 'by-content-id',
+      partitionKey: { name: 'contentId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'scheduledAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    })
+    
+    // Add GSI for brand-based queries
+    this.scheduleTable.addGlobalSecondaryIndex({
+      indexName: 'by-brand',
+      partitionKey: { name: 'brandId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'scheduledAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    })
+    
+    // Add GSI for platform-based queries
+    this.scheduleTable.addGlobalSecondaryIndex({
+      indexName: 'by-platform-status',
+      partitionKey: { name: 'platform', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'status', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
     })
     
     // Job State Table
@@ -103,6 +136,34 @@ export class PlatformMicroservicesStack extends cdk.Stack {
     const idempotencyTable = new dynamodb.Table(this, 'IdempotencyTable', {
       tableName: `postolio-${environment}-idempotency`,
       partitionKey: { name: 'idempotencyKey', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      timeToLiveAttribute: 'ttl',
+    })
+    
+    // Saga State Table for distributed transactions
+    const sagaStateTable = new dynamodb.Table(this, 'SagaStateTable', {
+      tableName: `postolio-${environment}-saga-state`,
+      partitionKey: { name: 'sagaId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      timeToLiveAttribute: 'ttl',
+    })
+    
+    // Add GSI for saga type queries
+    sagaStateTable.addGlobalSecondaryIndex({
+      indexName: 'by-saga-type',
+      partitionKey: { name: 'sagaType', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    })
+    
+    // Circuit Breaker State Table
+    const circuitBreakerTable = new dynamodb.Table(this, 'CircuitBreakerTable', {
+      tableName: `postolio-${environment}-circuit-breaker-state`,
+      partitionKey: { name: 'serviceName', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -168,6 +229,15 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       },
     })
     
+    // ==================== Rate Limit Table ====================
+    const rateLimitTable = new dynamodb.Table(this, 'RateLimitTable', {
+      tableName: `postolio-rate-limits-${environment}`,
+      partitionKey: { name: 'bucketKey', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      timeToLiveAttribute: 'ttl',
+    })
+    
     // ==================== Lambda Layer ====================
     const sharedLayer = new lambda.LayerVersion(this, 'SharedDependencies', {
       code: lambda.Code.fromAsset(path.join(__dirname, '../../layers/shared')),
@@ -184,6 +254,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       IDEMPOTENCY_TABLE_NAME: idempotencyTable.tableName,
       EVENT_BUS_NAME: this.eventBus.eventBusName,
       KMS_KEY_ID: tokenEncryptionKey.keyId,
+      RATE_LIMIT_TABLE_NAME: `postolio-rate-limits-${environment}`,
       AWS_ACCOUNT_ID: this.account,
     }
     
@@ -206,6 +277,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
     
     // Grant permissions
     this.tokenTable.grantReadWriteData(tokenServiceLambda)
+    rateLimitTable.grantReadWriteData(tokenServiceLambda)
     tokenEncryptionKey.grantEncryptDecrypt(tokenServiceLambda)
     platformSecrets.grantRead(tokenServiceLambda)
     
@@ -315,30 +387,73 @@ export class PlatformMicroservicesStack extends cdk.Stack {
     const linkedinPublisher = createPublisherLambda('LinkedIn', linkedinQueue)
     const tiktokPublisher = createPublisherLambda('TikTok', tiktokQueue)
     
-    // ==================== API Gateway ====================
-    this.tokenServiceApi = new apigateway.RestApi(this, 'TokenServiceApi', {
-      restApiName: `postolio-${environment}-token-service`,
-      deployOptions: {
-        stageName: environment,
-        tracingEnabled: true,
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        metricsEnabled: true,
-        throttlingBurstLimit: 100,
-        throttlingRateLimit: 50,
+    // ==================== Secured API Gateway ====================
+    const securedApi = new SecuredApiGateway(this, 'SecuredApiGateway', {
+      environment,
+      serviceName: 'platform',
+      lambdaIntegrations: {
+        'tokens': {
+          lambda: tokenServiceLambda,
+          methods: ['POST'],
+          authType: 'IAM',
+          throttle: {
+            burstLimit: 100,
+            rateLimit: 50,
+          },
+        },
+        'tokens/{userId}/{platform}': {
+          lambda: tokenServiceLambda,
+          methods: ['GET', 'DELETE'],
+          authType: 'IAM',
+          throttle: {
+            burstLimit: 50,
+            rateLimit: 25,
+          },
+        },
+        'schedules': {
+          lambda: schedulerServiceLambda,
+          methods: ['POST', 'GET'],
+          authType: 'IAM',
+          throttle: {
+            burstLimit: 200,
+            rateLimit: 100,
+          },
+        },
+        'schedules/{scheduleId}': {
+          lambda: schedulerServiceLambda,
+          methods: ['GET', 'DELETE', 'PATCH'],
+          authType: 'IAM',
+          throttle: {
+            burstLimit: 100,
+            rateLimit: 50,
+          },
+        },
       },
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+      enableWaf: environment === 'prod',
+      enableApiKey: true,
+      enableUsagePlan: true,
+      corsConfig: {
+        allowOrigins: environment === 'prod' 
+          ? [props.domainName ? `https://${props.domainName}` : 'https://postolio.example']
+          : apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+          'X-Amz-Security-Token',
+          'X-User-Id',
+          'X-User-Tier',
+          'X-Correlation-Id',
+          'X-Brand-Id',
+        ],
+        maxAge: cdk.Duration.hours(1),
       },
     })
     
-    // Token endpoints
-    const tokens = this.tokenServiceApi.root.addResource('tokens')
-    tokens.addMethod('POST', new apigateway.LambdaIntegration(tokenServiceLambda))
-    
-    const tokenById = tokens.addResource('{userId}').addResource('{platform}')
-    tokenById.addMethod('GET', new apigateway.LambdaIntegration(tokenServiceLambda))
-    tokenById.addMethod('DELETE', new apigateway.LambdaIntegration(tokenServiceLambda))
+    // Store API reference for other stacks
+    this.tokenServiceApi = securedApi.api
     
     // ==================== EventBridge Rules ====================
     
@@ -383,15 +498,103 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       targets: [new targets.SqsQueue(tiktokQueue)],
     })
     
+    // ==================== DLQ Processing Infrastructure ====================
+    
+    // DLQ Processing State Table
+    const dlqStateTable = new dynamodb.Table(this, 'DLQStateTable', {
+      tableName: `postolio-dlq-state-${environment}`,
+      partitionKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      pointInTimeRecovery: true,
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+      timeToLiveAttribute: 'ttl',
+    })
+    
+    // GSI for querying by DLQ and status
+    dlqStateTable.addGlobalSecondaryIndex({
+      indexName: 'by-dlq-status',
+      partitionKey: { name: 'dlqName', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'status', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    })
+    
+    // DLQ Processor Lambda
+    const dlqProcessorLambda = new lambda.Function(this, 'DLQProcessorLambda', {
+      functionName: `postolio-dlq-processor-${environment}`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('./lib/lambdas/dlq-processor'),
+      environment: {
+        DLQ_STATE_TABLE_NAME: dlqStateTable.tableName,
+        PUBLISHER_QUEUE_URL: instagramQueue.queueUrl,
+        SCHEDULER_QUEUE_URL: '', // Will be added when scheduler queue is created
+        TOKEN_REFRESH_QUEUE_URL: '', // Will be added when token refresh queue is created
+        ANALYTICS_QUEUE_URL: '', // Will be added when analytics queue is created
+        SQS_BASE_URL: `https://sqs.${cdk.Stack.of(this).region}.amazonaws.com/${cdk.Stack.of(this).account}`,
+        DLQ_MAX_RETRIES: '5',
+        DLQ_RETRY_DELAY_BASE: '60000',
+        ENVIRONMENT: environment,
+      },
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      tracing: lambda.Tracing.ACTIVE,
+    })
+    
+    // Grant permissions
+    dlqStateTable.grantReadWriteData(dlqProcessorLambda)
+    publisherDLQ.grantConsumeMessages(dlqProcessorLambda)
+    publisherDLQ.grantSendMessages(dlqProcessorLambda)
+    instagramQueue.grantSendMessages(dlqProcessorLambda)
+    facebookQueue.grantSendMessages(dlqProcessorLambda)
+    linkedinQueue.grantSendMessages(dlqProcessorLambda)
+    tiktokQueue.grantSendMessages(dlqProcessorLambda)
+    
+    // Schedule DLQ processing every 15 minutes
+    const dlqProcessingRule = new events.Rule(this, 'DLQProcessingRule', {
+      schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
+      description: 'Process messages from Dead Letter Queues',
+    })
+    
+    dlqProcessingRule.addTarget(new targets.LambdaFunction(dlqProcessorLambda))
+    
+    // Manual reprocess Lambda
+    const dlqReprocessLambda = new lambda.Function(this, 'DLQReprocessLambda', {
+      functionName: `postolio-dlq-reprocess-${environment}`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.reprocessHandler',
+      code: lambda.Code.fromAsset('./lib/lambdas/dlq-processor'),
+      environment: {
+        DLQ_STATE_TABLE_NAME: dlqStateTable.tableName,
+        SQS_BASE_URL: `https://sqs.${cdk.Stack.of(this).region}.amazonaws.com/${cdk.Stack.of(this).account}`,
+        ENVIRONMENT: environment,
+      },
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 256,
+      tracing: lambda.Tracing.ACTIVE,
+    })
+    
+    // Grant permissions for reprocess Lambda
+    dlqStateTable.grantReadWriteData(dlqReprocessLambda)
+    publisherDLQ.grantSendMessages(dlqReprocessLambda)
+    
     // ==================== CloudWatch Alarms ====================
+    let alarmTopic: cdk.aws_sns.Topic | undefined
+    
     if (alertEmail) {
-      const alarmTopic = new cdk.aws_sns.Topic(this, 'AlarmTopic', {
+      alarmTopic = new cdk.aws_sns.Topic(this, 'AlarmTopic', {
         displayName: `Postolio ${environment} Alarms`,
       })
       
       alarmTopic.addSubscription(
         new cdk.aws_sns_subscriptions.EmailSubscription(alertEmail)
       )
+      
+      // Grant DLQ processor permission to publish alerts
+      alarmTopic.grantPublish(dlqProcessorLambda)
+      
+      // Add alarm topic ARN to DLQ processor environment
+      dlqProcessorLambda.addEnvironment('DLQ_ALERT_TOPIC_ARN', alarmTopic.topicArn)
       
       // DLQ alarm
       new cloudwatch.Alarm(this, 'DLQAlarm', {
@@ -409,6 +612,33 @@ export class PlatformMicroservicesStack extends cdk.Stack {
         alarmDescription: 'Token rotation Lambda errors',
       }).addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(alarmTopic))
     }
+    
+    // ==================== CloudWatch Dashboards ====================
+    const dashboards = new CloudWatchDashboards(this, 'Dashboards', {
+      environment,
+      tokenServiceLambda,
+      schedulerServiceLambda,
+      publisherLambdas: {
+        instagram: instagramPublisher,
+        facebook: facebookPublisher,
+        linkedin: linkedinPublisher,
+        tiktok: tiktokPublisher,
+      },
+      dlqProcessorLambda,
+      tokenTable: this.tokenTable,
+      scheduleTable: this.scheduleTable,
+      sagaStateTable,
+      circuitBreakerTable,
+      dlqStateTable,
+      publisherQueues: {
+        instagram: instagramQueue,
+        facebook: facebookQueue,
+        linkedin: linkedinQueue,
+        tiktok: tiktokQueue,
+      },
+      publisherDLQ,
+      eventBus: this.eventBus,
+    })
     
     // ==================== Outputs ====================
     new cdk.CfnOutput(this, 'TokenServiceApiUrl', {
