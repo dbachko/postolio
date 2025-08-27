@@ -4,6 +4,8 @@ import crypto from 'crypto'
 import bcrypt from 'bcrypt'
 import { verifyJWT } from '../services/jwt.js'
 import { markdownToHtml } from '../utils/markdown.js'
+import { deletionQueueService } from '../services/deletion-queue.js'
+import { EmailService } from '../services/email.js'
 
 // Deletion reasons for survey
 const DELETION_REASONS = {
@@ -262,12 +264,15 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
         }
       })
       
-      // TODO: Implement scheduled deletion job for GDPR compliance
-      // This should run daily to permanently delete accounts past their 30-day recovery period
-      // Example: await scheduleJob('permanent-deletion', { userId: user.id, scheduledFor: scheduledDeletion })
+      // Schedule permanent deletion job for GDPR compliance
+      await deletionQueueService.scheduleDeletion({
+        userId: userId,
+        scheduledDeletionDate: scheduledDeletion,
+        email: user.email
+      }, scheduledDeletion.getTime() - Date.now()) // Delay until scheduled date
       
-      // TODO: Send deletion confirmation email
-      // Example: await emailService.sendDeletionConfirmation(user.email, scheduledDeletion)
+      // Send deletion confirmation email
+      await EmailService.sendDeletionConfirmation(user.email, scheduledDeletion)
       
       return reply.send({
         success: true,

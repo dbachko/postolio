@@ -525,6 +525,62 @@ If you didn't request this email, you can safely ignore it.
   }
 
   /**
+   * Send account deletion confirmation email
+   */
+  static async sendDeletionConfirmation(email: string, scheduledDeletionDate: Date): Promise<{ success: boolean; error?: string }> {
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+    const formattedDate = scheduledDeletionDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+
+    const { html, text } = this.renderEmailTemplate({
+      title: 'Account Deletion Scheduled',
+      greeting: 'Your account has been scheduled for deletion',
+      message: `Your Postolio account has been scheduled for permanent deletion on ${formattedDate}.`,
+      additionalText: 'You have 30 days to recover your account if you change your mind. After this date, all your data will be permanently deleted and cannot be recovered.',
+      buttonText: 'Recover Account',
+      buttonUrl: `${baseUrl}/account/recover`
+    })
+
+    return this.sendEmail({
+      to: email,
+      subject: 'Postolio Account Deletion Scheduled',
+      html,
+      text
+    })
+  }
+
+  /**
+   * Send account deletion confirmation email (immediate)
+   */
+  static async sendDeletionConfirmationImmediate(email: string, scheduledDeletionDate: Date): Promise<{ success: boolean; error?: string }> {
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+    const formattedDate = scheduledDeletionDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+
+    const { html, text } = this.renderEmailTemplate({
+      title: 'Account Deletion Scheduled',
+      greeting: 'Your account has been scheduled for deletion',
+      message: `Your Postolio account has been scheduled for permanent deletion on ${formattedDate}.`,
+      additionalText: 'You have 30 days to recover your account if you change your mind. After this date, all your data will be permanently deleted and cannot be recovered.',
+      buttonText: 'Recover Account',
+      buttonUrl: `${baseUrl}/account/recover`
+    })
+
+    return this.sendEmail({
+      to: email,
+      subject: 'Postolio Account Deletion Scheduled',
+      html,
+      text
+    })
+  }
+
+  /**
    * Verify email service connection
    */
   static async verifyConnection(): Promise<boolean> {

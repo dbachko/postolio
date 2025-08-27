@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { getDatabaseClient } from '../config/database.js'
 import { authenticateRequest } from '../middleware/auth.js'
+import { instagramService } from '../services/instagram.js'
 
 const prisma = getDatabaseClient()
 
@@ -91,9 +92,8 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         })
       }
 
-      // TODO: Integrate with Instagram Graph API if post is published
-      // For now, return mock metrics or empty metrics
-      const metrics = {
+      // Initialize default metrics
+      let metrics = {
         impressions: 0,
         reach: 0,
         engagement: 0,
@@ -104,10 +104,27 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       }
 
       // If post is published and has Instagram ID, fetch real metrics
-      if (post.status === 'published' && post.instagramPostId) {
-        // TODO: Call Instagram Graph API
-        // const instagramMetrics = await instagramService.getPostInsights(post.instagramPostId)
-        // Object.assign(metrics, instagramMetrics)
+      if (post.status === 'published' && post.instagramPostId && post.brand) {
+        try {
+          const insightsResponse = await instagramService.getMediaInsights(post.brand, post.instagramPostId)
+          
+          // Parse Instagram insights data
+          if (insightsResponse?.data) {
+            const insights = insightsResponse.data
+            metrics = {
+              impressions: insights.find((m: any) => m.name === 'impressions')?.values?.[0]?.value || 0,
+              reach: insights.find((m: any) => m.name === 'reach')?.values?.[0]?.value || 0,
+              engagement: insights.find((m: any) => m.name === 'engagement')?.values?.[0]?.value || 0,
+              saves: insights.find((m: any) => m.name === 'saves')?.values?.[0]?.value || 0,
+              shares: insights.find((m: any) => m.name === 'shares')?.values?.[0]?.value || 0,
+              comments_count: insights.find((m: any) => m.name === 'comments')?.values?.[0]?.value || 0,
+              likes_count: insights.find((m: any) => m.name === 'likes')?.values?.[0]?.value || 0
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch Instagram metrics:', error)
+          // Return default metrics on error
+        }
       }
 
       return reply.send({
@@ -157,16 +174,24 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         })
       }
 
-      // TODO: Fetch real comments from Instagram if post is published
-      const comments: any[] = []
-      const total = 0
+      // Initialize default values
+      let comments: any[] = []
+      let total = 0
 
       // If post is published and has Instagram ID, fetch real comments
-      if (post.status === 'published' && post.instagramPostId) {
-        // TODO: Call Instagram Graph API
-        // const instagramComments = await instagramService.getPostComments(post.instagramPostId, page, limit)
-        // comments.push(...instagramComments.data)
-        // total = instagramComments.total
+      if (post.status === 'published' && post.instagramPostId && post.brand) {
+        try {
+          const commentsResponse = await instagramService.getPostComments(
+            post.brand,
+            post.instagramPostId,
+            Number(limit)
+          )
+          comments = commentsResponse.data
+          total = commentsResponse.total
+        } catch (error) {
+          console.error('Failed to fetch Instagram comments:', error)
+          // Return empty comments on error
+        }
       }
 
       return reply.send({
