@@ -140,7 +140,7 @@ async function processMessage(record: SQSRecord): Promise<void> {
   
   try {
     // Validate input
-    const request = validateInput(
+    const request: PublishRequest = validateInput(
       PublishRequestSchema,
       JSON.parse(record.body)
     )
@@ -189,7 +189,7 @@ async function processMessage(record: SQSRecord): Promise<void> {
     if (error instanceof ValidationError) {
       logger.error('Validation failed', {
         messageId: record.messageId,
-        errors: (error as ValidationError).errors.errors,
+        errors: (error as ValidationError).errors.issues,
       })
       metrics.addMetric('ValidationErrors', MetricUnit.Count, 1)
       // Don't retry validation errors

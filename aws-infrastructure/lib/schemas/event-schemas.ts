@@ -28,7 +28,7 @@ export const PlatformEventSchema = z.object({
   ]),
   type: z.string(),
   timestamp: z.string().datetime(),
-  data: z.record(z.any()),
+  data: z.record(z.string(), z.any()),
   metadata: EventMetadataSchema,
 })
 

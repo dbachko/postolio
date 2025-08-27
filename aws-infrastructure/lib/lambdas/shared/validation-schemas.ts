@@ -20,7 +20,7 @@ export const PublishRequestSchema = z.object({
     }).optional(),
   }),
   scheduledAt: z.string().datetime().optional(),
-  metadata: z.record(z.any()).optional(), // Added for additional data
+  metadata: z.record(z.string(), z.any()).optional(), // Added for additional data
   idempotencyKey: z.string().min(1),
 })
 
@@ -73,7 +73,7 @@ export const TokenRecordSchema = z.object({
   encryptedRefreshToken: z.string().optional(),
   expiresAt: z.number(),
   lastRefreshed: z.string().datetime(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   ttl: z.number().optional(),
 })
 
@@ -91,7 +91,7 @@ export const ScheduleRequestSchema = z.object({
     mediaUrl: z.string().url().optional(),
     hashtags: z.array(z.string()).optional(),
   }),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 })
 
 export type ScheduleRequest = z.infer<typeof ScheduleRequestSchema>

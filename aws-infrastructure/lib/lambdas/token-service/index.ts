@@ -58,7 +58,7 @@ const StoreTokenRequestSchema = z.object({
   accessToken: z.string().min(10).max(10000),
   refreshToken: z.string().min(10).max(10000).optional(),
   expiresAt: z.number().positive().int(),
-  metadata: z.record(z.any()).optional()
+  metadata: z.record(z.string(), z.any()).optional()
 })
 
 // Helper function to get safe headers for logging (allowlist approach)
@@ -219,7 +219,7 @@ async function storeToken(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
         statusCode: 400,
         body: JSON.stringify({ 
           error: 'Invalid request data',
-          details: error.errors.map(e => ({
+          details: error.issues.map((e: any) => ({
             path: e.path.join('.'),
             message: e.message
           }))
