@@ -4,7 +4,7 @@
  * This ensures the Lambda always gets fresh credentials at publish time
  */
 
-import { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
 import { PublisherContentService } from '../services/publisher-content.js';
 import { createPublisherAuth } from '../middleware/publisher-auth.js';
@@ -13,10 +13,10 @@ const publisher: FastifyPluginAsync = async function (fastify) {
   // Retrieve API key inside plugin function for better security
   const PUBLISHER_API_KEY = process.env.PUBLISHER_API_KEY;
   
-  // Only enable if API key is configured
+  // Log the API key status but don't disable the endpoint
+  // In production, the secret is injected at runtime by ECS
   if (!PUBLISHER_API_KEY) {
-    fastify.log.warn('Publisher endpoint disabled - PUBLISHER_API_KEY not configured');
-    return;
+    fastify.log.warn('PUBLISHER_API_KEY not yet loaded - will be checked at request time');
   }
 
   // Rate limiting for security (max 100 requests per minute per API key)
@@ -33,11 +33,29 @@ const publisher: FastifyPluginAsync = async function (fastify) {
   // Optional: Set PUBLISHER_ALLOWED_IPS env var to restrict to specific IPs (comma-separated)
   // Example: PUBLISHER_ALLOWED_IPS="10.0.0.1,10.0.0.2" for Lambda NAT Gateway IPs
   const allowedIPs = process.env.PUBLISHER_ALLOWED_IPS?.split(',').filter(Boolean).map(ip => ip.trim());
-  const authMiddleware = createPublisherAuth({
-    apiKey: PUBLISHER_API_KEY,
-    requireHttps: process.env.NODE_ENV === 'production',
-    ...(allowedIPs && { allowedIPs })
-  });
+  
+  // Create middleware that checks API key at request time
+  const authMiddleware = async (request: FastifyRequest, reply: FastifyReply) => {
+    // Get API key at request time (allows for runtime injection by ECS)
+    const apiKey = process.env.PUBLISHER_API_KEY;
+    
+    if (!apiKey) {
+      fastify.log.error('PUBLISHER_API_KEY not configured - publisher endpoints will not work');
+      return reply.status(500).send({
+        error: 'Internal Server Error',
+        message: 'Publisher service not configured'
+      });
+    }
+    
+    // Now create and execute the actual auth middleware
+    const actualMiddleware = createPublisherAuth({
+      apiKey,
+      requireHttps: process.env.NODE_ENV === 'production',
+      ...(allowedIPs && { allowedIPs })
+    });
+    
+    return actualMiddleware(request, reply);
+  };
 
   /**
    * Get fresh content details for publishing
