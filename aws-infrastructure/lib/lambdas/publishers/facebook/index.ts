@@ -265,7 +265,7 @@ async function publishToFacebook(
 
     // Get the post details to retrieve permalink
     let postId = response.data.id
-    let permalink = null
+    let permalink: string | undefined
 
     // For photo posts, the response contains post_id
     if (response.data.post_id) {
