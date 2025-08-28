@@ -13,6 +13,7 @@ import { FacebookSignInIsolated } from '@/components/auth/FacebookSignInIsolated
 import { MagicLinkForm } from '@/components/auth/MagicLinkForm'
 import { validationRules } from '../utils/validation'
 import { TIMEOUTS } from '../constants/timeouts'
+import { getUserTimezone } from '../lib/timezone'
 import { Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -48,7 +49,10 @@ export function Register() {
     setError('')
 
     try {
-      await registerUser(data.email, data.password, data.name)
+      // Auto-detect user timezone
+      const timezone = getUserTimezone()
+      
+      await registerUser(data.email, data.password, data.name, timezone)
       toast.success('Account created successfully!', {
         description: 'Welcome to Postolio! Redirecting to dashboard...',
         icon: <CheckCircle className="text-green-500" />,

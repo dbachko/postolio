@@ -75,7 +75,8 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
             where: { id: user.id },
             data: { 
               googleId: googleUserInfo.id,
-              emailVerified: googleUserInfo.email_verified || user.emailVerified
+              // Google OAuth emails are always verified (Google has already verified them)
+              emailVerified: true
             },
             select: {
               id: true,
@@ -100,7 +101,8 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
             name: googleUserInfo.name,
             googleId: googleUserInfo.id,
             profilePicture: googleUserInfo.picture || null,
-            emailVerified: googleUserInfo.email_verified || false,
+            // Google OAuth emails are always verified (Google has already verified them)
+            emailVerified: true,
             subscriptionTier: 'free'
           },
           select: {
@@ -181,7 +183,8 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: userId },
         data: {
           googleId: payload.sub || '',
-          ...(payload.email_verified !== undefined && { emailVerified: payload.email_verified }),
+          // When linking Google account, mark email as verified (Google has verified it)
+          emailVerified: true,
           profilePicture: payload.picture || null
         },
         select: {

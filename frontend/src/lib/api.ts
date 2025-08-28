@@ -232,6 +232,7 @@ class ApiClient {
     email: string
     password: string
     name?: string
+    timezone?: string
   }): Promise<AuthResponse> {
     return this.request('/api/auth/register', {
       method: 'POST',

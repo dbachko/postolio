@@ -20,7 +20,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       enhancedRateLimiters.register()
     ]
   }, async (request, reply) => {
-    const { email, password, name } = request.body
+    const { email, password, name, timezone } = request.body
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -34,17 +34,21 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Create user
+    // Create user with auto-detected timezone
     const user = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         name: name || null,
+        timezone: timezone || 'UTC',  // Use detected timezone or UTC fallback
+        timezoneAutoDetected: true,   // Mark as auto-detected during registration
       },
       select: {
         id: true,
         email: true,
         name: true,
+        timezone: true,
+        timezoneAutoDetected: true,
         createdAt: true
       }
     })
