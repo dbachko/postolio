@@ -34,6 +34,8 @@ export const registerSchema = z.object({
     .min(1, 'Name is required')
     .max(100, 'Name must be less than 100 characters')
     .optional(),
+  timezone: z.string()
+    .optional() // Browser-detected timezone (e.g., 'America/New_York')
 })
 
 /**

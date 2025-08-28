@@ -6,6 +6,12 @@
 import { PrismaClient } from '@prisma/client'
 
 export function getDatabaseUrl(): string {
+  // First check if DATABASE_URL is provided
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL
+  }
+
+  // Otherwise, construct from individual variables
   const {
     DB_USERNAME,
     DB_PASSWORD,
@@ -15,7 +21,7 @@ export function getDatabaseUrl(): string {
   } = process.env
 
   if (!DB_USERNAME || !DB_PASSWORD || !DB_HOST || !DB_PORT || !DB_NAME) {
-    throw new Error('Missing required database environment variables: DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME')
+    throw new Error('Missing required database environment variables: DATABASE_URL or DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME')
   }
 
   // URL encode the username and password to handle special characters

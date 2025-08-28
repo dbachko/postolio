@@ -92,7 +92,9 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
             where: { id: user.id },
             data: { 
               facebookId: fbUserInfo.id,
-              profilePicture: fbUserInfo.picture?.data?.url || null
+              profilePicture: fbUserInfo.picture?.data?.url || null,
+              // If Facebook provided an email, it's verified
+              ...(fbUserInfo.email && { emailVerified: true })
             },
             select: {
               id: true,
