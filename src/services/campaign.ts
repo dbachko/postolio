@@ -411,6 +411,9 @@ class CampaignService {
 
       console.log(`Scheduling ${existingPreviews.length} preview posts for campaign: ${campaign.name}`)
 
+      // Log scheduling details for debugging
+      console.log(`Scheduling for brand ${campaign.brandId} in timezone: ${await TimezoneService.getBrandTimezone(campaign.brandId)}`)
+      
       // Schedule existing preview posts only
       for (let i = 0; i < Math.min(existingPreviews.length, postDates.length); i++) {
         const scheduledDate = postDates[i]
@@ -563,6 +566,7 @@ class CampaignService {
       : DEFAULT_TIMEZONE
 
     const current = new Date(startDate)
+    const now = new Date()
     
     while (current <= endDate) {
       // Create a date string in YYYY-MM-DD format for the current date
@@ -583,7 +587,14 @@ class CampaignService {
         timezone
       )
       
-      schedule.push(scheduledTime)
+      // Skip times that are in the past (with a 5-minute buffer for processing time)
+      const bufferTime = new Date(now.getTime() + 5 * 60 * 1000) // 5 minutes from now
+      if (scheduledTime > bufferTime) {
+        schedule.push(scheduledTime)
+      } else {
+        console.log(`Skipping past/too-soon scheduling time: ${scheduledTime.toISOString()} (current time + buffer: ${bufferTime.toISOString()})`)
+      }
+      
 
       // Increment based on frequency
       switch (frequency) {

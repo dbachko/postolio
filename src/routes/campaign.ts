@@ -72,8 +72,36 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const detectedTimezone = await TimezoneService.detectTimezone(request, userId)
         if (detectedTimezone !== 'UTC') {
           brandTimezone = detectedTimezone
+          
+          // Save the detected timezone to BOTH brand and user for future use
+          await Promise.all([
+            // Update brand timezone
+            prisma.brand.update({
+              where: { id: body.brandId },
+              data: { postingTimezone: detectedTimezone }
+            }),
+            // Update user timezone as auto-detected (if not already set)
+            prisma.user.update({
+              where: { 
+                id: userId,
+                // Only update if user doesn't have a manually set timezone
+                OR: [
+                  { timezone: null },
+                  { timezone: 'UTC' },
+                  { timezoneAutoDetected: true }
+                ]
+              },
+              data: { 
+                timezone: detectedTimezone,
+                timezoneAutoDetected: true 
+              }
+            })
+          ])
+          console.log(`Auto-detected and saved timezone ${detectedTimezone} for user ${userId} and brand ${body.brandId}`)
         }
       }
+      
+      console.log(`Campaign configuration using timezone: ${brandTimezone} for brand ${body.brandId}`)
       
       // Convert date strings to Date objects with timezone awareness
       const config: CampaignConfig = {
