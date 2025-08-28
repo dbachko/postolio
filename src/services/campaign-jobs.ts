@@ -163,13 +163,13 @@ class CampaignJobService {
 
       // Save new preview posts to database
       for (const post of examplePosts) {
-        console.log('Saving post to database:', {
+        console.log('Saving post to database:', JSON.stringify({
           caption: post.caption?.substring(0, 50) + '...',
           hashtags: post.hashtags?.length || 0,
           s3ImageKey: post.s3ImageKey || 'NOT SET',
           cdnImageUrl: post.cdnImageUrl?.substring(0, 80) + '...' || 'NOT SET',
           hasS3Fields: !!(post.s3ImageKey && post.cdnImageUrl)
-        })
+        }))
 
         await prisma.content.create({
           data: {

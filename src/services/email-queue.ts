@@ -128,28 +128,28 @@ export class EmailQueueService {
    */
   private setupEventListeners(): void {
     this.emailQueue.on('completed', (job: Bull.Job, result: EmailJobResult) => {
-      console.log(`✅ Email job ${job.id} completed:`, {
+      console.log(`✅ Email job ${job.id} completed:`, JSON.stringify({
         type: job.data.type,
         to: job.data.to,
         success: result.success,
-      })
+      }))
     })
 
     this.emailQueue.on('failed', (job: Bull.Job, err: Error) => {
-      console.error(`❌ Email job ${job.id} failed:`, {
+      console.error(`❌ Email job ${job.id} failed:`, JSON.stringify({
         type: job.data.type,
         to: job.data.to,
         error: err.message,
         attempts: job.attemptsMade,
         maxAttempts: job.opts.attempts,
-      })
+      }))
     })
 
     this.emailQueue.on('stalled', (job: Bull.Job) => {
-      console.warn(`⚠️ Email job ${job.id} stalled:`, {
+      console.warn(`⚠️ Email job ${job.id} stalled:`, JSON.stringify({
         type: job.data.type,
         to: job.data.to,
-      })
+      }))
     })
 
     this.emailQueue.on('error', (error: Error) => {
@@ -161,10 +161,10 @@ export class EmailQueueService {
     })
 
     this.emailQueue.on('active', (job: Bull.Job) => {
-      console.log(`🔄 Email job ${job.id} started processing:`, {
+      console.log(`🔄 Email job ${job.id} started processing:`, JSON.stringify({
         type: job.data.type,
         to: job.data.to,
-      })
+      }))
     })
   }
 
@@ -199,12 +199,12 @@ export class EmailQueueService {
 
     const job = await this.emailQueue.add('send-email', jobData, jobOptions)
 
-    console.log(`📧 Email job ${job.id} added to queue:`, {
+    console.log(`📧 Email job ${job.id} added to queue:`, JSON.stringify({
       type: jobData.type,
       to: jobData.to,
       priority,
       delay: delay > 0 ? `${delay}ms` : 'immediate',
-    })
+    }))
 
     return job
   }

@@ -261,7 +261,7 @@ export class ContentSchedulerClient {
     
     // Add debug logging for SigV4 signing
     if (this.debug) {
-      console.log('[ContentSchedulerClient] Configuring SigV4 signing:', {
+      console.log('[ContentSchedulerClient] Configuring SigV4 signing:', JSON.stringify({
         region: inferredRegion,
         service: 'execute-api',
         baseURL: normalizedBaseURL,
@@ -269,7 +269,7 @@ export class ContentSchedulerClient {
         AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION,
         // Check if we're running in ECS by looking for task metadata endpoint
         isECS: !!process.env.ECS_CONTAINER_METADATA_URI_V4,
-      });
+      }));
     }
     
     this.client.interceptors.request.use(sigv4Interceptor);
@@ -720,11 +720,11 @@ export class ContentSchedulerClient {
           // Log Authorization header to verify SigV4 signing
           const hasAuth = !!(config.headers['Authorization'] || config.headers['authorization']);
           if (!hasAuth && (config.method || 'get').toUpperCase() !== 'OPTIONS') {
-            console.warn('[ContentSchedulerClient] Warning: No Authorization header present before request', {
+            console.warn('[ContentSchedulerClient] Warning: No Authorization header present before request', JSON.stringify({
               url: config.url,
               fullUrl,
               headers: Object.keys(config.headers || {}),
-            });
+            }));
           }
           
           this.log('info', 'scheduler.http.request', {
@@ -768,7 +768,7 @@ export class ContentSchedulerClient {
           
           // Special handling for authentication errors
           if (error.response?.status === 403 && error.response?.data?.message === 'Missing Authentication Token') {
-            console.error('[ContentSchedulerClient] Authentication Error - Missing or invalid SigV4 signature:', {
+            console.error('[ContentSchedulerClient] Authentication Error - Missing or invalid SigV4 signature:', JSON.stringify({
               url: cfg.url,
               baseURL: cfg.baseURL,
               fullURL: this.composeFullUrl(cfg.baseURL || this.config.baseURL, cfg.url || ''),
@@ -776,7 +776,7 @@ export class ContentSchedulerClient {
               AWS_REGION: process.env.AWS_REGION,
               isECS: !!process.env.ECS_CONTAINER_METADATA_URI_V4,
               errorData: error.response?.data,
-            });
+            }));
           }
           
           this.log('error', 'scheduler.http.error', {
@@ -799,55 +799,55 @@ export class ContentSchedulerClient {
    */
   private setupCircuitBreakerEvents(): void {
     this.circuitBreaker.on('open', () => {
-      console.warn('Circuit breaker opened - requests will fail fast', {
+      console.warn('Circuit breaker opened - requests will fail fast', JSON.stringify({
         baseURL: this.config.baseURL,
         timestamp: new Date().toISOString(),
         stats: this.circuitBreaker.stats
-      });
+      }));
     });
 
     this.circuitBreaker.on('halfOpen', () => {
-      console.info('Circuit breaker half-open - testing service availability', {
+      console.info('Circuit breaker half-open - testing service availability', JSON.stringify({
         baseURL: this.config.baseURL,
         timestamp: new Date().toISOString(),
         stats: this.circuitBreaker.stats
-      });
+      }));
     });
 
     this.circuitBreaker.on('close', () => {
-      console.info('Circuit breaker closed - service recovered', {
+      console.info('Circuit breaker closed - service recovered', JSON.stringify({
         baseURL: this.config.baseURL,
         timestamp: new Date().toISOString(),
         stats: this.circuitBreaker.stats
-      });
+      }));
     });
 
     this.circuitBreaker.on('timeout', () => {
-      console.error('Circuit breaker timeout', {
+      console.error('Circuit breaker timeout', JSON.stringify({
         baseURL: this.config.baseURL,
         timeout: this.config.timeout,
         timestamp: new Date().toISOString(),
         stats: this.circuitBreaker.stats
-      });
+      }));
     });
 
     this.circuitBreaker.on('failure', (error: Error) => {
-      console.error('Circuit breaker failure detected', {
+      console.error('Circuit breaker failure detected', JSON.stringify({
         baseURL: this.config.baseURL,
         error: error.message,
         timestamp: new Date().toISOString(),
         stats: this.circuitBreaker.stats
-      });
+      }));
     });
 
     this.circuitBreaker.on('success', () => {
       // Only log on debug level to avoid spam
       if (process.env.NODE_ENV === 'development') {
-        console.debug('Circuit breaker success', {
+        console.debug('Circuit breaker success', JSON.stringify({
           baseURL: this.config.baseURL,
           timestamp: new Date().toISOString(),
           stats: this.circuitBreaker.stats
-        });
+        }));
       }
     });
   }

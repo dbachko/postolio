@@ -72,12 +72,12 @@ class AutopilotService {
    * This will be called by AWS Lambda when triggered by EventBridge
    */
   async handleEventBridgeTrigger(event: EventBridgeScheduledEvent): Promise<LambdaResponse> {
-    console.log('Autopilot triggered by EventBridge:', {
+    console.log('Autopilot triggered by EventBridge:', JSON.stringify({
       id: event.id,
       time: event.time,
       detailType: event['detail-type'],
       taskType: event.detail?.taskType,
-    });
+    }));
     
     const result = await this.runAutopilotGeneration();
     

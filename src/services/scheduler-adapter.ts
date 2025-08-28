@@ -498,11 +498,11 @@ export class SchedulerAdapter {
   ): Promise<void> {
     try {
       // Log to console for immediate visibility
-      console.error(`DATA INCONSISTENCY [${type}]:`, {
+      console.error(`DATA INCONSISTENCY [${type}]:`, JSON.stringify({
         contentId,
         timestamp: new Date().toISOString(),
         ...details,
-      });
+      }));
 
       // Store in database for reconciliation (using generationParams as audit trail)
       const content = await prisma.content.findUnique({

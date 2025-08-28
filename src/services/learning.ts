@@ -77,7 +77,7 @@ export class AILearningService {
       timingChanges: this.analyzeTimingChanges(originalContent.scheduledAt, editedContent.scheduledAt),
     }
 
-    console.log('Edit analysis completed:', analysis)
+    console.log('Edit analysis completed:', JSON.stringify(analysis))
     return analysis
   }
 
@@ -310,7 +310,7 @@ Focus on significant changes only. Return only JSON.`
         personalityShift: analysis.personalityShift || [],
       }
     } catch (error) {
-      console.error('Caption analysis error:', error)
+      console.error('Caption analysis error:', JSON.stringify(error, Object.getOwnPropertyNames(error)))
       return {
         lengthChange,
         toneChange: 'no_change',
@@ -344,7 +344,7 @@ Focus on significant changes only. Return only JSON.`
         popularityShift: this.analyzePopularityShift(added, removed),
       }
     } catch (error) {
-      console.error('Hashtag analysis error:', error)
+      console.error('Hashtag analysis error:', JSON.stringify(error, Object.getOwnPropertyNames(error)))
       return {
         countChange,
         addedCategories: [],
@@ -427,7 +427,7 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
       const categories = JSON.parse(response.choices[0]?.message?.content || '[]')
       return Array.isArray(categories) ? categories : []
     } catch (error) {
-      console.error('Hashtag categorization error:', error)
+      console.error('Hashtag categorization error:', JSON.stringify(error, Object.getOwnPropertyNames(error)))
       return []
     }
   }
