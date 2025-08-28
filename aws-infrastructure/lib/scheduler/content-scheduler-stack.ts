@@ -785,6 +785,18 @@ export class ContentSchedulerStack extends cdk.Stack {
       ]
     );
 
+    // Suppress WAF warning for non-production environments
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/SchedulerApi/DeploymentStage.${environment}/Resource`,
+      [
+        {
+          id: 'AwsSolutions-APIG3',
+          reason: `WAF not required for ${environment} environment. Production uses AWS WAF v2 for protection.`,
+        },
+      ]
+    );
+
     // Suppress API Gateway warnings (using IAM auth instead of Cognito)
     NagSuppressions.addResourceSuppressionsByPath(
       this,
