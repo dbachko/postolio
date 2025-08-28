@@ -144,11 +144,11 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
       generatedContent.map(async (item, index) => {
         try {
           const imageUrl = await generateBrandContentImage(item.imagePrompt || item.caption, styleProfile, brandName)
-          console.log('Generated image for post:', {
+          console.log('Generated image for post:', JSON.stringify({
             prompt: (item.imagePrompt || item.caption)?.substring(0, 50) + '...',
             imageUrl: imageUrl?.substring(0, 80) + '...' || 'Failed to generate',
             urlLength: imageUrl?.length || 0,
-          })
+          }))
           
           // Upload to S3 if image was generated successfully
           if (imageUrl && process.env.S3_IMAGES_BUCKET) {

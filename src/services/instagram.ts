@@ -587,12 +587,12 @@ class InstagramService {
   async handleWebhookEvent(event: any): Promise<void> {
     try {
       // Process Instagram webhook events
-      console.log('Processing Instagram webhook event:', event)
+      console.log('Processing Instagram webhook event:', JSON.stringify(event))
 
       // Implementation depends on specific webhook events you want to handle
       // Common events: media published, comments, mentions, etc.
     } catch (error) {
-      console.error('Failed to handle webhook event:', error)
+      console.error('Failed to handle webhook event:', JSON.stringify(error, Object.getOwnPropertyNames(error)))
     }
   }
 }

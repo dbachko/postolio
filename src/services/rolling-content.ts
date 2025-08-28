@@ -86,12 +86,12 @@ class RollingContentService {
       // Check queue status
       const queueStatus = await this.checkContentQueue(brandId)
       
-      console.log(`Queue status for brand ${brandId}:`, {
+      console.log(`Queue status for brand ${brandId}:`, JSON.stringify({
         totalScheduled: queueStatus.totalScheduled,
         daysAhead: queueStatus.daysAhead,
         needsGeneration: queueStatus.needsGeneration,
         minRequired: queueStatus.minQueueSize
-      })
+      }))
 
       if (!queueStatus.needsGeneration) {
         console.log(`Brand ${brandId} has sufficient content (${queueStatus.daysAhead} days ahead)`)

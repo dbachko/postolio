@@ -500,12 +500,12 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       if (caption !== undefined) {
         // Strict validation: caption must be a non-empty string
         if (!caption || typeof caption !== 'string' || caption.trim().length === 0) {
-          console.error('CRITICAL: Attempt to update content with invalid caption', {
+          console.error('CRITICAL: Attempt to update content with invalid caption', JSON.stringify({
             contentId,
             caption,
             captionType: typeof caption,
             captionLength: caption?.length || 0,
-          })
+          }))
           return reply.code(400).send({ error: 'Caption cannot be empty or invalid' })
         }
         updateData.caption = caption.trim() // Ensure we store trimmed caption
@@ -540,12 +540,12 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Log the update for debugging
-      console.log('Updating content with data:', {
+      console.log('Updating content with data:', JSON.stringify({
         contentId,
         updateData,
         originalScheduledAt: content.scheduledAt,
         originalStatus: content.status
-      })
+      }))
 
       // Update content
       const updatedContent = await prisma.content.update({
@@ -570,12 +570,12 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       await PublisherContentService.invalidateContentCache(contentId)
 
       // Log the result for debugging
-      console.log('Content update result:', {
+      console.log('Content update result:', JSON.stringify({
         contentId: updatedContent.id,
         newScheduledAt: updatedContent.scheduledAt,
         newStatus: updatedContent.status,
         updateSuccessful: true
-      })
+      }))
 
       // Handle scheduling changes with AWS ContentScheduler
       if (scheduledAt !== undefined) {
@@ -656,11 +656,11 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             .analyzeUserEdit(content.brand.id, originalContent, editedContent)
             .then((editAnalysis) => learningService.applyLearningToStyleProfile(content.brand.id, editAnalysis))
             .then((results) => {
-              console.log(`Learning applied for brand ${content.brand.id}:`, {
+              console.log(`Learning applied for brand ${content.brand.id}:`, JSON.stringify({
                 insights: results.insights.length,
                 profileUpdates: results.profileUpdates.length,
                 appliedToFuturePosts: results.appliedToFuturePosts,
-              })
+              }))
             })
             .catch((error) => {
               console.error('Learning application error:', error)
