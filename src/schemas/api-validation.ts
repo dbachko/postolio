@@ -24,28 +24,28 @@ export const PaginationSchema = z.object({
  * Post detail params
  */
 export const PostDetailParamsSchema = z.object({
-  postId: z.string().uuid('Invalid post ID format')
+  postId: z.string().cuid('Invalid post ID format')
 })
 
 /**
  * Brand params
  */
 export const BrandParamsSchema = z.object({
-  brandId: z.string().uuid('Invalid brand ID format')
+  brandId: z.string().cuid('Invalid brand ID format')
 })
 
 /**
  * Campaign params
  */
 export const CampaignParamsSchema = z.object({
-  campaignId: z.string().uuid('Invalid campaign ID format')
+  campaignId: z.string().cuid('Invalid campaign ID format')
 })
 
 /**
  * Content params
  */
 export const ContentParamsSchema = z.object({
-  contentId: z.string().uuid('Invalid content ID format')
+  contentId: z.string().cuid('Invalid content ID format')
 })
 
 /**
@@ -80,7 +80,7 @@ export const SortSchema = z.object({
  * Content generation request
  */
 export const ContentGenerationSchema = z.object({
-  brandId: z.string().uuid(),
+  brandId: z.string().cuid(),
   theme: z.string().min(1).max(100),
   count: z.number().int().min(1).max(10).default(1),
   style: z.string().optional(),
@@ -92,7 +92,7 @@ export const ContentGenerationSchema = z.object({
  */
 export const CampaignCreateSchema = z.object({
   name: z.string().min(1).max(100),
-  brandId: z.string().uuid(),
+  brandId: z.string().cuid(),
   config: z.object({
     frequency: z.enum(['daily', 'every-other-day', 'weekly']),
     themes: z.array(z.string()).min(1).max(10),
@@ -132,7 +132,7 @@ export const ContentApprovalSchema = z.object({
  * Schedule content request
  */
 export const ScheduleContentSchema = z.object({
-  contentId: z.string().uuid(),
+  contentId: z.string().cuid(),
   scheduledAt: z.string().refine(
     val => !isNaN(Date.parse(val)) && new Date(val) > new Date(),
     'Scheduled time must be in the future'
@@ -144,7 +144,7 @@ export const ScheduleContentSchema = z.object({
  * Analytics request
  */
 export const AnalyticsRequestSchema = z.object({
-  brandId: z.string().uuid(),
+  brandId: z.string().cuid(),
   timeRange: z.enum(['7d', '30d', '90d']),
   metrics: z
     .array(z.enum(['impressions', 'reach', 'engagement', 'growth']))
