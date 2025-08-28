@@ -21,6 +21,15 @@ CREATE TABLE "public"."users" (
     "scheduledDeletion" TIMESTAMP(3),
     "timezone" TEXT,
     "timezoneAutoDetected" BOOLEAN NOT NULL DEFAULT true,
+    "googleid" TEXT,
+    "facebookid" TEXT,
+    "profilepicture" TEXT,
+    "emailverified" BOOLEAN NOT NULL DEFAULT false,
+    "twofactorenabled" BOOLEAN NOT NULL DEFAULT false,
+    "twofactormethod" TEXT,
+    "twofactorsecret" TEXT,
+    "twofactorbackupcodes" JSONB,
+    "twofactorphonenumber" TEXT,
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
@@ -50,7 +59,6 @@ CREATE TABLE "public"."brands" (
 CREATE TABLE "public"."content" (
     "id" TEXT NOT NULL,
     "caption" TEXT NOT NULL,
-    "imageUrl" TEXT,
     "hashtags" TEXT[],
     "status" "public"."ContentStatus" NOT NULL DEFAULT 'draft',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -64,6 +72,7 @@ CREATE TABLE "public"."content" (
     "instagramPostId" TEXT,
     "analytics" JSONB,
     "schedulingError" TEXT,
+    "imageUrl" TEXT,
     "cdnImageUrl" TEXT,
     "imageRegion" TEXT,
     "retentionExpiresAt" TIMESTAMP(3),
@@ -110,8 +119,42 @@ CREATE TABLE "public"."campaign_templates" (
     CONSTRAINT "campaign_templates_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "public"."audit_logs" (
+    "id" TEXT NOT NULL,
+    "userid" TEXT,
+    "email" TEXT,
+    "eventtype" TEXT NOT NULL,
+    "ipaddress" TEXT,
+    "useragent" TEXT,
+    "metadata" JSONB NOT NULL DEFAULT '{}',
+    "success" BOOLEAN NOT NULL DEFAULT true,
+    "errormessage" TEXT,
+    "createdat" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "public"."users"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_googleid_key" ON "public"."users"("googleid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_facebookid_key" ON "public"."users"("facebookid");
+
+-- CreateIndex
+CREATE INDEX "content_brandId_status_idx" ON "public"."content"("brandId", "status");
+
+-- CreateIndex
+CREATE INDEX "content_scheduledAt_idx" ON "public"."content"("scheduledAt");
+
+-- CreateIndex
+CREATE INDEX "content_brandId_status_scheduledAt_idx" ON "public"."content"("brandId", "status", "scheduledAt");
+
+-- CreateIndex
+CREATE INDEX "content_campaignId_idx" ON "public"."content"("campaignId");
 
 -- CreateIndex
 CREATE INDEX "campaigns_priority_idx" ON "public"."campaigns"("priority");
@@ -133,6 +176,18 @@ CREATE INDEX "campaign_templates_isPublic_idx" ON "public"."campaign_templates"(
 
 -- CreateIndex
 CREATE INDEX "campaign_templates_createdAt_idx" ON "public"."campaign_templates"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_userid_idx" ON "public"."audit_logs"("userid");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_email_idx" ON "public"."audit_logs"("email");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_eventtype_idx" ON "public"."audit_logs"("eventtype");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_createdat_idx" ON "public"."audit_logs"("createdat");
 
 -- AddForeignKey
 ALTER TABLE "public"."brands" ADD CONSTRAINT "brands_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
