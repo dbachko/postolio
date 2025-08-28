@@ -7,6 +7,7 @@ import { validateAndSanitize } from '../middleware/validation.js'
 import { registerSchema, loginSchema, type RegisterInput, type LoginInput } from '../schemas/auth.js'
 import { AuditLogger, AuditEventType } from '../services/audit-logger.js'
 import { RefreshTokenService } from '../services/refresh-token.js'
+import { TimezoneService } from '../services/timezone.js'
 import Redis from 'ioredis'
 
 const prisma = getDatabaseClient()
@@ -157,6 +158,26 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
       
       return reply.code(401).send({ error: 'Invalid credentials' })
+    }
+
+    // Auto-detect and save timezone if user doesn't have one set
+    const userTimezone = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { timezone: true, timezoneAutoDetected: true }
+    })
+    
+    if (!userTimezone?.timezone || userTimezone.timezone === 'UTC' || userTimezone.timezoneAutoDetected) {
+      const detectedTimezone = await TimezoneService.detectTimezone(request, user.id)
+      if (detectedTimezone !== 'UTC') {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { 
+            timezone: detectedTimezone,
+            timezoneAutoDetected: true 
+          }
+        })
+        console.log(`Auto-detected and saved timezone ${detectedTimezone} for user ${user.id} during login`)
+      }
     }
 
     // Check if two-factor authentication is enabled
