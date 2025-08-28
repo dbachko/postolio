@@ -14,7 +14,6 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as kms from 'aws-cdk-lib/aws-kms';
-// Cognito removed - using IAM SigV4 authentication
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NagSuppressions } from 'cdk-nag';
@@ -57,8 +56,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // ==================== IAM SigV4 Authentication (No Cognito) ====================
-    // This microservice uses IAM SigV4 authentication instead of Cognito.
+    // This microservice uses IAM SigV4 authentication.
     // The main Postolio application authenticates using AWS IAM roles/credentials.
 
     // ==================== DynamoDB Tables with PITR ====================
@@ -787,14 +785,14 @@ export class ContentSchedulerStack extends cdk.Stack {
       ]
     );
 
-    // Suppress API Gateway Cognito authorizer warnings (using IAM auth instead)
+    // Suppress API Gateway warnings (using IAM auth)
     NagSuppressions.addResourceSuppressionsByPath(
       this,
       `/${this.stackName}/SchedulerApi/Default/schedules/POST/Resource`,
       [
         {
-          id: 'AwsSolutions-COG4',
-          reason: 'Using IAM SigV4 authentication for service-to-service communication instead of Cognito',
+          id: 'AwsSolutions-APIG4',
+          reason: 'Using IAM SigV4 authentication for service-to-service communication',
         },
       ]
     );
@@ -803,8 +801,8 @@ export class ContentSchedulerStack extends cdk.Stack {
       `/${this.stackName}/SchedulerApi/Default/schedules/GET/Resource`,
       [
         {
-          id: 'AwsSolutions-COG4',
-          reason: 'Using IAM SigV4 authentication for service-to-service communication instead of Cognito',
+          id: 'AwsSolutions-APIG4',
+          reason: 'Using IAM SigV4 authentication for service-to-service communication',
         },
       ]
     );
@@ -813,8 +811,8 @@ export class ContentSchedulerStack extends cdk.Stack {
       `/${this.stackName}/SchedulerApi/Default/schedules/{scheduleId}/GET/Resource`,
       [
         {
-          id: 'AwsSolutions-COG4',
-          reason: 'Using IAM SigV4 authentication for service-to-service communication instead of Cognito',
+          id: 'AwsSolutions-APIG4',
+          reason: 'Using IAM SigV4 authentication for service-to-service communication',
         },
       ]
     );
@@ -823,8 +821,8 @@ export class ContentSchedulerStack extends cdk.Stack {
       `/${this.stackName}/SchedulerApi/Default/schedules/{scheduleId}/PUT/Resource`,
       [
         {
-          id: 'AwsSolutions-COG4',
-          reason: 'Using IAM SigV4 authentication for service-to-service communication instead of Cognito',
+          id: 'AwsSolutions-APIG4',
+          reason: 'Using IAM SigV4 authentication for service-to-service communication',
         },
       ]
     );
@@ -833,8 +831,8 @@ export class ContentSchedulerStack extends cdk.Stack {
       `/${this.stackName}/SchedulerApi/Default/schedules/{scheduleId}/DELETE/Resource`,
       [
         {
-          id: 'AwsSolutions-COG4',
-          reason: 'Using IAM SigV4 authentication for service-to-service communication instead of Cognito',
+          id: 'AwsSolutions-APIG4',
+          reason: 'Using IAM SigV4 authentication for service-to-service communication',
         },
       ]
     );
@@ -983,7 +981,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       exportName: `${prefix}-api-arn`,
     });
 
-    // Cognito outputs removed - using IAM SigV4 authentication
 
     new cdk.CfnOutput(this, 'SchedulesTableName', {
       value: this.schedulesTable.tableName,

@@ -171,12 +171,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       description: 'Content Scheduler API ID',
       exportName: `postolio-scheduler-${props.environment}-api-id`,
     });
-
-    new cdk.CfnOutput(this, 'UserPoolId', {
-      value: this.userPool.userPoolId,
-      description: 'Cognito User Pool ID',
-      exportName: `postolio-scheduler-${props.environment}-user-pool-id`,
-    });
   }
 }
 ```
@@ -193,7 +187,6 @@ export class PostolioStack extends cdk.Stack {
     // Import values from ContentScheduler stack
     const schedulerApiUrl = cdk.Fn.importValue(`postolio-scheduler-${environment}-api-endpoint`);
     const schedulerApiId = cdk.Fn.importValue(`postolio-scheduler-${environment}-api-id`);
-    const userPoolId = cdk.Fn.importValue(`postolio-scheduler-${environment}-user-pool-id`);
 
     // Use imported values
     const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {

@@ -18,7 +18,7 @@ export interface SecuredApiGatewayProps {
     [path: string]: {
       lambda: lambda.Function
       methods: string[]
-      authType: 'IAM' | 'API_KEY' | 'COGNITO' | 'NONE'
+      authType: 'IAM' | 'API_KEY' | 'NONE'
       apiKeyRequired?: boolean
       throttle?: {
         burstLimit: number
@@ -248,10 +248,6 @@ export class SecuredApiGateway extends Construct {
           case 'API_KEY':
             authorizationType = apigateway.AuthorizationType.NONE
             apiKeyRequired = true
-            break
-          case 'COGNITO':
-            // Would need Cognito User Pool Authorizer
-            authorizationType = apigateway.AuthorizationType.COGNITO
             break
           case 'NONE':
             authorizationType = apigateway.AuthorizationType.NONE

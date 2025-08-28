@@ -242,9 +242,7 @@ async function runTests() {
     console.log(`\n${colors.yellow}⚠️  Some tests failed, but this may be expected without authentication.${colors.reset}`);
   }
   
-  console.log(`\n${colors.cyan}💡 To fully test the API, you need to:${colors.reset}`);
-  console.log(`  1. Create a user in Cognito User Pool: ${colors.yellow}us-east-1_231qeFMbj${colors.reset}`);
-  console.log(`  2. Get an authentication token`);
+
   console.log(`  3. Include the token in the Authorization header`);
   console.log(`\n${colors.cyan}Example with auth:${colors.reset}`);
   console.log(`  curl -X GET ${API_ENDPOINT}/schedules \\`);

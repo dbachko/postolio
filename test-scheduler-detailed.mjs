@@ -47,7 +47,7 @@ async function main() {
   checkResource('Stage', 'dev');
   checkResource('Methods', 'GET, POST, PUT, DELETE');
   checkResource('CORS', 'Enabled for all origins (dev)');
-  checkResource('Authentication', 'Cognito User Pools');
+  checkResource('Authentication', 'IAM');
 
   // 2. Lambda Functions
   printSection('Lambda Functions');
@@ -81,14 +81,7 @@ async function main() {
     });
   }
 
-  // 5. Cognito User Pool
-  printSection('Cognito Authentication');
-  checkResource('User Pool ID', 'us-east-1_231qeFMbj');
-  checkResource('User Pool Client', '766robomtsnda4f3a19lirtrnk');
-  checkResource('Authentication Type', 'Email-based');
-  checkResource('Password Policy', 'Strong (12+ chars, uppercase, lowercase, digits, symbols)');
-
-  // 6. EventBridge Scheduler
+  // 5. EventBridge Scheduler
   printSection('EventBridge Scheduler');
   const schedulerGroup = runCommand('aws scheduler list-schedule-groups --query "ScheduleGroups[?contains(Name, \'postolio-scheduler-dev\')].Name" --output json');
   if (schedulerGroup) {
@@ -143,13 +136,13 @@ async function main() {
   console.log(`  • API Endpoint: ${colors.yellow}${apiEndpoint}${colors.reset}`);
   console.log(`  • Lambda Functions: ${colors.yellow}3 deployed${colors.reset}`);
   console.log(`  • DynamoDB Tables: ${colors.yellow}3 created${colors.reset}`);
-  console.log(`  • Authentication: ${colors.yellow}Cognito configured${colors.reset}`);
+  console.log(`  • Authentication: ${colors.yellow}IAM configured${colors.reset}`);
   console.log(`  • Monitoring: ${colors.yellow}CloudWatch alarms active${colors.reset}`);
   
   console.log(`\n${colors.cyan}🔗 Next Steps:${colors.reset}`);
-  console.log(`  1. Create test user: ${colors.yellow}aws cognito-idp admin-create-user --user-pool-id us-east-1_231qeFMbj --username test@example.com${colors.reset}`);
-  console.log(`  2. Test with authentication: ${colors.yellow}curl -X POST ${apiEndpoint}schedules -H "Authorization: Bearer <token>"${colors.reset}`);
-  console.log(`  3. Monitor logs: ${colors.yellow}aws logs tail /aws/lambda/postolio-scheduler-dev-schedule-management --follow${colors.reset}`);
+  console.log(`  1. Test with authentication: ${colors.yellow}curl -X POST ${apiEndpoint}schedules -H "Authorization: Bearer <token>" --user REMOVED_HISTORICAL_CREDENTIAL --aws-sigv4 "aws:amz:us-east-1:execute-api"
+${colors.reset}`);
+  console.log(`  2. Monitor logs: ${colors.yellow}aws logs tail /aws/lambda/postolio-scheduler-dev-schedule-management --follow${colors.reset}`);
   
   console.log(`\n${colors.green}🎉 All systems operational!${colors.reset}\n`);
 }
