@@ -114,7 +114,23 @@ jobs:
           cd aws-infrastructure
           npm ci
           
-      - name: Deploy infrastructure with CDK
+      - name: Deploy ContentScheduler stack
+        working-directory: aws-infrastructure
+        run: |
+          echo "🚀 Deploying ContentScheduler stack first (required for Postolio)..."
+          npx cdk deploy ContentScheduler-${{ needs.set-environment.outputs.environment }} \
+            --require-approval never \
+            --context environment=${{ needs.set-environment.outputs.environment }} \
+            --context alertEmail=${{ vars.ALERT_EMAIL || '' }} \
+            --outputs-file scheduler-outputs-${{ needs.set-environment.outputs.environment }}.json
+          
+          echo "✅ ContentScheduler stack deployed successfully"
+          
+          # Display ContentScheduler outputs
+          echo "📋 ContentScheduler API Endpoint:"
+          cat scheduler-outputs-${{ needs.set-environment.outputs.environment }}.json | jq -r ".\"ContentScheduler-${{ needs.set-environment.outputs.environment }}\".ApiEndpoint"
+            
+      - name: Deploy Postolio infrastructure with CDK
         working-directory: aws-infrastructure
         env:
           # Pass user secrets as environment variables (CDK will pick them up)
@@ -122,6 +138,8 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           FACEBOOK_APP_SECRET: ${{ secrets.FACEBOOK_APP_SECRET }}
         run: |
+          echo "🚀 Deploying Postolio stack with ContentScheduler integration..."
+          
           # Deploy with environment-specific configuration
           # User secrets are passed via environment variables above
           npx cdk deploy Postolio-${{ needs.set-environment.outputs.environment }} \
@@ -137,6 +155,8 @@ jobs:
             --context corsOrigin=${{ vars.CORS_ORIGIN || vars.VITE_API_URL }} \
             --context logLevel=${{ vars.LOG_LEVEL || 'info' }} \
             --context enableMonitoring=${{ vars.ENABLE_MONITORING || 'false' }}
+            
+          echo "✅ Postolio stack deployed successfully"
             
       - name: Build frontend with environment variables
         working-directory: frontend
