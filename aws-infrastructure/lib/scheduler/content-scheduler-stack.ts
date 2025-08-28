@@ -767,7 +767,7 @@ export class ContentSchedulerStack extends cdk.Stack {
           reason: 'Lambda execution role requires wildcard permissions for CloudWatch Logs and X-Ray tracing',
           appliesTo: [
             'Resource::*',
-            `Resource::arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/postolio-scheduler-${environment}-*`,
+            `Resource::arn:aws:logs:${this.region}:<AWS::AccountId>:log-group:/aws/lambda/postolio-scheduler-${environment}-*`,
           ],
         },
       ]
@@ -785,7 +785,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       ]
     );
 
-    // Suppress API Gateway warnings (using IAM auth)
+    // Suppress API Gateway warnings (using IAM auth instead of Cognito)
     NagSuppressions.addResourceSuppressionsByPath(
       this,
       `/${this.stackName}/SchedulerApi/Default/schedules/POST/Resource`,
@@ -793,6 +793,10 @@ export class ContentSchedulerStack extends cdk.Stack {
         {
           id: 'AwsSolutions-APIG4',
           reason: 'Using IAM SigV4 authentication for service-to-service communication',
+        },
+        {
+          id: 'AwsSolutions-COG4',
+          reason: 'Using IAM SigV4 authentication for service-to-service communication instead of Cognito user pools',
         },
       ]
     );
@@ -804,6 +808,10 @@ export class ContentSchedulerStack extends cdk.Stack {
           id: 'AwsSolutions-APIG4',
           reason: 'Using IAM SigV4 authentication for service-to-service communication',
         },
+        {
+          id: 'AwsSolutions-COG4',
+          reason: 'Using IAM SigV4 authentication for service-to-service communication instead of Cognito user pools',
+        },
       ]
     );
     NagSuppressions.addResourceSuppressionsByPath(
@@ -813,6 +821,10 @@ export class ContentSchedulerStack extends cdk.Stack {
         {
           id: 'AwsSolutions-APIG4',
           reason: 'Using IAM SigV4 authentication for service-to-service communication',
+        },
+        {
+          id: 'AwsSolutions-COG4',
+          reason: 'Using IAM SigV4 authentication for service-to-service communication instead of Cognito user pools',
         },
       ]
     );
@@ -824,6 +836,10 @@ export class ContentSchedulerStack extends cdk.Stack {
           id: 'AwsSolutions-APIG4',
           reason: 'Using IAM SigV4 authentication for service-to-service communication',
         },
+        {
+          id: 'AwsSolutions-COG4',
+          reason: 'Using IAM SigV4 authentication for service-to-service communication instead of Cognito user pools',
+        },
       ]
     );
     NagSuppressions.addResourceSuppressionsByPath(
@@ -833,6 +849,10 @@ export class ContentSchedulerStack extends cdk.Stack {
         {
           id: 'AwsSolutions-APIG4',
           reason: 'Using IAM SigV4 authentication for service-to-service communication',
+        },
+        {
+          id: 'AwsSolutions-COG4',
+          reason: 'Using IAM SigV4 authentication for service-to-service communication instead of Cognito user pools',
         },
       ]
     );
@@ -897,7 +917,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::kms:GenerateDataKey*',
             'Action::kms:ReEncrypt*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
-            `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-scheduler-${environment}-schedules/*`,
+            `Resource::arn:aws:scheduler:${this.region}:<AWS::AccountId>:schedule/postolio-scheduler-${environment}-schedules/*`,
           ],
         },
       ]
