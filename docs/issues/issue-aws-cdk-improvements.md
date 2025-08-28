@@ -46,14 +46,6 @@ architecture: lambda.Architecture.ARM_64  // Graviton2
 
 ## Priority 2: Optimization (Week 2)
 
-### 🟢 Adopt AWS Solutions Constructs
-Replace custom implementation with `aws-cognito-apigateway-lambda`:
-```typescript
-import { CognitoToApiGatewayToLambda } from '@aws-solutions-constructs/aws-cognito-apigateway-lambda';
-```
-**Effort**: 2-3 days  
-**Impact**: 80% code reduction, built-in best practices
-
 ### 🟢 CloudFront Distribution
 ```typescript
 const distribution = new cloudfront.Distribution(this, 'VideoDistribution', {

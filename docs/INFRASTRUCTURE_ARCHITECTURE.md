@@ -18,7 +18,7 @@ The ContentScheduler is a dedicated microservice responsible for content schedul
   - Retry Handler Lambda
 - **DynamoDB Tables**: Schedule storage with TTL
 - **EventBridge Rules**: Automated scheduling triggers
-- **Cognito User Pool**: OAuth2 authentication provider
+- **IAM Roles**: For service-to-service authentication.
 - **CloudWatch**: Monitoring and alerting
 
 ### 2. Postolio Main Application Stack
@@ -57,8 +57,8 @@ Starting January 2025, all microservice communication uses OAuth2 Client Credent
 
 1. **Authentication Flow:**
    ```
-   Postolio → Request Token → Cognito User Pool
-   Cognito → Validate Credentials → Return JWT
+   Postolio -> Sign Request -> IAM
+   IAM -> Validate Signature -> Allow/Deny Access
    Postolio → API Request with JWT → ContentScheduler
    ContentScheduler → Validate JWT → Process Request
    ```

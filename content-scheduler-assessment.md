@@ -15,7 +15,7 @@ The Content Scheduler Integration implementation shows strong architectural foun
 - **Developer Experience**: Clean API, factory functions, health checks
 
 #### AWS Infrastructure (content-scheduler-stack.ts)
-- **Security**: KMS encryption, Cognito auth, WAF protection, PITR enabled
+- **Security**: KMS encryption, IAM auth, WAF protection, PITR enabled
 - **Scalability**: Auto-scaling, provisioned concurrency, DynamoDB GSIs
 - **Reliability**: DLQs, retry handlers, CloudWatch alarms
 - **Compliance**: GDPR considerations, audit logging, access logs
@@ -30,11 +30,11 @@ const client = new ContentSchedulerClient({
   apiKey: process.env.SCHEDULER_API_KEY
 })
 
-// But infrastructure uses Cognito
-const authorizer = new apigateway.CognitoUserPoolsAuthorizer(...)
+// But infrastructure uses IAM
+const authorizer = new apigateway.IamAuthorizer(...)
 ```
 **Impact**: SDK cannot authenticate with deployed API
-**Solution**: Implement Cognito token exchange in SDK
+**Solution**: Implement SigV4 request signing in SDK
 
 #### 2. **Missing User Context**
 ```typescript
@@ -79,20 +79,22 @@ await prisma.content.update(...) // Local state
 
 #### Missing Authentication Flow
 ```typescript
-// Required: Cognito authentication
+// Required: SigV4 signing
 class ContentSchedulerClient {
-  private async authenticate(): Promise<string> {
-    const cognitoClient = new CognitoIdentityProviderClient({})
-    const command = new InitiateAuthCommand({
-      ClientId: this.config.cognitoClientId,
-      AuthFlow: 'USER_PASSWORD_AUTH',
-      AuthParameters: {
-        USERNAME: this.config.username,
-        PASSWORD: this.config.password
-      }
-    })
-    const response = await cognitoClient.send(command)
-    return response.AuthenticationResult.IdToken
+  private async signRequest(request: HttpRequest): Promise<HttpRequest> {
+    const signer = new SignatureV4({
+      credentials: fromTemporaryCredentials({
+        accessKeyId: this.config.accessKeyId,
+        secretAccessKey: this.config.secretAccessKey,
+        sessionToken: this.config.sessionToken,
+      }),
+      region: 'us-east-1',
+      service: 'execute-api',
+      sha256: Sha256,
+    });
+    
+    const signedRequest = await signer.sign(request);
+    return signedRequest;
   }
 }
 ```
@@ -188,30 +190,31 @@ const publisherLambda = new NodejsFunction(this, 'Publisher', {
 ## 4. Recommended Refactoring Approach
 
 ### Phase 1: Authentication Integration (Day 1-2)
-1. **Add Cognito support to SDK**
+
+1. **Add SigV4 signing to SDK**
+
    ```typescript
    // src/clients/content-scheduler-client.ts
-   private async getAuthToken(): Promise<string> {
-     if (this.config.authMethod === 'cognito') {
-       return this.authenticateWithCognito()
-     }
-     return this.config.apiKey
+   private async signRequest(request: HttpRequest): Promise<HttpRequest> {
+     // SigV4 signing logic here
    }
    ```
 
 2. **Update service initialization**
+
    ```typescript
    // src/services/scheduler-v2.ts
    const client = new ContentSchedulerClient({
      baseURL: process.env.SCHEDULER_API_URL,
-     authMethod: 'cognito',
-     cognitoClientId: process.env.COGNITO_CLIENT_ID,
-     cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID
+     authMethod: 'iam',
+     // credentials will be sourced from environment
    })
    ```
 
 ### Phase 2: Service Integration (Day 3-4)
+
 1. **Create adapter service**
+
    ```typescript
    // src/services/scheduler-adapter.ts
    class SchedulerAdapter {
@@ -238,6 +241,7 @@ const publisherLambda = new NodejsFunction(this, 'Publisher', {
    ```
 
 2. **Implement dual-write pattern**
+
    ```typescript
    async syncToDatabase(schedule: Schedule, content: Content) {
      await prisma.$transaction(async (tx) => {
@@ -262,12 +266,15 @@ const publisherLambda = new NodejsFunction(this, 'Publisher', {
    ```
 
 ### Phase 3: Migration (Day 5)
+
 1. **Remove node-cron dependencies**
+
    ```bash
    npm uninstall node-cron @types/node-cron
    ```
 
 2. **Update service initialization**
+
    ```typescript
    // src/server.ts
    // Remove: schedulerService.start()
@@ -276,6 +283,7 @@ const publisherLambda = new NodejsFunction(this, 'Publisher', {
    ```
 
 3. **Deploy EventBridge rules**
+
    ```typescript
    // aws-infrastructure/lib/scheduler/autopilot-rule.ts
    new events.Rule(this, 'AutopilotRule', {
@@ -287,6 +295,7 @@ const publisherLambda = new NodejsFunction(this, 'Publisher', {
 ## 5. Testing Strategy Recommendations
 
 ### Unit Tests
+
 ```typescript
 // test/scheduler-client.test.ts
 describe('ContentSchedulerClient', () => {
@@ -335,6 +344,7 @@ describe('ContentSchedulerClient', () => {
 ```
 
 ### Integration Tests
+
 ```typescript
 // test/integration/scheduler-integration.test.ts
 describe('Scheduler Integration', () => {
@@ -379,6 +389,7 @@ describe('Scheduler Integration', () => {
 ```
 
 ### Load Tests
+
 ```typescript
 // test/load/scheduler-load.test.ts
 import autocannon from 'autocannon'
@@ -410,6 +421,7 @@ describe('Scheduler Load Tests', () => {
 ## 6. Monitoring & Observability
 
 ### Required Metrics
+
 ```typescript
 // Add custom metrics to SDK
 class ContentSchedulerClient {
@@ -437,6 +449,7 @@ class ContentSchedulerClient {
 ```
 
 ### Dashboard Requirements
+
 - Schedule creation rate
 - Failure rate by error type
 - Circuit breaker state changes
@@ -447,7 +460,8 @@ class ContentSchedulerClient {
 ## 7. Documentation Gaps
 
 ### Missing Documentation
-1. **Cognito Authentication Flow**: How to obtain and refresh tokens
+
+1. **Authentication Flow**: How to obtain and refresh tokens for SigV4
 2. **Error Recovery Procedures**: What happens when schedules fail
 3. **Data Consistency Model**: How dual-write ensures consistency
 4. **Migration Runbook**: Step-by-step migration from legacy

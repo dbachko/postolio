@@ -378,7 +378,7 @@ npm run test:coverage
 The application is designed for deployment on AWS using a modern containerized architecture with secure microservice communication. See the complete [AWS Deployment Strategy](docs/AWS_DEPLOYMENT_STRATEGY.md) for detailed information.
 
 #### 🔐 Security Updates (v2.3.0 - January 2025)
-- **OAuth2 Authentication**: Service-to-service authentication using AWS Cognito
+- **IAM SigV4 Authentication**: Service-to-service authentication using AWS IAM.
 - **Cross-Stack Dependencies**: ContentScheduler and Postolio stacks with automatic dependency management
 - **Secret Management**: Enhanced AWS Secrets Manager integration for OAuth2 credentials
 - **Zero-Trust Architecture**: All microservice communication requires authenticated JWT tokens
@@ -397,7 +397,7 @@ The application is designed for deployment on AWS using a modern containerized a
    ```
    
    This will deploy:
-   - ContentScheduler microservice stack (with Cognito User Pool)
+   - ContentScheduler microservice stack
    - Postolio main application stack (with OAuth2 client)
    - Cross-stack dependencies automatically configured
 
