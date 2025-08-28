@@ -394,8 +394,22 @@ redeploy_with_ecr_image() {
     # Temporary modification: change image source to ECR
     echo -e "${YELLOW}Updating CDK stack to use ECR image with tag: $IMAGE_TAG...${NC}"
     
-    # Deploy with ECR image using the specific tag to ensure new deployment
+    # Deploy both ContentScheduler and Postolio stacks
+    # ContentScheduler must be deployed first as Postolio depends on it
+    echo -e "${YELLOW}Deploying ContentScheduler stack first...${NC}"
+    npx cdk deploy ContentScheduler-$ENVIRONMENT \
+        --require-approval never \
+        --region $AWS_REGION
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to deploy ContentScheduler stack${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ ContentScheduler stack deployed successfully${NC}"
+    
+    # Deploy Postolio stack with ECR image using the specific tag to ensure new deployment
     # User secrets are passed as context from environment variables
+    echo -e "${YELLOW}Deploying Postolio stack...${NC}"
     npx cdk deploy Postolio-$ENVIRONMENT \
         --require-approval never \
         --context useEcrImage=true \
@@ -490,8 +504,24 @@ deploy_infrastructure() {
         fi
     fi
     
-    # Deploy the secure stack with ECR image using specific tag
+    # Deploy both ContentScheduler and Postolio stacks
+    # ContentScheduler must be deployed first as Postolio depends on it
+    echo -e "${YELLOW}Deploying ContentScheduler stack first...${NC}"
+    npx cdk deploy ContentScheduler-$ENVIRONMENT \
+        --context environment=$ENVIRONMENT \
+        --context account=$(aws sts get-caller-identity --query Account --output text) \
+        --context region=$AWS_REGION \
+        --require-approval never
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to deploy ContentScheduler stack${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ ContentScheduler stack deployed successfully${NC}"
+    
+    # Deploy Postolio stack with ECR image using specific tag
     # User secrets are passed as context from environment variables
+    echo -e "${YELLOW}Deploying Postolio stack...${NC}"
     npx cdk deploy Postolio-$ENVIRONMENT \
         --context environment=$ENVIRONMENT \
         --context account=$(aws sts get-caller-identity --query Account --output text) \

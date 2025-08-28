@@ -219,8 +219,22 @@ deploy_cdk_stack() {
         --context environment=production \
         --output "${LOGS_DIR}/cdk-synth"
     
-    # Deploy with approval
-    log_info "Deploying stack (this may take 15-30 minutes)..."
+    # Deploy both stacks - ContentScheduler first, then Postolio
+    log_info "Deploying ContentScheduler stack first..."
+    cdk deploy "ContentScheduler-prod" \
+        --context environment=production \
+        --require-approval never \
+        --outputs-file "${LOGS_DIR}/scheduler-outputs.json" \
+        --verbose | tee -a "${LOGS_DIR}/cdk-deploy.log"
+    
+    if [ $? -ne 0 ]; then
+        log_error "Failed to deploy ContentScheduler stack"
+        exit 1
+    fi
+    log_success "ContentScheduler stack deployed successfully"
+    
+    # Deploy Postolio stack (this may take 15-30 minutes)
+    log_info "Deploying Postolio stack..."
     cdk deploy "${STACK_NAME}" \
         --context environment=production \
         --require-approval never \
