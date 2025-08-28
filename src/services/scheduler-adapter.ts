@@ -18,10 +18,27 @@ export class SchedulerAdapter {
   private static instance: SchedulerAdapter | null = null;
   private broadcaster: StatusBroadcaster | null = null;
 
+  private schedulerEnabled: boolean = true;
+
   constructor(config?: Partial<ContentSchedulerConfig>) {
+    const baseURL = config?.baseURL || process.env.SCHEDULER_API_URL || 'http://localhost:4000';
+    
+    // Check if scheduler is properly configured
+    const isPlaceholderUrl = baseURL.includes('your-scheduler-api') || 
+                            baseURL.includes('scheduler-api-not-configured') ||
+                            baseURL.includes('example.com');
+    
+    if (isPlaceholderUrl) {
+      console.warn('⚠️  AWS Content Scheduler is not configured properly.');
+      console.warn(`⚠️  Current URL: ${baseURL}`);
+      console.warn('⚠️  Running in degraded mode - content will be saved but not scheduled for automatic publishing.');
+      console.warn('⚠️  To enable scheduling, deploy the ContentScheduler stack or set SCHEDULER_API_URL to a valid endpoint.');
+      this.schedulerEnabled = false;
+    }
+    
     // Initialize with environment config
     this.client = new ContentSchedulerClient({
-      baseURL: process.env.SCHEDULER_API_URL || 'http://localhost:4000',
+      baseURL,
       timeout: 30000,
       maxRetries: 3,
       ...config,
@@ -110,8 +127,12 @@ export class SchedulerAdapter {
       let scheduleId: string | undefined;
       let awsScheduleCreated = false;
       
-      try {
-        const schedule = await this.client.createSchedule({
+      // Skip AWS scheduling if scheduler is not enabled
+      if (!this.schedulerEnabled) {
+        console.info('Scheduler is disabled - saving content locally without AWS scheduling');
+      } else {
+        try {
+          const schedule = await this.client.createSchedule({
           contentId: content.id,
           brandId: content.brandId,
           userId: userId || content.brand.userId,
@@ -131,10 +152,18 @@ export class SchedulerAdapter {
         
         scheduleId = schedule.scheduleId;
         awsScheduleCreated = true;
-      } catch (awsError) {
-        console.error('Failed to create schedule in AWS:', awsError);
-        // AWS scheduling failed - we'll handle this below
+      } catch (awsError: any) {
+        // Handle circuit breaker and network errors gracefully
+        if (awsError?.code === 'CIRCUIT_BREAKER_OPEN' || awsError?.code === 'EOPENBREAKER') {
+          console.warn('Circuit breaker is open - AWS scheduler temporarily unavailable. Content will be saved locally but not scheduled for publishing.');
+        } else if (awsError?.code === 'NETWORK_ERROR') {
+          console.warn('Network error connecting to AWS scheduler. Content will be saved locally but not scheduled for publishing.');
+        } else {
+          console.error('Failed to create schedule in AWS:', awsError);
+        }
+        // AWS scheduling failed - we'll handle this below by updating local DB with error
       }
+    }
 
       // 5. Update local database only if AWS succeeded or as a tracked failure
       try {
@@ -253,13 +282,20 @@ export class SchedulerAdapter {
           await this.client.cancelSchedule(scheduleId);
           awsCancelled = true;
           console.log(`AWS schedule ${scheduleId} cancelled successfully`);
-        } catch (error) {
-          console.error('Failed to cancel in AWS:', error);
-          // Log inconsistency but continue with local update
-          await this.logInconsistency(contentId, 'AWS_CANCEL_FAILED', {
-            scheduleId,
-            error,
-          });
+        } catch (error: any) {
+          // Handle circuit breaker errors gracefully
+          if (error?.code === 'CIRCUIT_BREAKER_OPEN' || error?.code === 'EOPENBREAKER') {
+            console.warn('Circuit breaker is open - AWS scheduler temporarily unavailable. Continuing with local cancellation only.');
+          } else if (error?.code === 'NETWORK_ERROR') {
+            console.warn('Network error connecting to AWS scheduler. Continuing with local cancellation only.');
+          } else {
+            console.error('Failed to cancel in AWS:', error);
+            // Log inconsistency but continue with local update
+            await this.logInconsistency(contentId, 'AWS_CANCEL_FAILED', {
+              scheduleId,
+              error,
+            });
+          }
         }
       }
 
@@ -337,8 +373,15 @@ export class SchedulerAdapter {
         // Reschedule in AWS
         try {
           await this.client.reschedule(scheduleId, newTimeUTC);
-        } catch (error) {
-          console.error('Failed to reschedule in AWS:', error);
+        } catch (error: any) {
+          // Handle circuit breaker errors gracefully
+          if (error?.code === 'CIRCUIT_BREAKER_OPEN' || error?.code === 'EOPENBREAKER') {
+            console.warn('Circuit breaker is open - AWS scheduler temporarily unavailable. Continuing with local update only.');
+          } else if (error?.code === 'NETWORK_ERROR') {
+            console.warn('Network error connecting to AWS scheduler. Continuing with local update only.');
+          } else {
+            console.error('Failed to reschedule in AWS:', error);
+          }
           // Continue with local update even if AWS fails
         }
       }
