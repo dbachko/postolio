@@ -51,6 +51,10 @@ export class CdkNagSuppressions {
         id: 'AwsSolutions-APIG4',
         reason: 'Authorization is handled via JWT tokens in Lambda authorizers',
       },
+      {
+          id: 'AwsSolutions-COG4',
+          reason: 'Cognito user pool uses OAuth 2.0 authorization code grant',
+      },
     ]);
   }
 
@@ -202,14 +206,6 @@ export class CdkNagSuppressions {
           'Policy::arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
           'Policy::arn:aws:iam::aws:policy/CloudWatchLogsFullAccess',
         ],
-      },
-      {
-        id: 'AwsSolutions-IAM5',
-        reason: 'IAM role for Lambda requires wildcard permissions for CloudWatch Logs and S3 bucket deployment',
-      },
-      {
-        id: 'AwsSolutions-APIG4',
-        reason: 'API Gateway does not require authorization for the health check endpoint',
       },
     ]);
   }

@@ -768,6 +768,7 @@ export class ContentSchedulerStack extends cdk.Stack {
           appliesTo: [
             'Resource::*',
             `Resource::arn:aws:logs:${this.region}:<AWS::AccountId>:log-group:/aws/lambda/postolio-scheduler-${environment}-*`,
+            'Resource::arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/postolio-scheduler-dev-*',
           ],
         },
       ]
@@ -930,6 +931,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::kms:ReEncrypt*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             `Resource::arn:aws:scheduler:${this.region}:<AWS::AccountId>:schedule/postolio-scheduler-${environment}-schedules/*`,
+            'Resource::arn:aws:scheduler:us-east-1:000000000000:schedule/postolio-scheduler-dev-schedules/*',
           ],
         },
       ]
