@@ -30,7 +30,7 @@ export interface StatusUpdateData {
   contentId: string
   oldStatus: ContentStatus
   newStatus: ContentStatus
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   timestamp: string
 }
 
@@ -40,6 +40,7 @@ export interface WebSocketMessage {
   room?: string
   error?: string
   data?: StatusUpdateData | StatusUpdateData[]
+  timestamp?: number // For latency measurement in ping/pong
 }
 
 export interface UseSchedulingWebSocketOptions {
@@ -61,7 +62,7 @@ export interface UseSchedulingWebSocketOptions {
 export interface QueuedAction {
   id: string
   type: 'schedule' | 'reschedule' | 'cancel'
-  payload: Record<string, any>
+  payload: Record<string, unknown>
   timestamp: number
   retries: number
   lastAttempt?: number
@@ -79,9 +80,9 @@ export class WebSocketError extends Error {
   public readonly code: string
   public readonly isOperational: boolean = true
   public readonly timestamp: number
-  public readonly context?: Record<string, any>
+  public readonly context?: Record<string, unknown>
 
-  constructor(message: string, code: string, context?: Record<string, any>) {
+  constructor(message: string, code: string, context?: Record<string, unknown>) {
     super(message)
     this.name = 'WebSocketError'
     this.code = code
@@ -96,13 +97,13 @@ export class WebSocketError extends Error {
 }
 
 export class ConnectionError extends WebSocketError {
-  constructor(message: string, context?: Record<string, any>) {
+  constructor(message: string, context?: Record<string, unknown>) {
     super(message, 'CONNECTION_ERROR', context)
   }
 }
 
 export class AuthenticationError extends WebSocketError {
-  constructor(message: string, context?: Record<string, any>) {
+  constructor(message: string, context?: Record<string, unknown>) {
     super(message, 'AUTHENTICATION_ERROR', context)
   }
 }
@@ -114,7 +115,7 @@ export class TimeoutError extends WebSocketError {
 }
 
 export class NetworkError extends WebSocketError {
-  constructor(message: string, context?: Record<string, any>) {
+  constructor(message: string, context?: Record<string, unknown>) {
     super(message, 'NETWORK_ERROR', context)
   }
 }

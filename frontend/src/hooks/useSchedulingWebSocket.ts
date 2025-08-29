@@ -30,6 +30,8 @@ export function useSchedulingWebSocket({
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isConnectingRef = useRef(false) // Guard against multiple simultaneous connections
   const countdownIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined)
+  const lastConnectionAttemptRef = useRef<number>(0) // Track last connection attempt time
+  const tokenRefreshAttemptedRef = useRef(false) // Track if we've attempted token refresh
   
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected')
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
@@ -111,7 +113,7 @@ export function useSchedulingWebSocket({
         })
       } else if (newStatus === 'failed') {
         toast.error('Publishing failed', {
-          description: metadata?.error || 'Content could not be published to Instagram',
+          description: (metadata?.error as string) || 'Content could not be published to Instagram',
           duration: 8000,
         })
       } else if (newStatus === 'scheduled' && !metadata?.isOptimistic) {
@@ -121,29 +123,43 @@ export function useSchedulingWebSocket({
         })
       } else if (newStatus === 'draft' && metadata?.isRollback) {
         toast.warning('Scheduling failed', {
-          description: metadata?.error || 'Content has been returned to draft status',
+          description: (metadata?.error as string) || 'Content has been returned to draft status',
           duration: 5000,
         })
+      }
+      
+      // Define proper types for cache data
+      type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed'
+      
+      interface CacheData {
+        content?: Array<{ id: string; status: ContentStatus; [key: string]: unknown }>
+        [key: string]: unknown
+      }
+      
+      interface ContentItem {
+        id: string
+        status: ContentStatus
+        [key: string]: unknown
       }
       
       // Update content in cache
       queryClient.setQueriesData(
         { queryKey: ['content'] },
-        (oldData: any) => {
+        (oldData: CacheData | ContentItem[] | undefined) => {
           if (!oldData) return oldData
           
           // Handle array of content
           if (Array.isArray(oldData)) {
-            return oldData.map((item: any) =>
+            return oldData.map((item: ContentItem) =>
               item.id === contentId ? { ...item, status: newStatus } : item
             )
           }
           
           // Handle paginated response
-          if (oldData.content && Array.isArray(oldData.content)) {
+          if ('content' in oldData && Array.isArray(oldData.content)) {
             return {
               ...oldData,
-              content: oldData.content.map((item: any) =>
+              content: oldData.content.map((item: ContentItem) =>
                 item.id === contentId ? { ...item, status: newStatus } : item
               )
             }
@@ -155,9 +171,44 @@ export function useSchedulingWebSocket({
     }
   }, [queryKeys, queryClient, onStatusUpdate])
 
+  // Helper function to check if JWT is expired
+  const isTokenExpired = useCallback((token: string): boolean => {
+    try {
+      // Decode JWT without verification (just to check expiry)
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      const expiryTime = payload.exp * 1000 // Convert to milliseconds
+      return Date.now() >= expiryTime
+    } catch (error) {
+      console.error('Failed to decode JWT:', error)
+      return true // Assume expired if we can't decode
+    }
+  }, [])
+
+  // Helper function to refresh token
+  const refreshAuthToken = useCallback(async (): Promise<string | null> => {
+    try {
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.token) {
+          localStorage.setItem('auth_token', data.token)
+          return data.token
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh token:', error)
+    }
+    return null
+  }, [])
+
   // Exponential backoff calculation with jitter (react-use-websocket pattern)
   const calculateReconnectDelay = useCallback((attemptNumber: number) => {
-    const baseDelay = Math.min(Math.pow(2, attemptNumber) * 1000, 10000) // Cap at 10 seconds
+    // Increase max delay to 30 seconds for JWT expiration scenarios
+    const baseDelay = Math.min(Math.pow(2, attemptNumber) * 1000, 30000) // Cap at 30 seconds
     const jitter = Math.random() * 0.1 * baseDelay // Add 10% jitter to prevent thundering herd
     return Math.floor(baseDelay + jitter)
   }, [])
@@ -199,6 +250,53 @@ export function useSchedulingWebSocket({
       return
     }
 
+    // Rate limiting: prevent reconnection storms
+    const now = Date.now()
+    const timeSinceLastAttempt = now - lastConnectionAttemptRef.current
+    
+    // If we've reached max attempts and it's been less than 5 minutes, stop trying
+    if (reconnectAttemptsRef.current >= maxReconnectAttempts && timeSinceLastAttempt < 5 * 60 * 1000) {
+      console.log('Max reconnection attempts reached. Waiting before retry...')
+      return
+    }
+    
+    // Reset attempts counter if it's been more than 5 minutes since last attempt
+    if (timeSinceLastAttempt > 5 * 60 * 1000) {
+      reconnectAttemptsRef.current = 0
+      tokenRefreshAttemptedRef.current = false
+    }
+    
+    lastConnectionAttemptRef.current = now
+    
+    // Check if token is expired and attempt refresh
+    let currentToken = token
+    if (isTokenExpired(token)) {
+      console.log('JWT token expired, attempting refresh...')
+      
+      // Only attempt token refresh once per connection cycle
+      if (!tokenRefreshAttemptedRef.current) {
+        tokenRefreshAttemptedRef.current = true
+        const newToken = await refreshAuthToken()
+        
+        if (newToken) {
+          console.log('Token refreshed successfully')
+          currentToken = newToken
+          // Reset attempts since we have a fresh token
+          reconnectAttemptsRef.current = 0
+        } else {
+          console.error('Failed to refresh token. User may need to re-authenticate.')
+          handleConnectionChange('error')
+          // Don't attempt further connections without valid token
+          isConnectingRef.current = false
+          return
+        }
+      } else {
+        console.log('Token refresh already attempted, skipping...')
+        isConnectingRef.current = false
+        return
+      }
+    }
+
     isConnectingRef.current = true
 
     try {
@@ -215,7 +313,7 @@ export function useSchedulingWebSocket({
       try {
         const response = await fetch('/api/config/websocket', {
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${currentToken}`
           }
         })
         
@@ -243,6 +341,7 @@ export function useSchedulingWebSocket({
         isConnectingRef.current = false // Reset connecting flag
         handleConnectionChange('connected')
         reconnectAttemptsRef.current = 0
+        tokenRefreshAttemptedRef.current = false // Reset token refresh flag on successful connection
         setRetryIn(0) // Clear retry countdown
         
         // Clear countdown interval if exists
@@ -251,10 +350,10 @@ export function useSchedulingWebSocket({
           countdownIntervalRef.current = undefined
         }
 
-        // Authenticate and subscribe to brand room
+        // Authenticate and subscribe to brand room (use currentToken which may be refreshed)
         ws.send(JSON.stringify({
           type: 'auth',
-          token,
+          token: currentToken,
           brandId: selectedBrand.id
         }))
 
@@ -368,7 +467,19 @@ export function useSchedulingWebSocket({
             connect()
           }, delay)
         } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-          const maxAttemptsError = new ConnectionError(`Max reconnection attempts (${maxReconnectAttempts}) reached`)
+          console.log(`Max reconnection attempts (${maxReconnectAttempts}) reached. Will retry in 5 minutes.`)
+          
+          // Set a longer timeout (5 minutes) before allowing reconnection attempts again
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectAttemptsRef.current = 0
+            tokenRefreshAttemptedRef.current = false
+            if (enabled && token && selectedBrand) {
+              console.log('Retrying connection after cooldown period...')
+              connect()
+            }
+          }, 5 * 60 * 1000) // 5 minutes
+          
+          const maxAttemptsError = new ConnectionError(`Max reconnection attempts (${maxReconnectAttempts}) reached. Will retry in 5 minutes.`)
           handleWebSocketError(maxAttemptsError)
         }
       }
@@ -380,7 +491,7 @@ export function useSchedulingWebSocket({
         new ConnectionError('Failed to create WebSocket connection')
       handleWebSocketError(connectionError)
     }
-  }, [token, selectedBrand?.id, enabled, handleStatusUpdate, calculateReconnectDelay, maxReconnectAttempts, heartbeatInterval, handleConnectionChange, handleWebSocketError, messageFilter, offlineQueue])
+  }, [token, selectedBrand, enabled, handleStatusUpdate, calculateReconnectDelay, maxReconnectAttempts, heartbeatInterval, handleConnectionChange, handleWebSocketError, messageFilter, offlineQueue, isTokenExpired, refreshAuthToken])
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
@@ -479,6 +590,7 @@ export function useSchedulingWebSocket({
     // Reset state
     isConnectingRef.current = false
     reconnectAttemptsRef.current = 0
+    tokenRefreshAttemptedRef.current = false // Reset token refresh flag
     setRetryIn(0)
     
     // Close existing connection
@@ -505,7 +617,7 @@ export function useSchedulingWebSocket({
   }, [enabled, token, selectedBrand?.id]) // Stable deps only
 
   // Helper function to queue action when offline
-  const queueAction = useCallback((type: 'schedule' | 'reschedule' | 'cancel', payload: any) => {
+  const queueAction = useCallback((type: 'schedule' | 'reschedule' | 'cancel', payload: Record<string, unknown>) => {
     if (connectionStatus === 'disconnected' || connectionStatus === 'error') {
       return offlineQueue.enqueue(type, payload)
     }
