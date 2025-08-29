@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { apiClient, type Content } from '../lib/api'
-import { useDebounce } from '../hooks/useDebounce'
 import { ImageUploader } from './ImageUploader'
 import { PostCaptionEditor } from './PostCaptionEditor'
 import { PostHashtagEditor } from './PostHashtagEditor'
@@ -15,8 +14,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from './ui/dialog'
 import { Label } from './ui/label'
+import { Button } from './ui/button'
+import { Save } from 'lucide-react'
 
 interface PostEditorModalProps {
   content: Content | null
@@ -41,7 +43,10 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
   })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [hasChanges, setHasChanges] = useState(false)
+  const [showLearningMessage, setShowLearningMessage] = useState(false)
   const objectUrlRef = useRef<string | null>(null) // Track object URLs for cleanup
+  const originalDataRef = useRef<FormData | null>(null) // Track original data for comparison
   const [learningFeedback, setLearningFeedback] = useState<{
     isVisible: boolean
     message: string
@@ -66,12 +71,16 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
   // Initialize form data when content changes
   useEffect(() => {
     if (content && isOpen) {
-      setFormData({
+      const initialData = {
         caption: content.caption || '',
         hashtags: content.hashtags || [],
         cdnImageUrl: content.cdnImageUrl || '',
         scheduledAt: content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
-      })
+      }
+      setFormData(initialData)
+      originalDataRef.current = initialData
+      setHasChanges(false)
+      setShowLearningMessage(false)
     }
   }, [content, isOpen])
 
@@ -87,6 +96,9 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       })
       setLearningFeedback({ isVisible: false, message: '' })
       setSaveStatus('idle')
+      setHasChanges(false)
+      setShowLearningMessage(false)
+      originalDataRef.current = null
       // Clean up object URL when modal closes
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current)
@@ -105,28 +117,30 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
     }
   }, [])
 
-  // Additional safety check: Prevent form data corruption
-  useEffect(() => {
-    if (content && isOpen) {
-      // If we somehow have empty form data but valid content, restore it
-      if ((!formData.caption || formData.caption.trim() === '') && content.caption && content.caption.trim() !== '') {
-        console.warn('CRITICAL: Form data appears corrupted, restoring from content', {
-          contentId: content.id,
-          contentCaption: content.caption.substring(0, 50) + '...',
-          formCaption: formData.caption
-        })
-        setFormData({
-          caption: content.caption || '',
-          hashtags: content.hashtags || [],
-          cdnImageUrl: content.cdnImageUrl || '',
-          scheduledAt: content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
-        })
+  // Check for changes and show learning message
+  const checkForChanges = (newData: FormData) => {
+    if (!originalDataRef.current) return false
+    
+    const hasFormChanges = 
+      newData.caption !== originalDataRef.current.caption ||
+      JSON.stringify(newData.hashtags) !== JSON.stringify(originalDataRef.current.hashtags) ||
+      newData.cdnImageUrl !== originalDataRef.current.cdnImageUrl ||
+      newData.scheduledAt !== originalDataRef.current.scheduledAt
+    
+    setHasChanges(hasFormChanges)
+    
+    // Show learning message when user makes edits to caption or hashtags
+    if (hasFormChanges && !showLearningMessage) {
+      const textChanged = newData.caption !== originalDataRef.current.caption || 
+                         JSON.stringify(newData.hashtags) !== JSON.stringify(originalDataRef.current.hashtags)
+      if (textChanged) {
+        setShowLearningMessage(true)
       }
     }
-  }, [content, isOpen]) // Removed formData.caption to prevent unnecessary effects
+    
+    return hasFormChanges
+  }
 
-  // Debounced form data for auto-save
-  const debouncedFormData = useDebounce(formData, 500)
 
   const updateContentMutation = useMutation({
     mutationFn: (data: {
@@ -192,97 +206,53 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
     }
   })
 
-  // Auto-save when debounced form data changes
-  useEffect(() => {
-    console.log('🔄 Auto-save useEffect triggered', { 
-      hasContent: !!content, 
-      isOpen, 
-      debouncedCaption: debouncedFormData.caption?.substring(0, 20) 
+  // Manual save function
+  const saveChanges = async () => {
+    if (!content || !hasChanges) return
+    
+    // Safety check: Never save with empty caption
+    if (!formData.caption || formData.caption.trim().length === 0) {
+      console.error('Cannot save with empty caption')
+      return
+    }
+    
+    console.log('💾 Manually saving content:', { 
+      contentId: content.id, 
+      caption: formData.caption.substring(0, 30) + '...',
+      timestamp: new Date().toISOString()
     })
     
-    if (!content || !isOpen) {
-      console.log('Skipping autosave: content or modal not available', { contentId: content?.id, isOpen })
-      return
-    }
-
-    // Critical safety check: NEVER autosave if caption is empty
-    if (!debouncedFormData.caption || debouncedFormData.caption.trim().length === 0) {
-      console.warn('CRITICAL: Skipping autosave - Caption is empty or undefined', { 
-        contentId: content.id, 
-        caption: debouncedFormData.caption,
-        formDataKeys: Object.keys(debouncedFormData)
-      })
-      return
-    }
-
-    // Additional safety check: ensure we have meaningful form data
-    if (debouncedFormData.caption === '' && debouncedFormData.hashtags.length === 0 && debouncedFormData.cdnImageUrl === '') {
-      console.log('Skipping autosave: Form data appears to be empty initial state')
-      return
-    }
-
-    // Check if form data has actually changed from original content
-    const originalCaption = content.caption || ''
-    const originalHashtags = content.hashtags || []
-    const originalCdnImageUrl = content.cdnImageUrl || ''
-    const originalScheduledAt = content.scheduledAt ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm") : ''
-
-    const hasChanges = 
-      debouncedFormData.caption !== originalCaption ||
-      JSON.stringify(debouncedFormData.hashtags) !== JSON.stringify(originalHashtags) ||
-      debouncedFormData.cdnImageUrl !== originalCdnImageUrl ||
-      debouncedFormData.scheduledAt !== originalScheduledAt
-
-    if (hasChanges) {
-      // Final validation before mutation
-      if (!debouncedFormData.caption || debouncedFormData.caption.trim().length === 0) {
-        console.error('CRITICAL ERROR: About to autosave with empty caption!', {
-          contentId: content.id,
-          originalCaption,
-          newCaption: debouncedFormData.caption,
-          hasChanges,
-          formData: debouncedFormData
-        })
-        return
-      }
-
-      console.log('✅ Autosaving content:', { 
-        contentId: content.id, 
-        originalCaption: originalCaption.substring(0, 30) + '...', 
-        newCaption: debouncedFormData.caption.substring(0, 30) + '...',
-        cdnImageUrl: debouncedFormData.cdnImageUrl,
-        scheduledAt: debouncedFormData.scheduledAt,
-        originalScheduledAt: originalScheduledAt,
-        timestamp: new Date().toISOString()
-      })
-
-      // Always include scheduledAt in the mutation, even if empty
-      updateContentMutation.mutate({
-        contentId: content.id,
-        caption: debouncedFormData.caption,
-        hashtags: debouncedFormData.hashtags,
-        cdnImageUrl: debouncedFormData.cdnImageUrl || undefined,
-        scheduledAt: debouncedFormData.scheduledAt // Send empty string if cleared, datetime string if set
-      })
-    }
-  }, [debouncedFormData, content, isOpen]) // FIXED: Removed updateContentMutation from dependencies
+    updateContentMutation.mutate({
+      contentId: content.id,
+      caption: formData.caption,
+      hashtags: formData.hashtags,
+      cdnImageUrl: formData.cdnImageUrl || undefined,
+      scheduledAt: formData.scheduledAt
+    })
+    
+    // Update the original data reference after successful save
+    originalDataRef.current = formData
+    setHasChanges(false)
+  }
 
   const handleCaptionChange = (value: string) => {
-    setFormData(prev => ({ ...prev, caption: value }))
+    const newData = { ...formData, caption: value }
+    setFormData(newData)
+    checkForChanges(newData)
   }
 
   const handleHashtagsChange = (hashtags: string[]) => {
-    setFormData(prev => ({ ...prev, hashtags }))
+    const newData = { ...formData, hashtags }
+    setFormData(newData)
+    checkForChanges(newData)
   }
 
   const handleImageChange = async (fileOrUrl: string | File) => {
     if (typeof fileOrUrl === 'string') {
       // Direct URL update (e.g., when removing the image)
-      setFormData(prev => ({ ...prev, cdnImageUrl: fileOrUrl }))
-      
-      // If it's an empty string, it means the user removed the image
-      // This will trigger the auto-save via the debounced form data
-      // No need to mutate content object - auto-save will handle it
+      const newData = { ...formData, cdnImageUrl: fileOrUrl }
+      setFormData(newData)
+      checkForChanges(newData)
     } else {
       // File upload - create local preview immediately
       // Revoke previous object URL if it exists
@@ -301,10 +271,9 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
           if (response.success && response.content) {
             // Update with the server's response - use cdnImageUrl if available
             const newImageUrl = response.content.cdnImageUrl || objectUrl
-            setFormData(prev => ({ 
-              ...prev, 
-              cdnImageUrl: newImageUrl 
-            }))
+            const newData = { ...formData, cdnImageUrl: newImageUrl }
+            setFormData(newData)
+            checkForChanges(newData)
             setSaveStatus('saved')
             setLastSaved(new Date())
             
@@ -345,22 +314,16 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       to: value,
       contentId: content?.id 
     })
-    setFormData(prev => ({ ...prev, scheduledAt: value }))
-    
-    // Trigger immediate save for scheduled time changes
-    if (content && content.id) {
-      setSaveStatus('saving')
-      updateContentMutation.mutate({
-        contentId: content.id,
-        caption: formData.caption,
-        hashtags: formData.hashtags,
-        cdnImageUrl: formData.cdnImageUrl || undefined,
-        scheduledAt: value // Use the new value directly
-      })
-    }
+    const newData = { ...formData, scheduledAt: value }
+    setFormData(newData)
+    checkForChanges(newData)
   }
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    // Save changes on close if there are any
+    if (hasChanges) {
+      await saveChanges()
+    }
     setSaveStatus('idle')
     setLastSaved(null)
     onClose()
@@ -380,7 +343,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
           <PostSaveIndicator
             status={saveStatus}
             lastSaved={lastSaved}
-            showAILearningMessage={saveStatus === 'saved'}
+            showAILearningMessage={showLearningMessage && hasChanges}
           />
         </DialogHeader>
 
@@ -424,6 +387,17 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
             createdAt={content.createdAt}
           />
         </div>
+        
+        <DialogFooter>
+          <Button
+            onClick={saveChanges}
+            disabled={!hasChanges || updateContentMutation.isLoading}
+            className="flex items-center gap-2"
+          >
+            <Save className="h-4 w-4" />
+            Save Changes
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
