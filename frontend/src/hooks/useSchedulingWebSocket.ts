@@ -87,6 +87,20 @@ export function useSchedulingWebSocket({
     ]
   }, [selectedBrand?.id])
 
+  // Type definitions for cache data (moved outside callback for performance)
+  type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed'
+  
+  interface ContentItem {
+    id: string
+    status: ContentStatus
+    [key: string]: unknown
+  }
+  
+  interface CacheData {
+    content?: ContentItem[]
+    [key: string]: unknown
+  }
+
   // Handle status update and invalidate queries
   const handleStatusUpdate = useCallback((event: StatusUpdateEvent) => {
     setLastUpdate(new Date())
@@ -128,20 +142,6 @@ export function useSchedulingWebSocket({
         })
       }
       
-      // Define proper types for cache data
-      type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed'
-      
-      interface CacheData {
-        content?: Array<{ id: string; status: ContentStatus; [key: string]: unknown }>
-        [key: string]: unknown
-      }
-      
-      interface ContentItem {
-        id: string
-        status: ContentStatus
-        [key: string]: unknown
-      }
-      
       // Update content in cache
       queryClient.setQueriesData(
         { queryKey: ['content'] },
@@ -174,8 +174,18 @@ export function useSchedulingWebSocket({
   // Helper function to check if JWT is expired
   const isTokenExpired = useCallback((token: string): boolean => {
     try {
+      // Validate JWT format: should have 3 parts separated by dots
+      if (typeof token !== 'string') {
+        console.error('JWT token is not a string')
+        return true
+      }
+      const parts = token.split('.')
+      if (parts.length !== 3 || !parts[1]) {
+        console.error('JWT token is not properly formatted')
+        return true
+      }
       // Decode JWT without verification (just to check expiry)
-      const payload = JSON.parse(atob(token.split('.')[1]))
+      const payload = JSON.parse(atob(parts[1]))
       const expiryTime = payload.exp * 1000 // Convert to milliseconds
       return Date.now() >= expiryTime
     } catch (error) {
@@ -198,9 +208,23 @@ export function useSchedulingWebSocket({
           localStorage.setItem('auth_token', data.token)
           return data.token
         }
+        console.error('Token refresh response missing token field:', data)
+      } else {
+        // Log detailed error information for non-2xx responses
+        const errorText = await response.text()
+        console.error(`Token refresh failed with status ${response.status}: ${response.statusText}`, errorText)
+        
+        // Handle specific error codes
+        if (response.status === 401) {
+          console.error('Authentication expired. User needs to log in again.')
+        } else if (response.status === 403) {
+          console.error('Token refresh forbidden. Invalid refresh token.')
+        } else if (response.status >= 500) {
+          console.error('Server error during token refresh. Will retry later.')
+        }
       }
     } catch (error) {
-      console.error('Failed to refresh token:', error)
+      console.error('Network error during token refresh:', error)
     }
     return null
   }, [])
