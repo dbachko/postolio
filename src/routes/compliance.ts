@@ -56,8 +56,7 @@ export async function complianceRoutes(app: FastifyInstance) {
               content: true,
               campaigns: true
             }
-          },
-          campaignTemplates: true
+          }
         }
       })
 

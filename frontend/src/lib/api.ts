@@ -94,28 +94,6 @@ export interface Campaign {
   completedAt?: string | null
 }
 
-export interface CampaignTemplate {
-  id: string
-  name: string
-  description: string | null
-  category: string
-  config?: {
-    duration?: { start: string, end: string }
-    frequency?: 'daily' | 'every2days' | '3weekly' | string
-    themes?: string[]
-    style?: string
-    postingTime?: string
-    priority?: number
-  }
-  exampleContent?: Content[]
-  usageCount: number
-  createdBy: string
-  createdAt: string
-  updatedAt: string
-  tags?: string[]
-  isPublic: boolean
-}
-
 // API base URL configuration
 // Empty string means use relative URLs (for development with proxy)
 // Full URL for production or explicit configuration
@@ -637,94 +615,6 @@ class ApiClient {
     return this.request('/api/campaign/coordination')
   }
 
-  // Template endpoints
-  async getTemplates(filters?: {
-    category?: string
-    tags?: string[]
-    search?: string
-    isPublic?: boolean
-  }): Promise<{ success: boolean; templates: CampaignTemplate[] }> {
-    const params = new URLSearchParams()
-    if (filters?.category) params.append('category', filters.category)
-    if (filters?.tags) filters.tags.forEach(tag => params.append('tags', tag))
-    if (filters?.search) params.append('search', filters.search)
-    if (filters?.isPublic !== undefined) params.append('isPublic', filters.isPublic.toString())
-    
-    const url = '/api/templates' + (params.toString() ? `?${params.toString()}` : '')
-    return this.request(url)
-  }
-
-  async getTemplate(templateId: string): Promise<{ success: boolean; template: CampaignTemplate }> {
-    return this.request(`/api/templates/${templateId}`)
-  }
-
-  async createTemplate(data: {
-    name: string
-    description?: string
-    category: string
-    campaignId?: string
-    config?: any
-    tags?: string[]
-    isPublic?: boolean
-  }): Promise<{ success: boolean; template: CampaignTemplate }> {
-    return this.request('/api/templates', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async updateTemplate(templateId: string, updates: {
-    name?: string
-    description?: string
-    category?: string
-    tags?: string[]
-    isPublic?: boolean
-  }): Promise<{ success: boolean; template: CampaignTemplate }> {
-    return this.request(`/api/templates/${templateId}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    })
-  }
-
-  async deleteTemplate(templateId: string): Promise<{ success: boolean; message: string }> {
-    return this.request(`/api/templates/${templateId}`, {
-      method: 'DELETE',
-    })
-  }
-
-  async useTemplate(templateId: string, data: {
-    name: string
-    brandId: string
-    duration?: { start: Date, end: Date }
-  }): Promise<{ success: boolean; campaign: any }> {
-    return this.request(`/api/templates/${templateId}/apply`, {
-      method: 'POST',
-      body: JSON.stringify({
-        name: data.name,
-        brandId: data.brandId,
-        duration: data.duration ? {
-          start: data.duration.start.toISOString(),
-          end: data.duration.end.toISOString()
-        } : {
-          start: new Date().toISOString(),
-          end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
-        }
-      }),
-    })
-  }
-
-
-  async saveCampaignAsTemplate(campaignId: string, data: {
-    name: string
-    description?: string
-    isPublic?: boolean
-    brandId?: string
-  }): Promise<{ success: boolean; template: CampaignTemplate }> {
-    return this.request(`/api/templates/campaigns/${campaignId}/save-template`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-  }
 
   // Post Detail Methods
   async getPostDetail(postId: string): Promise<{

@@ -28,7 +28,6 @@ async function cleanDatabase() {
   // Delete in order to respect foreign key constraints
   await prisma.content.deleteMany({})
   await prisma.campaign.deleteMany({})
-  await prisma.campaignTemplate.deleteMany({})
   await prisma.brand.deleteMany({})
   await prisma.user.deleteMany({})
 }

@@ -5,14 +5,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useBrandStore } from '../stores/brandStore'
-import { apiClient, type CampaignConfig, type Content, type Campaign, type CampaignTemplate } from '../lib/api'
+import { apiClient, type CampaignConfig, type Content, type Campaign } from '../lib/api'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { PostEditorModal } from '../components/PostEditorModal'
-import { TemplateSelector } from '../components/TemplateSelector'
-import { SaveAsTemplateModal } from '../components/SaveAsTemplateModal'
 import { CampaignAnalytics } from '../components/CampaignAnalytics'
 import { CampaignComparison } from '../components/CampaignComparison'
 import { CampaignsList } from '../components/CampaignsList'
@@ -22,7 +20,7 @@ import { frequencyOptions, styleOptions } from '../constants/campaign'
 import { useCampaignEdit } from '../hooks/useCampaignEdit'
 import { 
   Loader2, Edit, Calendar, Users, TrendingUp, AlertCircle, Plus,
-  FileText, Bookmark, BarChart3
+  BarChart3
 } from 'lucide-react'
 
 
@@ -67,12 +65,6 @@ export function Campaigns() {
   // Modal state
   const [selectedPost, setSelectedPost] = useState<Content | null>(null)
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false)
-  const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false)
-  const [templateSelectorMode, setTemplateSelectorMode] = useState<'create' | 'configure'>('create')
-  const [isSaveAsTemplateOpen, setIsSaveAsTemplateOpen] = useState(false)
-  const [saveAsTemplateCampaignId, setSaveAsTemplateCampaignId] = useState<string | null>(null)
-  const [isFormPrefilledFromTemplate, setIsFormPrefilledFromTemplate] = useState(false)
-  const [usedTemplateName, setUsedTemplateName] = useState<string | null>(null)
   const [isComparisonOpen, setIsComparisonOpen] = useState(false)
   const [pollingCampaigns, setPollingCampaigns] = useState<Set<string>>(new Set())
 
@@ -384,8 +376,6 @@ export function Campaigns() {
     // Reset form data to initial state when creating new campaign
     setFormData(initialFormData)
     setErrors({})
-    setIsFormPrefilledFromTemplate(false)
-    setUsedTemplateName(null)
     setCurrentView('create')
     navigate('/campaigns/create')
   }, [navigate])
@@ -481,10 +471,6 @@ export function Campaigns() {
     return Object.keys(newErrors).length === 0
   }
 
-  const getTodayDate = () => {
-    return format(new Date(), 'yyyy-MM-dd')
-  }
-
   const getFrequencyLabel = (frequency: string) => {
     const option = frequencyOptions.find(opt => opt.value === frequency)
     return option ? option.label : frequency
@@ -570,29 +556,6 @@ export function Campaigns() {
     setIsPostEditorOpen(true)
   }
 
-  const handleUseTemplate = () => {
-    setTemplateSelectorMode('create')
-    setIsTemplateSelectorOpen(true)
-  }
-
-  const handleTemplateSelected = (campaignId: string) => {
-    // TODO: Use campaignId to navigate to specific campaign if needed
-    console.log('Campaign created from template:', campaignId)
-    setIsTemplateSelectorOpen(false)
-    setCurrentView('dashboard')
-    campaignsQuery.refetch()
-    toast.success('Campaign created from template successfully!')
-  }
-
-  const handleSaveAsTemplate = (campaignId: string) => {
-    setSaveAsTemplateCampaignId(campaignId)
-    setIsSaveAsTemplateOpen(true)
-  }
-
-  const handleTemplateSaved = () => {
-    setIsSaveAsTemplateOpen(false)
-    setSaveAsTemplateCampaignId(null)
-  }
 
   return (
     <div className="space-y-6">
@@ -634,10 +597,6 @@ export function Campaigns() {
                     <BarChart3 className="w-4 h-4" />
                     Compare Campaigns
                   </Button>
-                  <Button variant="outline" onClick={handleUseTemplate} className="flex items-center gap-2 bg-blue-50 border-blue-200 hover:bg-blue-100">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                    Use Template
-                  </Button>
                   <Button onClick={handleCreateNewCampaign} className="flex items-center gap-2">
                     <Plus className="w-4 h-4" />
                     Create New Campaign
@@ -670,10 +629,6 @@ export function Campaigns() {
                 Create your first automated content campaign to get started.
               </p>
               <div className="flex gap-2 justify-center">
-                <Button variant="outline" onClick={handleUseTemplate} className="flex items-center gap-2 bg-blue-50 border-blue-200 hover:bg-blue-100">
-                  <FileText className="w-4 h-4 text-blue-600" />
-                  Use Template
-                </Button>
                 <Button onClick={handleCreateNewCampaign} className="flex items-center gap-2">
                   <Plus className="w-4 h-4" />
                   Create New Campaign
@@ -702,8 +657,6 @@ export function Campaigns() {
           formData={formData}
           errors={errors}
           isSubmitting={configureMutation.isPending}
-          isFormPrefilledFromTemplate={isFormPrefilledFromTemplate}
-          usedTemplateName={usedTemplateName}
           onSubmit={handleSubmit}
           onInputChange={handleInputChange}
           onAddTheme={addTheme}
@@ -712,11 +665,8 @@ export function Campaigns() {
             setCurrentView('dashboard')
             setFormData(initialFormData)
             setErrors({})
-            setIsFormPrefilledFromTemplate(false)
-            setUsedTemplateName(null)
             navigate('/campaigns', { replace: true })
           }}
-          onUseTemplate={handleUseTemplate}
         />
       )}
 
@@ -780,14 +730,6 @@ export function Campaigns() {
                         Edit Campaign
                       </Button>
                     )}
-                    <Button 
-                      variant="outline" 
-                      onClick={() => handleSaveAsTemplate(campaignDetailsQuery.data.campaign.id)}
-                      className="flex items-center gap-2"
-                    >
-                      <Bookmark className="w-4 h-4" />
-                      Save as Template
-                    </Button>
                   </div>
                 </div>
               </div>
@@ -1115,56 +1057,6 @@ export function Campaigns() {
         }}
       />
 
-      {/* Template Selector Modal */}
-      {selectedBrand && (
-        <TemplateSelector
-          open={isTemplateSelectorOpen}
-          onOpenChange={setIsTemplateSelectorOpen}
-          brandId={selectedBrand.id}
-          onTemplateSelected={handleTemplateSelected}
-          onTemplateForConfiguration={(template: CampaignTemplate) => {
-            // Pre-fill form with template data
-            const templateConfig = template.config || {}
-            const today = getTodayDate()
-            const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
-            
-            // Type-safe frequency handling
-            const templateFrequency = templateConfig.frequency
-            const safeFrequency = (templateFrequency && 
-              ['daily', 'every2days', '3weekly'].includes(templateFrequency)) 
-              ? templateFrequency as 'daily' | 'every2days' | '3weekly'
-              : '' as const
-            
-            setFormData({
-              name: `${template.name} Campaign`,
-              startDate: today,
-              endDate: format(endDate, 'yyyy-MM-dd'),
-              frequency: safeFrequency,
-              themes: templateConfig.themes || [],
-              style: templateConfig.style || '',
-              postingTime: templateConfig.postingTime || '12:00',
-              priority: templateConfig.priority || 5
-            })
-            
-            setIsTemplateSelectorOpen(false)
-            setCurrentView('create')
-            setIsFormPrefilledFromTemplate(true)
-            setUsedTemplateName(template.name)
-            toast.success(`Campaign form pre-filled with "${template.name}" template settings!`)
-          }}
-          mode={templateSelectorMode}
-        />
-      )}
-
-      {/* Save as Template Modal */}
-      {saveAsTemplateCampaignId && (
-        <SaveAsTemplateModal
-          open={isSaveAsTemplateOpen}
-          onOpenChange={setIsSaveAsTemplateOpen}
-          campaignId={saveAsTemplateCampaignId}
-          onTemplateSaved={handleTemplateSaved}
-        />
-      )}
 
       {/* Campaign Comparison Modal */}
       <CampaignComparison

@@ -229,11 +229,6 @@ export class RetentionManager {
         where: { userId }
       })
 
-      // Delete campaign templates
-      await prisma.campaignTemplate.deleteMany({
-        where: { createdById: userId }
-      })
-
       // Finally, delete the user
       await prisma.user.delete({
         where: { id: userId }
