@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { ReactElement } from 'react'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://localhost:3000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 export function TermsOfService() {
   const [content, setContent] = useState<string>('')
