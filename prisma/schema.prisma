@@ -38,7 +38,6 @@ model User {
   twoFactorPhoneNumber String?        @map("twofactorphonenumber") // Phone number for SMS 2FA
   
   brands            Brand[]
-  campaignTemplates CampaignTemplate[]
   modifiedCampaigns Campaign[]
 
   @@map("users")
@@ -61,7 +60,6 @@ model Brand {
   engagementRules      Json?
   postingTimezone      String?            // Brand-specific posting timezone (null = use user's timezone)
   user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaignTemplates    CampaignTemplate[]
   campaigns            Campaign[]
   content              Content[]
 
@@ -126,26 +124,6 @@ model Campaign {
   @@map("campaigns")
 }
 
-model CampaignTemplate {
-  id             String   @id @default(cuid())
-  name           String
-  description    String?
-  isPublic       Boolean  @default(false)
-  templateConfig Json
-  usageCount     Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  createdById    String
-  brandId        String?
-  brand          Brand?   @relation(fields: [brandId], references: [id])
-  createdBy      User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
-
-  @@index([createdById])
-  @@index([brandId])
-  @@index([isPublic])
-  @@index([createdAt])
-  @@map("campaign_templates")
-}
 
 enum ContentStatus {
   draft      // New content or unscheduled content (replaces pending, approved without scheduledAt, rejected)

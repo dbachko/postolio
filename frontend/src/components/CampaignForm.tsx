@@ -6,7 +6,7 @@ import { Button } from './ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Badge } from './ui/badge'
-import { Loader2, X, FileText } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import type { CampaignFormData, CampaignErrors } from '../types/campaign'
 import { frequencyOptions, styleOptions, commonThemes } from '../constants/campaign'
 
@@ -15,8 +15,6 @@ interface CampaignFormProps {
   formData: CampaignFormData
   errors: CampaignErrors
   isSubmitting: boolean
-  isFormPrefilledFromTemplate?: boolean
-  usedTemplateName?: string | null
   mode?: 'create' | 'edit'
   existingCampaign?: any
   onSubmit: (e: React.FormEvent) => void
@@ -24,7 +22,6 @@ interface CampaignFormProps {
   onAddTheme: (theme: string) => void
   onRemoveTheme: (theme: string) => void
   onBackToDashboard: () => void
-  onUseTemplate?: () => void
   onCancel?: () => void
 }
 
@@ -33,8 +30,6 @@ const CampaignForm = memo(({
   formData,
   errors,
   isSubmitting,
-  isFormPrefilledFromTemplate = false,
-  usedTemplateName = null,
   mode = 'create',
   existingCampaign,
   onSubmit,
@@ -42,7 +37,6 @@ const CampaignForm = memo(({
   onAddTheme,
   onRemoveTheme,
   onBackToDashboard,
-  onUseTemplate,
   onCancel
 }: CampaignFormProps) => {
   const [newTheme, setNewTheme] = useState('')
@@ -96,31 +90,10 @@ const CampaignForm = memo(({
             <Button variant="outline" onClick={mode === 'edit' ? onCancel : onBackToDashboard}>
               {mode === 'edit' ? 'Cancel' : '← All Campaigns'}
             </Button>
-            {mode === 'create' && onUseTemplate && (
-              <Button variant="outline" onClick={onUseTemplate} className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Use Template Instead
-              </Button>
-            )}
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        {/* Template Pre-fill Indicator */}
-        {isFormPrefilledFromTemplate && usedTemplateName && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              <div>
-                <p className="font-medium text-blue-900">Form pre-filled from template</p>
-                <p className="text-sm text-blue-700">
-                  Using settings from "{usedTemplateName}" template. You can modify any field before creating your campaign.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         <form onSubmit={onSubmit} className="space-y-6">
           {/* Campaign Name */}
           <div className="space-y-2">

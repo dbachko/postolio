@@ -122,11 +122,6 @@ export class DeletionQueueService {
         where: { userId }
       })
       
-      // Delete campaign templates
-      await tx.campaignTemplate.deleteMany({
-        where: { createdById: userId }
-      })
-      
       // Finally delete the user
       await tx.user.delete({
         where: { id: userId }

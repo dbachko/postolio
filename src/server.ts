@@ -29,7 +29,6 @@ import growthRoutes from './routes/growth.js'
 import aiRoutes from './routes/ai.js'
 import autopilotRoutes from './routes/autopilot.js'
 import campaignRoutes from './routes/campaign.js'
-import campaignTemplatesRoutes from './routes/campaign-templates.js'
 import campaignAnalyticsRoutes from './routes/campaign-analytics.js'
 import rollingContentRoutes from './routes/rolling-content.js'
 import legalRoutes from './routes/legal.js'
@@ -166,7 +165,6 @@ export function buildFastify(): FastifyInstance {
   app.register(aiRoutes, { prefix: '/api/ai' })
   app.register(autopilotRoutes, { prefix: '/api/autopilot' })
   app.register(campaignRoutes, { prefix: '/api/campaign' })
-  app.register(campaignTemplatesRoutes, { prefix: '/api/templates' })
   app.register(campaignAnalyticsRoutes, { prefix: '/api/' }) // API root level for campaign analytics
   app.register(rollingContentRoutes, { prefix: '/api/rolling-content' })
   app.register(legalRoutes, { prefix: '/api/legal' })
