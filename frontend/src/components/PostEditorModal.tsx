@@ -391,7 +391,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
         <DialogFooter>
           <Button
             onClick={saveChanges}
-            disabled={!hasChanges || updateContentMutation.isLoading}
+            disabled={!hasChanges || updateContentMutation.isPending}
             className="flex items-center gap-2"
           >
             <Save className="h-4 w-4" />
