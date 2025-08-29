@@ -30,19 +30,22 @@ export function PostSaveIndicator({
   }
 
   const getText = () => {
+    // Show AI learning message when specified, regardless of save status
+    if (showAILearningMessage && status !== 'saving' && status !== 'error') {
+      return 'AI is learning from your edits and improving future content...'
+    }
+    
     switch (status) {
       case 'saving':
         return 'Saving...'
       case 'saved':
-        return showAILearningMessage 
-          ? 'AI is learning from your edits and improving future content...'
-          : 'Saved'
+        return 'Saved'
       case 'error':
         return 'Failed to save'
       default:
         return lastSaved 
           ? `Last saved: ${format(lastSaved, 'HH:mm:ss')}` 
-          : 'Auto-save enabled'
+          : 'Changes will be saved when you close the dialog'
     }
   }
 
