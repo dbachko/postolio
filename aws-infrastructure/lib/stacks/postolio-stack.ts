@@ -392,6 +392,20 @@ export class PostolioStack extends cdk.Stack {
       resources: ['*'], // SES resources are global
     }))
 
+    // Grant permissions to invoke Token Service API
+    taskRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'execute-api:Invoke'
+      ],
+      resources: [
+        `arn:aws:execute-api:${this.region}:${this.account}:*/*/POST/tokens`,
+        `arn:aws:execute-api:${this.region}:${this.account}:*/*/DELETE/tokens`,
+        `arn:aws:execute-api:${this.region}:${this.account}:*/*/POST/tokens/refresh`,
+        `arn:aws:execute-api:${this.region}:${this.account}:*/*/GET/health`
+      ],
+    }))
+
     // Custom task execution role policy
     const taskExecutionRolePolicy = new iam.PolicyDocument({
       statements: [

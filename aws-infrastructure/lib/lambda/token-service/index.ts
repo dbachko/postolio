@@ -20,7 +20,6 @@ const kmsClient = new KMSClient({});
 
 const TABLE_NAME = process.env.TOKENS_TABLE!;
 const KMS_KEY_ID = process.env.KMS_KEY_ID!;
-const API_KEY = process.env.TOKEN_SERVICE_API_KEY;
 
 interface TokenData {
   accessToken: string;
@@ -45,15 +44,34 @@ interface GetTokenRequest {
   platform: string;
 }
 
-// API Key validation
-function validateApiKey(event: APIGatewayProxyEvent): boolean {
-  if (!API_KEY) {
-    logger.warn('API_KEY not configured - allowing request in dev mode');
+// Authentication validation
+function validateAuth(event: APIGatewayProxyEvent): boolean {
+  // When API Gateway has IAM authorization enabled, it validates the signature
+  // BEFORE invoking this Lambda. So if we're invoked, the request is authenticated.
+  // The only exception is in development mode or for health checks.
+  
+  // Health check endpoint is public
+  if (event.path === '/health' && event.httpMethod === 'GET') {
     return true;
   }
   
-  const providedKey = event.headers['x-api-key'] || event.headers['X-API-Key'];
-  return providedKey === API_KEY;
+  // In development, allow all requests for testing
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'dev') {
+    logger.info('Development mode - allowing request without IAM authentication');
+    return true;
+  }
+  
+  // In production with IAM auth, if Lambda is invoked, the request is authenticated
+  // Log the caller information from the request context
+  if (event.requestContext?.accountId) {
+    logger.info('Request authenticated via IAM', {
+      accountId: event.requestContext.accountId,
+      apiId: event.requestContext.apiId,
+      requestId: event.requestContext.requestId,
+    });
+  }
+  
+  return true; // If Lambda is invoked, API Gateway already validated IAM signature
 }
 
 // Encrypt token using KMS
@@ -155,15 +173,15 @@ async function deleteToken(data: GetTokenRequest): Promise<void> {
 
 // Main Lambda handler
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  logger.info('Request received', { path: event.path, method: event.httpMethod });
+  logger.info('Request received', { 
+    path: event.path, 
+    method: event.httpMethod,
+    accountId: event.requestContext?.accountId,
+    requestId: event.requestContext?.requestId,
+  });
   
-  // Validate API key
-  if (!validateApiKey(event)) {
-    return {
-      statusCode: 401,
-      body: JSON.stringify({ error: 'Unauthorized' }),
-    };
-  }
+  // Log authentication info (API Gateway already validated IAM signature)
+  validateAuth(event);
   
   try {
     const path = event.path;

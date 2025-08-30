@@ -54,7 +54,6 @@ const tokenServiceStack = new TokenServiceStack(app, `TokenService-${environment
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
-  apiKeyValue: app.node.tryGetContext('tokenServiceApiKey') || process.env.TOKEN_SERVICE_API_KEY,
   serviceDiscoveryNamespaceId: serviceDiscoveryStack.namespaceId,
   description: `Token Service - OAuth token management - ${environment} environment`,
   tags: {

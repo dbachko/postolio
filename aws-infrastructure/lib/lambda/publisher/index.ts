@@ -6,6 +6,9 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } from '@
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { SignatureV4 } from '@aws-sdk/signature-v4';
+import { Sha256 } from '@aws-crypto/sha256-js';
+import { defaultProvider } from '@aws-sdk/credential-provider-node';
 
 // Platform-specific character limits
 const PLATFORM_LIMITS = {
@@ -365,17 +368,43 @@ async function getTokenFromTokenService(brandId: string, userId: string): Promis
     if (tokenServiceUrl) {
       logger.info('Fetching token from Token Service', { brandId, userId });
       
-      const response = await fetch(`${tokenServiceUrl}/tokens`, {
+      // Sign the request with AWS SigV4 for IAM authentication
+      const url = new URL(`${tokenServiceUrl}/tokens`);
+      const body = JSON.stringify({
+        userId,
+        brandId,
+        platform: 'instagram',
+      });
+      
+      // Create signer for IAM authentication
+      const signer = new SignatureV4({
+        service: 'execute-api',
+        region: process.env.AWS_REGION || 'us-east-1',
+        credentials: defaultProvider(),
+        sha256: Sha256,
+      });
+      
+      // Prepare request for signing
+      const request = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': process.env.TOKEN_SERVICE_API_KEY || '',
+          host: url.hostname,
         },
-        body: JSON.stringify({
-          userId,
-          brandId,
-          platform: 'instagram',
-        }),
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        protocol: url.protocol,
+        body,
+      };
+      
+      // Sign the request
+      const signedRequest = await signer.sign(request);
+      
+      // Make the signed request
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: signedRequest.headers as any,
+        body,
       });
 
       if (response.ok) {

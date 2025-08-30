@@ -23,13 +23,11 @@ import { NagSuppressions } from 'cdk-nag';
 export interface TokenServiceStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
   alertEmail?: string;
-  apiKeyValue?: string;
   serviceDiscoveryNamespaceId?: string; // Use shared namespace
 }
 
 export class TokenServiceStack extends cdk.Stack {
   public readonly apiUrl: string;
-  public readonly apiKey: string;
   public readonly tableName: string;
   public readonly kmsKeyId: string;
 
@@ -85,9 +83,6 @@ export class TokenServiceStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // Generate API key
-    const apiKey = props.apiKeyValue || cdk.Fn.base64(cdk.Stack.of(this).stackId + '-token-service-key');
-
     // Create Lambda function
     const tokenServiceLambda = new NodejsFunction(this, 'TokenServiceFunction', {
       functionName: `token-service-${environment}`,
@@ -99,7 +94,6 @@ export class TokenServiceStack extends cdk.Stack {
       environment: {
         TOKENS_TABLE: tokensTable.tableName,
         KMS_KEY_ID: encryptionKey.keyId,
-        TOKEN_SERVICE_API_KEY: apiKey,
         NODE_ENV: environment,
         ...getServiceDiscoveryEnvVars(serviceDiscovery.getClientConfig()),
       },
@@ -127,7 +121,7 @@ export class TokenServiceStack extends cdk.Stack {
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'X-API-Key'],
+        allowHeaders: ['Content-Type', 'Authorization'],
       },
     });
 
@@ -136,16 +130,22 @@ export class TokenServiceStack extends cdk.Stack {
       requestTemplates: { 'application/json': '{ "statusCode": "200" }' },
     });
 
-    // API routes
+    // API routes with IAM authentication
     const tokens = api.root.addResource('tokens');
-    tokens.addMethod('POST', integration); // Store or get token
-    tokens.addMethod('DELETE', integration); // Delete token
+    tokens.addMethod('POST', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // Store or get token
+    tokens.addMethod('DELETE', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // Delete token
 
     const refresh = tokens.addResource('refresh');
-    refresh.addMethod('POST', integration); // Refresh token
+    refresh.addMethod('POST', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // Refresh token
 
     const health = api.root.addResource('health');
-    health.addMethod('GET', integration); // Health check
+    health.addMethod('GET', integration); // Health check - no auth required
 
     // Register Token Service with Cloud Map
     registerLambdaService(
@@ -187,19 +187,12 @@ export class TokenServiceStack extends cdk.Stack {
 
     // Outputs
     this.apiUrl = api.url;
-    this.apiKey = apiKey;
     this.tableName = tokensTable.tableName;
     this.kmsKeyId = encryptionKey.keyId;
 
     new cdk.CfnOutput(this, 'TokenServiceApiUrl', {
       value: this.apiUrl,
       description: 'Token Service API URL',
-      // No export needed - services use Cloud Map for discovery
-    });
-
-    new cdk.CfnOutput(this, 'TokenServiceApiKey', {
-      value: apiKey,
-      description: 'Token Service API Key (store securely)',
       // No export needed - services use Cloud Map for discovery
     });
 

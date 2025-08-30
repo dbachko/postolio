@@ -1,23 +1,45 @@
 /**
  * Token Service Client SDK
- * Enterprise-grade client for Token Service with circuit breaker and retry logic
+ * Enterprise-grade client for Token Service with IAM SigV4 authentication
  */
 
 import CircuitBreaker from 'opossum';
+import { SignatureV4 } from '@aws-sdk/signature-v4';
+import { Sha256 } from '@aws-crypto/sha256-js';
+import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { getServiceDiscovery } from '../utils/service-discovery-client.js';
 import type { StoreTokenParams, TokenData, TokenServiceConfig } from '../types/token-service.js';
 
 export class TokenServiceClient {
   private circuitBreaker: CircuitBreaker;
   private baseURL: string;
-  private apiKey: string | undefined;
+  private signer: SignatureV4;
 
   constructor(config?: TokenServiceConfig) {
     this.baseURL = config?.apiUrl || process.env.TOKEN_SERVICE_URL || 'http://localhost:4001';
-    this.apiKey = process.env.TOKEN_SERVICE_API_KEY || undefined;
     
     // Initialize with service discovery if available
     this.initializeWithServiceDiscovery(config);
+
+    // Initialize AWS SigV4 signer for IAM authentication
+    // Only initialize if we're running in AWS or have credentials
+    if (process.env.AWS_REGION || process.env.AWS_ACCESS_KEY_ID) {
+      try {
+        this.signer = new SignatureV4({
+          service: 'execute-api',
+          region: process.env.AWS_REGION || 'us-east-1',
+          credentials: defaultProvider(),
+          sha256: Sha256,
+        });
+      } catch (error) {
+        console.warn('Failed to initialize AWS SigV4 signer:', error);
+        console.warn('Token Service requests will be made without IAM authentication');
+        // In local development without AWS credentials, signer will be undefined
+      }
+    } else {
+      console.info('Running in local development mode without AWS credentials');
+      console.info('Token Service requests will be made without IAM authentication');
+    }
 
     // Circuit breaker configuration
     const options = {
@@ -138,7 +160,7 @@ export class TokenServiceClient {
   }
 
   /**
-   * Make HTTP request with retry logic
+   * Make HTTP request with AWS SigV4 authentication and retry logic
    */
   private async makeRequest(
     path: string,
@@ -146,27 +168,44 @@ export class TokenServiceClient {
     body?: any,
     retries = 3
   ): Promise<Response> {
-    const url = `${this.baseURL}${path}`;
-    const headers: any = {
-      'Content-Type': 'application/json',
-    };
+    const url = new URL(`${this.baseURL}${path}`);
     
-    if (this.apiKey) {
-      headers['X-API-Key'] = this.apiKey;
-    }
-
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
-        const options: globalThis.RequestInit = {
-          method,
-          headers,
+        let headers: any = {
+          'Content-Type': 'application/json',
         };
         
-        if (body) {
-          options.body = JSON.stringify(body);
+        // If we have a signer (running in AWS or with credentials), sign the request
+        if (this.signer) {
+          // Prepare request for signing
+          const request = {
+            method,
+            headers: {
+              'Content-Type': 'application/json',
+              host: url.hostname,
+            },
+            hostname: url.hostname,
+            path: url.pathname + url.search,
+            protocol: url.protocol,
+            body: body ? JSON.stringify(body) : undefined,
+          };
+
+          // Sign the request with AWS SigV4
+          const signedRequest = await this.signer.sign(request);
+          headers = signedRequest.headers;
+        } else {
+          // Local development without AWS credentials
+          // Token Service Lambda allows unauthenticated requests in dev mode
+          console.debug('Making unsigned request to Token Service (local development)');
         }
         
-        const response = await fetch(url, options);
+        // Make the request (signed or unsigned based on environment)
+        const response = await fetch(url.toString(), {
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : undefined,
+        });
 
         // Don't retry on client errors (4xx)
         if (response.status >= 400 && response.status < 500) {
