@@ -964,7 +964,7 @@ export class PostolioStack extends cdk.Stack {
       `/${this.stackName}/TaskRole/DefaultPolicy/Resource`,
       [{
         id: 'AwsSolutions-IAM5',
-        reason: 'ECS task requires S3 operations for image storage and CloudFront/SES wildcard permissions',
+        reason: 'ECS task requires S3 operations for image storage, CloudFront/SES wildcard permissions, and Token Service API invocation',
         appliesTo: [
           'Action::s3:Abort*',
           'Action::s3:DeleteObject*',
@@ -973,6 +973,11 @@ export class PostolioStack extends cdk.Stack {
           'Action::s3:List*',
           'Resource::<AIImagesBucket56BD98E8.Arn>/*',
           'Resource::*', // For CloudFront invalidations and SES operations
+          // Token Service API Gateway permissions (wildcards required as API Gateway ID changes with deployments)
+          'Resource::arn:aws:execute-api:us-east-1:000000000000:*/*/POST/tokens',
+          'Resource::arn:aws:execute-api:us-east-1:000000000000:*/*/DELETE/tokens',
+          'Resource::arn:aws:execute-api:us-east-1:000000000000:*/*/POST/tokens/refresh',
+          'Resource::arn:aws:execute-api:us-east-1:000000000000:*/*/GET/health',
         ],
       }]
     )
