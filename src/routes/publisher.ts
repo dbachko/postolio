@@ -5,7 +5,7 @@
  */
 
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { PublisherCredentialsService } from '../services/publisher-credentials.js';
+// import { PublisherCredentialsService } from '../services/publisher-credentials.js';
 import { PublisherContentService } from '../services/publisher-content.js';
 import { createPublisherAuth } from '../middleware/publisher-auth.js';
 
@@ -176,91 +176,6 @@ const publisher: FastifyPluginAsync = async function (fastify) {
       reply.status(500).send({
         error: 'Internal Server Error',
         message: 'Failed to fetch content for publishing'
-      });
-    }
-  });
-
-  /**
-   * Get publishing credentials for a brand
-   * This endpoint is called by the AWS publisher Lambda at publish time
-   */
-  fastify.post('/credentials', {
-    preHandler: authMiddleware,
-    schema: {
-      body: {
-        type: 'object',
-        required: ['brandId'],
-        properties: {
-          brandId: { type: 'string', minLength: 1 }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            credentials: {
-              type: 'object',
-              properties: {
-                instagramAccessToken: { type: 'string' },
-                instagramAccountId: { type: 'string' },
-                instagramPageId: { type: 'string' }
-              }
-            },
-            brandName: { type: 'string' },
-            timestamp: { type: 'string' }
-          }
-        }
-      }
-    }
-  }, async function (request, reply) {
-    try {
-      const { brandId } = request.body as { brandId: string };
-
-      if (!brandId) {
-        return reply.status(400).send({ 
-          error: 'Bad Request',
-          message: 'brandId is required' 
-        });
-      }
-
-      // Fetch fresh credentials from database
-      const credentials = await PublisherCredentialsService.getPublishingCredentials(brandId);
-
-      if (!credentials) {
-        return reply.status(404).send({ 
-          error: 'Not Found',
-          message: `No valid Instagram credentials found for brand ${brandId}`,
-          brandId 
-        });
-      }
-
-      // Log for monitoring (without exposing any token information)
-      fastify.log.info({
-        event: 'publisher_credentials_fetched',
-        brandId,
-        brandName: credentials.brandName,
-        hasCredentials: !!credentials.instagramAccessToken,
-        timestamp: new Date().toISOString(),
-        source: request.headers['x-request-id'] || 'unknown'
-      });
-
-      // Return credentials
-      reply.send({
-        success: true,
-        credentials: {
-          instagramAccessToken: credentials.instagramAccessToken,
-          instagramAccountId: credentials.instagramAccountId,
-          instagramPageId: credentials.instagramPageId,
-        },
-        brandName: credentials.brandName,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error('Publisher credentials error:', error);
-      reply.status(500).send({
-        error: 'Internal Server Error',
-        message: error instanceof Error ? error.message : 'Failed to fetch credentials',
       });
     }
   });

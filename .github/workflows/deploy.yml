@@ -114,10 +114,26 @@ jobs:
           cd aws-infrastructure
           npm ci
           
+      - name: Deploy Token Service stack
+        working-directory: aws-infrastructure
+        run: |
+          echo "🚀 Deploying Token Service stack first (required for other services)..."
+          npx cdk deploy TokenService-${{ needs.set-environment.outputs.environment }} \
+            --require-approval never \
+            --context environment=${{ needs.set-environment.outputs.environment }} \
+            --context alertEmail=${{ vars.ALERT_EMAIL || '' }} \
+            --outputs-file token-service-outputs-${{ needs.set-environment.outputs.environment }}.json
+          
+          echo "✅ Token Service stack deployed successfully"
+          
+          # Display Token Service outputs
+          echo "📋 Token Service API Endpoint:"
+          cat token-service-outputs-${{ needs.set-environment.outputs.environment }}.json | jq -r ".\"TokenService-${{ needs.set-environment.outputs.environment }}\".TokenServiceApiUrl"
+            
       - name: Deploy ContentScheduler stack
         working-directory: aws-infrastructure
         run: |
-          echo "🚀 Deploying ContentScheduler stack first (required for Postolio)..."
+          echo "🚀 Deploying ContentScheduler stack (required for Postolio)..."
           npx cdk deploy ContentScheduler-${{ needs.set-environment.outputs.environment }} \
             --require-approval never \
             --context environment=${{ needs.set-environment.outputs.environment }} \

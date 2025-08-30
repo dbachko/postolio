@@ -215,10 +215,7 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
       const brands = await prisma.brand.findMany({
         where: {
           userId,
-          OR: [
-            { instagramAccessToken: { not: null } },
-            { instagramPageId: { not: null } }
-          ]
+          instagramPageId: { not: null }
         }
       })
 

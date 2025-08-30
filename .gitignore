@@ -116,3 +116,6 @@ temp/
 
 # Debug files
 debug-*.js
+
+# Claude
+.claude

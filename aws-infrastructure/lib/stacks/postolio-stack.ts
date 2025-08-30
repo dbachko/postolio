@@ -17,13 +17,15 @@ import * as route53Targets from 'aws-cdk-lib/aws-route53-targets'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import { NagSuppressions } from 'cdk-nag'
 import { Construct } from 'constructs'
+import { ServiceDiscoveryManager, getServiceDiscoveryEnvVars } from '../utils/service-discovery'
 
 export interface PostolioStackProps extends cdk.StackProps {
   environment: string
   domainName?: string
   hostedZoneId?: string
   useExternalDns?: boolean
-  contentSchedulerStack?: cdk.Stack // Optional reference to ContentScheduler stack
+  serviceDiscoveryNamespaceId?: string; // Use shared namespace
+  // No stack references needed - services use Cloud Map for discovery
 }
 
 export class PostolioStack extends cdk.Stack {
@@ -41,12 +43,9 @@ export class PostolioStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PostolioStackProps) {
     super(scope, id, props)
 
-    const { environment, domainName, hostedZoneId, useExternalDns, contentSchedulerStack } = props
+    const { environment, domainName, hostedZoneId, useExternalDns, serviceDiscoveryNamespaceId } = props
 
-    // Import ContentScheduler API URL if stack reference is provided
-    const schedulerApiUrl = contentSchedulerStack 
-      ? cdk.Fn.importValue(`postolio-scheduler-${environment}-api-endpoint`)
-      : process.env.SCHEDULER_API_URL || 'https://scheduler-api-not-configured.example.com';
+    // Services use Cloud Map for discovery - no hardcoded URLs needed
 
 
     // ECR Repository for backend container images - reference existing repository
@@ -106,6 +105,13 @@ export class PostolioStack extends cdk.Stack {
           destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogsGroup, vpcFlowLogsRole),
         },
       },
+    })
+
+    // Use shared Service Discovery namespace
+    const serviceDiscovery = new ServiceDiscoveryManager(this, 'ServiceDiscovery', {
+      vpc, // Note: VPC is provided but we're using HTTP namespace from shared stack
+      environment: environment as 'dev' | 'staging' | 'prod',
+      existingNamespaceId: serviceDiscoveryNamespaceId || cdk.Fn.importValue(`ServiceDiscovery-${environment}-NamespaceId`),
     })
 
     // Security Groups
@@ -495,18 +501,12 @@ export class PostolioStack extends cdk.Stack {
       })
     )
 
-    // Grant permission to invoke Content Scheduler API using IAM authentication
-    // Import the API ARN from ContentScheduler stack exports
-    const schedulerApiArn = cdk.Fn.importValue(`postolio-scheduler-${environment}-api-arn`)
-    
+    // Grant permission to invoke APIs discovered via Cloud Map
+    // Services will discover endpoints at runtime
     taskRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['execute-api:Invoke'],
-      resources: [
-        // Allow invoking all methods on the API
-        // The schedulerApiArn already includes /*/*/*, so we don't need to add more
-        schedulerApiArn
-      ],
+      resources: ['*'], // Allow invoking any API Gateway discovered via Cloud Map
     }))
     
     // Get the image tag from context, defaulting to 'latest' if not provided
@@ -560,10 +560,12 @@ export class PostolioStack extends cdk.Stack {
           AWS_REGION: cdk.Aws.REGION,
           CLOUDFRONT_DOMAIN: apiDomainName, // Will be updated after distribution creation
           
-          // Service endpoints
-          SCHEDULER_API_URL: schedulerApiUrl,
+          // Service endpoints (discovered via Cloud Map at runtime)
           SCHEDULER_API_STAGE: environment,
           WS_DOMAIN: 'postolio.example', // WebSocket subdomain
+          
+          // Service Discovery Configuration
+          ...getServiceDiscoveryEnvVars(serviceDiscovery.getClientConfig()),
           
           // AWS SES configuration
           USE_AWS_SES: 'true', // Use SES in production
@@ -633,6 +635,20 @@ export class PostolioStack extends cdk.Stack {
     
     // CRITICAL: Set health check grace period to allow container to start
     cfnServiceConfig.healthCheckGracePeriodSeconds = 300 // 5 minutes grace period
+
+    // Register main app with service discovery
+    const mainAppService = serviceDiscovery.registerService('main-app', {
+      customAttributes: {
+        url: `https://${apiDomainName}/api`,
+        type: 'ecs',
+        environment,
+      },
+    })
+
+    // Associate ECS service with Cloud Map service
+    fargateService.service.associateCloudMapService({
+      service: mainAppService,
+    })
 
     // Auto Scaling
     const scalableTarget = fargateService.service.autoScaleTaskCount({

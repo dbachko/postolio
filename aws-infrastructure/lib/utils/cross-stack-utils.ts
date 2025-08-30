@@ -8,7 +8,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
-import { Construct } from 'constructs';
 
 // =====================================================================================
 // INTERFACES AND TYPES

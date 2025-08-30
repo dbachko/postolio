@@ -19,12 +19,14 @@ import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import { ServiceDiscoveryManager, registerLambdaService, getServiceDiscoveryEnvVars } from '../utils/service-discovery';
 
 export interface ContentSchedulerStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
   alertEmail?: string;
   mainAppApiUrl?: string;
   publisherApiKey?: string;
+  serviceDiscoveryNamespaceId?: string; // Use shared namespace
 }
 
 export class ContentSchedulerStack extends cdk.Stack {
@@ -35,7 +37,7 @@ export class ContentSchedulerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ContentSchedulerStackProps) {
     super(scope, id, props);
 
-    const { environment, alertEmail, mainAppApiUrl, publisherApiKey } = props;
+    const { environment, alertEmail, mainAppApiUrl, publisherApiKey, serviceDiscoveryNamespaceId } = props;
     const prefix = `postolio-scheduler-${environment}`;
     
     // All environments use the production URL
@@ -46,6 +48,12 @@ export class ContentSchedulerStack extends cdk.Stack {
                                     this.node.tryGetContext('publisherApiKey') || 
                                     process.env.PUBLISHER_API_KEY || 
                                     '';
+
+    // Use shared Service Discovery namespace
+    const serviceDiscovery = new ServiceDiscoveryManager(this, 'ServiceDiscovery', {
+      environment,
+      existingNamespaceId: serviceDiscoveryNamespaceId || cdk.Fn.importValue(`ServiceDiscovery-${environment}-NamespaceId`),
+    });
 
     // ==================== KMS Keys ====================
     
@@ -263,6 +271,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       POWERTOOLS_METRICS_NAMESPACE: 'ContentScheduler',
       LOG_LEVEL: environment === 'prod' ? 'INFO' : 'DEBUG',
       SCHEDULER_GROUP_NAME: `${prefix}-schedules`,
+      ...getServiceDiscoveryEnvVars(serviceDiscovery.getClientConfig()),
     };
 
     // Custom IAM Role for Lambda (Least Privilege)
@@ -1001,18 +1010,26 @@ export class ContentSchedulerStack extends cdk.Stack {
       ]
     );
 
+    // Register Content Scheduler with Cloud Map
+    registerLambdaService(
+      serviceDiscovery,
+      'content-scheduler',
+      this.api.url,
+      environment
+    );
+
     // ==================== Outputs ====================
     
     new cdk.CfnOutput(this, 'ApiEndpoint', {
       value: this.api.url,
       description: 'Content Scheduler API endpoint',
-      exportName: `${prefix}-api-endpoint`,
+      // No export needed - services use Cloud Map for discovery
     });
 
     new cdk.CfnOutput(this, 'ApiArn', {
       value: this.api.arnForExecuteApi(),
       description: 'Content Scheduler API ARN for IAM permissions',
-      exportName: `${prefix}-api-arn`,
+      // No export needed - services use Cloud Map for discovery
     });
 
 

@@ -1,0 +1,13 @@
+{
+  "name": "publisher-lambda",
+  "version": "1.0.0",
+  "description": "Publisher Lambda for content scheduling",
+  "main": "index.js",
+  "dependencies": {
+    "@prisma/client": "^5.7.0",
+    "prisma": "^5.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}

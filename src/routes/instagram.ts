@@ -156,31 +156,15 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         return reply.status(404).send({ error: 'Brand not found' })
       }
 
-      if (!brand.instagramAccessToken) {
-        return reply.status(400).send({ error: 'No Instagram token to refresh' })
+      if (!brand.instagramAccountId) {
+        return reply.status(400).send({ error: 'Instagram not connected' })
       }
 
-      const refreshResult = await instagramService.refreshAccessToken(brand.instagramAccessToken)
-
-      if (!refreshResult) {
-        return reply.status(500).send({ error: 'Failed to refresh Instagram token' })
-      }
-
-      // Update brand with new token
-      await prisma.brand.update({
-        where: { id: brandId },
-        data: {
-          instagramAccessToken: refreshResult.accessToken,
-          preferences: {
-            ...((brand.preferences as any) || {}),
-            tokenExpiresAt: refreshResult.expiresAt,
-          },
-        },
-      })
-
-      reply.send({
+      // Token refresh is now handled automatically by Token Service
+      // when fetching tokens that are close to expiry
+      return reply.send({
         success: true,
-        expiresAt: refreshResult.expiresAt,
+        message: 'Token refresh is handled automatically by Token Service'
       })
     } catch (error) {
       reply.status(500).send({
@@ -351,7 +335,6 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           userId: user.id,
         },
         data: {
-          instagramAccessToken: null,
           instagramPageId: null,
           instagramAccountId: null,
           instagramProfileData: { set: null },

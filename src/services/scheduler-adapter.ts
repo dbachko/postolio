@@ -8,41 +8,93 @@ import { ContentSchedulerClient, ContentSchedulerConfig } from '../clients/conte
 import { SCHEDULER_TIME_INTERVALS, SYNC_TOLERANCE } from '../constants/scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
 import { TimezoneService } from './timezone.js';
+// import { TokenServiceClient } from '../clients/token-service-client.js';
+// import { getServiceDiscovery } from '../utils/service-discovery-client.js';
 import type { StatusBroadcaster } from './status-broadcaster.js';
 import type { GenerationParams } from '../types/scheduler.js';
 
 const prisma = getDatabaseClient();
 
 export class SchedulerAdapter {
-  private client: ContentSchedulerClient;
+  private _client: ContentSchedulerClient | null = null;
+  private _clientPromise: Promise<ContentSchedulerClient> | null = null;
   private static instance: SchedulerAdapter | null = null;
   private broadcaster: StatusBroadcaster | null = null;
 
   private schedulerEnabled: boolean = true;
 
-  constructor(config?: Partial<ContentSchedulerConfig>) {
-    const baseURL = config?.baseURL || process.env.SCHEDULER_API_URL || 'http://localhost:4000';
-    
-    // Check if scheduler is properly configured
-    const isPlaceholderUrl = baseURL.includes('your-scheduler-api') || 
-                            baseURL.includes('scheduler-api-not-configured') ||
-                            baseURL.includes('example.com');
-    
-    if (isPlaceholderUrl) {
-      console.warn('⚠️  AWS Content Scheduler is not configured properly.');
-      console.warn(`⚠️  Current URL: ${baseURL}`);
-      console.warn('⚠️  Running in degraded mode - content will be saved but not scheduled for automatic publishing.');
-      console.warn('⚠️  To enable scheduling, deploy the ContentScheduler stack or set SCHEDULER_API_URL to a valid endpoint.');
-      this.schedulerEnabled = false;
+  private constructor(private config?: Partial<ContentSchedulerConfig>) {
+    // Configuration stored for lazy initialization
+  }
+
+  static async create(config?: Partial<ContentSchedulerConfig>): Promise<SchedulerAdapter> {
+    const adapter = new SchedulerAdapter(config);
+    // Trigger initialization immediately
+    await adapter.client;
+    return adapter;
+  }
+
+  /**
+   * Lazy-initialized client getter with automatic service discovery
+   */
+  private get client(): Promise<ContentSchedulerClient> {
+    if (!this._clientPromise) {
+      this._clientPromise = this.initializeClient();
     }
-    
-    // Initialize with environment config
-    this.client = new ContentSchedulerClient({
-      baseURL,
-      timeout: 30000,
-      maxRetries: 3,
-      ...config,
-    });
+    return this._clientPromise;
+  }
+
+  private async initializeClient(): Promise<ContentSchedulerClient> {
+    try {
+      // Use the new service discovery-aware factory method
+      const client = await ContentSchedulerClient.create({
+        timeout: 30000,
+        maxRetries: 3,
+        ...this.config,
+      });
+      
+      console.log('✅ ContentSchedulerClient initialized with service discovery');
+      this.schedulerEnabled = true;
+      this._client = client;
+      return client;
+    } catch (error) {
+      console.error('❌ Failed to initialize ContentSchedulerClient:', error);
+      
+      // Fallback: try with legacy environment variable
+      const fallbackUrl = process.env.SCHEDULER_API_URL || 'http://localhost:4000';
+      
+      // Check if scheduler is properly configured
+      const isPlaceholderUrl = fallbackUrl.includes('your-scheduler-api') || 
+                              fallbackUrl.includes('scheduler-api-not-configured') ||
+                              fallbackUrl.includes('example.com');
+      
+      if (isPlaceholderUrl) {
+        console.warn('⚠️  AWS Content Scheduler is not configured properly.');
+        console.warn(`⚠️  Current URL: ${fallbackUrl}`);
+        console.warn('⚠️  Running in degraded mode - content will be saved but not scheduled for automatic publishing.');
+        console.warn('⚠️  To enable scheduling, deploy the ContentScheduler stack or set SCHEDULER_API_URL to a valid endpoint.');
+        this.schedulerEnabled = false;
+        throw new Error('Scheduler not configured - degraded mode');
+      } else {
+        // Try with fallback URL
+        try {
+          const client = new ContentSchedulerClient({
+            baseURL: fallbackUrl,
+            timeout: 30000,
+            maxRetries: 3,
+            ...this.config,
+          });
+          console.warn('⚠️  Using fallback ContentScheduler URL:', fallbackUrl);
+          this.schedulerEnabled = true;
+          this._client = client;
+          return client;
+        } catch (fallbackError) {
+          console.error('❌ Failed to initialize ContentScheduler with fallback URL:', fallbackError);
+          this.schedulerEnabled = false;
+          throw fallbackError;
+        }
+      }
+    }
   }
 
   /**
@@ -56,16 +108,36 @@ export class SchedulerAdapter {
    * Get the client instance (for testing purposes only)
    * @internal
    */
-  getClient(): ContentSchedulerClient {
-    return this.client;
+  getClient(): ContentSchedulerClient | null {
+    return this._client;
   }
 
+
   /**
-   * Get singleton instance
+   * Get singleton instance (deprecated - use create() for proper async initialization)
+   * @deprecated Use SchedulerAdapter.create() instead
    */
   static getInstance(config?: Partial<ContentSchedulerConfig>): SchedulerAdapter {
     if (!SchedulerAdapter.instance) {
+      // This is problematic but kept for backward compatibility
+      console.warn(
+        '⚠️ Using deprecated getInstance(). Migrate to SchedulerAdapter.create() for proper async initialization.\n' +
+        'Migration guide:\n' +
+        '  Before: const adapter = SchedulerAdapter.getInstance(config);\n' +
+        '  After:  const adapter = await SchedulerAdapter.create(config);\n' +
+        'This ensures proper service discovery and prevents race conditions. getInstance() will be removed in v3.0.0.'
+      );
       SchedulerAdapter.instance = new SchedulerAdapter(config);
+    }
+    return SchedulerAdapter.instance;
+  }
+
+  /**
+   * Get singleton instance with proper async initialization
+   */
+  static async getInstanceAsync(config?: Partial<ContentSchedulerConfig>): Promise<SchedulerAdapter> {
+    if (!SchedulerAdapter.instance) {
+      SchedulerAdapter.instance = await SchedulerAdapter.create(config);
     }
     return SchedulerAdapter.instance;
   }
@@ -132,7 +204,7 @@ export class SchedulerAdapter {
         console.info('Scheduler is disabled - saving content locally without AWS scheduling');
       } else {
         try {
-          const schedule = await this.client.createSchedule({
+          const schedule = await (await this.client).createSchedule({
           contentId: content.id,
           brandId: content.brandId,
           userId: userId || content.brand.userId,
@@ -190,7 +262,7 @@ export class SchedulerAdapter {
         // If AWS schedule was created but local DB update failed, try to cancel AWS schedule
         if (awsScheduleCreated && scheduleId) {
           try {
-            await this.client.cancelSchedule(scheduleId);
+            await (await this.client).cancelSchedule(scheduleId);
             console.log(`Rolled back AWS schedule ${scheduleId} due to DB failure`);
           } catch (rollbackError) {
             console.error('Failed to rollback AWS schedule:', rollbackError);
@@ -279,7 +351,7 @@ export class SchedulerAdapter {
       if (scheduleId && wasAwsScheduled) {
         // Cancel in AWS if it was actually created there
         try {
-          await this.client.cancelSchedule(scheduleId);
+          await (await this.client).cancelSchedule(scheduleId);
           awsCancelled = true;
           console.log(`AWS schedule ${scheduleId} cancelled successfully`);
         } catch (error: any) {
@@ -372,7 +444,7 @@ export class SchedulerAdapter {
       if (scheduleId) {
         // Reschedule in AWS
         try {
-          await this.client.reschedule(scheduleId, newTimeUTC);
+          await (await this.client).reschedule(scheduleId, newTimeUTC);
         } catch (error: any) {
           // Handle circuit breaker errors gracefully
           if (error?.code === 'CIRCUIT_BREAKER_OPEN' || error?.code === 'EOPENBREAKER') {
@@ -429,7 +501,7 @@ export class SchedulerAdapter {
   }>> {
     try {
       // Fetch from AWS
-      const schedules = await this.client.getUpcomingSchedules(brandId, limit);
+      const schedules = await (await this.client).getUpcomingSchedules(brandId, limit);
       
       // Also get from local database for consistency check
       const localContent = await prisma.content.findMany({
@@ -477,7 +549,7 @@ export class SchedulerAdapter {
   }> {
     try {
       // Get from AWS
-      const awsRawStats = await this.client.getSchedulingStats(brandId);
+      const awsRawStats = await (await this.client).getSchedulingStats(brandId);
       
       // Transform AWS stats to match expected format
       const awsStats = {
@@ -512,7 +584,7 @@ export class SchedulerAdapter {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      return await this.client.healthCheck();
+      return await (await this.client).healthCheck();
     } catch (error) {
       console.error('Scheduler health check failed:', error);
       return false;
@@ -528,7 +600,15 @@ export class SchedulerAdapter {
     successes: number;
     fallbacks: number;
   } {
-    return this.client.getCircuitBreakerStats();
+    if (!this._client) {
+      return {
+        opened: false,
+        failures: 0,
+        successes: 0,
+        fallbacks: 0,
+      };
+    }
+    return this._client.getCircuitBreakerStats();
   }
 
   /**

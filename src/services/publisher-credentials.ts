@@ -6,6 +6,7 @@
 
 import { getDatabaseClient } from '../config/database.js';
 import { getRedisClient } from '../services/redis.js';
+import { getTokenService } from './service-clients.js';
 
 const prisma = getDatabaseClient();
 
@@ -39,17 +40,17 @@ export class PublisherCredentialsService {
             return JSON.parse(cached);
           }
         } catch (cacheError) {
-          console.warn('Redis cache read failed, falling back to database:', cacheError);
+          console.warn('Redis cache read failed, falling back to Token Service:', cacheError);
         }
       }
 
-      // Cache miss - fetch from database
+      // Cache miss - fetch brand metadata from database
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
         select: {
           id: true,
           name: true,
-          instagramAccessToken: true,
+          userId: true,
           instagramAccountId: true,
           instagramPageId: true,
         },
@@ -60,14 +61,27 @@ export class PublisherCredentialsService {
         return null;
       }
 
+      // Fetch token from Token Service (using service discovery)
+      const tokenServiceClient = await getTokenService();
+      const tokenData = await tokenServiceClient.getToken(
+        brand.userId,
+        brand.id,
+        'instagram'
+      );
+
+      if (!tokenData) {
+        console.error(`No Instagram token found for brand: ${brandId}`);
+        return null;
+      }
+
       // Check if Instagram is connected
-      if (!brand.instagramAccessToken || !brand.instagramAccountId) {
-        console.error(`Instagram not connected for brand: ${brandId}`);
+      if (!tokenData.accessToken || !brand.instagramAccountId) {
+        console.error(`Instagram not properly connected for brand: ${brandId}`);
         return null;
       }
 
       const credentials = {
-        instagramAccessToken: brand.instagramAccessToken,
+        instagramAccessToken: tokenData.accessToken,
         instagramAccountId: brand.instagramAccountId,
         instagramPageId: brand.instagramPageId,
         brandName: brand.name,
@@ -98,8 +112,8 @@ export class PublisherCredentialsService {
       return false;
     }
 
-    // Token expiry validation will be implemented when we store token expiry dates
-    // Currently, Instagram long-lived tokens are valid for 60 days
+    // Token Service handles expiry validation and auto-refresh
+    // If we get a token from Token Service, it's already validated
     return true;
   }
 

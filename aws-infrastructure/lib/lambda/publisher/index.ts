@@ -34,6 +34,8 @@ const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 
 interface PublishEvent {
   scheduleId: string;
+  brandId?: string;
+  userId?: string;
 }
 
 interface PlatformAdapter {
@@ -272,9 +274,25 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       imageUrl: freshContent.cdnImageUrl || freshContent.mediaUrls?.[0],
     };
 
-    // Get platform credentials from main app
-    const credentials = await getPlatformCredentials(schedule.brandId);
-    logger.info('Fetched credentials', { brandId: schedule.brandId, hasToken: !!credentials.instagramAccessToken });
+    // Get platform credentials from Token Service or API
+    const userId = event.userId || schedule.userId;
+    const brandId = event.brandId || schedule.brandId;
+    
+    if (!brandId) {
+      throw new Error('Brand ID not found in event or schedule');
+    }
+    
+    let credentials;
+    if (userId) {
+      // Fetch fresh token from Token Service at publish time
+      credentials = await getTokenFromTokenService(brandId, userId);
+    } else {
+      // Fall back to API call if no userId
+      logger.warn('No userId available, falling back to API call', { brandId });
+      credentials = await getPlatformCredentials(brandId);
+    }
+    
+    logger.info('Fetched credentials', { brandId, hasToken: !!credentials.instagramAccessToken });
 
     // If video content, get signed URL
     let mediaUrl = null;
@@ -338,6 +356,48 @@ async function getSchedule(scheduleId: string): Promise<any> {
   }));
 
   return result.Item;
+}
+
+async function getTokenFromTokenService(brandId: string, userId: string): Promise<any> {
+  try {
+    // Try Token Service first (preferred)
+    const tokenServiceUrl = process.env.TOKEN_SERVICE_URL;
+    if (tokenServiceUrl) {
+      logger.info('Fetching token from Token Service', { brandId, userId });
+      
+      const response = await fetch(`${tokenServiceUrl}/tokens`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.TOKEN_SERVICE_API_KEY || '',
+        },
+        body: JSON.stringify({
+          userId,
+          brandId,
+          platform: 'instagram',
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.accessToken) {
+          logger.info('Successfully fetched token from Token Service');
+          return {
+            instagramAccessToken: data.accessToken,
+            instagramAccountId: data.metadata?.accountId,
+            instagramPageId: data.metadata?.pageId,
+          };
+        }
+      } else {
+        logger.warn('Token Service returned error', { status: response.status });
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to fetch from Token Service, falling back to API', error as Error);
+  }
+  
+  // Fall back to main app API
+  return getPlatformCredentials(brandId);
 }
 
 async function getPlatformCredentials(brandId: string): Promise<any> {
