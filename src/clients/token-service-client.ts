@@ -13,7 +13,7 @@ import type { StoreTokenParams, TokenData, TokenServiceConfig } from '../types/t
 export class TokenServiceClient {
   private circuitBreaker: CircuitBreaker;
   private baseURL: string;
-  private signer: SignatureV4;
+  private signer: SignatureV4 | undefined;
 
   constructor(config?: TokenServiceConfig) {
     this.baseURL = config?.apiUrl || process.env.TOKEN_SERVICE_URL || 'http://localhost:4001';
@@ -201,11 +201,17 @@ export class TokenServiceClient {
         }
         
         // Make the request (signed or unsigned based on environment)
-        const response = await fetch(url.toString(), {
+        const fetchOptions: RequestInit = {
           method,
           headers,
-          body: body ? JSON.stringify(body) : undefined,
-        });
+        };
+        
+        // Only add body if it exists (undefined body causes TypeScript error)
+        if (body) {
+          fetchOptions.body = JSON.stringify(body);
+        }
+        
+        const response = await fetch(url.toString(), fetchOptions);
 
         // Don't retry on client errors (4xx)
         if (response.status >= 400 && response.status < 500) {
