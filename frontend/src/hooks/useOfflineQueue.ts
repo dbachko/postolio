@@ -3,7 +3,7 @@ import { useRef, useCallback, useEffect, useMemo } from 'react'
 export interface QueuedAction {
   id: string
   type: 'schedule' | 'reschedule' | 'cancel'
-  payload: any
+  payload: Record<string, unknown>
   timestamp: number
   retries: number
   maxRetries?: number // Allow per-action max retries
@@ -72,7 +72,7 @@ export function useOfflineQueue({
   }, [])
 
   // Add action to queue with crypto.randomUUID for unique IDs
-  const enqueue = useCallback((type: QueuedAction['type'], payload: any, actionMaxRetries?: number) => {
+  const enqueue = useCallback((type: QueuedAction['type'], payload: Record<string, unknown>, actionMaxRetries?: number) => {
     const action: QueuedAction = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID 
         ? crypto.randomUUID() 
