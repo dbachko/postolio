@@ -263,7 +263,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       }
 
       // Check if Instagram is connected
-      if (!brand.instagramAccessToken) {
+      if (!brand.instagramAccountId) {
         return reply.status(400).send({ error: 'Instagram account not connected' })
       }
 
@@ -350,7 +350,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
       }
 
       const rules = await engagementService.getEngagementRules(brandId)
-      const hasInstagram = !!brand.instagramAccessToken
+      const hasInstagram = !!brand.instagramAccountId
       const isActive = brand.engagementActive || false
 
       reply.send({

@@ -5,8 +5,10 @@ import crypto from 'crypto'
 
 import { getDatabaseClient } from '../config/database.js'
 import { PublisherCredentialsService } from '../services/publisher-credentials.js'
+import { TokenServiceClient } from '../clients/token-service-client.js'
 
 const prisma = getDatabaseClient()
+const tokenServiceClient = new TokenServiceClient()
 
 interface AuthorizeQuery {
   brandId: string
@@ -223,11 +225,29 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       // Add account type since it's not returned by the API
       instagramProfile.account_type = 'BUSINESS'
 
-      // Update brand with real Instagram connection
+      // Store sensitive token in Token Service
+      const tokenExpiresAt = tokenData.expires_in
+        ? new Date(Date.now() + tokenData.expires_in * 1000)
+        : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000) // Default 60 days
+
+      await tokenServiceClient.storeToken({
+        userId: brand.userId,
+        brandId: brand.id,
+        platform: 'instagram',
+        accessToken: pageAccessToken,
+        expiresAt: tokenExpiresAt,
+        metadata: {
+          pageId: pageWithInstagram.id,
+          accountId: instagramAccountId,
+          profileData: instagramProfile,
+        },
+      })
+
+      // Update brand with UI metadata only (no sensitive token)
       await prisma.brand.update({
         where: { id: brand.id },
         data: {
-          instagramAccessToken: pageAccessToken,
+          // Remove instagramAccessToken - now stored in Token Service
           instagramPageId: pageWithInstagram.id,
           instagramAccountId: instagramAccountId,
           instagramProfileData: instagramProfile as any,
@@ -235,9 +255,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
             ...preferences,
             oauthState: null,
             oauthStateExpires: null,
-            tokenExpiresAt: tokenData.expires_in
-              ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
-              : null,
+            tokenExpiresAt: tokenExpiresAt.toISOString(),
           },
         },
       })

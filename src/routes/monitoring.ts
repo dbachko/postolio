@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { monitoringService } from '../services/monitoring.js'
 import { checkDatabaseHealth, getDatabaseMetrics } from '../config/database.js'
+import { serviceClients } from '../services/service-clients.js'
 
 const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   // Get system metrics
@@ -91,8 +92,26 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
       }
     }
 
+    // Check service discovery health
+    let serviceDiscoveryHealth: any = { status: 'unknown' }
+    try {
+      const serviceHealth = await serviceClients.healthCheck()
+      serviceDiscoveryHealth = {
+        status: serviceHealth.overall,
+        services: {
+          tokenService: serviceHealth.tokenService,
+          schedulerService: serviceHealth.schedulerService,
+        }
+      }
+    } catch (error) {
+      serviceDiscoveryHealth = {
+        status: 'unhealthy',
+        error: error instanceof Error ? error.message : 'Service discovery unavailable'
+      }
+    }
+
     return {
-      status: isHealthy && dbHealth.status === 'healthy' ? 'healthy' : 'degraded',
+      status: isHealthy && dbHealth.status === 'healthy' && serviceDiscoveryHealth.status !== 'unhealthy' ? 'healthy' : 'degraded',
       timestamp: now.toISOString(),
       uptime: process.uptime(),
       services: {
@@ -103,6 +122,7 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
         },
         database: dbHealth,
         emailQueue: emailQueueHealth,
+        serviceDiscovery: serviceDiscoveryHealth,
       },
       system: {
         memoryUsage: process.memoryUsage(),
@@ -170,6 +190,57 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
     } catch (error) {
       return {
         timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }
+  })
+
+  // Service discovery health check
+  fastify.get('/health/service-discovery', async function () {
+    try {
+      const serviceHealth = await serviceClients.healthCheck()
+      
+      return {
+        timestamp: new Date().toISOString(),
+        overall: serviceHealth.overall,
+        services: serviceHealth,
+        environment: {
+          serviceDiscoveryEnabled: process.env.SERVICE_DISCOVERY_ENABLED === 'true',
+          cloudMapNamespaceId: process.env.CLOUDMAP_NAMESPACE_ID || 'not configured',
+          cloudMapNamespaceName: process.env.CLOUDMAP_NAMESPACE_NAME || 'not configured',
+        },
+        fallbackUrls: {
+          tokenService: process.env.TOKEN_SERVICE_URL || 'not configured',
+          contentScheduler: process.env.CONTENT_SCHEDULER_URL || process.env.SCHEDULER_API_URL || 'not configured',
+        }
+      }
+    } catch (error) {
+      return {
+        timestamp: new Date().toISOString(),
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        environment: {
+          serviceDiscoveryEnabled: process.env.SERVICE_DISCOVERY_ENABLED === 'true',
+          cloudMapNamespaceId: process.env.CLOUDMAP_NAMESPACE_ID || 'not configured',
+          cloudMapNamespaceName: process.env.CLOUDMAP_NAMESPACE_NAME || 'not configured',
+        }
+      }
+    }
+  })
+
+  // Refresh service discovery
+  fastify.post('/service-discovery/refresh', async function () {
+    try {
+      await serviceClients.refreshServiceDiscovery()
+      return {
+        timestamp: new Date().toISOString(),
+        status: 'success',
+        message: 'Service discovery refreshed successfully'
+      }
+    } catch (error) {
+      return {
+        timestamp: new Date().toISOString(),
+        status: 'error',
         error: error instanceof Error ? error.message : 'Unknown error'
       }
     }

@@ -394,9 +394,37 @@ redeploy_with_ecr_image() {
     # Temporary modification: change image source to ECR
     echo -e "${YELLOW}Updating CDK stack to use ECR image with tag: $IMAGE_TAG...${NC}"
     
-    # Deploy both ContentScheduler and Postolio stacks
-    # ContentScheduler must be deployed first as Postolio depends on it
-    echo -e "${YELLOW}Deploying ContentScheduler stack first...${NC}"
+    # Deploy Service Discovery stack first (required for all services)
+    echo -e "${YELLOW}Deploying shared Service Discovery stack...${NC}"
+    npx cdk deploy ServiceDiscovery-$ENVIRONMENT \
+        --require-approval never \
+        --region $AWS_REGION
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to deploy Service Discovery stack${NC}"
+        echo "Service Discovery is required for all other services."
+        return 1
+    fi
+    echo -e "${GREEN}✅ Service Discovery stack deployed successfully${NC}"
+    
+    # Deploy microservices (can be deployed independently after ServiceDiscovery)
+    echo -e "${YELLOW}Deploying microservices...${NC}"
+    
+    # Token Service
+    echo -e "${YELLOW}Deploying Token Service stack...${NC}"
+    npx cdk deploy TokenService-$ENVIRONMENT \
+        --require-approval never \
+        --region $AWS_REGION
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to deploy Token Service stack${NC}"
+        echo "Please check the error messages above and try again."
+        return 1
+    fi
+    echo -e "${GREEN}✅ Token Service stack deployed successfully${NC}"
+    
+    # ContentScheduler
+    echo -e "${YELLOW}Deploying ContentScheduler stack...${NC}"
     npx cdk deploy ContentScheduler-$ENVIRONMENT \
         --require-approval never \
         --region $AWS_REGION
@@ -504,9 +532,41 @@ deploy_infrastructure() {
         fi
     fi
     
-    # Deploy both ContentScheduler and Postolio stacks
-    # ContentScheduler must be deployed first as Postolio depends on it
-    echo -e "${YELLOW}Deploying ContentScheduler stack first...${NC}"
+    # Deploy Service Discovery stack first (required for all services)
+    echo -e "${YELLOW}Deploying shared Service Discovery stack...${NC}"
+    npx cdk deploy ServiceDiscovery-$ENVIRONMENT \
+        --context environment=$ENVIRONMENT \
+        --context account=$(aws sts get-caller-identity --query Account --output text) \
+        --context region=$AWS_REGION \
+        --require-approval never
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to deploy Service Discovery stack${NC}"
+        echo "Service Discovery is required for all other services."
+        exit 1
+    fi
+    echo -e "${GREEN}✅ Service Discovery stack deployed successfully${NC}"
+    
+    # Deploy microservices (can be deployed independently after ServiceDiscovery)
+    echo -e "${YELLOW}Deploying microservices...${NC}"
+    
+    # Token Service
+    echo -e "${YELLOW}Deploying Token Service stack...${NC}"
+    npx cdk deploy TokenService-$ENVIRONMENT \
+        --context environment=$ENVIRONMENT \
+        --context account=$(aws sts get-caller-identity --query Account --output text) \
+        --context region=$AWS_REGION \
+        --require-approval never
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to deploy Token Service stack${NC}"
+        echo "Please check the error messages above and try again."
+        exit 1
+    fi
+    echo -e "${GREEN}✅ Token Service stack deployed successfully${NC}"
+    
+    # ContentScheduler
+    echo -e "${YELLOW}Deploying ContentScheduler stack...${NC}"
     npx cdk deploy ContentScheduler-$ENVIRONMENT \
         --context environment=$ENVIRONMENT \
         --context account=$(aws sts get-caller-identity --query Account --output text) \

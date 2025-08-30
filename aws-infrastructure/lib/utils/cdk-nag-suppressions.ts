@@ -5,7 +5,6 @@
 
 import { NagSuppressions } from 'cdk-nag';
 import { Stack } from 'aws-cdk-lib';
-import * as cdk from 'aws-cdk-lib';
 
 /**
  * Common CDK Nag suppressions with justifications

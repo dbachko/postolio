@@ -11,6 +11,7 @@ import * as https from 'https';
 import CircuitBreaker from 'opossum';
 import type { Options as CircuitBreakerOptions } from 'opossum';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { getServiceDiscovery, SERVICES } from '../utils/service-discovery-client.js';
 
 // ==================== Validation Schemas ====================
 
@@ -158,6 +159,7 @@ export class ContentSchedulerClient {
 
     // Initialize cache for response caching
     this.cache = new Map();
+    
     // Normalize and sanitize base URL (remove trailing slashes) to avoid SigV4 canonical path mismatches
     const normalizedBaseURL = this.config.baseURL.replace(/\/+$/, '');
 
@@ -290,6 +292,40 @@ export class ContentSchedulerClient {
 
     // Circuit breaker event handlers
     this.setupCircuitBreakerEvents();
+  }
+
+  /**
+   * Create a ContentSchedulerClient with automatic service discovery
+   */
+  static async create(config: Partial<ContentSchedulerConfig> = {}): Promise<ContentSchedulerClient> {
+    const finalConfig = { ...config };
+    
+    // Use service discovery if enabled and no baseURL provided
+    if (process.env.SERVICE_DISCOVERY_ENABLED === 'true' && !finalConfig.baseURL) {
+      try {
+        const discovery = getServiceDiscovery();
+        const schedulerUrl = await discovery.getServiceUrl(SERVICES.CONTENT_SCHEDULER);
+        finalConfig.baseURL = schedulerUrl;
+        console.log('✅ Content Scheduler discovered via Cloud Map:', finalConfig.baseURL);
+      } catch {
+        // Fall back to environment variable
+        const fallbackUrl = process.env.SCHEDULER_API_URL || process.env.CONTENT_SCHEDULER_URL;
+        if (fallbackUrl) {
+          finalConfig.baseURL = fallbackUrl;
+          console.warn('⚠️  Content Scheduler discovery failed, using fallback URL:', fallbackUrl);
+        } else {
+          console.error('❌ Content Scheduler discovery failed and no fallback URL available');
+          throw new Error('Unable to discover Content Scheduler service URL');
+        }
+      }
+    }
+    
+    // Ensure baseURL is provided
+    if (!finalConfig.baseURL) {
+      throw new Error('baseURL is required for ContentSchedulerClient');
+    }
+    
+    return new ContentSchedulerClient(finalConfig as ContentSchedulerConfig);
   }
 
   // ==================== Public Methods ====================
@@ -958,11 +994,11 @@ export class ContentSchedulerClient {
     });
     
     // Limit cache size to prevent memory issues
-    if (this.cache.size > 100) {
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey) {
-        this.cache.delete(firstKey);
-      }
+    const MAX_CACHE_SIZE = 100;
+    if (this.cache.size >= MAX_CACHE_SIZE) {
+      // Remove oldest entries until we're back within limit
+      const keysToDelete = Array.from(this.cache.keys()).slice(0, this.cache.size - MAX_CACHE_SIZE + 1);
+      keysToDelete.forEach(key => this.cache.delete(key));
     }
   }
 }

@@ -52,7 +52,6 @@ model Brand {
   styleProfile         Json?
   preferences          Json?
   userId               String
-  instagramAccessToken String?
   instagramPageId      String?
   instagramAccountId   String?
   instagramProfileData Json?

@@ -196,7 +196,7 @@ class EngagementService {
       const brands = await prisma.brand.findMany({
         where: {
           engagementRules: { not: Prisma.JsonNull },
-          instagramAccessToken: { not: null },
+          instagramAccountId: { not: null },
         },
       })
 

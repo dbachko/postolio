@@ -126,7 +126,7 @@ class AutopilotService {
       // Get all brands that have Instagram integration
       const brands = await prisma.brand.findMany({
         where: {
-          OR: [{ instagramAccessToken: { not: null } }, { instagramPageId: { not: null } }],
+          instagramPageId: { not: null },
         },
         include: {
           content: {
@@ -395,7 +395,7 @@ class AutopilotService {
     try {
       const brands = await prisma.brand.findMany({
         where: {
-          OR: [{ instagramAccessToken: { not: null } }, { instagramPageId: { not: null } }],
+          instagramPageId: { not: null },
         },
         include: {
           content: {
