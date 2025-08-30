@@ -120,7 +120,13 @@ export class SchedulerAdapter {
   static getInstance(config?: Partial<ContentSchedulerConfig>): SchedulerAdapter {
     if (!SchedulerAdapter.instance) {
       // This is problematic but kept for backward compatibility
-      console.warn('⚠️ Using deprecated getInstance(). Use SchedulerAdapter.create() for proper async initialization.');
+      console.warn(
+        '⚠️ Using deprecated getInstance(). Migrate to SchedulerAdapter.create() for proper async initialization.\n' +
+        'Migration guide:\n' +
+        '  Before: const adapter = SchedulerAdapter.getInstance(config);\n' +
+        '  After:  const adapter = await SchedulerAdapter.create(config);\n' +
+        'This ensures proper service discovery and prevents race conditions. getInstance() will be removed in v3.0.0.'
+      );
       SchedulerAdapter.instance = new SchedulerAdapter(config);
     }
     return SchedulerAdapter.instance;

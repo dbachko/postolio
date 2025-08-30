@@ -996,9 +996,15 @@ export class ContentSchedulerClient {
     // Limit cache size to prevent memory issues
     const MAX_CACHE_SIZE = 100;
     if (this.cache.size >= MAX_CACHE_SIZE) {
-      // Remove oldest entries until we're back within limit
-      const keysToDelete = Array.from(this.cache.keys()).slice(0, this.cache.size - MAX_CACHE_SIZE + 1);
-      keysToDelete.forEach(key => this.cache.delete(key));
+      // Use iterator for efficient cache eviction (O(n) where n = items to delete, not total cache size)
+      const iterator = this.cache.keys();
+      const itemsToDelete = this.cache.size - MAX_CACHE_SIZE + 1;
+      for (let i = 0; i < itemsToDelete; i++) {
+        const { value: key, done } = iterator.next();
+        if (!done && key !== undefined) {
+          this.cache.delete(key);
+        }
+      }
     }
   }
 }

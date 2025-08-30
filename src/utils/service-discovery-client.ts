@@ -97,9 +97,14 @@ export class ServiceDiscovery {
           new URL(fallbackUrl); // Validate URL format
           console.log(`Using fallback URL for ${serviceName}: ${fallbackUrl}`);
           return fallbackUrl;
-        } catch {
-          console.error(`Invalid fallback URL for ${serviceName}: ${fallbackUrl}`);
-          throw new Error(`Invalid fallback URL for service: ${serviceName}`);
+        } catch (urlError) {
+          const errorDetails = urlError instanceof Error ? urlError.message : 'Invalid URL format';
+          console.error(`Invalid fallback URL for ${serviceName}: ${fallbackUrl}. Error: ${errorDetails}`);
+          throw new Error(
+            `Invalid fallback URL for service '${serviceName}': ${fallbackUrl}. ` +
+            `URL validation failed: ${errorDetails}. ` +
+            `Ensure the URL includes protocol (http:// or https://) and is properly formatted.`
+          );
         }
       }
       

@@ -9,6 +9,15 @@ const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY;
 if (!ENCRYPTION_KEY) {
   throw new Error('TOKEN_ENCRYPTION_KEY environment variable is required for token encryption');
 }
+
+// Validate encryption key format (256 bits = 64 hex characters for AES-256)
+if (!/^[0-9a-fA-F]{64}$/.test(ENCRYPTION_KEY)) {
+  throw new Error(
+    'TOKEN_ENCRYPTION_KEY must be exactly 64 hexadecimal characters (256 bits). ' +
+    'Generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+  );
+}
+
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm'
 
 // Request schema
