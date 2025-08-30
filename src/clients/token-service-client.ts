@@ -157,7 +157,7 @@ export class TokenServiceClient {
 
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
-        const options: RequestInit = {
+        const options: globalThis.RequestInit = {
           method,
           headers,
         };

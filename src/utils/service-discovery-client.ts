@@ -97,7 +97,7 @@ export class ServiceDiscovery {
           new URL(fallbackUrl); // Validate URL format
           console.log(`Using fallback URL for ${serviceName}: ${fallbackUrl}`);
           return fallbackUrl;
-        } catch (error) {
+        } catch {
           console.error(`Invalid fallback URL for ${serviceName}: ${fallbackUrl}`);
           throw new Error(`Invalid fallback URL for service: ${serviceName}`);
         }
@@ -195,7 +195,7 @@ export function getServiceDiscovery(): ServiceDiscovery {
 export async function callService(
   serviceName: string,
   path: string,
-  options?: RequestInit
+  options?: globalThis.RequestInit
 ): Promise<Response> {
   const discovery = getServiceDiscovery();
   const serviceUrl = await discovery.getServiceUrl(serviceName);

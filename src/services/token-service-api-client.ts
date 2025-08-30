@@ -6,7 +6,7 @@
 import axios, { AxiosInstance } from 'axios'
 import { aws4Interceptor } from 'aws4-axios'
 
-interface TokenData {
+interface _TokenData {
   accessToken: string
   refreshToken?: string
   expiresAt?: string

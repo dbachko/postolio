@@ -27,7 +27,7 @@ const TokenResponseSchema = z.object({
 })
 
 // Token encryption/decryption utilities
-function encryptToken(token: string): string {
+function _encryptToken(token: string): string {
   const iv = crypto.randomBytes(16)
   const cipher = crypto.createCipheriv(
     ENCRYPTION_ALGORITHM,
@@ -44,7 +44,7 @@ function encryptToken(token: string): string {
   return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted
 }
 
-function decryptToken(encryptedToken: string): string {
+function _decryptToken(encryptedToken: string): string {
   const parts = encryptedToken.split(':')
   if (parts.length !== 3) {
     // Token is not encrypted (legacy), return as-is
@@ -126,7 +126,7 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
       let tokenData: any = {}
       
       switch (platform) {
-        case 'instagram':
+        case 'instagram': {
           tokenData = {
             accessToken: token.accessToken,
             accountId: token.metadata?.accountId || brand.instagramAccountId,
@@ -156,6 +156,7 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
             tokenData.expiresAt = tokenExpiresAt
           }
           break
+        }
           
         case 'facebook':
           // TODO: Implement Facebook token retrieval

@@ -8,8 +8,8 @@ import { ContentSchedulerClient, ContentSchedulerConfig } from '../clients/conte
 import { SCHEDULER_TIME_INTERVALS, SYNC_TOLERANCE } from '../constants/scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
 import { TimezoneService } from './timezone.js';
-import { TokenServiceClient } from '../clients/token-service-client.js';
-import { getServiceDiscovery } from '../utils/service-discovery-client.js';
+// import { TokenServiceClient } from '../clients/token-service-client.js';
+// import { getServiceDiscovery } from '../utils/service-discovery-client.js';
 import type { StatusBroadcaster } from './status-broadcaster.js';
 import type { GenerationParams } from '../types/scheduler.js';
 

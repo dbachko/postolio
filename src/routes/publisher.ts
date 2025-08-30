@@ -5,7 +5,7 @@
  */
 
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { PublisherCredentialsService } from '../services/publisher-credentials.js';
+// import { PublisherCredentialsService } from '../services/publisher-credentials.js';
 import { PublisherContentService } from '../services/publisher-content.js';
 import { createPublisherAuth } from '../middleware/publisher-auth.js';
 
