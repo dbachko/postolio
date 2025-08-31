@@ -359,8 +359,9 @@ export class ContentSchedulerClient {
       const validatedData = UpdateScheduleInputSchema.parse(data);
       
       // Preserve stage path by omitting leading slash
+      // Note: API Gateway only supports PUT for updates, not PATCH
       const response = await this.retryWithBackoff(
-        () => this.client.patch(`schedules/${id}`, validatedData)
+        () => this.client.put(`schedules/${id}`, validatedData)
       );
       
       // Validate and return response
