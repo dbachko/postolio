@@ -90,10 +90,16 @@ class InstagramService {
 
   /**
    * Check if a brand has Instagram connected
+   * 
+   * Breaking Change: This method now checks for both instagramAccountId and 
+   * instagramPageId instead of instagramAccessToken. Both IDs are required because:
+   * - instagramAccountId: The Instagram Business Account ID used for API calls
+   * - instagramPageId: The Facebook Page ID required for token management
+   * 
+   * After Token Service integration, tokens are stored separately in the Token Service,
+   * so we validate the connection by checking if both required IDs are present.
    */
   isConfigured(brand: BrandData): boolean {
-    // After Token Service integration, tokens are stored separately
-    // Check for Instagram account and page IDs instead
     return !!(brand.instagramAccountId && brand.instagramPageId)
   }
 

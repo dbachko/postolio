@@ -116,6 +116,20 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
     try {
       // Handle OAuth errors first
       if (request.query.error) {
+        // Escape HTML to prevent XSS
+        const escapeHtml = (str: string) => {
+          return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;')
+        }
+        
+        const errorMessage = escapeHtml(
+          request.query.error_description || request.query.error || 'An error occurred during authorization'
+        )
+        
         const errorHtml = `
           <html>
             <head>
@@ -153,7 +167,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
               <div class="container">
                 <div class="error">✕</div>
                 <h2>Connection Failed</h2>
-                <p>${request.query.error_description || request.query.error || 'An error occurred during authorization'}</p>
+                <p>${errorMessage}</p>
                 <p class="message">Please close this window and try again.</p>
               </div>
               <script>
@@ -164,8 +178,8 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
                       type: 'INSTAGRAM_OAUTH_ERROR', 
                       data: { 
                         success: false, 
-                        error: '${request.query.error}',
-                        error_description: '${request.query.error_description || ''}'
+                        error: ${JSON.stringify(request.query.error)},
+                        error_description: ${JSON.stringify(request.query.error_description || '')}
                       }
                     }, window.location.origin);
                   } catch (e) {
