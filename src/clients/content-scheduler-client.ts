@@ -429,12 +429,31 @@ export class ContentSchedulerClient {
 
   /**
    * Reschedule a post to a new time
+   * Note: API Gateway requires all required fields even for updates
    */
-  async reschedule(id: string, newTime: Date): Promise<Schedule> {
-    return this.updateSchedule(id, { 
+  async reschedule(
+    id: string, 
+    newTime: Date,
+    requiredFields?: {
+      brandId: string;
+      contentId: string;
+      platform?: string;
+    }
+  ): Promise<Schedule> {
+    const updateData: UpdateScheduleInput = { 
       scheduledAt: newTime.toISOString(),
-      status: 'scheduled' 
-    });
+      status: 'scheduled'
+    };
+
+    // If required fields are provided, include them to satisfy API Gateway validation
+    if (requiredFields) {
+      // These fields shouldn't change but API Gateway requires them
+      (updateData as any).brandId = requiredFields.brandId;
+      (updateData as any).contentId = requiredFields.contentId;
+      (updateData as any).platform = requiredFields.platform || 'instagram';
+    }
+    
+    return this.updateSchedule(id, updateData);
   }
 
   /**
