@@ -22,6 +22,8 @@
     "playwright:install": "playwright install"
   },
   "dependencies": {
+    "@aws-sdk/client-eventbridge": "^3.879.0",
+    "@aws-sdk/client-servicediscovery": "^3.879.0",
     "@aws-sdk/client-ses": "^3.873.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
