@@ -201,7 +201,7 @@ export class TokenServiceClient {
         }
         
         // Make the request (signed or unsigned based on environment)
-        const fetchOptions: RequestInit = {
+        const fetchOptions: any = {
           method,
           headers,
         };
