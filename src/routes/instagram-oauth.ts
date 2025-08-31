@@ -116,10 +116,85 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
     try {
       // Handle OAuth errors first
       if (request.query.error) {
-        return reply.status(400).send({
-          error: request.query.error,
-          error_description: request.query.error_description,
-        })
+        // Escape HTML to prevent XSS
+        const escapeHtml = (str: string) => {
+          return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;')
+        }
+        
+        const errorMessage = escapeHtml(
+          request.query.error_description || request.query.error || 'An error occurred during authorization'
+        )
+        
+        const errorHtml = `
+          <html>
+            <head>
+              <title>Connection Failed</title>
+              <style>
+                body {
+                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  height: 100vh;
+                  margin: 0;
+                  background-color: #f5f5f5;
+                }
+                .container {
+                  text-align: center;
+                  padding: 2rem;
+                  background: white;
+                  border-radius: 8px;
+                  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                  max-width: 400px;
+                }
+                .error {
+                  color: #ef4444;
+                  font-size: 1.5rem;
+                  margin-bottom: 1rem;
+                }
+                .message {
+                  color: #6b7280;
+                  margin-top: 1rem;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="error">✕</div>
+                <h2>Connection Failed</h2>
+                <p>${errorMessage}</p>
+                <p class="message">Please close this window and try again.</p>
+              </div>
+              <script>
+                // Notify parent window of failure
+                if (window.opener && !window.opener.closed) {
+                  try {
+                    window.opener.postMessage({ 
+                      type: 'INSTAGRAM_OAUTH_ERROR', 
+                      data: { 
+                        success: false, 
+                        error: ${JSON.stringify(request.query.error)},
+                        error_description: ${JSON.stringify(request.query.error_description || '')}
+                      }
+                    }, window.location.origin);
+                  } catch (e) {
+                    console.error('Failed to send message to parent window:', e);
+                  }
+                }
+                // Close after delay
+                setTimeout(function() {
+                  window.close();
+                }, 5000);
+              </script>
+            </body>
+          </html>
+        `
+        return reply.type('text/html').send(errorHtml)
       }
 
       const { code, state } = request.query
@@ -266,19 +341,71 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       // Return HTML that closes the popup and notifies the parent
       const html = `
         <html>
+          <head>
+            <title>Instagram Connected</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background-color: #f5f5f5;
+              }
+              .container {
+                text-align: center;
+                padding: 2rem;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              }
+              .success {
+                color: #10b981;
+                font-size: 1.5rem;
+                margin-bottom: 1rem;
+              }
+              .message {
+                color: #6b7280;
+              }
+            </style>
+          </head>
           <body>
+            <div class="container">
+              <div class="success">✓</div>
+              <h2>Instagram Connected Successfully!</h2>
+              <p class="message">You can close this window.</p>
+            </div>
             <script>
               // Notify parent window of success
-              if (window.opener) {
-                window.opener.postMessage({ 
-                  type: 'INSTAGRAM_OAUTH_SUCCESS', 
-                  data: { success: true, profile: ${JSON.stringify(instagramProfile)} }
-                }, '*');
+              if (window.opener && !window.opener.closed) {
+                try {
+                  window.opener.postMessage({ 
+                    type: 'INSTAGRAM_OAUTH_SUCCESS', 
+                    data: { 
+                      success: true, 
+                      profile: ${JSON.stringify(instagramProfile)} 
+                    }
+                  }, window.location.origin);
+                  
+                  // Give time for the message to be received before closing
+                  setTimeout(function() {
+                    window.close();
+                  }, 1500);
+                } catch (e) {
+                  console.error('Failed to send message to parent window:', e);
+                  // Still try to close after a delay
+                  setTimeout(function() {
+                    window.close();
+                  }, 3000);
+                }
+              } else {
+                // No parent window, just show success message
+                setTimeout(function() {
+                  window.close();
+                }, 3000);
               }
-              // Close popup
-              window.close();
             </script>
-            <p>Instagram connected successfully! You can close this window.</p>
           </body>
         </html>
       `

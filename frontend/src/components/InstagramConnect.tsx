@@ -40,12 +40,16 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
       // Open OAuth popup
       const popup = window.open(data.authUrl, 'instagram-oauth', 'width=600,height=700,scrollbars=yes,resizable=yes')
 
-      // Listen for success message from popup
+      // Listen for success or error messages from popup
       const handleMessage = (event: MessageEvent) => {
         if (event.data.type === 'INSTAGRAM_OAUTH_SUCCESS') {
           console.log('Instagram OAuth success:', event.data.data)
           setIsConnecting(false)
           queryClient.invalidateQueries({ queryKey: ['instagram-status', brand.id] })
+          window.removeEventListener('message', handleMessage)
+        } else if (event.data.type === 'INSTAGRAM_OAUTH_ERROR') {
+          console.error('Instagram OAuth error:', event.data.data)
+          setIsConnecting(false)
           window.removeEventListener('message', handleMessage)
         }
       }
