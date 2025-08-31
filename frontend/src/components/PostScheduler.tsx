@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { Label } from './ui/label'
 import { Input } from './ui/input'
@@ -17,15 +18,46 @@ export function PostScheduler({
   showClearButton = true,
   showFormattedDate = true
 }: PostSchedulerProps) {
+  // Use local state to track value while editing
+  const [localValue, setLocalValue] = useState(value)
+
+  // Sync local value when parent value changes from outside
+  useEffect(() => {
+    setLocalValue(value)
+  }, [value])
+
   const handleClear = () => {
+    setLocalValue('')
     onChange('')
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Update local state immediately for responsive UI
+    setLocalValue(e.target.value)
+  }
+
+  const handleBlur = () => {
+    // Only trigger parent onChange when user finishes editing
+    if (localValue !== value) {
+      onChange(localValue)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Also save on Enter key
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (localValue !== value) {
+        onChange(localValue)
+      }
+    }
   }
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label htmlFor="scheduledAt">Scheduled Time</Label>
-        {showClearButton && value && (
+        {showClearButton && localValue && (
           <button
             type="button"
             onClick={handleClear}
@@ -39,13 +71,15 @@ export function PostScheduler({
       <Input
         id="scheduledAt"
         type="datetime-local"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={localValue}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         disabled={disabled}
       />
-      {showFormattedDate && value && (
+      {showFormattedDate && localValue && (
         <div className="text-xs text-gray-500">
-          Scheduled for: {format(new Date(value), 'EEEE, MMMM d, yyyy \'at\' h:mm a')}
+          Scheduled for: {format(new Date(localValue), 'EEEE, MMMM d, yyyy \'at\' h:mm a')}
         </div>
       )}
     </div>
