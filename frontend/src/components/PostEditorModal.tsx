@@ -9,6 +9,7 @@ import { PostScheduler } from './PostScheduler'
 import { PostStatusCard } from './PostStatusCard'
 import { PostSaveIndicator, type SaveStatus } from './PostSaveIndicator'
 import { PostLearningFeedback } from './PostLearningFeedback'
+import { usePostSchedulerStore } from '../stores/postSchedulerStore'
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,7 @@ interface FormData {
 
 export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalProps) {
   const queryClient = useQueryClient()
+  const resetSchedulerStore = usePostSchedulerStore((state) => state.reset)
   const [formData, setFormData] = useState<FormData>({
     caption: '',
     hashtags: [],
@@ -99,13 +101,15 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       setHasChanges(false)
       setShowLearningMessage(false)
       originalDataRef.current = null
+      // Reset the scheduler store to clear any editing state
+      resetSchedulerStore()
       // Clean up object URL when modal closes
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current)
         objectUrlRef.current = null
       }
     }
-  }, [isOpen])
+  }, [isOpen, resetSchedulerStore])
 
   // Clean up object URL on component unmount
   useEffect(() => {
@@ -378,6 +382,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
           </div>
 
           <PostScheduler
+            contentId={content.id}
             value={formData.scheduledAt}
             onChange={handleScheduledAtChange}
           />
