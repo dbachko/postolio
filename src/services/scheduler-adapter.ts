@@ -442,9 +442,13 @@ export class SchedulerAdapter {
       const scheduleId = (content.generationParams as GenerationParams)?.scheduleId;
       
       if (scheduleId) {
-        // Reschedule in AWS
+        // Reschedule in AWS - API Gateway requires all fields even for updates
         try {
-          await (await this.client).reschedule(scheduleId, newTimeUTC);
+          await (await this.client).reschedule(scheduleId, newTimeUTC, {
+            brandId: content.brandId,
+            contentId: content.id,
+            platform: 'instagram' // Default to instagram for now
+          });
         } catch (error: any) {
           // Handle circuit breaker errors gracefully
           if (error?.code === 'CIRCUIT_BREAKER_OPEN' || error?.code === 'EOPENBREAKER') {
