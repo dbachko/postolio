@@ -248,7 +248,7 @@ export class SchedulerAdapter {
               ? null 
               : `AWS Scheduler unavailable - content not scheduled`,
             generationParams: {
-              ...(content.generationParams as GenerationParams || {}),
+              ...((content.generationParams as GenerationParams | null) || {}),
               scheduleId: scheduleId,
               scheduledTimezone: brandTimezone,
               scheduledLocalTime: customTime ? customTime.toISOString() : undefined,
@@ -342,9 +342,10 @@ export class SchedulerAdapter {
         return { success: false, error: 'Content not found' };
       }
 
-      const generationParams = content.generationParams as GenerationParams;
-      const scheduleId = generationParams?.scheduleId;
-      const wasAwsScheduled = generationParams?.awsScheduleCreated;
+      // Type-safe access to generationParams with proper null checking
+      const generationParams = (content.generationParams as GenerationParams | null) || {};
+      const scheduleId = generationParams.scheduleId;
+      const wasAwsScheduled = generationParams.awsScheduleCreated;
       
       let awsCancelled = false;
       
@@ -439,48 +440,103 @@ export class SchedulerAdapter {
       
       console.log(`Rescheduling content ${contentId} from ${content.scheduledAt} to ${newTimeUTC.toISOString()} (${brandTimezone})`);
 
-      const scheduleId = (content.generationParams as GenerationParams)?.scheduleId;
+      // Type-safe access to generationParams
+      const generationParams = (content.generationParams as GenerationParams | null) || {};
+      const scheduleId = generationParams.scheduleId;
+      let awsRescheduleSuccess = false;
+      let awsError: any = null;
       
-      if (scheduleId) {
-        // Reschedule in AWS - API Gateway requires all fields even for updates
-        try {
+      if (!scheduleId) {
+        // Content should have a schedule ID if it's currently scheduled
+        if (content.status === 'scheduled' && content.scheduledAt) {
+          console.error(`Content ${contentId} is marked as scheduled but has no AWS schedule ID`);
+          return {
+            success: false,
+            error: 'Content is not properly scheduled in AWS - cannot reschedule. Please cancel and reschedule from scratch.'
+          };
+        } else {
+          // Content is not scheduled, nothing to reschedule
+          return {
+            success: false,
+            error: 'Content is not scheduled - nothing to reschedule'
+          };
+        }
+      }
+      
+      // Reschedule in AWS FIRST - only update local DB if this succeeds
+      try {
           await (await this.client).reschedule(scheduleId, newTimeUTC, {
             brandId: content.brandId,
             contentId: content.id,
             platform: 'instagram' // Default to instagram for now
           });
+          awsRescheduleSuccess = true;
+          console.log(`AWS schedule ${scheduleId} rescheduled successfully`);
         } catch (error: any) {
-          // Handle circuit breaker errors gracefully
+          awsError = error;
+          
+          // Handle circuit breaker errors with more specific messaging
           if (error?.code === 'CIRCUIT_BREAKER_OPEN' || error?.code === 'EOPENBREAKER') {
-            console.warn('Circuit breaker is open - AWS scheduler temporarily unavailable. Continuing with local update only.');
+            console.error('Circuit breaker is open - AWS scheduler temporarily unavailable. Reschedule failed.');
+            return { 
+              success: false, 
+              error: 'AWS scheduler temporarily unavailable. Please try again in a few minutes.' 
+            };
           } else if (error?.code === 'NETWORK_ERROR') {
-            console.warn('Network error connecting to AWS scheduler. Continuing with local update only.');
+            console.error('Network error connecting to AWS scheduler. Reschedule failed.');
+            return { 
+              success: false, 
+              error: 'Network error connecting to scheduler service. Please check your connection and try again.' 
+            };
           } else {
             console.error('Failed to reschedule in AWS:', error);
+            return {
+              success: false,
+              error: `Failed to reschedule: ${error.message || 'Unknown AWS scheduler error'}`
+            };
           }
-          // Continue with local update even if AWS fails
+        }
+
+      // Only update local database if AWS reschedule succeeded
+      if (awsRescheduleSuccess) {
+        try {
+          await prisma.content.update({
+            where: { id: contentId },
+            data: {
+              scheduledAt: newTimeUTC,
+              schedulingError: null, // Clear any previous errors
+              generationParams: {
+                ...generationParams, // Already safely extracted above
+                scheduledTimezone: brandTimezone,
+                rescheduledAt: new Date().toISOString(),
+                rescheduledLocalTime: isLocalTime ? newTime.toISOString() : undefined,
+              } as any,
+            },
+          });
+
+          // Log with timezone context
+          const localTimeDisplay = TimezoneService.formatWithTimezone(newTimeUTC, brandTimezone);
+          console.log(`Content ${contentId} rescheduled successfully for ${localTimeDisplay}`);
+
+          return { success: true };
+        } catch (dbError) {
+          // AWS succeeded but local DB failed - this is a serious consistency issue
+          console.error('CRITICAL: AWS reschedule succeeded but local DB update failed:', dbError);
+          await this.logInconsistency(contentId, 'LOCAL_DB_UPDATE_FAILED_AFTER_AWS_SUCCESS', {
+            awsScheduleId: scheduleId,
+            newTime: newTimeUTC.toISOString(),
+            error: dbError,
+          });
+          
+          return {
+            success: false,
+            error: 'Schedule was updated in AWS but local database sync failed. Please refresh the page.'
+          };
         }
       }
 
-      // Update local database with UTC time
-      await prisma.content.update({
-        where: { id: contentId },
-        data: {
-          scheduledAt: newTimeUTC,
-          generationParams: {
-            ...(content.generationParams as GenerationParams || {}),
-            scheduledTimezone: brandTimezone,
-            rescheduledAt: new Date().toISOString(),
-            rescheduledLocalTime: isLocalTime ? newTime.toISOString() : undefined,
-          } as any,
-        },
-      });
-
-      // Log with timezone context
-      const localTimeDisplay = TimezoneService.formatWithTimezone(newTimeUTC, brandTimezone);
-      console.log(`Content ${contentId} rescheduled successfully for ${localTimeDisplay}`);
-
-      return { success: true };
+      // This shouldn't be reached given the return statements above
+      return { success: false, error: 'Unknown error during reschedule operation' };
     } catch (error) {
       console.error('Error rescheduling content:', error);
       return { 
@@ -620,7 +676,7 @@ export class SchedulerAdapter {
    */
   private async logInconsistency(
     contentId: string,
-    type: 'AWS_SCHEDULE_WITHOUT_LOCAL' | 'AWS_CANCEL_FAILED' | 'LOCAL_WITHOUT_AWS' | 'DATA_MISMATCH',
+    type: 'AWS_SCHEDULE_WITHOUT_LOCAL' | 'AWS_CANCEL_FAILED' | 'LOCAL_WITHOUT_AWS' | 'DATA_MISMATCH' | 'LOCAL_DB_UPDATE_FAILED_AFTER_AWS_SUCCESS',
     details: Record<string, unknown>
   ): Promise<void> {
     try {
@@ -637,8 +693,8 @@ export class SchedulerAdapter {
       });
 
       if (content) {
-        const generationParams = content.generationParams as GenerationParams || {};
-        const inconsistencies = (generationParams.inconsistencies as Array<unknown> || []);
+        const generationParams = (content.generationParams as GenerationParams | null) || {};
+        const inconsistencies = (generationParams.inconsistencies as Array<unknown>) || [];
         
         inconsistencies.push({
           type,
