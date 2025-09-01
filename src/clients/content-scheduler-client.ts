@@ -41,7 +41,23 @@ const UpdateScheduleInputSchema = z.object({
   mediaUrls: z.array(z.string().url()).optional(),
   status: ScheduleStatusSchema.optional(),
   metadata: z.record(z.unknown()).optional(),
-});
+  // API Gateway validation fields (required when performing reschedule)
+  brandId: z.string().optional(),
+  contentId: z.string().optional(),
+  platform: PlatformSchema.optional(),
+}).refine(
+  (data) => {
+    // If any of the API Gateway fields are provided, all must be provided
+    const hasAnyApiField = data.brandId || data.contentId || data.platform;
+    const hasAllApiFields = data.brandId && data.contentId && data.platform;
+    
+    return !hasAnyApiField || hasAllApiFields;
+  },
+  {
+    message: "When updating schedule, brandId, contentId, and platform must all be provided together for API Gateway validation",
+    path: ["brandId", "contentId", "platform"]
+  }
+);
 
 // Response schema from Lambda
 const ScheduleSchema = z.object({
@@ -434,24 +450,21 @@ export class ContentSchedulerClient {
   async reschedule(
     id: string, 
     newTime: Date,
-    requiredFields?: {
+    requiredFields: {
       brandId: string;
       contentId: string;
       platform?: string;
     }
   ): Promise<Schedule> {
+    // For reschedule operations, API Gateway requires all fields
     const updateData: UpdateScheduleInput = { 
       scheduledAt: newTime.toISOString(),
-      status: 'scheduled'
+      status: 'scheduled',
+      // Include required fields directly in the typed object
+      brandId: requiredFields.brandId,
+      contentId: requiredFields.contentId,
+      platform: (requiredFields.platform as Platform) || 'instagram',
     };
-
-    // If required fields are provided, include them to satisfy API Gateway validation
-    if (requiredFields) {
-      // These fields shouldn't change but API Gateway requires them
-      (updateData as any).brandId = requiredFields.brandId;
-      (updateData as any).contentId = requiredFields.contentId;
-      (updateData as any).platform = requiredFields.platform || 'instagram';
-    }
     
     return this.updateSchedule(id, updateData);
   }

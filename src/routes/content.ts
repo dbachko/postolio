@@ -547,7 +547,40 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         originalStatus: content.status
       }))
 
-      // Update content
+      // Handle AWS scheduling operations FIRST before updating local DB
+      // This prevents race conditions where local DB has new time but AWS doesn't
+      const originalScheduledTime = content.scheduledAt?.toISOString()
+      const newScheduledTime = updateData.scheduledAt?.toISOString()
+      
+      // Check if this is a reschedule operation (time changed)
+      if (originalScheduledTime && newScheduledTime && originalScheduledTime !== newScheduledTime) {
+        try {
+          console.log(`Attempting to reschedule content ${contentId} from ${originalScheduledTime} to ${newScheduledTime}`);
+          
+          // Call AWS reschedule FIRST - fail fast if this doesn't work
+          const rescheduleResult = await schedulerService.reschedulePost(contentId, updateData.scheduledAt!);
+          
+          if (!rescheduleResult.success) {
+            console.error('AWS reschedule failed:', rescheduleResult.error);
+            return reply.code(500).send({
+              success: false,
+              error: `Failed to reschedule: ${rescheduleResult.error}`,
+              data: null
+            });
+          }
+          
+          console.log(`AWS reschedule succeeded for content ${contentId}`);
+        } catch (rescheduleError) {
+          console.error('Error during AWS reschedule:', rescheduleError);
+          return reply.code(500).send({
+            success: false,
+            error: `Reschedule failed: ${rescheduleError instanceof Error ? rescheduleError.message : 'Unknown error'}`,
+            data: null
+          });
+        }
+      }
+      
+      // Only update local DB after AWS operations succeed (or if no AWS operation needed)
       const updatedContent = await prisma.content.update({
         where: { id: contentId },
         data: updateData,
@@ -611,22 +644,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             console.error('Error cancelling schedule:', cancelError)
           }
         }
-        // Case 3: Reschedule (time changed)
-        else if (originalScheduledTime && newScheduledTime && originalScheduledTime !== newScheduledTime) {
-          try {
-            // For rescheduling, also don't pass customTime
-            // The scheduler-adapter will read the updated scheduledAt from DB
-            const rescheduleResult = await schedulerService.reschedulePost(contentId, updatedContent.scheduledAt!)
-            
-            if (!rescheduleResult.success) {
-              console.error('Failed to reschedule in AWS:', rescheduleResult.error)
-            } else {
-              console.log(`Content ${contentId} rescheduled successfully in AWS`)
-            }
-          } catch (rescheduleError) {
-            console.error('Error rescheduling:', rescheduleError)
-          }
-        }
+        // Note: Reschedule logic moved earlier in the flow to prevent race conditions
+        // AWS operations now happen BEFORE local DB updates
       }
 
       // Apply AI learning if there were changes
