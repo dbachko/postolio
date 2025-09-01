@@ -8,6 +8,15 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { randomUUID } from 'crypto';
 import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from './config';
 
+/**
+ * Schedule Management Lambda
+ * 
+ * This Lambda handles CRUD operations for content schedules with resilience patterns:
+ * - PUT operations implement "upsert" (update or insert) for data consistency recovery
+ * - If a schedule is missing during update (e.g., DynamoDB data loss), it will be recreated
+ * - This ensures the system can recover from data inconsistencies between services
+ */
+
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'schedule-management' });
 const tracer = new Tracer({ serviceName: 'schedule-management' });
@@ -15,7 +24,12 @@ const metrics = new Metrics({ namespace: 'ContentScheduler', serviceName: 'sched
 
 // Initialize AWS SDK clients
 const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: {
+    removeUndefinedValues: false, // Keep undefined values as empty to ensure all fields are stored
+    convertEmptyValues: true,     // Convert empty strings/arrays to DynamoDB empty values
+  }
+});
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 
 // Validation schemas
@@ -213,7 +227,7 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
     contentId: validatedData.contentId 
   });
 
-  // Store in DynamoDB first
+  // Store in DynamoDB first - ensure all content fields are stored with defaults
   await docClient.send(new PutCommand({
     TableName: process.env.SCHEDULES_TABLE!,
     Item: {
@@ -226,10 +240,11 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
       scheduledAt,
       status: SCHEDULE_STATUS.SCHEDULED,
       contentType: validatedData.contentType || 'image',
-      videoUrl: validatedData.videoUrl,
-      caption: validatedData.caption,
-      hashtags: validatedData.hashtags,
-      mediaUrls: validatedData.mediaUrls,
+      videoUrl: validatedData.videoUrl || '',
+      // Ensure content fields always have values (not undefined)
+      caption: validatedData.caption || '',
+      hashtags: validatedData.hashtags || [],
+      mediaUrls: validatedData.mediaUrls || [],
       userId: validatedData.userId,
       gsi1pk: `BRAND#${validatedData.brandId}`,
       gsi1sk: scheduledAt,
@@ -424,18 +439,43 @@ async function updateSchedule(scheduleId: string, data: any): Promise<APIGateway
     }));
     
     if (!existingSchedule.Item) {
-      return {
-        statusCode: 404,
-        body: JSON.stringify({ error: 'Schedule not found' }),
-      };
+      // Schedule doesn't exist - create it instead (upsert pattern for resilience)
+      logger.warn('Schedule not found during update, creating new schedule', { 
+        scheduleId,
+        reason: 'Data inconsistency recovery - schedule missing from DynamoDB'
+      });
+      
+      // Validate the data has required fields for creation
+      const validation = validateScheduleRequest(data);
+      if (!validation.valid) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ 
+            error: 'Cannot create schedule - missing required fields',
+            validationErrors: validation.errors 
+          }),
+        };
+      }
+      
+      // Create the schedule (reuse creation logic)
+      return createSchedule(data);
     }
     
-    // Update the schedule data
+    // Update the schedule data, preserving content fields
     const updatedItem = {
       ...existingSchedule.Item,
       ...data,
+      // Ensure content fields are preserved or updated
+      caption: data.caption !== undefined ? data.caption : existingSchedule.Item.caption,
+      hashtags: data.hashtags !== undefined ? data.hashtags : existingSchedule.Item.hashtags,
+      mediaUrls: data.mediaUrls !== undefined ? data.mediaUrls : existingSchedule.Item.mediaUrls,
       updatedAt: new Date().toISOString(),
     };
+    
+    logger.info('Updating existing schedule', { 
+      scheduleId,
+      hasContentUpdates: !!(data.caption || data.hashtags || data.mediaUrls)
+    });
     
     // If scheduledAt changed, we need to update EventBridge
     if (data.scheduledAt && data.scheduledAt !== existingSchedule.Item.scheduledAt) {
