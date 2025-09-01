@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, type ComponentType } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Calendar, dateFnsLocalizer, type View, type Event } from 'react-big-calendar'
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
@@ -28,6 +28,8 @@ const localizer = dateFnsLocalizer({
 
 // Create the DnD Calendar component
 const DnDCalendar = withDragAndDrop(Calendar)
+// Wrap with a broad ComponentType to avoid incomplete HOC typings blocking base Calendar props
+const DnDCalendarAny = DnDCalendar as unknown as ComponentType<Record<string, unknown>>
 
 interface PlaceholderContent {
   id: string
@@ -77,10 +79,38 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   })
 
   // Use provided content or fetched content
-  const content = propContent || calendarQuery.data?.data?.content || []
-  const placeholders = calendarQuery.data?.data?.placeholders || []
+  const content = useMemo(
+    () => propContent ?? calendarQuery.data?.data?.content ?? [],
+    [propContent, calendarQuery.data?.data?.content]
+  )
+  const placeholders = useMemo(
+    () => calendarQuery.data?.data?.placeholders ?? [],
+    [calendarQuery.data?.data?.placeholders]
+  )
+
+    // Type guards
+    const isPlaceholderContent = (r: unknown): r is PlaceholderContent => {
+      if (!r || typeof r !== 'object') return false
+      const obj = r as Record<string, unknown>
+      return obj.type === 'placeholder' && obj.isPlaceholder === true && typeof obj.id === 'string'
+    }
+
+    const isContent = (r: unknown): r is Content => {
+      if (!r || typeof r !== 'object') return false
+      const obj = r as Record<string, unknown>
+      return typeof obj.id === 'string' && typeof obj.status === 'string'
+    }
+
+    const isCalendarEvent = useCallback((e: unknown): e is CalendarEvent => {
+      if (!e || typeof e !== 'object') return false
+      const obj = e as Record<string, unknown>
+      return obj.start instanceof Date && obj.end instanceof Date && typeof obj.id === 'string' &&
+        (isContent(obj.resource) || isPlaceholderContent(obj.resource))
+    }, [])
 
   // Reschedule mutation with optimistic updates
+  type CalendarAPIData = { data?: { content?: Content[] } } | undefined
+
   const rescheduleMutation = useMutation({
     mutationFn: ({ contentId, scheduledAt }: { contentId: string; scheduledAt: string }) => 
       apiClient.updateContent({ contentId, scheduledAt }),
@@ -92,20 +122,18 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
       const previousData = queryClient.getQueryData(['calendar', brandId, format(currentDate, 'yyyy-MM')])
       
       // Optimistically update the cache
-      queryClient.setQueryData(['calendar', brandId, format(currentDate, 'yyyy-MM')], (old: any) => {
+      queryClient.setQueryData(['calendar', brandId, format(currentDate, 'yyyy-MM')], (old: CalendarAPIData) => {
         if (!old?.data?.content) return old
-        
-        return {
+        const next: NonNullable<CalendarAPIData> = {
           ...old,
           data: {
             ...old.data,
-            content: old.data.content.map((item: Content) => 
-              item.id === contentId 
-                ? { ...item, scheduledAt } 
-                : item
+            content: old.data.content.map((item: Content) =>
+              item.id === contentId ? { ...item, scheduledAt } : item
             )
           }
         }
+        return next
       })
       
       // Return a context with the previous data
@@ -180,12 +208,18 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   }, [content, placeholders, timezone])
 
   // Handle event drop (rescheduling)
-  const handleEventDrop = useCallback(({ event, start }: { event: CalendarEvent; start: Date | string; end: Date | string }) => {
-    
+  const handleEventDrop = useCallback((args: { event: unknown; start: Date | string; end: Date | string }) => {
+    const { event, start } = args
+    if (!isCalendarEvent(event)) return
     const draggedContent = event.resource
-    
+
     // Don't allow dragging of published posts, placeholders, failed, or skipped posts
-    if (draggedContent.status === 'published' || ('isPlaceholder' in draggedContent && draggedContent.isPlaceholder) || draggedContent.status === 'failed' || draggedContent.status === 'skipped') {
+    if (
+      draggedContent.status === 'published' ||
+      ('isPlaceholder' in draggedContent && draggedContent.isPlaceholder) ||
+      draggedContent.status === 'failed' ||
+      draggedContent.status === 'skipped'
+    ) {
       toast.error('Cannot reschedule this post')
       return
     }
@@ -193,21 +227,17 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     // The 'start' parameter from react-big-calendar is already in local timezone
     // and represents the exact date/time where the event was dropped
     const newLocalDate = typeof start === 'string' ? new Date(start) : start
-    
-    // IMPORTANT: We use the EXACT time from the drop location, not the original time
-    // This allows users to change both date AND time by dragging
-    
+
     // Convert the local date/time to UTC for storage
     const utcDate = convertLocalToUTC(newLocalDate, timezone)
     const scheduledAt = utcDate.toISOString()
-    
-    
+
     // Perform the mutation
     rescheduleMutation.mutate({
       contentId: draggedContent.id,
       scheduledAt
     })
-  }, [rescheduleMutation, timezone])
+  }, [rescheduleMutation, timezone, isCalendarEvent])
 
   // Navigation handlers with memoization
   const handlePrevious = useCallback(() => {
@@ -231,8 +261,10 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   }, [])
 
   // Custom event component
-  const EventComponent = ({ event }: { event: CalendarEvent }) => {
-    const content = event.resource
+  const EventComponent = ({ event }: { event: Event }) => {
+    if (!isCalendarEvent(event)) return null
+    const calendarEvent = event
+    const content = calendarEvent.resource
     const isPlaceholder = 'isPlaceholder' in content && content.isPlaceholder
     const isDraggable = !isPlaceholder && content.status !== 'published' && content.status !== 'failed' && content.status !== 'skipped'
     
@@ -259,12 +291,16 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     return (
       <div
         className={`p-1 rounded ${isPlaceholder ? 'border border-dashed' : 'border-l-2'} ${statusColors[content.status as keyof typeof statusColors] || statusColors.draft} ${isDraggable ? 'cursor-move' : isPlaceholder ? '' : 'cursor-pointer'} hover:opacity-80 transition-opacity`}
-        onClick={() => !isPlaceholder && onContentClick?.(content as any)}
+        onClick={() => {
+          if (!isPlaceholder && 'id' in content) {
+            onContentClick?.(content as Content)
+          }
+        }}
         title={isDraggable ? 'Drag to reschedule' : ''}
       >
         <div className="flex items-center gap-1 text-xs">
           {StatusIcon && <StatusIcon className="w-3 h-3 flex-shrink-0" />}
-          <span className="truncate">{event.title}</span>
+          <span className="truncate">{calendarEvent.title}</span>
         </div>
         {isPlaceholder && (
           <div className="text-[10px] opacity-60 mt-0.5">Will generate</div>
@@ -398,49 +434,51 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   }
 
   // Check if event is draggable
-  const isDraggableAccessor = useCallback((event: CalendarEvent) => {
-    const status = event.resource.status
-    const isPlaceholder = 'isPlaceholder' in event.resource && event.resource.isPlaceholder
+  const canDragEvent = useCallback((ev: unknown) => {
+    if (!isCalendarEvent(ev)) return false
+    const status = ev.resource.status
+    const isPlaceholder = 'isPlaceholder' in ev.resource && ev.resource.isPlaceholder
     // Allow dragging for draft and scheduled posts
     // Disallow for published, placeholder, failed, and skipped posts
     return !isPlaceholder && status !== 'published' && status !== 'failed' && status !== 'skipped'
-  }, [])
+  }, [isCalendarEvent])
 
   // Handle event click to navigate to post detail
-  const handleSelectEvent = useCallback((event: CalendarEvent | object, _e?: React.SyntheticEvent<HTMLElement>) => {
-    // Type guard to ensure we have the right event type
-    if (!('resource' in event)) return
-    
-    const calendarEvent = event as CalendarEvent
-    const resource = calendarEvent.resource
+  const handleSelectEvent = useCallback((event: unknown) => {
+    if (!isCalendarEvent(event)) return
+    const resource = event.resource
     // Don't navigate for placeholders
     if ('isPlaceholder' in resource && resource.isPlaceholder) {
       return
     }
     // Navigate to post detail page
     navigate(`/posts/${resource.id}`)
-  }, [navigate])
+  }, [navigate, isCalendarEvent])
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <CustomToolbar />
       
-      <div className="calendar-container" style={{ height: '600px' }}>
-        <DnDCalendar
+      <div
+        className="calendar-container"
+        style={{ height: '75vh', minHeight: view === 'week' ? '900px' : '600px' }}
+      >
+  <DnDCalendarAny
           localizer={localizer}
           events={events}
-          startAccessor={(event: any) => event.start}
-          endAccessor={(event: any) => event.end}
+          startAccessor={(e: object) => (isCalendarEvent(e) ? e.start : new Date(0))}
+          endAccessor={(e: object) => (isCalendarEvent(e) ? e.end : new Date(0))}
           date={currentDate}
           onNavigate={setCurrentDate}
           view={view}
           onView={setView}
           views={['day', 'week']}
           toolbar={false} // We use our custom toolbar
+          allDaySlot={false}
           components={{
-            event: EventComponent as any,
+            event: EventComponent,
           }}
-          eventPropGetter={() => ({
+          eventPropGetter={(/* event: Event, _start, _end, _isSelected */) => ({
             className: 'calendar-event',
             style: {
               border: 'none',
@@ -448,25 +486,35 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
               padding: '2px',
             },
           })}
-          dayPropGetter={(date) => ({
+          dayPropGetter={(date: Date) => ({
             className: isToday(date) ? 'calendar-today' : '',
             style: isToday(date) ? {
               backgroundColor: '#f0f9ff',
             } : {},
           })}
-          min={new Date(2024, 0, 1, 6, 0)} // 6 AM
-          max={new Date(2024, 0, 1, 22, 0)} // 10 PM
+          // Show full 24-hour range
+          min={new Date(1970, 0, 1, 0, 0, 0)}
+          max={new Date(1970, 0, 1, 23, 59, 59)}
+          // Smaller step keeps hours readable while allowing precise drops
           step={60}
           timeslots={1}
           defaultDate={new Date()}
+          // Start scrolled near the current time for convenience
+          scrollToTime={new Date(1970, 0, 1, new Date().getHours(), 0, 0)}
+          dayLayoutAlgorithm="no-overlap"
           formats={{
-            timeGutterFormat: 'h:mm a',
-            eventTimeRangeFormat: ({ start }, culture, localizer) =>
-              localizer?.format(start, 'h:mm a', culture) || '',
+            timeGutterFormat: 'h a',
+            eventTimeRangeFormat: (
+              { start }: { start: Date; end: Date },
+              culture: string,
+              localizer: { format: (date: Date, f: string, c?: string) => string }
+            ) => localizer?.format(start, 'h:mm a', culture) || '',
           }}
           // Drag and drop props
-          draggableAccessor={isDraggableAccessor as any}
-          onEventDrop={handleEventDrop as any}
+          draggableAccessor={(ev: Event) => canDragEvent(ev)}
+          onEventDrop={({ event, start, end }: { event: Event; start: Date | string; end: Date | string }) =>
+            handleEventDrop({ event, start, end })
+          }
           resizable={false}
           // Click handler for navigation
           onSelectEvent={handleSelectEvent}
