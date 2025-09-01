@@ -231,8 +231,9 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   }, [])
 
   // Custom event component
-  const EventComponent = ({ event }: { event: CalendarEvent }) => {
-    const content = event.resource
+  const EventComponent = ({ event }: { event: Event }) => {
+    const calendarEvent = event as unknown as CalendarEvent
+    const content = calendarEvent.resource
     const isPlaceholder = 'isPlaceholder' in content && content.isPlaceholder
     const isDraggable = !isPlaceholder && content.status !== 'published' && content.status !== 'failed' && content.status !== 'skipped'
     
@@ -259,12 +260,16 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     return (
       <div
         className={`p-1 rounded ${isPlaceholder ? 'border border-dashed' : 'border-l-2'} ${statusColors[content.status as keyof typeof statusColors] || statusColors.draft} ${isDraggable ? 'cursor-move' : isPlaceholder ? '' : 'cursor-pointer'} hover:opacity-80 transition-opacity`}
-        onClick={() => !isPlaceholder && onContentClick?.(content as any)}
+        onClick={() => {
+          if (!isPlaceholder && 'id' in content) {
+            onContentClick?.(content as unknown as Content)
+          }
+        }}
         title={isDraggable ? 'Drag to reschedule' : ''}
       >
         <div className="flex items-center gap-1 text-xs">
           {StatusIcon && <StatusIcon className="w-3 h-3 flex-shrink-0" />}
-          <span className="truncate">{event.title}</span>
+          <span className="truncate">{calendarEvent.title}</span>
         </div>
         {isPlaceholder && (
           <div className="text-[10px] opacity-60 mt-0.5">Will generate</div>
@@ -407,7 +412,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   }, [])
 
   // Handle event click to navigate to post detail
-  const handleSelectEvent = useCallback((event: CalendarEvent | object, _e?: React.SyntheticEvent<HTMLElement>) => {
+  const handleSelectEvent = useCallback((event: CalendarEvent | object) => {
     // Type guard to ensure we have the right event type
     if (!('resource' in event)) return
     
@@ -425,22 +430,26 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <CustomToolbar />
       
-      <div className="calendar-container" style={{ height: '600px' }}>
+      <div
+        className="calendar-container"
+        style={{ height: '75vh', minHeight: view === 'week' ? '900px' : '600px' }}
+      >
         <DnDCalendar
           localizer={localizer}
           events={events}
-          startAccessor={(event: any) => event.start}
-          endAccessor={(event: any) => event.end}
+          startAccessor={(event: CalendarEvent) => event.start}
+          endAccessor={(event: CalendarEvent) => event.end}
           date={currentDate}
           onNavigate={setCurrentDate}
           view={view}
           onView={setView}
           views={['day', 'week']}
           toolbar={false} // We use our custom toolbar
+          allDaySlot={false}
           components={{
-            event: EventComponent as any,
+            event: EventComponent,
           }}
-          eventPropGetter={() => ({
+          eventPropGetter={(/* event: Event, _start, _end, _isSelected */) => ({
             className: 'calendar-event',
             style: {
               border: 'none',
@@ -454,19 +463,26 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
               backgroundColor: '#f0f9ff',
             } : {},
           })}
-          min={new Date(2024, 0, 1, 6, 0)} // 6 AM
-          max={new Date(2024, 0, 1, 22, 0)} // 10 PM
+          // Show full 24-hour range
+          min={new Date(1970, 0, 1, 0, 0, 0)}
+          max={new Date(1970, 0, 1, 23, 59, 59)}
+          // Smaller step keeps hours readable while allowing precise drops
           step={60}
           timeslots={1}
           defaultDate={new Date()}
+          // Start scrolled near the current time for convenience
+          scrollToTime={new Date(1970, 0, 1, new Date().getHours(), 0, 0)}
+          dayLayoutAlgorithm="no-overlap"
           formats={{
-            timeGutterFormat: 'h:mm a',
+            timeGutterFormat: 'h a',
             eventTimeRangeFormat: ({ start }, culture, localizer) =>
               localizer?.format(start, 'h:mm a', culture) || '',
           }}
           // Drag and drop props
-          draggableAccessor={isDraggableAccessor as any}
-          onEventDrop={handleEventDrop as any}
+          draggableAccessor={(ev: Event) => isDraggableAccessor(ev as CalendarEvent)}
+          onEventDrop={({ event, start }: { event: Event; start: Date | string; end: Date | string }) =>
+            handleEventDrop({ event: event as CalendarEvent, start })
+          }
           resizable={false}
           // Click handler for navigation
           onSelectEvent={handleSelectEvent}

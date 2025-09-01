@@ -14,10 +14,16 @@
 .calendar-container .rbc-time-view .rbc-time-gutter {
   background-color: #f8fafc;
   border-right: 1px solid #e2e8f0;
+  width: 68px; /* wider gutter for 24h labels */
 }
 
 .calendar-container .rbc-time-view .rbc-time-slot {
   border-top: 1px solid #f3f4f6;
+}
+
+/* subtle zebra striping for each hour row to improve scanning */
+.calendar-container .rbc-timeslot-group:nth-child(odd) {
+  background-color: #fafafa;
 }
 
 .calendar-container .rbc-today {
@@ -26,6 +32,7 @@
 
 .calendar-container .rbc-current-time-indicator {
   background-color: #3b82f6;
+  height: 2px;
 }
 
 .calendar-container .calendar-event {
@@ -48,6 +55,13 @@
   border-top: 1px solid #e2e8f0;
 }
 
+/* keep header sticky for long scrolls */
+.calendar-container .rbc-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
 /* Custom event styling */
 .calendar-event:hover {
   opacity: 0.8;
@@ -57,4 +71,9 @@
 /* Today highlight */
 .calendar-today {
   background-color: #f0f9ff !important;
+}
+
+/* Allow wrapping for long titles without overflowing */
+.calendar-container .rbc-event-content {
+  white-space: normal;
 }
