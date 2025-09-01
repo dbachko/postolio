@@ -827,7 +827,6 @@ update_secrets() {
     echo -e "${GREEN}✅ Infrastructure secrets are automatically configured:${NC}"
     echo "   - JWT_SECRET: Auto-generated from stack ID"
     echo "   - REDIS_URL: Configured from ElastiCache endpoint"
-    echo "   - PUBLISHER_API_KEY: Auto-generated for Lambda"
     echo "   - DB_USERNAME/DB_PASSWORD: Managed by RDS"
     echo ""
     echo -e "${YELLOW}⚠️  User secrets must be provided as environment variables:${NC}"

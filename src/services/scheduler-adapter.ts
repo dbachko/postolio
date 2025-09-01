@@ -464,9 +464,11 @@ export class SchedulerAdapter {
       }
       
       // Reschedule in AWS FIRST - only update local DB if this succeeds
-      // Also send updated content in case it was edited
+      // Use updateSchedule directly to include content updates
       try {
-          await (await this.client).reschedule(scheduleId, newTimeUTC, {
+          await (await this.client).updateSchedule(scheduleId, {
+            scheduledAt: newTimeUTC.toISOString(),
+            // Include required fields for API Gateway validation
             brandId: content.brandId,
             contentId: content.id,
             platform: 'instagram', // Default to instagram for now
@@ -476,7 +478,7 @@ export class SchedulerAdapter {
             mediaUrls: content.cdnImageUrl ? [content.cdnImageUrl] : content.imageUrl ? [content.imageUrl] : []
           });
           awsRescheduleSuccess = true;
-          console.log(`AWS schedule ${scheduleId} rescheduled successfully`);
+          console.log(`AWS schedule ${scheduleId} rescheduled successfully with updated content`);
         } catch (error: any) {
           awsError = error;
           

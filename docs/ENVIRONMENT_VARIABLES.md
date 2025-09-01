@@ -69,7 +69,6 @@ These remain in AWS Secrets Manager as they are sensitive:
 - `SENDGRID_API_KEY` - Email service
 - `AWS_SES_ACCESS_KEY` - Email sending
 - `MIDJOURNEY_TOKEN` - Image generation
-- `PUBLISHER_API_KEY` - Internal service auth
 
 ### Service Credentials
 - `SENTRY_AUTH_TOKEN` - Sentry deployment token

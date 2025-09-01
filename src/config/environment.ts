@@ -35,7 +35,6 @@ interface EnvironmentConfig {
   
   // API Keys (Secrets)
   openaiApiKey: string
-  publisherApiKey: string
   
   // URLs and Endpoints
   apiUrl: string
@@ -144,7 +143,6 @@ class EnvironmentService {
       
       // API Keys (from AWS Secrets Manager or env vars)
       openaiApiKey: process.env.OPENAI_API_KEY || awsSecrets.openaiApiKey || '',
-      publisherApiKey: process.env.PUBLISHER_API_KEY || awsSecrets.publisherApiKey || '',
       
       // URLs and Endpoints (from environment variables)
       apiUrl: process.env.API_URL || process.env.VITE_API_URL || 'http://localhost:3000',

@@ -27,7 +27,6 @@ These secrets are automatically generated and managed by CDK:
 |--------|--------|-------------|
 | `JWT_SECRET` | Generated from Stack ID | JWT token signing |
 | `REDIS_URL` | ElastiCache endpoint | Redis connection string |
-| `PUBLISHER_API_KEY` | Generated UUID | Internal Lambda auth |
 | `DB_USERNAME` | RDS configuration | Database username |
 | `DB_PASSWORD` | RDS auto-generated | Database password |
 
