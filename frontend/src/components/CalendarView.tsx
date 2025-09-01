@@ -466,8 +466,8 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   <DnDCalendarAny
           localizer={localizer}
           events={events}
-          startAccessor={(e: object) => (isCalendarEvent(e) ? e.start : new Date(0))}
-          endAccessor={(e: object) => (isCalendarEvent(e) ? e.end : new Date(0))}
+          startAccessor="start"
+          endAccessor="end"
           date={currentDate}
           onNavigate={setCurrentDate}
           view={view}
