@@ -60,7 +60,6 @@ echo -e "${YELLOW}Infrastructure Secrets (Auto-generated):${NC}"
 echo ""
 echo -e "${GREEN}✅ JWT_SECRET${NC} - Will be generated from stack ID"
 echo -e "${GREEN}✅ REDIS_URL${NC} - Will be configured from ElastiCache endpoint"
-echo -e "${GREEN}✅ PUBLISHER_API_KEY${NC} - Will be generated as UUID"
 echo -e "${GREEN}✅ DB_USERNAME/PASSWORD${NC} - Managed by RDS"
 
 # Check if .env file exists

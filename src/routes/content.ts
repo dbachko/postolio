@@ -8,7 +8,6 @@ import learningService from '../services/learning.js'
 import { uploadImageBufferToS3, type ImageMetadata } from '../services/s3-image.js'
 import { computePlaceholders } from '../services/placeholderService.js'
 import { schedulerService } from '../services/scheduler.js'
-import { PublisherContentService } from '../services/publisher-content.js'
 
 import { getDatabaseClient } from '../config/database.js'
 
@@ -597,10 +596,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           brandId: true,
         },
       })
-
-      // Invalidate publisher content cache after update
-      // This ensures fresh content is fetched at publish time
-      await PublisherContentService.invalidateContentCache(contentId)
 
       // Log the result for debugging
       console.log('Content update result:', JSON.stringify({
