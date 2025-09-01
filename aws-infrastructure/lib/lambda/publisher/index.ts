@@ -259,25 +259,28 @@ export const handler = async (event: PublishEvent): Promise<void> => {
   logger.info('Publishing content', { scheduleId: event.scheduleId });
 
   try {
-    // Get schedule details from DynamoDB
+    // Get schedule details from DynamoDB (already contains latest content)
     const schedule = await getSchedule(event.scheduleId);
     if (!schedule) {
       throw new Error(`Schedule not found: ${event.scheduleId}`);
     }
 
-    // Get fresh content details from main app
-    const freshContent = await getContentDetails(schedule.contentId);
-    logger.info('Fetched fresh content', { contentId: schedule.contentId, brandId: schedule.brandId });
+    // Use content directly from schedule (no need to fetch from main app)
+    // The scheduler's DynamoDB is kept up-to-date via EventBridge events
+    logger.info('Using content from schedule', { 
+      contentId: schedule.contentId, 
+      brandId: schedule.brandId,
+      hasCaption: !!schedule.caption,
+      hasHashtags: !!schedule.hashtags 
+    });
 
-    // Merge fresh content with schedule data
-    const mergedSchedule = {
+    // Prepare content with proper media URL
+    const publishableSchedule = {
       ...schedule,
-      caption: freshContent.caption,
-      hashtags: freshContent.hashtags,
-      imageUrl: freshContent.cdnImageUrl || freshContent.mediaUrls?.[0],
+      imageUrl: schedule.mediaUrls?.[0] || schedule.imageUrl,
     };
 
-    // Get platform credentials from Token Service or API
+    // Get platform credentials from Token Service
     const userId = event.userId || schedule.userId;
     const brandId = event.brandId || schedule.brandId;
     
@@ -285,15 +288,12 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       throw new Error('Brand ID not found in event or schedule');
     }
     
-    let credentials;
-    if (userId) {
-      // Fetch fresh token from Token Service at publish time
-      credentials = await getTokenFromTokenService(brandId, userId);
-    } else {
-      // Fall back to API call if no userId
-      logger.warn('No userId available, falling back to API call', { brandId });
-      credentials = await getPlatformCredentials(brandId);
+    if (!userId) {
+      throw new Error('User ID not found in event or schedule - required for token retrieval');
     }
+    
+    // Fetch fresh token from Token Service at publish time
+    const credentials = await getTokenFromTokenService(brandId, userId);
     
     logger.info('Fetched credentials', { brandId, hasToken: !!credentials.instagramAccessToken });
 
@@ -301,8 +301,8 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     let mediaUrl = null;
     if (schedule.contentType === 'video' && schedule.videoUrl) {
       mediaUrl = await getSignedVideoUrl(schedule.videoUrl);
-    } else if (mergedSchedule.imageUrl) {
-      mediaUrl = mergedSchedule.imageUrl;
+    } else if (publishableSchedule.imageUrl) {
+      mediaUrl = publishableSchedule.imageUrl;
     }
 
     // Get platform adapter
@@ -314,7 +314,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     }
     
     // Publish to platform using adapter
-    const publishResult = await adapter.publish(mergedSchedule, credentials, mediaUrl);
+    const publishResult = await adapter.publish(publishableSchedule, credentials, mediaUrl);
     
     if (!publishResult.success) {
       throw new Error(publishResult.error || 'Publishing failed');
@@ -362,130 +362,81 @@ async function getSchedule(scheduleId: string): Promise<any> {
 }
 
 async function getTokenFromTokenService(brandId: string, userId: string): Promise<any> {
-  try {
-    // Try Token Service first (preferred)
-    const tokenServiceUrl = process.env.TOKEN_SERVICE_URL;
-    if (tokenServiceUrl) {
-      logger.info('Fetching token from Token Service', { brandId, userId });
-      
-      // Sign the request with AWS SigV4 for IAM authentication
-      const url = new URL(`${tokenServiceUrl}/tokens`);
-      const body = JSON.stringify({
-        userId,
-        brandId,
-        platform: 'instagram',
-      });
-      
-      // Create signer for IAM authentication
-      const signer = new SignatureV4({
-        service: 'execute-api',
-        region: process.env.AWS_REGION || 'us-east-1',
-        credentials: defaultProvider(),
-        sha256: Sha256,
-      });
-      
-      // Prepare request for signing
-      const request = {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          host: url.hostname,
-        },
-        hostname: url.hostname,
-        path: url.pathname + url.search,
-        protocol: url.protocol,
-        body,
-      };
-      
-      // Sign the request
-      const signedRequest = await signer.sign(request);
-      
-      // Make the signed request
-      const response = await fetch(url.toString(), {
-        method: 'POST',
-        headers: signedRequest.headers as any,
-        body,
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.accessToken) {
-          logger.info('Successfully fetched token from Token Service');
-          return {
-            instagramAccessToken: data.accessToken,
-            instagramAccountId: data.metadata?.accountId,
-            instagramPageId: data.metadata?.pageId,
-          };
-        }
-      } else {
-        logger.warn('Token Service returned error', { status: response.status });
-      }
-    }
-  } catch (error) {
-    logger.warn('Failed to fetch from Token Service, falling back to API', error as Error);
+  const tokenServiceUrl = process.env.TOKEN_SERVICE_URL;
+  if (!tokenServiceUrl) {
+    throw new Error('TOKEN_SERVICE_URL not configured');
   }
+
+  logger.info('Fetching token from Token Service', { brandId, userId });
   
-  // Fall back to main app API
-  return getPlatformCredentials(brandId);
-}
+  // Sign the request with AWS SigV4 for IAM authentication
+  const url = new URL(`${tokenServiceUrl}/tokens`);
+  const body = JSON.stringify({
+    userId,
+    brandId,
+    platform: 'instagram',
+  });
+  
+  // Create signer for IAM authentication
+  const signer = new SignatureV4({
+    service: 'execute-api',
+    region: process.env.AWS_REGION || 'us-east-1',
+    credentials: defaultProvider(),
+    sha256: Sha256,
+  });
+  
+  // Prepare request for signing
+  const request = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      host: url.hostname,
+    },
+    hostname: url.hostname,
+    path: url.pathname + url.search,
+    protocol: url.protocol,
+    body,
+  };
+  
+  // Sign the request
+  const signedRequest = await signer.sign(request);
+  
+  // Make the signed request
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: signedRequest.headers as any,
+    body,
+  });
 
-async function getPlatformCredentials(brandId: string): Promise<any> {
-  try {
-    const response = await fetch(`${process.env.MAIN_APP_API_URL}/api/publisher/credentials`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': process.env.PUBLISHER_API_KEY || '',
-      },
-      body: JSON.stringify({ brandId }),
+  if (!response.ok) {
+    const errorText = await response.text();
+    logger.error('Token Service request failed', { 
+      status: response.status, 
+      error: errorText,
+      brandId,
+      userId 
     });
-
-    if (!response.ok) {
-      const error = await response.text();
-      logger.error('Failed to fetch credentials from main app', { brandId, status: response.status, error });
-      throw new Error(`Failed to fetch credentials: ${error}`);
-    }
-
-    const data = await response.json();
-    if (!data.success || !data.credentials) {
-      throw new Error('Invalid credentials response from main app');
-    }
-
-    return data.credentials;
-  } catch (error) {
-    logger.error('Error fetching platform credentials', error as Error);
-    throw error;
+    throw new Error(`Failed to fetch token from Token Service: ${response.status} ${errorText}`);
   }
+
+  const data = await response.json();
+  if (!data.accessToken) {
+    throw new Error('Token Service returned no access token');
+  }
+
+  logger.info('Successfully fetched token from Token Service');
+  return {
+    instagramAccessToken: data.accessToken,
+    instagramAccountId: data.metadata?.accountId,
+    instagramPageId: data.metadata?.pageId,
+  };
 }
 
-async function getContentDetails(contentId: string): Promise<any> {
-  try {
-    const response = await fetch(`${process.env.MAIN_APP_API_URL}/api/publisher/content`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': process.env.PUBLISHER_API_KEY || '',
-      },
-      body: JSON.stringify({ contentId }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      logger.error('Failed to fetch content from main app', { contentId, status: response.status, error });
-      throw new Error(`Failed to fetch content: ${error}`);
-    }
-
-    const data = await response.json();
-    if (!data.success || !data.content) {
-      throw new Error('Invalid content response from main app');
-    }
-
-    return data.content;
-  } catch (error) {
-    logger.error('Error fetching content details', error as Error);
-    throw error;
-  }
-}
+// Removed getPlatformCredentials and getContentDetails functions
+// Publisher Lambda now:
+// 1. Uses content directly from scheduler's DynamoDB (no main app API calls)
+// 2. Gets tokens exclusively from Token Service (proper microservices pattern)
+// This simplifies the architecture and improves performance
 
 async function getSignedVideoUrl(videoKey: string): Promise<string> {
   const command = new GetObjectCommand({

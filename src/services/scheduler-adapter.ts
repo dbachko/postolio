@@ -211,14 +211,14 @@ export class SchedulerAdapter {
           platform: 'instagram', // Default for now, could expand to other platforms
           scheduledAt: scheduledTimeUTC.toISOString(), // Lambda expects 'scheduledAt'
           contentType: 'image', // Default to image, could be video/carousel/reel/story
-          // DO NOT store content details here - they can change if user edits content
-          // Publisher Lambda should fetch fresh content from database at publish time
-          // using contentId to ensure we always publish the latest edited content
+          // Store content details in scheduler's DynamoDB
+          // When content is edited, EventBridge events will update this
+          caption: content.caption || '',
+          hashtags: content.hashtags || [],
+          mediaUrls: content.cdnImageUrl ? [content.cdnImageUrl] : content.imageUrl ? [content.imageUrl] : [],
           metadata: {
             timezone: brandTimezone,
             localTime: customTime ? customTime.toISOString() : undefined,
-            // Content details (caption, hashtags, mediaUrls) intentionally NOT stored
-            // Publisher Lambda will fetch fresh content via /api/publisher/content endpoint
           },
         });
         
@@ -464,11 +464,16 @@ export class SchedulerAdapter {
       }
       
       // Reschedule in AWS FIRST - only update local DB if this succeeds
+      // Also send updated content in case it was edited
       try {
           await (await this.client).reschedule(scheduleId, newTimeUTC, {
             brandId: content.brandId,
             contentId: content.id,
-            platform: 'instagram' // Default to instagram for now
+            platform: 'instagram', // Default to instagram for now
+            // Include content details in case they were edited
+            caption: content.caption || '',
+            hashtags: content.hashtags || [],
+            mediaUrls: content.cdnImageUrl ? [content.cdnImageUrl] : content.imageUrl ? [content.imageUrl] : []
           });
           awsRescheduleSuccess = true;
           console.log(`AWS schedule ${scheduleId} rescheduled successfully`);

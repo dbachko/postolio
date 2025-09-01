@@ -69,7 +69,6 @@ const contentSchedulerStack = new ContentSchedulerStack(app, `ContentScheduler-$
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
-  publisherApiKey: app.node.tryGetContext('publisherApiKey') || process.env.PUBLISHER_API_KEY,
   serviceDiscoveryNamespaceId: serviceDiscoveryStack.namespaceId,
   description: `Content Scheduler Microservice - ${environment} environment`,
   tags: {

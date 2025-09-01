@@ -29,16 +29,6 @@ export interface PostolioStackProps extends cdk.StackProps {
 }
 
 export class PostolioStack extends cdk.Stack {
-  /**
-   * Generate a cryptographically secure random secret
-   * Used for auto-generating API keys when not provided via environment
-   */
-  private generateRandomSecret(): string {
-    // Use crypto.randomBytes for cryptographically secure random generation
-    // 32 bytes = 256 bits of entropy, converted to base64
-    const crypto = require('crypto');
-    return crypto.randomBytes(32).toString('base64');
-  }
 
   constructor(scope: Construct, id: string, props: PostolioStackProps) {
     super(scope, id, props)
@@ -327,12 +317,6 @@ export class PostolioStack extends cdk.Stack {
 
     // Placeholder for CloudFront distribution - will be created after ECS service
 
-    // Generate publisher API key once for sharing between stacks
-    // Use context or environment variable, or generate a random one
-    const publisherApiKey = this.node.tryGetContext('publisherApiKey') || 
-                           process.env.PUBLISHER_API_KEY || 
-                           this.generateRandomSecret();
-    
     // Infrastructure secrets - Only CDK-generated or infrastructure-specific secrets
     // User-provided secrets (OPENAI_API_KEY, etc.) are now passed as environment variables from GitHub Secrets
     const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
@@ -346,9 +330,7 @@ export class PostolioStack extends cdk.Stack {
         // Database connection (CDK-managed)
         redisUrl: cdk.SecretValue.unsafePlainText(`redis://${redis.attrRedisEndpointAddress}:6380`),
         
-        // Internal service authentication (CDK-generated)
-        publisherApiKey: cdk.SecretValue.unsafePlainText(publisherApiKey),
-        
+        // NOTE: Publisher now uses AWS IAM SigV4 authentication instead of API keys
         // NOTE: User-provided secrets moved to environment variables:
         // - openaiApiKey -> OPENAI_API_KEY (from GitHub Secrets)
         // - googleClientSecret -> GOOGLE_CLIENT_SECRET (from GitHub Secrets)
@@ -553,7 +535,6 @@ export class PostolioStack extends cdk.Stack {
           
           // Infrastructure secrets (from AWS Secrets Manager)
           JWT_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'jwtSecret'),
-          PUBLISHER_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, 'publisherApiKey'),
           REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
         },
         environment: {
