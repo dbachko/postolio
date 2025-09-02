@@ -433,6 +433,17 @@ export class ContentSchedulerStack extends cdk.Stack {
       resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/${prefix}-schedules/*`],
     }));
 
+    // Grant Publisher Lambda permission to use Service Discovery
+    publisherLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'servicediscovery:DiscoverInstances',
+        'servicediscovery:GetNamespace',
+        'servicediscovery:GetService',
+      ],
+      resources: ['*'], // Service Discovery requires wildcard for discovery operations
+    }));
+
     // Grant Lambda permission to pass the scheduler role to EventBridge
     scheduleManagementLambda.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
