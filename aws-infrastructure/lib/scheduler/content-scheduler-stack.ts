@@ -444,6 +444,16 @@ export class ContentSchedulerStack extends cdk.Stack {
       resources: ['*'], // Service Discovery requires wildcard for discovery operations
     }));
 
+    // Grant Publisher Lambda permission to invoke Token Service API (IAM-authenticated)
+    publisherLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['execute-api:Invoke'],
+      resources: [
+        // Publisher Lambda only needs to GET tokens from Token Service
+        `arn:aws:execute-api:${this.region}:${this.account}:*/*/GET/tokens/*`,
+      ],
+    }));
+
     // Grant Lambda permission to pass the scheduler role to EventBridge
     scheduleManagementLambda.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
