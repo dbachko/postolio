@@ -6,15 +6,14 @@
 import { SagaOrchestrator, SagaContext } from '../patterns/saga-orchestrator'
 import { EventBusService } from '../services/event-bus-service'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import axios from 'axios'
-import { discoverService } from '../lambda/shared/service-discovery'
+import { discoverService } from '../lambda/shared/service-discovery-runtime'
 
 const dynamoClient = new DynamoDBClient({})
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
 const eventBus = EventBusService.getInstance()
 
-const CONTENT_TABLE = process.env.CONTENT_TABLE_NAME || 'content'
 const SCHEDULE_TABLE = process.env.SCHEDULE_TABLE_NAME || 'schedules'
 const MAIN_APP_URL = process.env.MAIN_APP_URL || 'http://localhost:3000'
 

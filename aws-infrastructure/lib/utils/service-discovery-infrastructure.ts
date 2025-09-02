@@ -1,6 +1,13 @@
 /**
- * Service Discovery Utilities
- * Provides AWS Cloud Map integration for automatic service discovery
+ * Service Discovery Infrastructure Utilities
+ * 
+ * FOR CDK/INFRASTRUCTURE USE ONLY - Used at deployment time to register services with AWS Cloud Map
+ * For Lambda runtime service discovery, use lib/lambda/shared/service-discovery-runtime.ts
+ * 
+ * This module provides CDK constructs for:
+ * - Creating Cloud Map namespaces
+ * - Registering services with Cloud Map
+ * - Configuring service discovery for ECS/Lambda services
  */
 
 import * as cdk from 'aws-cdk-lib';
@@ -16,7 +23,8 @@ export interface ServiceDiscoveryConfig {
 }
 
 /**
- * Manages service discovery namespace and registration
+ * Manages service discovery namespace and registration for CDK stacks
+ * Used at deployment time to register services with AWS Cloud Map
  */
 export class ServiceDiscoveryManager extends Construct {
   public readonly namespace: servicediscovery.INamespace;
