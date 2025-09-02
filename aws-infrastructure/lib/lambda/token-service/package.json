@@ -12,7 +12,8 @@
     "@aws-sdk/client-kms": "^3.876.0",
     "@aws-sdk/lib-dynamodb": "^3.876.0",
     "@aws-lambda-powertools/logger": "^2.0.0",
-    "@aws-lambda-powertools/metrics": "^2.0.0"
+    "@aws-lambda-powertools/metrics": "^2.0.0",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.145",

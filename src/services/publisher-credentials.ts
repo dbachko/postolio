@@ -11,10 +11,11 @@ import { getTokenService } from './service-clients.js';
 const prisma = getDatabaseClient();
 
 export interface PublisherCredentials {
-  instagramAccessToken: string | null;
-  instagramAccountId: string | null;
-  instagramPageId: string | null;
+  accessToken: string | null;
+  accountId: string | null;
+  pageId: string | null;
   brandName: string;
+  platform?: string;
 }
 
 // Cache TTL: 5 minutes (credentials rarely change)
@@ -74,17 +75,18 @@ export class PublisherCredentialsService {
         return null;
       }
 
-      // Check if Instagram is connected
-      if (!tokenData.accessToken || !brand.instagramAccountId) {
-        console.error(`Instagram not properly connected for brand: ${brandId}`);
+      // Check if platform is connected
+      if (!tokenData.accessToken) {
+        console.error(`No token found for brand: ${brandId}`);
         return null;
       }
 
       const credentials = {
-        instagramAccessToken: tokenData.accessToken,
-        instagramAccountId: brand.instagramAccountId,
-        instagramPageId: brand.instagramPageId,
+        accessToken: tokenData.accessToken,
+        accountId: tokenData.metadata?.accountId || brand.instagramAccountId,
+        pageId: tokenData.metadata?.pageId || brand.instagramPageId,
         brandName: brand.name,
+        platform: 'instagram',
       };
 
       // Cache the result
@@ -108,7 +110,7 @@ export class PublisherCredentialsService {
    * Validate that credentials are still valid
    */
   static async validateCredentials(credentials: PublisherCredentials): Promise<boolean> {
-    if (!credentials.instagramAccessToken) {
+    if (!credentials.accessToken) {
       return false;
     }
 
