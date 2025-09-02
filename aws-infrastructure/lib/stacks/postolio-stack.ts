@@ -17,7 +17,7 @@ import * as route53Targets from 'aws-cdk-lib/aws-route53-targets'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import { NagSuppressions } from 'cdk-nag'
 import { Construct } from 'constructs'
-import { ServiceDiscoveryManager, getServiceDiscoveryEnvVars } from '../utils/service-discovery'
+import { ServiceDiscoveryManager, getServiceDiscoveryEnvVars } from '../utils/service-discovery-infrastructure'
 
 export interface PostolioStackProps extends cdk.StackProps {
   environment: string
