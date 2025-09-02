@@ -213,13 +213,37 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
   }
   
   const validatedData = validation.data!;
+  
+  // Check if a schedule already exists for this contentId
+  const existingSchedules = await docClient.send(new QueryCommand({
+    TableName: process.env.SCHEDULES_TABLE!,
+    IndexName: 'by-content',
+    KeyConditionExpression: 'contentId = :contentId',
+    ExpressionAttributeValues: {
+      ':contentId': validatedData.contentId,
+    },
+    Limit: 1, // We only need to know if one exists
+  }));
+  
+  if (existingSchedules.Items && existingSchedules.Items.length > 0) {
+    const existingSchedule = existingSchedules.Items[0];
+    logger.info('Found existing schedule for contentId, updating instead of creating new', { 
+      existingScheduleId: existingSchedule.scheduleId,
+      existingStatus: existingSchedule.status,
+      contentId: validatedData.contentId 
+    });
+    
+    // Update the existing schedule instead of creating a new one
+    return updateSchedule(existingSchedule.scheduleId, data);
+  }
+  
   const scheduleId = `SCH_${Date.now()}_${randomUUID()}`;
   const scheduledAt = new Date(validatedData.scheduledAt).toISOString();
   
   // Format date for EventBridge Scheduler
   const eventBridgeScheduleTime = formatEventBridgeScheduleTime(validatedData.scheduledAt);
   
-  logger.info('Creating schedule', { 
+  logger.info('Creating new schedule (no existing schedule found)', { 
     scheduleId, 
     scheduledAt, 
     eventBridgeScheduleTime,
