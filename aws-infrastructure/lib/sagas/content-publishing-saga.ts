@@ -8,6 +8,7 @@ import { EventBusService } from '../services/event-bus-service'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
 import axios from 'axios'
+import { discoverService } from '../lambda/shared/service-discovery'
 
 const dynamoClient = new DynamoDBClient({})
 const docClient = DynamoDBDocumentClient.from(dynamoClient)
@@ -86,9 +87,12 @@ export class ContentPublishingSaga {
       forward: async (ctx) => {
         console.log(`Getting token for brand ${ctx.brandId} on ${ctx.platform}`)
         
+        // Discover token service endpoint
+        const tokenServiceUrl = await discoverService('token-service')
+        
         // Fetch token from token service (Lambda or API)
         const response = await axios.get(
-          `${process.env.TOKEN_SERVICE_URL}/tokens/${ctx.userId}/${ctx.brandId}/${ctx.platform}`,
+          `${tokenServiceUrl}/tokens/${ctx.userId}/${ctx.brandId}/${ctx.platform}`,
           {
             headers: {
               'x-correlation-id': ctx.correlationId,
