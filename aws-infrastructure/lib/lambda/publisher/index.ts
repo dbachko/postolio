@@ -12,6 +12,7 @@ import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { discoverService } from '../shared/service-discovery-runtime';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
+import { API_VERSIONS, API_BASE_URLS } from '../../constants/api-versions.js';
 
 // Platform-specific character limits
 const PLATFORM_LIMITS = {
@@ -91,15 +92,15 @@ class InstagramAdapter implements PlatformAdapter {
       const formattedCaption = this.formatCaption(schedule.caption, schedule.hashtags);
       
       // Step 1: Create media container
-      const createMediaUrl = `https://graph.facebook.com/v23.0/${credentials.instagramAccountId}/media`;
+      const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
       const createMediaParams = new URLSearchParams({
         image_url: mediaUrl,
         caption: formattedCaption,
-        access_token: credentials.instagramAccessToken,
+        access_token: credentials.accessToken,
       });
 
       logger.info('Creating Instagram media container', { 
-        accountId: credentials.instagramAccountId,
+        accountId: credentials.accountId,
         hasMediaUrl: !!mediaUrl 
       });
 
@@ -124,10 +125,10 @@ class InstagramAdapter implements PlatformAdapter {
       }
 
       // Step 2: Publish the media
-      const publishUrl = `https://graph.facebook.com/v23.0/${credentials.instagramAccountId}/media_publish`;
+      const publishUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media_publish`;
       const publishParams = new URLSearchParams({
         creation_id: creationId,
-        access_token: credentials.instagramAccessToken,
+        access_token: credentials.accessToken,
       });
 
       logger.info('Publishing Instagram media', { creationId });
@@ -149,10 +150,10 @@ class InstagramAdapter implements PlatformAdapter {
       const postId = publishResult.id;
 
       // Step 3: Get the permalink
-      const permalinkUrl = `https://graph.facebook.com/v23.0/${postId}`;
+      const permalinkUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${postId}`;
       const permalinkParams = new URLSearchParams({
         fields: 'permalink',
-        access_token: credentials.instagramAccessToken,
+        access_token: credentials.accessToken,
       });
 
       const permalinkResponse = await fetch(`${permalinkUrl}?${permalinkParams}`);
@@ -177,7 +178,7 @@ class InstagramAdapter implements PlatformAdapter {
   }
 
   validateCredentials(credentials: any): boolean {
-    return !!(credentials?.instagramAccessToken && credentials?.instagramAccountId);
+    return !!(credentials?.accessToken && credentials?.accountId);
   }
 
   formatContent(schedule: any): any {
@@ -306,10 +307,6 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       accountId: tokenData.accountId,
       pageId: tokenData.pageId,
       expiresAt: tokenData.expiresAt,
-      // Legacy field names for backward compatibility with adapters
-      instagramAccessToken: tokenData.accessToken,
-      instagramAccountId: tokenData.accountId,
-      instagramPageId: tokenData.pageId,
     };
     
     logger.info('Fetched credentials', { brandId, hasToken: !!credentials.accessToken });

@@ -6,6 +6,7 @@
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import fetch from 'node-fetch';
+import { API_VERSIONS, API_BASE_URLS } from '../../constants/api-versions.js';
 
 const logger = new Logger({ serviceName: 'token-refresh' });
 const metrics = new Metrics({ namespace: 'TokenService', serviceName: 'token-refresh' });
@@ -42,7 +43,7 @@ async function refreshInstagramToken(refreshToken: string, metadata?: any): Prom
     }
     
     // Exchange for long-lived token (60 days)
-    const url = `https://graph.facebook.com/v18.0/oauth/access_token`;
+    const url = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/oauth/access_token`;
     const params = new URLSearchParams({
       grant_type: 'fb_exchange_token',
       client_id: appId,

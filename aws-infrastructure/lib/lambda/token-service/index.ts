@@ -14,6 +14,7 @@ import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import crypto from 'crypto';
+import { TokenServiceError, ValidationError, RateLimitError } from '../shared/errors.js';
 
 const logger = new Logger({ serviceName: 'token-service' });
 const metrics = new Metrics({ namespace: 'TokenService', serviceName: 'token-service' });
@@ -29,33 +30,9 @@ const KMS_KEY_ID = process.env.KMS_KEY_ID!;
 const RATE_LIMIT_TABLE = process.env.RATE_LIMIT_TABLE || 'token-rate-limits';
 
 // Custom error classes
-class TokenServiceError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public statusCode: number = 500,
-    public retryable: boolean = false
-  ) {
-    super(message);
-    this.name = 'TokenServiceError';
-  }
-}
-
-class ValidationError extends TokenServiceError {
-  constructor(message: string) {
-    super(message, 'VALIDATION_ERROR', 400, false);
-  }
-}
-
 class NotFoundError extends TokenServiceError {
   constructor(message: string) {
     super(message, 'NOT_FOUND', 404, false);
-  }
-}
-
-class RateLimitError extends TokenServiceError {
-  constructor(message: string, public retryAfter: number) {
-    super(message, 'RATE_LIMIT_EXCEEDED', 429, true);
   }
 }
 
@@ -183,10 +160,8 @@ async function checkRateLimit(userId: string, platform?: string): Promise<void> 
     
     if (currentCount >= limit.maxRequests) {
       const retryAfter = Math.ceil((limit.windowMs - (now % limit.windowMs)) / 1000);
-      throw new RateLimitError(
-        `Rate limit exceeded. Max ${limit.maxRequests} requests per minute`,
-        retryAfter
-      );
+      const error = new RateLimitError(retryAfter);
+      throw error;
     }
     
     // Increment counter

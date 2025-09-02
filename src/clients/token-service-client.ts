@@ -11,6 +11,7 @@ import { getServiceDiscovery } from '../utils/service-discovery-client.js';
 import type { StoreTokenParams, TokenData } from '../types/token-service.js';
 import { getRedisClient } from '../services/redis.js';
 import crypto from 'crypto';
+import { TokenServiceError, RateLimitError, ValidationError } from '../errors/token-service-errors.js';
 
 // Proper type definitions
 interface RequestHeaders extends Record<string, string> {
@@ -30,20 +31,6 @@ interface RateLimitState {
   resetTime: number;
 }
 
-// Error types for better error handling
-export class TokenServiceError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public statusCode?: number,
-    public retryable: boolean = false,
-    public retryAfter?: number
-  ) {
-    super(message);
-    this.name = 'TokenServiceError';
-  }
-}
-
 export interface TokenServiceConfig {
   apiUrl?: string;
   timeout?: number;
@@ -61,7 +48,7 @@ export interface TokenServiceConfig {
 }
 
 export class TokenServiceClient {
-  private circuitBreaker!: CircuitBreaker;
+  private circuitBreaker: CircuitBreaker | null = null;
   private baseURL: string;
   private signer: SignatureV4 | undefined;
   private config: Required<TokenServiceConfig>;
@@ -69,6 +56,8 @@ export class TokenServiceClient {
   private rateLimitState: Map<string, RateLimitState> = new Map();
   private pendingRequests: Map<string, Promise<any>> = new Map();
   private correlationId: string;
+  private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor(config?: TokenServiceConfig) {
     // Set defaults with proper typing
@@ -91,19 +80,35 @@ export class TokenServiceClient {
     this.baseURL = this.config.apiUrl;
     this.correlationId = this.config.correlationId;
     
-    // Initialize with service discovery if available
-    this.initializeWithServiceDiscovery();
-
-    // Initialize AWS SigV4 signer for IAM authentication
-    this.initializeSigner();
-
-    // Initialize circuit breaker with enhanced configuration
-    this.initializeCircuitBreaker();
+    // Initialize asynchronously to handle service discovery properly
+    this.initPromise = this.initialize();
 
     // Set up cache cleanup
     if (this.config.enableCache) {
       setInterval(() => this.cleanupCache(), 60000); // Clean every minute
     }
+  }
+
+  private async initialize(): Promise<void> {
+    // Initialize service discovery first (async operation)
+    await this.initializeWithServiceDiscovery();
+    
+    // Initialize AWS SigV4 signer for IAM authentication
+    this.initializeSigner();
+
+    // Initialize circuit breaker with enhanced configuration
+    this.initializeCircuitBreaker();
+    
+    this.initialized = true;
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+    throw new Error('TokenServiceClient not properly initialized');
   }
 
   private async initializeWithServiceDiscovery(): Promise<void> {
@@ -154,14 +159,18 @@ export class TokenServiceClient {
       options
     );
 
-    this.circuitBreaker.on('open', () => {
+    this.circuitBreaker!.on('open', () => {
       this.logError('Circuit breaker OPEN - failing fast', {
-        stats: this.circuitBreaker.stats,
+        stats: this.circuitBreaker!.stats,
       });
     });
 
-    this.circuitBreaker.on('halfOpen', () => {
+    this.circuitBreaker!.on('halfOpen', () => {
       this.logInfo('Circuit breaker HALF-OPEN - testing recovery');
+    });
+
+    this.circuitBreaker!.on('close', () => {
+      this.logInfo('Circuit breaker CLOSED - service healthy');
     });
   }
 
@@ -169,6 +178,9 @@ export class TokenServiceClient {
    * Get a token with caching and deduplication
    */
   async getToken(userId: string, brandId: string, platform: string): Promise<TokenData | null> {
+    // Ensure initialization is complete
+    await this.ensureInitialized();
+    
     const cacheKey = `token:${userId}:${brandId}:${platform}`;
     
     // Check cache first
@@ -193,7 +205,7 @@ export class TokenServiceClient {
     }
 
     // Make the request
-    const promise = this.circuitBreaker.fire(async () => {
+    const promise = this.circuitBreaker!.fire(async () => {
       const path = `/tokens/${userId}/${platform}/${brandId}`;
       const response = await this.makeRequest(path, 'GET');
       
@@ -242,6 +254,9 @@ export class TokenServiceClient {
    * Store a token with validation
    */
   async storeToken(params: StoreTokenParams): Promise<void> {
+    // Ensure initialization is complete
+    await this.ensureInitialized();
+    
     // Validate input
     this.validateStoreTokenParams(params);
     
@@ -250,7 +265,7 @@ export class TokenServiceClient {
       await this.checkRateLimit('storeToken');
     }
 
-    await this.circuitBreaker.fire(async () => {
+    await this.circuitBreaker!.fire(async () => {
       const path = `/tokens/${params.userId}/${params.platform}/${params.brandId}`;
       const response = await this.makeRequest(path, 'PUT', {
         accessToken: params.accessToken,
@@ -447,13 +462,7 @@ export class TokenServiceClient {
     
     if (state.count >= this.config.rateLimit.maxRequests) {
       const retryAfter = Math.ceil((state.resetTime - now) / 1000);
-      throw new TokenServiceError(
-        'Rate limit exceeded',
-        'RATE_LIMIT_EXCEEDED',
-        429,
-        true,
-        retryAfter
-      );
+      throw new RateLimitError(retryAfter);
     }
     
     state.count++;
@@ -463,21 +472,11 @@ export class TokenServiceClient {
   // Validation
   private validateStoreTokenParams(params: StoreTokenParams): void {
     if (!params.userId || !params.brandId || !params.platform || !params.accessToken) {
-      throw new TokenServiceError(
-        'Missing required parameters',
-        'INVALID_PARAMS',
-        400,
-        false
-      );
+      throw new ValidationError('Missing required parameters');
     }
     
     if (params.expiresAt && new Date(params.expiresAt) < new Date()) {
-      throw new TokenServiceError(
-        'Token already expired',
-        'TOKEN_EXPIRED',
-        400,
-        false
-      );
+      throw new ValidationError('Token already expired');
     }
   }
 
@@ -551,6 +550,14 @@ export class TokenServiceClient {
 
   // Get circuit breaker statistics
   getCircuitBreakerStats() {
+    if (!this.circuitBreaker) {
+      return {
+        opened: false,
+        closed: false,
+        halfOpen: false,
+        stats: null,
+      };
+    }
     return {
       opened: this.circuitBreaker.opened,
       closed: this.circuitBreaker.closed,

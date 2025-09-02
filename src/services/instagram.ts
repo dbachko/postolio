@@ -213,7 +213,7 @@ class InstagramService {
       }
 
       const fields = 'id,username,name,biography,followers_count,media_count,profile_picture_url,website'
-      const url = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}?fields=${fields}&access_token=${credentials.instagramAccessToken}`
+      const url = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}?fields=${fields}&access_token=${credentials.accessToken}`
 
       const response = await axios.get(url)
       const profile = response.data
@@ -254,7 +254,7 @@ class InstagramService {
       }
 
       const fields = 'id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count'
-      const url = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/media?fields=${fields}&limit=${limit}&access_token=${credentials.instagramAccessToken}`
+      const url = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media?fields=${fields}&limit=${limit}&access_token=${credentials.accessToken}`
 
       const response = await axios.get(url)
       const mediaData = response.data.data || []
@@ -302,29 +302,29 @@ class InstagramService {
 
       // Step 1: Create media container
       const caption = `${request.caption}\n\n${request.hashtags.map((tag) => `#${tag}`).join(' ')}`
-      const containerUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/media`
+      const containerUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media`
 
       const containerData = {
         image_url: request.cdnImageUrl,
         caption: caption,
-        access_token: credentials.instagramAccessToken,
+        access_token: credentials.accessToken,
       }
 
       const containerResponse = await axios.post(containerUrl, containerData)
       const containerId = containerResponse.data.id
 
       // Step 2: Publish the media container
-      const publishUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/media_publish`
+      const publishUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media_publish`
       const publishData = {
         creation_id: containerId,
-        access_token: credentials.instagramAccessToken,
+        access_token: credentials.accessToken,
       }
 
       const publishResponse = await axios.post(publishUrl, publishData)
       const mediaId = publishResponse.data.id
 
       // Step 3: Get the permalink
-      const permalinkUrl = `https://graph.facebook.com/v23.0/${mediaId}?fields=permalink&access_token=${credentials.instagramAccessToken}`
+      const permalinkUrl = `https://graph.facebook.com/v23.0/${mediaId}?fields=permalink&access_token=${credentials.accessToken}`
       const permalinkResponse = await axios.get(permalinkUrl)
 
       return {
@@ -356,7 +356,7 @@ class InstagramService {
       }
 
       const metrics = 'impressions,reach,engagement,likes,comments,saves,shares'
-      const url = `https://graph.facebook.com/v23.0/${mediaId}/insights?metric=${metrics}&access_token=${credentials.instagramAccessToken}`
+      const url = `https://graph.facebook.com/v23.0/${mediaId}/insights?metric=${metrics}&access_token=${credentials.accessToken}`
 
       const response = await axios.get(url)
       return response.data
@@ -384,12 +384,12 @@ class InstagramService {
       }
 
       // First, get the total count
-      const countUrl = `https://graph.facebook.com/v23.0/${mediaId}?fields=comments_count&access_token=${credentials.instagramAccessToken}`
+      const countUrl = `https://graph.facebook.com/v23.0/${mediaId}?fields=comments_count&access_token=${credentials.accessToken}`
       const countResponse = await axios.get(countUrl)
       const total = countResponse.data.comments_count || 0
 
       // Then get the actual comments
-      const url = `https://graph.facebook.com/v23.0/${mediaId}/comments?fields=id,text,username,timestamp,like_count&limit=${limit}&access_token=${credentials.instagramAccessToken}`
+      const url = `https://graph.facebook.com/v23.0/${mediaId}/comments?fields=id,text,username,timestamp,like_count&limit=${limit}&access_token=${credentials.accessToken}`
       const response = await axios.get(url)
 
       return {
@@ -447,11 +447,11 @@ class InstagramService {
       }
 
       // Get follower count (lifetime metric)
-      const followerUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}?fields=followers_count&access_token=${credentials.instagramAccessToken}`
+      const followerUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}?fields=followers_count&access_token=${credentials.accessToken}`
       const followerResponse = await axios.get(followerUrl)
 
       // Get insights for the time range
-      const metricsUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/insights?metric=impressions,reach,profile_views&period=day&since=${startDate.toISOString().split('T')[0]}&until=${endDate.toISOString().split('T')[0]}&access_token=${credentials.instagramAccessToken}`
+      const metricsUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/insights?metric=impressions,reach,profile_views&period=day&since=${startDate.toISOString().split('T')[0]}&until=${endDate.toISOString().split('T')[0]}&access_token=${credentials.accessToken}`
       const insightsResponse = await axios.get(metricsUrl)
 
       // Process insights data
@@ -502,8 +502,14 @@ class InstagramService {
     }
 
     try {
+      // Get fresh credentials from Token Service
+      const credentials = await this.getCredentials(brand)
+      if (!credentials) {
+        throw new Error('Failed to get Instagram credentials')
+      }
+
       // Get recent media
-      const mediaUrl = `https://graph.facebook.com/v23.0/${brand.instagramAccountId}/media?fields=id,caption,media_type,media_url,permalink,timestamp&limit=${limit}&access_token=${brand.instagramAccessToken}`
+      const mediaUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media?fields=id,caption,media_type,media_url,permalink,timestamp&limit=${limit}&access_token=${credentials.accessToken}`
       const mediaResponse = await axios.get(mediaUrl)
 
       const posts = []
@@ -511,7 +517,7 @@ class InstagramService {
       // Get insights for each media item
       for (const media of mediaResponse.data.data) {
         try {
-          const insightsUrl = `https://graph.facebook.com/v23.0/${media.id}/insights?metric=impressions,reach,engagement&access_token=${brand.instagramAccessToken}`
+          const insightsUrl = `https://graph.facebook.com/v23.0/${media.id}/insights?metric=impressions,reach,engagement&access_token=${credentials.accessToken}`
           const insightsResponse = await axios.get(insightsUrl)
 
           const insights = insightsResponse.data.data
