@@ -9,7 +9,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { discoverService } from '../../utils/service-discovery-client';
+import { discoverService } from '../shared/service-discovery';
 
 // Platform-specific character limits
 const PLATFORM_LIMITS = {
