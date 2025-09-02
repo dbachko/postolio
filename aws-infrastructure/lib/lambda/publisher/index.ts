@@ -10,6 +10,8 @@ import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { discoverService } from '../shared/service-discovery-runtime';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { EventBridge } from '@aws-sdk/client-eventbridge';
 
 // Platform-specific character limits
 const PLATFORM_LIMITS = {
@@ -35,7 +37,10 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
 });
 const secretsClient = tracer.captureAWSv3Client(new SecretsManagerClient({}));
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
+const lambdaClient = new LambdaClient({});
+const eventBridge = new EventBridge({});
 
+// Event from scheduler (minimal data)
 interface PublishEvent {
   scheduleId: string;
   brandId?: string;
@@ -260,14 +265,13 @@ export const handler = async (event: PublishEvent): Promise<void> => {
   logger.info('Publishing content', { scheduleId: event.scheduleId });
 
   try {
-    // Get schedule details from DynamoDB (already contains latest content)
+    // Get schedule details from DynamoDB (contains content)
     const schedule = await getSchedule(event.scheduleId);
     if (!schedule) {
       throw new Error(`Schedule not found: ${event.scheduleId}`);
     }
 
-    // Use content directly from schedule (no need to fetch from main app)
-    // The scheduler's DynamoDB is kept up-to-date via EventBridge events
+    // Use content directly from schedule
     logger.info('Using content from schedule', { 
       contentId: schedule.contentId, 
       brandId: schedule.brandId,
@@ -281,7 +285,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       imageUrl: schedule.mediaUrls?.[0] || schedule.imageUrl,
     };
 
-    // Get platform credentials from Token Service
+    // Get user and brand IDs for token retrieval
     const userId = event.userId || schedule.userId;
     const brandId = event.brandId || schedule.brandId;
     
@@ -293,10 +297,22 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       throw new Error('User ID not found in event or schedule - required for token retrieval');
     }
     
-    // Fetch fresh token from Token Service at publish time
-    const credentials = await getTokenFromTokenService(brandId, userId);
+    // Get token from Token Service via Lambda invocation (improved)
+    const tokenData = await getTokenFromTokenService(brandId, userId, schedule.platform);
+
+    // Prepare credentials based on platform
+    const credentials = {
+      accessToken: tokenData.accessToken,
+      accountId: tokenData.accountId,
+      pageId: tokenData.pageId,
+      expiresAt: tokenData.expiresAt,
+      // Legacy field names for backward compatibility with adapters
+      instagramAccessToken: tokenData.accessToken,
+      instagramAccountId: tokenData.accountId,
+      instagramPageId: tokenData.pageId,
+    };
     
-    logger.info('Fetched credentials', { brandId, hasToken: !!credentials.instagramAccessToken });
+    logger.info('Fetched credentials', { brandId, hasToken: !!credentials.accessToken });
 
     // If video content, get signed URL
     let mediaUrl = null;
@@ -362,66 +378,70 @@ async function getSchedule(scheduleId: string): Promise<any> {
   return result.Item;
 }
 
-async function getTokenFromTokenService(brandId: string, userId: string): Promise<any> {
-  // Use existing Lambda service discovery helper
-  const tokenServiceUrl = await discoverService('token-service');
+interface TokenServiceResponse {
+  accessToken: string;
+  expiresAt?: string;
+  accountId?: string;
+  pageId?: string;
+}
 
-  logger.info('Fetching token from Token Service', { brandId, userId });
+// Get token from Token Service (via Lambda invocation)
+async function getTokenFromTokenService(
+  brandId: string, 
+  userId: string, 
+  platform: string
+): Promise<TokenServiceResponse> {
+  const tokenServiceArn = process.env.TOKEN_SERVICE_ARN;
   
-  // Sign the request with AWS SigV4 for IAM authentication
-  // GET /tokens/{userId}/{platform}/{brandId} - Using new RESTful endpoint
-  const url = new URL(`${tokenServiceUrl}/tokens/${userId}/instagram/${brandId}`);
-  
-  // Create signer for IAM authentication
-  const signer = new SignatureV4({
-    service: 'execute-api',
-    region: process.env.AWS_REGION || 'us-east-1',
-    credentials: defaultProvider(),
-    sha256: Sha256,
-  });
-  
-  // Prepare request for signing (GET request, no body)
-  const request = {
-    method: 'GET',
-    headers: {
-      host: url.hostname,
-    },
-    hostname: url.hostname,
-    path: url.pathname,
-    protocol: url.protocol,
-  };
-  
-  // Sign the request
-  const signedRequest = await signer.sign(request);
-  
-  // Make the signed request
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: signedRequest.headers as any,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    logger.error('Token Service request failed', { 
-      status: response.status, 
-      error: errorText,
-      brandId,
-      userId 
-    });
-    throw new Error(`Failed to fetch token from Token Service: ${response.status} ${errorText}`);
+  if (!tokenServiceArn) {
+    throw new Error('TOKEN_SERVICE_ARN not configured');
   }
 
-  const data = await response.json();
-  if (!data.accessToken) {
-    throw new Error('Token Service returned no access token');
-  }
+  logger.info('Fetching token from Token Service', { brandId, userId, platform });
 
-  logger.info('Successfully fetched token from Token Service');
-  return {
-    instagramAccessToken: data.accessToken,
-    instagramAccountId: data.metadata?.accountId,
-    instagramPageId: data.metadata?.pageId,
-  };
+  try {
+    const response = await lambdaClient.send(new InvokeCommand({
+      FunctionName: tokenServiceArn,
+      InvocationType: 'RequestResponse',
+      Payload: JSON.stringify({
+        httpMethod: 'GET',
+        path: `/tokens/${userId}/${platform}/${brandId}`,
+        headers: {},
+        pathParameters: {
+          userId,
+          platform,
+          brandId
+        }
+      })
+    }));
+
+    const result = JSON.parse(new TextDecoder().decode(response.Payload));
+    
+    if (result.statusCode !== 200) {
+      logger.error('Token Service invocation failed', { 
+        statusCode: result.statusCode,
+        error: result.body
+      });
+      throw new Error(`Token Service error: ${result.statusCode}`);
+    }
+    
+    const tokenData = JSON.parse(result.body);
+    
+    if (!tokenData.accessToken) {
+      throw new Error('Token Service returned no access token');
+    }
+    
+    logger.info('Successfully fetched token from Token Service');
+    return {
+      accessToken: tokenData.accessToken,
+      expiresAt: tokenData.expiresAt,
+      accountId: tokenData.metadata?.accountId,
+      pageId: tokenData.metadata?.pageId,
+    };
+  } catch (error) {
+    logger.error('Failed to invoke Token Service', { error });
+    throw error;
+  }
 }
 
 // Removed getPlatformCredentials and getContentDetails functions
