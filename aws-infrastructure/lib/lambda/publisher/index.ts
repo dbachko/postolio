@@ -9,7 +9,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { ServiceDiscoveryClient, DiscoverInstancesCommand } from '@aws-sdk/client-servicediscovery';
+import { getServiceDiscovery, SERVICES } from './service-discovery-client';
 
 // Platform-specific character limits
 const PLATFORM_LIMITS = {
@@ -35,7 +35,6 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
 });
 const secretsClient = tracer.captureAWSv3Client(new SecretsManagerClient({}));
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
-const serviceDiscoveryClient = tracer.captureAWSv3Client(new ServiceDiscoveryClient({}));
 
 interface PublishEvent {
   scheduleId: string;
@@ -363,50 +362,10 @@ async function getSchedule(scheduleId: string): Promise<any> {
   return result.Item;
 }
 
-/**
- * Get token service URL using service discovery with fallback
- */
-async function getTokenServiceUrl(): Promise<string> {
-  // Try service discovery first if enabled
-  if (process.env.SERVICE_DISCOVERY_ENABLED === 'true' && process.env.CLOUDMAP_NAMESPACE_NAME) {
-    try {
-      logger.info('Attempting service discovery for token-service');
-      
-      const response = await serviceDiscoveryClient.send(new DiscoverInstancesCommand({
-        NamespaceName: process.env.CLOUDMAP_NAMESPACE_NAME,
-        ServiceName: 'token-service',
-        MaxResults: 10,
-        HealthStatus: 'HEALTHY',
-      }));
-
-      if (response.Instances && response.Instances.length > 0) {
-        const instance = response.Instances[0];
-        const url = instance.Attributes?.url;
-        
-        if (url) {
-          logger.info('Token service discovered via Cloud Map', { url });
-          return url;
-        }
-      }
-      
-      logger.warn('No healthy token service instances found via service discovery');
-    } catch (error) {
-      logger.warn('Service discovery failed for token-service', { error: (error as Error).message });
-    }
-  }
-
-  // Fallback to environment variable
-  const tokenServiceUrl = process.env.TOKEN_SERVICE_URL;
-  if (tokenServiceUrl) {
-    logger.info('Using fallback TOKEN_SERVICE_URL', { url: tokenServiceUrl });
-    return tokenServiceUrl;
-  }
-
-  throw new Error('Token service not available: neither service discovery nor TOKEN_SERVICE_URL configured');
-}
-
 async function getTokenFromTokenService(brandId: string, userId: string): Promise<any> {
-  const tokenServiceUrl = await getTokenServiceUrl();
+  // Use existing service discovery helper
+  const discovery = getServiceDiscovery();
+  const tokenServiceUrl = await discovery.getServiceUrl(SERVICES.TOKEN_SERVICE);
 
   logger.info('Fetching token from Token Service', { brandId, userId });
   
