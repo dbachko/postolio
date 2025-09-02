@@ -450,6 +450,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       actions: ['execute-api:Invoke'],
       resources: [
         // Publisher Lambda only needs to GET tokens from Token Service
+        // GET /tokens/{userId}/{platform}?brandId={brandId}
         `arn:aws:execute-api:${this.region}:${this.account}:*/*/GET/tokens/*`,
       ],
     }));
@@ -966,7 +967,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       [
         {
           id: 'AwsSolutions-IAM5',
-          reason: 'Publisher Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, S3 operations, KMS, and Token Service API access',
+          reason: 'Publisher Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, S3 operations, KMS, and Token Service API GET access',
           appliesTo: [
             'Resource::*',
             'Action::kms:GenerateDataKey*',
