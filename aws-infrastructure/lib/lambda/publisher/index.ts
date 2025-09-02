@@ -9,6 +9,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { discoverService } from '../shared/service-discovery-runtime';
 
 // Platform-specific character limits
 const PLATFORM_LIMITS = {
@@ -362,10 +363,8 @@ async function getSchedule(scheduleId: string): Promise<any> {
 }
 
 async function getTokenFromTokenService(brandId: string, userId: string): Promise<any> {
-  const tokenServiceUrl = process.env.TOKEN_SERVICE_URL;
-  if (!tokenServiceUrl) {
-    throw new Error('TOKEN_SERVICE_URL not configured');
-  }
+  // Use existing Lambda service discovery helper
+  const tokenServiceUrl = await discoverService('token-service');
 
   logger.info('Fetching token from Token Service', { brandId, userId });
   

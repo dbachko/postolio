@@ -19,7 +19,7 @@ import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 import * as path from 'path';
-import { ServiceDiscoveryManager, registerLambdaService, getServiceDiscoveryEnvVars } from '../utils/service-discovery';
+import { ServiceDiscoveryManager, registerLambdaService, getServiceDiscoveryEnvVars } from '../utils/service-discovery-infrastructure';
 
 export interface ContentSchedulerStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
@@ -431,6 +431,17 @@ export class ContentSchedulerStack extends cdk.Stack {
         'scheduler:ListSchedules',
       ],
       resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/${prefix}-schedules/*`],
+    }));
+
+    // Grant Publisher Lambda permission to use Service Discovery
+    publisherLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'servicediscovery:DiscoverInstances',
+        'servicediscovery:GetNamespace',
+        'servicediscovery:GetService',
+      ],
+      resources: ['*'], // Service Discovery requires wildcard for discovery operations
     }));
 
     // Grant Lambda permission to pass the scheduler role to EventBridge
