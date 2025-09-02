@@ -370,12 +370,8 @@ async function getTokenFromTokenService(brandId: string, userId: string): Promis
   logger.info('Fetching token from Token Service', { brandId, userId });
   
   // Sign the request with AWS SigV4 for IAM authentication
-  const url = new URL(`${tokenServiceUrl}/tokens`);
-  const body = JSON.stringify({
-    userId,
-    brandId,
-    platform: 'instagram',
-  });
+  // GET /tokens/{userId}/{platform}?brandId={brandId}
+  const url = new URL(`${tokenServiceUrl}/tokens/${userId}/instagram?brandId=${brandId}`);
   
   // Create signer for IAM authentication
   const signer = new SignatureV4({
@@ -387,15 +383,13 @@ async function getTokenFromTokenService(brandId: string, userId: string): Promis
   
   // Prepare request for signing
   const request = {
-    method: 'POST',
+    method: 'GET',
     headers: {
-      'Content-Type': 'application/json',
       host: url.hostname,
     },
     hostname: url.hostname,
     path: url.pathname + url.search,
     protocol: url.protocol,
-    body,
   };
   
   // Sign the request
@@ -403,9 +397,8 @@ async function getTokenFromTokenService(brandId: string, userId: string): Promis
   
   // Make the signed request
   const response = await fetch(url.toString(), {
-    method: 'POST',
+    method: 'GET',
     headers: signedRequest.headers as any,
-    body,
   });
 
   if (!response.ok) {

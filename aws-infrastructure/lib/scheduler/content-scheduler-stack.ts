@@ -433,6 +433,28 @@ export class ContentSchedulerStack extends cdk.Stack {
       resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/${prefix}-schedules/*`],
     }));
 
+    // Grant Publisher Lambda permission to use Service Discovery
+    publisherLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'servicediscovery:DiscoverInstances',
+        'servicediscovery:GetNamespace',
+        'servicediscovery:GetService',
+      ],
+      resources: ['*'], // Service Discovery requires wildcard for discovery operations
+    }));
+
+    // Grant Publisher Lambda permission to invoke Token Service API (IAM-authenticated)
+    publisherLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['execute-api:Invoke'],
+      resources: [
+        // Publisher Lambda only needs to GET tokens from Token Service
+        // GET /tokens/{userId}/{platform}?brandId={brandId}
+        `arn:aws:execute-api:${this.region}:${this.account}:*/*/GET/tokens/*`,
+      ],
+    }));
+
     // Grant Lambda permission to pass the scheduler role to EventBridge
     scheduleManagementLambda.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
@@ -945,7 +967,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       [
         {
           id: 'AwsSolutions-IAM5',
-          reason: 'Publisher Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, S3 operations, KMS, and Token Service API access',
+          reason: 'Publisher Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, S3 operations, KMS, and Token Service API GET access',
           appliesTo: [
             'Resource::*',
             'Action::kms:GenerateDataKey*',
