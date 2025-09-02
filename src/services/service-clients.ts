@@ -32,9 +32,9 @@ export class ServiceClients {
   async getTokenService(): Promise<TokenServiceClient> {
     if (!this._tokenService) {
       try {
-        // TokenServiceClient already has service discovery built-in
+        // TokenServiceClient with RESTful endpoints and enhanced features
         this._tokenService = new TokenServiceClient();
-        console.log('✅ Token Service client initialized');
+        console.log('✅ Token Service client initialized with RESTful endpoints and enhanced features');
       } catch (error) {
         console.error('❌ Failed to initialize Token Service client:', error);
         throw error;
@@ -133,7 +133,7 @@ export class ServiceClients {
       shutdownPromises.push(
         this._tokenService.healthCheck()
           .then(() => console.log('Token service gracefully stopped'))
-          .catch(error => console.warn('Token service was unhealthy during refresh:', error))
+          .catch((error: unknown) => console.warn('Token service was unhealthy during refresh:', error))
       );
     }
     
@@ -141,7 +141,7 @@ export class ServiceClients {
       shutdownPromises.push(
         this._schedulerService.healthCheck()
           .then(() => console.log('Scheduler service gracefully stopped'))
-          .catch(error => console.warn('Scheduler service was unhealthy during refresh:', error))
+          .catch((error: unknown) => console.warn('Scheduler service was unhealthy during refresh:', error))
       );
     }
     

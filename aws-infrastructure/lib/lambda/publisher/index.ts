@@ -369,8 +369,8 @@ async function getTokenFromTokenService(brandId: string, userId: string): Promis
   logger.info('Fetching token from Token Service', { brandId, userId });
   
   // Sign the request with AWS SigV4 for IAM authentication
-  // GET /tokens/{userId}/{platform}?brandId={brandId}
-  const url = new URL(`${tokenServiceUrl}/tokens/${userId}/instagram?brandId=${brandId}`);
+  // GET /tokens/{userId}/{platform}/{brandId} - Using new RESTful endpoint
+  const url = new URL(`${tokenServiceUrl}/tokens/${userId}/instagram/${brandId}`);
   
   // Create signer for IAM authentication
   const signer = new SignatureV4({
@@ -380,14 +380,14 @@ async function getTokenFromTokenService(brandId: string, userId: string): Promis
     sha256: Sha256,
   });
   
-  // Prepare request for signing
+  // Prepare request for signing (GET request, no body)
   const request = {
     method: 'GET',
     headers: {
       host: url.hostname,
     },
     hostname: url.hostname,
-    path: url.pathname + url.search,
+    path: url.pathname,
     protocol: url.protocol,
   };
   

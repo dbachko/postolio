@@ -95,6 +95,15 @@ export class TokenServiceStack extends cdk.Stack {
         TOKENS_TABLE: tokensTable.tableName,
         KMS_KEY_ID: encryptionKey.keyId,
         NODE_ENV: environment,
+        // Platform OAuth credentials (should be in Secrets Manager in production)
+        FACEBOOK_APP_ID: process.env.FACEBOOK_APP_ID || '',
+        FACEBOOK_APP_SECRET: process.env.FACEBOOK_APP_SECRET || '',
+        LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID || '',
+        LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET || '',
+        TIKTOK_CLIENT_KEY: process.env.TIKTOK_CLIENT_KEY || '',
+        TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
+        TWITTER_CLIENT_ID: process.env.TWITTER_CLIENT_ID || '',
+        TWITTER_CLIENT_SECRET: process.env.TWITTER_CLIENT_SECRET || '',
         ...getServiceDiscoveryEnvVars(serviceDiscovery.getClientConfig()),
       },
       logRetention: logs.RetentionDays.ONE_MONTH,
@@ -132,20 +141,74 @@ export class TokenServiceStack extends cdk.Stack {
 
     // API routes with IAM authentication
     const tokens = api.root.addResource('tokens');
+    
+    // Legacy endpoints (for backward compatibility)
     tokens.addMethod('POST', integration, {
       authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Store or get token
+    }); // Store or get token (deprecated)
     tokens.addMethod('DELETE', integration, {
       authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Delete token
+    }); // Delete token (deprecated)
 
     const refresh = tokens.addResource('refresh');
     refresh.addMethod('POST', integration, {
       authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Refresh token
+    }); // Refresh token (deprecated)
+    
+    // New RESTful endpoints
+    // Support for /tokens/batch
+    const batch = tokens.addResource('batch');
+    batch.addMethod('POST', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // Batch get tokens
+    
+    // Support for /tokens/{userId}
+    const userId = tokens.addResource('{userId}');
+    userId.addMethod('GET', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // List all user tokens
+    
+    // Support for /tokens/{userId}/{platform}
+    const platform = userId.addResource('{platform}');
+    platform.addMethod('GET', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // List platform tokens
+    
+    // Support for /tokens/{userId}/{platform}/{brandId}
+    const brandId = platform.addResource('{brandId}');
+    brandId.addMethod('GET', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // Get token
+    brandId.addMethod('PUT', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // Store/update token
+    brandId.addMethod('DELETE', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // Delete token
+    
+    // Support for /tokens/{userId}/{platform}/{brandId}/validate
+    const validate = brandId.addResource('validate');
+    validate.addMethod('POST', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // Validate token
+    
+    // Support for /tokens/{userId}/{platform}/{brandId}/refresh
+    const refreshNew = brandId.addResource('refresh');
+    refreshNew.addMethod('POST', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // Refresh token (new endpoint)
+    
+    // Support for /tokens/{userId}/{platform}/{brandId}/rotate
+    const rotate = brandId.addResource('rotate');
+    rotate.addMethod('POST', integration, {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    }); // Rotate token
 
     const health = api.root.addResource('health');
     health.addMethod('GET', integration); // Health check - no auth required
+    
+    const metrics = api.root.addResource('metrics');
+    metrics.addMethod('GET', integration); // Metrics - no auth required
 
     // Register Token Service with Cloud Map
     registerLambdaService(
