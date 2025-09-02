@@ -23,7 +23,7 @@ const ContentTypeSchema = z.enum(['image', 'video', 'carousel', 'reel', 'story']
 const CreateScheduleInputSchema = z.object({
   contentId: z.string(),
   brandId: z.string(),
-  userId: z.string().optional(),
+  userId: z.string(), // Required for ownership validation and token retrieval
   platform: PlatformSchema,
   scheduledAt: z.string().datetime(), // Changed from scheduledTime to scheduledAt
   contentType: ContentTypeSchema.optional(),
@@ -44,18 +44,19 @@ const UpdateScheduleInputSchema = z.object({
   // API Gateway validation fields (required when performing reschedule)
   brandId: z.string().optional(),
   contentId: z.string().optional(),
+  userId: z.string().optional(), // Required for token retrieval in publisher Lambda
   platform: PlatformSchema.optional(),
 }).refine(
   (data) => {
-    // If any of the API Gateway fields are provided, all must be provided
-    const hasAnyApiField = data.brandId || data.contentId || data.platform;
-    const hasAllApiFields = data.brandId && data.contentId && data.platform;
+    // If any of the API Gateway fields are provided, all must be provided (including userId for security)
+    const hasAnyApiField = data.brandId || data.contentId || data.platform || data.userId;
+    const hasRequiredApiFields = data.brandId && data.contentId && data.platform && data.userId;
     
-    return !hasAnyApiField || hasAllApiFields;
+    return !hasAnyApiField || hasRequiredApiFields;
   },
   {
-    message: "When updating schedule, brandId, contentId, and platform must all be provided together for API Gateway validation",
-    path: ["brandId", "contentId", "platform"]
+    message: "When updating schedule, brandId, contentId, userId, and platform must all be provided together for API Gateway validation and security",
+    path: ["brandId", "contentId", "userId", "platform"]
   }
 );
 
@@ -453,6 +454,7 @@ export class ContentSchedulerClient {
     requiredFields: {
       brandId: string;
       contentId: string;
+      userId: string; // Required for security validation
       platform?: string;
     }
   ): Promise<Schedule> {
@@ -463,6 +465,7 @@ export class ContentSchedulerClient {
       // Include required fields directly in the typed object
       brandId: requiredFields.brandId,
       contentId: requiredFields.contentId,
+      userId: requiredFields.userId, // Always include for ownership validation
       platform: (requiredFields.platform as Platform) || 'instagram',
     };
     

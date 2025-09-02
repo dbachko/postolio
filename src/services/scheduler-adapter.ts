@@ -423,7 +423,15 @@ export class SchedulerAdapter {
       // Get content to find schedule ID
       const content = await prisma.content.findUnique({
         where: { id: contentId },
-        include: { brand: true },
+        include: { 
+          brand: {
+            select: {
+              id: true,
+              name: true,
+              userId: true, // Include userId for scheduler
+            }
+          } 
+        },
       });
 
       if (!content) {
@@ -471,6 +479,7 @@ export class SchedulerAdapter {
             // Include required fields for API Gateway validation
             brandId: content.brandId,
             contentId: content.id,
+            userId: content.brand.userId, // Include userId for token retrieval
             platform: 'instagram', // Default to instagram for now
             // Include content details in case they were edited
             caption: content.caption || '',

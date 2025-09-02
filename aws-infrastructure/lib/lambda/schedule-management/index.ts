@@ -469,6 +469,7 @@ async function updateSchedule(scheduleId: string, data: any): Promise<APIGateway
       caption: data.caption !== undefined ? data.caption : existingSchedule.Item.caption,
       hashtags: data.hashtags !== undefined ? data.hashtags : existingSchedule.Item.hashtags,
       mediaUrls: data.mediaUrls !== undefined ? data.mediaUrls : existingSchedule.Item.mediaUrls,
+      userId: data.userId !== undefined ? data.userId : existingSchedule.Item.userId, // Preserve userId
       updatedAt: new Date().toISOString(),
     };
     
