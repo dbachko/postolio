@@ -966,7 +966,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       [
         {
           id: 'AwsSolutions-IAM5',
-          reason: 'Publisher Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, S3 operations, and KMS',
+          reason: 'Publisher Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, S3 operations, KMS, and Token Service API access',
           appliesTo: [
             'Resource::*',
             'Action::kms:GenerateDataKey*',
@@ -978,6 +978,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::s3:List*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             'Resource::<VideoBucket6ED8E1AF.Arn>/*',
+            'Resource::arn:aws:execute-api:us-east-1:000000000000:*/*/GET/tokens/*',
           ],
         },
       ]
