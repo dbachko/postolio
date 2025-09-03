@@ -279,7 +279,7 @@ async function handleContentUpdate(event: ContentUpdatedEvent): Promise<any> {
   // Find schedules for this content
   const schedules = await docClient.send(new QueryCommand({
     TableName: SCHEDULE_TABLE_NAME,
-    IndexName: 'by-content',
+    IndexName: 'by-content-id',
     KeyConditionExpression: 'contentId = :contentId',
     ExpressionAttributeValues: {
       ':contentId': event.contentId,

@@ -217,7 +217,7 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
   // Check if a schedule already exists for this contentId
   const existingSchedules = await docClient.send(new QueryCommand({
     TableName: process.env.SCHEDULES_TABLE!,
-    IndexName: 'by-content',
+    IndexName: 'by-content-id',
     KeyConditionExpression: 'contentId = :contentId',
     ExpressionAttributeValues: {
       ':contentId': validatedData.contentId,
