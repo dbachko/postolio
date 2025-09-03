@@ -23,7 +23,7 @@
     "diff:scheduler": "npm run prepare:layers && cdk diff ContentScheduler-dev -c environment=dev --app 'npx ts-node --prefer-ts-exts bin/scheduler-app.ts'"
   },
   "devDependencies": {
-    "aws-cdk": "2.93.0",
+    "aws-cdk": "2.1027.0",
     "@prisma/client": "^6.2.0",
     "prisma": "^6.2.0",
     "@aws-lambda-powertools/logger": "^2.25.1",
