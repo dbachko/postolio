@@ -7,6 +7,8 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
@@ -393,6 +395,68 @@ export class ContentSchedulerStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       // logRetention removed to avoid circular dependencies
     });
+
+    // Status Sync Lambda: updates main PostgreSQL based on EventBridge events
+    const statusSyncLambda = new lambdaNodejs.NodejsFunction(this, 'StatusSyncLambda', {
+      functionName: `${prefix}-status-sync`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/status-sync/index.ts'),
+      bundling: {
+        minify: environment === 'prod',
+        sourceMap: environment !== 'prod',
+        externalModules: [
+          '@aws-sdk/*',
+          '@aws-lambda-powertools/logger',
+          '@aws-lambda-powertools/tracer',
+          '@aws-lambda-powertools/metrics',
+        ],
+        nodeModules: [
+          '@prisma/client'
+        ],
+        commandHooks: {
+          beforeBundling() { return [] },
+          beforeInstall() { return [] },
+          afterBundling(inputDir: string, outputDir: string) {
+            return [
+              `cp -r ${inputDir}/node_modules/.prisma ${outputDir}/`,
+              `mkdir -p ${outputDir}/node_modules/@prisma/`,
+              `cp -r ${inputDir}/node_modules/@prisma/client ${outputDir}/node_modules/@prisma/`,
+            ]
+          }
+        }
+      },
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 1024,
+      environment: {
+        ...lambdaEnvironment,
+        // Expect DATABASE_URL to be set via stack parameters or environment config
+      },
+      tracing: lambda.Tracing.ACTIVE,
+      deadLetterQueueEnabled: true,
+      deadLetterQueue: deadLetterQueue,
+    });
+
+    // Allow logging
+    statusSyncLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+      ],
+      resources: ['*'],
+    }));
+
+    // EventBridge rule to forward platform publishing events to Status Sync Lambda
+    const statusSyncRule = new events.Rule(this, 'StatusSyncRule', {
+      ruleName: `${prefix}-status-sync`,
+      eventPattern: {
+        source: ['postolio.platform', 'postolio.scheduler'],
+        detailType: ['post.published', 'post.failed', 'schedule.created', 'schedule.updated', 'schedule.canceled'],
+      },
+    });
+    statusSyncRule.addTarget(new targets.LambdaFunction(statusSyncLambda));
 
     // Add DLQ as event source for retry handler
     retryHandlerLambda.addEventSource(new SqsEventSource(deadLetterQueue, {
