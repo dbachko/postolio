@@ -177,8 +177,7 @@ jobs:
           npm ci || npm install
           echo "PowerTools layer dependencies installed"
 
-      - name: Install AWS CDK
-        run: npm install -g aws-cdk
+      # CDK CLI is provided via local devDependency (npx cdk)
 
       - name: Check if CDK bootstrap is needed
         id: check-bootstrap
@@ -267,8 +266,7 @@ jobs:
           npm ci || npm install
           echo "PowerTools layer dependencies installed"
 
-      - name: Install AWS CDK
-        run: npm install -g aws-cdk
+      # CDK CLI is provided via local devDependency (npx cdk)
 
       - name: Deploy Content Scheduler to Staging
         working-directory: aws-infrastructure
@@ -329,8 +327,7 @@ jobs:
           npm ci || npm install
           echo "PowerTools layer dependencies installed"
 
-      - name: Install AWS CDK
-        run: npm install -g aws-cdk
+      # CDK CLI is provided via local devDependency (npx cdk)
 
       - name: Deploy Content Scheduler to Production
         working-directory: aws-infrastructure

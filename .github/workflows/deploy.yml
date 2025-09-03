@@ -108,11 +108,17 @@ jobs:
           docker push ${{ steps.vars.outputs.ecr_registry }}/${{ vars.ECR_REPOSITORY || 'postolio' }}:${{ steps.vars.outputs.image_tag }}
           docker push ${{ steps.vars.outputs.ecr_registry }}/${{ vars.ECR_REPOSITORY || 'postolio' }}:latest
           
-      - name: Install CDK
-        run: |
-          npm install -g aws-cdk
-          cd aws-infrastructure
-          npm ci
+      - name: Cache infra dependencies
+        uses: actions/cache@v4
+        with:
+          path: aws-infrastructure/node_modules
+          key: infra-${{ runner.os }}-${{ hashFiles('aws-infrastructure/package-lock.json') }}
+          restore-keys: |
+            infra-${{ runner.os }}-
+
+      - name: Install infra deps
+        working-directory: aws-infrastructure
+        run: npm ci
           
       - name: Deploy Token Service stack
         working-directory: aws-infrastructure
