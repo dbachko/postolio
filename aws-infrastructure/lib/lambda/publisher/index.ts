@@ -6,11 +6,9 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } from '@
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { SignatureV4 } from '@aws-sdk/signature-v4';
-import { Sha256 } from '@aws-crypto/sha256-js';
-import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { HttpRequest } from '@aws-sdk/protocol-http';
 import { discoverService } from '../shared/service-discovery-runtime';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { signRequest } from '../shared/request-signer';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
 import { API_VERSIONS, API_BASE_URLS } from '../../constants/api-versions.js';
 
@@ -38,7 +36,6 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
 });
 const secretsClient = tracer.captureAWSv3Client(new SecretsManagerClient({}));
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
-const lambdaClient = new LambdaClient({});
 const eventBridge = new EventBridge({});
 
 // Event from scheduler (minimal data)
@@ -382,47 +379,65 @@ interface TokenServiceResponse {
   pageId?: string;
 }
 
-// Get token from Token Service (via Lambda invocation)
+// Get token from Token Service (via HTTP with SigV4 signing)
 async function getTokenFromTokenService(
   brandId: string, 
   userId: string, 
   platform: string
 ): Promise<TokenServiceResponse> {
-  const tokenServiceArn = process.env.TOKEN_SERVICE_ARN;
-  
-  if (!tokenServiceArn) {
-    throw new Error('TOKEN_SERVICE_ARN not configured');
-  }
-
   logger.info('Fetching token from Token Service', { brandId, userId, platform });
 
   try {
-    const response = await lambdaClient.send(new InvokeCommand({
-      FunctionName: tokenServiceArn,
-      InvocationType: 'RequestResponse',
-      Payload: JSON.stringify({
-        httpMethod: 'GET',
-        path: `/tokens/${userId}/${platform}/${brandId}`,
-        headers: {},
-        pathParameters: {
-          userId,
-          platform,
-          brandId
-        }
-      })
-    }));
-
-    const result = JSON.parse(new TextDecoder().decode(response.Payload));
+    // Use service discovery to find Token Service URL
+    let tokenServiceUrl = process.env.TOKEN_SERVICE_URL;
     
-    if (result.statusCode !== 200) {
-      logger.error('Token Service invocation failed', { 
-        statusCode: result.statusCode,
-        error: result.body
-      });
-      throw new Error(`Token Service error: ${result.statusCode}`);
+    if (!tokenServiceUrl) {
+      // Try service discovery
+      try {
+        tokenServiceUrl = await discoverService('token-service');
+        logger.info('Token Service discovered via Cloud Map', { url: tokenServiceUrl });
+      } catch (discoveryError) {
+        logger.warn('Service discovery failed, using fallback', { error: discoveryError });
+      }
     }
     
-    const tokenData = JSON.parse(result.body);
+    if (!tokenServiceUrl) {
+      throw new Error('Token Service URL not configured and service discovery failed');
+    }
+
+    // Parse URL for signing
+    const url = new URL(`${tokenServiceUrl}/tokens/${userId}/${platform}/${brandId}`);
+    
+    // Create HTTP request for signing
+    // Sign the request with our shared signing utility
+    const headers = await signRequest({
+      method: 'GET',
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    // Make signed HTTP request
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers,
+    });
+    
+    if (!response.ok) {
+      logger.error('Token Service request failed', { 
+        status: response.status,
+        statusText: response.statusText
+      });
+      
+      if (response.status === 404) {
+        throw new Error('Token not found');
+      }
+      
+      throw new Error(`Token Service error: ${response.status} ${response.statusText}`);
+    }
+    
+    const tokenData = await response.json();
     
     if (!tokenData.accessToken) {
       throw new Error('Token Service returned no access token');
@@ -436,16 +451,17 @@ async function getTokenFromTokenService(
       pageId: tokenData.metadata?.pageId,
     };
   } catch (error) {
-    logger.error('Failed to invoke Token Service', { error });
+    logger.error('Failed to get token from Token Service', { error });
     throw error;
   }
 }
 
-// Removed getPlatformCredentials and getContentDetails functions
-// Publisher Lambda now:
+// Publisher Lambda architecture:
 // 1. Uses content directly from scheduler's DynamoDB (no main app API calls)
-// 2. Gets tokens exclusively from Token Service (proper microservices pattern)
-// This simplifies the architecture and improves performance
+// 2. Gets tokens from Token Service via signed HTTP with service discovery (secure & loose coupling)
+// 3. Uses AWS SigV4 signing for authentication to Token Service API Gateway
+// 4. No direct Lambda-to-Lambda invocation to avoid service coupling
+// This maintains proper microservices patterns with secure service-to-service authentication
 
 async function getSignedVideoUrl(videoKey: string): Promise<string> {
   const command = new GetObjectCommand({
