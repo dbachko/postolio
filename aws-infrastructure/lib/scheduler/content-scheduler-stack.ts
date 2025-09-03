@@ -402,6 +402,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'handler',
       entry: path.join(__dirname, '../lambda/status-sync/index.ts'),
+      role: lambdaRole,
       bundling: {
         minify: environment === 'prod',
         sourceMap: environment !== 'prod',
@@ -437,16 +438,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       deadLetterQueue: deadLetterQueue,
     });
 
-    // Allow logging
-    statusSyncLambda.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'logs:CreateLogGroup',
-        'logs:CreateLogStream',
-        'logs:PutLogEvents',
-      ],
-      resources: ['*'],
-    }));
+    // Logging permissions are provided via the shared LambdaExecutionRole (lambdaRole) with scoped resources
 
     // EventBridge rule to forward platform publishing events to Status Sync Lambda
     const statusSyncRule = new events.Rule(this, 'StatusSyncRule', {
