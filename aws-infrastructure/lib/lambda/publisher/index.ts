@@ -6,11 +6,9 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } from '@
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { SignatureV4 } from '@aws-sdk/signature-v4';
-import { Sha256 } from '@aws-crypto/sha256-js';
-import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { HttpRequest } from '@aws-sdk/protocol-http';
 import { discoverService } from '../shared/service-discovery-runtime';
+import { signRequest } from '../shared/request-signer';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
 import { API_VERSIONS, API_BASE_URLS } from '../../constants/api-versions.js';
 
@@ -396,11 +394,8 @@ async function getTokenFromTokenService(
     if (!tokenServiceUrl) {
       // Try service discovery
       try {
-        const discovered = await discoverService('token-service');
-        if (discovered && discovered.length > 0) {
-          tokenServiceUrl = discovered[0].url;
-          logger.info('Token Service discovered via Cloud Map', { url: tokenServiceUrl });
-        }
+        tokenServiceUrl = await discoverService('token-service');
+        logger.info('Token Service discovered via Cloud Map', { url: tokenServiceUrl });
       } catch (discoveryError) {
         logger.warn('Service discovery failed, using fallback', { error: discoveryError });
       }
@@ -414,33 +409,14 @@ async function getTokenFromTokenService(
     const url = new URL(`${tokenServiceUrl}/tokens/${userId}/${platform}/${brandId}`);
     
     // Create HTTP request for signing
-    const request = new HttpRequest({
+    // Sign the request with our shared signing utility
+    const headers = await signRequest({
       method: 'GET',
-      hostname: url.hostname,
-      port: url.port ? parseInt(url.port) : (url.protocol === 'https:' ? 443 : 80),
-      path: url.pathname + url.search,
-      protocol: url.protocol,
+      url,
       headers: {
         'Content-Type': 'application/json',
-        'host': url.hostname,
       },
     });
-
-    // Sign the request with SigV4
-    const signer = new SignatureV4({
-      service: 'execute-api',
-      region: process.env.AWS_REGION || 'us-east-1',
-      credentials: defaultProvider(),
-      sha256: Sha256,
-    });
-
-    const signedRequest = await signer.sign(request);
-    
-    // Convert signed headers to fetch-compatible format
-    const headers: Record<string, string> = {};
-    for (const [key, value] of Object.entries(signedRequest.headers)) {
-      headers[key] = Array.isArray(value) ? value.join(',') : String(value);
-    }
     
     // Make signed HTTP request
     const response = await fetch(url.toString(), {
