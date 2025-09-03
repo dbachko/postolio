@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "commonjs",
     "lib": ["ES2022"],
-    "declaration": true,
+    "declaration": false,
     "strict": false,
     "noImplicitAny": false,
     "strictNullChecks": true,
