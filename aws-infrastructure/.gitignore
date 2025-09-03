@@ -4,8 +4,9 @@
 *.d.ts
 *.js.map
 
-# Keep TypeScript source files
+# Keep TypeScript source files but not compiled .d.ts files
 !*.ts
+*.d.ts
 
 # CDK outputs
 outputs.json
