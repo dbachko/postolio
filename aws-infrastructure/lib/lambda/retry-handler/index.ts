@@ -62,14 +62,23 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
   const delaySeconds = RETRY_DELAYS[attemptNumber - 1] || 900;
 
   try {
-    // Retry the publish operation
+    // Get schedule metadata to include brandId and userId
+    const scheduleData = await getScheduleData(scheduleId);
+    
+    // Retry the publish operation with full context
+    const payload = {
+      scheduleId,
+      brandId: scheduleData?.brandId,
+      userId: scheduleData?.userId,
+    };
+    
     await lambdaClient.send(new InvokeCommand({
       FunctionName: process.env.PUBLISHER_LAMBDA_ARN!,
       InvocationType: 'Event', // Async invocation
-      Payload: JSON.stringify({ scheduleId }),
+      Payload: JSON.stringify(payload),
     }));
 
-    logger.info('Retry invoked successfully', { scheduleId, attemptNumber });
+    logger.info('Retry invoked successfully', { scheduleId, attemptNumber, payload });
     metrics.addMetric('RetryInvoked', MetricUnit.Count, 1);
   } catch (error) {
     logger.error('Failed to invoke retry', error as Error);
@@ -82,6 +91,23 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
     }
     
     throw error;
+  }
+}
+
+async function getScheduleData(scheduleId: string): Promise<any> {
+  try {
+    const result = await docClient.send(new GetCommand({
+      TableName: process.env.SCHEDULES_TABLE!,
+      Key: {
+        pk: `SCHEDULE#${scheduleId}`,
+        sk: 'METADATA',
+      },
+    }));
+
+    return result.Item;
+  } catch (error) {
+    logger.warn('No schedule data found', { scheduleId });
+    return null;
   }
 }
 
