@@ -981,7 +981,7 @@ export class ContentSchedulerStack extends cdk.Stack {
           reason: 'Lambda execution role requires wildcard permissions for CloudWatch Logs and X-Ray tracing',
           appliesTo: [
             'Resource::*',
-            `Resource::arn:aws:logs:${this.region}:<AWS::AccountId>:log-group:/aws/lambda/postolio-scheduler-${environment}-*`,
+            `Resource::arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/postolio-scheduler-${environment}-*`,
           ],
         },
       ]
@@ -1154,7 +1154,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::kms:GenerateDataKey*',
             'Action::kms:ReEncrypt*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
-            `Resource::arn:aws:scheduler:${this.region}:<AWS::AccountId>:schedule/postolio-scheduler-${environment}-schedules/*`,
+            `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-scheduler-${environment}-schedules/*`,
           ],
         },
       ]
@@ -1177,7 +1177,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::s3:List*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             'Resource::<VideoBucket6ED8E1AF.Arn>/*',
-            `Resource::arn:aws:execute-api:${this.region}:<AWS::AccountId>:*/*/GET/tokens/*`,
+            `Resource::arn:aws:execute-api:${this.region}:${this.account}:*/*/GET/tokens/*`,
           ],
         },
       ]
@@ -1212,7 +1212,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::kms:GenerateDataKey*',
             'Action::kms:ReEncrypt*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
-            `Resource::arn:aws:scheduler:${this.region}:<AWS::AccountId>:schedule/postolio-scheduler-${environment}-schedules/*`,
+            `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-scheduler-${environment}-schedules/*`,
           ],
         },
       ]
