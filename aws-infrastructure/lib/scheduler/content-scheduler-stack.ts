@@ -520,6 +520,26 @@ export class ContentSchedulerStack extends cdk.Stack {
       ],
     }));
 
+    // Grant Publisher Lambda permission to emit events to EventBridge (default bus)
+    publisherLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['events:PutEvents'],
+      resources: ['*'],
+    }));
+
+    // cdk-nag: suppress wildcard resource for PutEvents with justification
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/PublisherLambda/ServiceRole/DefaultPolicy/Resource`,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'EventBridge PutEvents requires wildcard resource when using default event bus',
+          appliesTo: ['Action::events:PutEvents', 'Resource::*'],
+        },
+      ]
+    );
+
     // Grant Lambda permission to pass the scheduler role to EventBridge
     scheduleManagementLambda.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
