@@ -214,11 +214,14 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
   
   const validatedData = validation.data!;
   
+  // Get index configuration
+  const dbConfig = getDynamoDBConfig();
+  
   // Check if a schedule already exists for this contentId
   const existingSchedules = await docClient.send(new QueryCommand({
-    TableName: process.env.SCHEDULES_TABLE!,
-    IndexName: 'by-content-id',
-    KeyConditionExpression: 'contentId = :contentId',
+    TableName: dbConfig.tableName,
+    IndexName: dbConfig.indexes.content.name,
+    KeyConditionExpression: `${dbConfig.indexes.content.partitionKey} = :contentId`,
     ExpressionAttributeValues: {
       ':contentId': validatedData.contentId,
     },
@@ -237,7 +240,27 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
     return updateSchedule(existingSchedule.scheduleId, data);
   }
   
-  const scheduleId = `SCH_${Date.now()}_${randomUUID()}`;
+  // Validate required fields before any operations
+  if (!validatedData.brandId || !validatedData.userId || !validatedData.contentId) {
+    logger.error('Missing required fields for schedule creation', {
+      brandId: validatedData.brandId,
+      userId: validatedData.userId,
+      contentId: validatedData.contentId,
+    });
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ 
+        error: 'Missing required fields',
+        missing: {
+          brandId: !validatedData.brandId,
+          userId: !validatedData.userId,
+          contentId: !validatedData.contentId,
+        }
+      }),
+    };
+  }
+
+  let scheduleId = `SCH_${Date.now()}_${randomUUID()}`;
   const scheduledAt = new Date(validatedData.scheduledAt).toISOString();
   
   // Format date for EventBridge Scheduler
@@ -248,34 +271,60 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
     scheduledAt, 
     eventBridgeScheduleTime,
     brandId: validatedData.brandId,
-    contentId: validatedData.contentId 
+    contentId: validatedData.contentId,
+    userId: validatedData.userId
   });
 
-  // Store in DynamoDB first - ensure all content fields are stored with defaults
-  await docClient.send(new PutCommand({
-    TableName: process.env.SCHEDULES_TABLE!,
-    Item: {
-      pk: `SCHEDULE#${scheduleId}`,
-      sk: 'METADATA',
-      scheduleId,
-      brandId: validatedData.brandId,
-      contentId: validatedData.contentId,
-      platform: validatedData.platform,
-      scheduledAt,
-      status: SCHEDULE_STATUS.SCHEDULED,
-      contentType: validatedData.contentType || 'image',
-      videoUrl: validatedData.videoUrl || '',
-      // Ensure content fields always have values (not undefined)
-      caption: validatedData.caption || '',
-      hashtags: validatedData.hashtags || [],
-      mediaUrls: validatedData.mediaUrls || [],
-      userId: validatedData.userId,
-      gsi1pk: `BRAND#${validatedData.brandId}`,
-      gsi1sk: scheduledAt,
-      ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days
-      createdAt: new Date().toISOString(),
-    },
-  }));
+  // Prepare the DynamoDB item with guaranteed non-null values
+  const scheduleItem = {
+    pk: `SCHEDULE#${scheduleId}`,
+    sk: 'METADATA',
+    scheduleId,
+    brandId: validatedData.brandId,
+    contentId: validatedData.contentId,
+    userId: validatedData.userId, // Ensure userId is always present
+    platform: validatedData.platform,
+    scheduledAt,
+    status: SCHEDULE_STATUS.SCHEDULED,
+    contentType: validatedData.contentType || 'image',
+    videoUrl: validatedData.videoUrl || '',
+    // Ensure content fields always have values (not undefined)
+    caption: validatedData.caption || '',
+    hashtags: validatedData.hashtags || [],
+    mediaUrls: validatedData.mediaUrls || [],
+    gsi1pk: `BRAND#${validatedData.brandId}`,
+    gsi1sk: scheduledAt,
+    ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days
+    createdAt: new Date().toISOString(),
+  };
+
+  // Store in DynamoDB first - with conditional put to ensure uniqueness
+  try {
+    await docClient.send(new PutCommand({
+      TableName: process.env.SCHEDULES_TABLE!,
+      Item: scheduleItem,
+      ConditionExpression: 'attribute_not_exists(pk)', // Ensure schedule doesn't already exist
+    }));
+  } catch (error: any) {
+    if (error.name === 'ConditionalCheckFailedException') {
+      logger.warn('Schedule already exists with this ID, likely a race condition', { scheduleId });
+      // Generate a new ID and retry once
+      const newScheduleId = `SCH_${Date.now()}_${randomUUID()}`;
+      scheduleItem.pk = `SCHEDULE#${newScheduleId}`;
+      scheduleItem.scheduleId = newScheduleId;
+      
+      await docClient.send(new PutCommand({
+        TableName: process.env.SCHEDULES_TABLE!,
+        Item: scheduleItem,
+        ConditionExpression: 'attribute_not_exists(pk)', // Ensure uniqueness on retry
+      }));
+      
+      // Update scheduleId for EventBridge creation
+      scheduleId = newScheduleId;
+    } else {
+      throw error;
+    }
+  }
 
   // Create EventBridge schedule - with rollback on failure
   try {
