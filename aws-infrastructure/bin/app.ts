@@ -6,6 +6,7 @@ import { ContentSchedulerStack } from '../lib/scheduler/content-scheduler-stack'
 import { PostolioStack } from '../lib/stacks/postolio-stack';
 import { TokenServiceStack } from '../lib/stacks/token-service-stack';
 import { ServiceDiscoveryStack } from '../lib/stacks/service-discovery-stack';
+import { getOAuthConfig } from '../lib/utils/oauth-config';
 
 const app = new cdk.App();
 
@@ -49,17 +50,17 @@ const serviceDiscoveryStack = new ServiceDiscoveryStack(app, `ServiceDiscovery-$
   },
 });
 
+// Get OAuth configuration from shared utility
+const oauthConfig = getOAuthConfig(app);
+
 // 2. Deploy Token Service stack (uses shared service discovery)
 const tokenServiceStack = new TokenServiceStack(app, `TokenService-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
   serviceDiscoveryNamespaceId: serviceDiscoveryStack.namespaceId,
-  // Public OAuth Client IDs (from GitHub environment variables via CDK context)
-  facebookAppId: app.node.tryGetContext('facebookAppId'),
-  instagramAppId: app.node.tryGetContext('instagramAppId'),
-  linkedinClientId: app.node.tryGetContext('linkedinClientId'),
-  tiktokClientKey: app.node.tryGetContext('tiktokClientKey'),
+  // OAuth configuration from shared utility
+  ...oauthConfig,
   description: `Token Service - OAuth token management - ${environment} environment`,
   tags: {
     Environment: environment,

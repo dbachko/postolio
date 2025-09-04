@@ -19,21 +19,12 @@ import { Construct } from 'constructs'
 import * as path from 'path'
 import { CloudWatchDashboards } from '../constructs/cloudwatch-dashboards'
 import { SecuredApiGateway } from '../constructs/secured-api-gateway'
+import { getOAuthEnvironmentVariables, type OAuthConfig } from '../utils/oauth-config'
 
-export interface PlatformMicroservicesStackProps extends cdk.StackProps {
+export interface PlatformMicroservicesStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod'
   domainName?: string
   alertEmail?: string
-  // Public OAuth Client IDs (passed from GitHub Environment Variables)
-  facebookAppId?: string
-  instagramAppId?: string
-  linkedinClientId?: string
-  tiktokClientKey?: string
-  // OAuth Secrets (passed from GitHub Secrets)
-  facebookAppSecret?: string
-  instagramAppSecret?: string
-  linkedinClientSecret?: string
-  tiktokClientSecret?: string
 }
 
 export class PlatformMicroservicesStack extends cdk.Stack {
@@ -249,17 +240,8 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       RATE_LIMIT_TABLE_NAME: `postolio-rate-limits-${environment}`,
       AWS_ACCOUNT_ID: this.account,
       
-      // Public OAuth Client IDs (from GitHub Environment Variables)
-      FACEBOOK_APP_ID: props.facebookAppId || process.env.FACEBOOK_APP_ID || '',
-      INSTAGRAM_APP_ID: props.instagramAppId || process.env.INSTAGRAM_APP_ID || '',
-      LINKEDIN_CLIENT_ID: props.linkedinClientId || process.env.LINKEDIN_CLIENT_ID || '',
-      TIKTOK_CLIENT_KEY: props.tiktokClientKey || process.env.TIKTOK_CLIENT_KEY || '',
-      
-      // OAuth Secrets (from GitHub Secrets)
-      FACEBOOK_APP_SECRET: props.facebookAppSecret || process.env.FACEBOOK_APP_SECRET || '',
-      INSTAGRAM_APP_SECRET: props.instagramAppSecret || process.env.INSTAGRAM_APP_SECRET || '',
-      LINKEDIN_CLIENT_SECRET: props.linkedinClientSecret || process.env.LINKEDIN_CLIENT_SECRET || '',
-      TIKTOK_CLIENT_SECRET: props.tiktokClientSecret || process.env.TIKTOK_CLIENT_SECRET || '',
+      // OAuth credentials from shared utility
+      ...getOAuthEnvironmentVariables(props),
     }
     
     // ==================== Lambda Functions ====================

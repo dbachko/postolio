@@ -53,8 +53,21 @@ list_secrets() {
     # OpenAI
     echo -e "\n${YELLOW}OpenAI API:${NC}"
     if aws secretsmanager describe-secret --secret-id "${OPENAI_SECRET}" &> /dev/null; then
-        value=$(aws secretsmanager get-secret-value --secret-id "${OPENAI_SECRET}" --query SecretString --output text 2>/dev/null | jq -r '.apiKey' 2>/dev/null || echo "N/A")
-        if [ "$value" != "N/A" ] && [ -n "$value" ]; then
+        # Fetch the secret value
+        secret_json=$(aws secretsmanager get-secret-value \
+            --secret-id "${OPENAI_SECRET}" \
+            --query SecretString \
+            --output text 2>/dev/null)
+        
+        # Extract the API key from JSON
+        if [ -n "$secret_json" ]; then
+            value=$(echo "$secret_json" | jq -r '.apiKey' 2>/dev/null)
+        else
+            value=""
+        fi
+        
+        # Check if value exists and is not null/empty
+        if [ -n "$value" ] && [ "$value" != "null" ]; then
             echo "  Status: ✓ Configured"
             echo "  Value: ${value:0:10}..." # Show first 10 chars only
         else
@@ -67,8 +80,21 @@ list_secrets() {
     # Google
     echo -e "\n${YELLOW}Google Client Secret:${NC}"
     if aws secretsmanager describe-secret --secret-id "${GOOGLE_SECRET}" &> /dev/null; then
-        value=$(aws secretsmanager get-secret-value --secret-id "${GOOGLE_SECRET}" --query SecretString --output text 2>/dev/null | jq -r '.clientSecret' 2>/dev/null || echo "N/A")
-        if [ "$value" != "N/A" ] && [ -n "$value" ]; then
+        # Fetch the secret value
+        secret_json=$(aws secretsmanager get-secret-value \
+            --secret-id "${GOOGLE_SECRET}" \
+            --query SecretString \
+            --output text 2>/dev/null)
+        
+        # Extract the client secret from JSON
+        if [ -n "$secret_json" ]; then
+            value=$(echo "$secret_json" | jq -r '.clientSecret' 2>/dev/null)
+        else
+            value=""
+        fi
+        
+        # Check if value exists and is not null/empty
+        if [ -n "$value" ] && [ "$value" != "null" ]; then
             echo "  Status: ✓ Configured"
             echo "  Value: ${value:0:10}..." # Show first 10 chars only
         else
@@ -81,8 +107,21 @@ list_secrets() {
     # Facebook
     echo -e "\n${YELLOW}Facebook App Secret:${NC}"
     if aws secretsmanager describe-secret --secret-id "${FACEBOOK_SECRET}" &> /dev/null; then
-        value=$(aws secretsmanager get-secret-value --secret-id "${FACEBOOK_SECRET}" --query SecretString --output text 2>/dev/null | jq -r '.appSecret' 2>/dev/null || echo "N/A")
-        if [ "$value" != "N/A" ] && [ -n "$value" ]; then
+        # Fetch the secret value
+        secret_json=$(aws secretsmanager get-secret-value \
+            --secret-id "${FACEBOOK_SECRET}" \
+            --query SecretString \
+            --output text 2>/dev/null)
+        
+        # Extract the app secret from JSON
+        if [ -n "$secret_json" ]; then
+            value=$(echo "$secret_json" | jq -r '.appSecret' 2>/dev/null)
+        else
+            value=""
+        fi
+        
+        # Check if value exists and is not null/empty
+        if [ -n "$value" ] && [ "$value" != "null" ]; then
             echo "  Status: ✓ Configured"
             echo "  Value: ${value:0:10}..." # Show first 10 chars only
         else

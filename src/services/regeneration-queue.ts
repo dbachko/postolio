@@ -3,14 +3,13 @@ import Redis from 'ioredis'
 import { prisma } from '../config/database.js'
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js'
 import type { StyleProfile } from './ai.js'
+import { getRedisUrl } from '../utils/redis-url.js'
 
 // Fixed batch size as per product decision
 const BATCH_SIZE = 5
 
-// Redis connection configuration (AWS best practice: construct from env vars)
-const redisUrl = process.env.REDIS_HOST 
-  ? `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT || '6379'}`
-  : process.env.REDIS_URL || 'redis://localhost:6379'
+// Redis connection configuration using shared utility
+const redisUrl = getRedisUrl()
 
 const redisConnection = new Redis(redisUrl, {
   maxRetriesPerRequest: null,

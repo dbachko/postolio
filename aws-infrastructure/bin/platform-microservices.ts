@@ -2,6 +2,7 @@
 import 'source-map-support/register'
 import * as cdk from 'aws-cdk-lib'
 import { PlatformMicroservicesStack } from '../lib/stacks/platform-microservices-stack'
+import { getOAuthConfig } from '../lib/utils/oauth-config'
 
 const app = new cdk.App()
 
@@ -58,21 +59,15 @@ const stackProps = {
   },
 }
 
+// Get OAuth configuration from shared utility
+const oauthConfig = getOAuthConfig(app)
+
 // Create the stack
 new PlatformMicroservicesStack(app, `Postolio-Platform-${environment}`, {
   ...stackProps[environment as keyof typeof stackProps],
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail,
-  // Public OAuth Client IDs (from GitHub Environment Variables)
-  facebookAppId: app.node.tryGetContext('facebookAppId') || process.env.FACEBOOK_APP_ID,
-  instagramAppId: app.node.tryGetContext('instagramAppId') || process.env.INSTAGRAM_APP_ID,
-  linkedinClientId: app.node.tryGetContext('linkedinClientId') || process.env.LINKEDIN_CLIENT_ID,
-  tiktokClientKey: app.node.tryGetContext('tiktokClientKey') || process.env.TIKTOK_CLIENT_KEY,
-  // OAuth Secrets (from GitHub Secrets)
-  facebookAppSecret: app.node.tryGetContext('facebookAppSecret') || process.env.FACEBOOK_APP_SECRET,
-  instagramAppSecret: app.node.tryGetContext('instagramAppSecret') || process.env.INSTAGRAM_APP_SECRET,
-  linkedinClientSecret: app.node.tryGetContext('linkedinClientSecret') || process.env.LINKEDIN_CLIENT_SECRET,
-  tiktokClientSecret: app.node.tryGetContext('tiktokClientSecret') || process.env.TIKTOK_CLIENT_SECRET,
+  ...oauthConfig, // Spread OAuth configuration
 })
 
 app.synth()

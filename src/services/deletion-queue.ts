@@ -1,6 +1,7 @@
 import Bull from 'bull'
 import { getDatabaseClient } from '../config/database.js'
 import Redis from 'ioredis'
+import { getRedisUrl } from '../utils/redis-url.js'
 
 const prisma = getDatabaseClient()
 
@@ -24,10 +25,8 @@ export class DeletionQueueService {
   private redis: Redis
 
   private constructor() {
-    // Construct Redis URL from environment variables (AWS best practice)
-    const redisUrl = process.env.REDIS_HOST 
-      ? `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT || '6379'}`
-      : process.env.REDIS_URL || 'redis://localhost:6379'
+    // Use shared utility for Redis URL construction
+    const redisUrl = getRedisUrl()
     
     // Create Redis connection for Bull
     this.redis = new Redis(redisUrl, {

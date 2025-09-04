@@ -19,16 +19,12 @@ import * as path from 'path';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { ServiceDiscoveryManager, registerLambdaService, getServiceDiscoveryEnvVars } from '../utils/service-discovery-infrastructure';
 import { NagSuppressions } from 'cdk-nag';
+import { OAuthConfig } from '../utils/oauth-config';
 
-export interface TokenServiceStackProps extends cdk.StackProps {
+export interface TokenServiceStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod';
   alertEmail?: string;
   serviceDiscoveryNamespaceId?: string; // Use shared namespace
-  // Public OAuth Client IDs (from GitHub environment variables)
-  facebookAppId?: string;
-  instagramAppId?: string;
-  linkedinClientId?: string;
-  tiktokClientKey?: string;
 }
 
 export class TokenServiceStack extends cdk.Stack {
