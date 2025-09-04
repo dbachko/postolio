@@ -24,6 +24,8 @@ import {
   X
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { useTimezone } from '../contexts/TimezoneContext'
+import { formatInUserTimezone, convertLocalToUTC } from '../lib/timezone'
 import { toast } from 'sonner'
 
 // Import our new reusable components
@@ -403,10 +405,18 @@ export default function PostDetail() {
     setLearningFeedback({ isVisible: false, message: '' })
   }
 
+  const { timezone } = useTimezone()
+
   // Quick action mutations
   const schedulePostMutation = useMutation({
     mutationFn: async (scheduledAt: string) => {
-      return apiClient.schedulePost(postId!, scheduledAt)
+      let payload = scheduledAt
+      if (scheduledAt && !scheduledAt.endsWith('Z')) {
+        const local = new Date(scheduledAt)
+        const utc = convertLocalToUTC(local, timezone)
+        payload = utc.toISOString()
+      }
+      return apiClient.schedulePost(postId!, payload)
     },
     onSuccess: () => {
       toast.success('Post scheduled successfully')
@@ -672,7 +682,7 @@ export default function PostDetail() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Scheduled</span>
                   <span className="font-medium">
-                    {format(new Date(post.scheduledAt), 'MMM d, h:mm a')}
+                    {formatInUserTimezone(post.scheduledAt, 'MMM d, h:mm a', timezone)}
                   </span>
                 </div>
               )}
@@ -681,7 +691,7 @@ export default function PostDetail() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Published</span>
                   <span className="font-medium">
-                    {format(new Date(post.postedAt), 'MMM d, h:mm a')}
+                    {formatInUserTimezone(post.postedAt, 'MMM d, h:mm a', timezone)}
                   </span>
                 </div>
               )}

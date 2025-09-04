@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns'
+import { formatInTimeZone } from 'date-fns-tz'
+import { useTimezone } from '../contexts/TimezoneContext'
 import { Card, CardContent } from './ui/card'
 import { Clock, Calendar, CheckCircle, AlertCircle } from 'lucide-react'
 
@@ -23,6 +25,7 @@ interface TimelineViewProps {
 
 export function TimelineView({ items, currentDate }: TimelineViewProps) {
   const navigate = useNavigate()
+  const { timezone } = useTimezone()
   
   // Group items by day for the current week
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 })
@@ -41,7 +44,8 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
     items.forEach(item => {
       const date = item.scheduledAt || item.postedAt
       if (date) {
-        const dayKey = format(new Date(date), 'yyyy-MM-dd')
+        // Group by day in the user's/brand timezone
+        const dayKey = formatInTimeZone(new Date(date), timezone, 'yyyy-MM-dd')
         const dayItems = grouped.get(dayKey) || []
         dayItems.push(item)
         grouped.set(dayKey, dayItems)
@@ -92,14 +96,15 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
           {Array.from({ length: 24 }, (_, hour) => (
             <div key={hour} className="grid grid-cols-8 gap-4 min-h-[60px]">
               <div className="col-span-1 text-sm text-gray-500 pt-1">
-                {format(new Date().setHours(hour, 0, 0, 0), 'ha')}
+                {formatInTimeZone(new Date().setHours(hour, 0, 0, 0), timezone, 'ha')}
               </div>
               {weekDays.map(day => {
                 const dayKey = format(day, 'yyyy-MM-dd')
                 const dayItems = itemsByDay.get(dayKey) || []
                 const hourItems = dayItems.filter(item => {
-                  const itemDate = new Date(item.scheduledAt || item.postedAt || '')
-                  return itemDate.getHours() === hour
+                  const d = item.scheduledAt || item.postedAt || ''
+                  const itemHour = parseInt(formatInTimeZone(new Date(d), timezone, 'H'), 10)
+                  return itemHour === hour
                 })
 
                 return (
@@ -129,7 +134,7 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
                             )}
                             {item.scheduledAt && (
                               <div className="text-[10px] opacity-75">
-                                {format(new Date(item.scheduledAt), 'h:mm a')}
+                                {formatInTimeZone(new Date(item.scheduledAt), timezone, 'h:mm a')}
                               </div>
                             )}
                           </div>

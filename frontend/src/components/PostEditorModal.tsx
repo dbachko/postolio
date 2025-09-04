@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
+import { useTimezone } from '../contexts/TimezoneContext'
+import { convertLocalToUTC } from '../lib/timezone'
 import { apiClient, type Content } from '../lib/api'
 import { ImageUploader } from './ImageUploader'
 import { PostCaptionEditor } from './PostCaptionEditor'
@@ -209,6 +211,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       }, 3000)
     }
   })
+  const { timezone } = useTimezone()
 
   // Manual save function
   const saveChanges = async () => {
@@ -226,12 +229,17 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       timestamp: new Date().toISOString()
     })
     
+    // Convert scheduledAt from local input to UTC ISO if present
+    const payloadScheduledAt = formData.scheduledAt
+      ? convertLocalToUTC(new Date(formData.scheduledAt), timezone).toISOString()
+      : undefined
+
     updateContentMutation.mutate({
       contentId: content.id,
       caption: formData.caption,
       hashtags: formData.hashtags,
       cdnImageUrl: formData.cdnImageUrl || undefined,
-      scheduledAt: formData.scheduledAt
+      scheduledAt: payloadScheduledAt
     })
     
     // Update the original data reference after successful save
