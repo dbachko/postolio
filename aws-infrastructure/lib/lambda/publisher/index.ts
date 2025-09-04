@@ -340,6 +340,29 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       publishResult.platformUrl
     );
 
+    // Emit EventBridge post.published event for downstream sync
+    try {
+      await eventBridge.putEvents({
+        Entries: [{
+          Source: 'postolio.platform',
+          DetailType: 'post.published',
+          Time: new Date(),
+          Detail: JSON.stringify({
+            scheduleId: event.scheduleId,
+            contentId: schedule.contentId,
+            brandId: schedule.brandId,
+            platform: schedule.platform,
+            platformPostId: publishResult.platformPostId,
+            permalink: publishResult.platformUrl,
+            publishedAt: new Date().toISOString(),
+          }),
+        }],
+      })
+      logger.info('Emitted post.published event to EventBridge')
+    } catch (emitErr) {
+      logger.warn('Failed to emit post.published event', { error: emitErr })
+    }
+
     metrics.addMetric('ContentPublished', MetricUnit.Count, 1);
     metrics.addMetric(`ContentPublished_${schedule.platform}`, MetricUnit.Count, 1);
     
@@ -353,6 +376,29 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     
     // Update schedule status to failed
     await updateScheduleStatus(event.scheduleId, 'failed', (error as Error).message);
+    
+    // Emit EventBridge post.failed event for downstream sync
+    try {
+      const schedule = await getSchedule(event.scheduleId).catch(() => null as any)
+      await eventBridge.putEvents({
+        Entries: [{
+          Source: 'postolio.platform',
+          DetailType: 'post.failed',
+          Time: new Date(),
+          Detail: JSON.stringify({
+            scheduleId: event.scheduleId,
+            contentId: schedule?.contentId,
+            brandId: schedule?.brandId,
+            platform: schedule?.platform,
+            error: (error as Error)?.message || 'Unknown error',
+            attemptNumber: 1,
+          }),
+        }],
+      })
+      logger.info('Emitted post.failed event to EventBridge')
+    } catch (emitErr) {
+      logger.warn('Failed to emit post.failed event', { error: emitErr })
+    }
     
     throw error;
   } finally {
