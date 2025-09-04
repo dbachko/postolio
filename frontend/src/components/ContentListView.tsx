@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns'
+import { formatInUserTimezone } from '../lib/timezone'
+import { useTimezone } from '../contexts/TimezoneContext'
 import { Card, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -36,6 +38,7 @@ type FilterStatus = 'all' | 'published' | 'scheduled' | 'placeholder' | 'failed'
 
 export function ContentListView({ items, currentDate }: ContentListViewProps) {
   const navigate = useNavigate()
+  const { timezone } = useTimezone()
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [sortField, setSortField] = useState<SortField>('date')
@@ -256,8 +259,8 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
                   </div>
                   
                   <div className="col-span-2 text-sm">
-                    <div className="font-medium">{format(itemDate, 'MMM d, yyyy')}</div>
-                    <div className="text-gray-500">{format(itemDate, 'h:mm a')}</div>
+                    <div className="font-medium">{formatInUserTimezone(itemDate, 'MMM d, yyyy', timezone)}</div>
+                    <div className="text-gray-500">{formatInUserTimezone(itemDate, 'h:mm a', timezone)}</div>
                   </div>
                   
                   <div className="col-span-2">
