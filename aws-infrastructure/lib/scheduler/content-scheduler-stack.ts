@@ -389,6 +389,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       environment: {
         ...lambdaEnvironment,
         PUBLISHER_LAMBDA_ARN: publisherLambda.functionArn,
+        SCHEDULES_TABLE: this.schedulesTable.tableName,
       },
       layers: [powertoolsLayer],
       // Using default role to avoid circular dependencies
@@ -459,6 +460,7 @@ export class ContentSchedulerStack extends cdk.Stack {
     // Grant permissions using least privilege
     this.schedulesTable.grantReadWriteData(scheduleManagementLambda);
     this.schedulesTable.grantReadWriteData(publisherLambda);
+    this.schedulesTable.grantReadWriteData(retryHandlerLambda); // Need to update schedule status on failure
     retryQueueTable.grantReadWriteData(publisherLambda);
     retryQueueTable.grantReadWriteData(retryHandlerLambda);
     auditLogTable.grantWriteData(scheduleManagementLambda);

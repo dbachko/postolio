@@ -266,7 +266,22 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     // Get schedule details from DynamoDB (contains content)
     const schedule = await getSchedule(event.scheduleId);
     if (!schedule) {
-      throw new Error(`Schedule not found: ${event.scheduleId}`);
+      // Schedule doesn't exist - likely an orphaned retry
+      logger.error('Schedule not found', { 
+        scheduleId: event.scheduleId,
+        eventBrandId: event.brandId,
+        eventUserId: event.userId
+      });
+      
+      // If we have brandId and userId from the event, create a failed status entry
+      if (event.brandId && event.userId) {
+        await createFailedScheduleEntry(event.scheduleId, event.brandId, event.userId, 'Schedule not found');
+      }
+      
+      // Don't throw - just return to avoid endless retries
+      metrics.addMetric('ScheduleNotFound', MetricUnit.Count, 1);
+      metrics.publishStoredMetrics();
+      return;
     }
 
     // Use content directly from schedule
@@ -283,16 +298,16 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       imageUrl: schedule.mediaUrls?.[0] || schedule.imageUrl,
     };
 
-    // Get user and brand IDs for token retrieval
-    const userId = event.userId || schedule.userId;
-    const brandId = event.brandId || schedule.brandId;
+    // Get user and brand IDs for token retrieval - prefer schedule data over event
+    const userId = schedule.userId || event.userId;
+    const brandId = schedule.brandId || event.brandId;
     
     if (!brandId) {
-      throw new Error('Brand ID not found in event or schedule');
+      throw new Error('Brand ID not found in schedule or event');
     }
     
     if (!userId) {
-      throw new Error('User ID not found in event or schedule - required for token retrieval');
+      throw new Error('User ID not found in schedule or event - required for token retrieval');
     }
     
     // Get token from Token Service via Lambda invocation (improved)
@@ -536,6 +551,29 @@ async function logAudit(
       details,
       timestamp: new Date().toISOString(),
       ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days
+    },
+  }));
+}
+
+async function createFailedScheduleEntry(
+  scheduleId: string,
+  brandId: string,
+  userId: string,
+  errorMessage: string
+): Promise<void> {
+  await docClient.send(new PutCommand({
+    TableName: process.env.SCHEDULES_TABLE!,
+    Item: {
+      pk: `SCHEDULE#${scheduleId}`,
+      sk: 'METADATA',
+      scheduleId,
+      brandId,
+      userId,
+      status: 'failed',
+      schedulingError: errorMessage,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ttl: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60), // 7 days
     },
   }));
 }
