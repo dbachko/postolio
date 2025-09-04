@@ -63,6 +63,11 @@ new PlatformMicroservicesStack(app, `Postolio-Platform-${environment}`, {
   ...stackProps[environment as keyof typeof stackProps],
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail,
+  // Public OAuth Client IDs (from GitHub Secrets/Environment)
+  facebookAppId: process.env.FACEBOOK_APP_ID,
+  instagramAppId: process.env.INSTAGRAM_APP_ID,
+  linkedinClientId: process.env.LINKEDIN_CLIENT_ID,
+  tiktokClientKey: process.env.TIKTOK_CLIENT_KEY,
 })
 
 app.synth()

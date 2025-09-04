@@ -7,8 +7,10 @@ import type { StyleProfile } from './ai.js'
 // Fixed batch size as per product decision
 const BATCH_SIZE = 5
 
-// Redis connection configuration
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
+// Redis connection configuration (AWS best practice: construct from env vars)
+const redisUrl = process.env.REDIS_HOST 
+  ? `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT || '6379'}`
+  : process.env.REDIS_URL || 'redis://localhost:6379'
 
 const redisConnection = new Redis(redisUrl, {
   maxRetriesPerRequest: null,

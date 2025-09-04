@@ -170,7 +170,10 @@ jobs:
             --context environment=${{ needs.set-environment.outputs.environment }} \
             --context domainName=${{ vars.DOMAIN_NAME }} \
             --context googleClientId=${{ vars.VITE_GOOGLE_CLIENT_ID }} \
-            --context facebookAppId=${{ vars.VITE_FACEBOOK_APP_ID }} \
+            --context facebookAppId=${{ vars.FACEBOOK_APP_ID }} \
+            --context instagramAppId=${{ vars.INSTAGRAM_APP_ID }} \
+            --context linkedinClientId=${{ vars.LINKEDIN_CLIENT_ID }} \
+            --context tiktokClientKey=${{ vars.TIKTOK_CLIENT_KEY }} \
             --context openaiApiKey="${{ secrets.OPENAI_API_KEY }}" \
             --context googleClientSecret="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
             --context facebookAppSecret="${{ secrets.FACEBOOK_APP_SECRET }}" \
@@ -190,6 +193,7 @@ jobs:
           cat > .env.production <<EOF
           # API Configuration
           VITE_API_URL=${{ vars.VITE_API_URL }}
+          VITE_API_BASE_URL=${{ vars.VITE_API_URL }}
           
           # OAuth Configuration (Public IDs)
           VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}

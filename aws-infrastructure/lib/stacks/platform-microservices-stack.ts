@@ -25,6 +25,11 @@ export interface PlatformMicroservicesStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod'
   domainName?: string
   alertEmail?: string
+  // Public OAuth Client IDs (passed from GitHub Secrets/Environment)
+  facebookAppId?: string
+  instagramAppId?: string
+  linkedinClientId?: string
+  tiktokClientKey?: string
 }
 
 export class PlatformMicroservicesStack extends cdk.Stack {
@@ -47,18 +52,16 @@ export class PlatformMicroservicesStack extends cdk.Stack {
     })
     
     // ==================== Secrets Manager ====================
+    // Only store actual secrets (not public client IDs)
     const platformSecrets = new secretsmanager.Secret(this, 'PlatformSecrets', {
       secretName: `postolio/${environment}/platform-credentials`,
-      description: 'Platform API credentials for social media integrations',
+      description: 'Platform API secrets for social media integrations (secrets only, not public IDs)',
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
-          FACEBOOK_APP_ID: '',
+          // Only store actual secrets (client secrets, not client IDs)
           FACEBOOK_APP_SECRET: '',
-          INSTAGRAM_APP_ID: '',
           INSTAGRAM_APP_SECRET: '',
-          LINKEDIN_CLIENT_ID: '',
           LINKEDIN_CLIENT_SECRET: '',
-          TIKTOK_CLIENT_KEY: '',
           TIKTOK_CLIENT_SECRET: '',
         }),
         generateStringKey: 'random-key',
@@ -256,6 +259,13 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       KMS_KEY_ID: tokenEncryptionKey.keyId,
       RATE_LIMIT_TABLE_NAME: `postolio-rate-limits-${environment}`,
       AWS_ACCOUNT_ID: this.account,
+      
+      // Public OAuth Client IDs (not sensitive - these are meant to be public)
+      // These come from GitHub Secrets/Environment Variables during deployment
+      FACEBOOK_APP_ID: props.facebookAppId || process.env.FACEBOOK_APP_ID || '',
+      INSTAGRAM_APP_ID: props.instagramAppId || process.env.INSTAGRAM_APP_ID || '',
+      LINKEDIN_CLIENT_ID: props.linkedinClientId || process.env.LINKEDIN_CLIENT_ID || '',
+      TIKTOK_CLIENT_KEY: props.tiktokClientKey || process.env.TIKTOK_CLIENT_KEY || '',
     }
     
     // ==================== Lambda Functions ====================

@@ -327,8 +327,8 @@ export class PostolioStack extends cdk.Stack {
           cdk.Fn.select(2, cdk.Fn.split('-', cdk.Fn.select(2, cdk.Fn.split('/', cdk.Aws.STACK_ID))))
         ),
         
-        // Database connection (CDK-managed)
-        redisUrl: cdk.SecretValue.unsafePlainText(`redis://${redis.attrRedisEndpointAddress}:6380`),
+        // NOTE: Redis endpoint moved to environment variables (AWS best practice)
+        // Non-sensitive internal endpoints should use env vars for automatic updates
         
         // NOTE: Publisher now uses AWS IAM SigV4 authentication instead of API keys
         // NOTE: User-provided secrets moved to environment variables:
@@ -536,13 +536,16 @@ export class PostolioStack extends cdk.Stack {
           
           // Infrastructure secrets (from AWS Secrets Manager)
           JWT_SECRET: ecs.Secret.fromSecretsManager(appSecrets, 'jwtSecret'),
-          REDIS_URL: ecs.Secret.fromSecretsManager(appSecrets, 'redisUrl'),
         },
         environment: {
           // Database configuration
           DB_HOST: database.instanceEndpoint.hostname,
           DB_PORT: database.instanceEndpoint.port.toString(),
           DB_NAME: 'postolio',
+          
+          // Redis configuration (AWS best practice: use env vars for non-sensitive endpoints)
+          REDIS_HOST: redis.attrRedisEndpointAddress,
+          REDIS_PORT: '6380',
           
           // User-provided secrets (from GitHub Secrets via CDK context)
           OPENAI_API_KEY: this.node.tryGetContext('openaiApiKey') || process.env.OPENAI_API_KEY || '',
@@ -552,6 +555,9 @@ export class PostolioStack extends cdk.Stack {
           // OAuth Client IDs (public values from GitHub Environment Variables via CDK context)
           GOOGLE_CLIENT_ID: this.node.tryGetContext('googleClientId') || process.env.GOOGLE_CLIENT_ID || '',
           FACEBOOK_APP_ID: this.node.tryGetContext('facebookAppId') || process.env.FACEBOOK_APP_ID || '',
+          INSTAGRAM_APP_ID: this.node.tryGetContext('instagramAppId') || process.env.INSTAGRAM_APP_ID || '',
+          LINKEDIN_CLIENT_ID: this.node.tryGetContext('linkedinClientId') || process.env.LINKEDIN_CLIENT_ID || '',
+          TIKTOK_CLIENT_KEY: this.node.tryGetContext('tiktokClientKey') || process.env.TIKTOK_CLIENT_KEY || '',
           
           // URLs and domains
           CORS_ORIGIN: apiDomainName, // Use unified domain instead of CloudFront domain
