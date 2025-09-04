@@ -1081,6 +1081,8 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::kms:GenerateDataKey*',
             'Action::kms:ReEncrypt*',
             'Resource::<PublisherLambdaB2749827.Arn>:*',
+            // Grant for DynamoDB GSIs produced by table grants; limited to this table's indexes
+            'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
           ],
         },
       ]
