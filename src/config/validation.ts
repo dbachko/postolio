@@ -5,7 +5,7 @@
 export interface RequiredEnvironmentVariables {
   DATABASE_URL: string;
   JWT_SECRET: string;
-  REDIS_URL: string;
+  // REDIS_URL or REDIS_HOST is required (handled by validation logic)
   // Add more as needed
 }
 
@@ -22,13 +22,25 @@ export interface OptionalEnvironmentVariables {
  * @throws Error if any required variables are missing
  */
 export function validateRequiredEnvironment(): void {
-  const required: (keyof RequiredEnvironmentVariables)[] = [
-    'DATABASE_URL',
-    'JWT_SECRET',
-    'REDIS_URL',
-  ];
+  const missing: string[] = [];
   
-  const missing = required.filter(key => !process.env[key]);
+  // Check DATABASE_URL or DB_HOST components
+  if (!process.env.DATABASE_URL) {
+    // Check if we can construct DATABASE_URL from components
+    if (!process.env.DB_HOST || !process.env.DB_USERNAME || !process.env.DB_PASSWORD) {
+      missing.push('DATABASE_URL (or DB_HOST + DB_USERNAME + DB_PASSWORD)');
+    }
+  }
+  
+  // Check JWT_SECRET
+  if (!process.env.JWT_SECRET) {
+    missing.push('JWT_SECRET');
+  }
+  
+  // Check Redis configuration - either REDIS_URL or REDIS_HOST is acceptable
+  if (!process.env.REDIS_URL && !process.env.REDIS_HOST) {
+    missing.push('REDIS_URL or REDIS_HOST');
+  }
   
   if (missing.length > 0) {
     throw new Error(
@@ -60,8 +72,15 @@ export function validateEnvironment(): void {
     console.warn('DATABASE_URL should start with postgresql://');
   }
   
-  if (process.env.REDIS_URL && !process.env.REDIS_URL.match(/^redis:\/\//)) {
-    console.warn('REDIS_URL should start with redis://');
+  // Redis can be configured via REDIS_URL or REDIS_HOST/REDIS_PORT
+  if (process.env.REDIS_URL) {
+    if (!process.env.REDIS_URL.match(/^redis:\/\//)) {
+      console.warn('REDIS_URL should start with redis://');
+    }
+    console.log(`Redis configured via REDIS_URL: ${process.env.REDIS_URL}`);
+  } else if (process.env.REDIS_HOST) {
+    const redisPort = process.env.REDIS_PORT || '6379';
+    console.log(`Redis configured via REDIS_HOST: redis://${process.env.REDIS_HOST}:${redisPort}`);
   }
   
   console.log('Environment validation completed successfully');
