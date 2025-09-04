@@ -421,6 +421,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       environment: {
         ...lambdaEnvironment,
         SCHEDULER_GROUP_NAME: `${prefix}-schedules`,
+        SCHEDULES_TABLE_SCHEDULE_INDEX: scheduleIdIndexName,
       },
       layers: [powertoolsLayer],
       tracing: lambda.Tracing.ACTIVE,
@@ -981,7 +982,6 @@ export class ContentSchedulerStack extends cdk.Stack {
           appliesTo: [
             'Resource::*',
             `Resource::arn:aws:logs:${this.region}:<AWS::AccountId>:log-group:/aws/lambda/postolio-scheduler-${environment}-*`,
-            'Resource::arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/postolio-scheduler-dev-*',
           ],
         },
       ]
@@ -1155,7 +1155,6 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::kms:ReEncrypt*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             `Resource::arn:aws:scheduler:${this.region}:<AWS::AccountId>:schedule/postolio-scheduler-${environment}-schedules/*`,
-            'Resource::arn:aws:scheduler:us-east-1:000000000000:schedule/postolio-scheduler-dev-schedules/*',
           ],
         },
       ]
@@ -1178,7 +1177,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::s3:List*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             'Resource::<VideoBucket6ED8E1AF.Arn>/*',
-            'Resource::arn:aws:execute-api:us-east-1:000000000000:*/*/GET/tokens/*',
+            `Resource::arn:aws:execute-api:${this.region}:<AWS::AccountId>:*/*/GET/tokens/*`,
           ],
         },
       ]

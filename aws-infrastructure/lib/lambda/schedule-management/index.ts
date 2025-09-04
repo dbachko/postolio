@@ -316,6 +316,7 @@ async function createSchedule(data: any): Promise<APIGatewayProxyResult> {
       await docClient.send(new PutCommand({
         TableName: process.env.SCHEDULES_TABLE!,
         Item: scheduleItem,
+        ConditionExpression: 'attribute_not_exists(pk)', // Ensure uniqueness on retry
       }));
       
       // Update scheduleId for EventBridge creation

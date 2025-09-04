@@ -4,7 +4,8 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { 
   DynamoDBDocumentClient, 
-  ScanCommand, 
+  ScanCommand,
+  QueryCommand, 
   UpdateCommand, 
   DeleteCommand,
   BatchWriteCommand 
@@ -22,11 +23,6 @@ const logger = new Logger({ serviceName: 'schedule-cleanup' });
 const tracer = new Tracer({ serviceName: 'schedule-cleanup' });
 const metrics = new Metrics({ namespace: 'ContentScheduler', serviceName: 'schedule-cleanup' });
 
-// Initialize AWS SDK clients
-const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
-
 interface CleanupResult {
   orphanedSchedules: number;
   orphanedEventBridgeRules: number;
@@ -37,6 +33,11 @@ interface CleanupResult {
 export const handler = async (event: EventBridgeEvent<'Scheduled Event', any>): Promise<CleanupResult> => {
   logger.info('Starting schedule cleanup job');
   
+  // Initialize AWS SDK clients inside handler for better Lambda performance
+  const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
+  const docClient = DynamoDBDocumentClient.from(dynamoClient);
+  const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
+  
   const result: CleanupResult = {
     orphanedSchedules: 0,
     orphanedEventBridgeRules: 0,
@@ -46,16 +47,16 @@ export const handler = async (event: EventBridgeEvent<'Scheduled Event', any>): 
 
   try {
     // 1. Find orphaned DynamoDB entries (failed status without brandId)
-    await cleanupOrphanedDynamoDBEntries(result);
+    await cleanupOrphanedDynamoDBEntries(result, docClient);
     
     // 2. Find EventBridge rules without matching DynamoDB entries
-    await cleanupOrphanedEventBridgeRules(result);
+    await cleanupOrphanedEventBridgeRules(result, docClient, schedulerClient);
     
     // 3. Mark old failed schedules for deletion
-    await cleanupOldFailedSchedules(result);
+    await cleanupOldFailedSchedules(result, docClient);
     
     // 4. Validate consistency of scheduled items
-    await validateScheduledItems(result);
+    await validateScheduledItems(result, docClient, schedulerClient);
     
     logger.info('Schedule cleanup completed', result);
     
@@ -75,7 +76,7 @@ export const handler = async (event: EventBridgeEvent<'Scheduled Event', any>): 
   return result;
 };
 
-async function cleanupOrphanedDynamoDBEntries(result: CleanupResult): Promise<void> {
+async function cleanupOrphanedDynamoDBEntries(result: CleanupResult, docClient: DynamoDBDocumentClient): Promise<void> {
   logger.info('Cleaning up orphaned DynamoDB entries');
   
   try {
@@ -128,7 +129,7 @@ async function cleanupOrphanedDynamoDBEntries(result: CleanupResult): Promise<vo
   }
 }
 
-async function cleanupOrphanedEventBridgeRules(result: CleanupResult): Promise<void> {
+async function cleanupOrphanedEventBridgeRules(result: CleanupResult, docClient: DynamoDBDocumentClient, schedulerClient: SchedulerClient): Promise<void> {
   logger.info('Cleaning up orphaned EventBridge rules');
   
   try {
@@ -150,10 +151,11 @@ async function cleanupOrphanedEventBridgeRules(result: CleanupResult): Promise<v
       // Extract schedule ID from the name (format: schedule-SCH_xxx)
       const scheduleId = schedule.Name.replace('schedule-', '');
       
-      // Check if corresponding DynamoDB entry exists
-      const dynamoResult = await docClient.send(new ScanCommand({
+      // Check if corresponding DynamoDB entry exists using Query on GSI
+      const dynamoResult = await docClient.send(new QueryCommand({
         TableName: process.env.SCHEDULES_TABLE!,
-        FilterExpression: 'scheduleId = :scheduleId',
+        IndexName: process.env.SCHEDULES_TABLE_SCHEDULE_INDEX || 'GSI-ScheduleId',
+        KeyConditionExpression: 'scheduleId = :scheduleId',
         ExpressionAttributeValues: {
           ':scheduleId': scheduleId,
         },
@@ -185,7 +187,7 @@ async function cleanupOrphanedEventBridgeRules(result: CleanupResult): Promise<v
   }
 }
 
-async function cleanupOldFailedSchedules(result: CleanupResult): Promise<void> {
+async function cleanupOldFailedSchedules(result: CleanupResult, docClient: DynamoDBDocumentClient): Promise<void> {
   logger.info('Cleaning up old failed schedules');
   
   try {
@@ -233,7 +235,7 @@ async function cleanupOldFailedSchedules(result: CleanupResult): Promise<void> {
   }
 }
 
-async function validateScheduledItems(result: CleanupResult): Promise<void> {
+async function validateScheduledItems(result: CleanupResult, docClient: DynamoDBDocumentClient, schedulerClient: SchedulerClient): Promise<void> {
   logger.info('Validating scheduled items consistency');
   
   try {
