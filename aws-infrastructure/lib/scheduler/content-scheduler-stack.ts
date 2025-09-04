@@ -397,6 +397,45 @@ export class ContentSchedulerStack extends cdk.Stack {
       // logRetention removed to avoid circular dependencies
     });
 
+    // Schedule Cleanup Lambda: runs daily to clean up orphaned schedules
+    const scheduleCleanupLambda = new lambdaNodejs.NodejsFunction(this, 'ScheduleCleanupLambda', {
+      functionName: `${prefix}-schedule-cleanup`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambda/schedule-cleanup/index.ts'),
+      bundling: {
+        minify: environment === 'prod',
+        sourceMap: environment !== 'prod',
+        externalModules: [
+          '@aws-lambda-powertools/logger',
+          '@aws-lambda-powertools/tracer',
+          '@aws-lambda-powertools/metrics',
+          '@aws-sdk/client-dynamodb',
+          '@aws-sdk/lib-dynamodb',
+          '@aws-sdk/client-scheduler',
+          '@aws-sdk/*',
+        ],
+      },
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      environment: {
+        ...lambdaEnvironment,
+        SCHEDULER_GROUP_NAME: `${prefix}-schedules`,
+      },
+      layers: [powertoolsLayer],
+      tracing: lambda.Tracing.ACTIVE,
+    });
+    
+    // Create EventBridge rule to run cleanup Lambda daily at 3 AM UTC
+    const cleanupRule = new events.Rule(this, 'ScheduleCleanupRule', {
+      ruleName: `${prefix}-cleanup-daily`,
+      description: 'Runs schedule cleanup Lambda daily to remove orphaned schedules',
+      schedule: events.Schedule.cron({ hour: '3', minute: '0' }), // Daily at 3:00 AM UTC
+    });
+    
+    // Add Lambda as target for the EventBridge rule
+    cleanupRule.addTarget(new targets.LambdaFunction(scheduleCleanupLambda));
+
     // Status Sync Lambda: updates main PostgreSQL based on EventBridge events
     const statusSyncLambda = new lambdaNodejs.NodejsFunction(this, 'StatusSyncLambda', {
       functionName: `${prefix}-status-sync`,
@@ -461,6 +500,7 @@ export class ContentSchedulerStack extends cdk.Stack {
     this.schedulesTable.grantReadWriteData(scheduleManagementLambda);
     this.schedulesTable.grantReadWriteData(publisherLambda);
     this.schedulesTable.grantReadWriteData(retryHandlerLambda); // Need to update schedule status on failure
+    this.schedulesTable.grantReadWriteData(scheduleCleanupLambda); // Need to cleanup orphaned entries
     retryQueueTable.grantReadWriteData(publisherLambda);
     retryQueueTable.grantReadWriteData(retryHandlerLambda);
     auditLogTable.grantWriteData(scheduleManagementLambda);
@@ -552,6 +592,24 @@ export class ContentSchedulerStack extends cdk.Stack {
           'iam:PassedToService': 'scheduler.amazonaws.com',
         },
       },
+    }));
+    
+    // Grant Schedule Cleanup Lambda permission to list and delete EventBridge schedules
+    scheduleCleanupLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'scheduler:ListSchedules',
+        'scheduler:GetSchedule',
+        'scheduler:DeleteSchedule',
+      ],
+      resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/${prefix}-schedules/*`],
+    }));
+    
+    // Grant Cleanup Lambda permission to list schedules in the group
+    scheduleCleanupLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['scheduler:ListSchedules'],
+      resources: ['*'], // ListSchedules requires wildcard when specifying GroupName
     }));
 
     // ==================== API Gateway CloudWatch Logging Role ====================
@@ -800,6 +858,49 @@ export class ContentSchedulerStack extends cdk.Stack {
       threshold: 10,
       evaluationPeriods: 1,
     }).addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+    
+    // Orphaned schedules alarm - triggers if too many orphaned schedules are found
+    new cloudwatch.Alarm(this, 'OrphanedSchedulesAlarm', {
+      alarmName: `${prefix}-orphaned-schedules`,
+      metric: new cloudwatch.Metric({
+        namespace: 'ContentScheduler',
+        metricName: 'OrphanedSchedulesCleaned',
+        statistic: 'Sum',
+        period: cdk.Duration.hours(24),
+      }),
+      threshold: 50, // Alert if more than 50 orphaned schedules are cleaned in a day
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+    
+    // Failed schedules alarm - triggers if many schedules are failing
+    new cloudwatch.Alarm(this, 'FailedSchedulesAlarm', {
+      alarmName: `${prefix}-failed-schedules`,
+      metric: new cloudwatch.Metric({
+        namespace: 'ContentScheduler',
+        metricName: 'FailedSchedulesCleaned',
+        statistic: 'Sum',
+        period: cdk.Duration.hours(24),
+      }),
+      threshold: 30, // Alert if more than 30 failed schedules are cleaned in a day
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+    
+    // Cleanup job failure alarm
+    new cloudwatch.Alarm(this, 'CleanupJobFailureAlarm', {
+      alarmName: `${prefix}-cleanup-job-failure`,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/Lambda',
+        metricName: 'Errors',
+        dimensionsMap: {
+          FunctionName: scheduleCleanupLambda.functionName,
+        },
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
 
     // ==================== CDK Nag Suppressions with Justifications ====================
     
@@ -1028,6 +1129,17 @@ export class ContentSchedulerStack extends cdk.Stack {
         },
       ]
     );
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/ScheduleCleanupLambda/ServiceRole/Resource`,
+      [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'Lambda functions require AWS managed BasicExecutionRole for CloudWatch Logs',
+          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+        },
+      ]
+    );
 
     // Suppress Lambda IAM wildcard permissions
     NagSuppressions.addResourceSuppressionsByPath(
@@ -1077,7 +1189,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       [
         {
           id: 'AwsSolutions-IAM5',
-          reason: 'Retry handler requires wildcard permissions for X-Ray, KMS, and Lambda invocation',
+          reason: 'Retry handler requires wildcard permissions for X-Ray, KMS, DynamoDB GSI access, and Lambda invocation',
           appliesTo: [
             'Resource::*',
             'Action::kms:GenerateDataKey*',
@@ -1085,6 +1197,23 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Resource::<PublisherLambdaB2749827.Arn>:*',
             // Grant for DynamoDB GSIs produced by table grants; limited to this table's indexes
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
+          ],
+        },
+      ]
+    );
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/ScheduleCleanupLambda/ServiceRole/DefaultPolicy/Resource`,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Schedule cleanup Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, KMS, and EventBridge Scheduler listing',
+          appliesTo: [
+            'Resource::*',
+            'Action::kms:GenerateDataKey*',
+            'Action::kms:ReEncrypt*',
+            'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
+            `Resource::arn:aws:scheduler:${this.region}:<AWS::AccountId>:schedule/postolio-scheduler-${environment}-schedules/*`,
           ],
         },
       ]

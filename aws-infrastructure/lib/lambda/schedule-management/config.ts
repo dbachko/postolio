@@ -16,6 +16,15 @@ export interface DynamoDBConfig {
       partitionKey: string;
       sortKey: string;
     };
+    content: {
+      name: string;
+      partitionKey: string;
+      sortKey: string;
+    };
+    scheduleId: {
+      name: string;
+      partitionKey: string;
+    };
   };
 }
 
@@ -35,6 +44,15 @@ export function getDynamoDBConfig(): DynamoDBConfig {
         name: process.env.SCHEDULES_TABLE_STATUS_INDEX || 'GSI2',
         partitionKey: 'status',
         sortKey: 'scheduledAt',
+      },
+      content: {
+        name: process.env.SCHEDULES_TABLE_CONTENT_INDEX || 'by-content-id',
+        partitionKey: 'contentId',
+        sortKey: 'scheduledAt',
+      },
+      scheduleId: {
+        name: process.env.SCHEDULES_TABLE_SCHEDULE_INDEX || 'GSI-ScheduleId',
+        partitionKey: 'scheduleId',
       },
     },
   };
