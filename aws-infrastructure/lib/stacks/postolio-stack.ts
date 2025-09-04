@@ -341,7 +341,8 @@ export class PostolioStack extends cdk.Stack {
     // ECS Cluster
     const cluster = new ecs.Cluster(this, 'PostolioCluster', {
       vpc,
-      containerInsights: true,  // Will be deprecated but still works
+      // Migrate to Container Insights v2 per CDK deprecation
+      containerInsightsV2: ecs.ContainerInsights.ENABLED,
     })
 
     // Task role with permissions to access secrets and S3
