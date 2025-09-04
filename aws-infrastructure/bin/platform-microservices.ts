@@ -63,11 +63,16 @@ new PlatformMicroservicesStack(app, `Postolio-Platform-${environment}`, {
   ...stackProps[environment as keyof typeof stackProps],
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail,
-  // Public OAuth Client IDs (from GitHub Secrets/Environment)
-  facebookAppId: process.env.FACEBOOK_APP_ID,
-  instagramAppId: process.env.INSTAGRAM_APP_ID,
-  linkedinClientId: process.env.LINKEDIN_CLIENT_ID,
-  tiktokClientKey: process.env.TIKTOK_CLIENT_KEY,
+  // Public OAuth Client IDs (from GitHub Environment Variables)
+  facebookAppId: app.node.tryGetContext('facebookAppId') || process.env.FACEBOOK_APP_ID,
+  instagramAppId: app.node.tryGetContext('instagramAppId') || process.env.INSTAGRAM_APP_ID,
+  linkedinClientId: app.node.tryGetContext('linkedinClientId') || process.env.LINKEDIN_CLIENT_ID,
+  tiktokClientKey: app.node.tryGetContext('tiktokClientKey') || process.env.TIKTOK_CLIENT_KEY,
+  // OAuth Secrets (from GitHub Secrets)
+  facebookAppSecret: app.node.tryGetContext('facebookAppSecret') || process.env.FACEBOOK_APP_SECRET,
+  instagramAppSecret: app.node.tryGetContext('instagramAppSecret') || process.env.INSTAGRAM_APP_SECRET,
+  linkedinClientSecret: app.node.tryGetContext('linkedinClientSecret') || process.env.LINKEDIN_CLIENT_SECRET,
+  tiktokClientSecret: app.node.tryGetContext('tiktokClientSecret') || process.env.TIKTOK_CLIENT_SECRET,
 })
 
 app.synth()

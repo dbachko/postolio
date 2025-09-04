@@ -14,7 +14,6 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway'
 import * as events from 'aws-cdk-lib/aws-events'
 import * as targets from 'aws-cdk-lib/aws-events-targets'
 import * as logs from 'aws-cdk-lib/aws-logs'
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
 import { Construct } from 'constructs'
 import * as path from 'path'
@@ -25,11 +24,16 @@ export interface PlatformMicroservicesStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod'
   domainName?: string
   alertEmail?: string
-  // Public OAuth Client IDs (passed from GitHub Secrets/Environment)
+  // Public OAuth Client IDs (passed from GitHub Environment Variables)
   facebookAppId?: string
   instagramAppId?: string
   linkedinClientId?: string
   tiktokClientKey?: string
+  // OAuth Secrets (passed from GitHub Secrets)
+  facebookAppSecret?: string
+  instagramAppSecret?: string
+  linkedinClientSecret?: string
+  tiktokClientSecret?: string
 }
 
 export class PlatformMicroservicesStack extends cdk.Stack {
@@ -51,24 +55,9 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Change to RETAIN for production
     })
     
-    // ==================== Secrets Manager ====================
-    // Only store actual secrets (not public client IDs)
-    const platformSecrets = new secretsmanager.Secret(this, 'PlatformSecrets', {
-      secretName: `postolio/${environment}/platform-credentials`,
-      description: 'Platform API secrets for social media integrations (secrets only, not public IDs)',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({
-          // Only store actual secrets (client secrets, not client IDs)
-          FACEBOOK_APP_SECRET: '',
-          INSTAGRAM_APP_SECRET: '',
-          LINKEDIN_CLIENT_SECRET: '',
-          TIKTOK_CLIENT_SECRET: '',
-        }),
-        generateStringKey: 'random-key',
-      },
-    })
-    
     // ==================== DynamoDB Tables ====================
+    // Note: Platform secrets are managed via GitHub Secrets and passed as environment variables
+    // No need for AWS Secrets Manager for these values
     
     // Token Table
     this.tokenTable = new dynamodb.Table(this, 'TokenTable', {
@@ -260,12 +249,17 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       RATE_LIMIT_TABLE_NAME: `postolio-rate-limits-${environment}`,
       AWS_ACCOUNT_ID: this.account,
       
-      // Public OAuth Client IDs (not sensitive - these are meant to be public)
-      // These come from GitHub Secrets/Environment Variables during deployment
+      // Public OAuth Client IDs (from GitHub Environment Variables)
       FACEBOOK_APP_ID: props.facebookAppId || process.env.FACEBOOK_APP_ID || '',
       INSTAGRAM_APP_ID: props.instagramAppId || process.env.INSTAGRAM_APP_ID || '',
       LINKEDIN_CLIENT_ID: props.linkedinClientId || process.env.LINKEDIN_CLIENT_ID || '',
       TIKTOK_CLIENT_KEY: props.tiktokClientKey || process.env.TIKTOK_CLIENT_KEY || '',
+      
+      // OAuth Secrets (from GitHub Secrets)
+      FACEBOOK_APP_SECRET: props.facebookAppSecret || process.env.FACEBOOK_APP_SECRET || '',
+      INSTAGRAM_APP_SECRET: props.instagramAppSecret || process.env.INSTAGRAM_APP_SECRET || '',
+      LINKEDIN_CLIENT_SECRET: props.linkedinClientSecret || process.env.LINKEDIN_CLIENT_SECRET || '',
+      TIKTOK_CLIENT_SECRET: props.tiktokClientSecret || process.env.TIKTOK_CLIENT_SECRET || '',
     }
     
     // ==================== Lambda Functions ====================
@@ -289,7 +283,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
     this.tokenTable.grantReadWriteData(tokenServiceLambda)
     rateLimitTable.grantReadWriteData(tokenServiceLambda)
     tokenEncryptionKey.grantEncryptDecrypt(tokenServiceLambda)
-    platformSecrets.grantRead(tokenServiceLambda)
+    // Platform secrets are passed as environment variables from GitHub Secrets
     
     // Token Rotation (scheduled)
     const tokenRotationLambda = new lambdaNode.NodejsFunction(this, 'TokenRotation', {
@@ -307,7 +301,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
     
     this.tokenTable.grantReadWriteData(tokenRotationLambda)
     tokenEncryptionKey.grantEncryptDecrypt(tokenRotationLambda)
-    platformSecrets.grantRead(tokenRotationLambda)
+    // Platform secrets are passed as environment variables from GitHub Secrets
     this.eventBus.grantPutEventsTo(tokenRotationLambda)
     
     // Schedule token rotation to run daily

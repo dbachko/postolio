@@ -31,11 +31,21 @@ export class SecretManager {
   }
 
   /**
-   * Get platform credentials from Secrets Manager
+   * Get platform credentials from environment variables
+   * Note: These are now passed as environment variables from GitHub Secrets
    */
   async getPlatformSecrets(): Promise<PlatformSecrets> {
-    const secretName = `postolio/${this.environment}/platform-credentials`
-    return this.getSecret<PlatformSecrets>(secretName)
+    // Platform secrets are now managed via GitHub Secrets and passed as environment variables
+    // This method returns them in the expected format for backward compatibility
+    return {
+      FACEBOOK_APP_SECRET: process.env.FACEBOOK_APP_SECRET,
+      INSTAGRAM_APP_SECRET: process.env.INSTAGRAM_APP_SECRET,
+      LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET,
+      TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET,
+      TWITTER_API_KEY: process.env.TWITTER_API_KEY,
+      TWITTER_API_SECRET: process.env.TWITTER_API_SECRET,
+      TWITTER_BEARER_TOKEN: process.env.TWITTER_BEARER_TOKEN,
+    }
   }
 
   /**
@@ -90,12 +100,11 @@ export class SecretManager {
 
   /**
    * Get a specific platform credential
-   * Note: Only retrieves secrets. Public IDs should be obtained from environment variables.
+   * Both IDs and secrets are now from environment variables (passed from GitHub Secrets)
    */
   async getPlatformCredential(platform: string, credentialType: 'id' | 'secret'): Promise<string | undefined> {
-    // Public IDs are now in environment variables, not secrets
+    // Public IDs from environment variables
     if (credentialType === 'id') {
-      // Return from environment variables
       if (platform === 'facebook') return process.env.FACEBOOK_APP_ID
       if (platform === 'instagram') return process.env.INSTAGRAM_APP_ID
       if (platform === 'linkedin') return process.env.LINKEDIN_CLIENT_ID
@@ -103,20 +112,13 @@ export class SecretManager {
       return undefined
     }
     
-    // Only secrets are stored in Secrets Manager
-    const secrets = await this.getPlatformSecrets()
+    // Secrets also from environment variables now (passed from GitHub Secrets)
+    if (platform === 'facebook') return process.env.FACEBOOK_APP_SECRET
+    if (platform === 'instagram') return process.env.INSTAGRAM_APP_SECRET
+    if (platform === 'linkedin') return process.env.LINKEDIN_CLIENT_SECRET
+    if (platform === 'tiktok') return process.env.TIKTOK_CLIENT_SECRET
     
-    // Special cases for different naming conventions
-    if (platform === 'linkedin') {
-      return secrets.LINKEDIN_CLIENT_SECRET
-    }
-    
-    if (platform === 'tiktok') {
-      return secrets.TIKTOK_CLIENT_SECRET
-    }
-    
-    const key = `${platform.toUpperCase()}_APP_SECRET` as keyof PlatformSecrets
-    return secrets[key]
+    return undefined
   }
 }
 
