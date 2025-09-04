@@ -128,6 +128,10 @@ jobs:
             --require-approval never \
             --context environment=${{ needs.set-environment.outputs.environment }} \
             --context alertEmail=${{ vars.ALERT_EMAIL || '' }} \
+            --context facebookAppId=${{ vars.FACEBOOK_APP_ID }} \
+            --context instagramAppId=${{ vars.INSTAGRAM_APP_ID }} \
+            --context linkedinClientId=${{ vars.LINKEDIN_CLIENT_ID }} \
+            --context tiktokClientKey=${{ vars.TIKTOK_CLIENT_KEY }} \
             --outputs-file token-service-outputs-${{ needs.set-environment.outputs.environment }}.json
           
           echo "✅ Token Service stack deployed successfully"

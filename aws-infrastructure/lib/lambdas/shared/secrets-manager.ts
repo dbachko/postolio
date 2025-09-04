@@ -9,13 +9,10 @@ import { Logger } from '@aws-lambda-powertools/logger'
 const logger = new Logger({ serviceName: 'secrets-manager' })
 
 export interface PlatformSecrets {
-  FACEBOOK_APP_ID?: string
+  // Only actual secrets (not public client IDs)
   FACEBOOK_APP_SECRET?: string
-  INSTAGRAM_APP_ID?: string
   INSTAGRAM_APP_SECRET?: string
-  LINKEDIN_CLIENT_ID?: string
   LINKEDIN_CLIENT_SECRET?: string
-  TIKTOK_CLIENT_KEY?: string
   TIKTOK_CLIENT_SECRET?: string
   TWITTER_API_KEY?: string
   TWITTER_API_SECRET?: string
@@ -93,22 +90,32 @@ export class SecretManager {
 
   /**
    * Get a specific platform credential
+   * Note: Only retrieves secrets. Public IDs should be obtained from environment variables.
    */
   async getPlatformCredential(platform: string, credentialType: 'id' | 'secret'): Promise<string | undefined> {
+    // Public IDs are now in environment variables, not secrets
+    if (credentialType === 'id') {
+      // Return from environment variables
+      if (platform === 'facebook') return process.env.FACEBOOK_APP_ID
+      if (platform === 'instagram') return process.env.INSTAGRAM_APP_ID
+      if (platform === 'linkedin') return process.env.LINKEDIN_CLIENT_ID
+      if (platform === 'tiktok') return process.env.TIKTOK_CLIENT_KEY
+      return undefined
+    }
+    
+    // Only secrets are stored in Secrets Manager
     const secrets = await this.getPlatformSecrets()
-    const key = `${platform.toUpperCase()}_${credentialType === 'id' ? 'APP_ID' : 'APP_SECRET'}` as keyof PlatformSecrets
     
     // Special cases for different naming conventions
     if (platform === 'linkedin') {
-      const linkedinKey = `LINKEDIN_CLIENT_${credentialType.toUpperCase()}` as keyof PlatformSecrets
-      return secrets[linkedinKey]
+      return secrets.LINKEDIN_CLIENT_SECRET
     }
     
     if (platform === 'tiktok') {
-      const tiktokKey = `TIKTOK_CLIENT_${credentialType === 'id' ? 'KEY' : 'SECRET'}` as keyof PlatformSecrets
-      return secrets[tiktokKey]
+      return secrets.TIKTOK_CLIENT_SECRET
     }
     
+    const key = `${platform.toUpperCase()}_APP_SECRET` as keyof PlatformSecrets
     return secrets[key]
   }
 }

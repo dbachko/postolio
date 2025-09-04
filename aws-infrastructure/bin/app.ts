@@ -55,6 +55,11 @@ const tokenServiceStack = new TokenServiceStack(app, `TokenService-${environment
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
   serviceDiscoveryNamespaceId: serviceDiscoveryStack.namespaceId,
+  // Public OAuth Client IDs (from GitHub environment variables via CDK context)
+  facebookAppId: app.node.tryGetContext('facebookAppId'),
+  instagramAppId: app.node.tryGetContext('instagramAppId'),
+  linkedinClientId: app.node.tryGetContext('linkedinClientId'),
+  tiktokClientKey: app.node.tryGetContext('tiktokClientKey'),
   description: `Token Service - OAuth token management - ${environment} environment`,
   tags: {
     Environment: environment,
