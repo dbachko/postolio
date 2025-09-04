@@ -2,6 +2,7 @@ import Bull from 'bull'
 import type Mail from 'nodemailer/lib/mailer'
 import { EmailService } from './email.js'
 import Redis from 'ioredis'
+import { getRedisUrl } from '../utils/redis-url.js'
 
 // Email job types
 export interface EmailJob {
@@ -30,22 +31,18 @@ export class EmailQueueService {
   private redis: Redis
 
   private constructor() {
+    // Use shared utility for Redis URL construction
+    const redisUrl = getRedisUrl()
+    
     // Create Redis connection for Bull
-    this.redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+    this.redis = new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
       family: 4, // Force IPv4
     })
 
-    // Create Bull queue - use Redis URL if available, otherwise connection object
-    const redisConfig = process.env.REDIS_URL 
-      ? process.env.REDIS_URL
-      : {
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '6379'),
-          ...(process.env.REDIS_PASSWORD && { password: process.env.REDIS_PASSWORD }),
-          db: parseInt(process.env.REDIS_DB || '0'),
-        }
+    // Create Bull queue - use same URL for consistency
+    const redisConfig = redisUrl
 
     this.emailQueue = new Bull('email processing', {
       redis: redisConfig,

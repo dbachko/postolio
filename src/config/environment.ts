@@ -11,6 +11,7 @@
  */
 
 import { SecretsManager } from '@aws-sdk/client-secrets-manager'
+import { getRedisUrl } from '../utils/redis-url.js'
 
 interface EnvironmentConfig {
   // Environment
@@ -126,7 +127,8 @@ class EnvironmentService {
       
       // Database (from AWS Secrets Manager or env vars)
       databaseUrl: process.env.DATABASE_URL || awsSecrets.databaseUrl || '',
-      redisUrl: process.env.REDIS_URL || awsSecrets.redisUrl || 'redis://localhost:6379',
+      // Redis URL using shared utility
+      redisUrl: getRedisUrl(awsSecrets.redisUrl || 'redis://localhost:6379'),
       
       // Authentication Secrets (from AWS Secrets Manager or env vars)
       jwtSecret: process.env.JWT_SECRET || awsSecrets.jwtSecret || 'dev-jwt-secret',

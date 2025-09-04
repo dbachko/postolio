@@ -9,13 +9,10 @@ import { Logger } from '@aws-lambda-powertools/logger'
 const logger = new Logger({ serviceName: 'secrets-manager' })
 
 export interface PlatformSecrets {
-  FACEBOOK_APP_ID?: string
+  // Only actual secrets (not public client IDs)
   FACEBOOK_APP_SECRET?: string
-  INSTAGRAM_APP_ID?: string
   INSTAGRAM_APP_SECRET?: string
-  LINKEDIN_CLIENT_ID?: string
   LINKEDIN_CLIENT_SECRET?: string
-  TIKTOK_CLIENT_KEY?: string
   TIKTOK_CLIENT_SECRET?: string
   TWITTER_API_KEY?: string
   TWITTER_API_SECRET?: string
@@ -34,11 +31,21 @@ export class SecretManager {
   }
 
   /**
-   * Get platform credentials from Secrets Manager
+   * Get platform credentials from environment variables
+   * Note: These are now passed as environment variables from GitHub Secrets
    */
   async getPlatformSecrets(): Promise<PlatformSecrets> {
-    const secretName = `postolio/${this.environment}/platform-credentials`
-    return this.getSecret<PlatformSecrets>(secretName)
+    // Platform secrets are now managed via GitHub Secrets and passed as environment variables
+    // This method returns them in the expected format for backward compatibility
+    return {
+      FACEBOOK_APP_SECRET: process.env.FACEBOOK_APP_SECRET,
+      INSTAGRAM_APP_SECRET: process.env.INSTAGRAM_APP_SECRET,
+      LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET,
+      TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET,
+      TWITTER_API_KEY: process.env.TWITTER_API_KEY,
+      TWITTER_API_SECRET: process.env.TWITTER_API_SECRET,
+      TWITTER_BEARER_TOKEN: process.env.TWITTER_BEARER_TOKEN,
+    }
   }
 
   /**
@@ -93,23 +100,25 @@ export class SecretManager {
 
   /**
    * Get a specific platform credential
+   * Both IDs and secrets are now from environment variables (passed from GitHub Secrets)
    */
   async getPlatformCredential(platform: string, credentialType: 'id' | 'secret'): Promise<string | undefined> {
-    const secrets = await this.getPlatformSecrets()
-    const key = `${platform.toUpperCase()}_${credentialType === 'id' ? 'APP_ID' : 'APP_SECRET'}` as keyof PlatformSecrets
-    
-    // Special cases for different naming conventions
-    if (platform === 'linkedin') {
-      const linkedinKey = `LINKEDIN_CLIENT_${credentialType.toUpperCase()}` as keyof PlatformSecrets
-      return secrets[linkedinKey]
+    // Public IDs from environment variables
+    if (credentialType === 'id') {
+      if (platform === 'facebook') return process.env.FACEBOOK_APP_ID
+      if (platform === 'instagram') return process.env.INSTAGRAM_APP_ID
+      if (platform === 'linkedin') return process.env.LINKEDIN_CLIENT_ID
+      if (platform === 'tiktok') return process.env.TIKTOK_CLIENT_KEY
+      return undefined
     }
     
-    if (platform === 'tiktok') {
-      const tiktokKey = `TIKTOK_CLIENT_${credentialType === 'id' ? 'KEY' : 'SECRET'}` as keyof PlatformSecrets
-      return secrets[tiktokKey]
-    }
+    // Secrets also from environment variables now (passed from GitHub Secrets)
+    if (platform === 'facebook') return process.env.FACEBOOK_APP_SECRET
+    if (platform === 'instagram') return process.env.INSTAGRAM_APP_SECRET
+    if (platform === 'linkedin') return process.env.LINKEDIN_CLIENT_SECRET
+    if (platform === 'tiktok') return process.env.TIKTOK_CLIENT_SECRET
     
-    return secrets[key]
+    return undefined
   }
 }
 

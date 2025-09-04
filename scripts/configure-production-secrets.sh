@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# Production Secrets Configuration Script
-# Sets up all required secrets in AWS Secrets Manager for production deployment
+# Simple Production Secrets Configuration Script
+# Manages the 3 key API secrets for Postolio
 
 set -e  # Exit on error
-set -u  # Exit on undefined variable
 
 # Configuration
 export AWS_REGION="${AWS_REGION:-us-east-1}"
@@ -17,429 +16,300 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
-}
-
-# Function to generate secure passwords
-generate_secure_password() {
-    local length=${1:-32}
-    openssl rand -base64 "$length" | tr -d "=+/" | cut -c1-"$length"
-}
+# Secret names
+OPENAI_SECRET="postolio/production/openai"
+GOOGLE_SECRET="postolio/production/google"
+FACEBOOK_SECRET="postolio/production/facebook"
 
 # Function to check prerequisites
 check_prerequisites() {
-    log_info "Checking prerequisites..."
+    echo -e "${BLUE}[INFO]${NC} Checking prerequisites..."
     
     # Check AWS CLI
     if ! command -v aws &> /dev/null; then
-        log_error "AWS CLI is not installed"
+        echo -e "${RED}[ERROR]${NC} AWS CLI is not installed"
         exit 1
     fi
     
     # Check AWS credentials
     if ! aws sts get-caller-identity &> /dev/null; then
-        log_error "AWS credentials are not configured"
+        echo -e "${RED}[ERROR]${NC} AWS credentials are not configured"
         exit 1
     fi
     
     # Check jq for JSON processing
     if ! command -v jq &> /dev/null; then
-        log_error "jq is not installed. Install with: brew install jq"
+        echo -e "${RED}[ERROR]${NC} jq is not installed. Install with: brew install jq"
         exit 1
     fi
     
-    log_success "Prerequisites met"
+    echo -e "${GREEN}[SUCCESS]${NC} Prerequisites met"
 }
 
-# Function to create or update secret
-create_or_update_secret() {
-    local secret_name=$1
-    local secret_value=$2
-    local description=$3
+# Function to list all secrets
+list_secrets() {
+    echo -e "\n${BLUE}=== Current Secrets ===${NC}"
     
-    if aws secretsmanager describe-secret --secret-id "${secret_name}" &> /dev/null; then
-        log_info "Updating existing secret: ${secret_name}"
-        aws secretsmanager update-secret \
-            --secret-id "${secret_name}" \
-            --secret-string "${secret_value}" \
-            --description "${description}" \
-            --output json > /dev/null
+    # OpenAI
+    echo -e "\n${YELLOW}OpenAI API:${NC}"
+    if aws secretsmanager describe-secret --secret-id "${OPENAI_SECRET}" &> /dev/null; then
+        # Fetch the secret value
+        secret_json=$(aws secretsmanager get-secret-value \
+            --secret-id "${OPENAI_SECRET}" \
+            --query SecretString \
+            --output text 2>/dev/null)
+        
+        # Extract the API key from JSON
+        if [ -n "$secret_json" ]; then
+            value=$(echo "$secret_json" | jq -r '.apiKey' 2>/dev/null)
+        else
+            value=""
+        fi
+        
+        # Check if value exists and is not null/empty
+        if [ -n "$value" ] && [ "$value" != "null" ]; then
+            echo "  Status: ✓ Configured"
+            echo "  Value: ${value:0:10}..." # Show first 10 chars only
+        else
+            echo "  Status: ✗ Not configured"
+        fi
     else
-        log_info "Creating new secret: ${secret_name}"
-        aws secretsmanager create-secret \
-            --name "${secret_name}" \
-            --description "${description}" \
-            --secret-string "${secret_value}" \
-            --tags "Key=Environment,Value=${ENVIRONMENT}" "Key=Application,Value=Postolio" \
-            --output json > /dev/null
+        echo "  Status: ✗ Secret doesn't exist"
     fi
     
-    log_success "Secret configured: ${secret_name}"
+    # Google
+    echo -e "\n${YELLOW}Google Client Secret:${NC}"
+    if aws secretsmanager describe-secret --secret-id "${GOOGLE_SECRET}" &> /dev/null; then
+        # Fetch the secret value
+        secret_json=$(aws secretsmanager get-secret-value \
+            --secret-id "${GOOGLE_SECRET}" \
+            --query SecretString \
+            --output text 2>/dev/null)
+        
+        # Extract the client secret from JSON
+        if [ -n "$secret_json" ]; then
+            value=$(echo "$secret_json" | jq -r '.clientSecret' 2>/dev/null)
+        else
+            value=""
+        fi
+        
+        # Check if value exists and is not null/empty
+        if [ -n "$value" ] && [ "$value" != "null" ]; then
+            echo "  Status: ✓ Configured"
+            echo "  Value: ${value:0:10}..." # Show first 10 chars only
+        else
+            echo "  Status: ✗ Not configured"
+        fi
+    else
+        echo "  Status: ✗ Secret doesn't exist"
+    fi
+    
+    # Facebook
+    echo -e "\n${YELLOW}Facebook App Secret:${NC}"
+    if aws secretsmanager describe-secret --secret-id "${FACEBOOK_SECRET}" &> /dev/null; then
+        # Fetch the secret value
+        secret_json=$(aws secretsmanager get-secret-value \
+            --secret-id "${FACEBOOK_SECRET}" \
+            --query SecretString \
+            --output text 2>/dev/null)
+        
+        # Extract the app secret from JSON
+        if [ -n "$secret_json" ]; then
+            value=$(echo "$secret_json" | jq -r '.appSecret' 2>/dev/null)
+        else
+            value=""
+        fi
+        
+        # Check if value exists and is not null/empty
+        if [ -n "$value" ] && [ "$value" != "null" ]; then
+            echo "  Status: ✓ Configured"
+            echo "  Value: ${value:0:10}..." # Show first 10 chars only
+        else
+            echo "  Status: ✗ Not configured"
+        fi
+    else
+        echo "  Status: ✗ Secret doesn't exist"
+    fi
+    
+    echo ""
 }
 
-# Function to configure database secrets
-configure_database_secrets() {
-    log_info "Configuring database secrets..."
-    
-    # Production RDS configuration
-    local db_password=$(generate_secure_password 32)
-    local db_secret='{
-        "engine": "postgres",
-        "host": "postolio-prod.cluster-xxxxx.us-east-1.rds.amazonaws.com",
-        "port": 5432,
-        "database": "postolio",
-        "username": "postolio_admin",
-        "password": "'${db_password}'",
-        "ssl": true,
-        "connectionUrl": "postgresql://postolio_admin:password@postolio-prod.cluster-xxxxx.us-east-1.rds.amazonaws.com:5432/postolio?sslmode=require"
-    }'
-    
-    create_or_update_secret \
-        "postolio/production/database" \
-        "${db_secret}" \
-        "Production database connection credentials"
-    
-    # Redis configuration
-    local redis_password=$(generate_secure_password 32)
-    local redis_secret='{
-        "host": "postolio-prod-redis.xxxxx.cache.amazonaws.com",
-        "port": 6379,
-        "password": "'${redis_password}'",
-        "tls": true,
-        "connectionUrl": "rediss://:password@postolio-prod-redis.xxxxx.cache.amazonaws.com:6379"
-    }'
-    
-    create_or_update_secret \
-        "postolio/production/redis" \
-        "${redis_secret}" \
-        "Production Redis connection credentials"
-}
-
-# Function to configure authentication secrets
-configure_auth_secrets() {
-    log_info "Configuring authentication secrets..."
-    
-    # JWT configuration
-    local jwt_secret='{
-        "secret": "'$(openssl rand -base64 64)'",
-        "expiresIn": "7d",
-        "refreshExpiresIn": "30d",
-        "algorithm": "HS256"
-    }'
-    
-    create_or_update_secret \
-        "postolio/production/jwt" \
-        "${jwt_secret}" \
-        "Production JWT signing configuration"
-}
-
-# Function to configure API secrets
-configure_api_secrets() {
-    log_info "Configuring API secrets..."
-    
-    # OpenAI API configuration
-    echo -n "Enter OpenAI API Key (or press Enter to skip): "
+# Function to update OpenAI API key
+update_openai() {
+    echo -e "\n${YELLOW}Update OpenAI API Key${NC}"
+    echo -n "Enter OpenAI API Key (starts with sk-): "
     read -s openai_key
     echo  # New line after hidden input
-    if [ -n "${openai_key}" ]; then
-        local openai_secret='{
-            "apiKey": "'${openai_key}'",
-            "organization": "",
-            "model": "gpt-4-turbo-preview",
-            "imageModel": "dall-e-3"
-        }'
-        
-        create_or_update_secret \
-            "postolio/production/openai" \
-            "${openai_secret}" \
-            "Production OpenAI API configuration"
-    else
-        log_warning "Skipping OpenAI configuration - update manually later"
-    fi
     
-    # Facebook/Instagram API configuration
-    read -p "Enter Facebook App ID (or press Enter to skip): " fb_app_id
-    echo -n "Enter Facebook App Secret (or press Enter to skip): "
-    read -s fb_app_secret
-    echo  # New line after hidden input
-    
-    if [ -n "${fb_app_id}" ] && [ -n "${fb_app_secret}" ]; then
-        local facebook_secret='{
-            "appId": "'${fb_app_id}'",
-            "appSecret": "'${fb_app_secret}'",
-            "clientToken": "",
-            "redirectUri": "https://postolio.example/auth/instagram/callback"
-        }'
-        
-        create_or_update_secret \
-            "postolio/production/facebook" \
-            "${facebook_secret}" \
-            "Production Facebook/Instagram API configuration"
-    else
-        log_warning "Skipping Facebook configuration - update manually later"
-    fi
-}
-
-# Function to configure scheduler secrets
-configure_scheduler_secrets() {
-    log_info "Configuring scheduler secrets..."
-    
-    # Generate API key for scheduler service
-    local scheduler_api_key=$(openssl rand -base64 32)
-    
-    local scheduler_secret='{
-        "apiKey": "'${scheduler_api_key}'",
-        "apiUrl": "https://postolio.example",
-        "maxRetries": 3,
-        "retryDelay": 1000,
-        "timeout": 30000
-    }'
-    
-    create_or_update_secret \
-        "postolio/production/scheduler" \
-        "${scheduler_secret}" \
-        "Production content scheduler configuration"
-    
-    # Store the API key separately for Lambda functions
-    create_or_update_secret \
-        "postolio/production/scheduler-api-key" \
-        "${scheduler_api_key}" \
-        "Content scheduler API key"
-}
-
-# Function to configure monitoring secrets
-configure_monitoring_secrets() {
-    log_info "Configuring monitoring secrets..."
-    
-    # DataDog integration (optional)
-    local monitoring_secret='{
-        "datadogApiKey": "",
-        "datadogAppKey": "",
-        "sentryDsn": "",
-        "slackWebhook": "",
-        "pagerdutyKey": ""
-    }'
-    
-    create_or_update_secret \
-        "postolio/production/monitoring" \
-        "${monitoring_secret}" \
-        "Production monitoring integrations"
-}
-
-# Function to configure platform credentials
-configure_platform_secrets() {
-    log_info "Configuring platform-specific secrets..."
-    
-    # TikTok API (future)
-    local tiktok_secret='{
-        "clientKey": "",
-        "clientSecret": "",
-        "redirectUri": "https://postolio.example/auth/tiktok/callback"
-    }'
-    
-    create_or_update_secret \
-        "postolio/production/tiktok" \
-        "${tiktok_secret}" \
-        "Production TikTok API configuration"
-    
-    # Twitter/X API (future)
-    local twitter_secret='{
-        "apiKey": "",
-        "apiSecret": "",
-        "bearerToken": "",
-        "redirectUri": "https://postolio.example/auth/twitter/callback"
-    }'
-    
-    create_or_update_secret \
-        "postolio/production/twitter" \
-        "${twitter_secret}" \
-        "Production Twitter/X API configuration"
-    
-    # LinkedIn API (future)
-    local linkedin_secret='{
-        "clientId": "",
-        "clientSecret": "",
-        "redirectUri": "https://postolio.example/auth/linkedin/callback"
-    }'
-    
-    create_or_update_secret \
-        "postolio/production/linkedin" \
-        "${linkedin_secret}" \
-        "Production LinkedIn API configuration"
-}
-
-# Function to configure encryption keys
-configure_encryption_keys() {
-    log_info "Configuring encryption keys..."
-    
-    # Data encryption key
-    local encryption_secret='{
-        "dataKey": "'$(openssl rand -base64 32)'",
-        "algorithm": "aes-256-gcm",
-        "rotationSchedule": "90d"
-    }'
-    
-    create_or_update_secret \
-        "postolio/production/encryption" \
-        "${encryption_secret}" \
-        "Production data encryption configuration"
-}
-
-# Function to grant permissions to services
-grant_permissions() {
-    log_info "Granting permissions to AWS services..."
-    
-    # Get account ID
-    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-    
-    # Create resource policy for Lambda access
-    local policy='{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "lambda.amazonaws.com"
-                },
-                "Action": "secretsmanager:GetSecretValue",
-                "Resource": "arn:aws:secretsmanager:'${AWS_REGION}':'${ACCOUNT_ID}':secret:postolio/production/*"
-            },
-            {
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "ecs-tasks.amazonaws.com"
-                },
-                "Action": "secretsmanager:GetSecretValue",
-                "Resource": "arn:aws:secretsmanager:'${AWS_REGION}':'${ACCOUNT_ID}':secret:postolio/production/*"
-            }
-        ]
-    }'
-    
-    # Apply resource policy to each secret
-    local secrets=$(aws secretsmanager list-secrets \
-        --filters Key=name,Values=postolio/production/ \
-        --query 'SecretList[].Name' \
-        --output text)
-    
-    for secret in $secrets; do
-        log_info "Granting access to: ${secret}"
-        aws secretsmanager put-resource-policy \
-            --secret-id "${secret}" \
-            --resource-policy "${policy}" \
-            --output json > /dev/null || true
-    done
-    
-    log_success "Permissions granted"
-}
-
-# Function to validate secrets
-validate_secrets() {
-    log_info "Validating secrets configuration..."
-    
-    local required_secrets=(
-        "postolio/production/database"
-        "postolio/production/jwt"
-        "postolio/production/scheduler"
-    )
-    
-    local missing_secrets=()
-    
-    for secret in "${required_secrets[@]}"; do
-        if ! aws secretsmanager describe-secret --secret-id "${secret}" &> /dev/null; then
-            missing_secrets+=("${secret}")
-        else
-            log_success "✓ ${secret}"
-        fi
-    done
-    
-    if [ ${#missing_secrets[@]} -gt 0 ]; then
-        log_error "Missing required secrets:"
-        for secret in "${missing_secrets[@]}"; do
-            echo "  - ${secret}"
-        done
+    if [ -z "$openai_key" ]; then
+        echo -e "${RED}[ERROR]${NC} API key cannot be empty"
         return 1
     fi
     
-    log_success "All required secrets configured"
+    # Create JSON with the API key
+    local secret_json='{
+        "apiKey": "'${openai_key}'",
+        "model": "gpt-4-turbo-preview",
+        "imageModel": "dall-e-3"
+    }'
+    
+    # Check if secret exists
+    if aws secretsmanager describe-secret --secret-id "${OPENAI_SECRET}" &> /dev/null; then
+        # Update existing secret
+        aws secretsmanager update-secret \
+            --secret-id "${OPENAI_SECRET}" \
+            --secret-string "${secret_json}" \
+            --output json > /dev/null
+        echo -e "${GREEN}[SUCCESS]${NC} OpenAI API key updated"
+    else
+        # Create new secret
+        aws secretsmanager create-secret \
+            --name "${OPENAI_SECRET}" \
+            --description "OpenAI API configuration" \
+            --secret-string "${secret_json}" \
+            --tags "Key=Environment,Value=${ENVIRONMENT}" "Key=Application,Value=Postolio" \
+            --output json > /dev/null
+        echo -e "${GREEN}[SUCCESS]${NC} OpenAI API key created"
+    fi
 }
 
-# Function to export secrets for backup
-export_secrets_list() {
-    log_info "Exporting secrets list..."
+# Function to update Google Client Secret
+update_google() {
+    echo -e "\n${YELLOW}Update Google Client Secret${NC}"
+    echo -n "Enter Google Client Secret: "
+    read -s google_secret
+    echo  # New line after hidden input
     
-    local export_file="production-secrets-$(date +%Y%m%d-%H%M%S).json"
+    if [ -z "$google_secret" ]; then
+        echo -e "${RED}[ERROR]${NC} Client secret cannot be empty"
+        return 1
+    fi
     
-    aws secretsmanager list-secrets \
-        --filters Key=name,Values=postolio/production/ \
-        --query 'SecretList[].{Name:Name,Description:Description,LastChangedDate:LastChangedDate}' \
-        --output json > "${export_file}"
+    # Create JSON with the client secret
+    local secret_json='{
+        "clientId": "",
+        "clientSecret": "'${google_secret}'",
+        "redirectUri": "https://postolio.example/auth/google/callback"
+    }'
     
-    log_success "Secrets list exported to: ${export_file}"
-    log_warning "Note: This file contains secret names only, not values"
+    # Check if secret exists
+    if aws secretsmanager describe-secret --secret-id "${GOOGLE_SECRET}" &> /dev/null; then
+        # Update existing secret
+        aws secretsmanager update-secret \
+            --secret-id "${GOOGLE_SECRET}" \
+            --secret-string "${secret_json}" \
+            --output json > /dev/null
+        echo -e "${GREEN}[SUCCESS]${NC} Google client secret updated"
+    else
+        # Create new secret
+        aws secretsmanager create-secret \
+            --name "${GOOGLE_SECRET}" \
+            --description "Google OAuth configuration" \
+            --secret-string "${secret_json}" \
+            --tags "Key=Environment,Value=${ENVIRONMENT}" "Key=Application,Value=Postolio" \
+            --output json > /dev/null
+        echo -e "${GREEN}[SUCCESS]${NC} Google client secret created"
+    fi
+}
+
+# Function to update Facebook App Secret
+update_facebook() {
+    echo -e "\n${YELLOW}Update Facebook App Secret${NC}"
+    echo -n "Enter Facebook App Secret: "
+    read -s fb_secret
+    echo  # New line after hidden input
+    
+    if [ -z "$fb_secret" ]; then
+        echo -e "${RED}[ERROR]${NC} App secret cannot be empty"
+        return 1
+    fi
+    
+    # Create JSON with the app secret
+    local secret_json='{
+        "appId": "",
+        "appSecret": "'${fb_secret}'",
+        "redirectUri": "https://postolio.example/auth/instagram/callback"
+    }'
+    
+    # Check if secret exists
+    if aws secretsmanager describe-secret --secret-id "${FACEBOOK_SECRET}" &> /dev/null; then
+        # Update existing secret
+        aws secretsmanager update-secret \
+            --secret-id "${FACEBOOK_SECRET}" \
+            --secret-string "${secret_json}" \
+            --output json > /dev/null
+        echo -e "${GREEN}[SUCCESS]${NC} Facebook app secret updated"
+    else
+        # Create new secret
+        aws secretsmanager create-secret \
+            --name "${FACEBOOK_SECRET}" \
+            --description "Facebook/Instagram API configuration" \
+            --secret-string "${secret_json}" \
+            --tags "Key=Environment,Value=${ENVIRONMENT}" "Key=Application,Value=Postolio" \
+            --output json > /dev/null
+        echo -e "${GREEN}[SUCCESS]${NC} Facebook app secret created"
+    fi
+}
+
+# Function to show menu
+show_menu() {
+    echo -e "\n${BLUE}=== Production Secrets Manager ===${NC}"
+    echo "1) List all secrets"
+    echo "2) Update OpenAI API Key"
+    echo "3) Update Google Client Secret"
+    echo "4) Update Facebook App Secret"
+    echo "5) Update all secrets"
+    echo "q) Quit"
+    echo ""
+    read -p "Select option: " choice
+    
+    case $choice in
+        1)
+            list_secrets
+            ;;
+        2)
+            update_openai
+            ;;
+        3)
+            update_google
+            ;;
+        4)
+            update_facebook
+            ;;
+        5)
+            update_openai
+            update_google
+            update_facebook
+            echo -e "\n${GREEN}[SUCCESS]${NC} All secrets updated"
+            ;;
+        q|Q)
+            echo "Exiting..."
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid option${NC}"
+            ;;
+    esac
 }
 
 # Main execution
 main() {
-    log_info "=========================================="
-    log_info "Production Secrets Configuration"
-    log_info "Environment: ${ENVIRONMENT}"
-    log_info "Region: ${AWS_REGION}"
-    log_info "=========================================="
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}   Production Secrets Configuration    ${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "Environment: ${YELLOW}${ENVIRONMENT}${NC}"
+    echo -e "Region: ${YELLOW}${AWS_REGION}${NC}"
     
     # Check prerequisites
     check_prerequisites
     
-    # Confirm production configuration
-    echo -e "${YELLOW}⚠️  WARNING: Configuring PRODUCTION secrets${NC}"
-    read -p "Continue? (yes/no): " -r
-    if [[ ! $REPLY =~ ^[Yy]es$ ]]; then
-        log_info "Configuration cancelled"
-        exit 0
-    fi
-    
-    # Configure all secret categories
-    configure_database_secrets
-    configure_auth_secrets
-    configure_api_secrets
-    configure_scheduler_secrets
-    configure_monitoring_secrets
-    configure_platform_secrets
-    configure_encryption_keys
-    
-    # Grant permissions
-    grant_permissions
-    
-    # Validate configuration
-    validate_secrets
-    
-    # Export for documentation
-    export_secrets_list
-    
-    log_success "=========================================="
-    log_success "Production secrets configuration complete!"
-    log_success "=========================================="
-    
-    echo ""
-    log_info "Next steps:"
-    echo "1. Update placeholder values in AWS Secrets Manager console"
-    echo "2. Test secret access from Lambda functions"
-    echo "3. Enable secret rotation where applicable"
-    echo "4. Document secret values in secure password manager"
+    # Interactive menu loop
+    while true; do
+        show_menu
+    done
 }
 
-# Run main
-main "$@"
+# Run if executed directly (not sourced)
+if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
+    main "$@"
+fi

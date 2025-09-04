@@ -19,8 +19,9 @@ import * as path from 'path';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { ServiceDiscoveryManager, registerLambdaService, getServiceDiscoveryEnvVars } from '../utils/service-discovery-infrastructure';
 import { NagSuppressions } from 'cdk-nag';
+import { OAuthConfig } from '../utils/oauth-config';
 
-export interface TokenServiceStackProps extends cdk.StackProps {
+export interface TokenServiceStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod';
   alertEmail?: string;
   serviceDiscoveryNamespaceId?: string; // Use shared namespace
@@ -95,15 +96,13 @@ export class TokenServiceStack extends cdk.Stack {
         TOKENS_TABLE: tokensTable.tableName,
         KMS_KEY_ID: encryptionKey.keyId,
         NODE_ENV: environment,
-        // Platform OAuth credentials (should be in Secrets Manager in production)
-        FACEBOOK_APP_ID: process.env.FACEBOOK_APP_ID || '',
-        FACEBOOK_APP_SECRET: process.env.FACEBOOK_APP_SECRET || '',
-        LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID || '',
-        LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET || '',
-        TIKTOK_CLIENT_KEY: process.env.TIKTOK_CLIENT_KEY || '',
-        TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
-        TWITTER_CLIENT_ID: process.env.TWITTER_CLIENT_ID || '',
-        TWITTER_CLIENT_SECRET: process.env.TWITTER_CLIENT_SECRET || '',
+        // Public OAuth IDs from props (passed via GitHub environment variables)
+        FACEBOOK_APP_ID: props.facebookAppId || process.env.FACEBOOK_APP_ID || '',
+        INSTAGRAM_APP_ID: props.instagramAppId || process.env.INSTAGRAM_APP_ID || '',
+        LINKEDIN_CLIENT_ID: props.linkedinClientId || process.env.LINKEDIN_CLIENT_ID || '',
+        TIKTOK_CLIENT_KEY: props.tiktokClientKey || process.env.TIKTOK_CLIENT_KEY || '',
+        // OAuth secrets will be retrieved from Secrets Manager at runtime
+        // Not passed as environment variables for security
         ...getServiceDiscoveryEnvVars(serviceDiscovery.getClientConfig()),
       },
       logRetention: logs.RetentionDays.ONE_MONTH,

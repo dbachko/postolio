@@ -2,6 +2,7 @@
 import 'source-map-support/register'
 import * as cdk from 'aws-cdk-lib'
 import { PlatformMicroservicesStack } from '../lib/stacks/platform-microservices-stack'
+import { getOAuthConfig } from '../lib/utils/oauth-config'
 
 const app = new cdk.App()
 
@@ -58,11 +59,15 @@ const stackProps = {
   },
 }
 
+// Get OAuth configuration from shared utility
+const oauthConfig = getOAuthConfig(app)
+
 // Create the stack
 new PlatformMicroservicesStack(app, `Postolio-Platform-${environment}`, {
   ...stackProps[environment as keyof typeof stackProps],
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail,
+  ...oauthConfig, // Spread OAuth configuration
 })
 
 app.synth()

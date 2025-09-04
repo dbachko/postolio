@@ -14,14 +14,14 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway'
 import * as events from 'aws-cdk-lib/aws-events'
 import * as targets from 'aws-cdk-lib/aws-events-targets'
 import * as logs from 'aws-cdk-lib/aws-logs'
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
 import { Construct } from 'constructs'
 import * as path from 'path'
 import { CloudWatchDashboards } from '../constructs/cloudwatch-dashboards'
 import { SecuredApiGateway } from '../constructs/secured-api-gateway'
+import { getOAuthEnvironmentVariables, type OAuthConfig } from '../utils/oauth-config'
 
-export interface PlatformMicroservicesStackProps extends cdk.StackProps {
+export interface PlatformMicroservicesStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod'
   domainName?: string
   alertEmail?: string
@@ -46,26 +46,9 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Change to RETAIN for production
     })
     
-    // ==================== Secrets Manager ====================
-    const platformSecrets = new secretsmanager.Secret(this, 'PlatformSecrets', {
-      secretName: `postolio/${environment}/platform-credentials`,
-      description: 'Platform API credentials for social media integrations',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({
-          FACEBOOK_APP_ID: '',
-          FACEBOOK_APP_SECRET: '',
-          INSTAGRAM_APP_ID: '',
-          INSTAGRAM_APP_SECRET: '',
-          LINKEDIN_CLIENT_ID: '',
-          LINKEDIN_CLIENT_SECRET: '',
-          TIKTOK_CLIENT_KEY: '',
-          TIKTOK_CLIENT_SECRET: '',
-        }),
-        generateStringKey: 'random-key',
-      },
-    })
-    
     // ==================== DynamoDB Tables ====================
+    // Note: Platform secrets are managed via GitHub Secrets and passed as environment variables
+    // No need for AWS Secrets Manager for these values
     
     // Token Table
     this.tokenTable = new dynamodb.Table(this, 'TokenTable', {
@@ -256,6 +239,9 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       KMS_KEY_ID: tokenEncryptionKey.keyId,
       RATE_LIMIT_TABLE_NAME: `postolio-rate-limits-${environment}`,
       AWS_ACCOUNT_ID: this.account,
+      
+      // OAuth credentials from shared utility
+      ...getOAuthEnvironmentVariables(props),
     }
     
     // ==================== Lambda Functions ====================
@@ -279,7 +265,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
     this.tokenTable.grantReadWriteData(tokenServiceLambda)
     rateLimitTable.grantReadWriteData(tokenServiceLambda)
     tokenEncryptionKey.grantEncryptDecrypt(tokenServiceLambda)
-    platformSecrets.grantRead(tokenServiceLambda)
+    // Platform secrets are passed as environment variables from GitHub Secrets
     
     // Token Rotation (scheduled)
     const tokenRotationLambda = new lambdaNode.NodejsFunction(this, 'TokenRotation', {
@@ -297,7 +283,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
     
     this.tokenTable.grantReadWriteData(tokenRotationLambda)
     tokenEncryptionKey.grantEncryptDecrypt(tokenRotationLambda)
-    platformSecrets.grantRead(tokenRotationLambda)
+    // Platform secrets are passed as environment variables from GitHub Secrets
     this.eventBus.grantPutEventsTo(tokenRotationLambda)
     
     // Schedule token rotation to run daily
