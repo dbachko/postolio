@@ -27,7 +27,7 @@ export class ServiceDiscovery {
     this.namespaceId = process.env.CLOUDMAP_NAMESPACE_ID || '';
     this.namespaceName = process.env.CLOUDMAP_NAMESPACE_NAME || 'postolio-dev.local';
 
-    if (!this.namespaceId && process.env.SERVICE_DISCOVERY_ENABLED === 'true') {
+    if (!this.namespaceId) {
       console.warn('Cloud Map namespace ID not configured. Service discovery disabled.');
     }
   }

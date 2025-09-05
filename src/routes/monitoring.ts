@@ -205,7 +205,7 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
         overall: serviceHealth.overall,
         services: serviceHealth,
         environment: {
-          serviceDiscoveryEnabled: process.env.SERVICE_DISCOVERY_ENABLED === 'true',
+          cloudMapConfigured: !!(process.env.CLOUDMAP_NAMESPACE_ID && process.env.CLOUDMAP_NAMESPACE_NAME),
           cloudMapNamespaceId: process.env.CLOUDMAP_NAMESPACE_ID || 'not configured',
           cloudMapNamespaceName: process.env.CLOUDMAP_NAMESPACE_NAME || 'not configured',
         },

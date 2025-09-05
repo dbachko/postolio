@@ -317,8 +317,9 @@ export class ContentSchedulerClient {
   static async create(config: Partial<ContentSchedulerConfig> = {}): Promise<ContentSchedulerClient> {
     const finalConfig = { ...config };
     
-    // Use service discovery if enabled and no baseURL provided
-    if (process.env.SERVICE_DISCOVERY_ENABLED === 'true' && !finalConfig.baseURL) {
+    // Use service discovery if Cloud Map is configured and no baseURL provided
+    const hasCloudMap = !!(process.env.CLOUDMAP_NAMESPACE_ID && process.env.CLOUDMAP_NAMESPACE_NAME);
+    if (hasCloudMap && !finalConfig.baseURL) {
       try {
         const discovery = getServiceDiscovery();
         const schedulerUrl = await discovery.getServiceUrl(SERVICES.CONTENT_SCHEDULER);

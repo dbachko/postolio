@@ -112,12 +112,12 @@ export class TokenServiceClient {
   }
 
   private async initializeWithServiceDiscovery(): Promise<void> {
-    // Use service discovery if enabled AND either:
+    // Use service discovery if Cloud Map is configured AND either:
     // 1. No URL was explicitly provided in config, OR
     // 2. The URL is the default localhost (which won't work in production)
     const isDefaultUrl = this.baseURL === 'http://localhost:4001' || this.baseURL.includes('localhost');
-    const shouldUseDiscovery = process.env.SERVICE_DISCOVERY_ENABLED === 'true' && 
-                               (!this.config.apiUrl || isDefaultUrl);
+    const hasCloudMap = !!(process.env.CLOUDMAP_NAMESPACE_ID && process.env.CLOUDMAP_NAMESPACE_NAME);
+    const shouldUseDiscovery = hasCloudMap && (!this.config.apiUrl || isDefaultUrl);
     
     if (shouldUseDiscovery) {
       try {
