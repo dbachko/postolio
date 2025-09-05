@@ -8,6 +8,7 @@ import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { getServiceDiscovery } from '../utils/service-discovery-client.js';
+import { shouldUseServiceDiscovery } from '../utils/service-discovery.js';
 import type { StoreTokenParams, TokenData } from '../types/token-service.js';
 import { getRedisClient } from '../services/redis.js';
 import crypto from 'crypto';
@@ -112,7 +113,7 @@ export class TokenServiceClient {
   }
 
   private async initializeWithServiceDiscovery(): Promise<void> {
-    if (process.env.SERVICE_DISCOVERY_ENABLED === 'true' && !this.config.apiUrl) {
+    if (shouldUseServiceDiscovery(this.baseURL, this.config.apiUrl)) {
       try {
         const discovery = getServiceDiscovery();
         const tokenServiceUrl = await discovery.getServiceUrl('token-service');

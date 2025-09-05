@@ -213,6 +213,6 @@ export function getServiceDiscoveryEnvVars(config: ServiceDiscoveryClientConfig)
     CLOUDMAP_NAMESPACE_ID: config.namespaceId,
     CLOUDMAP_NAMESPACE_NAME: config.namespaceName,
     // AWS_REGION is automatically set by Lambda runtime, don't override it
-    SERVICE_DISCOVERY_ENABLED: 'true',
+    // SERVICE_DISCOVERY_ENABLED removed - we now check for Cloud Map config directly
   };
 }

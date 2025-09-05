@@ -12,6 +12,7 @@ import CircuitBreaker from 'opossum';
 import type { Options as CircuitBreakerOptions } from 'opossum';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { getServiceDiscovery, SERVICES } from '../utils/service-discovery-client.js';
+import { isCloudMapConfigured } from '../utils/service-discovery.js';
 
 // ==================== Validation Schemas ====================
 
@@ -317,8 +318,8 @@ export class ContentSchedulerClient {
   static async create(config: Partial<ContentSchedulerConfig> = {}): Promise<ContentSchedulerClient> {
     const finalConfig = { ...config };
     
-    // Use service discovery if enabled and no baseURL provided
-    if (process.env.SERVICE_DISCOVERY_ENABLED === 'true' && !finalConfig.baseURL) {
+    // Use service discovery if Cloud Map is configured and no baseURL provided
+    if (isCloudMapConfigured() && !finalConfig.baseURL) {
       try {
         const discovery = getServiceDiscovery();
         const schedulerUrl = await discovery.getServiceUrl(SERVICES.CONTENT_SCHEDULER);
