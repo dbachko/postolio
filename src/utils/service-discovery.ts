@@ -17,7 +17,8 @@ export function isCloudMapConfigured(): boolean {
  * @returns true if the URL is localhost or a default local URL
  */
 export function isLocalUrl(url: string): boolean {
-  return url.includes('localhost') || url.includes('127.0.0.1') || url === 'http://localhost:4001';
+  // Match any localhost or 127.0.0.1 URL, with any protocol and optional port
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(url);
 }
 
 /**
