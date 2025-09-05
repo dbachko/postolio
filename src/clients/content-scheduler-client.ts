@@ -28,7 +28,7 @@ const CreateScheduleInputSchema = z.object({
   platform: PlatformSchema,
   scheduledAt: z.string().datetime(), // Changed from scheduledTime to scheduledAt
   contentType: ContentTypeSchema.optional(),
-  videoUrl: z.string().url().optional(),
+  videoUrl: z.string().url().nullish(),
   caption: z.string().optional(),
   hashtags: z.array(z.string()).optional(),
   mediaUrls: z.array(z.string().url()).optional(), // Array of URLs for carousel/multiple images
@@ -66,27 +66,27 @@ const ScheduleSchema = z.object({
   scheduleId: z.string(),
   contentId: z.string(),
   brandId: z.string(),
-  userId: z.string().optional(),
+  userId: z.string(), // Required for security and authorization
   platform: PlatformSchema,
   scheduledAt: z.string().datetime(),
   contentType: ContentTypeSchema,
-  videoUrl: z.string().url().optional(),
-  caption: z.string().optional(),
-  hashtags: z.array(z.string()).optional(),
-  mediaUrls: z.array(z.string().url()).optional(),
+  videoUrl: z.string().url().nullish(),
+  caption: z.string().nullish(),
+  hashtags: z.array(z.string()).nullish(),
+  mediaUrls: z.array(z.string().url()).nullish(),
   status: ScheduleStatusSchema,
   retryCount: z.number().default(0),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).nullish(),
   createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime().optional(),
-  publishedAt: z.string().datetime().optional(),
-  errorMessage: z.string().optional(),
+  updatedAt: z.string().datetime().nullish(),
+  publishedAt: z.string().datetime().nullish(),
+  errorMessage: z.string().nullish(),
 });
 
 const ScheduleListSchema = z.object({
   schedules: z.array(ScheduleSchema),
   nextToken: z.string().optional(),
-  total: z.number(),
+  total: z.number().optional(), // Make total optional since it might be missing
 });
 
 const ListSchedulesParamsSchema = z.object({
@@ -535,7 +535,7 @@ export class ContentSchedulerClient {
     
     statuses.forEach((status, index) => {
       const result = results[index];
-      stats[status] = result ? result.total : 0;
+      stats[status] = result ? (result.total ?? 0) : 0;
     });
 
     return stats;
