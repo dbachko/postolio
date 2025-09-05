@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { monitoringService } from '../services/monitoring.js'
 import { checkDatabaseHealth, getDatabaseMetrics } from '../config/database.js'
 import { serviceClients } from '../services/service-clients.js'
+import { isCloudMapConfigured } from '../utils/service-discovery.js'
 
 const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   // Get system metrics
@@ -205,7 +206,7 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
         overall: serviceHealth.overall,
         services: serviceHealth,
         environment: {
-          cloudMapConfigured: !!(process.env.CLOUDMAP_NAMESPACE_ID && process.env.CLOUDMAP_NAMESPACE_NAME),
+          cloudMapConfigured: isCloudMapConfigured(),
           cloudMapNamespaceId: process.env.CLOUDMAP_NAMESPACE_ID || 'not configured',
           cloudMapNamespaceName: process.env.CLOUDMAP_NAMESPACE_NAME || 'not configured',
         },

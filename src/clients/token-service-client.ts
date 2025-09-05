@@ -8,6 +8,7 @@ import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { getServiceDiscovery } from '../utils/service-discovery-client.js';
+import { shouldUseServiceDiscovery } from '../utils/service-discovery.js';
 import type { StoreTokenParams, TokenData } from '../types/token-service.js';
 import { getRedisClient } from '../services/redis.js';
 import crypto from 'crypto';
@@ -112,14 +113,7 @@ export class TokenServiceClient {
   }
 
   private async initializeWithServiceDiscovery(): Promise<void> {
-    // Use service discovery if Cloud Map is configured AND either:
-    // 1. No URL was explicitly provided in config, OR
-    // 2. The URL is the default localhost (which won't work in production)
-    const isDefaultUrl = this.baseURL === 'http://localhost:4001' || this.baseURL.includes('localhost');
-    const hasCloudMap = !!(process.env.CLOUDMAP_NAMESPACE_ID && process.env.CLOUDMAP_NAMESPACE_NAME);
-    const shouldUseDiscovery = hasCloudMap && (!this.config.apiUrl || isDefaultUrl);
-    
-    if (shouldUseDiscovery) {
+    if (shouldUseServiceDiscovery(this.baseURL, this.config.apiUrl)) {
       try {
         const discovery = getServiceDiscovery();
         const tokenServiceUrl = await discovery.getServiceUrl('token-service');

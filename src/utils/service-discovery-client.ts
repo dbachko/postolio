@@ -4,6 +4,7 @@
  */
 
 import { ServiceDiscoveryClient, DiscoverInstancesCommand, RegisterInstanceCommand, DeregisterInstanceCommand } from '@aws-sdk/client-servicediscovery';
+import { isCloudMapConfigured } from './service-discovery.js';
 
 export interface ServiceEndpoint {
   url: string;
