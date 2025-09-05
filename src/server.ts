@@ -40,6 +40,7 @@ import configRoutes from './routes/config.js'
 import { ensureDatabaseSchema } from './config/database-setup.js'
 import { getRetentionManager } from './services/retention-manager.js'
 import Redis from 'ioredis'
+import { getRedisUrl } from './utils/redis-url.js'
 import { StatusBroadcaster } from './services/status-broadcaster.js'
 import { schedulerAdapter } from './services/scheduler-adapter.js'
 import { applyRateLimiting } from './middleware/rate-limit.js'
@@ -236,7 +237,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // Services are triggered by AWS Lambda/EventBridge, not started here
       
       // Initialize Redis and StatusBroadcaster for WebSocket real-time updates
-      redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+      redis = new Redis(getRedisUrl(), {
         maxRetriesPerRequest: 3,
         enableReadyCheck: true,
         reconnectOnError: (err) => {

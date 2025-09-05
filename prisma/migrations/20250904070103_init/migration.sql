@@ -44,7 +44,6 @@ CREATE TABLE "public"."brands" (
     "styleProfile" JSONB,
     "preferences" JSONB,
     "userId" TEXT NOT NULL,
-    "instagramAccessToken" TEXT,
     "instagramPageId" TEXT,
     "instagramAccountId" TEXT,
     "instagramProfileData" JSONB,
@@ -104,22 +103,6 @@ CREATE TABLE "public"."campaigns" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."campaign_templates" (
-    "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "isPublic" BOOLEAN NOT NULL DEFAULT false,
-    "templateConfig" JSONB NOT NULL,
-    "usageCount" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    "createdById" TEXT NOT NULL,
-    "brandId" TEXT,
-
-    CONSTRAINT "campaign_templates_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "public"."audit_logs" (
     "id" TEXT NOT NULL,
     "userid" TEXT,
@@ -166,18 +149,6 @@ CREATE INDEX "campaigns_status_idx" ON "public"."campaigns"("status");
 CREATE INDEX "campaigns_brandId_status_idx" ON "public"."campaigns"("brandId", "status");
 
 -- CreateIndex
-CREATE INDEX "campaign_templates_createdById_idx" ON "public"."campaign_templates"("createdById");
-
--- CreateIndex
-CREATE INDEX "campaign_templates_brandId_idx" ON "public"."campaign_templates"("brandId");
-
--- CreateIndex
-CREATE INDEX "campaign_templates_isPublic_idx" ON "public"."campaign_templates"("isPublic");
-
--- CreateIndex
-CREATE INDEX "campaign_templates_createdAt_idx" ON "public"."campaign_templates"("createdAt");
-
--- CreateIndex
 CREATE INDEX "audit_logs_userid_idx" ON "public"."audit_logs"("userid");
 
 -- CreateIndex
@@ -203,9 +174,3 @@ ALTER TABLE "public"."campaigns" ADD CONSTRAINT "campaigns_brandId_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "public"."campaigns" ADD CONSTRAINT "campaigns_lastModifiedById_fkey" FOREIGN KEY ("lastModifiedById") REFERENCES "public"."users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."campaign_templates" ADD CONSTRAINT "campaign_templates_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "public"."brands"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."campaign_templates" ADD CONSTRAINT "campaign_templates_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

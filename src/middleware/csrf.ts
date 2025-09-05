@@ -2,8 +2,9 @@ import { FastifyPluginAsync } from 'fastify'
 import fp from 'fastify-plugin'
 import { randomBytes } from 'crypto'
 import Redis from 'ioredis'
+import { getRedisUrl } from '../utils/redis-url.js'
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
+const redis = new Redis(getRedisUrl())
 
 interface CSRFOptions {
   secret?: string
