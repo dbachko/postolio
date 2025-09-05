@@ -272,6 +272,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       VIDEO_BUCKET: this.videoBucket.bucketName,
       PLATFORM_CREDENTIALS_SECRET: platformCredentials.secretArn,
       // MAIN_APP_API_URL removed - publisher now uses content from DynamoDB
+      // TOKEN_SERVICE_URL removed - publisher uses service discovery to find Token Service
       POWERTOOLS_SERVICE_NAME: 'content-scheduler',
       POWERTOOLS_METRICS_NAMESPACE: 'ContentScheduler',
       LOG_LEVEL: environment === 'prod' ? 'INFO' : 'DEBUG',
