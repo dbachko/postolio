@@ -1,4 +1,5 @@
 import Redis from 'ioredis'
+import { getRedisUrl } from '../utils/redis-url.js'
 
 interface AccountInsights {
   followers: number
@@ -29,7 +30,7 @@ export class AnalyticsCache {
   private redis: Redis | null = null
 
   constructor() {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
+    const redisUrl = getRedisUrl()
     this.redis = new Redis(redisUrl, {
       enableReadyCheck: false,
       maxRetriesPerRequest: 1,

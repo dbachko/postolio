@@ -5,9 +5,10 @@ import { EmailService } from './email.js'
 import { AuditLogger, AuditEventType } from './audit-logger.js'
 import { RefreshTokenService } from './refresh-token.js'
 import Redis from 'ioredis'
+import { getRedisUrl } from '../utils/redis-url.js'
 
 const prisma = getDatabaseClient()
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
+const redis = new Redis(getRedisUrl())
 
 interface PasswordResetData {
   userId: string

@@ -1,8 +1,9 @@
 import Redis from 'ioredis'
 import { FastifyRequest, FastifyReply } from 'fastify'
 import { getDatabaseClient } from '../config/database.js'
+import { getRedisUrl } from '../utils/redis-url.js'
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
+const redis = new Redis(getRedisUrl())
 const prisma = getDatabaseClient()
 
 interface RateLimitConfig {

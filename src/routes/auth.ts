@@ -9,9 +9,10 @@ import { AuditLogger, AuditEventType } from '../services/audit-logger.js'
 import { RefreshTokenService } from '../services/refresh-token.js'
 import { TimezoneService } from '../services/timezone.js'
 import Redis from 'ioredis'
+import { getRedisUrl } from '../utils/redis-url.js'
 
 const prisma = getDatabaseClient()
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
+const redis = new Redis(getRedisUrl())
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // User registration with rate limiting and validation

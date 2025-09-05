@@ -6,9 +6,10 @@ import Redis from 'ioredis'
 import { EmailService } from './email.js'
 import { randomBytes } from 'crypto'
 import { Prisma } from '@prisma/client'
+import { getRedisUrl } from '../utils/redis-url.js'
 
 const prisma = getDatabaseClient()
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
+const redis = new Redis(getRedisUrl())
 
 export enum TwoFactorMethod {
   TOTP = 'totp',     // Time-based One-Time Password (Google Authenticator)
