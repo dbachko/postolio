@@ -4,7 +4,6 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
-import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { SQSEvent, SQSRecord } from 'aws-lambda';
 
 // Initialize Powertools
@@ -16,7 +15,6 @@ const metrics = new Metrics({ namespace: 'ContentScheduler', serviceName: 'retry
 const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const lambdaClient = tracer.captureAWSv3Client(new LambdaClient({}));
-const sqsClient = tracer.captureAWSv3Client(new SQSClient({}));
 
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAYS = [60, 300, 900]; // 1 min, 5 min, 15 min
@@ -83,13 +81,13 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
   } catch (error) {
     logger.error('Failed to invoke retry', error as Error);
     
-    // If we can't even invoke the Lambda, schedule another retry
-    if (attemptNumber < MAX_RETRY_ATTEMPTS) {
-      await scheduleNextRetry(scheduleId, delaySeconds);
-    } else {
-      await markAsFailed(scheduleId, 'Failed to invoke publisher Lambda');
+    // If we've reached max attempts, mark as failed
+    if (attemptNumber >= MAX_RETRY_ATTEMPTS) {
+      await markAsFailed(scheduleId, 'Failed to invoke publisher Lambda after max retries');
     }
     
+    // Let SQS DLQ handle the retry with its built-in exponential backoff
+    // Do NOT manually schedule retries to avoid recursive invocations
     throw error;
   }
 }
@@ -193,42 +191,5 @@ async function markAsFailed(scheduleId: string, reason: string): Promise<void> {
   }));
 }
 
-async function scheduleNextRetry(scheduleId: string, delaySeconds: number): Promise<void> {
-  const queueUrl = process.env.RETRY_QUEUE_URL;
-  
-  if (!queueUrl) {
-    logger.warn('RETRY_QUEUE_URL not configured, skipping retry scheduling', { scheduleId });
-    return;
-  }
-
-  logger.info('Scheduling next retry', { scheduleId, delaySeconds });
-  
-  try {
-    await sqsClient.send(new SendMessageCommand({
-      QueueUrl: queueUrl,
-      MessageBody: JSON.stringify({ 
-        scheduleId,
-        timestamp: new Date().toISOString(),
-        retryAttempt: true
-      }),
-      DelaySeconds: Math.min(delaySeconds, 900), // SQS max delay is 900 seconds (15 minutes)
-      MessageAttributes: {
-        scheduleId: {
-          DataType: 'String',
-          StringValue: scheduleId
-        },
-        retryDelaySeconds: {
-          DataType: 'Number',
-          StringValue: delaySeconds.toString()
-        }
-      }
-    }));
-    
-    logger.info('Successfully scheduled retry', { scheduleId, delaySeconds });
-    metrics.addMetric('RetryScheduled', MetricUnit.Count, 1);
-  } catch (error) {
-    logger.error('Failed to schedule retry', { scheduleId, error: error as Error });
-    metrics.addMetric('RetryScheduleFailed', MetricUnit.Count, 1);
-    throw error;
-  }
-}
+// Removed scheduleNextRetry function to prevent recursive invocations
+// The DLQ's built-in retry mechanism with exponential backoff handles retries automatically
