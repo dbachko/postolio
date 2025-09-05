@@ -109,8 +109,8 @@ export async function discoverService(serviceName: AllowedService, useCache: boo
   }
   
   try {
-    // Use service discovery if enabled
-    if (process.env.SERVICE_DISCOVERY_ENABLED === 'true' && process.env.CLOUDMAP_NAMESPACE_NAME) {
+    // Use service discovery if Cloud Map is configured
+    if (process.env.CLOUDMAP_NAMESPACE_ID && process.env.CLOUDMAP_NAMESPACE_NAME) {
       const client = getClient();
       
       const response = await client.send(new DiscoverInstancesCommand({

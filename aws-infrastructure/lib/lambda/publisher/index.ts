@@ -9,6 +9,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { HttpRequest } from '@aws-sdk/protocol-http';
 import { discoverService } from '../shared/service-discovery-runtime';
 import { signRequest } from '../shared/request-signer';
+import { isCloudMapConfigured, isLocalUrl, shouldUseServiceDiscovery } from './service-discovery-utils';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
 import { API_VERSIONS, API_BASE_URLS } from '../../constants/api-versions.js';
 
@@ -449,20 +450,23 @@ async function getTokenFromTokenService(
   logger.info('Fetching token from Token Service', { brandId, userId, platform });
 
   try {
-    // Use service discovery to find Token Service URL
-    let tokenServiceUrl = process.env.TOKEN_SERVICE_URL;
+    // Check if we should use service discovery
+    const defaultUrl = process.env.TOKEN_SERVICE_URL || 'http://localhost:4001';
+    let tokenServiceUrl = defaultUrl;
     
-    if (!tokenServiceUrl) {
-      // Try service discovery
+    // Use service discovery if appropriate
+    if (shouldUseServiceDiscovery(tokenServiceUrl, process.env.TOKEN_SERVICE_URL)) {
       try {
         tokenServiceUrl = await discoverService('token-service');
         logger.info('Token Service discovered via Cloud Map', { url: tokenServiceUrl });
       } catch (discoveryError) {
-        logger.warn('Service discovery failed, using fallback', { error: discoveryError });
+        logger.warn('Service discovery failed', { error: discoveryError });
+        // Don't throw here - we might still have a valid URL from env var
       }
     }
     
-    if (!tokenServiceUrl) {
+    // Only throw if we still have localhost URL after discovery attempt
+    if (isLocalUrl(tokenServiceUrl) && tokenServiceUrl === defaultUrl) {
       throw new Error('Token Service URL not configured and service discovery failed');
     }
 
