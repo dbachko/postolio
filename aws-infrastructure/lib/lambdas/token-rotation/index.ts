@@ -229,11 +229,10 @@ async function refreshInstagramToken(accessToken: string): Promise<RefreshResult
 
 async function refreshFacebookToken(currentToken: string, metadata: Record<string, any>): Promise<RefreshResult> {
   try {
-    // Get credentials from Secrets Manager (not from metadata for security)
+    // Get app ID from environment variable and secret from Secrets Manager
+    const appId = process.env.FACEBOOK_APP_ID
     const secretManager = getSecretManager()
     const secrets = await secretManager.getPlatformSecrets()
-    
-    const appId = secrets.FACEBOOK_APP_ID
     const appSecret = secrets.FACEBOOK_APP_SECRET
     
     if (!appId || !appSecret) {
@@ -262,15 +261,14 @@ async function refreshFacebookToken(currentToken: string, metadata: Record<strin
 
 async function refreshLinkedInToken(refreshToken: string, metadata: Record<string, any>): Promise<RefreshResult> {
   try {
-    // Get credentials from Secrets Manager (not from metadata for security)
+    // Get client ID from environment variable and secret from Secrets Manager
+    const clientId = process.env.LINKEDIN_CLIENT_ID
     const secretManager = getSecretManager()
     const secrets = await secretManager.getPlatformSecrets()
-    
-    const clientId = secrets.LINKEDIN_CLIENT_ID
     const clientSecret = secrets.LINKEDIN_CLIENT_SECRET
     
     if (!clientId || !clientSecret) {
-      throw new Error('LinkedIn client credentials not available in Secrets Manager')
+      throw new Error('LinkedIn client credentials not available')
     }
 
     const response = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', null, {
@@ -298,15 +296,14 @@ async function refreshLinkedInToken(refreshToken: string, metadata: Record<strin
 
 async function refreshTikTokToken(refreshToken: string, metadata: Record<string, any>): Promise<RefreshResult> {
   try {
-    // Get credentials from Secrets Manager (not from metadata for security)
+    // Get client key from environment variable and secret from Secrets Manager
+    const clientKey = process.env.TIKTOK_CLIENT_KEY
     const secretManager = getSecretManager()
     const secrets = await secretManager.getPlatformSecrets()
-    
-    const clientKey = secrets.TIKTOK_CLIENT_KEY
     const clientSecret = secrets.TIKTOK_CLIENT_SECRET
     
     if (!clientKey || !clientSecret) {
-      throw new Error('TikTok client credentials not available in Secrets Manager')
+      throw new Error('TikTok client credentials not available')
     }
 
     const response = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', {

@@ -1,0 +1,141 @@
+graph TB
+    %% Postolio AWS Architecture Diagram
+    %% AI-Powered Social Media Automation Platform
+    
+    subgraph Internet["🌐 Internet"]
+        Users[["👥 Users<br/>Web & Mobile"]]
+    end
+    
+    subgraph EdgeServices["☁️ Edge Services Layer"]
+        Route53["📡 Route 53<br/>postolio.example"]
+        CloudFront["🌍 CloudFront CDN<br/>Global Distribution"]
+        WAF["🛡️ AWS WAF v2<br/>Production Security"]
+    end
+    
+    subgraph APIGateway["🚪 API Gateway Layer"]
+        ALB["⚖️ Application Load Balancer<br/>HTTPS/SSL Termination"]
+        TokenAPI["🌐 API Gateway<br/>Token Service<br/>IAM Auth"]
+        SchedulerAPI["🌐 API Gateway<br/>Content Scheduler<br/>IAM Auth"]
+    end
+    
+    subgraph ComputeServices["🔧 Compute Services"]
+        subgraph ECSCluster["🚢 ECS Fargate Cluster"]
+            MainApp["📦 Main Postolio Service<br/>Node.js 22 + Fastify<br/>• User Auth (JWT + 2FA)<br/>• Brand Management<br/>• Campaign Orchestration<br/>• AI Content Generation"]
+        end
+        
+        TokenLambda["⚡ Token Service Lambda<br/>• OAuth Storage<br/>• KMS Encryption<br/>• Auto Rotation"]
+        SchedulerLambda["⚡ Content Scheduler Lambda<br/>• Schedule CRUD<br/>• EventBridge Rules<br/>• Conflict Resolution"]
+        PublisherLambda["⚡ Publisher Lambda<br/>• Multi-Platform<br/>• Adapter Pattern<br/>• Rate Limiting"]
+        GDPRLambda["⚡ GDPR Service Lambda<br/>• Data Export<br/>• Data Deletion<br/>• Audit Logs"]
+    end
+    
+    subgraph DataStorage["💾 Data Storage Layer"]
+        RDS[("🗄️ RDS PostgreSQL<br/>• Users & Auth<br/>• Brands<br/>• Campaigns<br/>• Content")]
+        DynamoTokens[("🔥 DynamoDB<br/>OAuth Tokens<br/>TTL & GSI")]
+        DynamoSchedules[("🔥 DynamoDB<br/>Schedules<br/>4 GSIs")]
+        Redis[("⚡ ElastiCache Redis<br/>Sessions & Caching<br/>Port 6380")]
+        S3Frontend["📂 S3 Frontend<br/>React SPA Assets"]
+        S3Images["📂 S3 AI Images<br/>Intelligent Tiering"]
+    end
+    
+    subgraph Integration["🔌 AWS Integration Services"]
+        EventBridge["🔄 EventBridge<br/>Event Bus<br/>• campaign.created<br/>• schedule.ready<br/>• post.published"]
+        SecretsManager["🔐 Secrets Manager<br/>API Keys & Credentials"]
+        KMS["🔑 KMS<br/>Encryption Keys"]
+        CloudMap["🌐 Cloud Map<br/>Service Discovery<br/>30s Cache"]
+    end
+    
+    subgraph Monitoring["📊 Monitoring & Observability"]
+        CloudWatch["📊 CloudWatch<br/>Metrics & Logs"]
+        XRay["🔍 X-Ray<br/>Distributed Tracing"]
+        SNS["📢 SNS<br/>Alert Topics"]
+        SES["📧 SES<br/>Transactional Email"]
+    end
+    
+    subgraph External["🌍 External Platform APIs"]
+        Instagram["📷 Instagram<br/>Graph API"]
+        LinkedIn["👔 LinkedIn<br/>API v2"]
+        Facebook["📘 Facebook<br/>Graph API"]
+        TikTok["🎵 TikTok<br/>Business API"]
+        OpenAI["🤖 OpenAI<br/>GPT-4o & DALL-E 3"]
+        YouTube["📹 YouTube<br/>Data API v3"]
+        Google["🔍 Google OAuth"]
+    end
+    
+    %% Primary Flow Connections
+    Users --> Route53
+    Route53 --> CloudFront
+    CloudFront --> WAF
+    CloudFront --> S3Frontend
+    WAF --> ALB
+    ALB --> MainApp
+    
+    %% API Gateway Connections
+    TokenAPI --> TokenLambda
+    SchedulerAPI --> SchedulerLambda
+    
+    %% Main App Database Connections
+    MainApp --> RDS
+    MainApp --> Redis
+    MainApp --> S3Images
+    MainApp --> EventBridge
+    MainApp --> CloudMap
+    MainApp --> SecretsManager
+    
+    %% Service-to-Service Communications
+    MainApp -.->|SigV4 Auth| TokenAPI
+    MainApp -.->|SigV4 Auth| SchedulerAPI
+    
+    %% Lambda Service Connections
+    TokenLambda --> DynamoTokens
+    TokenLambda --> KMS
+    TokenLambda --> SecretsManager
+    SchedulerLambda --> DynamoSchedules
+    SchedulerLambda --> EventBridge
+    
+    %% EventBridge Triggers
+    EventBridge -->|Trigger| PublisherLambda
+    EventBridge -->|GDPR Events| GDPRLambda
+    
+    %% Publisher Flow
+    PublisherLambda -.->|Get Tokens| TokenLambda
+    PublisherLambda --> Instagram
+    PublisherLambda --> LinkedIn
+    PublisherLambda --> Facebook
+    PublisherLambda --> TikTok
+    PublisherLambda --> YouTube
+    
+    %% GDPR Service Connections
+    GDPRLambda --> RDS
+    GDPRLambda -.-> DynamoTokens
+    
+    %% External API Connections
+    MainApp --> OpenAI
+    MainApp -.-> Google
+    
+    %% Service Discovery Registration
+    CloudMap -.-> TokenAPI
+    CloudMap -.-> SchedulerAPI
+    CloudMap -.-> MainApp
+    
+    %% Monitoring Connections
+    MainApp -.-> CloudWatch
+    TokenLambda -.-> CloudWatch
+    SchedulerLambda -.-> CloudWatch
+    PublisherLambda -.-> CloudWatch
+    CloudWatch --> SNS
+    MainApp -.-> XRay
+    MainApp --> SES
+    
+    %% Styling
+    classDef awsService fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#fff
+    classDef lambda fill:#FF9900,stroke:#FF6600,stroke-width:2px,color:#fff
+    classDef database fill:#3369E7,stroke:#1E3A8A,stroke-width:2px,color:#fff
+    classDef external fill:#10B981,stroke:#059669,stroke-width:2px,color:#fff
+    classDef storage fill:#8B5CF6,stroke:#6D28D9,stroke-width:2px,color:#fff
+    
+    class Route53,CloudFront,WAF,ALB,TokenAPI,SchedulerAPI,EventBridge,SecretsManager,KMS,CloudMap,CloudWatch,XRay,SNS,SES awsService
+    class TokenLambda,SchedulerLambda,PublisherLambda,GDPRLambda lambda
+    class RDS,DynamoTokens,DynamoSchedules,Redis database
+    class S3Frontend,S3Images storage
+    class Instagram,LinkedIn,Facebook,TikTok,OpenAI,YouTube,Google external
