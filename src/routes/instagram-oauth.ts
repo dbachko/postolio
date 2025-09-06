@@ -131,8 +131,11 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         )
         
         const errorHtml = `
-          <html>
+          <!DOCTYPE html>
+          <html lang="en">
             <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <title>Connection Failed</title>
               <style>
                 body {
@@ -154,8 +157,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
                 }
                 .error {
                   color: #ef4444;
-                  font-size: 1.5rem;
+                  font-size: 3rem;
                   margin-bottom: 1rem;
+                  font-weight: bold;
                 }
                 .message {
                   color: #6b7280;
@@ -165,7 +169,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
             </head>
             <body>
               <div class="container">
-                <div class="error">✕</div>
+                <div class="error">&#10005;</div>
                 <h2>Connection Failed</h2>
                 <p>${errorMessage}</p>
                 <p class="message">Please close this window and try again.</p>
@@ -340,8 +344,11 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
 
       // Return HTML that closes the popup and notifies the parent
       const html = `
-        <html>
+        <!DOCTYPE html>
+        <html lang="en">
           <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Instagram Connected</title>
             <style>
               body {
@@ -362,8 +369,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
               }
               .success {
                 color: #10b981;
-                font-size: 1.5rem;
+                font-size: 3rem;
                 margin-bottom: 1rem;
+                font-weight: bold;
               }
               .message {
                 color: #6b7280;
@@ -372,7 +380,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           </head>
           <body>
             <div class="container">
-              <div class="success">✓</div>
+              <div class="success">&#10003;</div>
               <h2>Instagram Connected Successfully!</h2>
               <p class="message">You can close this window.</p>
             </div>
