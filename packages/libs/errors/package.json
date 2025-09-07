@@ -1,0 +1,9 @@
+{
+  "name": "@postolio/errors",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.ts",
+  "devDependencies": {
+    "@postolio/tsconfig": "workspace:*"
+  }
+}
