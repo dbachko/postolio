@@ -1,0 +1,280 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '9.9.0'
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+
+jobs:
+  # ============================================
+  # Detect what changed
+  # ============================================
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.filter.outputs.changes }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed packages
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api: packages/apps/api/**
+            web: packages/apps/web/**
+            token-service: packages/services/token-service/**
+            publisher: packages/services/publisher/**
+            retry-handler: packages/services/retry-handler/**
+            dlq-processor: packages/services/dlq-processor/**
+            schedule-management: packages/services/schedule-management/**
+            schedule-cleanup: packages/services/schedule-cleanup/**
+            status-sync: packages/services/status-sync/**
+            infra: packages/infra/**
+            libs: packages/libs/**
+
+  # ============================================
+  # Code Quality Checks
+  # ============================================
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run linting
+        run: pnpm turbo lint --filter=[HEAD^1]
+
+      - name: Run type checking  
+        run: pnpm turbo typecheck --filter=[HEAD^1]
+
+      - name: Check formatting
+        run: pnpm prettier --check "**/*.{ts,tsx,md}" --ignore-path .gitignore
+
+  # ============================================
+  # Unit Tests
+  # ============================================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests with coverage
+        run: pnpm turbo test:coverage --filter=[HEAD^1]
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: unittests
+          fail_ci_if_error: false
+
+  # ============================================
+  # Build Validation
+  # ============================================
+  build-validation:
+    name: Build Validation
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    strategy:
+      matrix:
+        package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter @postolio/${{ matrix.package }}...
+
+      - name: Build package
+        run: pnpm turbo build --filter @postolio/${{ matrix.package }}
+
+  # ============================================
+  # Security Scanning
+  # ============================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # ============================================
+  # CDK Diff
+  # ============================================
+  cdk-diff:
+    name: CDK Diff
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'infrastructure') || contains(github.event.pull_request.files.*.filename, 'packages/infra')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Install CDK dependencies
+        working-directory: packages/infra/cdk
+        run: pnpm install --frozen-lockfile
+
+      - name: Run CDK diff
+        working-directory: packages/infra/cdk
+        run: |
+          echo "## CDK Stack Changes" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          pnpm cdk diff --all --context environment=dev >> $GITHUB_STEP_SUMMARY 2>&1
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # PR Summary
+  # ============================================
+  pr-summary:
+    name: PR Summary
+    runs-on: ubuntu-latest
+    needs: [code-quality, unit-tests, build-validation, security-scan]
+    if: always()
+    
+    steps:
+      - name: Comment PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const checkRuns = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha
+            });
+            
+            const summary = `
+            ## 📊 PR Check Summary
+            
+            | Check | Status |
+            |-------|--------|
+            | Code Quality | ${checkRuns.data.check_runs.find(r => r.name === 'Code Quality')?.conclusion || 'pending'} |
+            | Unit Tests | ${checkRuns.data.check_runs.find(r => r.name === 'Unit Tests')?.conclusion || 'pending'} |
+            | Build Validation | ${checkRuns.data.check_runs.find(r => r.name.includes('Build Validation'))?.conclusion || 'pending'} |
+            | Security Scan | ${checkRuns.data.check_runs.find(r => r.name === 'Security Scan')?.conclusion || 'pending'} |
+            
+            ---
+            *Generated at: ${new Date().toISOString()}*
+            `;
+            
+            // Find existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('PR Check Summary')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: summary
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: summary
+              });
+            }

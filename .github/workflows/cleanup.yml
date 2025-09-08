@@ -1,0 +1,220 @@
+name: Cleanup Resources
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (no actual deletion)'
+        required: false
+        type: boolean
+        default: true
+      retention_days:
+        description: 'Keep images/versions from last N days'
+        required: false
+        type: string
+        default: '30'
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  # ============================================
+  # Clean up ECR images
+  # ============================================
+  cleanup-ecr:
+    name: Cleanup ECR Images
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Clean up ECR repositories
+        run: |
+          RETENTION_DAYS="${{ github.event.inputs.retention_days || '30' }}"
+          DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
+          
+          echo "🧹 Cleaning up ECR images older than $RETENTION_DAYS days"
+          echo "Dry run: $DRY_RUN"
+          
+          # List all postolio repositories
+          REPOS=$(aws ecr describe-repositories \
+            --query 'repositories[?starts_with(repositoryName, `postolio`)].repositoryName' \
+            --output text)
+          
+          for REPO in $REPOS; do
+            echo "Processing repository: $REPO"
+            
+            # Get images older than retention period
+            CUTOFF_DATE=$(date -u -d "$RETENTION_DAYS days ago" +%Y-%m-%dT%H:%M:%S)
+            
+            OLD_IMAGES=$(aws ecr describe-images \
+              --repository-name "$REPO" \
+              --query "imageDetails[?imagePushedAt<'$CUTOFF_DATE'].imageDigest" \
+              --output text)
+            
+            if [[ -n "$OLD_IMAGES" ]]; then
+              IMAGE_COUNT=$(echo "$OLD_IMAGES" | wc -w)
+              echo "Found $IMAGE_COUNT images to delete in $REPO"
+              
+              if [[ "$DRY_RUN" != "true" ]]; then
+                for DIGEST in $OLD_IMAGES; do
+                  echo "Deleting image: $DIGEST"
+                  aws ecr batch-delete-image \
+                    --repository-name "$REPO" \
+                    --image-ids imageDigest="$DIGEST"
+                done
+              else
+                echo "DRY RUN: Would delete $IMAGE_COUNT images"
+              fi
+            else
+              echo "No old images found in $REPO"
+            fi
+          done
+
+  # ============================================
+  # Clean up Lambda versions
+  # ============================================
+  cleanup-lambda:
+    name: Cleanup Lambda Versions
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Clean up Lambda versions
+        run: |
+          RETENTION_COUNT=10  # Keep last 10 versions
+          DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
+          
+          echo "🧹 Cleaning up Lambda versions (keeping last $RETENTION_COUNT)"
+          
+          # List all postolio Lambda functions
+          FUNCTIONS=$(aws lambda list-functions \
+            --query 'Functions[?starts_with(FunctionName, `postolio`)].FunctionName' \
+            --output text)
+          
+          for FUNCTION in $FUNCTIONS; do
+            echo "Processing function: $FUNCTION"
+            
+            # Get all versions except $LATEST
+            VERSIONS=$(aws lambda list-versions-by-function \
+              --function-name "$FUNCTION" \
+              --query "Versions[?Version!='\$LATEST'].Version" \
+              --output text | tr '\t' '\n' | sort -rn)
+            
+            VERSION_COUNT=$(echo "$VERSIONS" | wc -l)
+            
+            if [[ $VERSION_COUNT -gt $RETENTION_COUNT ]]; then
+              # Get versions to delete (all except the last RETENTION_COUNT)
+              VERSIONS_TO_DELETE=$(echo "$VERSIONS" | tail -n +$((RETENTION_COUNT + 1)))
+              DELETE_COUNT=$(echo "$VERSIONS_TO_DELETE" | wc -l)
+              
+              echo "Found $DELETE_COUNT versions to delete"
+              
+              if [[ "$DRY_RUN" != "true" ]]; then
+                for VERSION in $VERSIONS_TO_DELETE; do
+                  echo "Deleting version: $VERSION"
+                  aws lambda delete-function \
+                    --function-name "$FUNCTION" \
+                    --qualifier "$VERSION" 2>/dev/null || true
+                done
+              else
+                echo "DRY RUN: Would delete versions: $VERSIONS_TO_DELETE"
+              fi
+            else
+              echo "No excess versions found for $FUNCTION"
+            fi
+          done
+
+  # ============================================
+  # Clean up CloudWatch Logs
+  # ============================================
+  cleanup-logs:
+    name: Cleanup CloudWatch Logs
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Clean up CloudWatch log streams
+        run: |
+          RETENTION_DAYS="${{ github.event.inputs.retention_days || '30' }}"
+          DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
+          
+          echo "🧹 Cleaning up CloudWatch log streams older than $RETENTION_DAYS days"
+          
+          # Get all postolio log groups
+          LOG_GROUPS=$(aws logs describe-log-groups \
+            --query 'logGroups[?contains(logGroupName, `postolio`)].logGroupName' \
+            --output text)
+          
+          CUTOFF_TIMESTAMP=$(($(date +%s) - RETENTION_DAYS * 86400))000
+          
+          for LOG_GROUP in $LOG_GROUPS; do
+            echo "Processing log group: $LOG_GROUP"
+            
+            # Get empty log streams
+            EMPTY_STREAMS=$(aws logs describe-log-streams \
+              --log-group-name "$LOG_GROUP" \
+              --query "logStreams[?lastEventTimestamp==null || lastEventTimestamp<\`$CUTOFF_TIMESTAMP\`].logStreamName" \
+              --output text)
+            
+            if [[ -n "$EMPTY_STREAMS" ]]; then
+              STREAM_COUNT=$(echo "$EMPTY_STREAMS" | wc -w)
+              echo "Found $STREAM_COUNT empty/old log streams"
+              
+              if [[ "$DRY_RUN" != "true" ]]; then
+                for STREAM in $EMPTY_STREAMS; do
+                  echo "Deleting log stream: $STREAM"
+                  aws logs delete-log-stream \
+                    --log-group-name "$LOG_GROUP" \
+                    --log-stream-name "$STREAM" 2>/dev/null || true
+                done
+              else
+                echo "DRY RUN: Would delete $STREAM_COUNT log streams"
+              fi
+            else
+              echo "No empty/old log streams found"
+            fi
+          done
+
+  # ============================================
+  # Generate cleanup report
+  # ============================================
+  cleanup-report:
+    name: Cleanup Report
+    runs-on: ubuntu-latest
+    needs: [cleanup-ecr, cleanup-lambda, cleanup-logs]
+    if: always()
+    
+    steps:
+      - name: Generate cleanup summary
+        run: |
+          echo "## 🧹 Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+          echo "**Retention Period:** ${{ github.event.inputs.retention_days || '30' }} days" >> $GITHUB_STEP_SUMMARY
+          echo "**Dry Run:** ${{ github.event.inputs.dry_run || 'true' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Jobs Status" >> $GITHUB_STEP_SUMMARY
+          echo "- ECR Cleanup: ${{ needs.cleanup-ecr.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Lambda Cleanup: ${{ needs.cleanup-lambda.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Logs Cleanup: ${{ needs.cleanup-logs.result }}" >> $GITHUB_STEP_SUMMARY

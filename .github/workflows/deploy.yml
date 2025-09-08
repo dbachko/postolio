@@ -1,0 +1,662 @@
+name: Deploy Microservices
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      services:
+        description: 'Services to deploy (comma-separated, or "all")'
+        required: false
+        default: 'all'
+
+concurrency:
+  group: deploy-${{ github.ref }}-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  NODE_VERSION: '22'
+  PNPM_VERSION: '9.9.0'
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+
+jobs:
+  # ============================================
+  # STEP 1: Detect Changes
+  # ============================================
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      api-changed: ${{ steps.changes.outputs.api }}
+      web-changed: ${{ steps.changes.outputs.web }}
+      infra-changed: ${{ steps.changes.outputs.infra }}
+      token-service-changed: ${{ steps.changes.outputs.token-service }}
+      publisher-changed: ${{ steps.changes.outputs.publisher }}
+      retry-handler-changed: ${{ steps.changes.outputs.retry-handler }}
+      dlq-processor-changed: ${{ steps.changes.outputs.dlq-processor }}
+      schedule-management-changed: ${{ steps.changes.outputs.schedule-management }}
+      schedule-cleanup-changed: ${{ steps.changes.outputs.schedule-cleanup }}
+      status-sync-changed: ${{ steps.changes.outputs.status-sync }}
+      libs-changed: ${{ steps.changes.outputs.libs }}
+      any-service-changed: ${{ steps.changes.outputs.any-service }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup change detection
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          base: ${{ github.event.pull_request.base.sha || github.event.before }}
+          filters: |
+            api:
+              - 'packages/apps/api/**'
+              - 'packages/libs/**'
+              - 'pnpm-lock.yaml'
+            web:
+              - 'packages/apps/web/**'
+              - 'packages/libs/**'
+              - 'pnpm-lock.yaml'
+            infra:
+              - 'packages/infra/**'
+              - '.github/workflows/**'
+            token-service:
+              - 'packages/services/token-service/**'
+              - 'packages/libs/**'
+              - 'pnpm-lock.yaml'
+            publisher:
+              - 'packages/services/publisher/**'
+              - 'packages/libs/**'
+              - 'pnpm-lock.yaml'
+            retry-handler:
+              - 'packages/services/retry-handler/**'
+              - 'packages/libs/**'
+              - 'pnpm-lock.yaml'
+            dlq-processor:
+              - 'packages/services/dlq-processor/**'
+              - 'packages/libs/**'
+              - 'pnpm-lock.yaml'
+            schedule-management:
+              - 'packages/services/schedule-management/**'
+              - 'packages/libs/**'
+              - 'pnpm-lock.yaml'
+            schedule-cleanup:
+              - 'packages/services/schedule-cleanup/**'
+              - 'packages/libs/**'
+              - 'pnpm-lock.yaml'
+            status-sync:
+              - 'packages/services/status-sync/**'
+              - 'packages/libs/**'
+              - 'pnpm-lock.yaml'
+            libs:
+              - 'packages/libs/**'
+            any-service:
+              - 'packages/services/**'
+              - 'packages/apps/**'
+
+      - name: Generate deployment matrix
+        id: matrix
+        run: |
+          SERVICES=()
+          
+          # Check if manual deployment with specific services
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.services }}" != "all" ]]; then
+            IFS=',' read -ra REQUESTED_SERVICES <<< "${{ github.event.inputs.services }}"
+            for service in "${REQUESTED_SERVICES[@]}"; do
+              SERVICES+=("\"$service\"")
+            done
+          else
+            # Auto-detect changed services
+            [[ "${{ steps.changes.outputs.token-service }}" == "true" ]] && SERVICES+=("\"token-service\"")
+            [[ "${{ steps.changes.outputs.publisher }}" == "true" ]] && SERVICES+=("\"publisher\"")
+            [[ "${{ steps.changes.outputs.retry-handler }}" == "true" ]] && SERVICES+=("\"retry-handler\"")
+            [[ "${{ steps.changes.outputs.dlq-processor }}" == "true" ]] && SERVICES+=("\"dlq-processor\"")
+            [[ "${{ steps.changes.outputs.schedule-management }}" == "true" ]] && SERVICES+=("\"schedule-management\"")
+            [[ "${{ steps.changes.outputs.schedule-cleanup }}" == "true" ]] && SERVICES+=("\"schedule-cleanup\"")
+            [[ "${{ steps.changes.outputs.status-sync }}" == "true" ]] && SERVICES+=("\"status-sync\"")
+          fi
+          
+          if [ ${#SERVICES[@]} -eq 0 ]; then
+            echo "matrix=[]" >> $GITHUB_OUTPUT
+          else
+            MATRIX=$(IFS=,; echo "[${SERVICES[*]}]")
+            echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "Services to deploy: $MATRIX"
+
+  # ============================================
+  # STEP 2: Run Tests
+  # ============================================
+  test:
+    name: Test Changed Packages
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run linting
+        run: pnpm turbo lint --filter=[HEAD^1]
+
+      - name: Run type checking
+        run: pnpm turbo typecheck --filter=[HEAD^1]
+
+      - name: Run tests
+        run: pnpm turbo test --filter=[HEAD^1]
+
+  # ============================================
+  # STEP 3: Build & Push Docker Images
+  # ============================================
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      github.event_name == 'workflow_dispatch' || 
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+    environment: ${{ needs.detect-changes.outputs.environment }}
+    strategy:
+      matrix:
+        service:
+          - name: api
+            path: packages/apps/api
+            changed: ${{ needs.detect-changes.outputs.api-changed }}
+          - name: web
+            path: packages/apps/web
+            changed: ${{ needs.detect-changes.outputs.web-changed }}
+    
+    steps:
+      - name: Skip if not changed
+        if: matrix.service.changed != 'true' && github.event_name != 'workflow_dispatch'
+        run: echo "Service ${{ matrix.service.name }} has not changed, skipping build"
+
+      - name: Checkout code
+        if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.service.path }}/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/postolio-${{ matrix.service.name }}:${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/postolio-${{ matrix.service.name }}:${{ needs.detect-changes.outputs.environment }}-latest
+          cache-from: type=gha,scope=${{ matrix.service.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
+          build-args: |
+            NODE_ENV=${{ needs.detect-changes.outputs.environment == 'prod' && 'production' || needs.detect-changes.outputs.environment }}
+
+  # ============================================
+  # STEP 4: Deploy Infrastructure
+  # ============================================
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-images]
+    if: |
+      needs.detect-changes.outputs.infra-changed == 'true' || 
+      github.event_name == 'workflow_dispatch'
+    environment: ${{ needs.detect-changes.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: packages/infra/cdk/pnpm-lock.yaml
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install CDK dependencies
+        working-directory: packages/infra/cdk
+        run: pnpm install --frozen-lockfile
+
+      - name: CDK Bootstrap (if needed)
+        working-directory: packages/infra/cdk
+        run: |
+          if ! aws cloudformation describe-stacks --stack-name CDKToolkit &>/dev/null; then
+            pnpm cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
+          fi
+
+      - name: Deploy Service Discovery Stack
+        working-directory: packages/infra/cdk
+        run: |
+          pnpm cdk deploy ServiceDiscovery-${{ needs.detect-changes.outputs.environment }} \
+            --require-approval never \
+            --context environment=${{ needs.detect-changes.outputs.environment }}
+
+      - name: Deploy Monitoring Stack
+        working-directory: packages/infra/cdk
+        if: needs.detect-changes.outputs.environment == 'prod'
+        run: |
+          pnpm cdk deploy Monitoring-${{ needs.detect-changes.outputs.environment }} \
+            --require-approval never \
+            --context environment=${{ needs.detect-changes.outputs.environment }} \
+            --context alertEmail=${{ vars.ALERT_EMAIL }}
+
+      - name: Deploy EventBridge Rules Stack
+        working-directory: packages/infra/cdk
+        run: |
+          pnpm cdk deploy EventBridgeRules-${{ needs.detect-changes.outputs.environment }} \
+            --require-approval never \
+            --context environment=${{ needs.detect-changes.outputs.environment }}
+
+  # ============================================
+  # STEP 5: Deploy Microservices
+  # ============================================
+  deploy-microservices:
+    name: Deploy ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: [detect-changes, deploy-infrastructure]
+    if: needs.detect-changes.outputs.matrix != '[]'
+    environment: ${{ needs.detect-changes.outputs.environment }}
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      max-parallel: 3
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter @postolio/${{ matrix.service }}...
+
+      - name: Build service
+        run: pnpm turbo build --filter @postolio/${{ matrix.service }}
+
+      - name: Package Lambda
+        working-directory: packages/services/${{ matrix.service }}
+        run: |
+          # Create deployment package
+          mkdir -p deploy
+          cp -r dist/* deploy/
+          cp package.json deploy/
+          cd deploy
+          npm ci --production
+          zip -r ../${{ matrix.service }}.zip .
+
+      - name: Deploy Lambda function
+        run: |
+          FUNCTION_NAME="postolio-${{ needs.detect-changes.outputs.environment }}-${{ matrix.service }}"
+          
+          # Check if function exists
+          if aws lambda get-function --function-name $FUNCTION_NAME &>/dev/null; then
+            echo "Updating existing Lambda function..."
+            aws lambda update-function-code \
+              --function-name $FUNCTION_NAME \
+              --zip-file fileb://packages/services/${{ matrix.service }}/${{ matrix.service }}.zip
+            
+            # Wait for update to complete
+            aws lambda wait function-updated \
+              --function-name $FUNCTION_NAME
+            
+            # Update environment variables if needed
+            aws lambda update-function-configuration \
+              --function-name $FUNCTION_NAME \
+              --environment Variables="{
+                NODE_ENV=${{ needs.detect-changes.outputs.environment }},
+                SERVICE_NAME=${{ matrix.service }},
+                ENVIRONMENT=${{ needs.detect-changes.outputs.environment }}
+              }"
+          else
+            echo "Function does not exist, deploying via CDK..."
+            cd packages/infra/cdk
+            pnpm install --frozen-lockfile
+            pnpm cdk deploy ${{ matrix.service }}-${{ needs.detect-changes.outputs.environment }} \
+              --require-approval never \
+              --context environment=${{ needs.detect-changes.outputs.environment }}
+          fi
+
+  # ============================================
+  # STEP 6: Deploy Main Application
+  # ============================================
+  deploy-main-app:
+    name: Deploy Main Application
+    runs-on: ubuntu-latest
+    needs: [detect-changes, deploy-infrastructure, deploy-microservices]
+    if: |
+      needs.detect-changes.outputs.api-changed == 'true' || 
+      needs.detect-changes.outputs.infra-changed == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    environment: ${{ needs.detect-changes.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install CDK dependencies
+        working-directory: packages/infra/cdk
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy Postolio Stack
+        working-directory: packages/infra/cdk
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FACEBOOK_APP_SECRET: ${{ secrets.FACEBOOK_APP_SECRET }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          pnpm cdk deploy Postolio-${{ needs.detect-changes.outputs.environment }} \
+            --require-approval never \
+            --context environment=${{ needs.detect-changes.outputs.environment }} \
+            --context imageTag=${{ needs.detect-changes.outputs.environment }}-${{ github.sha }} \
+            --context domainName=${{ vars.DOMAIN_NAME }} \
+            --context corsOrigin=${{ vars.CORS_ORIGIN }}
+
+      - name: Update ECS Service
+        run: |
+          CLUSTER_NAME=$(aws cloudformation describe-stacks \
+            --stack-name "Postolio-${{ needs.detect-changes.outputs.environment }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='EcsClusterName'].OutputValue" \
+            --output text)
+            
+          SERVICE_NAME=$(aws cloudformation describe-stacks \
+            --stack-name "Postolio-${{ needs.detect-changes.outputs.environment }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='EcsServiceName'].OutputValue" \
+            --output text)
+            
+          if [[ -n "$CLUSTER_NAME" && -n "$SERVICE_NAME" ]]; then
+            aws ecs update-service \
+              --cluster "$CLUSTER_NAME" \
+              --service "$SERVICE_NAME" \
+              --force-new-deployment
+            
+            # Wait for service to stabilize
+            aws ecs wait services-stable \
+              --cluster "$CLUSTER_NAME" \
+              --services "$SERVICE_NAME"
+          fi
+
+  # ============================================
+  # STEP 7: Deploy Frontend
+  # ============================================
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: [detect-changes, deploy-main-app]
+    if: |
+      needs.detect-changes.outputs.web-changed == 'true' || 
+      needs.detect-changes.outputs.api-changed == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    environment: ${{ needs.detect-changes.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter @postolio/web...
+
+      - name: Build frontend
+        working-directory: packages/apps/web
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          VITE_FACEBOOK_APP_ID: ${{ vars.VITE_FACEBOOK_APP_ID }}
+          VITE_ENVIRONMENT: ${{ needs.detect-changes.outputs.environment }}
+        run: pnpm build
+
+      - name: Deploy to S3
+        working-directory: packages/apps/web
+        run: |
+          BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name "Postolio-${{ needs.detect-changes.outputs.environment }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
+            --output text)
+            
+          if [[ -z "$BUCKET_NAME" ]]; then
+            echo "Error: Frontend bucket not found"
+            exit 1
+          fi
+          
+          # Sync static assets with cache
+          aws s3 sync dist/ s3://$BUCKET_NAME/ \
+            --delete \
+            --exclude "index.html" \
+            --exclude "*.js.map" \
+            --cache-control "public, max-age=31536000, immutable"
+            
+          # Upload index.html without cache
+          aws s3 cp dist/index.html s3://$BUCKET_NAME/index.html \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --content-type "text/html"
+
+      - name: Invalidate CloudFront
+        run: |
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+            --stack-name "Postolio-${{ needs.detect-changes.outputs.environment }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" \
+            --output text)
+            
+          if [[ -n "$DISTRIBUTION_ID" ]]; then
+            aws cloudfront create-invalidation \
+              --distribution-id "$DISTRIBUTION_ID" \
+              --paths "/*"
+          fi
+
+  # ============================================
+  # STEP 8: Run E2E Tests
+  # ============================================
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-frontend]
+    if: needs.detect-changes.outputs.environment != 'prod'
+    environment: ${{ needs.detect-changes.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+
+      - name: Run E2E tests
+        env:
+          BASE_URL: ${{ vars.VITE_API_URL }}
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+        run: |
+          cd packages/apps/web
+          npm run test:e2e
+
+  # ============================================
+  # STEP 9: Deployment Summary
+  # ============================================
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [detect-changes, deploy-frontend, deploy-microservices]
+    if: always()
+    
+    steps:
+      - name: Generate deployment report
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🎉 Deployment Summary"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📍 Environment: ${{ needs.detect-changes.outputs.environment }}"
+          echo "🔄 Commit: ${{ github.sha }}"
+          echo ""
+          echo "📦 Changed Components:"
+          [[ "${{ needs.detect-changes.outputs.api-changed }}" == "true" ]] && echo "  ✅ API"
+          [[ "${{ needs.detect-changes.outputs.web-changed }}" == "true" ]] && echo "  ✅ Web"
+          [[ "${{ needs.detect-changes.outputs.infra-changed }}" == "true" ]] && echo "  ✅ Infrastructure"
+          [[ "${{ needs.detect-changes.outputs.token-service-changed }}" == "true" ]] && echo "  ✅ Token Service"
+          [[ "${{ needs.detect-changes.outputs.publisher-changed }}" == "true" ]] && echo "  ✅ Publisher"
+          [[ "${{ needs.detect-changes.outputs.retry-handler-changed }}" == "true" ]] && echo "  ✅ Retry Handler"
+          [[ "${{ needs.detect-changes.outputs.dlq-processor-changed }}" == "true" ]] && echo "  ✅ DLQ Processor"
+          [[ "${{ needs.detect-changes.outputs.schedule-management-changed }}" == "true" ]] && echo "  ✅ Schedule Management"
+          [[ "${{ needs.detect-changes.outputs.schedule-cleanup-changed }}" == "true" ]] && echo "  ✅ Schedule Cleanup"
+          [[ "${{ needs.detect-changes.outputs.status-sync-changed }}" == "true" ]] && echo "  ✅ Status Sync"
+          echo ""
+          echo "🔗 Application URL: ${{ vars.VITE_API_URL }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Send deployment notification
+        if: needs.detect-changes.outputs.environment == 'prod'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = `
+            ## 🚀 Production Deployment Complete
+            
+            **Environment:** ${{ needs.detect-changes.outputs.environment }}
+            **Commit:** ${{ github.sha }}
+            **Deployed by:** ${{ github.actor }}
+            
+            ### Changed Services:
+            ${[
+              ${{ needs.detect-changes.outputs.api-changed }} && '- API',
+              ${{ needs.detect-changes.outputs.web-changed }} && '- Web Frontend',
+              ${{ needs.detect-changes.outputs.token-service-changed }} && '- Token Service',
+              ${{ needs.detect-changes.outputs.publisher-changed }} && '- Publisher Service'
+            ].filter(Boolean).join('\n')}
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
+            });
