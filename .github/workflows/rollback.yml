@@ -31,6 +31,13 @@ on:
         required: true
         default: 'previous'
 
+permissions:
+  contents: read
+  packages: write
+  deployments: write
+  id-token: write
+  issues: write
+
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
 

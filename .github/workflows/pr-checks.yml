@@ -4,6 +4,14 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+  security-events: write
+  issues: write
+  statuses: write
+
 env:
   NODE_VERSION: '22'
   PNPM_VERSION: '9.9.0'
@@ -229,23 +237,19 @@ jobs:
     steps:
       - name: Comment PR
         uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const checkRuns = await github.rest.checks.listForRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: context.sha
-            });
-            
             const summary = `
             ## 📊 PR Check Summary
             
             | Check | Status |
             |-------|--------|
-            | Code Quality | ${checkRuns.data.check_runs.find(r => r.name === 'Code Quality')?.conclusion || 'pending'} |
-            | Unit Tests | ${checkRuns.data.check_runs.find(r => r.name === 'Unit Tests')?.conclusion || 'pending'} |
-            | Build Validation | ${checkRuns.data.check_runs.find(r => r.name.includes('Build Validation'))?.conclusion || 'pending'} |
-            | Security Scan | ${checkRuns.data.check_runs.find(r => r.name === 'Security Scan')?.conclusion || 'pending'} |
+            | Code Quality | ${{ needs.code-quality.result }} |
+            | Unit Tests | ${{ needs.unit-tests.result }} |
+            | Build Validation | ${{ needs.build-validation.result }} |
+            | Security Scan | ${{ needs.security-scan.result }} |
             
             ---
             *Generated at: ${new Date().toISOString()}*

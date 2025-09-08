@@ -24,6 +24,13 @@ concurrency:
   group: deploy-${{ github.ref }}-${{ github.event.inputs.environment || 'dev' }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: write
+  deployments: write
+  id-token: write
+  pull-requests: read
+
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
   NODE_VERSION: '22'
@@ -634,10 +641,17 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Send deployment notification
-        if: needs.detect-changes.outputs.environment == 'prod'
+        if: needs.detect-changes.outputs.environment == 'prod' && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const changes = [];
+            if ('${{ needs.detect-changes.outputs.api-changed }}' === 'true') changes.push('- API');
+            if ('${{ needs.detect-changes.outputs.web-changed }}' === 'true') changes.push('- Web Frontend');
+            if ('${{ needs.detect-changes.outputs.token-service-changed }}' === 'true') changes.push('- Token Service');
+            if ('${{ needs.detect-changes.outputs.publisher-changed }}' === 'true') changes.push('- Publisher Service');
+            
             const summary = `
             ## 🚀 Production Deployment Complete
             
@@ -646,12 +660,7 @@ jobs:
             **Deployed by:** ${{ github.actor }}
             
             ### Changed Services:
-            ${[
-              ${{ needs.detect-changes.outputs.api-changed }} && '- API',
-              ${{ needs.detect-changes.outputs.web-changed }} && '- Web Frontend',
-              ${{ needs.detect-changes.outputs.token-service-changed }} && '- Token Service',
-              ${{ needs.detect-changes.outputs.publisher-changed }} && '- Publisher Service'
-            ].filter(Boolean).join('\n')}
+            ${changes.join('\n')}
             `;
             
             await github.rest.issues.createComment({
