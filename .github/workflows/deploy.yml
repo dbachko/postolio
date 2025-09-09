@@ -190,13 +190,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run linting
-        run: npx turbo lint --filter=[HEAD^1]
+        run: npx turbo lint --filter='...[origin/${{ github.base_ref || github.event.before }}]'
 
       - name: Run type checking
-        run: npx turbo typecheck --filter=[HEAD^1]
+        run: npx turbo typecheck --filter='...[origin/${{ github.base_ref || github.event.before }}]'
 
       - name: Run tests
-        run: npx turbo test --filter=[HEAD^1]
+        run: npx turbo test --filter='...[origin/${{ github.base_ref || github.event.before }}]'
 
   # ============================================
   # STEP 3: Build & Push Docker Images
@@ -369,7 +369,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build service
-        run: npx turbo build --filter=@postolio/${{ matrix.service }}
+        run: npx turbo build --filter="@postolio/${{ matrix.service }}"
 
       - name: Package Lambda
         working-directory: packages/services/${{ matrix.service }}
