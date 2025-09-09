@@ -334,6 +334,13 @@ jobs:
             pnpm cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
           fi
 
+      - name: Deploy ECR Registry Stack
+        working-directory: packages/infra/cdk
+        run: |
+          pnpm cdk deploy EcrRegistry-${{ needs.detect-changes.outputs.environment }} \
+            --require-approval never \
+            --context environment=${{ needs.detect-changes.outputs.environment }}
+
       - name: Deploy Service Discovery Stack
         working-directory: packages/infra/cdk
         run: |

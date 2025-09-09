@@ -5,6 +5,7 @@ import { AwsSolutionsChecks } from "cdk-nag";
 import { ContentSchedulerStack } from "../lib/scheduler/content-scheduler-stack";
 import { PostolioStack } from "../lib/stacks/postolio-stack";
 import { TokenServiceStack } from "../lib/stacks/token-service-stack";
+import { EcrRegistryStack } from "../lib/stacks/ecr-registry-stack";
 import { ServiceDiscoveryStack } from "../lib/stacks/service-discovery-stack";
 import { getOAuthConfig } from "../lib/utils/oauth-config";
 
@@ -37,7 +38,20 @@ const envConfig = {
 
 const stackEnv = envConfig[environment as keyof typeof envConfig];
 
-// 1. Deploy Shared Service Discovery stack first (all services will use this)
+// 1. Deploy ECR registry (ensures repository exists for image pushes)
+const ecrRegistry = new EcrRegistryStack(app, `EcrRegistry-${environment}`, {
+  env: stackEnv,
+  environment: environment as "dev" | "staging" | "prod",
+  description: `ECR repositories for ${environment} environment`,
+  tags: {
+    Environment: environment,
+    Service: "ECR",
+    ManagedBy: "CDK",
+    Version: "1.0",
+  },
+});
+
+// 2. Deploy Shared Service Discovery stack (all services will use this)
 const serviceDiscoveryStack = new ServiceDiscoveryStack(
   app,
   `ServiceDiscovery-${environment}`,
@@ -57,7 +71,7 @@ const serviceDiscoveryStack = new ServiceDiscoveryStack(
 // Get OAuth configuration from shared utility
 const oauthConfig = getOAuthConfig(app);
 
-// 2. Deploy Token Service stack (uses shared service discovery)
+// 3. Deploy Token Service stack (uses shared service discovery)
 const tokenServiceStack = new TokenServiceStack(
   app,
   `TokenService-${environment}`,
@@ -78,7 +92,7 @@ const tokenServiceStack = new TokenServiceStack(
   },
 );
 
-// 3. Deploy ContentScheduler stack (uses shared service discovery)
+// 4. Deploy ContentScheduler stack (uses shared service discovery)
 const contentSchedulerStack = new ContentSchedulerStack(
   app,
   `ContentScheduler-${environment}`,
@@ -97,7 +111,7 @@ const contentSchedulerStack = new ContentSchedulerStack(
   },
 );
 
-// 4. Deploy Postolio stack (uses shared service discovery)
+// 5. Deploy Postolio stack (uses shared service discovery)
 const postolioStack = new PostolioStack(app, `Postolio-${environment}`, {
   env: stackEnv,
   environment,
