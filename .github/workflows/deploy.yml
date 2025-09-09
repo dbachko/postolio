@@ -252,20 +252,37 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Ensure ECR repository exists (API only)
+        if: (matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch') && matrix.service.name == 'api'
+        env:
+          REPO_NAME: ${{ 'postolio' }}
+        run: |
+          if ! aws ecr describe-repositories --repository-names "$REPO_NAME" >/dev/null 2>&1; then
+            echo "Creating ECR repository: $REPO_NAME"
+            aws ecr create-repository \
+              --repository-name "$REPO_NAME" \
+              --image-scanning-configuration scanOnPush=true \
+              --image-tag-mutability MUTABLE >/dev/null
+          else
+            echo "ECR repository exists: $REPO_NAME"
+          fi
+
       - name: Set up Docker Buildx
         if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push Docker image
-        if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
+      - name: Build and push Docker image (API only)
+        if: (matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch') && matrix.service.name == 'api'
         uses: docker/build-push-action@v5
+        env:
+          REPO_NAME: postolio
         with:
           context: ${{ matrix.service.context }}
           file: ${{ matrix.service.path }}/Dockerfile
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/postolio-${{ matrix.service.name }}:${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/postolio-${{ matrix.service.name }}:${{ needs.detect-changes.outputs.environment }}-latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ needs.detect-changes.outputs.environment }}-latest
           cache-from: type=gha,scope=${{ matrix.service.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
           build-args: |
