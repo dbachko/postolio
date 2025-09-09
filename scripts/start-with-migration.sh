@@ -36,31 +36,44 @@ if [ -z "${DATABASE_URL}" ]; then
     fi
 fi
 
-# Run Prisma migrations with retry logic
-echo "Running database migrations..."
-MAX_RETRIES=5
-RETRY_COUNT=0
+# Run Prisma migrations with retry logic (skip if schema is absent)
+if [ -f ./prisma/schema.prisma ]; then
+  echo "Running database migrations..."
+  MAX_RETRIES=5
+  RETRY_COUNT=0
 
-while [ ${RETRY_COUNT} -lt ${MAX_RETRIES} ]; do
-    echo "Migration attempt $((RETRY_COUNT + 1)) of ${MAX_RETRIES}..."
-    
-    if npx prisma migrate deploy --schema=./prisma/schema.prisma 2>&1; then
-        echo "Database migrations completed successfully"
-        break
-    else
-        RETRY_COUNT=$((RETRY_COUNT + 1))
-        if [ ${RETRY_COUNT} -lt ${MAX_RETRIES} ]; then
-            WAIT_TIME=$((RETRY_COUNT * 10))
-            echo "Migration failed, retrying in ${WAIT_TIME} seconds..."
-            sleep ${WAIT_TIME}
-        else
-            echo "Database migration failed after ${MAX_RETRIES} attempts!"
-            echo "Please check database connectivity and migration files"
-            exit 1
-        fi
-    fi
-done
+  while [ ${RETRY_COUNT} -lt ${MAX_RETRIES} ]; do
+      echo "Migration attempt $((RETRY_COUNT + 1)) of ${MAX_RETRIES}..."
+      
+      if npx prisma migrate deploy --schema=./prisma/schema.prisma 2>&1; then
+          echo "Database migrations completed successfully"
+          break
+      else
+          RETRY_COUNT=$((RETRY_COUNT + 1))
+          if [ ${RETRY_COUNT} -lt ${MAX_RETRIES} ]; then
+              WAIT_TIME=$((RETRY_COUNT * 10))
+              echo "Migration failed, retrying in ${WAIT_TIME} seconds..."
+              sleep ${WAIT_TIME}
+          else
+              echo "Database migration failed after ${MAX_RETRIES} attempts!"
+              echo "Please check database connectivity and migration files"
+              exit 1
+          fi
+      fi
+  done
+else
+  echo "Prisma schema not found at ./prisma/schema.prisma — skipping migrations"
+fi
 
 # Start the application
 echo "Starting application server..."
-exec npm start
+
+# Prefer monorepo path for API dist, fall back to local dist
+if [ -f packages/apps/api/dist/server.js ]; then
+  exec node packages/apps/api/dist/server.js
+elif [ -f dist/server.js ]; then
+  exec node dist/server.js
+else
+  echo "Could not find compiled server entry (dist/server.js). Exiting."
+  exit 1
+fi
