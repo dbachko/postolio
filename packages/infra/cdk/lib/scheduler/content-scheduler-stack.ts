@@ -532,22 +532,8 @@ export class ContentSchedulerStack extends cdk.Stack {
             "@aws-lambda-powertools/tracer",
             "@aws-lambda-powertools/metrics",
           ],
-          nodeModules: ["@prisma/client"],
-          commandHooks: {
-            beforeBundling() {
-              return [];
-            },
-            beforeInstall() {
-              return [];
-            },
-            afterBundling(inputDir: string, outputDir: string) {
-              return [
-                `cp -r ${inputDir}/node_modules/.prisma ${outputDir}/`,
-                `mkdir -p ${outputDir}/node_modules/@prisma/`,
-                `cp -r ${inputDir}/node_modules/@prisma/client ${outputDir}/node_modules/@prisma/`,
-              ];
-            },
-          },
+          // Include Prisma CLI so @prisma/client postinstall can generate and fetch engines
+          nodeModules: ["@prisma/client", "prisma"],
         },
         timeout: cdk.Duration.seconds(30),
         memorySize: 1024,
