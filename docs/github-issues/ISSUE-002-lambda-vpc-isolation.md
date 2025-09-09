@@ -3,9 +3,11 @@
 ## 🚨 Security Requirement
 
 ### Problem
+
 All Lambda functions are currently deployed **without VPC configuration**, exposing them to potential security risks. Functions have direct internet access and are not network-isolated, violating enterprise security best practices.
 
 ### Security Impact
+
 - **Network exposure** - Functions accessible from public internet
 - **No network segmentation** - Cannot restrict traffic between components
 - **Compliance violation** - Fails SOC2/PCI requirements for network isolation
@@ -13,6 +15,7 @@ All Lambda functions are currently deployed **without VPC configuration**, expos
 - **Missing defense in depth** - No network-level security controls
 
 ### Current State vs Required
+
 ```
 Current: Lambda functions with public internet access
 Required: Lambda functions in private VPC subnets
@@ -26,31 +29,31 @@ Gap: No VPC configuration implemented
 ```typescript
 // aws-infrastructure/lib/scheduler/content-scheduler-stack.ts
 
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ec2 from "aws-cdk-lib/aws-ec2";
 
 // Create VPC with proper subnet configuration
-const vpc = new ec2.Vpc(this, 'SchedulerVPC', {
+const vpc = new ec2.Vpc(this, "SchedulerVPC", {
   maxAzs: 2,
   natGateways: 2, // HA NAT gateways
   subnetConfiguration: [
     {
-      name: 'Public',
+      name: "Public",
       subnetType: ec2.SubnetType.PUBLIC,
       cidrMask: 24,
     },
     {
-      name: 'Private',
+      name: "Private",
       subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       cidrMask: 24,
     },
     {
-      name: 'Isolated',
+      name: "Isolated",
       subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
       cidrMask: 24,
     },
   ],
   flowLogs: {
-    'VPCFlowLogs': {
+    VPCFlowLogs: {
       destination: ec2.FlowLogDestination.toCloudWatchLogs(),
       trafficType: ec2.FlowLogTrafficType.ALL,
     },
@@ -62,9 +65,9 @@ const vpc = new ec2.Vpc(this, 'SchedulerVPC', {
 
 ```typescript
 // Create security groups for different components
-const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSG', {
+const lambdaSecurityGroup = new ec2.SecurityGroup(this, "LambdaSG", {
   vpc,
-  description: 'Security group for Lambda functions',
+  description: "Security group for Lambda functions",
   allowAllOutbound: false, // Explicit outbound rules
 });
 
@@ -72,19 +75,19 @@ const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSG', {
 lambdaSecurityGroup.addEgressRule(
   ec2.Peer.anyIpv4(),
   ec2.Port.tcp(443),
-  'Allow HTTPS to AWS services'
+  "Allow HTTPS to AWS services",
 );
 
 // Allow connection to RDS
-const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RDSSG', {
+const rdsSecurityGroup = new ec2.SecurityGroup(this, "RDSSG", {
   vpc,
-  description: 'Security group for RDS',
+  description: "Security group for RDS",
 });
 
 rdsSecurityGroup.addIngressRule(
   lambdaSecurityGroup,
   ec2.Port.tcp(5432),
-  'Allow PostgreSQL from Lambda'
+  "Allow PostgreSQL from Lambda",
 );
 ```
 
@@ -92,10 +95,10 @@ rdsSecurityGroup.addIngressRule(
 
 ```typescript
 // Configure Lambda with VPC
-const apiLambda = new lambda.Function(this, 'ApiHandler', {
+const apiLambda = new lambda.Function(this, "ApiHandler", {
   runtime: lambda.Runtime.NODEJS_20_X,
-  handler: 'index.handler',
-  code: lambda.Code.fromAsset('lambda'),
+  handler: "index.handler",
+  code: lambda.Code.fromAsset("lambda"),
   vpc: vpc,
   vpcSubnets: {
     subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -109,16 +112,16 @@ const apiLambda = new lambda.Function(this, 'ApiHandler', {
 });
 
 // Add VPC endpoints for AWS services to avoid internet routing
-const s3Endpoint = vpc.addGatewayEndpoint('S3Endpoint', {
+const s3Endpoint = vpc.addGatewayEndpoint("S3Endpoint", {
   service: ec2.GatewayVpcEndpointAwsService.S3,
 });
 
-const dynamoEndpoint = vpc.addGatewayEndpoint('DynamoEndpoint', {
+const dynamoEndpoint = vpc.addGatewayEndpoint("DynamoEndpoint", {
   service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
 });
 
 // Interface endpoints for other services
-const secretsEndpoint = vpc.addInterfaceEndpoint('SecretsEndpoint', {
+const secretsEndpoint = vpc.addInterfaceEndpoint("SecretsEndpoint", {
   service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
   subnets: {
     subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -131,8 +134,11 @@ const secretsEndpoint = vpc.addInterfaceEndpoint('SecretsEndpoint', {
 ```typescript
 // Configure NAT instances for cost optimization (optional)
 const natInstance = new ec2.NatProvider.instance({
-  instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-  keyName: 'nat-instance-key',
+  instanceType: ec2.InstanceType.of(
+    ec2.InstanceClass.T3,
+    ec2.InstanceSize.MICRO,
+  ),
+  keyName: "nat-instance-key",
 });
 
 // Or use managed NAT Gateway (recommended for production)
@@ -156,41 +162,42 @@ Internet Gateway
 ### Performance Considerations
 
 #### Cold Start Mitigation
+
 ```typescript
 // 1. Use provisioned concurrency for critical functions
-const alias = new lambda.Alias(this, 'ProdAlias', {
-  aliasName: 'prod',
+const alias = new lambda.Alias(this, "ProdAlias", {
+  aliasName: "prod",
   version: apiLambda.currentVersion,
   provisionedConcurrentExecutions: 5,
 });
 
 // 2. Optimize ENI management
-const lambdaWithOptimizedENI = new lambda.Function(this, 'OptimizedLambda', {
+const lambdaWithOptimizedENI = new lambda.Function(this, "OptimizedLambda", {
   // ... other config
   vpc: vpc,
   allowPublicSubnet: false,
-  filesystem: lambda.FileSystem.fromEfsAccessPoint(
-    accessPoint,
-    '/mnt/efs'
-  ), // Share ENI across invocations
+  filesystem: lambda.FileSystem.fromEfsAccessPoint(accessPoint, "/mnt/efs"), // Share ENI across invocations
 });
 ```
 
 ### Migration Strategy
 
 #### Phase 1: Development Environment
+
 1. Deploy VPC in development
 2. Configure Lambda functions
 3. Test connectivity
 4. Measure performance impact
 
 #### Phase 2: Staging Environment
+
 1. Deploy to staging
 2. Load testing with VPC
 3. Optimize cold starts
 4. Validate security groups
 
 #### Phase 3: Production Deployment
+
 1. Deploy VPC infrastructure
 2. Migrate Lambda functions
 3. Monitor performance
@@ -232,11 +239,11 @@ const lambdaWithOptimizedENI = new lambda.Function(this, 'OptimizedLambda', {
 
 ### Performance Benchmarks
 
-| Metric | Without VPC | With VPC | Acceptable |
-|--------|-------------|----------|------------|
-| Cold Start | ~200ms | ~400ms | < 500ms |
-| Warm Start | ~50ms | ~50ms | < 100ms |
-| P99 Latency | 1.5s | 1.8s | < 2s |
+| Metric      | Without VPC | With VPC | Acceptable |
+| ----------- | ----------- | -------- | ---------- |
+| Cold Start  | ~200ms      | ~400ms   | < 500ms    |
+| Warm Start  | ~50ms       | ~50ms    | < 100ms    |
+| P99 Latency | 1.5s        | 1.8s     | < 2s       |
 
 ### Cost Impact
 

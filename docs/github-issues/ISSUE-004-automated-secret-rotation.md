@@ -3,9 +3,11 @@
 ## 🔐 Security & Compliance Requirement
 
 ### Problem
+
 Secrets are **manually managed** with no automatic rotation mechanism. This creates security risks from long-lived credentials and makes compliance (SOC2, ISO 27001) difficult to achieve.
 
 ### Security Impact
+
 - **Credential compromise risk** from long-lived secrets
 - **Compliance violation** - Most standards require 90-day rotation
 - **Manual rotation errors** - Risk of service outage
@@ -13,6 +15,7 @@ Secrets are **manually managed** with no automatic rotation mechanism. This crea
 - **Insider threat** - No automatic revocation
 
 ### Current State vs Required
+
 ```
 Current: Static secrets with manual rotation
 Required: Automated rotation every 30-90 days
@@ -26,28 +29,28 @@ Gap: No rotation Lambda functions or schedule
 ```typescript
 // aws-infrastructure/lib/rotation/database-rotation-stack.ts
 
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as rds from "aws-cdk-lib/aws-rds";
+import * as lambda from "aws-cdk-lib/aws-lambda";
 
 // Database secret with automatic rotation
-const dbSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
-  description: 'RDS PostgreSQL credentials',
+const dbSecret = new secretsmanager.Secret(this, "DatabaseSecret", {
+  description: "RDS PostgreSQL credentials",
   generateSecretString: {
     secretStringTemplate: JSON.stringify({
-      username: 'postolio_admin',
+      username: "postolio_admin",
     }),
-    generateStringKey: 'password',
-    excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+    generateStringKey: "password",
+    excludeCharacters: " %+~`#$&*()|[]{}:;<>?!'/@\"\\",
     passwordLength: 32,
   },
 });
 
 // Rotation Lambda function
-const rotationLambda = new lambda.Function(this, 'DbRotationLambda', {
+const rotationLambda = new lambda.Function(this, "DbRotationLambda", {
   runtime: lambda.Runtime.PYTHON_3_11,
-  handler: 'index.handler',
-  code: lambda.Code.fromAsset('lambda/rotation/database'),
+  handler: "index.handler",
+  code: lambda.Code.fromAsset("lambda/rotation/database"),
   environment: {
     SECRETS_MANAGER_ENDPOINT: `https://secretsmanager.${this.region}.amazonaws.com`,
     RDS_ENDPOINT: database.clusterEndpoint.hostname,
@@ -60,7 +63,7 @@ const rotationLambda = new lambda.Function(this, 'DbRotationLambda', {
 });
 
 // Configure rotation
-dbSecret.addRotationSchedule('DbRotation', {
+dbSecret.addRotationSchedule("DbRotation", {
   automaticallyAfter: cdk.Duration.days(30),
   lambda: rotationLambda,
   vpcSubnets: {
@@ -79,20 +82,20 @@ database.grantConnect(rotationLambda);
 
 ```typescript
 // API key rotation for external services
-const apiKeySecret = new secretsmanager.Secret(this, 'ApiKeySecret', {
-  description: 'External API keys',
+const apiKeySecret = new secretsmanager.Secret(this, "ApiKeySecret", {
+  description: "External API keys",
   secretString: JSON.stringify({
-    openai: '',
-    facebook: '',
-    instagram: '',
+    openai: "",
+    facebook: "",
+    instagram: "",
   }),
 });
 
 // Rotation Lambda for API keys
-const apiKeyRotationLambda = new lambda.Function(this, 'ApiKeyRotation', {
+const apiKeyRotationLambda = new lambda.Function(this, "ApiKeyRotation", {
   runtime: lambda.Runtime.NODEJS_20_X,
-  handler: 'rotate-api-keys.handler',
-  code: lambda.Code.fromAsset('lambda/rotation/api-keys'),
+  handler: "rotate-api-keys.handler",
+  code: lambda.Code.fromAsset("lambda/rotation/api-keys"),
   environment: {
     SECRET_ARN: apiKeySecret.secretArn,
     NOTIFICATION_TOPIC: notificationTopic.topicArn,
@@ -101,7 +104,7 @@ const apiKeyRotationLambda = new lambda.Function(this, 'ApiKeyRotation', {
 });
 
 // Schedule rotation every 90 days
-apiKeySecret.addRotationSchedule('ApiKeyRotation', {
+apiKeySecret.addRotationSchedule("ApiKeyRotation", {
   automaticallyAfter: cdk.Duration.days(90),
   lambda: apiKeyRotationLambda,
 });
@@ -127,10 +130,10 @@ def handler(event, context):
     arn = event['SecretId']
     token = event['Token']
     step = event['Step']
-    
+
     # Get the secret
     metadata = secrets_client.describe_secret(SecretId=arn)
-    
+
     if step == "createSecret":
         create_secret(secrets_client, arn, token)
     elif step == "setSecret":
@@ -147,13 +150,13 @@ def create_secret(client, arn, token):
     # Get current secret
     current = client.get_secret_value(SecretId=arn, VersionStage="AWSCURRENT")
     secret = json.loads(current['SecretString'])
-    
+
     # Generate new password
     new_password = client.get_random_password(
         PasswordLength=32,
         ExcludeCharacters=' %+~`#$&*()|[]{}:;<>?!\'/@"\\'
     )['RandomPassword']
-    
+
     # Create new version
     secret['password'] = new_password
     client.put_secret_value(
@@ -173,14 +176,14 @@ def set_secret(client, arn, token):
         VersionStage="AWSPENDING"
     )
     secret = json.loads(pending['SecretString'])
-    
+
     # Get current secret for admin connection
     current = client.get_secret_value(
         SecretId=arn,
         VersionStage="AWSCURRENT"
     )
     current_secret = json.loads(current['SecretString'])
-    
+
     # Connect with current password
     conn = psycopg2.connect(
         host=secret['host'],
@@ -190,7 +193,7 @@ def set_secret(client, arn, token):
         password=current_secret['password'],
         sslmode='require'
     )
-    
+
     try:
         with conn.cursor() as cursor:
             # Change password
@@ -213,7 +216,7 @@ def test_secret(client, arn, token):
         VersionStage="AWSPENDING"
     )
     secret = json.loads(pending['SecretString'])
-    
+
     # Try to connect with new password
     try:
         conn = psycopg2.connect(
@@ -248,8 +251,11 @@ def finish_secret(client, arn, token):
 // Application code to handle rotation
 // services/secrets-manager.ts
 
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
-import { NodeHttpHandler } from '@aws-sdk/node-http-handler';
+import {
+  SecretsManagerClient,
+  GetSecretValueCommand,
+} from "@aws-sdk/client-secrets-manager";
+import { NodeHttpHandler } from "@aws-sdk/node-http-handler";
 
 class SecretsManager {
   private client: SecretsManagerClient;
@@ -276,24 +282,26 @@ class SecretsManager {
     try {
       // Fetch from Secrets Manager
       const response = await this.client.send(
-        new GetSecretValueCommand({ SecretId: secretName })
+        new GetSecretValueCommand({ SecretId: secretName }),
       );
-      
-      const secret = JSON.parse(response.SecretString || '{}');
-      
+
+      const secret = JSON.parse(response.SecretString || "{}");
+
       // Cache the secret
       this.cache.set(secretName, {
         value: secret,
         expiry: Date.now() + this.CACHE_TTL,
       });
-      
+
       return secret;
     } catch (error) {
       // Handle rotation in progress
-      if (error.name === 'InvalidRequestException' && 
-          error.message.includes('rotation')) {
+      if (
+        error.name === "InvalidRequestException" &&
+        error.message.includes("rotation")
+      ) {
         // Wait and retry
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         return this.getSecret(secretName);
       }
       throw error;
@@ -316,7 +324,7 @@ class DatabaseConnection {
   }
 
   async getConnection(): Promise<Pool> {
-    if (!this.pool || !await this.isHealthy()) {
+    if (!this.pool || !(await this.isHealthy())) {
       await this.createPool();
     }
     return this.pool!;
@@ -324,8 +332,10 @@ class DatabaseConnection {
 
   private async createPool(): Promise<void> {
     // Get latest credentials
-    const secret = await this.secretsManager.getSecret('postolio/production/database');
-    
+    const secret = await this.secretsManager.getSecret(
+      "postolio/production/database",
+    );
+
     // Close existing pool
     if (this.pool) {
       await this.pool.end();
@@ -345,18 +355,18 @@ class DatabaseConnection {
     });
 
     // Handle errors
-    this.pool.on('error', (err) => {
-      console.error('Database pool error:', err);
+    this.pool.on("error", (err) => {
+      console.error("Database pool error:", err);
       this.pool = null;
     });
   }
 
   private async isHealthy(): Promise<boolean> {
     if (!this.pool) return false;
-    
+
     try {
       const client = await this.pool.connect();
-      await client.query('SELECT 1');
+      await client.query("SELECT 1");
       client.release();
       return true;
     } catch {
@@ -370,10 +380,10 @@ class DatabaseConnection {
 
 ```typescript
 // CloudWatch alarms for rotation
-const rotationFailureAlarm = new cloudwatch.Alarm(this, 'RotationFailure', {
+const rotationFailureAlarm = new cloudwatch.Alarm(this, "RotationFailure", {
   metric: new cloudwatch.Metric({
-    namespace: 'AWS/SecretsManager',
-    metricName: 'RotationFailed',
+    namespace: "AWS/SecretsManager",
+    metricName: "RotationFailed",
     dimensionsMap: {
       SecretName: dbSecret.secretName,
     },
@@ -384,7 +394,7 @@ const rotationFailureAlarm = new cloudwatch.Alarm(this, 'RotationFailure', {
 
 // SNS notification on failure
 rotationFailureAlarm.addAlarmAction(
-  new cloudwatch_actions.SnsAction(alertTopic)
+  new cloudwatch_actions.SnsAction(alertTopic),
 );
 ```
 
@@ -408,12 +418,12 @@ rotationFailureAlarm.addAlarmAction(
 
 ### Rotation Schedule
 
-| Secret Type | Rotation Period | Compliance Requirement |
-|------------|----------------|----------------------|
-| Database passwords | 30 days | PCI-DSS, SOC2 |
-| API keys | 90 days | Best practice |
-| JWT signing keys | 90 days | Security best practice |
-| Encryption keys | 365 days | GDPR, HIPAA |
+| Secret Type        | Rotation Period | Compliance Requirement |
+| ------------------ | --------------- | ---------------------- |
+| Database passwords | 30 days         | PCI-DSS, SOC2          |
+| API keys           | 90 days         | Best practice          |
+| JWT signing keys   | 90 days         | Security best practice |
+| Encryption keys    | 365 days        | GDPR, HIPAA            |
 
 ### Files to Create/Modify
 

@@ -32,6 +32,6 @@ scripts/get-*.sh
 # scripts/run-migrations-only.sh - KEPT
 *.md
 # Allow legal documents needed by API endpoints
-!DATA_DELETION.md
-!PRIVACY_POLICY.md
-!TERMS_OF_SERVICE.md
+!legal/DATA_DELETION.md
+!legal/PRIVACY_POLICY.md
+!legal/TERMS_OF_SERVICE.md

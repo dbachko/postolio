@@ -1,74 +1,56 @@
-# Multi-stage build for production
-FROM node:22-alpine AS base
-
-# Install necessary packages for building native dependencies
-RUN apk add --no-cache python3 make g++ openssl
-
-# Install dependencies only when needed
-FROM base AS deps
+# Stage 1: Builder
+# This stage builds the application and creates a pruned production deployment.
+FROM node:22-alpine AS builder
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* ./
+# Install pnpm and necessary build tools
+RUN npm i -g pnpm
+RUN apk add --no-cache libc6-compat python3 make g++ openssl
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
-
-# Rebuild the source code only when needed
-FROM base AS builder
-WORKDIR /app
-
-# Copy package files
-COPY package.json package-lock.json* ./
-
-# Install all dependencies (including devDependencies)
-RUN npm ci
-
-# Copy source code
+# Copy the entire monorepo context
+# This is simpler than copying files individually and lets Turborepo handle caching.
 COPY . .
 
-# Generate Prisma client first, then build
-RUN npx prisma generate
+# Install all dependencies using the lockfile
+RUN pnpm install --frozen-lockfile
 
-# Build application
-RUN npm run build
+# Build the target application (@postolio/api) and its dependencies
+RUN pnpm turbo run build --filter=@postolio/api...
 
-# Production image, copy all the files and run next
+# Create a pruned, production-ready deployment for the api service
+# The output will be in /app/out/api
+RUN pnpm deploy --filter=@postolio/api --prod out/api
+
+
+# Stage 2: Runner
+# This stage creates the final, lean production image.
 FROM node:22-alpine AS runner
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apk add --no-cache openssl
-
-# Don't run production as root
+# Create a non-root user for security
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
 
-# Copy the built application from the builder stage
-COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nodejs:nodejs /app/package.json ./package.json
+# Copy the pruned deployment from the builder stage
+COPY --from=builder /app/out/api /app
+
+# Copy other necessary assets from the builder stage
 COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nodejs:nodejs /app/scripts/start-with-migration.sh ./start-with-migration.sh
-COPY --from=builder --chown=nodejs:nodejs /app/scripts/run-migrations-only.sh ./scripts/run-migrations-only.sh
+COPY --from=builder --chown=nodejs:nodejs /app/legal ./legal
 
-# Copy legal documents needed by API endpoints
-COPY --from=builder --chown=nodejs:nodejs /app/DATA_DELETION.md ./DATA_DELETION.md
-COPY --from=builder --chown=nodejs:nodejs /app/PRIVACY_POLICY.md ./PRIVACY_POLICY.md
-COPY --from=builder --chown=nodejs:nodejs /app/TERMS_OF_SERVICE.md ./TERMS_OF_SERVICE.md
+# Make startup script executable
+RUN chmod +x ./start-with-migration.sh
 
-# Make startup scripts executable
-RUN chmod +x ./start-with-migration.sh ./scripts/run-migrations-only.sh
-
+# Set user and environment
 USER nodejs
-
 EXPOSE 3000
-
 ENV PORT=3000
 ENV NODE_ENV=production
 
-# Add health check with longer start period for migrations
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
   CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })" || exit 1
 
+# Start command
 CMD ["./start-with-migration.sh"]
