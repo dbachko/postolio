@@ -13,18 +13,30 @@ COPY . .
 RUN pnpm dlx turbo prune --scope=api --docker --out-dir out
 
 
-# Stage 2: Builder (in pruned workspace)
+# Stage 2: Install pruned deps
+FROM node:22-alpine AS installer
+WORKDIR /app
+RUN npm i -g pnpm
+
+# Copy manifests from pruned workspace for deterministic install
+COPY --from=pruner /app/out/json/ ./
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Stage 3: Build in pruned workspace
 FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Install pnpm and build tools
 RUN npm i -g pnpm && apk add --no-cache libc6-compat python3 make g++ openssl
 
-# Bring in pruned workspace files
-COPY --from=pruner /app/out/ .
-
-# Install production dependencies for pruned workspace
-RUN pnpm install --frozen-lockfile
+# Bring in node_modules and full sources
+COPY --from=installer /app/node_modules ./node_modules
+COPY --from=installer /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=pruner /app/out/full/ ./
 
 # Build the API (and any required deps per turbo pipeline)
 RUN pnpm turbo run build --filter=api
