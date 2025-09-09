@@ -287,20 +287,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Ensure ECR repository exists (API only)
-        if: (matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch') && matrix.service.name == 'api'
-        env:
-          REPO_NAME: ${{ 'postolio' }}
-        run: |
-          if ! aws ecr describe-repositories --repository-names "$REPO_NAME" >/dev/null 2>&1; then
-            echo "Creating ECR repository: $REPO_NAME"
-            aws ecr create-repository \
-              --repository-name "$REPO_NAME" \
-              --image-scanning-configuration scanOnPush=true \
-              --image-tag-mutability MUTABLE >/dev/null
-          else
-            echo "ECR repository exists: $REPO_NAME"
-          fi
+      # ECR repo is managed by CDK; creation occurs in deploy-infrastructure
 
       - name: Set up Docker Buildx
         if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
@@ -370,12 +357,16 @@ jobs:
             pnpm cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
           fi
 
-      - name: Deploy ECR Registry Stack
+      - name: Ensure ECR repository via CDK (if missing)
         working-directory: packages/infra/cdk
         run: |
-          pnpm cdk deploy EcrRegistry-${{ needs.detect-changes.outputs.environment }} \
-            --require-approval never \
-            --context environment=${{ needs.detect-changes.outputs.environment }}
+          if aws ecr describe-repositories --repository-names postolio >/dev/null 2>&1; then
+            echo "ECR repository 'postolio' already exists, skipping CDK deploy"
+          else
+            pnpm cdk deploy EcrRegistry-${{ needs.detect-changes.outputs.environment }} \
+              --require-approval never \
+              --context environment=${{ needs.detect-changes.outputs.environment }}
+          fi
 
       - name: Deploy Service Discovery Stack
         working-directory: packages/infra/cdk
