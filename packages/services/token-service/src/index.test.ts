@@ -33,14 +33,6 @@ describe('Token Service Lambda', () => {
           expiresAt: Date.now() + 3600 * 1000,
         },
       });
-      Item: {
-        userId: 'user-123',
-        brandId: 'brand-456',
-        platform: 'instagram',
-        accessToken: 'test-token',
-        expiresAt: Date.now() + 3600 * 1000,
-      },
-    })
 
     const event = {
       path: '/tokens/user-123/brand-456/instagram',
