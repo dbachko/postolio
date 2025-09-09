@@ -138,23 +138,8 @@ export class PostolioLambdaStack extends cdk.Stack {
             "@aws-sdk/*", // Use Lambda runtime's AWS SDK
             "pg-native", // Native module not needed
           ],
-          nodeModules: ["@prisma/client", "fastify", "openai"],
-          commandHooks: {
-            beforeBundling(inputDir: string, outputDir: string): string[] {
-              return [];
-            },
-            afterBundling(inputDir: string, outputDir: string): string[] {
-              // Copy Prisma client
-              return [
-                `cp -r ${inputDir}/node_modules/.prisma ${outputDir}/`,
-                `mkdir -p ${outputDir}/node_modules/@prisma/`,
-                `cp -r ${inputDir}/node_modules/@prisma/client ${outputDir}/node_modules/@prisma/`,
-              ];
-            },
-            beforeInstall(inputDir: string, outputDir: string): string[] {
-              return [];
-            },
-          },
+          // Include Prisma CLI so @prisma/client postinstall can generate and fetch engines
+          nodeModules: ["@prisma/client", "prisma", "fastify", "openai"],
         },
         tracing: lambda.Tracing.ACTIVE,
         logRetention: logs.RetentionDays.ONE_WEEK,
