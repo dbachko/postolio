@@ -445,9 +445,7 @@ class ApiClient {
     return this.request(`/api/content/history/${brandId}`);
   }
 
-  async publishToInstagram(
-    contentId: string,
-  ): Promise<{
+  async publishToInstagram(contentId: string): Promise<{
     success: boolean;
     content: Content;
     instagramPost?: Record<string, unknown>;
