@@ -227,7 +227,7 @@ jobs:
             changed: ${{ needs.detect-changes.outputs.api-changed }}
           - name: web
             path: packages/apps/web
-            context: packages/apps/web
+            context: .
             changed: ${{ needs.detect-changes.outputs.web-changed }}
     
     steps:

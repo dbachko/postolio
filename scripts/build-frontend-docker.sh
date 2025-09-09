@@ -78,8 +78,7 @@ fi
 echo -e "${YELLOW}Building frontend Docker image...${NC}"
 echo -e "${YELLOW}API URL: $API_URL${NC}"
 
-# Use the monorepo web package directory
-cd "$PROJECT_ROOT/packages/apps/web"
+cd "$PROJECT_ROOT"
 
 # Build Docker image with build arguments
 BUILD_ARGS="--build-arg VITE_API_URL=$API_URL"
@@ -102,7 +101,7 @@ echo -e "${YELLOW}Building Docker image with OAuth credentials...${NC}"
 docker build \
     $BUILD_ARGS \
     -t "postolio-frontend:$ENVIRONMENT" \
-    -f Dockerfile .
+    -f packages/apps/web/Dockerfile .
 
 echo -e "${GREEN}✅ Frontend Docker image built successfully${NC}"
 echo -e "${GREEN}Image tagged as: postolio-frontend:$ENVIRONMENT${NC}"
