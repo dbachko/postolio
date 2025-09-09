@@ -223,9 +223,11 @@ jobs:
         service:
           - name: api
             path: packages/apps/api
+            context: .
             changed: ${{ needs.detect-changes.outputs.api-changed }}
           - name: web
             path: packages/apps/web
+            context: packages/apps/web
             changed: ${{ needs.detect-changes.outputs.web-changed }}
     
     steps:
@@ -258,7 +260,7 @@ jobs:
         if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ matrix.service.context }}
           file: ${{ matrix.service.path }}/Dockerfile
           push: true
           tags: |

@@ -1,5 +1,5 @@
 # Stage 1: Builder
-# This stage builds the application and creates a pruned production deployment.
+# Mirrors the root Dockerfile to build the @postolio/api service from the monorepo.
 FROM node:22-alpine AS builder
 WORKDIR /app
 
@@ -7,8 +7,7 @@ WORKDIR /app
 RUN npm i -g pnpm
 RUN apk add --no-cache libc6-compat python3 make g++ openssl
 
-# Copy the entire monorepo context
-# This is simpler than copying files individually and lets Turborepo handle caching.
+# Copy the entire monorepo context so Turborepo can resolve workspace deps
 COPY . .
 
 # Install all dependencies using the lockfile
@@ -23,7 +22,6 @@ RUN pnpm deploy --filter=@postolio/api --prod out/api
 
 
 # Stage 2: Runner
-# This stage creates the final, lean production image.
 FROM node:22-alpine AS runner
 WORKDIR /app
 
@@ -54,3 +52,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
 
 # Start command
 CMD ["./start-with-migration.sh"]
+
