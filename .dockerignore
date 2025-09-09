@@ -28,8 +28,8 @@ scripts/validate-*.sh
 scripts/quick-*.sh
 scripts/get-*.sh
 # Keep migration scripts
-# scripts/start-with-migration.sh - KEPT
-# scripts/run-migrations-only.sh - KEPT
+!scripts/start-with-migration.sh
+!scripts/run-migrations-only.sh
 *.md
 # Allow legal documents needed by API endpoints
 !legal/DATA_DELETION.md

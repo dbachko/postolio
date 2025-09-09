@@ -189,7 +189,7 @@ build_and_push_images() {
         --build-arg NODE_ENV=production \
         --tag "${ECR_REPO}:${DEPLOYMENT_ID}" \
         --tag "${ECR_REPO}:latest" \
-        --file Dockerfile \
+        --file packages/apps/api/Dockerfile \
         . | tee -a "${LOGS_DIR}/docker-build.log"
     
     # Push to ECR

@@ -78,7 +78,8 @@ fi
 echo -e "${YELLOW}Building frontend Docker image...${NC}"
 echo -e "${YELLOW}API URL: $API_URL${NC}"
 
-cd "$PROJECT_ROOT/frontend"
+# Use the monorepo web package directory
+cd "$PROJECT_ROOT/packages/apps/web"
 
 # Build Docker image with build arguments
 BUILD_ARGS="--build-arg VITE_API_URL=$API_URL"
