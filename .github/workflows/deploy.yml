@@ -73,7 +73,8 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "environment=prod" >> $GITHUB_OUTPUT
+            # Deploy main to 'dev' until production is enabled
+            echo "environment=dev" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
             echo "environment=staging" >> $GITHUB_OUTPUT
           else
@@ -390,12 +391,18 @@ jobs:
             echo "Stack $STACK_NAME not in CDK app. Skipping."
           fi
 
-      - name: Deploy EventBridge Rules Stack
+      - name: Deploy EventBridge Rules Stack (if present)
         working-directory: packages/infra/cdk
         run: |
-          pnpm cdk deploy EventBridgeRules-${{ needs.detect-changes.outputs.environment }} \
-            --require-approval never \
-            --context environment=${{ needs.detect-changes.outputs.environment }}
+          STACK_NAME="EventBridgeRules-${{ needs.detect-changes.outputs.environment }}"
+          if pnpm cdk ls | grep -xq "$STACK_NAME"; then
+            echo "Found $STACK_NAME in app. Deploying..."
+            pnpm cdk deploy "$STACK_NAME" \
+              --require-approval never \
+              --context environment=${{ needs.detect-changes.outputs.environment }}
+          else
+            echo "Stack $STACK_NAME not in CDK app. Skipping."
+          fi
 
   # ============================================
   # STEP 5: Deploy Microservices
