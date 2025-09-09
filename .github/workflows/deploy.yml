@@ -458,9 +458,8 @@ jobs:
           # Create deployment package
           mkdir -p deploy
           cp -r dist/* deploy/
-          cp package.json deploy/
           cd deploy
-          npm ci --production
+          # Artifacts are bundled with tsup; no install needed (avoids lockfile issues)
           zip -r ../${{ matrix.service }}.zip .
 
       - name: Deploy Lambda function
