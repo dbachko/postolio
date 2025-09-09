@@ -208,6 +208,41 @@ jobs:
         run: npx turbo test --filter='...[origin/${{ github.base_ref || github.event.before }}]'
 
   # ============================================
+  # STEP 2.5: Check Infra Bootstrap
+  # ============================================
+  infra-bootstrap-check:
+    name: Check Infra Bootstrap
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    outputs:
+      needs-deploy: ${{ steps.check.outputs.needs_deploy }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check CloudFormation stacks
+        id: check
+        run: |
+          ENV="${{ needs.detect-changes.outputs.environment }}"
+          NEEDS_DEPLOY=false
+
+          if ! aws cloudformation describe-stacks --stack-name "ServiceDiscovery-$ENV" >/dev/null 2>&1; then
+            echo "ServiceDiscovery stack missing for $ENV"
+            NEEDS_DEPLOY=true
+          fi
+
+          if ! aws cloudformation describe-stacks --stack-name "Postolio-$ENV" >/dev/null 2>&1; then
+            echo "Postolio stack missing for $ENV"
+            NEEDS_DEPLOY=true
+          fi
+
+          echo "needs_deploy=$NEEDS_DEPLOY" >> "$GITHUB_OUTPUT"
+
+  # ============================================
   # STEP 3: Build & Push Docker Images
   # ============================================
   build-images:
@@ -294,9 +329,10 @@ jobs:
   deploy-infrastructure:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-images]
+    needs: [detect-changes, infra-bootstrap-check, build-images]
     if: |
       needs.detect-changes.outputs.infra-changed == 'true' || 
+      needs.infra-bootstrap-check.outputs.needs-deploy == 'true' || 
       github.event_name == 'workflow_dispatch'
     environment: ${{ needs.detect-changes.outputs.environment }}
     
