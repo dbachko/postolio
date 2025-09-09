@@ -190,13 +190,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run linting
-        run: pnpm turbo lint --filter=[HEAD^1]
+        run: npx turbo lint --filter=[HEAD^1]
 
       - name: Run type checking
-        run: pnpm turbo typecheck --filter=[HEAD^1]
+        run: npx turbo typecheck --filter=[HEAD^1]
 
       - name: Run tests
-        run: pnpm turbo test --filter=[HEAD^1]
+        run: npx turbo test --filter=[HEAD^1]
 
   # ============================================
   # STEP 3: Build & Push Docker Images
@@ -366,10 +366,10 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --filter @postolio/${{ matrix.service }}...
+        run: pnpm install --frozen-lockfile
 
       - name: Build service
-        run: pnpm turbo build --filter @postolio/${{ matrix.service }}
+        run: npx turbo build --filter=@postolio/${{ matrix.service }}
 
       - name: Package Lambda
         working-directory: packages/services/${{ matrix.service }}
@@ -527,7 +527,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --filter @postolio/web...
+        run: pnpm install --frozen-lockfile
 
       - name: Build frontend
         working-directory: packages/apps/web
