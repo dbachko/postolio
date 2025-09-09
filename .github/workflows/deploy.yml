@@ -375,14 +375,20 @@ jobs:
             --require-approval never \
             --context environment=${{ needs.detect-changes.outputs.environment }}
 
-      - name: Deploy Monitoring Stack
+      - name: Deploy Monitoring Stack (if present)
         working-directory: packages/infra/cdk
         if: needs.detect-changes.outputs.environment == 'prod'
         run: |
-          pnpm cdk deploy Monitoring-${{ needs.detect-changes.outputs.environment }} \
-            --require-approval never \
-            --context environment=${{ needs.detect-changes.outputs.environment }} \
-            --context alertEmail=${{ vars.ALERT_EMAIL }}
+          STACK_NAME="Monitoring-${{ needs.detect-changes.outputs.environment }}"
+          if pnpm cdk ls | grep -xq "$STACK_NAME"; then
+            echo "Found $STACK_NAME in app. Deploying..."
+            pnpm cdk deploy "$STACK_NAME" \
+              --require-approval never \
+              --context environment=${{ needs.detect-changes.outputs.environment }} \
+              --context alertEmail=${{ vars.ALERT_EMAIL }}
+          else
+            echo "Stack $STACK_NAME not in CDK app. Skipping."
+          fi
 
       - name: Deploy EventBridge Rules Stack
         working-directory: packages/infra/cdk
