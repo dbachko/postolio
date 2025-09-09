@@ -31,8 +31,8 @@ services:
 
   frontend:
     build:
-      context: ./packages/apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: packages/apps/web/Dockerfile
     ports:
       - '80:80'
     depends_on:
