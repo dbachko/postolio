@@ -38,6 +38,17 @@ export class EventBusService {
     // Stub implementation
     console.log(`Putting ${events.length} events`)
   }
+
+  async publish(eventType: string, detail: any, metadata?: any): Promise<void> {
+    // Stub implementation
+    console.log(`Publishing event: ${eventType}`)
+    await this.putEvent({
+      source: 'postolio',
+      detailType: eventType,
+      detail: detail,
+      eventBusName: 'default'
+    })
+  }
 }
 
 export default EventBusService

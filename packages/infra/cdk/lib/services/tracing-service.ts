@@ -6,7 +6,7 @@
 export class TracingService {
   private static instance: TracingService
 
-  private constructor() {}
+  constructor() {}
 
   static getInstance(): TracingService {
     if (!TracingService.instance) {
@@ -39,6 +39,21 @@ export class TracingService {
   captureError(error: Error): void {
     // Stub implementation
     console.error(`Captured error:`, error)
+  }
+
+  async traceOperation<T>(name: string, operation: () => Promise<T>, metadata?: any): Promise<T> {
+    // Stub implementation
+    console.log(`Tracing operation: ${name}`, metadata)
+    const segment = this.startSegment(name)
+    try {
+      const result = await operation()
+      this.endSegment(segment)
+      return result
+    } catch (error) {
+      this.captureError(error as Error)
+      this.endSegment(segment)
+      throw error
+    }
   }
 }
 
