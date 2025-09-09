@@ -7,6 +7,7 @@ This directory contains detailed GitHub issue templates for critical production 
 ## 🔴 Critical Issues (Production Blockers)
 
 ### 1. [ISSUE-001: Multi-Region Disaster Recovery](./ISSUE-001-multi-region-dr.md)
+
 **Priority**: CRITICAL  
 **Impact**: No disaster recovery capability  
 **Effort**: 1-2 weeks  
@@ -17,6 +18,7 @@ This directory contains detailed GitHub issue templates for critical production 
 ---
 
 ### 2. [ISSUE-002: Lambda VPC Isolation](./ISSUE-002-lambda-vpc-isolation.md)
+
 **Priority**: CRITICAL  
 **Impact**: Security vulnerability - no network isolation  
 **Effort**: 1 week  
@@ -27,6 +29,7 @@ This directory contains detailed GitHub issue templates for critical production 
 ---
 
 ### 3. [ISSUE-003: Blue-Green Deployment](./ISSUE-003-blue-green-deployment.md)
+
 **Priority**: CRITICAL  
 **Impact**: Deployment risk - no safe rollout mechanism  
 **Effort**: 1-1.5 weeks  
@@ -39,6 +42,7 @@ This directory contains detailed GitHub issue templates for critical production 
 ## 🟡 High Priority Issue
 
 ### 4. [ISSUE-004: Automated Secret Rotation](./ISSUE-004-automated-secret-rotation.md)
+
 **Priority**: HIGH  
 **Impact**: Security compliance requirement  
 **Effort**: 1 week  
@@ -78,6 +82,7 @@ Recommended order for addressing these issues:
 ## Additional Context
 
 These issues were identified during a comprehensive code review using:
+
 - AWS CDK MCP Server for CDK best practices
 - AWS Knowledge MCP Server for AWS architecture patterns
 - Multi-agent architecture review
@@ -88,6 +93,7 @@ All critical security vulnerabilities in the shell scripts have been fixed. Thes
 ## Review Report
 
 For full details of the code review that identified these issues, see:
+
 - [Phase 9 Code Review Report](../phase9-code-review-report.md)
 
 ---

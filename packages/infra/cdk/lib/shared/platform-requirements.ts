@@ -37,7 +37,7 @@ export interface PlatformRequirements {
 export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
   instagram: {
     upload: {
-      formats: ['mp4', 'mov'],
+      formats: ["mp4", "mov"],
       maxSize: 1024 * 1024 * 1024, // 1GB
       maxDuration: 90, // seconds for Reels
     },
@@ -45,11 +45,11 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
       maxDuration: 90,
       minDuration: 3,
       maxFileSize: 1024 * 1024 * 1024, // 1GB
-      supportedCodecs: ['h264', 'hevc'],
-      supportedContainers: ['mp4', 'mov'],
+      supportedCodecs: ["h264", "hevc"],
+      supportedContainers: ["mp4", "mov"],
       minResolution: { width: 540, height: 960 },
       maxResolution: { width: 1920, height: 1920 },
-      aspectRatios: ['9:16', '4:5', '1:1'],
+      aspectRatios: ["9:16", "4:5", "1:1"],
       minFrameRate: 23,
       maxFrameRate: 60,
       audioBitrate: { min: 64000, max: 320000 },
@@ -59,7 +59,7 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
       resolution: { width: 1080, height: 1920 },
       maxBitrate: 5000000,
       audioSettings: {
-        codec: 'AAC',
+        codec: "AAC",
         bitrate: 128000,
         sampleRate: 48000,
       },
@@ -67,7 +67,7 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
   },
   tiktok: {
     upload: {
-      formats: ['mp4', 'mov', 'mpeg', 'avi'],
+      formats: ["mp4", "mov", "mpeg", "avi"],
       maxSize: 4 * 1024 * 1024 * 1024, // 4GB
       maxDuration: 600, // 10 minutes
     },
@@ -75,11 +75,11 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
       maxDuration: 600,
       minDuration: 1,
       maxFileSize: 4 * 1024 * 1024 * 1024, // 4GB
-      supportedCodecs: ['h264', 'hevc'],
-      supportedContainers: ['mp4', 'mov', 'mpeg', 'avi'],
+      supportedCodecs: ["h264", "hevc"],
+      supportedContainers: ["mp4", "mov", "mpeg", "avi"],
       minResolution: { width: 540, height: 960 },
       maxResolution: { width: 1920, height: 1920 },
-      aspectRatios: ['9:16', '16:9', '1:1'],
+      aspectRatios: ["9:16", "16:9", "1:1"],
       minFrameRate: 23,
       maxFrameRate: 60,
       audioBitrate: { min: 96000, max: 320000 },
@@ -89,7 +89,7 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
       resolution: { width: 1080, height: 1920 },
       maxBitrate: 8000000,
       audioSettings: {
-        codec: 'AAC',
+        codec: "AAC",
         bitrate: 192000,
         sampleRate: 48000,
       },
@@ -97,7 +97,7 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
   },
   youtube: {
     upload: {
-      formats: ['mp4', 'mov', 'avi', 'wmv', 'flv', 'mkv'],
+      formats: ["mp4", "mov", "avi", "wmv", "flv", "mkv"],
       maxSize: 256 * 1024 * 1024, // 256MB for Shorts
       maxDuration: 60, // 60 seconds for Shorts
     },
@@ -105,11 +105,11 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
       maxDuration: 60,
       minDuration: 1,
       maxFileSize: 256 * 1024 * 1024, // 256MB for Shorts
-      supportedCodecs: ['h264', 'hevc', 'vp9'],
-      supportedContainers: ['mp4', 'mov', 'avi', 'wmv', 'flv', 'mkv', 'webm'],
+      supportedCodecs: ["h264", "hevc", "vp9"],
+      supportedContainers: ["mp4", "mov", "avi", "wmv", "flv", "mkv", "webm"],
       minResolution: { width: 256, height: 144 },
       maxResolution: { width: 3840, height: 2160 },
-      aspectRatios: ['9:16'], // Shorts must be vertical
+      aspectRatios: ["9:16"], // Shorts must be vertical
       minFrameRate: 24,
       maxFrameRate: 60,
       audioBitrate: { min: 128000, max: 512000 },
@@ -119,7 +119,7 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
       resolution: { width: 1080, height: 1920 },
       maxBitrate: 10000000,
       audioSettings: {
-        codec: 'AAC',
+        codec: "AAC",
         bitrate: 256000,
         sampleRate: 48000,
       },
@@ -127,7 +127,7 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
   },
   facebook: {
     upload: {
-      formats: ['mp4', 'mov'],
+      formats: ["mp4", "mov"],
       maxSize: 4 * 1024 * 1024 * 1024, // 4GB
       maxDuration: 240, // 4 minutes for feed
     },
@@ -135,11 +135,11 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
       maxDuration: 240,
       minDuration: 1,
       maxFileSize: 4 * 1024 * 1024 * 1024, // 4GB
-      supportedCodecs: ['h264', 'hevc'],
-      supportedContainers: ['mp4', 'mov'],
+      supportedCodecs: ["h264", "hevc"],
+      supportedContainers: ["mp4", "mov"],
       minResolution: { width: 120, height: 120 },
       maxResolution: { width: 1920, height: 1080 },
-      aspectRatios: ['16:9', '1:1', '4:5', '9:16', '2:3'],
+      aspectRatios: ["16:9", "1:1", "4:5", "9:16", "2:3"],
       minFrameRate: 23,
       maxFrameRate: 60,
       audioBitrate: { min: 128000, max: 256000 },
@@ -149,7 +149,7 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
       resolution: { width: 1920, height: 1080 },
       maxBitrate: 8000000,
       audioSettings: {
-        codec: 'AAC',
+        codec: "AAC",
         bitrate: 192000,
         sampleRate: 48000,
       },
@@ -157,7 +157,7 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
   },
   linkedin: {
     upload: {
-      formats: ['mp4', 'mov', 'avi'],
+      formats: ["mp4", "mov", "avi"],
       maxSize: 5 * 1024 * 1024 * 1024, // 5GB
       maxDuration: 600, // 10 minutes
     },
@@ -165,11 +165,11 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
       maxDuration: 600,
       minDuration: 3,
       maxFileSize: 5 * 1024 * 1024 * 1024, // 5GB
-      supportedCodecs: ['h264'],
-      supportedContainers: ['mp4', 'mov', 'avi'],
+      supportedCodecs: ["h264"],
+      supportedContainers: ["mp4", "mov", "avi"],
       minResolution: { width: 256, height: 144 },
       maxResolution: { width: 4096, height: 2304 },
-      aspectRatios: ['16:9', '1:1', '4:5', '1.91:1'],
+      aspectRatios: ["16:9", "1:1", "4:5", "1.91:1"],
       minFrameRate: 10,
       maxFrameRate: 60,
       audioBitrate: { min: 64000, max: 512000 },
@@ -179,7 +179,7 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
       resolution: { width: 1920, height: 1080 },
       maxBitrate: 10000000,
       audioSettings: {
-        codec: 'AAC',
+        codec: "AAC",
         bitrate: 256000,
         sampleRate: 48000,
       },
@@ -189,29 +189,29 @@ export const PLATFORM_REQUIREMENTS: Record<string, PlatformRequirements> = {
 
 // Helper function to get platform key from various formats
 export function normalizePlatformKey(platform: string): string {
-  const normalized = platform.toLowerCase().replace(/_/g, '');
-  
+  const normalized = platform.toLowerCase().replace(/_/g, "");
+
   // Map variations to standard keys
   const mappings: Record<string, string> = {
-    'instagramreels': 'instagram',
-    'instagram_reels': 'instagram',
-    'youtubeshorts': 'youtube',
-    'youtube_shorts': 'youtube',
+    instagramreels: "instagram",
+    instagram_reels: "instagram",
+    youtubeshorts: "youtube",
+    youtube_shorts: "youtube",
   };
-  
+
   return mappings[normalized] || normalized;
 }
 
 // Valid MIME types for video uploads
 export const VALID_VIDEO_MIME_TYPES = [
-  'video/mp4',
-  'video/quicktime',
-  'video/x-msvideo',
-  'video/x-ms-wmv',
-  'video/x-flv',
-  'video/x-matroska',
-  'video/mpeg',
-  'video/webm',
+  "video/mp4",
+  "video/quicktime",
+  "video/x-msvideo",
+  "video/x-ms-wmv",
+  "video/x-flv",
+  "video/x-matroska",
+  "video/mpeg",
+  "video/webm",
 ];
 
 // Maximum file size across all platforms (5GB)

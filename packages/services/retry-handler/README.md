@@ -6,9 +6,9 @@ This service implements a generic retry mechanism for failed operations. It can 
 
 ### Scripts
 
--   **Build:** `pnpm build`
--   **Lint:** `pnpm lint`
--   **Test:** `pnpm test`
+- **Build:** `pnpm build`
+- **Lint:** `pnpm lint`
+- **Test:** `pnpm test`
 
 To run any script for only this service from the monorepo root, use the `--filter` flag:
 

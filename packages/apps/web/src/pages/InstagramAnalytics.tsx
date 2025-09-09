@@ -1,119 +1,145 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useAuthStore } from '../stores/authStore'
-import { useBrandStore } from '../stores/brandStore'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Button } from '../components/ui/button'
-import { Badge } from '../components/ui/badge'
-import { Loader2, Eye, Heart, Users, Instagram } from 'lucide-react'
-import { MetricsCard } from '../components/analytics/MetricsCard'
-import { EngagementChart } from '../components/analytics/EngagementChart'
-import { RefreshControls } from '../components/analytics/RefreshControls'
-import { TimeRangeSelector } from '../components/analytics/TimeRangeSelector'
-import { apiClient } from '../lib/api'
-import { formatDistanceToNow } from 'date-fns'
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "../stores/authStore";
+import { useBrandStore } from "../stores/brandStore";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Loader2, Eye, Heart, Users, Instagram } from "lucide-react";
+import { MetricsCard } from "../components/analytics/MetricsCard";
+import { EngagementChart } from "../components/analytics/EngagementChart";
+import { RefreshControls } from "../components/analytics/RefreshControls";
+import { TimeRangeSelector } from "../components/analytics/TimeRangeSelector";
+import { apiClient } from "../lib/api";
+import { formatDistanceToNow } from "date-fns";
 
 interface AnalyticsOverview {
   data: {
-    followers: number
-    impressions: number
-    reach: number
-    profile_views?: number
-    website_clicks?: number
-  }
-  lastUpdated: string
-  fromCache: boolean
+    followers: number;
+    impressions: number;
+    reach: number;
+    profile_views?: number;
+    website_clicks?: number;
+  };
+  lastUpdated: string;
+  fromCache: boolean;
 }
 
 interface PostPerformance {
   posts: Array<{
-    id: string
-    caption: string
-    impressions: number
-    engagement: number
-    media_url: string
-    posted_at: string
-  }>
-  lastUpdated: string
+    id: string;
+    caption: string;
+    impressions: number;
+    engagement: number;
+    media_url: string;
+    posted_at: string;
+  }>;
+  lastUpdated: string;
 }
 
 interface CacheStatus {
-  lastUpdated: string | null
-  cacheAge: number
-  rateLimitRemaining: number
-  configured: boolean
+  lastUpdated: string | null;
+  cacheAge: number;
+  rateLimitRemaining: number;
+  configured: boolean;
 }
 
 export default function InstagramAnalytics() {
-  const { getToken } = useAuthStore()
-  const { selectedBrand } = useBrandStore()
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('7d')
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const { getToken } = useAuthStore();
+  const { selectedBrand } = useBrandStore();
+  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("7d");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch analytics overview
-  const { data: overview, isLoading: overviewLoading, refetch: refetchOverview } = useQuery<AnalyticsOverview>({
-    queryKey: ['instagram-analytics', 'overview', selectedBrand?.id, timeRange],
+  const {
+    data: overview,
+    isLoading: overviewLoading,
+    refetch: refetchOverview,
+  } = useQuery<AnalyticsOverview>({
+    queryKey: ["instagram-analytics", "overview", selectedBrand?.id, timeRange],
     queryFn: async () => {
-      const token = getToken()
-      if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth')
-      return apiClient.get(`/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=${timeRange}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const token = getToken();
+      if (!selectedBrand?.id || !token)
+        throw new Error("Missing brand or auth");
+      return apiClient.get(
+        `/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=${timeRange}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
     },
     enabled: !!selectedBrand?.id && !!getToken(),
     refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
-  })
+  });
 
   // Fetch posts performance
-  const { data: posts, isLoading: postsLoading, refetch: refetchPosts } = useQuery<PostPerformance>({
-    queryKey: ['instagram-analytics', 'posts', selectedBrand?.id],
+  const {
+    data: posts,
+    isLoading: postsLoading,
+    refetch: refetchPosts,
+  } = useQuery<PostPerformance>({
+    queryKey: ["instagram-analytics", "posts", selectedBrand?.id],
     queryFn: async () => {
-      const token = getToken()
-      if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth')
-      return apiClient.get(`/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const token = getToken();
+      if (!selectedBrand?.id || !token)
+        throw new Error("Missing brand or auth");
+      return apiClient.get(
+        `/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
     },
     enabled: !!selectedBrand?.id && !!getToken(),
     refetchInterval: 10 * 60 * 1000, // Refetch every 10 minutes
-  })
+  });
 
   // Fetch cache status
   const { data: status, refetch: refetchStatus } = useQuery<CacheStatus>({
-    queryKey: ['instagram-analytics', 'status', selectedBrand?.id],
+    queryKey: ["instagram-analytics", "status", selectedBrand?.id],
     queryFn: async () => {
-      const token = getToken()
-      if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth')
-      return apiClient.get(`/api/instagram-analytics/status/${selectedBrand.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const token = getToken();
+      if (!selectedBrand?.id || !token)
+        throw new Error("Missing brand or auth");
+      return apiClient.get(
+        `/api/instagram-analytics/status/${selectedBrand.id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
     },
     enabled: !!selectedBrand?.id && !!getToken(),
     refetchInterval: 2 * 60 * 1000, // Refetch every 2 minutes
-  })
+  });
 
   const handleRefresh = async () => {
-    const token = getToken()
-    if (!selectedBrand?.id || !token || isRefreshing) return
-    
-    setIsRefreshing(true)
+    const token = getToken();
+    if (!selectedBrand?.id || !token || isRefreshing) return;
+
+    setIsRefreshing(true);
     try {
-      await apiClient.post(`/api/instagram-analytics/refresh/${selectedBrand.id}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      
+      await apiClient.post(
+        `/api/instagram-analytics/refresh/${selectedBrand.id}`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
       // Refetch all data after refresh
-      await Promise.all([
-        refetchOverview(),
-        refetchPosts(),
-        refetchStatus()
-      ])
+      await Promise.all([refetchOverview(), refetchPosts(), refetchStatus()]);
     } catch (error) {
-      console.error('Refresh failed:', error)
+      console.error("Refresh failed:", error);
     } finally {
-      setIsRefreshing(false)
+      setIsRefreshing(false);
     }
-  }
+  };
 
   if (!selectedBrand) {
     return (
@@ -121,10 +147,12 @@ export default function InstagramAnalytics() {
         <div className="text-center">
           <Instagram className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h1 className="text-2xl font-bold mb-4">Instagram Analytics</h1>
-          <p className="text-muted-foreground">Please select a brand to view analytics.</p>
+          <p className="text-muted-foreground">
+            Please select a brand to view analytics.
+          </p>
         </div>
       </div>
-    )
+    );
   }
 
   if (status && !status.configured) {
@@ -140,7 +168,8 @@ export default function InstagramAnalytics() {
                 Instagram Not Connected
               </CardTitle>
               <CardDescription>
-                Connect your Instagram account to view analytics data for {selectedBrand.name}.
+                Connect your Instagram account to view analytics data for{" "}
+                {selectedBrand.name}.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -151,7 +180,7 @@ export default function InstagramAnalytics() {
           </Card>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -167,7 +196,7 @@ export default function InstagramAnalytics() {
             Insights for {selectedBrand.name}
           </p>
         </div>
-        
+
         <div className="flex flex-wrap gap-3">
           <TimeRangeSelector value={timeRange} onValueChange={setTimeRange} />
           <RefreshControls
@@ -183,13 +212,23 @@ export default function InstagramAnalytics() {
       {status && (
         <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-muted-foreground">
           <span className="whitespace-nowrap">
-            Last updated: {status.lastUpdated ? formatDistanceToNow(new Date(status.lastUpdated), { addSuffix: true }) : 'Never'}
+            Last updated:{" "}
+            {status.lastUpdated
+              ? formatDistanceToNow(new Date(status.lastUpdated), {
+                  addSuffix: true,
+                })
+              : "Never"}
           </span>
-          <Badge variant={overview?.fromCache ? 'secondary' : 'default'} className="text-xs">
-            {overview?.fromCache ? 'Cached' : 'Fresh'}
+          <Badge
+            variant={overview?.fromCache ? "secondary" : "default"}
+            className="text-xs"
+          >
+            {overview?.fromCache ? "Cached" : "Fresh"}
           </Badge>
           <span className="hidden sm:inline">•</span>
-          <span className="whitespace-nowrap">Rate limit: {status.rateLimitRemaining}/200</span>
+          <span className="whitespace-nowrap">
+            Rate limit: {status.rateLimitRemaining}/200
+          </span>
         </div>
       )}
 
@@ -201,7 +240,9 @@ export default function InstagramAnalytics() {
               <CardContent className="p-6">
                 <div className="flex items-center space-x-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-muted-foreground">Loading...</span>
+                  <span className="text-sm text-muted-foreground">
+                    Loading...
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -220,21 +261,21 @@ export default function InstagramAnalytics() {
             value={overview.data.impressions}
             icon={<Eye className="h-4 w-4" />}
             trend={0}
-            description={`Past ${timeRange === '7d' ? '7 days' : timeRange === '30d' ? '30 days' : '90 days'}`}
+            description={`Past ${timeRange === "7d" ? "7 days" : timeRange === "30d" ? "30 days" : "90 days"}`}
           />
           <MetricsCard
             title="Reach"
             value={overview.data.reach}
             icon={<Heart className="h-4 w-4" />}
             trend={0}
-            description={`Past ${timeRange === '7d' ? '7 days' : timeRange === '30d' ? '30 days' : '90 days'}`}
+            description={`Past ${timeRange === "7d" ? "7 days" : timeRange === "30d" ? "30 days" : "90 days"}`}
           />
           <MetricsCard
             title="Profile Views"
             value={overview.data.profile_views || 0}
             icon={<Eye className="h-4 w-4" />}
             trend={0}
-            description={`Past ${timeRange === '7d' ? '7 days' : timeRange === '30d' ? '30 days' : '90 days'}`}
+            description={`Past ${timeRange === "7d" ? "7 days" : timeRange === "30d" ? "30 days" : "90 days"}`}
           />
         </div>
       ) : null}
@@ -260,7 +301,9 @@ export default function InstagramAnalytics() {
           <CardContent className="p-6">
             <div className="flex items-center space-x-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm text-muted-foreground">Loading posts...</span>
+              <span className="text-sm text-muted-foreground">
+                Loading posts...
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -301,7 +344,9 @@ export default function InstagramAnalytics() {
                         </span>
                       </div>
                       <span className="text-muted-foreground">
-                        {formatDistanceToNow(new Date(post.posted_at), { addSuffix: true })}
+                        {formatDistanceToNow(new Date(post.posted_at), {
+                          addSuffix: true,
+                        })}
                       </span>
                     </div>
                   </CardContent>
@@ -314,7 +359,9 @@ export default function InstagramAnalytics() {
         <Card>
           <CardContent className="p-6 text-center">
             <Instagram className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No posts data available</h3>
+            <h3 className="text-lg font-medium mb-2">
+              No posts data available
+            </h3>
             <p className="text-muted-foreground mb-4">
               Start posting content on Instagram to see analytics data.
             </p>
@@ -325,5 +372,5 @@ export default function InstagramAnalytics() {
         </Card>
       )}
     </div>
-  )
+  );
 }

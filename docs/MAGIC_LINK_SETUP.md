@@ -39,6 +39,7 @@ FRONTEND_URL=http://localhost:5173     # Change to your production URL in produc
    - Use this password as `SMTP_PASS`
 
 3. **Configure your .env**:
+
 ```bash
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
@@ -52,6 +53,7 @@ SMTP_PASS=your-16-char-app-password
 1. **Create a SendGrid account** at https://sendgrid.com
 2. **Generate an API key** in Settings > API Keys
 3. **Configure your .env**:
+
 ```bash
 SMTP_HOST=smtp.sendgrid.net
 SMTP_PORT=587
@@ -65,6 +67,7 @@ SMTP_PASS=your-sendgrid-api-key
 1. **Verify your domain** in AWS SES console
 2. **Create SMTP credentials** in SES > SMTP Settings
 3. **Configure your .env**:
+
 ```bash
 SMTP_HOST=email-smtp.us-east-1.amazonaws.com
 SMTP_PORT=587
@@ -79,6 +82,7 @@ SMTP_PASS=your-ses-smtp-password
 2. **Verify your domain**
 3. **Get SMTP credentials** from Domain Settings
 4. **Configure your .env**:
+
 ```bash
 SMTP_HOST=smtp.mailgun.org
 SMTP_PORT=587
@@ -90,16 +94,19 @@ SMTP_PASS=your-mailgun-password
 ## Testing Your Configuration
 
 1. **Start the development server**:
+
 ```bash
 npm run dev
 ```
 
 2. **Check configuration status**:
+
 ```bash
 curl http://localhost:3000/api/auth/magic-link/status
 ```
 
 You should see:
+
 ```json
 {
   "configured": true,
@@ -118,19 +125,23 @@ You should see:
 ## Security Features
 
 ### Rate Limiting
+
 - Maximum 5 magic link requests per email per hour
 - Prevents abuse and spam
 
 ### Token Security
+
 - Tokens are 32-character random strings using nanoid
 - Stored in Redis with automatic expiration
 - One-time use only (deleted immediately after verification)
 
 ### Email Verification
+
 - Magic links automatically verify email addresses
 - No separate email verification step needed
 
 ### Time Limits
+
 - Magic links expire after 15 minutes
 - Expired links return an error message
 - Users can request a new link immediately
@@ -138,6 +149,7 @@ You should see:
 ## User Experience
 
 ### Sign Up Flow
+
 1. User enters email address
 2. System sends magic link
 3. User clicks link in email
@@ -145,12 +157,14 @@ You should see:
 5. Email is automatically verified
 
 ### Sign In Flow
+
 1. User enters email address
 2. System sends magic link (only if account exists)
 3. User clicks link in email
 4. User is logged in immediately
 
 ### Security Messages
+
 - Sign-in attempts for non-existent emails show generic success message
 - Prevents email enumeration attacks
 - All error messages are user-friendly and non-revealing
@@ -160,20 +174,22 @@ You should see:
 ### Magic Link Not Sending
 
 1. **Check SMTP configuration**:
+
 ```bash
 # Verify all SMTP variables are set
 grep SMTP .env
 ```
 
 2. **Test SMTP connection**:
+
 ```javascript
 // Add this test script as test-email.js
-const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransporter({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === 'true',
+  secure: process.env.SMTP_SECURE === "true",
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -182,9 +198,9 @@ const transporter = nodemailer.createTransporter({
 
 transporter.verify((error, success) => {
   if (error) {
-    console.log('SMTP Error:', error);
+    console.log("SMTP Error:", error);
   } else {
-    console.log('SMTP Ready');
+    console.log("SMTP Ready");
   }
 });
 ```
@@ -222,6 +238,7 @@ transporter.verify((error, success) => {
 ## API Reference
 
 ### Send Magic Link
+
 ```http
 POST /api/auth/magic-link/send
 Content-Type: application/json
@@ -233,6 +250,7 @@ Content-Type: application/json
 ```
 
 ### Verify Magic Link
+
 ```http
 POST /api/auth/magic-link/verify
 Content-Type: application/json
@@ -243,6 +261,7 @@ Content-Type: application/json
 ```
 
 ### Check Configuration Status
+
 ```http
 GET /api/auth/magic-link/status
 ```
@@ -250,6 +269,7 @@ GET /api/auth/magic-link/status
 ## Support
 
 For issues or questions:
+
 1. Check server logs for SMTP errors
 2. Verify environment variables are loaded
 3. Test with different email providers

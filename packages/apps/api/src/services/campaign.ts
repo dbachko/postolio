@@ -1404,9 +1404,7 @@ class CampaignService {
   /**
    * Get campaign coordination summary for a user
    */
-  async getCampaignCoordination(
-    userId: string,
-  ): Promise<{
+  async getCampaignCoordination(userId: string): Promise<{
     activeCampaigns: number;
     resourceAllocation: unknown;
     campaignsByPriority: Record<number, number>;

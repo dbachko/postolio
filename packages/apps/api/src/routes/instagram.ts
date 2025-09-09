@@ -1,6 +1,9 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { Prisma } from "@postolio/database";
-import { instagramService, InstagramWebhookEvent } from "../services/instagram.js";
+import {
+  instagramService,
+  InstagramWebhookEvent,
+} from "../services/instagram.js";
 import crypto from "crypto";
 
 import { getDatabaseClient } from "../config/database.js";
@@ -217,12 +220,10 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         }
 
         if (content.status !== "scheduled" && content.status !== "draft") {
-          return reply
-            .status(400)
-            .send({
-              error:
-                "Content must be scheduled or in draft status before publishing",
-            });
+          return reply.status(400).send({
+            error:
+              "Content must be scheduled or in draft status before publishing",
+          });
         }
 
         // Check if brand has Instagram connection
@@ -430,7 +431,9 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           entry: rec.entry,
         };
       }
-      await instagramService.handleWebhookEvent(event as unknown as InstagramWebhookEvent);
+      await instagramService.handleWebhookEvent(
+        event as unknown as InstagramWebhookEvent,
+      );
       reply.send("OK");
     } catch {
       reply.status(500).send("Error processing webhook");

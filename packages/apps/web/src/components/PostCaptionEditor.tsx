@@ -1,13 +1,13 @@
-import { Label } from './ui/label'
-import { Textarea } from './ui/textarea'
+import { Label } from "./ui/label";
+import { Textarea } from "./ui/textarea";
 
 interface PostCaptionEditorProps {
-  value: string
-  onChange: (value: string) => void
-  placeholder?: string
-  minHeight?: string
-  showCharacterCount?: boolean
-  disabled?: boolean
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  minHeight?: string;
+  showCharacterCount?: boolean;
+  disabled?: boolean;
 }
 
 export function PostCaptionEditor({
@@ -16,7 +16,7 @@ export function PostCaptionEditor({
   placeholder = "Write your caption...",
   minHeight = "min-h-32",
   showCharacterCount = true,
-  disabled = false
+  disabled = false,
 }: PostCaptionEditorProps) {
   return (
     <div className="space-y-2">
@@ -35,5 +35,5 @@ export function PostCaptionEditor({
         </div>
       )}
     </div>
-  )
+  );
 }

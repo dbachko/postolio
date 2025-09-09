@@ -1,7 +1,16 @@
 // WebSocket-related type definitions
-export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'
+export type ContentStatus =
+  | "draft"
+  | "scheduled"
+  | "published"
+  | "failed"
+  | "skipped";
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
+export type ConnectionStatus =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "error";
 
 // ReadyState enum following react-use-websocket pattern
 export enum ReadyState {
@@ -14,140 +23,153 @@ export enum ReadyState {
 
 // Connection status mapping for better UX
 export const CONNECTION_STATUS_MAP = {
-  [ReadyState.CONNECTING]: 'connecting',
-  [ReadyState.OPEN]: 'connected', 
-  [ReadyState.CLOSING]: 'disconnected',
-  [ReadyState.CLOSED]: 'disconnected',
-  [ReadyState.UNINSTANTIATED]: 'disconnected',
-} as const
+  [ReadyState.CONNECTING]: "connecting",
+  [ReadyState.OPEN]: "connected",
+  [ReadyState.CLOSING]: "disconnected",
+  [ReadyState.CLOSED]: "disconnected",
+  [ReadyState.UNINSTANTIATED]: "disconnected",
+} as const;
 
 export interface StatusUpdateEvent {
-  type: 'status_update' | 'batch_status_update'
-  data: StatusUpdateData | StatusUpdateData[]
+  type: "status_update" | "batch_status_update";
+  data: StatusUpdateData | StatusUpdateData[];
 }
 
 export interface StatusUpdateData {
-  contentId: string
-  oldStatus: ContentStatus
-  newStatus: ContentStatus
-  metadata?: Record<string, unknown>
-  timestamp: string
+  contentId: string;
+  oldStatus: ContentStatus;
+  newStatus: ContentStatus;
+  metadata?: Record<string, unknown>;
+  timestamp: string;
 }
 
 export interface WebSocketMessage {
-  type: 'auth' | 'subscribe' | 'ping' | 'pong' | 'auth_success' | 'auth_error' | 'subscribed' | 'status_update' | 'batch_status_update'
-  token?: string
-  room?: string
-  error?: string
-  data?: StatusUpdateData | StatusUpdateData[]
-  timestamp?: number // For latency measurement in ping/pong
+  type:
+    | "auth"
+    | "subscribe"
+    | "ping"
+    | "pong"
+    | "auth_success"
+    | "auth_error"
+    | "subscribed"
+    | "status_update"
+    | "batch_status_update";
+  token?: string;
+  room?: string;
+  error?: string;
+  data?: StatusUpdateData | StatusUpdateData[];
+  timestamp?: number; // For latency measurement in ping/pong
 }
 
 export interface UseSchedulingWebSocketOptions {
-  enabled?: boolean
-  onStatusUpdate?: (event: StatusUpdateEvent) => void
-  onConnectionChange?: (status: ConnectionStatus) => void
-  onError?: (error: WebSocketError) => void
-  reconnectInterval?: number | ((lastAttemptNumber: number) => number) // Support function for exponential backoff
-  maxReconnectAttempts?: number
-  heartbeatInterval?: number
+  enabled?: boolean;
+  onStatusUpdate?: (event: StatusUpdateEvent) => void;
+  onConnectionChange?: (status: ConnectionStatus) => void;
+  onError?: (error: WebSocketError) => void;
+  reconnectInterval?: number | ((lastAttemptNumber: number) => number); // Support function for exponential backoff
+  maxReconnectAttempts?: number;
+  heartbeatInterval?: number;
   // Message filtering support following react-use-websocket pattern
-  filter?: (message: WebSocketMessage) => boolean
+  filter?: (message: WebSocketMessage) => boolean;
   // Should reconnect callback
-  shouldReconnect?: (closeEvent: CloseEvent) => boolean
+  shouldReconnect?: (closeEvent: CloseEvent) => boolean;
   // Retry on error flag
-  retryOnError?: boolean
+  retryOnError?: boolean;
 }
 
 export interface QueuedAction {
-  id: string
-  type: 'schedule' | 'reschedule' | 'cancel'
-  payload: Record<string, unknown>
-  timestamp: number
-  retries: number
-  lastAttempt?: number
-  maxRetries?: number
+  id: string;
+  type: "schedule" | "reschedule" | "cancel";
+  payload: Record<string, unknown>;
+  timestamp: number;
+  retries: number;
+  lastAttempt?: number;
+  maxRetries?: number;
 }
 
 export interface OfflineQueueOptions {
-  maxRetries?: number
-  retryDelay?: number
-  onProcess?: (action: QueuedAction) => Promise<boolean>
-  onError?: (action: QueuedAction, error: WebSocketError) => void
+  maxRetries?: number;
+  retryDelay?: number;
+  onProcess?: (action: QueuedAction) => Promise<boolean>;
+  onError?: (action: QueuedAction, error: WebSocketError) => void;
 }
 
 export class WebSocketError extends Error {
-  public readonly code: string
-  public readonly isOperational: boolean = true
-  public readonly timestamp: number
-  public readonly context?: Record<string, unknown>
+  public readonly code: string;
+  public readonly isOperational: boolean = true;
+  public readonly timestamp: number;
+  public readonly context?: Record<string, unknown>;
 
-  constructor(message: string, code: string, context?: Record<string, unknown>) {
-    super(message)
-    this.name = 'WebSocketError'
-    this.code = code
-    this.timestamp = Date.now()
-    this.context = context
-    
+  constructor(
+    message: string,
+    code: string,
+    context?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "WebSocketError";
+    this.code = code;
+    this.timestamp = Date.now();
+    this.context = context;
+
     // Maintain proper stack trace
     if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, WebSocketError)
+      Error.captureStackTrace(this, WebSocketError);
     }
   }
 }
 
 export class ConnectionError extends WebSocketError {
   constructor(message: string, context?: Record<string, unknown>) {
-    super(message, 'CONNECTION_ERROR', context)
+    super(message, "CONNECTION_ERROR", context);
   }
 }
 
 export class AuthenticationError extends WebSocketError {
   constructor(message: string, context?: Record<string, unknown>) {
-    super(message, 'AUTHENTICATION_ERROR', context)
+    super(message, "AUTHENTICATION_ERROR", context);
   }
 }
 
 export class TimeoutError extends WebSocketError {
   constructor(message: string, timeout: number) {
-    super(message, 'TIMEOUT_ERROR', { timeout })
+    super(message, "TIMEOUT_ERROR", { timeout });
   }
 }
 
 export class NetworkError extends WebSocketError {
   constructor(message: string, context?: Record<string, unknown>) {
-    super(message, 'NETWORK_ERROR', context)
+    super(message, "NETWORK_ERROR", context);
   }
 }
 
 // Utility function to check if error is retryable
 export function isRetryableError(error: WebSocketError): boolean {
-  const retryableCodes = ['CONNECTION_ERROR', 'TIMEOUT_ERROR', 'NETWORK_ERROR']
-  return retryableCodes.includes(error.code)
+  const retryableCodes = ["CONNECTION_ERROR", "TIMEOUT_ERROR", "NETWORK_ERROR"];
+  return retryableCodes.includes(error.code);
 }
 
 // Utility function to check if error is operational (vs programmer error)
 export function isOperationalError(error: Error): boolean {
-  return error instanceof WebSocketError && error.isOperational
+  return error instanceof WebSocketError && error.isOperational;
 }
 
 // Utility function to get friendly connection status message
 export function getConnectionStatusMessage(status: ConnectionStatus): string {
   const messages = {
-    connecting: 'Connecting to server...',
-    connected: 'Connected',
-    disconnected: 'Disconnected',
-    error: 'Connection error'
-  }
-  return messages[status] || 'Unknown status'
+    connecting: "Connecting to server...",
+    connected: "Connected",
+    disconnected: "Disconnected",
+    error: "Connection error",
+  };
+  return messages[status] || "Unknown status";
 }
 
 // Utility function to check if WebSocket should reconnect based on close event
 export function shouldReconnectDefault(closeEvent: CloseEvent): boolean {
   // Don't reconnect for normal closure or policy violations
   if (closeEvent.code === 1000 || closeEvent.code === 1008) {
-    return false
+    return false;
   }
   // Reconnect for all other cases (unexpected disconnections)
-  return true
+  return true;
 }

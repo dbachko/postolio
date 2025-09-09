@@ -77,11 +77,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         if (!brand.styleProfile) {
-          return reply
-            .code(400)
-            .send({
-              error: "Brand must have a style profile to generate content",
-            });
+          return reply.code(400).send({
+            error: "Brand must have a style profile to generate content",
+          });
         }
 
         // Generate content using AI
@@ -158,27 +156,20 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Handle specific OpenAI errors with appropriate status codes
         if (error instanceof Error) {
           if (error.message.includes("OpenAI API key configuration error")) {
-            return reply
-              .code(503)
-              .send({
-                error:
-                  "AI service configuration error. Please contact support.",
-              });
+            return reply.code(503).send({
+              error: "AI service configuration error. Please contact support.",
+            });
           }
           if (error.message.includes("OpenAI API quota exceeded")) {
-            return reply
-              .code(503)
-              .send({
-                error: "AI service quota exceeded. Please try again later.",
-              });
+            return reply.code(503).send({
+              error: "AI service quota exceeded. Please try again later.",
+            });
           }
           if (error.message.includes("OpenAI API rate limit exceeded")) {
-            return reply
-              .code(429)
-              .send({
-                error:
-                  "AI service rate limit exceeded. Please try again in a moment.",
-              });
+            return reply.code(429).send({
+              error:
+                "AI service rate limit exceeded. Please try again in a moment.",
+            });
           }
         }
 
@@ -211,11 +202,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         if (caption.length > 2200) {
-          return reply
-            .code(400)
-            .send({
-              error: "Caption exceeds Instagram limit of 2200 characters",
-            });
+          return reply.code(400).send({
+            error: "Caption exceeds Instagram limit of 2200 characters",
+          });
         }
 
         if (!Array.isArray(hashtags)) {
@@ -926,11 +915,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       // Validate mime type
       const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
       if (!allowedMimeTypes.includes(mimeType)) {
-        return reply
-          .code(400)
-          .send({
-            error: "Invalid image type. Supported types: JPEG, PNG, WebP",
-          });
+        return reply.code(400).send({
+          error: "Invalid image type. Supported types: JPEG, PNG, WebP",
+        });
       }
 
       // Verify user owns the content through brand ownership
@@ -998,11 +985,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         } catch (s3Error) {
           console.error("S3 upload failed:", s3Error);
           // Fail gracefully instead of storing large base64 data URLs
-          return reply
-            .code(500)
-            .send({
-              error: "Failed to upload image to storage. Please try again.",
-            });
+          return reply.code(500).send({
+            error: "Failed to upload image to storage. Please try again.",
+          });
         }
 
         // Update content with S3 URLs or fallback

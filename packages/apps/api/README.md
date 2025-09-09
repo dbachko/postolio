@@ -6,10 +6,10 @@ This is the main backend API for the Postolio application. It is built with Fast
 
 ### Scripts
 
--   **Dev:** `pnpm dev` (Starts the Fastify server in watch mode)
--   **Build:** `pnpm build`
--   **Lint:** `pnpm lint`
--   **Start:** `pnpm start` (Starts the production server)
+- **Dev:** `pnpm dev` (Starts the Fastify server in watch mode)
+- **Build:** `pnpm build`
+- **Lint:** `pnpm lint`
+- **Start:** `pnpm start` (Starts the production server)
 
 To run any script for only this application from the monorepo root, use the `--filter` flag:
 

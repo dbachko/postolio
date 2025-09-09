@@ -1,13 +1,13 @@
 /**
  * Cross-Stack Utilities for AWS CDK
- * 
+ *
  * Utility functions and classes to simplify cross-stack dependencies,
  * configuration management, and stack orchestration.
  */
 
-import * as cdk from 'aws-cdk-lib';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as cdk from "aws-cdk-lib";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 
 // =====================================================================================
 // INTERFACES AND TYPES
@@ -54,8 +54,8 @@ export class CrossStackConfigManager {
    */
   exportValue(key: string, value: string, description?: string): void {
     const exportName = this.buildExportName(key);
-    
-    new cdk.CfnOutput(this.stack, this.capitalizeFirst(key) + 'Export', {
+
+    new cdk.CfnOutput(this.stack, this.capitalizeFirst(key) + "Export", {
       value,
       description: description || `${key} export for ${this.projectName}`,
       exportName,
@@ -73,13 +73,21 @@ export class CrossStackConfigManager {
   /**
    * Store configuration in Parameter Store
    */
-  storeParameter(key: string, value: string, description?: string): ssm.StringParameter {
-    return new ssm.StringParameter(this.stack, this.capitalizeFirst(key) + 'Parameter', {
-      parameterName: this.buildParameterName(key),
-      stringValue: value,
-      description: description || `${key} parameter for ${this.projectName}`,
-      tier: ssm.ParameterTier.STANDARD,
-    });
+  storeParameter(
+    key: string,
+    value: string,
+    description?: string,
+  ): ssm.StringParameter {
+    return new ssm.StringParameter(
+      this.stack,
+      this.capitalizeFirst(key) + "Parameter",
+      {
+        parameterName: this.buildParameterName(key),
+        stringValue: value,
+        description: description || `${key} parameter for ${this.projectName}`,
+        tier: ssm.ParameterTier.STANDARD,
+      },
+    );
   }
 
   /**
@@ -94,19 +102,22 @@ export class CrossStackConfigManager {
    * Create a configuration secret
    */
   createConfigSecret(
-    config: Record<string, cdk.SecretValue | string>, 
-    description?: string
+    config: Record<string, cdk.SecretValue | string>,
+    description?: string,
   ): secretsmanager.Secret {
     // Convert string values to SecretValue
     const secretConfig: Record<string, cdk.SecretValue> = {};
     for (const [key, value] of Object.entries(config)) {
-      secretConfig[key] = typeof value === 'string' 
-        ? cdk.SecretValue.unsafePlainText(value)
-        : value;
+      secretConfig[key] =
+        typeof value === "string"
+          ? cdk.SecretValue.unsafePlainText(value)
+          : value;
     }
 
-    return new secretsmanager.Secret(this.stack, 'CrossStackConfig', {
-      description: description || `Cross-stack configuration for ${this.projectName}-${this.environment}`,
+    return new secretsmanager.Secret(this.stack, "CrossStackConfig", {
+      description:
+        description ||
+        `Cross-stack configuration for ${this.projectName}-${this.environment}`,
       secretObjectValue: secretConfig,
     });
   }
@@ -114,11 +125,14 @@ export class CrossStackConfigManager {
   /**
    * Import a configuration secret from another stack
    */
-  importConfigSecret(secretArn: string, secretId?: string): secretsmanager.ISecret {
+  importConfigSecret(
+    secretArn: string,
+    secretId?: string,
+  ): secretsmanager.ISecret {
     return secretsmanager.Secret.fromSecretCompleteArn(
       this.stack,
-      secretId || 'ImportedConfigSecret',
-      secretArn
+      secretId || "ImportedConfigSecret",
+      secretArn,
     );
   }
 
@@ -151,33 +165,46 @@ export class SchedulerIntegration {
   /**
    * Export scheduler configuration for consumption by other stacks
    */
-  exportSchedulerConfig(apiUrl: string, endpoints?: Record<string, string>): void {
+  exportSchedulerConfig(
+    apiUrl: string,
+    endpoints?: Record<string, string>,
+  ): void {
     // Export individual values
-    this.configManager.exportValue('scheduler-api-url', apiUrl, 'ContentScheduler API URL');
-    
+    this.configManager.exportValue(
+      "scheduler-api-url",
+      apiUrl,
+      "ContentScheduler API URL",
+    );
+
     if (endpoints) {
       this.configManager.exportValue(
-        'scheduler-endpoints', 
-        JSON.stringify(endpoints), 
-        'ContentScheduler API endpoints'
+        "scheduler-endpoints",
+        JSON.stringify(endpoints),
+        "ContentScheduler API endpoints",
       );
     }
 
     // Also store in Parameter Store for external access
-    this.configManager.storeParameter('scheduler-api-url', apiUrl);
+    this.configManager.storeParameter("scheduler-api-url", apiUrl);
   }
 
   /**
    * Import scheduler configuration from another stack
    */
   importSchedulerConfig(sourceStackName: string): SchedulerConfig {
-    const apiUrl = this.configManager.importValue(sourceStackName, 'scheduler-api-url');
-    
+    const apiUrl = this.configManager.importValue(
+      sourceStackName,
+      "scheduler-api-url",
+    );
+
     let endpoints: Record<string, string> | undefined;
-  try {
-      const endpointsJson = this.configManager.importValue(sourceStackName, 'scheduler-endpoints');
+    try {
+      const endpointsJson = this.configManager.importValue(
+        sourceStackName,
+        "scheduler-endpoints",
+      );
       endpoints = JSON.parse(endpointsJson);
-  } catch {
+    } catch {
       // Endpoints not available, continue without them
     }
     return { apiUrl, endpoints } as SchedulerConfig;
@@ -188,7 +215,7 @@ export class SchedulerIntegration {
    */
   createAppSecretsWithScheduler(
     schedulerConfig: SchedulerConfig,
-    additionalSecrets: Record<string, cdk.SecretValue | string> = {}
+    additionalSecrets: Record<string, cdk.SecretValue | string> = {},
   ): secretsmanager.Secret {
     const secretConfig = {
       // Scheduler configuration
@@ -197,14 +224,15 @@ export class SchedulerIntegration {
     };
 
     if (schedulerConfig.endpoints) {
-      (secretConfig as any).schedulerEndpoints = cdk.SecretValue.unsafePlainText(
-        JSON.stringify(schedulerConfig.endpoints)
-      );
+      (secretConfig as any).schedulerEndpoints =
+        cdk.SecretValue.unsafePlainText(
+          JSON.stringify(schedulerConfig.endpoints),
+        );
     }
 
     return this.configManager.createConfigSecret(
-      secretConfig, 
-      'Application secrets with ContentScheduler integration'
+      secretConfig,
+      "Application secrets with ContentScheduler integration",
     );
   }
 }
@@ -252,7 +280,9 @@ export class StackDependencyResolver {
       for (const dependencyName of dependencyNames) {
         const dependencyStack = this.stacks.get(dependencyName);
         if (!dependencyStack) {
-          throw new Error(`Dependency stack ${dependencyName} not found in resolver`);
+          throw new Error(
+            `Dependency stack ${dependencyName} not found in resolver`,
+          );
         }
 
         dependentStack.addDependency(dependencyStack);
@@ -325,18 +355,21 @@ export class EnvironmentConfigHelper {
   getResourceName(baseName: string, suffix?: string): string {
     const parts = [baseName, this.environment];
     if (suffix) parts.push(suffix);
-    return parts.join('-');
+    return parts.join("-");
   }
 
   /**
    * Get environment-specific tags
    */
-  getStandardTags(projectName: string, additionalTags: Record<string, string> = {}): Record<string, string> {
+  getStandardTags(
+    projectName: string,
+    additionalTags: Record<string, string> = {},
+  ): Record<string, string> {
     return {
       Environment: this.environment,
       Project: projectName,
       Region: this.region,
-      ManagedBy: 'CDK',
+      ManagedBy: "CDK",
       ...additionalTags,
     };
   }
@@ -345,7 +378,7 @@ export class EnvironmentConfigHelper {
    * Check if environment is production
    */
   isProduction(): boolean {
-    return this.environment === 'prod' || this.environment === 'production';
+    return this.environment === "prod" || this.environment === "production";
   }
 
   /**
@@ -369,21 +402,21 @@ export class EnvironmentConfigHelper {
  * Create consistent export names across stacks
  */
 export function createExportName(stackName: string, key: string): string {
-  return `${stackName}-${key}`.replace(/[^a-zA-Z0-9-]/g, '-');
+  return `${stackName}-${key}`.replace(/[^a-zA-Z0-9-]/g, "-");
 }
 
 /**
  * Validate that required exports exist before importing
  */
 export function validateExports(
-  stack: cdk.Stack, 
-  sourceStackName: string, 
-  requiredExports: string[]
+  stack: cdk.Stack,
+  sourceStackName: string,
+  requiredExports: string[],
 ): void {
   // Note: This is a compile-time check. Runtime validation would require custom resources
   for (const exportKey of requiredExports) {
     const exportName = createExportName(sourceStackName, exportKey);
-    
+
     // Add a custom attribute to track expected imports
     if (!(stack as any).__expectedImports) {
       (stack as any).__expectedImports = [];
@@ -406,8 +439,12 @@ export interface StackConfig {
 }
 
 export function createStackProps(config: StackConfig): cdk.StackProps {
-  const envHelper = new EnvironmentConfigHelper(config.environment, config.region, config.account);
-  
+  const envHelper = new EnvironmentConfigHelper(
+    config.environment,
+    config.region,
+    config.account,
+  );
+
   return {
     stackName: config.stackName,
     env: envHelper.getEnvConfig(),

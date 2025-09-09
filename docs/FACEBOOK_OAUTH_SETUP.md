@@ -3,6 +3,7 @@
 This guide covers setting up Facebook OAuth for user registration/login. Since Postolio already uses Meta App for Instagram integration, you'll use the same app but configure it for Facebook Login.
 
 ## Prerequisites
+
 - A Facebook Developer account
 - A Meta App (already created if you've set up Instagram integration)
 
@@ -25,6 +26,7 @@ This guide covers setting up Facebook OAuth for user registration/login. Since P
 2. Configure the following:
 
    **Valid OAuth Redirect URIs:**
+
    ```
    http://localhost:3000/api/auth/facebook/callback
    http://localhost:5173/api/auth/facebook/callback
@@ -48,6 +50,7 @@ This guide covers setting up Facebook OAuth for user registration/login. Since P
    - **App Secret**: Click "Show" to reveal (this is your `FACEBOOK_APP_SECRET`)
 
 3. Add App Domains:
+
    ```
    localhost
    ```
@@ -70,6 +73,7 @@ Note: These are automatically available in development mode.
 ## Step 6: Configure Environment Variables
 
 ### Backend (.env)
+
 ```bash
 # Meta App Configuration (same for Instagram and Facebook)
 FACEBOOK_APP_ID=your-app-id-here
@@ -80,6 +84,7 @@ FACEBOOK_OAUTH_REDIRECT_URI=http://localhost:3000/api/auth/facebook/callback
 ```
 
 ### Frontend (frontend/.env)
+
 ```bash
 # Facebook App ID (same as backend but without secret)
 VITE_FACEBOOK_APP_ID=your-app-id-here
@@ -95,11 +100,13 @@ VITE_FACEBOOK_APP_ID=your-app-id-here
 ## Development vs Production
 
 ### Development Mode
+
 - Works immediately with test users
 - No app review required
 - Limited to app developers and testers
 
 ### Production Mode
+
 1. Complete "Data Use Checkup"
 2. Submit for App Review if needed
 3. Update redirect URIs with production domain:
@@ -117,21 +124,25 @@ VITE_FACEBOOK_APP_ID=your-app-id-here
 ## Troubleshooting
 
 ### "URL Blocked" Error
+
 - Check that redirect URI matches exactly in:
   - Facebook app settings
   - Backend environment variable
   - Frontend code
 
 ### "App Not Set Up" Error
+
 - Ensure Facebook Login product is added to your app
 - Check that app is not in development mode for production use
 
 ### "Invalid OAuth redirect URI"
+
 - URIs must match exactly (including protocol and port)
 - Add both http and https variants for local development
 - Check for trailing slashes
 
 ### "Missing Permissions"
+
 - In development: Permissions are auto-granted
 - In production: May need app review for extended permissions
 
@@ -146,6 +157,7 @@ VITE_FACEBOOK_APP_ID=your-app-id-here
 ## Integration with Instagram
 
 Since you're using the same Meta App for both Facebook Login and Instagram Graph API:
+
 - Use the same `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET`
 - Different redirect URIs for different OAuth flows:
   - Facebook Login: `/api/auth/facebook/callback`
@@ -154,6 +166,7 @@ Since you're using the same Meta App for both Facebook Login and Instagram Graph
 ## Next Steps
 
 After successful setup:
+
 1. Test login flow with test users
 2. Implement account linking for existing users
 3. Add profile picture import from Facebook

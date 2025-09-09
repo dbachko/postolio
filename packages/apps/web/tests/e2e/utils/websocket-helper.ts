@@ -1,4 +1,4 @@
-import { Page } from '@playwright/test';
+import { Page } from "@playwright/test";
 
 export class WebSocketHelper {
   constructor(private page: Page) {}
@@ -9,10 +9,12 @@ export class WebSocketHelper {
   async waitForConnection(timeout = 10000): Promise<void> {
     await this.page.waitForFunction(
       () => {
-        const connectionStatus = document.querySelector('[data-testid="connection-status"]');
-        return connectionStatus?.textContent?.includes('Live');
+        const connectionStatus = document.querySelector(
+          '[data-testid="connection-status"]',
+        );
+        return connectionStatus?.textContent?.includes("Live");
       },
-      { timeout }
+      { timeout },
     );
   }
 
@@ -34,20 +36,20 @@ export class WebSocketHelper {
     await this.page.evaluateOnNewDocument(() => {
       (window as any).__websocketMessages = [];
       (window as any).__websockets = [];
-      
+
       const originalWebSocket = window.WebSocket;
       window.WebSocket = class extends originalWebSocket {
         constructor(url: string | URL, protocols?: string | string[]) {
           super(url, protocols);
-          
+
           (window as any).__websockets.push(this);
-          
+
           // Monitor messages
-          this.addEventListener('message', (event) => {
+          this.addEventListener("message", (event) => {
             try {
               const data = JSON.parse(event.data);
               (window as any).__websocketMessages.push({
-                type: 'received',
+                type: "received",
                 data,
                 timestamp: Date.now(),
               });
@@ -55,15 +57,15 @@ export class WebSocketHelper {
               // Ignore non-JSON messages
             }
           });
-          
+
           // Monitor sent messages
           const originalSend = this.send.bind(this);
           this.send = (data: string | Blob | ArrayBuffer | ArrayBufferView) => {
             try {
-              if (typeof data === 'string') {
+              if (typeof data === "string") {
                 const parsed = JSON.parse(data);
                 (window as any).__websocketMessages.push({
-                  type: 'sent',
+                  type: "sent",
                   data: parsed,
                   timestamp: Date.now(),
                 });
@@ -81,7 +83,7 @@ export class WebSocketHelper {
   /**
    * Get all WebSocket messages
    */
-  async getMessages(type?: 'sent' | 'received'): Promise<any[]> {
+  async getMessages(type?: "sent" | "received"): Promise<any[]> {
     return await this.page.evaluate((filterType) => {
       const messages = (window as any).__websocketMessages || [];
       if (filterType) {
@@ -98,12 +100,12 @@ export class WebSocketHelper {
     return await this.page.waitForFunction(
       (type) => {
         const messages = (window as any).__websocketMessages || [];
-        return messages.find((m: any) => 
-          m.type === 'received' && m.data?.type === type
+        return messages.find(
+          (m: any) => m.type === "received" && m.data?.type === type,
         );
       },
       type,
-      { timeout }
+      { timeout },
     );
   }
 
@@ -113,7 +115,8 @@ export class WebSocketHelper {
   async getConnectionCount(): Promise<number> {
     return await this.page.evaluate(() => {
       const sockets = (window as any).__websockets || [];
-      return sockets.filter((ws: WebSocket) => ws.readyState === WebSocket.OPEN).length;
+      return sockets.filter((ws: WebSocket) => ws.readyState === WebSocket.OPEN)
+        .length;
     });
   }
 
@@ -136,7 +139,7 @@ export class WebSocketHelper {
    */
   async getOfflineQueueSize(): Promise<number> {
     return await this.page.evaluate(() => {
-      const queueData = localStorage.getItem('offlineQueue');
+      const queueData = localStorage.getItem("offlineQueue");
       if (queueData) {
         const queue = JSON.parse(queueData);
         return Array.isArray(queue) ? queue.length : 0;
@@ -150,7 +153,7 @@ export class WebSocketHelper {
    */
   async clearOfflineQueue(): Promise<void> {
     await this.page.evaluate(() => {
-      localStorage.removeItem('offlineQueue');
+      localStorage.removeItem("offlineQueue");
     });
   }
 }

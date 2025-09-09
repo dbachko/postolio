@@ -1,104 +1,104 @@
-import { useState, useEffect } from 'react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import { Mail, X, CheckCircle, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
-import { TIMEOUTS } from '@/constants/timeouts'
+import { useState, useEffect } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Mail, X, CheckCircle, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { TIMEOUTS } from "@/constants/timeouts";
 
 interface VerificationStatus {
-  verified: boolean
-  email?: string
-  canResend: boolean
+  verified: boolean;
+  email?: string;
+  canResend: boolean;
 }
 
 export function EmailVerificationBanner() {
-  const [status, setStatus] = useState<VerificationStatus | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSending, setIsSending] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const [status, setStatus] = useState<VerificationStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    checkVerificationStatus()
-  }, [])
+    checkVerificationStatus();
+  }, []);
 
   const checkVerificationStatus = async () => {
     try {
-      const token = localStorage.getItem('token')
-      if (!token) return
+      const token = localStorage.getItem("token");
+      if (!token) return;
 
-      const response = await fetch('/api/auth/email/verification-status', {
+      const response = await fetch("/api/auth/email/verification-status", {
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.ok) {
-        const data = await response.json()
-        setStatus(data)
-        
+        const data = await response.json();
+        setStatus(data);
+
         // Check if user has previously dismissed the banner
-        const dismissedKey = `email-verification-dismissed-${data.email}`
-        const wasDismissed = localStorage.getItem(dismissedKey)
+        const dismissedKey = `email-verification-dismissed-${data.email}`;
+        const wasDismissed = localStorage.getItem(dismissedKey);
         if (wasDismissed) {
-          setDismissed(true)
+          setDismissed(true);
         }
       }
     } catch (error) {
-      console.error('Failed to check verification status:', error)
+      console.error("Failed to check verification status:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const sendVerificationEmail = async () => {
-    setIsSending(true)
+    setIsSending(true);
     try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/auth/email/send-verification', {
-        method: 'POST',
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/auth/email/send-verification", {
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (response.ok) {
-        toast.success('Verification email sent!', {
-          description: 'Check your inbox for the verification link.',
+        toast.success("Verification email sent!", {
+          description: "Check your inbox for the verification link.",
           icon: <CheckCircle className="text-green-500" />,
           duration: TIMEOUTS.TOAST_DURATION,
-        })
-        
+        });
+
         // Update status to reflect that email was sent
-        setStatus(prev => prev ? { ...prev, canResend: false } : null)
+        setStatus((prev) => (prev ? { ...prev, canResend: false } : null));
       } else {
-        toast.error('Failed to send email', {
-          description: data.error || 'Please try again later',
-        })
+        toast.error("Failed to send email", {
+          description: data.error || "Please try again later",
+        });
       }
     } catch {
-      toast.error('Network error', {
-        description: 'Failed to send verification email',
-      })
+      toast.error("Network error", {
+        description: "Failed to send verification email",
+      });
     } finally {
-      setIsSending(false)
+      setIsSending(false);
     }
-  }
+  };
 
   const handleDismiss = () => {
-    setDismissed(true)
+    setDismissed(true);
     // Remember dismissal in localStorage
     if (status?.email) {
-      const dismissedKey = `email-verification-dismissed-${status.email}`
-      localStorage.setItem(dismissedKey, 'true')
+      const dismissedKey = `email-verification-dismissed-${status.email}`;
+      localStorage.setItem(dismissedKey, "true");
     }
-  }
+  };
 
   // Don't show banner if loading, verified, or dismissed
   if (isLoading || !status || status.verified || dismissed) {
-    return null
+    return null;
   }
 
   return (
@@ -111,7 +111,8 @@ export function EmailVerificationBanner() {
               Verify your email to unlock all features
             </span>
             <span className="text-blue-700 dark:text-blue-300 ml-2">
-              Check your inbox for {status.email} or request a new verification email.
+              Check your inbox for {status.email} or request a new verification
+              email.
             </span>
           </div>
           <div className="flex items-center gap-2 ml-4">
@@ -153,5 +154,5 @@ export function EmailVerificationBanner() {
         </AlertDescription>
       </Alert>
     </div>
-  )
+  );
 }

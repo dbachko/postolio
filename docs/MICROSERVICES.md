@@ -270,6 +270,7 @@ npx cdk destroy Postolio-Platform-dev \
 ## Support
 
 For issues or questions:
+
 1. Check CloudWatch Logs for errors
 2. Review this documentation
 3. Check AWS service health dashboard

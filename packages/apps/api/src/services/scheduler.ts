@@ -124,9 +124,7 @@ class SchedulerService {
   /**
    * Get scheduling statistics for a brand
    */
-  async getSchedulingStats(
-    brandId: string,
-  ): Promise<{
+  async getSchedulingStats(brandId: string): Promise<{
     totalScheduled: number;
     upcoming: number;
     lastScheduledAt?: Date;

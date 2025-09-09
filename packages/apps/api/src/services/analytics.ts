@@ -107,7 +107,10 @@ class AnalyticsService {
       )) as unknown;
       const insights = Array.isArray(mediaInsightsRaw)
         ? mediaInsightsRaw.reduce<InsightMetrics>((acc, metric) => {
-            const m = metric as { name?: string; values?: Array<{ value?: number }> };
+            const m = metric as {
+              name?: string;
+              values?: Array<{ value?: number }>;
+            };
             const name = m.name;
             const firstVal = m.values?.[0]?.value;
             if (typeof name === "string" && typeof firstVal === "number") {
@@ -139,13 +142,13 @@ class AnalyticsService {
 
       const metrics: PostMetrics = {
         postId: content.instagramPostId,
-  impressions: insights.impressions || 0,
-  reach: insights.reach || 0,
-  likes: insights.likes || insights.like_count || 0,
-  comments: insights.comments || insights.comments_count || 0,
-  saves: insights.saves || insights.saved || 0,
-  shares: insights.shares || 0,
-  engagementRate: this.calculateEngagementRate(insights),
+        impressions: insights.impressions || 0,
+        reach: insights.reach || 0,
+        likes: insights.likes || insights.like_count || 0,
+        comments: insights.comments || insights.comments_count || 0,
+        saves: insights.saves || insights.saved || 0,
+        shares: insights.shares || 0,
+        engagementRate: this.calculateEngagementRate(insights),
         timestamp: postedAt,
         dayOfWeek: postedAt.getDay(),
         hourOfDay: postedAt.getHours(),

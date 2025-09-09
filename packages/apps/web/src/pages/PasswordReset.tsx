@@ -1,45 +1,51 @@
-import { useState, useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Check, X } from 'lucide-react'
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Check, X } from "lucide-react";
 
 export function PasswordReset() {
-  const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const token = searchParams.get('token')
-  
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const token = searchParams.get("token");
+
   // Request reset state
-  const [email, setEmail] = useState('')
-  const [isRequesting, setIsRequesting] = useState(false)
-  const [requestError, setRequestError] = useState('')
-  const [requestSuccess, setRequestSuccess] = useState(false)
-  
+  const [email, setEmail] = useState("");
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [requestError, setRequestError] = useState("");
+  const [requestSuccess, setRequestSuccess] = useState(false);
+
   // Reset password state
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [isResetting, setIsResetting] = useState(false)
-  const [resetError, setResetError] = useState('')
-  const [tokenValid, setTokenValid] = useState<boolean | null>(null)
-  const [tokenEmail, setTokenEmail] = useState<string>('')
-  
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+  const [tokenEmail, setTokenEmail] = useState<string>("");
+
   // Password strength indicators
   const [passwordStrength, setPasswordStrength] = useState({
     length: false,
     uppercase: false,
     lowercase: false,
     number: false,
-  })
+  });
 
   // Validate token on mount if present
   useEffect(() => {
     if (token) {
-      validateToken()
+      validateToken();
     }
-  }, [token])
+  }, [token]);
 
   // Update password strength as user types
   useEffect(() => {
@@ -48,87 +54,102 @@ export function PasswordReset() {
       uppercase: /[A-Z]/.test(password),
       lowercase: /[a-z]/.test(password),
       number: /[0-9]/.test(password),
-    })
-  }, [password])
+    });
+  }, [password]);
 
   const validateToken = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/password/reset-validate/${token}`)
-      const data = await response.json()
-      setTokenValid(data.valid)
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || ""}/api/auth/password/reset-validate/${token}`,
+      );
+      const data = await response.json();
+      setTokenValid(data.valid);
       if (data.email) {
-        setTokenEmail(data.email)
+        setTokenEmail(data.email);
       }
     } catch {
-      setTokenValid(false)
+      setTokenValid(false);
     }
-  }
+  };
 
   const handleRequestReset = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsRequesting(true)
-    setRequestError('')
+    e.preventDefault();
+    setIsRequesting(true);
+    setRequestError("");
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/password/reset-request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || ""}/api/auth/password/reset-request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        },
+      );
 
-      const data = await response.json()
-      
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to send reset email')
+        throw new Error(data.error || "Failed to send reset email");
       }
 
-      setRequestSuccess(true)
+      setRequestSuccess(true);
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : 'An error occurred')
+      setRequestError(
+        error instanceof Error ? error.message : "An error occurred",
+      );
     } finally {
-      setIsRequesting(false)
+      setIsRequesting(false);
     }
-  }
+  };
 
   const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
+    e.preventDefault();
+
     if (password !== confirmPassword) {
-      setResetError("Passwords don't match")
-      return
+      setResetError("Passwords don't match");
+      return;
     }
 
     if (!Object.values(passwordStrength).every(Boolean)) {
-      setResetError('Password does not meet all requirements')
-      return
+      setResetError("Password does not meet all requirements");
+      return;
     }
 
-    setIsResetting(true)
-    setResetError('')
+    setIsResetting(true);
+    setResetError("");
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/password/reset`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, password, confirmPassword }),
-      })
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || ""}/api/auth/password/reset`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, password, confirmPassword }),
+        },
+      );
 
-      const data = await response.json()
-      
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to reset password')
+        throw new Error(data.error || "Failed to reset password");
       }
 
       // Success! Redirect to login
-      navigate('/login', { 
-        state: { message: 'Password reset successfully! Please log in with your new password.' }
-      })
+      navigate("/login", {
+        state: {
+          message:
+            "Password reset successfully! Please log in with your new password.",
+        },
+      });
     } catch (error) {
-      setResetError(error instanceof Error ? error.message : 'An error occurred')
+      setResetError(
+        error instanceof Error ? error.message : "An error occurred",
+      );
     } finally {
-      setIsResetting(false)
+      setIsResetting(false);
     }
-  }
+  };
 
   // If we have a token, show the reset form
   if (token) {
@@ -154,7 +175,7 @@ export function PasswordReset() {
             </CardContent>
           </Card>
         </div>
-      )
+      );
     }
 
     return (
@@ -173,7 +194,7 @@ export function PasswordReset() {
                   <AlertDescription>{resetError}</AlertDescription>
                 </Alert>
               )}
-              
+
               <div className="space-y-2">
                 <Label htmlFor="password">New Password</Label>
                 <Input
@@ -185,7 +206,7 @@ export function PasswordReset() {
                   required
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
                 <Input
@@ -200,22 +221,48 @@ export function PasswordReset() {
 
               {/* Password strength indicators */}
               <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">Password requirements:</div>
+                <div className="text-sm text-muted-foreground">
+                  Password requirements:
+                </div>
                 <div className="space-y-1">
-                  <div className={`flex items-center text-sm ${passwordStrength.length ? 'text-green-600' : 'text-muted-foreground'}`}>
-                    {passwordStrength.length ? <Check className="w-4 h-4 mr-2" /> : <X className="w-4 h-4 mr-2" />}
+                  <div
+                    className={`flex items-center text-sm ${passwordStrength.length ? "text-green-600" : "text-muted-foreground"}`}
+                  >
+                    {passwordStrength.length ? (
+                      <Check className="w-4 h-4 mr-2" />
+                    ) : (
+                      <X className="w-4 h-4 mr-2" />
+                    )}
                     At least 15 characters
                   </div>
-                  <div className={`flex items-center text-sm ${passwordStrength.uppercase ? 'text-green-600' : 'text-muted-foreground'}`}>
-                    {passwordStrength.uppercase ? <Check className="w-4 h-4 mr-2" /> : <X className="w-4 h-4 mr-2" />}
+                  <div
+                    className={`flex items-center text-sm ${passwordStrength.uppercase ? "text-green-600" : "text-muted-foreground"}`}
+                  >
+                    {passwordStrength.uppercase ? (
+                      <Check className="w-4 h-4 mr-2" />
+                    ) : (
+                      <X className="w-4 h-4 mr-2" />
+                    )}
                     One uppercase letter
                   </div>
-                  <div className={`flex items-center text-sm ${passwordStrength.lowercase ? 'text-green-600' : 'text-muted-foreground'}`}>
-                    {passwordStrength.lowercase ? <Check className="w-4 h-4 mr-2" /> : <X className="w-4 h-4 mr-2" />}
+                  <div
+                    className={`flex items-center text-sm ${passwordStrength.lowercase ? "text-green-600" : "text-muted-foreground"}`}
+                  >
+                    {passwordStrength.lowercase ? (
+                      <Check className="w-4 h-4 mr-2" />
+                    ) : (
+                      <X className="w-4 h-4 mr-2" />
+                    )}
                     One lowercase letter
                   </div>
-                  <div className={`flex items-center text-sm ${passwordStrength.number ? 'text-green-600' : 'text-muted-foreground'}`}>
-                    {passwordStrength.number ? <Check className="w-4 h-4 mr-2" /> : <X className="w-4 h-4 mr-2" />}
+                  <div
+                    className={`flex items-center text-sm ${passwordStrength.number ? "text-green-600" : "text-muted-foreground"}`}
+                  >
+                    {passwordStrength.number ? (
+                      <Check className="w-4 h-4 mr-2" />
+                    ) : (
+                      <X className="w-4 h-4 mr-2" />
+                    )}
                     One number
                   </div>
                 </div>
@@ -223,16 +270,18 @@ export function PasswordReset() {
 
               <Button
                 type="submit"
-                disabled={isResetting || !Object.values(passwordStrength).every(Boolean)}
+                disabled={
+                  isResetting || !Object.values(passwordStrength).every(Boolean)
+                }
                 className="w-full"
               >
-                {isResetting ? 'Resetting...' : 'Reset Password'}
+                {isResetting ? "Resetting..." : "Reset Password"}
               </Button>
             </form>
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   // Otherwise show the request form
@@ -242,7 +291,8 @@ export function PasswordReset() {
         <CardHeader>
           <CardTitle>Forgot Your Password?</CardTitle>
           <CardDescription>
-            Enter your email address and we'll send you a link to reset your password.
+            Enter your email address and we'll send you a link to reset your
+            password.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -269,7 +319,7 @@ export function PasswordReset() {
                   <AlertDescription>{requestError}</AlertDescription>
                 </Alert>
               )}
-              
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <Input
@@ -282,12 +332,8 @@ export function PasswordReset() {
                 />
               </div>
 
-              <Button
-                type="submit"
-                disabled={isRequesting}
-                className="w-full"
-              >
-                {isRequesting ? 'Sending...' : 'Send Reset Link'}
+              <Button type="submit" disabled={isRequesting} className="w-full">
+                {isRequesting ? "Sending..." : "Send Reset Link"}
               </Button>
 
               <div className="text-center">
@@ -303,5 +349,5 @@ export function PasswordReset() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

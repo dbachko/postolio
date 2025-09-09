@@ -1,377 +1,426 @@
 // Basic types - avoiding complex type imports for now to resolve build issues
-import { convertFileToBase64 } from './fileUtils'
+import { convertFileToBase64 } from "./fileUtils";
 
 export interface User {
-  id: string
-  email: string
-  name: string | null
-  instagramUsername: string | null
-  subscriptionTier: string
-  timezone?: string | null
-  timezoneAutoDetected?: boolean
-  createdAt: string
+  id: string;
+  email: string;
+  name: string | null;
+  instagramUsername: string | null;
+  subscriptionTier: string;
+  timezone?: string | null;
+  timezoneAutoDetected?: boolean;
+  createdAt: string;
 }
 
 export interface Brand {
-  id: string
-  name: string
-  description: string | null
-  styleProfile: Record<string, unknown> | null
-  createdAt: string
+  id: string;
+  name: string;
+  description: string | null;
+  styleProfile: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 export interface Content {
-  id: string
-  caption: string
-  hashtags: string[]
-  s3ImageKey?: string | null
-  cdnImageUrl?: string | null
-  imageRegion?: string | null
-  retentionExpiresAt?: string | null
-  status: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'
-  scheduledAt: string | null
-  postedAt: string | null
-  createdAt: string
-  updatedAt: string
-  brandId: string
-  campaignId?: string | null
-  instagramPostId?: string | null
-  instagramPermalink?: string | null
+  id: string;
+  caption: string;
+  hashtags: string[];
+  s3ImageKey?: string | null;
+  cdnImageUrl?: string | null;
+  imageRegion?: string | null;
+  retentionExpiresAt?: string | null;
+  status: "draft" | "scheduled" | "published" | "failed" | "skipped";
+  scheduledAt: string | null;
+  postedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  brandId: string;
+  campaignId?: string | null;
+  instagramPostId?: string | null;
+  instagramPermalink?: string | null;
 }
 
 export interface AuthResponse {
-  token: string
-  user: User
+  token: string;
+  user: User;
 }
 
 export interface CampaignConfig {
-  name: string
-  brandId: string
-  duration: { start: string | Date, end: string | Date }
-  frequency: string
-  themes: string[]
-  style: string
-  postingTime: string
-  priority?: number
+  name: string;
+  brandId: string;
+  duration: { start: string | Date; end: string | Date };
+  frequency: string;
+  themes: string[];
+  style: string;
+  postingTime: string;
+  priority?: number;
 }
 
 export interface CampaignPreview {
-  campaignId: string
-  configId: string
-  examplePosts: Content[]
+  campaignId: string;
+  configId: string;
+  examplePosts: Content[];
   campaignPlan: {
-    name: string
-    duration: { start: string, end: string }
-    estimatedTotalPosts: number
-    postingSchedule: string
-    themes: string[]
-    style: string
-    postingTime: string
-  }
+    name: string;
+    duration: { start: string; end: string };
+    estimatedTotalPosts: number;
+    postingSchedule: string;
+    themes: string[];
+    style: string;
+    postingTime: string;
+  };
 }
 
 export interface Campaign {
-  id: string
-  name: string
-  status: 'creating' | 'preview' | 'active' | 'paused' | 'completed' | 'failed' | 'processing'
-  brandId: string
+  id: string;
+  name: string;
+  status:
+    | "creating"
+    | "preview"
+    | "active"
+    | "paused"
+    | "completed"
+    | "failed"
+    | "processing";
+  brandId: string;
   config?: {
-    duration?: { start: string, end: string }
-    frequency?: string
-    themes?: string[]
-    style?: string
-    postingTime?: string
-    priority?: number
-  }
-  content: Content[]
-  progress?: number
-  errorMessage?: string | null
-  previewGenerated?: boolean
-  priority: number
-  createdAt: string
-  updatedAt: string
-  startedAt?: string | null
-  completedAt?: string | null
-  lastModifiedAt?: string
-  lastModifiedBy?: string
+    duration?: { start: string; end: string };
+    frequency?: string;
+    themes?: string[];
+    style?: string;
+    postingTime?: string;
+    priority?: number;
+  };
+  content: Content[];
+  progress?: number;
+  errorMessage?: string | null;
+  previewGenerated?: boolean;
+  priority: number;
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  lastModifiedAt?: string;
+  lastModifiedBy?: string;
 }
 
 export interface CampaignStatusResponse {
-  success: boolean
+  success: boolean;
   status: {
-    status: Campaign['status']
-    progress?: number
-    previewGenerated?: boolean
-    errorMessage?: string | null
-  }
+    status: Campaign["status"];
+    progress?: number;
+    previewGenerated?: boolean;
+    errorMessage?: string | null;
+  };
 }
 
 // API base URL configuration
 // Empty string means use relative URLs (for development with proxy)
 // Full URL for production or explicit configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 class ApiClient {
-  private token: string | null = null
-  private cachedTimezone: string | null = null
-  private timezoneLastUpdated = 0
-  private static TIMEZONE_CACHE_DURATION = 30 * 1000 // 30 seconds
+  private token: string | null = null;
+  private cachedTimezone: string | null = null;
+  private timezoneLastUpdated = 0;
+  private static TIMEZONE_CACHE_DURATION = 30 * 1000; // 30 seconds
 
   constructor() {
-    this.token = localStorage.getItem('auth_token')
+    this.token = localStorage.getItem("auth_token");
   }
 
   setToken(token: string) {
-    this.token = token
-    localStorage.setItem('auth_token', token)
+    this.token = token;
+    localStorage.setItem("auth_token", token);
   }
 
   removeToken() {
-    this.token = null
-    localStorage.removeItem('auth_token')
+    this.token = null;
+    localStorage.removeItem("auth_token");
   }
 
   private getTimezone(): string {
-    const now = Date.now()
-    
+    const now = Date.now();
+
     // Return cached timezone if still valid
-    if (this.cachedTimezone && (now - this.timezoneLastUpdated) < ApiClient.TIMEZONE_CACHE_DURATION) {
-      return this.cachedTimezone
+    if (
+      this.cachedTimezone &&
+      now - this.timezoneLastUpdated < ApiClient.TIMEZONE_CACHE_DURATION
+    ) {
+      return this.cachedTimezone;
     }
-    
+
     // Update cache with fresh value
-    this.cachedTimezone = localStorage.getItem('userTimezone') || 
-                         localStorage.getItem('detectedTimezone') ||
-                         'UTC' // neutral global fallback
-    this.timezoneLastUpdated = now
-    
-    return this.cachedTimezone
+    this.cachedTimezone =
+      localStorage.getItem("userTimezone") ||
+      localStorage.getItem("detectedTimezone") ||
+      "UTC"; // neutral global fallback
+    this.timezoneLastUpdated = now;
+
+    return this.cachedTimezone;
   }
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
   ): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`
+    const url = `${API_BASE_URL}${endpoint}`;
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string>),
-    }
+    };
 
     // Only set Content-Type if there's a body
     if (options.body) {
-      headers['Content-Type'] = 'application/json'
+      headers["Content-Type"] = "application/json";
     }
 
     if (this.token) {
-      headers.Authorization = `Bearer ${this.token}`
+      headers.Authorization = `Bearer ${this.token}`;
     }
 
     // Include timezone header for all requests (cached for performance)
-    headers['X-Timezone'] = this.getTimezone()
+    headers["X-Timezone"] = this.getTimezone();
 
     const response = await fetch(url, {
       ...options,
       headers,
-      credentials: 'include' // Include cookies in requests
-    })
+      credentials: "include", // Include cookies in requests
+    });
 
     if (!response.ok) {
       // Handle 401 Unauthorized specifically
-      if (response.status === 401 && endpoint !== '/api/auth/me') {
+      if (response.status === 401 && endpoint !== "/api/auth/me") {
         // Clear the token and redirect to login
-        this.removeToken()
+        this.removeToken();
         // Only redirect if not already on login/register page
-        const currentPath = window.location.pathname
-        if (currentPath !== '/login' && currentPath !== '/register') {
-          window.location.href = '/login'
+        const currentPath = window.location.pathname;
+        if (currentPath !== "/login" && currentPath !== "/register") {
+          window.location.href = "/login";
         }
       }
-      
+
       // Handle specific error codes with meaningful messages
       if (response.status === 413) {
-        throw new Error('Image too large. Please optimize your image to be under 10MB.')
+        throw new Error(
+          "Image too large. Please optimize your image to be under 10MB.",
+        );
       }
-      
-      const errorText = await response.text()
+
+      const errorText = await response.text();
       try {
-        const errorData = JSON.parse(errorText)
-        throw new Error(errorData.error || errorData.message || 'Request failed')
+        const errorData = JSON.parse(errorText);
+        throw new Error(
+          errorData.error || errorData.message || "Request failed",
+        );
       } catch {
         // If JSON parsing fails, check for specific status codes
         if (response.status === 404) {
-          throw new Error('Resource not found')
+          throw new Error("Resource not found");
         } else if (response.status === 500) {
-          throw new Error('Server error. Please try again later.')
+          throw new Error("Server error. Please try again later.");
         } else if (response.status === 403) {
-          throw new Error('You do not have permission to perform this action')
+          throw new Error("You do not have permission to perform this action");
         } else if (errorText) {
           // If we have error text but it's not JSON, use it
-          throw new Error(errorText)
+          throw new Error(errorText);
         } else {
           // Fallback to generic message with status
-          throw new Error(`Request failed with status ${response.status}`)
+          throw new Error(`Request failed with status ${response.status}`);
         }
       }
     }
 
-    return response.json()
+    return response.json();
   }
 
   // Auth endpoints
   async register(data: {
-    email: string
-    password: string
-    name?: string
-    timezone?: string
+    email: string;
+    password: string;
+    name?: string;
+    timezone?: string;
   }): Promise<AuthResponse> {
-    return this.request('/api/auth/register', {
-      method: 'POST',
+    return this.request("/api/auth/register", {
+      method: "POST",
       body: JSON.stringify(data),
-    })
+    });
   }
 
-  async login(data: { email: string; password: string; rememberMe?: boolean }): Promise<AuthResponse> {
-    return this.request('/api/auth/login', {
-      method: 'POST',
+  async login(data: {
+    email: string;
+    password: string;
+    rememberMe?: boolean;
+  }): Promise<AuthResponse> {
+    return this.request("/api/auth/login", {
+      method: "POST",
       body: JSON.stringify(data),
-    })
+    });
   }
 
   async getProfile(): Promise<{ user: User }> {
-    return this.request('/api/auth/me')
+    return this.request("/api/auth/me");
   }
 
   async logout(): Promise<{ success: boolean; message: string }> {
-    const response = await this.request('/api/auth/logout', {
-      method: 'POST'
-    })
-    this.removeToken()
-    return response as { success: boolean; message: string }
+    const response = await this.request("/api/auth/logout", {
+      method: "POST",
+    });
+    this.removeToken();
+    return response as { success: boolean; message: string };
   }
 
   async refreshToken(): Promise<{ token: string }> {
-    return this.request('/api/auth/refresh', {
-      method: 'POST'
-    })
+    return this.request("/api/auth/refresh", {
+      method: "POST",
+    });
   }
 
   // User timezone endpoints
   async updateUserTimezone(data: {
-    timezone: string
-    timezoneAutoDetected: boolean
-  }): Promise<{ success: boolean; user: { id: string; timezone: string | null; timezoneAutoDetected: boolean } }> {
-    return this.request('/api/users/timezone', {
-      method: 'PATCH',
+    timezone: string;
+    timezoneAutoDetected: boolean;
+  }): Promise<{
+    success: boolean;
+    user: {
+      id: string;
+      timezone: string | null;
+      timezoneAutoDetected: boolean;
+    };
+  }> {
+    return this.request("/api/users/timezone", {
+      method: "PATCH",
       body: JSON.stringify(data),
-    })
+    });
   }
 
   // Brand timezone endpoints
-  async getBrandTimezone(brandId: string): Promise<{ timezone: string | null }> {
-    return this.request(`/api/brands/${brandId}/timezone`)
+  async getBrandTimezone(
+    brandId: string,
+  ): Promise<{ timezone: string | null }> {
+    return this.request(`/api/brands/${brandId}/timezone`);
   }
 
-  async updateBrandTimezone(brandId: string, timezone: string | null): Promise<{ success: boolean; brand: { id: string; postingTimezone: string | null } }> {
+  async updateBrandTimezone(
+    brandId: string,
+    timezone: string | null,
+  ): Promise<{
+    success: boolean;
+    brand: { id: string; postingTimezone: string | null };
+  }> {
     return this.request(`/api/brands/${brandId}/timezone`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({ timezone }),
-    })
+    });
   }
 
   // Brand endpoints
   async getBrands(): Promise<{ brands: Brand[] }> {
-    return this.request('/api/brands/list')
+    return this.request("/api/brands/list");
   }
 
   async createBrand(data: {
-    name: string
-    description?: string
+    name: string;
+    description?: string;
   }): Promise<{ brand: Brand }> {
-    return this.request('/api/brands/create', {
-      method: 'POST',
+    return this.request("/api/brands/create", {
+      method: "POST",
       body: JSON.stringify(data),
-    })
+    });
   }
 
   async analyzeBrand(data: {
-    brandName: string
+    brandName: string;
     posts: Array<{
-      imageUrl: string
-      caption: string
-      hashtags: string[]
-    }>
+      imageUrl: string;
+      caption: string;
+      hashtags: string[];
+    }>;
   }): Promise<{ brand: Brand; analysis: Record<string, unknown> }> {
-    return this.request('/api/brands/analyze', {
-      method: 'POST',
+    return this.request("/api/brands/analyze", {
+      method: "POST",
       body: JSON.stringify(data),
-    })
+    });
   }
 
-  async deleteBrand(brandId: string): Promise<{ message: string; deletedBrand: Brand }> {
+  async deleteBrand(
+    brandId: string,
+  ): Promise<{ message: string; deletedBrand: Brand }> {
     return this.request(`/api/brands/brand/${brandId}`, {
-      method: 'DELETE',
-    })
+      method: "DELETE",
+    });
   }
 
-  async updateBrand(brandId: string, data: {
-    name?: string
-    description?: string
-  }): Promise<{ message: string; brand: Brand }> {
+  async updateBrand(
+    brandId: string,
+    data: {
+      name?: string;
+      description?: string;
+    },
+  ): Promise<{ message: string; brand: Brand }> {
     return this.request(`/api/brands/brand/${brandId}`, {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify(data),
-    })
+    });
   }
 
   // Instagram OAuth endpoints
-  async initializeInstagramOAuth(brandId: string): Promise<{ authUrl: string; state: string }> {
-    return this.request(`/api/auth/instagram/authorize?brandId=${brandId}`)
+  async initializeInstagramOAuth(
+    brandId: string,
+  ): Promise<{ authUrl: string; state: string }> {
+    return this.request(`/api/auth/instagram/authorize?brandId=${brandId}`);
   }
 
-  async getInstagramConnectionStatus(brandId: string, refresh = false): Promise<{ connected: boolean; profile: Record<string, unknown> | null }> {
-    const queryParam = refresh ? '?refresh=true' : ''
-    return this.request(`/api/instagram/status/${brandId}${queryParam}`)
+  async getInstagramConnectionStatus(
+    brandId: string,
+    refresh = false,
+  ): Promise<{ connected: boolean; profile: Record<string, unknown> | null }> {
+    const queryParam = refresh ? "?refresh=true" : "";
+    return this.request(`/api/instagram/status/${brandId}${queryParam}`);
   }
 
   async disconnectInstagram(brandId: string): Promise<{ success: boolean }> {
     return this.request(`/api/instagram/disconnect`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ brandId }),
-    })
+    });
   }
 
-  async refreshInstagramToken(brandId: string): Promise<{ success: boolean; expiresAt: string }> {
+  async refreshInstagramToken(
+    brandId: string,
+  ): Promise<{ success: boolean; expiresAt: string }> {
     return this.request(`/api/instagram/refresh-token`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ brandId }),
-    })
+    });
   }
 
   // Content endpoints
   async generateContent(data: {
-    brandId: string
-    count: number
-    theme?: string
-    style?: string
+    brandId: string;
+    count: number;
+    theme?: string;
+    style?: string;
   }): Promise<{ content: Content[]; metadata: Record<string, unknown> }> {
-    return this.request('/api/content/generate', {
-      method: 'POST',
+    return this.request("/api/content/generate", {
+      method: "POST",
       body: JSON.stringify(data),
-    })
+    });
   }
 
   async createManualContent(data: {
-    brandId: string
-    caption: string
-    hashtags: string[]
-    imageFile?: File
-  }): Promise<{ content: Content; metadata: { brandId: string; source: string } }> {
+    brandId: string;
+    caption: string;
+    hashtags: string[];
+    imageFile?: File;
+  }): Promise<{
+    content: Content;
+    metadata: { brandId: string; source: string };
+  }> {
     if (data.imageFile) {
       // Convert File to base64 for upload (matching existing pattern)
-      const imageData = await convertFileToBase64(data.imageFile)
-      
-      return this.request('/api/content/create', {
-        method: 'POST',
+      const imageData = await convertFileToBase64(data.imageFile);
+
+      return this.request("/api/content/create", {
+        method: "POST",
         body: JSON.stringify({
           brandId: data.brandId,
           caption: data.caption,
@@ -379,497 +428,589 @@ class ApiClient {
           imageData,
           mimeType: data.imageFile.type,
         }),
-      })
+      });
     }
-    
-    return this.request('/api/content/create', {
-      method: 'POST',
+
+    return this.request("/api/content/create", {
+      method: "POST",
       body: JSON.stringify({
         brandId: data.brandId,
         caption: data.caption,
         hashtags: data.hashtags,
       }),
-    })
+    });
   }
 
   async getContentHistory(brandId: string): Promise<{ content: Content[] }> {
-    return this.request(`/api/content/history/${brandId}`)
+    return this.request(`/api/content/history/${brandId}`);
   }
 
-  async publishToInstagram(contentId: string): Promise<{ success: boolean; content: Content; instagramPost?: Record<string, unknown> }> {
+  async publishToInstagram(
+    contentId: string,
+  ): Promise<{
+    success: boolean;
+    content: Content;
+    instagramPost?: Record<string, unknown>;
+  }> {
     return this.request(`/api/instagram/publish/${contentId}`, {
-      method: 'POST',
-    })
+      method: "POST",
+    });
   }
 
-  async scheduleContent(contentId: string, customTime?: string): Promise<{ success: boolean; scheduleId?: string; brandId?: string; error?: string }> {
-    return this.request('/api/analytics/schedule', {
-      method: 'POST',
+  async scheduleContent(
+    contentId: string,
+    customTime?: string,
+  ): Promise<{
+    success: boolean;
+    scheduleId?: string;
+    brandId?: string;
+    error?: string;
+  }> {
+    return this.request("/api/analytics/schedule", {
+      method: "POST",
       body: JSON.stringify({
         contentId,
         customTime,
       }),
-    })
+    });
   }
 
   async updateContent(data: {
-    contentId: string
-    caption?: string
-    hashtags?: string[]
-    imageUrl?: string
-    scheduledAt?: string
-  }): Promise<{ content: Content; learning?: { learningActive: boolean; message: string; appliedToFuturePosts?: number } }> {
-    return this.request('/api/content/update', {
-      method: 'PUT',
+    contentId: string;
+    caption?: string;
+    hashtags?: string[];
+    imageUrl?: string;
+    scheduledAt?: string;
+  }): Promise<{
+    content: Content;
+    learning?: {
+      learningActive: boolean;
+      message: string;
+      appliedToFuturePosts?: number;
+    };
+  }> {
+    return this.request("/api/content/update", {
+      method: "PUT",
       body: JSON.stringify(data),
-    })
+    });
   }
 
-  async uploadContentImage(contentId: string, file: File): Promise<{ success: boolean; content: Content; message: string }> {
+  async uploadContentImage(
+    contentId: string,
+    file: File,
+  ): Promise<{ success: boolean; content: Content; message: string }> {
     // Convert file to base64 (matching existing pattern)
-    const base64Data = await convertFileToBase64(file)
-    
-    return this.request<{ success: boolean; content: Content; message: string }>('/api/content/upload-image', {
-      method: 'POST',
+    const base64Data = await convertFileToBase64(file);
+
+    return this.request<{
+      success: boolean;
+      content: Content;
+      message: string;
+    }>("/api/content/upload-image", {
+      method: "POST",
       body: JSON.stringify({
         contentId,
         imageData: base64Data,
         mimeType: file.type,
       }),
-    })
+    });
   }
 
   // AI Learning endpoints
   async getLearningAnalytics(brandId: string): Promise<{
     analytics: {
-      totalEditsAnalyzed: number
-      profileUpdatesCount: number
-      learningConfidence: number
+      totalEditsAnalyzed: number;
+      profileUpdatesCount: number;
+      learningConfidence: number;
       topInsights: Array<{
-        category: string
-        pattern: string
-        frequency: number
-        lastDetected: Date
-      }>
+        category: string;
+        pattern: string;
+        frequency: number;
+        lastDetected: Date;
+      }>;
       improvementMetrics: {
-        editFrequencyReduction: number
-        contentAcceptanceRate: number
-        styleBoundaryRefinement: number
-      }
-    }
+        editFrequencyReduction: number;
+        contentAcceptanceRate: number;
+        styleBoundaryRefinement: number;
+      };
+    };
   }> {
-    return this.request(`/api/ai/learning-stats/${brandId}`)
+    return this.request(`/api/ai/learning-stats/${brandId}`);
   }
 
   // Analytics endpoints
   async get<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    return this.request(endpoint, { ...options, method: 'GET' })
+    return this.request(endpoint, { ...options, method: "GET" });
   }
 
-  async post<T>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> {
+  async post<T>(
+    endpoint: string,
+    data?: unknown,
+    options?: RequestInit,
+  ): Promise<T> {
     return this.request(endpoint, {
       ...options,
-      method: 'POST',
+      method: "POST",
       body: data ? JSON.stringify(data) : undefined,
-    })
+    });
   }
 
-  async put<T>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> {
+  async put<T>(
+    endpoint: string,
+    data?: unknown,
+    options?: RequestInit,
+  ): Promise<T> {
     return this.request(endpoint, {
       ...options,
-      method: 'PUT',
+      method: "PUT",
       body: data ? JSON.stringify(data) : undefined,
-    })
+    });
   }
 
   async delete<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    return this.request(endpoint, { ...options, method: 'DELETE' })
+    return this.request(endpoint, { ...options, method: "DELETE" });
   }
 
   // Content endpoints (fixed duplicate method - keeping the correct one)
   /* Note: updateContent is already defined above at line 368-379 with PUT method */
 
-  async deletePost(postId: string): Promise<{ success: boolean; message: string }> {
+  async deletePost(
+    postId: string,
+  ): Promise<{ success: boolean; message: string }> {
     return this.request(`/api/content/post/${postId}`, {
-      method: 'DELETE',
-    })
+      method: "DELETE",
+    });
   }
 
-  async schedulePost(postId: string, scheduledAt: string): Promise<{ success: boolean; content: Content }> {
+  async schedulePost(
+    postId: string,
+    scheduledAt: string,
+  ): Promise<{ success: boolean; content: Content }> {
     return this.request(`/api/content/post/${postId}/schedule`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ scheduledAt }),
-    })
+    });
   }
 
-  async publishPostNow(postId: string): Promise<{ success: boolean; content: Content }> {
+  async publishPostNow(
+    postId: string,
+  ): Promise<{ success: boolean; content: Content }> {
     return this.request(`/api/content/post/${postId}/publish-now`, {
-      method: 'POST',
-    })
+      method: "POST",
+    });
   }
 
   // Calendar endpoints
-  async getCalendarContent(brandId: string, month?: string): Promise<{
-    success: boolean
+  async getCalendarContent(
+    brandId: string,
+    month?: string,
+  ): Promise<{
+    success: boolean;
     data: {
-      content: Content[]
+      content: Content[];
       placeholders: Array<{
-        id: string
-        type: 'placeholder'
-        campaignId: string
-        campaignName: string
-        scheduledAt: string
-        status: 'placeholder'
-        message: string
-      }>
-    }
+        id: string;
+        type: "placeholder";
+        campaignId: string;
+        campaignName: string;
+        scheduledAt: string;
+        status: "placeholder";
+        message: string;
+      }>;
+    };
   }> {
-    const currentMonth = month || new Date().toISOString().slice(0, 7)
-    return this.request(`/api/content/calendar/${brandId}/${currentMonth}`)
+    const currentMonth = month || new Date().toISOString().slice(0, 7);
+    return this.request(`/api/content/calendar/${brandId}/${currentMonth}`);
   }
 
   // Campaign endpoints
-  async configureCampaign(config: CampaignConfig): Promise<{ success: boolean; campaign: Campaign }> {
+  async configureCampaign(
+    config: CampaignConfig,
+  ): Promise<{ success: boolean; campaign: Campaign }> {
     // Handle both Date objects and strings for duration
     const getDurationString = (dateValue: Date | string): string => {
-      if (typeof dateValue === 'string') {
+      if (typeof dateValue === "string") {
         // Already a string, use directly
-        return dateValue
+        return dateValue;
       }
       // Convert Date object to YYYY-MM-DD format
-      const year = dateValue.getFullYear()
-      const month = String(dateValue.getMonth() + 1).padStart(2, '0')
-      const day = String(dateValue.getDate()).padStart(2, '0')
-      return `${year}-${month}-${day}`
-    }
-    
-    return this.request('/api/campaign/configure', {
-      method: 'POST',
+      const year = dateValue.getFullYear();
+      const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+      const day = String(dateValue.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    return this.request("/api/campaign/configure", {
+      method: "POST",
       headers: {
-        'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone
+        "X-Timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
       body: JSON.stringify({
         name: config.name,
         brandId: config.brandId,
         duration: {
           start: getDurationString(config.duration.start),
-          end: getDurationString(config.duration.end)
+          end: getDurationString(config.duration.end),
         },
         frequency: config.frequency,
         themes: config.themes,
         style: config.style,
         postingTime: config.postingTime,
-        priority: config.priority
+        priority: config.priority,
       }),
-    })
+    });
   }
 
-  async previewCampaign(campaignId: string, exampleCount = 3): Promise<{ success: boolean; preview: CampaignPreview }> {
-    return this.request('/api/campaign/preview', {
-      method: 'POST',
+  async previewCampaign(
+    campaignId: string,
+    exampleCount = 3,
+  ): Promise<{ success: boolean; preview: CampaignPreview }> {
+    return this.request("/api/campaign/preview", {
+      method: "POST",
       body: JSON.stringify({ configId: campaignId, exampleCount }),
-    })
+    });
   }
 
-  async startCampaign(campaignId: string): Promise<{ success: boolean; message: string }> {
-    return this.request('/api/campaign/start', {
-      method: 'POST',
+  async startCampaign(
+    campaignId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request("/api/campaign/start", {
+      method: "POST",
       body: JSON.stringify({ campaignId }),
-    })
+    });
   }
 
-  async listCampaigns(brandId?: string): Promise<{ success: boolean; campaigns: Campaign[] }> {
-    const url = brandId ? `/api/campaign/list?brandId=${brandId}` : '/api/campaign/list'
-    return this.request(url)
+  async listCampaigns(
+    brandId?: string,
+  ): Promise<{ success: boolean; campaigns: Campaign[] }> {
+    const url = brandId
+      ? `/api/campaign/list?brandId=${brandId}`
+      : "/api/campaign/list";
+    return this.request(url);
   }
 
-  async getCampaign(campaignId: string): Promise<{ success: boolean; campaign: Campaign }> {
-    return this.request(`/api/campaign/${campaignId}`)
+  async getCampaign(
+    campaignId: string,
+  ): Promise<{ success: boolean; campaign: Campaign }> {
+    return this.request(`/api/campaign/${campaignId}`);
   }
 
-  async deleteCampaign(campaignId: string): Promise<{ success: boolean; message: string }> {
+  async deleteCampaign(
+    campaignId: string,
+  ): Promise<{ success: boolean; message: string }> {
     return this.request(`/api/campaign/${campaignId}`, {
-      method: 'DELETE',
-    })
+      method: "DELETE",
+    });
   }
 
   async getCampaignStatus(campaignId: string): Promise<CampaignStatusResponse> {
-    return this.request(`/api/campaign/status/${campaignId}`)
+    return this.request(`/api/campaign/status/${campaignId}`);
   }
 
-  async updateCampaign(campaignId: string, updates: {
-    name?: string
-    themes?: string[]
-    style?: string
-    frequency?: string
-    postingTime?: string
-    startDate?: string
-    endDate?: string
-    status?: string
-    priority?: number
-  }): Promise<{ success: boolean; campaign: Campaign; message?: string; skippedCount?: number; cancelledCount?: number }> {
+  async updateCampaign(
+    campaignId: string,
+    updates: {
+      name?: string;
+      themes?: string[];
+      style?: string;
+      frequency?: string;
+      postingTime?: string;
+      startDate?: string;
+      endDate?: string;
+      status?: string;
+      priority?: number;
+    },
+  ): Promise<{
+    success: boolean;
+    campaign: Campaign;
+    message?: string;
+    skippedCount?: number;
+    cancelledCount?: number;
+  }> {
     return this.request(`/api/campaign/${campaignId}`, {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify(updates),
-    })
+    });
   }
 
   // Update campaign priority
-  async updateCampaignPriority(campaignId: string, priority: number): Promise<{ success: boolean; campaign: Campaign }> {
+  async updateCampaignPriority(
+    campaignId: string,
+    priority: number,
+  ): Promise<{ success: boolean; campaign: Campaign }> {
     return this.request(`/api/campaign/${campaignId}/priority`, {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify({ priority }),
-    })
+    });
   }
 
   // Get campaign coordination summary
-  async getCampaignCoordination(): Promise<{ success: boolean; coordination: unknown }> {
-    return this.request('/api/campaign/coordination')
+  async getCampaignCoordination(): Promise<{
+    success: boolean;
+    coordination: unknown;
+  }> {
+    return this.request("/api/campaign/coordination");
   }
-
 
   // Post Detail Methods
   async getPostDetail(postId: string): Promise<{
-    success: boolean
+    success: boolean;
     data: {
-      id: string
-      caption: string
-      hashtags: string[]
-      cdnImageUrl?: string
-      imageUrl?: string
-      status: string
-      scheduledAt?: string | null
-      postedAt?: string | null
-      instagramPostId?: string | null
-      instagramPermalink?: string | null
+      id: string;
+      caption: string;
+      hashtags: string[];
+      cdnImageUrl?: string;
+      imageUrl?: string;
+      status: string;
+      scheduledAt?: string | null;
+      postedAt?: string | null;
+      instagramPostId?: string | null;
+      instagramPermalink?: string | null;
       analytics?: {
-        impressions?: number
-        reach?: number
-        engagement?: number
-      }
+        impressions?: number;
+        reach?: number;
+        engagement?: number;
+      };
       generationParams?: {
-        theme?: string
-        style?: string
-        scheduleId?: string
-      }
-      brand: { id: string; name: string }
-      campaign?: { id: string; name: string; status: string }
-      createdAt: string
-      updatedAt: string
-    }
+        theme?: string;
+        style?: string;
+        scheduleId?: string;
+      };
+      brand: { id: string; name: string };
+      campaign?: { id: string; name: string; status: string };
+      createdAt: string;
+      updatedAt: string;
+    };
   }> {
-    return this.request(`/api/posts/${postId}/detail`)
+    return this.request(`/api/posts/${postId}/detail`);
   }
 
   async getPostInsights(postId: string): Promise<{
-    success: boolean
+    success: boolean;
     data: {
-      postId: string
+      postId: string;
       metrics: {
-        impressions: number
-        reach: number
-        engagement: number
-        saves: number
-        shares: number
-        comments_count: number
-        likes_count: number
-      }
-      lastUpdated: string
-    }
+        impressions: number;
+        reach: number;
+        engagement: number;
+        saves: number;
+        shares: number;
+        comments_count: number;
+        likes_count: number;
+      };
+      lastUpdated: string;
+    };
   }> {
-    return this.request(`/api/posts/${postId}/insights`)
+    return this.request(`/api/posts/${postId}/insights`);
   }
 
-  async getPostComments(postId: string, page = 1, limit = 20): Promise<{
-    success: boolean
+  async getPostComments(
+    postId: string,
+    page = 1,
+    limit = 20,
+  ): Promise<{
+    success: boolean;
     data: {
       comments: Array<{
-        username: string
-        text: string
-      }>
+        username: string;
+        text: string;
+      }>;
       pagination: {
-        page: number
-        limit: number
-        total: number
-        pages: number
-      }
-    }
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+      };
+    };
   }> {
-    return this.request(`/api/posts/${postId}/comments?page=${page}&limit=${limit}`)
+    return this.request(
+      `/api/posts/${postId}/comments?page=${page}&limit=${limit}`,
+    );
   }
 
-  async updatePost(postId: string, data: {
-    caption: string
-    hashtags: string[]
-  }): Promise<{
-    success: boolean
-    data: unknown
+  async updatePost(
+    postId: string,
+    data: {
+      caption: string;
+      hashtags: string[];
+    },
+  ): Promise<{
+    success: boolean;
+    data: unknown;
   }> {
     return this.request(`/api/content/${postId}/edit`, {
-      method: 'PATCH',
-      body: JSON.stringify(data)
-    })
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
   }
 
   async publishPost(postId: string): Promise<{
-    success: boolean
-    data: unknown
+    success: boolean;
+    data: unknown;
   }> {
     return this.request(`/api/content/${postId}/publish`, {
-      method: 'POST'
-    })
+      method: "POST",
+    });
   }
 
   // Campaign Analytics Methods
   async getCampaignMetrics(campaignId: string): Promise<{
-    success: boolean
+    success: boolean;
     data: {
-      totalPosts: number
-      totalImpressions: number
-      totalEngagement: number
-      averageEngagementRate: number
-      reach: number
-      postsScheduled: number
-      postsPosted: number
-      postsApproved: number
-      campaignDuration: number
-      postingFrequency: number
-      topHashtags: Array<{ tag: string; count: number; avgEngagement: number }>
-      performanceByDate: Array<{ date: string; impressions: number; engagement: number }>
-    }
-    lastUpdated: string
-    fromCache: boolean
+      totalPosts: number;
+      totalImpressions: number;
+      totalEngagement: number;
+      averageEngagementRate: number;
+      reach: number;
+      postsScheduled: number;
+      postsPosted: number;
+      postsApproved: number;
+      campaignDuration: number;
+      postingFrequency: number;
+      topHashtags: Array<{ tag: string; count: number; avgEngagement: number }>;
+      performanceByDate: Array<{
+        date: string;
+        impressions: number;
+        engagement: number;
+      }>;
+    };
+    lastUpdated: string;
+    fromCache: boolean;
   }> {
-    return this.request(`/api/campaign/analytics/${campaignId}`)
+    return this.request(`/api/campaign/analytics/${campaignId}`);
   }
 
   async compareCampaigns(campaignIds: string[]): Promise<{
-    success: boolean
+    success: boolean;
     data: {
       campaigns: Array<{
-        id: string
-        name: string
-        metrics: unknown
-        performance: 'high' | 'medium' | 'low'
-      }>
+        id: string;
+        name: string;
+        metrics: unknown;
+        performance: "high" | "medium" | "low";
+      }>;
       summary: {
-        totalCampaigns: number
-        avgEngagementRate: number
-        bestPerformingMetric: string
-        improvementOpportunity: string
-      }
-      topPerformer: string
-    }
-    lastUpdated: string
+        totalCampaigns: number;
+        avgEngagementRate: number;
+        bestPerformingMetric: string;
+        improvementOpportunity: string;
+      };
+      topPerformer: string;
+    };
+    lastUpdated: string;
   }> {
-    return this.request('/api/campaign/analytics/compare', {
-      method: 'POST',
+    return this.request("/api/campaign/analytics/compare", {
+      method: "POST",
       body: JSON.stringify({ campaignIds }),
-    })
+    });
   }
 
   async getCampaignRecommendations(campaignId: string): Promise<{
-    success: boolean
+    success: boolean;
     data: Array<{
-      type: 'frequency' | 'content' | 'timing' | 'hashtags' | 'themes'
-      message: string
-      priority: 'high' | 'medium' | 'low'
-      impact: string
-      actionable: boolean
-      data?: unknown
-    }>
-    count: number
-    lastUpdated: string
+      type: "frequency" | "content" | "timing" | "hashtags" | "themes";
+      message: string;
+      priority: "high" | "medium" | "low";
+      impact: string;
+      actionable: boolean;
+      data?: unknown;
+    }>;
+    count: number;
+    lastUpdated: string;
   }> {
-    return this.request(`/api/campaign/analytics/${campaignId}/recommendations`)
+    return this.request(
+      `/api/campaign/analytics/${campaignId}/recommendations`,
+    );
   }
 
   async getCampaignROI(campaignId: string): Promise<{
-    success: boolean
+    success: boolean;
     data: {
-      estimatedValue: number
-      engagementValue: number
-      reachValue: number
+      estimatedValue: number;
+      engagementValue: number;
+      reachValue: number;
       breakdown: {
-        costPerEngagement: number
-        estimatedReach: number
-        valuePerImpression: number
-      }
-      methodology: string
-    }
-    lastUpdated: string
+        costPerEngagement: number;
+        estimatedReach: number;
+        valuePerImpression: number;
+      };
+      methodology: string;
+    };
+    lastUpdated: string;
   }> {
-    return this.request(`/api/campaign/analytics/${campaignId}/roi`)
+    return this.request(`/api/campaign/analytics/${campaignId}/roi`);
   }
 
   async getBrandAnalyticsSummary(brandId: string): Promise<{
-    success: boolean
+    success: boolean;
     data: {
-      totalCampaigns: number
+      totalCampaigns: number;
       summary: {
-        totalPosts: number
-        totalImpressions: number
-        totalEngagement: number
-        averageEngagementRate: number
-      }
+        totalPosts: number;
+        totalImpressions: number;
+        totalEngagement: number;
+        averageEngagementRate: number;
+      };
       topPerformingCampaign: {
-        id: string
-        name: string
-        engagementRate: number
-      } | null
+        id: string;
+        name: string;
+        engagementRate: number;
+      } | null;
       campaignBreakdown: Array<{
-        campaignId: string
-        campaignName: string
-        metrics: unknown
-      }>
-    }
-    lastUpdated: string
+        campaignId: string;
+        campaignName: string;
+        metrics: unknown;
+      }>;
+    };
+    lastUpdated: string;
   }> {
-    return this.request(`/api/brand/${brandId}/analytics/summary`)
+    return this.request(`/api/brand/${brandId}/analytics/summary`);
   }
 
   // Content regeneration endpoints
-  async regenerateContent(campaignId: string, params: {
-    themes?: string[]
-    style?: string
-    contentIds?: string[]
-  }): Promise<{
-    success: boolean
+  async regenerateContent(
+    campaignId: string,
+    params: {
+      themes?: string[];
+      style?: string;
+      contentIds?: string[];
+    },
+  ): Promise<{
+    success: boolean;
     data: {
-      jobId: string
-      totalContent: number
-      estimatedTime: number
-    }
+      jobId: string;
+      totalContent: number;
+      estimatedTime: number;
+    };
   }> {
     return this.request(`/api/campaigns/${campaignId}/regenerate-content`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(params),
-    })
+    });
   }
 
   async getRegenerationJobProgress(jobId: string): Promise<{
-    success: boolean
+    success: boolean;
     data: {
-      status: 'pending' | 'processing' | 'completed' | 'failed'
-      progress: number
-      total: number
-      completed: number
-      failed: number
-      errors?: string[]
-    }
+      status: "pending" | "processing" | "completed" | "failed";
+      progress: number;
+      total: number;
+      completed: number;
+      failed: number;
+      errors?: string[];
+    };
   }> {
-    return this.request(`/api/campaigns/regeneration-jobs/${jobId}`)
+    return this.request(`/api/campaigns/regeneration-jobs/${jobId}`);
   }
 
   async cancelRegenerationJob(jobId: string): Promise<{
-    success: boolean
-    message: string
+    success: boolean;
+    message: string;
   }> {
     return this.request(`/api/campaigns/regeneration-jobs/${jobId}`, {
-      method: 'DELETE',
-    })
+      method: "DELETE",
+    });
   }
-
 }
 
-export const apiClient = new ApiClient()
+export const apiClient = new ApiClient();

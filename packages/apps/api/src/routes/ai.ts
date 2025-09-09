@@ -67,11 +67,9 @@ export default async function aiRoutes(fastify: FastifyInstance) {
         const { brandId, content, currentHashtags } = request.body;
 
         if (!brandId || !content || !currentHashtags) {
-          return reply
-            .code(400)
-            .send({
-              error: "Brand ID, content, and current hashtags are required",
-            });
+          return reply.code(400).send({
+            error: "Brand ID, content, and current hashtags are required",
+          });
         }
 
         const optimization = await aiService.optimizeHashtags(
@@ -131,11 +129,9 @@ export default async function aiRoutes(fastify: FastifyInstance) {
         const { brandId, context, contentType } = request.body;
 
         if (!brandId || !context || !contentType) {
-          return reply
-            .code(400)
-            .send({
-              error: "Brand ID, context, and content type are required",
-            });
+          return reply.code(400).send({
+            error: "Brand ID, context, and content type are required",
+          });
         }
 
         const result = await aiService.suggestContentIdeas(
@@ -195,12 +191,10 @@ export default async function aiRoutes(fastify: FastifyInstance) {
         const { brandId, originalContent, editedContent } = request.body;
 
         if (!brandId || !originalContent || !editedContent) {
-          return reply
-            .code(400)
-            .send({
-              error:
-                "Brand ID, original content, and edited content are required",
-            });
+          return reply.code(400).send({
+            error:
+              "Brand ID, original content, and edited content are required",
+          });
         }
 
         // Analyze the edit patterns

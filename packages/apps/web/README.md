@@ -6,11 +6,11 @@ This is the frontend web application for Postolio. It is a single-page applicati
 
 ### Scripts
 
--   **Dev:** `pnpm dev` (Starts the Vite development server)
--   **Build:** `pnpm build`
--   **Lint:** `pnpm lint`
--   **Test:** `pnpm test`
--   **Preview:** `pnpm preview` (Serves the production build locally)
+- **Dev:** `pnpm dev` (Starts the Vite development server)
+- **Build:** `pnpm build`
+- **Lint:** `pnpm lint`
+- **Test:** `pnpm test`
+- **Preview:** `pnpm preview` (Serves the production build locally)
 
 To run any script for only this application from the monorepo root, use the `--filter` flag:
 

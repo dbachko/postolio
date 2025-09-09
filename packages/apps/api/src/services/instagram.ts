@@ -702,9 +702,7 @@ class InstagramService {
   /**
    * Force refresh analytics data (bypass cache)
    */
-  async refreshAnalyticsData(
-    brand: BrandData,
-  ): Promise<{
+  async refreshAnalyticsData(brand: BrandData): Promise<{
     success: boolean;
     message: string;
     nextRefreshAllowed: string;

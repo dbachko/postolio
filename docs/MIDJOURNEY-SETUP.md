@@ -5,6 +5,7 @@ This guide explains how to set up Midjourney integration for higher quality imag
 ## Overview
 
 The Midjourney integration provides:
+
 - Higher quality AI-generated images compared to DALL-E
 - Brand-consistent visual style based on brand profiles
 - Automatic fallback to DALL-E when Midjourney is unavailable
@@ -42,7 +43,7 @@ Add these variables to your `.env` file:
 ```bash
 # Midjourney API Configuration
 MIDJOURNEY_SALAI_TOKEN="your-discord-salai-token-here"
-MIDJOURNEY_SERVER_ID="your-discord-server-id-here"  
+MIDJOURNEY_SERVER_ID="your-discord-server-id-here"
 MIDJOURNEY_CHANNEL_ID="your-discord-channel-id-here"
 ```
 
@@ -62,19 +63,23 @@ The system automatically uses Midjourney for content generation:
 
 ```typescript
 // This will try Midjourney first, fallback to DALL-E
-const content = await generateInstagramContent(styleProfile, brandName, request)
+const content = await generateInstagramContent(
+  styleProfile,
+  brandName,
+  request,
+);
 ```
 
 ### Manual Usage
 
 ```typescript
-import { generateMidjourneyImage } from './src/services/midjourney.js'
+import { generateMidjourneyImage } from "./src/services/midjourney.js";
 
 const imageUrl = await generateMidjourneyImage(
-  'A beautiful sunset over the ocean',
+  "A beautiful sunset over the ocean",
   styleProfile,
-  brandName
-)
+  brandName,
+);
 ```
 
 ## Brand-Aware Prompts
@@ -87,6 +92,7 @@ The system enhances prompts with brand characteristics:
 - **Content Themes**: Considers brand's content focus areas
 
 Example transformation:
+
 ```
 Original: "A coffee cup on a table"
 Enhanced: "A coffee cup on a table, modern minimalist aesthetic, featuring #FF6B6B and #4ECDC4 color scheme, authentic style, lifestyle context --ar 1:1 --style raw --quality 2"
@@ -110,12 +116,12 @@ The system provides graceful fallbacks:
 Check service status:
 
 ```typescript
-import { midjourneyService } from './src/services/midjourney.js'
+import { midjourneyService } from "./src/services/midjourney.js";
 
-const status = midjourneyService.getStatus()
-console.log('Configured:', status.configured)
-console.log('Initialized:', status.initialized)
-console.log('Fallback Mode:', status.fallbackMode)
+const status = midjourneyService.getStatus();
+console.log("Configured:", status.configured);
+console.log("Initialized:", status.initialized);
+console.log("Fallback Mode:", status.fallbackMode);
 ```
 
 ## Troubleshooting
@@ -179,28 +185,32 @@ npm run dev
 ```typescript
 class MidjourneyService {
   // Initialize the service
-  async init(): Promise<boolean>
-  
+  async init(): Promise<boolean>;
+
   // Generate brand-aware image
   async generateBrandImage(
     prompt: string,
     styleProfile: StyleProfile,
-    brandName: string
-  ): Promise<MidjourneyImageResult>
-  
+    brandName: string,
+  ): Promise<MidjourneyImageResult>;
+
   // Generate multiple variations
   async generateImageVariations(
     prompt: string,
     styleProfile: StyleProfile,
     brandName: string,
-    count: number
-  ): Promise<MidjourneyImageResult[]>
-  
+    count: number,
+  ): Promise<MidjourneyImageResult[]>;
+
   // Get service status
-  getStatus(): { configured: boolean, initialized: boolean, fallbackMode: boolean }
-  
+  getStatus(): {
+    configured: boolean;
+    initialized: boolean;
+    fallbackMode: boolean;
+  };
+
   // Cleanup resources
-  async destroy(): Promise<void>
+  async destroy(): Promise<void>;
 }
 ```
 
@@ -211,14 +221,14 @@ class MidjourneyService {
 async function generateMidjourneyImage(
   prompt: string,
   styleProfile: StyleProfile,
-  brandName: string
-): Promise<string>
+  brandName: string,
+): Promise<string>;
 
 // Multiple image variations
 async function generateImageVariations(
   prompt: string,
   styleProfile: StyleProfile,
   brandName: string,
-  count: number
-): Promise<string[]>
+  count: number,
+): Promise<string[]>;
 ```

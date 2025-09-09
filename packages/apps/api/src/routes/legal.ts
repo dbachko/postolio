@@ -146,7 +146,12 @@ export default async function legalRoutes(fastify: FastifyInstance) {
   fastify.get("/terms-of-service", async (request, reply) => {
     try {
       // Read the terms of service markdown file
-      const termsPath = path.join(__dirname, "..", "..", "legal/TERMS_OF_SERVICE.md");
+      const termsPath = path.join(
+        __dirname,
+        "..",
+        "..",
+        "legal/TERMS_OF_SERVICE.md",
+      );
       let termsContent = fs.readFileSync(termsPath, "utf8");
 
       // Make copyright year dynamic

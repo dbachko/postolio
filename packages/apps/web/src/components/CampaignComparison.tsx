@@ -1,105 +1,117 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiClient, type Campaign } from '../lib/api'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
-import { Badge } from './ui/badge'
-import { Button } from './ui/button'
-import { Label } from './ui/label'
-import { Checkbox } from './ui/checkbox'
-import { 
-  BarChart3, 
-  TrendingUp, 
-  TrendingDown, 
-  Users, 
-  Eye, 
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient, type Campaign } from "../lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Label } from "./ui/label";
+import { Checkbox } from "./ui/checkbox";
+import {
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  Eye,
   Heart,
   AlertCircle,
   Loader2,
-  X
-} from 'lucide-react'
+  X,
+} from "lucide-react";
 
 interface Metrics {
-  totalImpressions: number
-  totalEngagement: number
-  reach: number
-  averageEngagementRate: number
-  totalPosts: number
+  totalImpressions: number;
+  totalEngagement: number;
+  reach: number;
+  averageEngagementRate: number;
+  totalPosts: number;
 }
 
 interface ComparisonCampaign {
-  id: string
-  name: string
-  performance: string
-  metrics: Metrics
+  id: string;
+  name: string;
+  performance: string;
+  metrics: Metrics;
 }
 
 interface CampaignComparisonProps {
-  campaigns: Campaign[]
-  isOpen: boolean
-  onClose: () => void
+  campaigns: Campaign[];
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignComparisonProps) {
-  const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([])
-  const [showComparison, setShowComparison] = useState(false)
+export function CampaignComparison({
+  campaigns,
+  isOpen,
+  onClose,
+}: CampaignComparisonProps) {
+  const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
+  const [showComparison, setShowComparison] = useState(false);
 
   // Only fetch comparison when we have selected campaigns and user wants to see results
   const comparisonQuery = useQuery({
-    queryKey: ['campaign-comparison', selectedCampaigns],
+    queryKey: ["campaign-comparison", selectedCampaigns],
     queryFn: () => apiClient.compareCampaigns(selectedCampaigns),
-    enabled: showComparison && selectedCampaigns.length >= 2
-  })
+    enabled: showComparison && selectedCampaigns.length >= 2,
+  });
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   const handleCampaignToggle = (campaignId: string) => {
-    setSelectedCampaigns(prev => 
+    setSelectedCampaigns((prev) =>
       prev.includes(campaignId)
-        ? prev.filter(id => id !== campaignId)
-        : [...prev, campaignId]
-    )
-  }
+        ? prev.filter((id) => id !== campaignId)
+        : [...prev, campaignId],
+    );
+  };
 
   const handleCompare = () => {
     if (selectedCampaigns.length >= 2) {
-      setShowComparison(true)
+      setShowComparison(true);
     }
-  }
+  };
 
   const handleClose = () => {
-    setSelectedCampaigns([])
-    setShowComparison(false)
-    onClose()
-  }
+    setSelectedCampaigns([]);
+    setShowComparison(false);
+    onClose();
+  };
 
   const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
-    return num.toString()
-  }
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toString();
+  };
 
   const getPerformanceColor = (performance: string) => {
     switch (performance) {
-      case 'high': return 'text-green-600'
-      case 'medium': return 'text-yellow-600'
-      case 'low': return 'text-red-600'
-      default: return 'text-gray-600'
+      case "high":
+        return "text-green-600";
+      case "medium":
+        return "text-yellow-600";
+      case "low":
+        return "text-red-600";
+      default:
+        return "text-gray-600";
     }
-  }
+  };
 
   const getPerformanceIcon = (performance: string) => {
     switch (performance) {
-      case 'high': return <TrendingUp className="w-4 h-4" />
-      case 'medium': return <BarChart3 className="w-4 h-4" />
-      case 'low': return <TrendingDown className="w-4 h-4" />
-      default: return <BarChart3 className="w-4 h-4" />
+      case "high":
+        return <TrendingUp className="w-4 h-4" />;
+      case "medium":
+        return <BarChart3 className="w-4 h-4" />;
+      case "low":
+        return <TrendingDown className="w-4 h-4" />;
+      default:
+        return <BarChart3 className="w-4 h-4" />;
     }
-  }
+  };
 
   // Filter to only show active or completed campaigns that can be compared
-  const comparableCampaigns = campaigns.filter(campaign => 
-    ['active', 'completed', 'paused'].includes(campaign.status)
-  )
+  const comparableCampaigns = campaigns.filter((campaign) =>
+    ["active", "completed", "paused"].includes(campaign.status),
+  );
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -124,7 +136,9 @@ export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignCompa
             /* Campaign Selection */
             <div className="space-y-6">
               <div>
-                <Label className="text-base font-medium">Select Campaigns to Compare</Label>
+                <Label className="text-base font-medium">
+                  Select Campaigns to Compare
+                </Label>
                 <p className="text-sm text-gray-600 mt-1">
                   Choose at least 2 campaigns that have been launched
                 </p>
@@ -135,9 +149,12 @@ export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignCompa
                   <CardContent className="py-8">
                     <div className="text-center">
                       <BarChart3 className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                      <h3 className="font-medium text-gray-900 mb-2">No campaigns available for comparison</h3>
+                      <h3 className="font-medium text-gray-900 mb-2">
+                        No campaigns available for comparison
+                      </h3>
                       <p className="text-gray-600">
-                        You need at least 2 active or completed campaigns to use the comparison feature.
+                        You need at least 2 active or completed campaigns to use
+                        the comparison feature.
                       </p>
                     </div>
                   </CardContent>
@@ -145,27 +162,36 @@ export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignCompa
               ) : (
                 <div className="space-y-3">
                   {comparableCampaigns.map((campaign) => (
-                    <Card key={campaign.id} className="cursor-pointer hover:border-blue-300">
+                    <Card
+                      key={campaign.id}
+                      className="cursor-pointer hover:border-blue-300"
+                    >
                       <CardContent className="p-4">
                         <div className="flex items-center space-x-3">
                           <Checkbox
                             checked={selectedCampaigns.includes(campaign.id)}
-                            onCheckedChange={() => handleCampaignToggle(campaign.id)}
+                            onCheckedChange={() =>
+                              handleCampaignToggle(campaign.id)
+                            }
                           />
                           <div className="flex-1">
                             <div className="flex items-center gap-3">
                               <h4 className="font-medium">{campaign.name}</h4>
-                              <Badge 
+                              <Badge
                                 variant={
-                                  campaign.status === 'active' ? 'default' :
-                                  campaign.status === 'completed' ? 'secondary' :
-                                  'outline'
+                                  campaign.status === "active"
+                                    ? "default"
+                                    : campaign.status === "completed"
+                                      ? "secondary"
+                                      : "outline"
                                 }
                               >
                                 {campaign.status}
                               </Badge>
                             </div>
-                            <p className="text-sm text-gray-600">Brand: {campaign.brandId}</p>
+                            <p className="text-sm text-gray-600">
+                              Brand: {campaign.brandId}
+                            </p>
                           </div>
                         </div>
                       </CardContent>
@@ -178,11 +204,12 @@ export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignCompa
                 <Button variant="outline" onClick={handleClose}>
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={handleCompare}
                   disabled={selectedCampaigns.length < 2}
                 >
-                  Compare {selectedCampaigns.length} Campaign{selectedCampaigns.length !== 1 ? 's' : ''}
+                  Compare {selectedCampaigns.length} Campaign
+                  {selectedCampaigns.length !== 1 ? "s" : ""}
                 </Button>
               </div>
             </div>
@@ -193,10 +220,14 @@ export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignCompa
                 <div>
                   <h3 className="text-lg font-medium">Comparison Results</h3>
                   <p className="text-sm text-gray-600">
-                    Performance comparison for {selectedCampaigns.length} campaigns
+                    Performance comparison for {selectedCampaigns.length}{" "}
+                    campaigns
                   </p>
                 </div>
-                <Button variant="outline" onClick={() => setShowComparison(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowComparison(false)}
+                >
                   ← Back to Selection
                 </Button>
               </div>
@@ -227,20 +258,43 @@ export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignCompa
                     <CardContent>
                       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div>
-                          <p className="text-sm text-gray-600">Best Performing Metric</p>
-                          <p className="font-medium capitalize">{comparisonQuery.data.data.summary.bestPerformingMetric}</p>
+                          <p className="text-sm text-gray-600">
+                            Best Performing Metric
+                          </p>
+                          <p className="font-medium capitalize">
+                            {
+                              comparisonQuery.data.data.summary
+                                .bestPerformingMetric
+                            }
+                          </p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600">Average Engagement Rate</p>
-                          <p className="font-medium">{comparisonQuery.data.data.summary.avgEngagementRate.toFixed(2)}%</p>
+                          <p className="text-sm text-gray-600">
+                            Average Engagement Rate
+                          </p>
+                          <p className="font-medium">
+                            {comparisonQuery.data.data.summary.avgEngagementRate.toFixed(
+                              2,
+                            )}
+                            %
+                          </p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600">Top Performer</p>
-                          <p className="font-medium">{comparisonQuery.data.data.topPerformer}</p>
+                          <p className="font-medium">
+                            {comparisonQuery.data.data.topPerformer}
+                          </p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600">Improvement Opportunity</p>
-                          <p className="font-medium capitalize">{comparisonQuery.data.data.summary.improvementOpportunity}</p>
+                          <p className="text-sm text-gray-600">
+                            Improvement Opportunity
+                          </p>
+                          <p className="font-medium capitalize">
+                            {
+                              comparisonQuery.data.data.summary
+                                .improvementOpportunity
+                            }
+                          </p>
                         </div>
                       </div>
                     </CardContent>
@@ -248,14 +302,26 @@ export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignCompa
 
                   {/* Individual Campaign Comparisons */}
                   <div className="grid md:grid-cols-2 gap-6">
-                    {(comparisonQuery.data.data.campaigns as ComparisonCampaign[]).map((campaign: ComparisonCampaign) => (
+                    {(
+                      comparisonQuery.data.data
+                        .campaigns as ComparisonCampaign[]
+                    ).map((campaign: ComparisonCampaign) => (
                       <Card key={campaign.id}>
                         <CardHeader>
                           <div className="flex items-center justify-between">
-                            <CardTitle className="text-lg">{campaign.name}</CardTitle>
-                            <div className={`flex items-center gap-1 ${getPerformanceColor(campaign.performance)}`}>
+                            <CardTitle className="text-lg">
+                              {campaign.name}
+                            </CardTitle>
+                            <div
+                              className={`flex items-center gap-1 ${getPerformanceColor(campaign.performance)}`}
+                            >
                               {getPerformanceIcon(campaign.performance)}
-                              <Badge variant="outline" className={getPerformanceColor(campaign.performance)}>
+                              <Badge
+                                variant="outline"
+                                className={getPerformanceColor(
+                                  campaign.performance,
+                                )}
+                              >
                                 {campaign.performance}
                               </Badge>
                             </div>
@@ -266,29 +332,54 @@ export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignCompa
                             <div className="grid grid-cols-2 gap-4">
                               <div className="text-center">
                                 <Eye className="w-5 h-5 mx-auto text-gray-400 mb-1" />
-                                <p className="text-sm text-gray-600">Impressions</p>
-                                <p className="font-medium">{formatNumber(campaign.metrics.totalImpressions)}</p>
+                                <p className="text-sm text-gray-600">
+                                  Impressions
+                                </p>
+                                <p className="font-medium">
+                                  {formatNumber(
+                                    campaign.metrics.totalImpressions,
+                                  )}
+                                </p>
                               </div>
                               <div className="text-center">
                                 <Heart className="w-5 h-5 mx-auto text-gray-400 mb-1" />
-                                <p className="text-sm text-gray-600">Engagement</p>
-                                <p className="font-medium">{formatNumber(campaign.metrics.totalEngagement)}</p>
+                                <p className="text-sm text-gray-600">
+                                  Engagement
+                                </p>
+                                <p className="font-medium">
+                                  {formatNumber(
+                                    campaign.metrics.totalEngagement,
+                                  )}
+                                </p>
                               </div>
                               <div className="text-center">
                                 <Users className="w-5 h-5 mx-auto text-gray-400 mb-1" />
                                 <p className="text-sm text-gray-600">Reach</p>
-                                <p className="font-medium">{formatNumber(campaign.metrics.reach)}</p>
+                                <p className="font-medium">
+                                  {formatNumber(campaign.metrics.reach)}
+                                </p>
                               </div>
                               <div className="text-center">
                                 <TrendingUp className="w-5 h-5 mx-auto text-gray-400 mb-1" />
-                                <p className="text-sm text-gray-600">Eng. Rate</p>
-                                <p className="font-medium">{campaign.metrics.averageEngagementRate.toFixed(2)}%</p>
+                                <p className="text-sm text-gray-600">
+                                  Eng. Rate
+                                </p>
+                                <p className="font-medium">
+                                  {campaign.metrics.averageEngagementRate.toFixed(
+                                    2,
+                                  )}
+                                  %
+                                </p>
                               </div>
                             </div>
-                            
+
                             <div className="text-center pt-2 border-t">
-                              <p className="text-sm text-gray-600">Total Posts</p>
-                              <p className="text-xl font-bold">{campaign.metrics.totalPosts}</p>
+                              <p className="text-sm text-gray-600">
+                                Total Posts
+                              </p>
+                              <p className="text-xl font-bold">
+                                {campaign.metrics.totalPosts}
+                              </p>
                             </div>
                           </div>
                         </CardContent>
@@ -302,5 +393,5 @@ export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignCompa
         </div>
       </div>
     </div>
-  )
+  );
 }

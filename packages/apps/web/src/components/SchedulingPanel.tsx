@@ -1,63 +1,63 @@
-import { useState } from 'react'
+import { useState } from "react";
 
 interface ScheduledPost {
-  id: string
-  caption: string
-  imageUrl: string
-  hashtags: string[]
-  scheduledTime: string
-  status: string
+  id: string;
+  caption: string;
+  imageUrl: string;
+  hashtags: string[];
+  scheduledTime: string;
+  status: string;
 }
 
 interface SchedulingPanelProps {
-  scheduledPosts: ScheduledPost[]
-  onCancelPost: (contentId: string) => void
-  onReschedulePost: (contentId: string, newTime: string) => void
+  scheduledPosts: ScheduledPost[];
+  onCancelPost: (contentId: string) => void;
+  onReschedulePost: (contentId: string, newTime: string) => void;
 }
 
-export default function SchedulingPanel({ 
-  scheduledPosts, 
-  onCancelPost, 
-  onReschedulePost 
+export default function SchedulingPanel({
+  scheduledPosts,
+  onCancelPost,
+  onReschedulePost,
 }: SchedulingPanelProps) {
-  const [rescheduleId, setRescheduleId] = useState<string | null>(null)
-  const [newDateTime, setNewDateTime] = useState('')
+  const [rescheduleId, setRescheduleId] = useState<string | null>(null);
+  const [newDateTime, setNewDateTime] = useState("");
 
   const handleReschedule = () => {
     if (rescheduleId && newDateTime) {
-      onReschedulePost(rescheduleId, newDateTime)
-      setRescheduleId(null)
-      setNewDateTime('')
+      onReschedulePost(rescheduleId, newDateTime);
+      setRescheduleId(null);
+      setNewDateTime("");
     }
-  }
+  };
 
   const formatScheduledTime = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleString()
-  }
+    const date = new Date(dateString);
+    return date.toLocaleString();
+  };
 
   const getTimeUntilPost = (dateString: string) => {
-    const now = new Date()
-    const scheduledTime = new Date(dateString)
-    const diffMs = scheduledTime.getTime() - now.getTime()
-    
-    if (diffMs < 0) return 'Overdue'
-    
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-    
+    const now = new Date();
+    const scheduledTime = new Date(dateString);
+    const diffMs = scheduledTime.getTime() - now.getTime();
+
+    if (diffMs < 0) return "Overdue";
+
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
     if (diffHours > 24) {
-      const diffDays = Math.floor(diffHours / 24)
-      return `${diffDays}d ${diffHours % 24}h`
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}d ${diffHours % 24}h`;
     }
-    
-    return `${diffHours}h ${diffMinutes}m`
-  }
+
+    return `${diffHours}h ${diffMinutes}m`;
+  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h3 className="text-lg font-semibold mb-4">Scheduled Posts</h3>
-      
+
       {scheduledPosts.length === 0 ? (
         <p className="text-gray-500 text-center py-8">No posts scheduled</p>
       ) : (
@@ -72,12 +72,12 @@ export default function SchedulingPanel({
                     className="w-16 h-16 object-cover rounded-lg"
                   />
                 )}
-                
+
                 <div className="flex-1">
                   <p className="text-sm text-gray-800 mb-2 line-clamp-2">
                     {post.caption}
                   </p>
-                  
+
                   <div className="flex flex-wrap gap-1 mb-2">
                     {post.hashtags.slice(0, 3).map((tag, index) => (
                       <span
@@ -93,15 +93,17 @@ export default function SchedulingPanel({
                       </span>
                     )}
                   </div>
-                  
+
                   <div className="text-sm text-gray-600">
-                    <div>Scheduled: {formatScheduledTime(post.scheduledTime)}</div>
+                    <div>
+                      Scheduled: {formatScheduledTime(post.scheduledTime)}
+                    </div>
                     <div className="font-medium text-blue-600">
                       In {getTimeUntilPost(post.scheduledTime)}
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex flex-col space-y-2">
                   <button
                     onClick={() => setRescheduleId(post.id)}
@@ -117,7 +119,7 @@ export default function SchedulingPanel({
                   </button>
                 </div>
               </div>
-              
+
               {rescheduleId === post.id && (
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -138,8 +140,8 @@ export default function SchedulingPanel({
                     </button>
                     <button
                       onClick={() => {
-                        setRescheduleId(null)
-                        setNewDateTime('')
+                        setRescheduleId(null);
+                        setNewDateTime("");
                       }}
                       className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
                     >
@@ -153,5 +155,5 @@ export default function SchedulingPanel({
         </div>
       )}
     </div>
-  )
+  );
 }

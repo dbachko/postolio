@@ -1,6 +1,7 @@
 # OAuth Architecture Review - Postolio
 
 ## Executive Summary
+
 This document provides a comprehensive architectural review of the OAuth implementation in Postolio, performed after fixing critical DOM manipulation errors and cleaning up the codebase.
 
 ## Current Architecture
@@ -8,6 +9,7 @@ This document provides a comprehensive architectural review of the OAuth impleme
 ### Frontend OAuth Implementation
 
 #### Components Structure
+
 ```
 frontend/src/components/auth/
 ├── GoogleSignInIsolated.tsx    (186 lines) - Direct Google Identity Services SDK
@@ -29,6 +31,7 @@ frontend/src/types/
 ### Implementation Details
 
 #### Google OAuth
+
 - **SDK**: Google Identity Services (GIS) - Latest version
 - **Integration Method**: Direct DOM rendering with `renderButton` API
 - **Authentication Flow**: One-tap credential response
@@ -38,6 +41,7 @@ frontend/src/types/
   - Graceful fallback for missing configuration
 
 #### Facebook OAuth
+
 - **SDK**: Facebook JavaScript SDK v18.0
 - **Integration Method**: Programmatic login with `FB.login()`
 - **Critical Setting**: `xfbml: false` to prevent DOM manipulation
@@ -71,6 +75,7 @@ frontend/src/types/
 ## Areas for Improvement
 
 ### 1. Backend OAuth Implementation
+
 **Issue**: No backend OAuth endpoints found
 **Recommendation**: Implement backend OAuth verification endpoints
 
@@ -82,54 +87,58 @@ frontend/src/types/
 ```
 
 ### 2. Token Verification
+
 **Issue**: Frontend assumes backend endpoints exist
 **Recommendation**: Implement proper token verification
 
 ```typescript
 // Google token verification
-import { OAuth2Client } from 'google-auth-library';
+import { OAuth2Client } from "google-auth-library";
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 const ticket = await client.verifyIdToken({
   idToken: credential,
-  audience: GOOGLE_CLIENT_ID
+  audience: GOOGLE_CLIENT_ID,
 });
 ```
 
 ### 3. Error Recovery
+
 **Current**: Basic error toasts
 **Recommendation**: Implement retry logic for network failures
 
 ```typescript
 const retryWithExponentialBackoff = async (
   fn: () => Promise<any>,
-  maxRetries = 3
+  maxRetries = 3,
 ) => {
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
     } catch (error) {
       if (i === maxRetries - 1) throw error;
-      await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+      await new Promise((r) => setTimeout(r, Math.pow(2, i) * 1000));
     }
   }
 };
 ```
 
 ### 4. SDK Loading Strategy
+
 **Current**: Load on component mount
 **Recommendation**: Preload SDKs for faster authentication
 
 ```typescript
 // Preload in App.tsx for critical paths
 const preloadOAuthSDKs = () => {
-  if (window.location.pathname.includes('login')) {
-    import('@/components/auth/GoogleSignInIsolated');
-    import('@/components/auth/FacebookSignInIsolated');
+  if (window.location.pathname.includes("login")) {
+    import("@/components/auth/GoogleSignInIsolated");
+    import("@/components/auth/FacebookSignInIsolated");
   }
 };
 ```
 
 ### 5. State Management
+
 **Current**: Local component state
 **Recommendation**: Consider global OAuth state
 
@@ -153,11 +162,13 @@ interface OAuthStore {
 ## Performance Metrics
 
 ### Current Performance
+
 - **SDK Load Time**: ~500-800ms (Google), ~600-900ms (Facebook)
 - **Authentication Flow**: ~1-2s total
 - **Bundle Impact**: Minimal (SDKs loaded from CDN)
 
 ### Optimization Opportunities
+
 1. Implement resource hints: `<link rel="preconnect" href="https://accounts.google.com">`
 2. Use service workers for SDK caching
 3. Implement progressive enhancement
@@ -165,51 +176,58 @@ interface OAuthStore {
 ## Testing Recommendations
 
 ### Unit Tests
+
 ```typescript
-describe('GoogleSignInIsolated', () => {
-  it('should handle missing configuration gracefully');
-  it('should cleanup SDK on unmount');
-  it('should handle authentication errors');
+describe("GoogleSignInIsolated", () => {
+  it("should handle missing configuration gracefully");
+  it("should cleanup SDK on unmount");
+  it("should handle authentication errors");
 });
 ```
 
 ### Integration Tests
+
 ```typescript
-describe('OAuth Flow', () => {
-  it('should complete Google sign-in flow');
-  it('should handle Facebook sign-in cancellation');
-  it('should link OAuth to existing account');
+describe("OAuth Flow", () => {
+  it("should complete Google sign-in flow");
+  it("should handle Facebook sign-in cancellation");
+  it("should link OAuth to existing account");
 });
 ```
 
 ### E2E Tests
+
 ```typescript
-test('OAuth login flow', async ({ page }) => {
-  await page.goto('/login');
+test("OAuth login flow", async ({ page }) => {
+  await page.goto("/login");
   await page.click('[data-testid="google-signin"]');
   // Handle OAuth popup
-  await expect(page).toHaveURL('/dashboard');
+  await expect(page).toHaveURL("/dashboard");
 });
 ```
 
 ## Migration Path
 
 ### Phase 1: Backend Implementation (Priority: High)
+
 1. Implement OAuth verification endpoints
 2. Add token validation logic
 3. Implement account linking
 
 ### Phase 2: Security Enhancements (Priority: High)
+
 1. Add CSRF protection
 2. Implement secure token storage
 3. Add rate limiting
 
 ### Phase 3: Performance Optimization (Priority: Medium)
+
 1. Implement SDK preloading
 2. Add resource hints
 3. Optimize bundle size
 
 ### Phase 4: Testing Coverage (Priority: Medium)
+
 1. Add unit tests
 2. Implement integration tests
 3. Add E2E tests
@@ -219,6 +237,7 @@ test('OAuth login flow', async ({ page }) => {
 The current OAuth implementation successfully resolves the DOM manipulation issues and provides a clean, type-safe foundation. However, the backend implementation is missing and should be prioritized. The recommended improvements focus on security, performance, and maintainability while preserving the current stability.
 
 ## Code Quality Metrics
+
 - **TypeScript Coverage**: 100%
 - **ESLint Compliance**: ✅ No errors in OAuth code
 - **Bundle Size Impact**: < 5KB (excluding external SDKs)
@@ -226,6 +245,7 @@ The current OAuth implementation successfully resolves the DOM manipulation issu
 - **Security Score**: 70/100 (pending backend implementation)
 
 ## Next Steps
+
 1. ✅ Remove unused OAuth components
 2. ✅ Fix TypeScript type issues
 3. ⏳ Implement backend OAuth endpoints

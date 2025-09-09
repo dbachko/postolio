@@ -269,9 +269,7 @@ class CampaignJobService {
   /**
    * Get current job status
    */
-  async getCampaignStatus(
-    campaignId: string,
-  ): Promise<{
+  async getCampaignStatus(campaignId: string): Promise<{
     id: string;
     status: string;
     progress: number;

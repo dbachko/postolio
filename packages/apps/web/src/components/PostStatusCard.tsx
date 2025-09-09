@@ -1,35 +1,45 @@
-import { format } from 'date-fns'
-import { Badge } from './ui/badge'
+import { format } from "date-fns";
+import { Badge } from "./ui/badge";
 
-export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'
+export type PostStatus =
+  | "draft"
+  | "scheduled"
+  | "published"
+  | "failed"
+  | "skipped";
 
 interface PostStatusCardProps {
-  status: PostStatus
-  createdAt: string | Date
-  className?: string
+  status: PostStatus;
+  createdAt: string | Date;
+  className?: string;
 }
 
-export function PostStatusCard({ status, createdAt, className = '' }: PostStatusCardProps) {
+export function PostStatusCard({
+  status,
+  createdAt,
+  className = "",
+}: PostStatusCardProps) {
   const getBadgeVariant = (status: PostStatus) => {
     switch (status) {
-      case 'draft':
-        return 'secondary'
-      case 'scheduled':
-        return 'default'
-      case 'published':
-        return 'secondary'
-      case 'failed':
-        return 'destructive'
-      case 'skipped':
-        return 'outline'
+      case "draft":
+        return "secondary";
+      case "scheduled":
+        return "default";
+      case "published":
+        return "secondary";
+      case "failed":
+        return "destructive";
+      case "skipped":
+        return "outline";
       default:
-        return 'secondary'
+        return "secondary";
     }
-  }
+  };
 
-  const formattedDate = typeof createdAt === 'string' 
-    ? format(new Date(createdAt), 'MMM d, yyyy \'at\' h:mm a')
-    : format(createdAt, 'MMM d, yyyy \'at\' h:mm a')
+  const formattedDate =
+    typeof createdAt === "string"
+      ? format(new Date(createdAt), "MMM d, yyyy 'at' h:mm a")
+      : format(createdAt, "MMM d, yyyy 'at' h:mm a");
 
   return (
     <div className={`bg-gray-50 rounded-lg p-4 ${className}`}>
@@ -38,10 +48,8 @@ export function PostStatusCard({ status, createdAt, className = '' }: PostStatus
         <Badge variant={getBadgeVariant(status)}>
           {status.charAt(0).toUpperCase() + status.slice(1)}
         </Badge>
-        <span className="text-xs text-gray-500">
-          Created: {formattedDate}
-        </span>
+        <span className="text-xs text-gray-500">Created: {formattedDate}</span>
       </div>
     </div>
-  )
+  );
 }

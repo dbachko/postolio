@@ -21,6 +21,7 @@ test/
 ### 1. Unit Tests (Security & Performance)
 
 #### Security Tests (`token-service.test.ts`)
+
 Tests the security fixes applied to prevent information disclosure and validate input:
 
 ```bash
@@ -29,6 +30,7 @@ npm test -- test/microservices/token-service.test.ts
 ```
 
 **What's tested:**
+
 - ✅ Header logging only includes safe headers (allowlist approach)
 - ✅ Input validation with Zod schemas
 - ✅ SQL injection prevention
@@ -38,6 +40,7 @@ npm test -- test/microservices/token-service.test.ts
 - ✅ IAM authentication requirements
 
 #### Performance Tests (`dlq-processor.test.ts`)
+
 Tests the batch loading optimization for DLQ processing:
 
 ```bash
@@ -46,6 +49,7 @@ npm test -- test/microservices/dlq-processor.test.ts
 ```
 
 **What's tested:**
+
 - ✅ Batch loading vs individual queries
 - ✅ Handling batches > 100 items (DynamoDB limit)
 - ✅ Fallback to individual loads on batch failure
@@ -59,6 +63,7 @@ npm test -- test/microservices/integration-test.ts
 ```
 
 **Test Categories:**
+
 - Event-driven flow validation
 - Rate limiting enforcement
 - Security validation
@@ -76,6 +81,7 @@ The automated testing script provides comprehensive local validation:
 ```
 
 **What it does:**
+
 1. Checks service availability (backend, PostgreSQL, Redis)
 2. Runs unit tests for security and performance
 3. Tests API endpoints with various inputs
@@ -89,6 +95,7 @@ The automated testing script provides comprehensive local validation:
 ### Prerequisites
 
 1. **Start Backend Services:**
+
 ```bash
 # Start database and Redis
 npm run dev:db
@@ -98,11 +105,13 @@ npm run dev
 ```
 
 2. **Install Test Dependencies:**
+
 ```bash
 npm install --save-dev @types/jest jest supertest
 ```
 
 3. **Configure Test Database:**
+
 ```bash
 # Copy .env.example to .env.test
 cp .env.example .env.test
@@ -129,63 +138,67 @@ DLQ_STATE_TABLE_NAME="test-dlq-state"
 ### Security Validation Tests
 
 #### 1. Header Filtering Test
+
 ```typescript
 // Verify sensitive headers are not logged
-test('should NOT log sensitive headers', async () => {
+test("should NOT log sensitive headers", async () => {
   const event = createEventWithHeaders({
-    'authorization': 'Bearer secret',  // Should NOT appear
-    'content-type': 'application/json' // Should appear
-  })
-  
-  await handler(event)
-  
-  const loggedHeaders = getLoggedHeaders()
-  expect(loggedHeaders).not.toHaveProperty('authorization')
-  expect(loggedHeaders).toHaveProperty('content-type')
-})
+    authorization: "Bearer secret", // Should NOT appear
+    "content-type": "application/json", // Should appear
+  });
+
+  await handler(event);
+
+  const loggedHeaders = getLoggedHeaders();
+  expect(loggedHeaders).not.toHaveProperty("authorization");
+  expect(loggedHeaders).toHaveProperty("content-type");
+});
 ```
 
 #### 2. Input Validation Test
+
 ```typescript
 // Verify Zod schema validation
-test('should reject invalid platform', async () => {
+test("should reject invalid platform", async () => {
   const response = await handler({
     body: JSON.stringify({
-      platform: 'invalid-platform' // Not in enum
-    })
-  })
-  
-  expect(response.statusCode).toBe(400)
-  expect(response.body).toContain('Invalid enum value')
-})
+      platform: "invalid-platform", // Not in enum
+    }),
+  });
+
+  expect(response.statusCode).toBe(400);
+  expect(response.body).toContain("Invalid enum value");
+});
 ```
 
 ### Performance Validation Tests
 
 #### 1. Batch Loading Test
+
 ```typescript
 // Verify batch loading is used for multiple messages
-test('should use BatchGetCommand', async () => {
-  const messages = createMessages(50)
-  await processor.processMessages(messages)
-  
-  const batchCalls = getBatchGetCalls()
-  expect(batchCalls.length).toBe(1) // Single batch call
-  
-  const individualCalls = getIndividualGetCalls()
-  expect(individualCalls.length).toBe(0) // No individual calls
-})
+test("should use BatchGetCommand", async () => {
+  const messages = createMessages(50);
+  await processor.processMessages(messages);
+
+  const batchCalls = getBatchGetCalls();
+  expect(batchCalls.length).toBe(1); // Single batch call
+
+  const individualCalls = getIndividualGetCalls();
+  expect(individualCalls.length).toBe(0); // No individual calls
+});
 ```
 
 #### 2. Connection Pooling Test
+
 ```typescript
 // Verify client reuse across invocations
-test('should reuse DynamoDB client', () => {
-  const firstImport = require('./token-service')
-  const secondImport = require('./token-service')
-  
-  expect(DynamoDBClient).toHaveBeenCalledTimes(1) // Created once
-})
+test("should reuse DynamoDB client", () => {
+  const firstImport = require("./token-service");
+  const secondImport = require("./token-service");
+
+  expect(DynamoDBClient).toHaveBeenCalledTimes(1); // Created once
+});
 ```
 
 ## 🚀 Running Tests in CI/CD
@@ -204,7 +217,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:14
@@ -215,7 +228,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      
+
       redis:
         image: redis:7
         options: >-
@@ -223,33 +236,33 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '20'
-          cache: 'npm'
-      
+          node-version: "20"
+          cache: "npm"
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run database migrations
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postolio_test
-      
+
       - name: Run security tests
         run: npm test -- test/microservices/token-service.test.ts
-      
+
       - name: Run performance tests
         run: npm test -- test/microservices/dlq-processor.test.ts
-      
+
       - name: Run integration tests
         run: npm test -- test/microservices/integration-test.ts
-      
+
       - name: Run CDK synthesis
         run: |
           cd aws-infrastructure
@@ -259,6 +272,7 @@ jobs:
 ## 📊 Test Coverage Requirements
 
 ### Minimum Coverage Targets
+
 - **Security Functions**: 100% coverage required
 - **Core Business Logic**: 80% minimum
 - **Error Handling**: 90% minimum
@@ -280,6 +294,7 @@ open coverage/index.html
 ## 🔍 Manual Testing Checklist
 
 ### Security Testing
+
 - [ ] Attempt SQL injection in all input fields
 - [ ] Try XSS attacks in text inputs
 - [ ] Verify sensitive data is not logged
@@ -287,6 +302,7 @@ open coverage/index.html
 - [ ] Attempt to access other users' data
 
 ### Performance Testing
+
 - [ ] Monitor response times under load
 - [ ] Check connection pooling effectiveness
 - [ ] Verify batch operations are used
@@ -294,6 +310,7 @@ open coverage/index.html
 - [ ] Monitor memory usage
 
 ### Integration Testing
+
 - [ ] Test complete user workflows
 - [ ] Verify event propagation
 - [ ] Test error recovery scenarios
@@ -305,6 +322,7 @@ open coverage/index.html
 ### Common Issues and Solutions
 
 #### 1. Database Connection Errors
+
 ```bash
 # Check PostgreSQL is running
 docker ps | grep postgres
@@ -314,6 +332,7 @@ npx prisma migrate reset --force
 ```
 
 #### 2. Redis Connection Errors
+
 ```bash
 # Check Redis is running
 docker ps | grep redis
@@ -323,6 +342,7 @@ redis-cli FLUSHALL
 ```
 
 #### 3. Port Conflicts
+
 ```bash
 # Find process using port 3000
 lsof -i :3000
@@ -332,6 +352,7 @@ kill -9 <PID>
 ```
 
 #### 4. Module Import Errors
+
 ```bash
 # Clear Jest cache
 jest --clearCache
@@ -345,11 +366,13 @@ npm run build
 ### Using Artillery for Load Testing
 
 1. **Install Artillery:**
+
 ```bash
 npm install -g artillery
 ```
 
 2. **Create Load Test Config:**
+
 ```yaml
 # artillery-config.yml
 config:
@@ -376,6 +399,7 @@ scenarios:
 ```
 
 3. **Run Load Test:**
+
 ```bash
 artillery run artillery-config.yml
 ```
@@ -402,5 +426,5 @@ artillery run artillery-config.yml
 
 ---
 
-*Testing guide created: January 2025*
-*Last updated: Current session*
+_Testing guide created: January 2025_
+_Last updated: Current session_

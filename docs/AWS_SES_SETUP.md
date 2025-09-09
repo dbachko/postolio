@@ -36,6 +36,7 @@ Run our automated setup script:
 ```
 
 This script will:
+
 1. Verify your email address
 2. Initiate domain verification
 3. Check verification status
@@ -63,6 +64,7 @@ aws ses verify-domain-identity \
 ```
 
 Add the returned TXT record to your DNS:
+
 - Name: `_postolio.example`
 - Type: `TXT`
 - Value: `[verification-token]`
@@ -81,11 +83,13 @@ Add the CNAME records to your DNS for better deliverability.
 ### 4. Move Out of Sandbox (Production)
 
 New AWS accounts start in sandbox mode with limitations:
+
 - Can only send to verified emails
 - Max 200 emails/day
 - Max 1 email/second
 
 To request production access:
+
 1. Go to [AWS SES Console](https://console.aws.amazon.com/ses/)
 2. Click "Request production access"
 3. Fill out the form with:
@@ -169,15 +173,15 @@ aws ses send-email \
 
 ```javascript
 // The EmailService automatically uses SES in production
-import { EmailService } from './services/email.js'
+import { EmailService } from "./services/email.js";
 
 // Send test email
 const result = await EmailService.sendEmail({
-  to: 'user@example.com',
-  subject: 'Test Email',
-  html: '<p>Test email from Postolio</p>',
-  text: 'Test email from Postolio'
-})
+  to: "user@example.com",
+  subject: "Test Email",
+  html: "<p>Test email from Postolio</p>",
+  text: "Test email from Postolio",
+});
 ```
 
 ## Monitoring
@@ -211,6 +215,7 @@ MessageRejected: Email address is not verified
 ```
 
 **Solution**: Verify the sender email address:
+
 ```bash
 aws ses verify-email-identity --email-address noreply@postolio.example
 ```
@@ -222,6 +227,7 @@ MessageRejected: Email address is not verified. The following identities failed 
 ```
 
 **Solution**: Either:
+
 1. Verify recipient emails for testing
 2. Request production access
 
@@ -229,7 +235,8 @@ MessageRejected: Email address is not verified. The following identities failed 
 
 Domain verification pending for more than 72 hours.
 
-**Solution**: 
+**Solution**:
+
 1. Check DNS records are correctly added
 2. Use `dig` to verify: `dig TXT _postolio.example`
 
@@ -259,6 +266,7 @@ Throttling: Rate exceeded
 ## Support
 
 For issues with SES setup:
+
 1. Check CloudWatch logs in AWS Console
 2. Review [AWS SES Documentation](https://docs.aws.amazon.com/ses/)
 3. Contact AWS Support if needed
@@ -266,6 +274,7 @@ For issues with SES setup:
 ## Implementation Status
 
 ✅ **Completed**:
+
 - EmailService with SES integration
 - Automatic SES/SMTP switching based on environment
 - IAM permissions in CDK stack

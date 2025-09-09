@@ -339,12 +339,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         const pageAccessToken = pageWithInstagram.access_token;
 
         if (!instagramAccountId || !pageAccessToken) {
-          return reply
-            .status(400)
-            .send({
-              error:
-                "Incomplete Instagram page data returned from Facebook API",
-            });
+          return reply.status(400).send({
+            error: "Incomplete Instagram page data returned from Facebook API",
+          });
         }
 
         // Get Instagram account information

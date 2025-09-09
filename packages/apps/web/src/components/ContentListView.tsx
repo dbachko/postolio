@@ -1,150 +1,206 @@
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns'
-import { formatInUserTimezone } from '../lib/timezone'
-import { useTimezone } from '../contexts/TimezoneContext'
-import { Card, CardContent } from './ui/card'
-import { Badge } from './ui/badge'
-import { Button } from './ui/button'
-import { Input } from './ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
-import { 
-  Calendar, Clock, CheckCircle, AlertCircle, Search, Filter,
-  ChevronUp, ChevronDown, Image as ImageIcon
-} from 'lucide-react'
+import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
+import { formatInUserTimezone } from "../lib/timezone";
+import { useTimezone } from "../contexts/TimezoneContext";
+import { Card, CardContent } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import {
+  Calendar,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Search,
+  Filter,
+  ChevronUp,
+  ChevronDown,
+  Image as ImageIcon,
+} from "lucide-react";
 
 interface ListItem {
-  id: string
-  type: 'content' | 'placeholder'
-  caption: string
-  scheduledAt?: string
-  postedAt?: string
-  createdAt?: string
-  status: string
-  hashtags?: string[]
-  imageUrl?: string
-  campaignName?: string
-  campaignId?: string
+  id: string;
+  type: "content" | "placeholder";
+  caption: string;
+  scheduledAt?: string;
+  postedAt?: string;
+  createdAt?: string;
+  status: string;
+  hashtags?: string[];
+  imageUrl?: string;
+  campaignName?: string;
+  campaignId?: string;
 }
 
 interface ContentListViewProps {
-  items: ListItem[]
-  currentDate: Date
+  items: ListItem[];
+  currentDate: Date;
 }
 
-type SortField = 'date' | 'status' | 'type'
-type SortOrder = 'asc' | 'desc'
-type FilterStatus = 'all' | 'published' | 'scheduled' | 'placeholder' | 'failed'
+type SortField = "date" | "status" | "type";
+type SortOrder = "asc" | "desc";
+type FilterStatus =
+  | "all"
+  | "published"
+  | "scheduled"
+  | "placeholder"
+  | "failed";
 
 export function ContentListView({ items, currentDate }: ContentListViewProps) {
-  const navigate = useNavigate()
-  const { timezone } = useTimezone()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
-  const [sortField, setSortField] = useState<SortField>('date')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const navigate = useNavigate();
+  const { timezone } = useTimezone();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   // Filter items for current month and apply search/filters
   const filteredItems = useMemo(() => {
-    const monthStart = startOfMonth(currentDate)
-    const monthEnd = endOfMonth(currentDate)
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
 
-    return items.filter(item => {
+    return items.filter((item) => {
       // Check if in current month
-      const itemDate = new Date(item.scheduledAt || item.postedAt || item.createdAt || new Date())
+      const itemDate = new Date(
+        item.scheduledAt || item.postedAt || item.createdAt || new Date(),
+      );
       if (!isWithinInterval(itemDate, { start: monthStart, end: monthEnd })) {
-        return false
+        return false;
       }
 
       // Apply status filter
-      if (filterStatus !== 'all') {
-        if (filterStatus === 'placeholder' && item.type !== 'placeholder') return false
-        if (filterStatus === 'published' && item.status !== 'published') return false
-        if (filterStatus === 'scheduled' && item.status !== 'scheduled') return false
-        if (filterStatus === 'failed' && item.status !== 'failed') return false
+      if (filterStatus !== "all") {
+        if (filterStatus === "placeholder" && item.type !== "placeholder")
+          return false;
+        if (filterStatus === "published" && item.status !== "published")
+          return false;
+        if (filterStatus === "scheduled" && item.status !== "scheduled")
+          return false;
+        if (filterStatus === "failed" && item.status !== "failed") return false;
       }
 
       // Apply search query
       if (searchQuery) {
-        const query = searchQuery.toLowerCase()
+        const query = searchQuery.toLowerCase();
         return (
           item.caption.toLowerCase().includes(query) ||
-          item.hashtags?.some(tag => tag.toLowerCase().includes(query)) ||
+          item.hashtags?.some((tag) => tag.toLowerCase().includes(query)) ||
           item.campaignName?.toLowerCase().includes(query)
-        )
+        );
       }
 
-      return true
-    })
-  }, [items, currentDate, filterStatus, searchQuery])
+      return true;
+    });
+  }, [items, currentDate, filterStatus, searchQuery]);
 
   // Sort items
   const sortedItems = useMemo(() => {
-    const sorted = [...filteredItems]
+    const sorted = [...filteredItems];
     sorted.sort((a, b) => {
-      let comparison = 0
-      
+      let comparison = 0;
+
       switch (sortField) {
-        case 'date': {
-          const dateA = new Date(a.scheduledAt || a.postedAt || 0).getTime()
-          const dateB = new Date(b.scheduledAt || b.postedAt || 0).getTime()
-          comparison = dateA - dateB
-          break
+        case "date": {
+          const dateA = new Date(a.scheduledAt || a.postedAt || 0).getTime();
+          const dateB = new Date(b.scheduledAt || b.postedAt || 0).getTime();
+          comparison = dateA - dateB;
+          break;
         }
-        case 'status':
-          comparison = a.status.localeCompare(b.status)
-          break
-        case 'type':
-          comparison = a.type.localeCompare(b.type)
-          break
+        case "status":
+          comparison = a.status.localeCompare(b.status);
+          break;
+        case "type":
+          comparison = a.type.localeCompare(b.type);
+          break;
       }
 
-      return sortOrder === 'asc' ? comparison : -comparison
-    })
-    return sorted
-  }, [filteredItems, sortField, sortOrder])
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+    return sorted;
+  }, [filteredItems, sortField, sortOrder]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
-      setSortField(field)
-      setSortOrder('asc')
+      setSortField(field);
+      setSortOrder("asc");
     }
-  }
+  };
 
   const toggleExpanded = (itemId: string) => {
-    setExpandedItems(prev => {
-      const next = new Set(prev)
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
       if (next.has(itemId)) {
-        next.delete(itemId)
+        next.delete(itemId);
       } else {
-        next.add(itemId)
+        next.add(itemId);
       }
-      return next
-    })
-  }
+      return next;
+    });
+  };
 
   const getStatusBadge = (status: string, type: string) => {
-    if (type === 'placeholder') {
-      return <Badge variant="outline" className="gap-1"><Clock className="w-3 h-3" />Future AI</Badge>
+    if (type === "placeholder") {
+      return (
+        <Badge variant="outline" className="gap-1">
+          <Clock className="w-3 h-3" />
+          Future AI
+        </Badge>
+      );
     }
     switch (status) {
-      case 'published':
-        return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle className="w-3 h-3" />Published</Badge>
-      case 'scheduled':
-        return <Badge variant="default" className="gap-1 bg-blue-600"><Calendar className="w-3 h-3" />Scheduled</Badge>
-      case 'failed':
-        return <Badge variant="destructive" className="gap-1"><AlertCircle className="w-3 h-3" />Failed</Badge>
-      case 'skipped':
-        return <Badge variant="outline" className="gap-1 bg-yellow-100 text-yellow-800"><AlertCircle className="w-3 h-3" />Skipped</Badge>
-      case 'draft':
-        return <Badge variant="secondary" className="gap-1"><Clock className="w-3 h-3" />Draft</Badge>
+      case "published":
+        return (
+          <Badge variant="default" className="gap-1 bg-green-600">
+            <CheckCircle className="w-3 h-3" />
+            Published
+          </Badge>
+        );
+      case "scheduled":
+        return (
+          <Badge variant="default" className="gap-1 bg-blue-600">
+            <Calendar className="w-3 h-3" />
+            Scheduled
+          </Badge>
+        );
+      case "failed":
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <AlertCircle className="w-3 h-3" />
+            Failed
+          </Badge>
+        );
+      case "skipped":
+        return (
+          <Badge
+            variant="outline"
+            className="gap-1 bg-yellow-100 text-yellow-800"
+          >
+            <AlertCircle className="w-3 h-3" />
+            Skipped
+          </Badge>
+        );
+      case "draft":
+        return (
+          <Badge variant="secondary" className="gap-1">
+            <Clock className="w-3 h-3" />
+            Draft
+          </Badge>
+        );
       default:
-        return <Badge variant="secondary">{status}</Badge>
+        return <Badge variant="secondary">{status}</Badge>;
     }
-  }
+  };
 
   return (
     <Card data-testid="view-list">
@@ -160,7 +216,10 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
               className="pl-10"
             />
           </div>
-          <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as FilterStatus)}>
+          <Select
+            value={filterStatus}
+            onValueChange={(value) => setFilterStatus(value as FilterStatus)}
+          >
             <SelectTrigger className="w-[180px]">
               <Filter className="w-4 h-4 mr-2" />
               <SelectValue />
@@ -181,39 +240,48 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => toggleSort('type')}
+              onClick={() => toggleSort("type")}
               className="p-0 h-auto font-medium"
             >
               Type
-              {sortField === 'type' && (
-                sortOrder === 'asc' ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />
-              )}
+              {sortField === "type" &&
+                (sortOrder === "asc" ? (
+                  <ChevronUp className="w-3 h-3 ml-1" />
+                ) : (
+                  <ChevronDown className="w-3 h-3 ml-1" />
+                ))}
             </Button>
           </div>
           <div className="col-span-2">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => toggleSort('date')}
+              onClick={() => toggleSort("date")}
               className="p-0 h-auto font-medium"
             >
               Date/Time
-              {sortField === 'date' && (
-                sortOrder === 'asc' ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />
-              )}
+              {sortField === "date" &&
+                (sortOrder === "asc" ? (
+                  <ChevronUp className="w-3 h-3 ml-1" />
+                ) : (
+                  <ChevronDown className="w-3 h-3 ml-1" />
+                ))}
             </Button>
           </div>
           <div className="col-span-2">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => toggleSort('status')}
+              onClick={() => toggleSort("status")}
               className="p-0 h-auto font-medium"
             >
               Status
-              {sortField === 'status' && (
-                sortOrder === 'asc' ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />
-              )}
+              {sortField === "status" &&
+                (sortOrder === "asc" ? (
+                  <ChevronUp className="w-3 h-3 ml-1" />
+                ) : (
+                  <ChevronDown className="w-3 h-3 ml-1" />
+                ))}
             </Button>
           </div>
           <div className="col-span-5">Content</div>
@@ -227,30 +295,38 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
               No posts found for the selected filters
             </div>
           ) : (
-            sortedItems.map(item => {
-              const isExpanded = expandedItems.has(item.id)
-              const itemDate = new Date(item.scheduledAt || item.postedAt || '')
-              
+            sortedItems.map((item) => {
+              const isExpanded = expandedItems.has(item.id);
+              const itemDate = new Date(
+                item.scheduledAt || item.postedAt || "",
+              );
+
               return (
                 <div
                   key={item.id}
                   className={`grid grid-cols-12 gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors ${
-                    item.type === 'placeholder' ? 'border border-dashed border-gray-300' : 'border border-gray-200 cursor-pointer'
+                    item.type === "placeholder"
+                      ? "border border-dashed border-gray-300"
+                      : "border border-gray-200 cursor-pointer"
                   }`}
                   onClick={() => {
-                    if (item.type === 'content') {
-                      navigate(`/posts/${item.id}`)
+                    if (item.type === "content") {
+                      navigate(`/posts/${item.id}`);
                     }
                   }}
                 >
                   <div className="col-span-1">
-                    {item.type === 'placeholder' ? (
+                    {item.type === "placeholder" ? (
                       <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
                         <Clock className="w-4 h-4 text-gray-500" />
                       </div>
                     ) : item.imageUrl ? (
                       <div className="w-8 h-8 bg-gray-100 rounded overflow-hidden">
-                        <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                        <img
+                          src={item.imageUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                     ) : (
                       <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
@@ -258,56 +334,68 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="col-span-2 text-sm">
-                    <div className="font-medium">{formatInUserTimezone(itemDate, 'MMM d, yyyy', timezone)}</div>
-                    <div className="text-gray-500">{formatInUserTimezone(itemDate, 'h:mm a', timezone)}</div>
+                    <div className="font-medium">
+                      {formatInUserTimezone(itemDate, "MMM d, yyyy", timezone)}
+                    </div>
+                    <div className="text-gray-500">
+                      {formatInUserTimezone(itemDate, "h:mm a", timezone)}
+                    </div>
                   </div>
-                  
+
                   <div className="col-span-2">
                     {getStatusBadge(item.status, item.type)}
                   </div>
-                  
+
                   <div className="col-span-5">
                     <button
                       onClick={(e) => {
-                        e.stopPropagation()
-                        toggleExpanded(item.id)
+                        e.stopPropagation();
+                        toggleExpanded(item.id);
                       }}
                       className="text-left w-full"
                     >
-                      <div className={`text-sm ${isExpanded ? '' : 'line-clamp-2'}`}>
-                        {item.type === 'placeholder' 
-                          ? 'Content will be generated closer to scheduled date'
-                          : item.caption
-                        }
+                      <div
+                        className={`text-sm ${isExpanded ? "" : "line-clamp-2"}`}
+                      >
+                        {item.type === "placeholder"
+                          ? "Content will be generated closer to scheduled date"
+                          : item.caption}
                       </div>
                     </button>
-                    {isExpanded && item.hashtags && item.hashtags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {item.hashtags.map((tag, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-xs">
-                            #{tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
+                    {isExpanded &&
+                      item.hashtags &&
+                      item.hashtags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {item.hashtags.map((tag, idx) => (
+                            <Badge
+                              key={idx}
+                              variant="secondary"
+                              className="text-xs"
+                            >
+                              #{tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                   </div>
-                  
+
                   <div className="col-span-2 text-sm text-gray-600">
-                    {item.campaignName || '-'}
+                    {item.campaignName || "-"}
                   </div>
                 </div>
-              )
+              );
             })
           )}
         </div>
 
         {/* Summary */}
         <div className="mt-6 pt-4 border-t text-sm text-gray-600">
-          Showing {sortedItems.length} of {items.length} posts for {format(currentDate, 'MMMM yyyy')}
+          Showing {sortedItems.length} of {items.length} posts for{" "}
+          {format(currentDate, "MMMM yyyy")}
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }

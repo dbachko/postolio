@@ -1,9 +1,16 @@
-import { useState, type ReactNode, useEffect, useCallback, useRef, useMemo } from 'react'
-import { useAuthStore } from '../stores/authStore'
-import { useBrandStore } from '../stores/brandStore'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { EmailVerificationBanner } from './EmailVerificationBanner'
-import { Button } from '@/components/ui/button'
+import {
+  useState,
+  type ReactNode,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
+import { useAuthStore } from "../stores/authStore";
+import { useBrandStore } from "../stores/brandStore";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { EmailVerificationBanner } from "./EmailVerificationBanner";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +18,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from "@/components/ui/dropdown-menu";
 import {
   CommandDialog,
   CommandEmpty,
@@ -19,13 +26,13 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@/components/ui/command'
-import { 
-  ChevronDown, 
-  Settings, 
-  LogOut, 
-  Check, 
-  Building2, 
+} from "@/components/ui/command";
+import {
+  ChevronDown,
+  Settings,
+  LogOut,
+  Check,
+  Building2,
   Search,
   BarChart3,
   Instagram,
@@ -36,182 +43,196 @@ import {
   Grid3X3,
   FileText,
   Sparkles,
-  Home
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
+  Home,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface LayoutProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 interface NavigationItem {
-  label: string
-  path: string
-  icon: typeof Megaphone
-  description?: string
-  matchType?: 'exact' | 'startsWith'
+  label: string;
+  path: string;
+  icon: typeof Megaphone;
+  description?: string;
+  matchType?: "exact" | "startsWith";
 }
 
 // Main navigation items (always visible on desktop)
 const mainNavItems: NavigationItem[] = [
   {
-    label: 'Campaigns',
-    path: '/campaigns',
+    label: "Campaigns",
+    path: "/campaigns",
     icon: Megaphone,
-    description: 'Manage content campaigns',
-    matchType: 'startsWith'
+    description: "Manage content campaigns",
+    matchType: "startsWith",
   },
   {
-    label: 'Content',
-    path: '/content',
+    label: "Content",
+    path: "/content",
     icon: FileText,
-    description: 'Content library',
-    matchType: 'exact'
+    description: "Content library",
+    matchType: "exact",
   },
   {
-    label: 'Analytics',
-    path: '/analytics',
+    label: "Analytics",
+    path: "/analytics",
     icon: BarChart3,
-    description: 'Performance metrics',
-    matchType: 'exact'
-  }
-]
+    description: "Performance metrics",
+    matchType: "exact",
+  },
+];
 
 // Secondary navigation items (in dropdown menu)
 const secondaryNavItems: NavigationItem[] = [
   {
-    label: 'Instagram',
-    path: '/instagram-analytics',
+    label: "Instagram",
+    path: "/instagram-analytics",
     icon: Instagram,
-    description: 'Instagram insights'
+    description: "Instagram insights",
   },
   {
-    label: 'Engagement',
-    path: '/engagement',
+    label: "Engagement",
+    path: "/engagement",
     icon: Users,
-    description: 'Audience engagement'
+    description: "Audience engagement",
   },
   {
-    label: 'Growth',
-    path: '/growth',
+    label: "Growth",
+    path: "/growth",
     icon: TrendingUp,
-    description: 'Growth strategies'
+    description: "Growth strategies",
   },
   {
-    label: 'AI Features',
-    path: '/ai-features',
+    label: "AI Features",
+    path: "/ai-features",
     icon: Brain,
-    description: 'AI-powered tools'
-  }
-]
+    description: "AI-powered tools",
+  },
+];
 
 // Combine all navigation items for search
-const allNavItems = [...mainNavItems, ...secondaryNavItems]
+const allNavItems = [...mainNavItems, ...secondaryNavItems];
 
 // Utility function for route matching
 const isRouteActive = (item: NavigationItem, currentPath: string): boolean => {
-  if (item.matchType === 'startsWith') {
-    return currentPath === item.path || currentPath.startsWith(item.path + '/')
+  if (item.matchType === "startsWith") {
+    return currentPath === item.path || currentPath.startsWith(item.path + "/");
   }
   // Default to exact match
-  return currentPath === item.path
-}
+  return currentPath === item.path;
+};
 
 export function UltraThinLayout({ children }: LayoutProps) {
-  const { user, logout } = useAuthStore()
-  const { selectedBrand, brands, setSelectedBrand } = useBrandStore()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const menuRef = useRef<HTMLDivElement>(null)
+  const { user, logout } = useAuthStore();
+  const { selectedBrand, brands, setSelectedBrand } = useBrandStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
+    logout();
+    navigate("/login");
+  };
 
-  const isActiveRoute = useCallback((item: NavigationItem) => {
-    return isRouteActive(item, location.pathname)
-  }, [location.pathname])
+  const isActiveRoute = useCallback(
+    (item: NavigationItem) => {
+      return isRouteActive(item, location.pathname);
+    },
+    [location.pathname],
+  );
 
   // Command palette keyboard shortcut
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        setSearchOpen((open) => !open)
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen((open) => !open);
       }
-    }
-    document.addEventListener('keydown', down)
-    return () => document.removeEventListener('keydown', down)
-  }, [])
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
 
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false)
+        setMenuOpen(false);
       }
-    }
+    };
     if (menuOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [menuOpen])
+  }, [menuOpen]);
 
   // Close menu on route change
   useEffect(() => {
-    setMenuOpen(false)
-  }, [location])
+    setMenuOpen(false);
+  }, [location]);
 
   // Handle search selection
-  const handleSearchSelect = useCallback((path: string) => {
-    navigate(path)
-    setSearchOpen(false)
-    setSearchQuery('')
-  }, [navigate])
+  const handleSearchSelect = useCallback(
+    (path: string) => {
+      navigate(path);
+      setSearchOpen(false);
+      setSearchQuery("");
+    },
+    [navigate],
+  );
 
   // Filter navigation items based on search query
-  const filteredItems = useMemo(() => 
-    allNavItems.filter(item => 
-      item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description?.toLowerCase().includes(searchQuery.toLowerCase())
-    ),
-    [searchQuery]
-  )
+  const filteredItems = useMemo(
+    () =>
+      allNavItems.filter(
+        (item) =>
+          item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.description?.toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
+    [searchQuery],
+  );
 
   return (
     <div className="min-h-screen bg-background">
       {/* Skip to main content for accessibility */}
-      <a 
-        href="#main-content" 
+      <a
+        href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 z-50 px-4 py-2 bg-primary text-primary-foreground rounded-md"
       >
         Skip to main content
       </a>
 
       {/* Ultra-thin navigation bar */}
-      <nav className="bg-card border-b shadow-sm sticky top-0 z-40 h-14" role="navigation" aria-label="Main navigation">
+      <nav
+        className="bg-card border-b shadow-sm sticky top-0 z-40 h-14"
+        role="navigation"
+        aria-label="Main navigation"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
           <div className="flex items-center justify-between h-full">
-            
             {/* Left Section: Logo + Main Nav (Desktop) / Logo (Mobile) */}
             <div className="flex items-center h-full">
               {/* Logo */}
-              <Link 
-                to="/dashboard" 
+              <Link
+                to="/dashboard"
                 className="flex items-center space-x-2 mr-8"
                 aria-label="Postolio home"
               >
-                <img 
-                  src="/postolio-icon.svg" 
-                  alt="" 
+                <img
+                  src="/postolio-icon.svg"
+                  alt=""
                   className="w-7 h-7"
                   aria-hidden="true"
                 />
-                <h1 className="text-lg font-bold text-foreground hidden sm:block">Postolio</h1>
+                <h1 className="text-lg font-bold text-foreground hidden sm:block">
+                  Postolio
+                </h1>
               </Link>
 
               {/* Main Navigation Items - Desktop Only */}
@@ -222,11 +243,11 @@ export function UltraThinLayout({ children }: LayoutProps) {
                     to={item.path}
                     className={cn(
                       "flex items-center px-6 h-full border-b-2 transition-colors",
-                      isActiveRoute(item) 
-                        ? "border-blue-600 text-blue-600 bg-blue-50/50" 
-                        : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                      isActiveRoute(item)
+                        ? "border-blue-600 text-blue-600 bg-blue-50/50"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50",
                     )}
-                    aria-current={isActiveRoute(item) ? 'page' : undefined}
+                    aria-current={isActiveRoute(item) ? "page" : undefined}
                   >
                     <item.icon className="w-5 h-5 mr-2" aria-hidden="true" />
                     <span className="font-medium text-sm">{item.label}</span>
@@ -270,16 +291,18 @@ export function UltraThinLayout({ children }: LayoutProps) {
                 {menuOpen && (
                   <>
                     {/* Backdrop for mobile */}
-                    <div 
+                    <div
                       className="fixed inset-0 bg-black/20 z-30 md:hidden"
                       onClick={() => setMenuOpen(false)}
                     />
-                    
+
                     {/* Menu Content */}
                     <div className="absolute right-0 mt-2 w-80 bg-card rounded-lg shadow-lg border z-40">
                       <div className="p-4">
-                        <h3 className="text-sm font-semibold text-muted-foreground mb-3">More Features</h3>
-                        
+                        <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                          More Features
+                        </h3>
+
                         {/* Mobile: Show main nav items */}
                         <div className="md:hidden mb-4">
                           <div className="space-y-1">
@@ -292,13 +315,20 @@ export function UltraThinLayout({ children }: LayoutProps) {
                                   "flex items-center px-3 py-2 rounded-lg text-sm transition-colors",
                                   isActiveRoute(item)
                                     ? "bg-blue-50 text-blue-600"
-                                    : "hover:bg-accent hover:text-accent-foreground"
+                                    : "hover:bg-accent hover:text-accent-foreground",
                                 )}
                               >
-                                <item.icon className="w-5 h-5 mr-3" aria-hidden="true" />
+                                <item.icon
+                                  className="w-5 h-5 mr-3"
+                                  aria-hidden="true"
+                                />
                                 <div>
-                                  <div className="font-medium">{item.label}</div>
-                                  <div className="text-xs text-muted-foreground">{item.description}</div>
+                                  <div className="font-medium">
+                                    {item.label}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {item.description}
+                                  </div>
                                 </div>
                               </Link>
                             ))}
@@ -317,11 +347,16 @@ export function UltraThinLayout({ children }: LayoutProps) {
                                 "flex flex-col items-center p-3 rounded-lg text-center transition-colors",
                                 isActiveRoute(item)
                                   ? "bg-blue-50 text-blue-600"
-                                  : "hover:bg-accent hover:text-accent-foreground"
+                                  : "hover:bg-accent hover:text-accent-foreground",
                               )}
                             >
-                              <item.icon className="w-6 h-6 mb-2" aria-hidden="true" />
-                              <span className="text-xs font-medium">{item.label}</span>
+                              <item.icon
+                                className="w-6 h-6 mb-2"
+                                aria-hidden="true"
+                              />
+                              <span className="text-xs font-medium">
+                                {item.label}
+                              </span>
                             </Link>
                           ))}
                         </div>
@@ -341,7 +376,10 @@ export function UltraThinLayout({ children }: LayoutProps) {
                             onClick={() => setMenuOpen(false)}
                             className="flex items-center px-3 py-2 rounded-lg text-sm hover:bg-accent transition-colors"
                           >
-                            <Building2 className="w-4 h-4 mr-3" aria-hidden="true" />
+                            <Building2
+                              className="w-4 h-4 mr-3"
+                              aria-hidden="true"
+                            />
                             Manage Brands
                           </Link>
                           <Link
@@ -349,7 +387,10 @@ export function UltraThinLayout({ children }: LayoutProps) {
                             onClick={() => setMenuOpen(false)}
                             className="flex items-center px-3 py-2 rounded-lg text-sm hover:bg-accent transition-colors"
                           >
-                            <Settings className="w-4 h-4 mr-3" aria-hidden="true" />
+                            <Settings
+                              className="w-4 h-4 mr-3"
+                              aria-hidden="true"
+                            />
                             Settings
                           </Link>
                         </div>
@@ -363,18 +404,19 @@ export function UltraThinLayout({ children }: LayoutProps) {
               {user && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       className="flex items-center space-x-2 h-9 px-3"
                       aria-label="User and brand menu"
                     >
                       <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                         <span className="text-xs font-semibold text-white">
-                          {selectedBrand?.name?.charAt(0) || user.email?.charAt(0)?.toUpperCase()}
+                          {selectedBrand?.name?.charAt(0) ||
+                            user.email?.charAt(0)?.toUpperCase()}
                         </span>
                       </div>
                       <span className="hidden sm:inline text-sm font-medium">
-                        {selectedBrand ? selectedBrand.name : 'Select Brand'}
+                        {selectedBrand ? selectedBrand.name : "Select Brand"}
                       </span>
                       <ChevronDown className="w-3 h-3" aria-hidden="true" />
                     </Button>
@@ -382,8 +424,12 @@ export function UltraThinLayout({ children }: LayoutProps) {
                   <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>
                       <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">Account</p>
-                        <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                        <p className="text-sm font-medium leading-none">
+                          Account
+                        </p>
+                        <p className="text-xs leading-none text-muted-foreground">
+                          {user.email}
+                        </p>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
@@ -398,12 +444,19 @@ export function UltraThinLayout({ children }: LayoutProps) {
                           <DropdownMenuItem
                             key={brand.id}
                             onClick={() => setSelectedBrand(brand)}
-                            className={selectedBrand?.id === brand.id ? 'bg-accent font-medium' : ''}
+                            className={
+                              selectedBrand?.id === brand.id
+                                ? "bg-accent font-medium"
+                                : ""
+                            }
                           >
                             <div className="flex items-center justify-between w-full">
                               <span>{brand.name}</span>
                               {selectedBrand?.id === brand.id && (
-                                <Check className="w-4 h-4 text-blue-600" aria-hidden="true" />
+                                <Check
+                                  className="w-4 h-4 text-blue-600"
+                                  aria-hidden="true"
+                                />
                               )}
                             </div>
                           </DropdownMenuItem>
@@ -413,19 +466,22 @@ export function UltraThinLayout({ children }: LayoutProps) {
                     )}
 
                     {/* User Actions */}
-                    <DropdownMenuItem onClick={() => navigate('/brands')}>
+                    <DropdownMenuItem onClick={() => navigate("/brands")}>
                       <Building2 className="w-4 h-4 mr-2" aria-hidden="true" />
                       Manage Brands
                     </DropdownMenuItem>
-                    
-                    <DropdownMenuItem onClick={() => navigate('/settings')}>
+
+                    <DropdownMenuItem onClick={() => navigate("/settings")}>
                       <Settings className="w-4 h-4 mr-2" aria-hidden="true" />
                       Settings
                     </DropdownMenuItem>
 
                     <DropdownMenuSeparator />
 
-                    <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                    <DropdownMenuItem
+                      onClick={handleLogout}
+                      className="text-red-600"
+                    >
                       <LogOut className="w-4 h-4 mr-2" aria-hidden="true" />
                       Logout
                     </DropdownMenuItem>
@@ -439,14 +495,14 @@ export function UltraThinLayout({ children }: LayoutProps) {
 
       {/* Command Palette Search */}
       <CommandDialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <CommandInput 
-          placeholder="Search features, campaigns, analytics..." 
+        <CommandInput
+          placeholder="Search features, campaigns, analytics..."
           value={searchQuery}
           onValueChange={setSearchQuery}
         />
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
-          
+
           <CommandGroup heading="Navigation">
             {filteredItems.map((item) => (
               <CommandItem
@@ -470,8 +526,8 @@ export function UltraThinLayout({ children }: LayoutProps) {
           <CommandGroup heading="Quick Actions">
             <CommandItem
               onSelect={() => {
-                navigate('/campaigns')
-                setSearchOpen(false)
+                navigate("/campaigns");
+                setSearchOpen(false);
               }}
             >
               <Sparkles className="w-4 h-4 mr-3" aria-hidden="true" />
@@ -479,8 +535,8 @@ export function UltraThinLayout({ children }: LayoutProps) {
             </CommandItem>
             <CommandItem
               onSelect={() => {
-                navigate('/brands')
-                setSearchOpen(false)
+                navigate("/brands");
+                setSearchOpen(false);
               }}
             >
               <Building2 className="w-4 h-4 mr-3" aria-hidden="true" />
@@ -488,8 +544,8 @@ export function UltraThinLayout({ children }: LayoutProps) {
             </CommandItem>
             <CommandItem
               onSelect={() => {
-                navigate('/settings')
-                setSearchOpen(false)
+                navigate("/settings");
+                setSearchOpen(false);
               }}
             >
               <Settings className="w-4 h-4 mr-3" aria-hidden="true" />
@@ -503,10 +559,13 @@ export function UltraThinLayout({ children }: LayoutProps) {
       <EmailVerificationBanner />
 
       {/* Main Content */}
-      <main id="main-content" className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <main
+        id="main-content"
+        className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8"
+      >
         {children}
       </main>
-      
+
       {/* Footer */}
       <footer className="bg-card border-t mt-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -515,22 +574,22 @@ export function UltraThinLayout({ children }: LayoutProps) {
               © {new Date().getFullYear()} Postolio. All rights reserved.
             </div>
             <div className="flex items-center gap-1 text-xs md:text-sm">
-              <Link 
-                to="/privacy-policy" 
+              <Link
+                to="/privacy-policy"
                 className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-accent"
               >
                 Privacy Policy
               </Link>
               <span className="text-muted-foreground/50">•</span>
-              <Link 
-                to="/terms-of-service" 
+              <Link
+                to="/terms-of-service"
                 className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-accent"
               >
                 Terms of Service
               </Link>
               <span className="text-muted-foreground/50">•</span>
-              <Link 
-                to="/legal/data-deletion" 
+              <Link
+                to="/legal/data-deletion"
                 className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-accent"
               >
                 Data Deletion
@@ -540,5 +599,5 @@ export function UltraThinLayout({ children }: LayoutProps) {
         </div>
       </footer>
     </div>
-  )
+  );
 }

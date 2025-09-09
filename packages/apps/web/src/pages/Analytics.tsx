@@ -1,154 +1,159 @@
-import { useState, useEffect } from 'react'
-import { apiClient } from '../lib/api'
-import { PageHeader } from '@/components/PageHeader'
-import AnalyticsChart from '../components/AnalyticsChart'
-import SchedulingPanel from '../components/SchedulingPanel'
-import { useBrandStore } from '../stores/brandStore'
+import { useState, useEffect } from "react";
+import { apiClient } from "../lib/api";
+import { PageHeader } from "@/components/PageHeader";
+import AnalyticsChart from "../components/AnalyticsChart";
+import SchedulingPanel from "../components/SchedulingPanel";
+import { useBrandStore } from "../stores/brandStore";
 
 interface AnalyticsReport {
-  totalPosts: number
-  totalImpressions: number
-  totalReach: number
-  totalEngagements: number
-  averageEngagementRate: number
+  totalPosts: number;
+  totalImpressions: number;
+  totalReach: number;
+  totalEngagements: number;
+  averageEngagementRate: number;
   optimalTimes: Array<{
-    dayOfWeek: number
-    hour: number
-    engagementScore: number
-    sampleSize: number
-    dayName: string
-    timeFormatted: string
-  }>
+    dayOfWeek: number;
+    hour: number;
+    engagementScore: number;
+    sampleSize: number;
+    dayName: string;
+    timeFormatted: string;
+  }>;
   topPerformingPosts: Array<{
-    postId: string
-    impressions: number
-    reach: number
-    likes: number
-    comments: number
-    saves: number
-    shares: number
-    engagementRate: number
-    timestamp: string
-  }>
+    postId: string;
+    impressions: number;
+    reach: number;
+    likes: number;
+    comments: number;
+    saves: number;
+    shares: number;
+    engagementRate: number;
+    timestamp: string;
+  }>;
   engagementTrends: Array<{
-    date: string
-    engagementRate: number
-  }>
+    date: string;
+    engagementRate: number;
+  }>;
 }
 
 interface SchedulingStats {
-  scheduled: number
-  posted: number
-  failed: number
-  draft: number
+  scheduled: number;
+  posted: number;
+  failed: number;
+  draft: number;
 }
 
 interface ScheduledPost {
-  id: string
-  caption: string
-  imageUrl: string
-  hashtags: string[]
-  scheduledTime: string
-  status: string
+  id: string;
+  caption: string;
+  imageUrl: string;
+  hashtags: string[];
+  scheduledTime: string;
+  status: string;
 }
 
 export default function Analytics() {
-  const { selectedBrand } = useBrandStore()
-  const [report, setReport] = useState<AnalyticsReport | null>(null)
-  const [schedulingStats, setSchedulingStats] = useState<SchedulingStats | null>(null)
-  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [daysPeriod, setDaysPeriod] = useState(30)
+  const { selectedBrand } = useBrandStore();
+  const [report, setReport] = useState<AnalyticsReport | null>(null);
+  const [schedulingStats, setSchedulingStats] =
+    useState<SchedulingStats | null>(null);
+  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [daysPeriod, setDaysPeriod] = useState(30);
 
   useEffect(() => {
-    loadBrands()
-  }, [])
+    loadBrands();
+  }, []);
 
   useEffect(() => {
     if (selectedBrand?.id) {
-      loadAnalytics()
-      loadSchedulingData()
+      loadAnalytics();
+      loadSchedulingData();
     }
-  }, [selectedBrand?.id, daysPeriod])
+  }, [selectedBrand?.id, daysPeriod]);
 
   const loadBrands = async () => {
     try {
-      const response = await apiClient.getBrands()
+      const response = await apiClient.getBrands();
       // Brand management is handled by the brand store
-      console.log('Brands loaded:', response.brands)
+      console.log("Brands loaded:", response.brands);
     } catch {
-      setError('Failed to load brands')
+      setError("Failed to load brands");
     }
-  }
+  };
 
   const loadAnalytics = async () => {
-    if (!selectedBrand?.id) return
+    if (!selectedBrand?.id) return;
 
-    setLoading(true)
-    setError('')
+    setLoading(true);
+    setError("");
 
     try {
       const [reportResponse, statsResponse] = await Promise.all([
-        apiClient.get<{ report: AnalyticsReport }>(`/api/analytics/report/${selectedBrand.id}?days=${daysPeriod}`),
-        apiClient.get<{ stats: SchedulingStats }>(`/api/analytics/stats/${selectedBrand.id}`),
-      ])
+        apiClient.get<{ report: AnalyticsReport }>(
+          `/api/analytics/report/${selectedBrand.id}?days=${daysPeriod}`,
+        ),
+        apiClient.get<{ stats: SchedulingStats }>(
+          `/api/analytics/stats/${selectedBrand.id}`,
+        ),
+      ]);
 
-      setReport(reportResponse.report)
-      setSchedulingStats(statsResponse.stats)
+      setReport(reportResponse.report);
+      setSchedulingStats(statsResponse.stats);
     } catch {
-      setError('Failed to load analytics data')
+      setError("Failed to load analytics data");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const loadSchedulingData = async () => {
-    if (!selectedBrand?.id) return
+    if (!selectedBrand?.id) return;
 
     try {
       const response = await apiClient.get<{ scheduledPosts: ScheduledPost[] }>(
-        `/api/analytics/scheduled/${selectedBrand.id}`
-      )
-      setScheduledPosts(response.scheduledPosts)
+        `/api/analytics/scheduled/${selectedBrand.id}`,
+      );
+      setScheduledPosts(response.scheduledPosts);
     } catch (err) {
-      console.error('Failed to load scheduled posts:', err)
+      console.error("Failed to load scheduled posts:", err);
     }
-  }
+  };
 
   const handleCancelPost = async (contentId: string) => {
     try {
-      await apiClient.delete(`/api/analytics/scheduled/${contentId}`)
+      await apiClient.delete(`/api/analytics/scheduled/${contentId}`);
 
       // Remove from local state
-      setScheduledPosts((prev) => prev.filter((post) => post.id !== contentId))
+      setScheduledPosts((prev) => prev.filter((post) => post.id !== contentId));
 
       // Reload stats
-      loadAnalytics()
+      loadAnalytics();
     } catch {
-      setError('Failed to cancel scheduled post')
+      setError("Failed to cancel scheduled post");
     }
-  }
+  };
 
   const handleReschedulePost = async (contentId: string, newTime: string) => {
     try {
-      await apiClient.put('/api/analytics/reschedule', {
+      await apiClient.put("/api/analytics/reschedule", {
         contentId,
         newTime,
-      })
+      });
 
       // Reload scheduling data
-      loadSchedulingData()
+      loadSchedulingData();
     } catch {
-      setError('Failed to reschedule post')
+      setError("Failed to reschedule post");
     }
-  }
+  };
 
   const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
-    return num.toString()
-  }
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toString();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
@@ -158,12 +163,17 @@ export default function Analytics() {
           description="Track performance and manage your posting schedule"
         />
 
-        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6 mt-6">{error}</div>}
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6 mt-6">
+            {error}
+          </div>
+        )}
 
         <div className="mb-6 mt-6 flex flex-wrap gap-3 items-center">
           {selectedBrand && (
             <div className="text-sm text-gray-600">
-              Analytics for: <span className="font-medium">{selectedBrand.name}</span>
+              Analytics for:{" "}
+              <span className="font-medium">{selectedBrand.name}</span>
             </div>
           )}
 
@@ -190,23 +200,39 @@ export default function Analytics() {
             {/* Overview Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-500">Total Posts</h3>
-                <p className="text-2xl font-bold text-gray-900">{report.totalPosts}</p>
+                <h3 className="text-sm font-medium text-gray-500">
+                  Total Posts
+                </h3>
+                <p className="text-2xl font-bold text-gray-900">
+                  {report.totalPosts}
+                </p>
               </div>
 
               <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-500">Total Impressions</h3>
-                <p className="text-2xl font-bold text-gray-900">{formatNumber(report.totalImpressions)}</p>
+                <h3 className="text-sm font-medium text-gray-500">
+                  Total Impressions
+                </h3>
+                <p className="text-2xl font-bold text-gray-900">
+                  {formatNumber(report.totalImpressions)}
+                </p>
               </div>
 
               <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-500">Total Reach</h3>
-                <p className="text-2xl font-bold text-gray-900">{formatNumber(report.totalReach)}</p>
+                <h3 className="text-sm font-medium text-gray-500">
+                  Total Reach
+                </h3>
+                <p className="text-2xl font-bold text-gray-900">
+                  {formatNumber(report.totalReach)}
+                </p>
               </div>
 
               <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-500">Avg. Engagement Rate</h3>
-                <p className="text-2xl font-bold text-green-600">{report.averageEngagementRate.toFixed(1)}%</p>
+                <h3 className="text-sm font-medium text-gray-500">
+                  Avg. Engagement Rate
+                </h3>
+                <p className="text-2xl font-bold text-green-600">
+                  {report.averageEngagementRate.toFixed(1)}%
+                </p>
               </div>
             </div>
 
@@ -214,62 +240,105 @@ export default function Analytics() {
             {schedulingStats && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-lg shadow-md">
-                  <h3 className="text-sm font-medium text-gray-500">Scheduled</h3>
-                  <p className="text-2xl font-bold text-blue-600">{schedulingStats.scheduled}</p>
+                  <h3 className="text-sm font-medium text-gray-500">
+                    Scheduled
+                  </h3>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {schedulingStats.scheduled}
+                  </p>
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h3 className="text-sm font-medium text-gray-500">Posted</h3>
-                  <p className="text-2xl font-bold text-green-600">{schedulingStats.posted}</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {schedulingStats.posted}
+                  </p>
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h3 className="text-sm font-medium text-gray-500">Failed</h3>
-                  <p className="text-2xl font-bold text-red-600">{schedulingStats.failed}</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {schedulingStats.failed}
+                  </p>
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h3 className="text-sm font-medium text-gray-500">Draft</h3>
-                  <p className="text-2xl font-bold text-yellow-600">{schedulingStats.draft}</p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {schedulingStats.draft}
+                  </p>
                 </div>
               </div>
             )}
 
             {/* Charts and Data */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              <AnalyticsChart title="Engagement Trends" data={report.engagementTrends} type="engagement" />
+              <AnalyticsChart
+                title="Engagement Trends"
+                data={report.engagementTrends}
+                type="engagement"
+              />
 
-              <AnalyticsChart title="Optimal Posting Times" data={report.optimalTimes} type="optimal-times" />
+              <AnalyticsChart
+                title="Optimal Posting Times"
+                data={report.optimalTimes}
+                type="optimal-times"
+              />
             </div>
 
             {/* Top Performing Posts */}
             <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-              <h3 className="text-lg font-semibold mb-4">Top Performing Posts</h3>
+              <h3 className="text-lg font-semibold mb-4">
+                Top Performing Posts
+              </h3>
               <div className="overflow-x-auto">
                 <table className="min-w-full">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Post ID</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Impressions</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Reach</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Engagement</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">Engagement Rate</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-500">
+                        Post ID
+                      </th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-500">
+                        Impressions
+                      </th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-500">
+                        Reach
+                      </th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-500">
+                        Engagement
+                      </th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-500">
+                        Engagement Rate
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {report.topPerformingPosts.slice(0, 5).map((post, index) => (
-                      <tr key={index} className="border-b">
-                        <td className="py-3 px-4 text-sm text-gray-900 truncate max-w-32">{post.postId}</td>
-                        <td className="py-3 px-4 text-sm text-gray-900">{formatNumber(post.impressions)}</td>
-                        <td className="py-3 px-4 text-sm text-gray-900">{formatNumber(post.reach)}</td>
-                        <td className="py-3 px-4 text-sm text-gray-900">
-                          {formatNumber(post.likes + post.comments + post.saves + post.shares)}
-                        </td>
-                        <td className="py-3 px-4 text-sm font-medium text-green-600">
-                          {post.engagementRate.toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
+                    {report.topPerformingPosts
+                      .slice(0, 5)
+                      .map((post, index) => (
+                        <tr key={index} className="border-b">
+                          <td className="py-3 px-4 text-sm text-gray-900 truncate max-w-32">
+                            {post.postId}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-900">
+                            {formatNumber(post.impressions)}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-900">
+                            {formatNumber(post.reach)}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-900">
+                            {formatNumber(
+                              post.likes +
+                                post.comments +
+                                post.saves +
+                                post.shares,
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-sm font-medium text-green-600">
+                            {post.engagementRate.toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -287,7 +356,12 @@ export default function Analytics() {
         {!loading && !report && selectedBrand && (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
-              <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg
+                className="mx-auto h-12 w-12"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -296,11 +370,15 @@ export default function Analytics() {
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No analytics data available</h3>
-            <p className="text-gray-500">Start posting content to see analytics and insights.</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No analytics data available
+            </h3>
+            <p className="text-gray-500">
+              Start posting content to see analytics and insights.
+            </p>
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }

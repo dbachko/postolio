@@ -1,50 +1,59 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { format } from 'date-fns'
-import { apiClient } from '../lib/api'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
-import { Badge } from './ui/badge'
-import { Button } from './ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
-import { 
-  BarChart, 
-  TrendingUp, 
-  TrendingDown, 
-  Users, 
-  Eye, 
-  Heart, 
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { apiClient } from "../lib/api";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import {
+  BarChart,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  Eye,
+  Heart,
   Hash,
   DollarSign,
   Lightbulb,
   AlertCircle,
-  Loader2
-} from 'lucide-react'
+  Loader2,
+} from "lucide-react";
 
 interface CampaignAnalyticsProps {
-  campaignId: string
-  campaignName: string
+  campaignId: string;
+  campaignName: string;
 }
 
-export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalyticsProps) {
-  const [selectedTab, setSelectedTab] = useState('overview')
+export function CampaignAnalytics({
+  campaignId,
+  campaignName,
+}: CampaignAnalyticsProps) {
+  const [selectedTab, setSelectedTab] = useState("overview");
 
   // Fetch campaign metrics
   const metricsQuery = useQuery({
-    queryKey: ['campaign-metrics', campaignId],
-    queryFn: () => apiClient.getCampaignMetrics(campaignId)
-  })
+    queryKey: ["campaign-metrics", campaignId],
+    queryFn: () => apiClient.getCampaignMetrics(campaignId),
+  });
 
   // Fetch optimization recommendations
   const recommendationsQuery = useQuery({
-    queryKey: ['campaign-recommendations', campaignId],
-    queryFn: () => apiClient.getCampaignRecommendations(campaignId)
-  })
+    queryKey: ["campaign-recommendations", campaignId],
+    queryFn: () => apiClient.getCampaignRecommendations(campaignId),
+  });
 
   // Fetch ROI data
   const roiQuery = useQuery({
-    queryKey: ['campaign-roi', campaignId],
-    queryFn: () => apiClient.getCampaignROI(campaignId)
-  })
+    queryKey: ["campaign-roi", campaignId],
+    queryFn: () => apiClient.getCampaignROI(campaignId),
+  });
 
   if (metricsQuery.isLoading) {
     return (
@@ -54,7 +63,7 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
           Loading analytics...
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (metricsQuery.error) {
@@ -67,12 +76,12 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
-  const metrics = metricsQuery.data?.data
-  const recommendations = recommendationsQuery.data?.data || []
-  const roi = roiQuery.data?.data
+  const metrics = metricsQuery.data?.data;
+  const recommendations = recommendationsQuery.data?.data || [];
+  const roi = roiQuery.data?.data;
 
   if (!metrics) {
     return (
@@ -83,33 +92,41 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
-    return num.toString()
-  }
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toString();
+  };
 
   const getPerformanceColor = (rate: number) => {
-    if (rate >= 3) return 'text-green-600'
-    if (rate >= 1.5) return 'text-yellow-600'
-    return 'text-red-600'
-  }
+    if (rate >= 3) return "text-green-600";
+    if (rate >= 1.5) return "text-yellow-600";
+    return "text-red-600";
+  };
 
   const getPerformanceIcon = (rate: number) => {
-    return rate >= 2 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />
-  }
+    return rate >= 2 ? (
+      <TrendingUp className="w-4 h-4" />
+    ) : (
+      <TrendingDown className="w-4 h-4" />
+    );
+  };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'high': return 'bg-red-100 text-red-800 border-red-200'
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'low': return 'bg-green-100 text-green-800 border-green-200'
-      default: return 'bg-gray-100 text-gray-800 border-gray-200'
+      case "high":
+        return "bg-red-100 text-red-800 border-red-200";
+      case "medium":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "low":
+        return "bg-green-100 text-green-800 border-green-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
     }
-  }
+  };
 
   return (
     <div className="space-y-6">
@@ -155,7 +172,9 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Impressions</p>
-                  <p className="text-2xl font-bold">{formatNumber(metrics.totalImpressions)}</p>
+                  <p className="text-2xl font-bold">
+                    {formatNumber(metrics.totalImpressions)}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -167,7 +186,9 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Engagement</p>
-                  <p className="text-2xl font-bold">{formatNumber(metrics.totalEngagement)}</p>
+                  <p className="text-2xl font-bold">
+                    {formatNumber(metrics.totalEngagement)}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -179,7 +200,9 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Reach</p>
-                  <p className="text-2xl font-bold">{formatNumber(metrics.reach)}</p>
+                  <p className="text-2xl font-bold">
+                    {formatNumber(metrics.reach)}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -193,24 +216,38 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Posts Scheduled:</span>
+                  <span className="text-sm text-muted-foreground">
+                    Posts Scheduled:
+                  </span>
                   <span className="font-medium">{metrics.postsScheduled}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Posts Posted:</span>
+                  <span className="text-sm text-muted-foreground">
+                    Posts Posted:
+                  </span>
                   <span className="font-medium">{metrics.postsPosted}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Posts Approved:</span>
+                  <span className="text-sm text-muted-foreground">
+                    Posts Approved:
+                  </span>
                   <span className="font-medium">{metrics.postsApproved}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Campaign Duration:</span>
-                  <span className="font-medium">{metrics.campaignDuration} days</span>
+                  <span className="text-sm text-muted-foreground">
+                    Campaign Duration:
+                  </span>
+                  <span className="font-medium">
+                    {metrics.campaignDuration} days
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Posting Frequency:</span>
-                  <span className="font-medium">{metrics.postingFrequency.toFixed(1)}/day</span>
+                  <span className="text-sm text-muted-foreground">
+                    Posting Frequency:
+                  </span>
+                  <span className="font-medium">
+                    {metrics.postingFrequency.toFixed(1)}/day
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -218,7 +255,9 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <div className={`flex items-center gap-1 ${getPerformanceColor(metrics.averageEngagementRate)}`}>
+                  <div
+                    className={`flex items-center gap-1 ${getPerformanceColor(metrics.averageEngagementRate)}`}
+                  >
                     {getPerformanceIcon(metrics.averageEngagementRate)}
                     Engagement Rate
                   </div>
@@ -226,12 +265,17 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
               </CardHeader>
               <CardContent>
                 <div className="text-center">
-                  <div className={`text-4xl font-bold ${getPerformanceColor(metrics.averageEngagementRate)}`}>
+                  <div
+                    className={`text-4xl font-bold ${getPerformanceColor(metrics.averageEngagementRate)}`}
+                  >
                     {metrics.averageEngagementRate.toFixed(2)}%
                   </div>
                   <p className="text-sm text-muted-foreground mt-2">
-                    {metrics.averageEngagementRate >= 3 ? 'Excellent' :
-                     metrics.averageEngagementRate >= 1.5 ? 'Good' : 'Needs Improvement'}
+                    {metrics.averageEngagementRate >= 3
+                      ? "Excellent"
+                      : metrics.averageEngagementRate >= 1.5
+                        ? "Good"
+                        : "Needs Improvement"}
                   </p>
                   <div className="mt-4 text-xs text-muted-foreground">
                     Industry average: 1.5-3%
@@ -262,15 +306,21 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
               ) : (
                 <div className="space-y-3">
                   {metrics.topHashtags.slice(0, 10).map((hashtag, index) => (
-                    <div key={hashtag.tag} className="flex items-center justify-between">
+                    <div
+                      key={hashtag.tag}
+                      className="flex items-center justify-between"
+                    >
                       <div className="flex items-center gap-3">
                         <Badge variant="outline">#{index + 1}</Badge>
                         <span className="font-medium">#{hashtag.tag}</span>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium">{formatNumber(hashtag.avgEngagement)}</div>
+                        <div className="font-medium">
+                          {formatNumber(hashtag.avgEngagement)}
+                        </div>
                         <div className="text-xs text-muted-foreground">
-                          Used {hashtag.count} time{hashtag.count !== 1 ? 's' : ''}
+                          Used {hashtag.count} time
+                          {hashtag.count !== 1 ? "s" : ""}
                         </div>
                       </div>
                     </div>
@@ -284,9 +334,7 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
           <Card>
             <CardHeader>
               <CardTitle>Performance Timeline</CardTitle>
-              <CardDescription>
-                Daily performance breakdown
-              </CardDescription>
+              <CardDescription>Daily performance breakdown</CardDescription>
             </CardHeader>
             <CardContent>
               {metrics.performanceByDate.length === 0 ? (
@@ -296,9 +344,12 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
               ) : (
                 <div className="space-y-3">
                   {metrics.performanceByDate.slice(-7).map((day) => (
-                    <div key={day.date} className="flex items-center justify-between">
+                    <div
+                      key={day.date}
+                      className="flex items-center justify-between"
+                    >
                       <span className="text-sm">
-                        {format(new Date(day.date), 'MMM d, yyyy')}
+                        {format(new Date(day.date), "MMM d, yyyy")}
                       </span>
                       <div className="flex gap-4 text-sm">
                         <span>{formatNumber(day.impressions)} impressions</span>
@@ -332,9 +383,12 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
               ) : recommendations.length === 0 ? (
                 <div className="text-center py-8">
                   <Lightbulb className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="font-medium text-gray-900 mb-2">No recommendations yet</h3>
+                  <h3 className="font-medium text-gray-900 mb-2">
+                    No recommendations yet
+                  </h3>
                   <p className="text-gray-600">
-                    We'll provide optimization insights once your campaign has more data.
+                    We'll provide optimization insights once your campaign has
+                    more data.
                   </p>
                 </div>
               ) : (
@@ -350,7 +404,9 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
                             <Badge variant="outline">{rec.type}</Badge>
                           </div>
                         </div>
-                        <p className="text-sm font-medium mb-2">{rec.message}</p>
+                        <p className="text-sm font-medium mb-2">
+                          {rec.message}
+                        </p>
                         <p className="text-xs text-muted-foreground mb-3">
                           Expected impact: {rec.impact}
                         </p>
@@ -404,8 +460,12 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
                     <Card>
                       <CardContent className="p-4">
                         <div className="text-center">
-                          <p className="text-sm text-muted-foreground">Engagement Value</p>
-                          <p className="text-2xl font-bold">${roi.engagementValue.toFixed(2)}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Engagement Value
+                          </p>
+                          <p className="text-2xl font-bold">
+                            ${roi.engagementValue.toFixed(2)}
+                          </p>
                         </div>
                       </CardContent>
                     </Card>
@@ -413,8 +473,12 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
                     <Card>
                       <CardContent className="p-4">
                         <div className="text-center">
-                          <p className="text-sm text-muted-foreground">Reach Value</p>
-                          <p className="text-2xl font-bold">${roi.reachValue.toFixed(2)}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Reach Value
+                          </p>
+                          <p className="text-2xl font-bold">
+                            ${roi.reachValue.toFixed(2)}
+                          </p>
                         </div>
                       </CardContent>
                     </Card>
@@ -446,5 +510,5 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

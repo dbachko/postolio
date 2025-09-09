@@ -1,16 +1,16 @@
-import React, { useState, useCallback, useRef } from 'react'
-import { Upload, X, Image as ImageIcon, AlertCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from './ui/button'
-import { Alert, AlertDescription } from './ui/alert'
+import React, { useState, useCallback, useRef } from "react";
+import { Upload, X, Image as ImageIcon, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "./ui/button";
+import { Alert, AlertDescription } from "./ui/alert";
 
 interface ImageUploaderProps {
-  value?: string
-  onChange: (url: string | File) => void
-  onUpload?: (file: File) => Promise<string>
-  className?: string
-  maxSizeInMB?: number
-  acceptedFormats?: string[]
+  value?: string;
+  onChange: (url: string | File) => void;
+  onUpload?: (file: File) => Promise<string>;
+  className?: string;
+  maxSizeInMB?: number;
+  acceptedFormats?: string[];
 }
 
 export function ImageUploader({
@@ -19,124 +19,135 @@ export function ImageUploader({
   onUpload,
   className,
   maxSizeInMB = 10,
-  acceptedFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  acceptedFormats = ["image/jpeg", "image/png", "image/webp", "image/gif"],
 }: ImageUploaderProps) {
-  const [isDragging, setIsDragging] = useState(false)
-  const [previewUrl, setPreviewUrl] = useState<string>(value || '')
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isDragging, setIsDragging] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string>(value || "");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update preview when value changes
   React.useEffect(() => {
     if (value && !selectedFile) {
-      setPreviewUrl(value)
+      setPreviewUrl(value);
     }
-  }, [value, selectedFile])
+  }, [value, selectedFile]);
 
   const validateFile = (file: File): string | null => {
     // Check file type
     if (!acceptedFormats.includes(file.type)) {
-      return `Invalid file type. Accepted formats: ${acceptedFormats.map(f => f.split('/')[1]).join(', ')}`
+      return `Invalid file type. Accepted formats: ${acceptedFormats.map((f) => f.split("/")[1]).join(", ")}`;
     }
 
     // Check file size
-    const sizeInMB = file.size / (1024 * 1024)
+    const sizeInMB = file.size / (1024 * 1024);
     if (sizeInMB > maxSizeInMB) {
-      return `File size exceeds ${maxSizeInMB}MB limit. Current size: ${sizeInMB.toFixed(2)}MB`
+      return `File size exceeds ${maxSizeInMB}MB limit. Current size: ${sizeInMB.toFixed(2)}MB`;
     }
 
-    return null
-  }
+    return null;
+  };
 
-  const handleFile = useCallback(async (file: File) => {
-    setError(null)
+  const handleFile = useCallback(
+    async (file: File) => {
+      setError(null);
 
-    // Validate file
-    const validationError = validateFile(file)
-    if (validationError) {
-      setError(validationError)
-      return
-    }
-
-    // Create preview URL
-    const objectUrl = URL.createObjectURL(file)
-    setPreviewUrl(objectUrl)
-    setSelectedFile(file)
-
-    // If onUpload is provided, upload the file
-    if (onUpload) {
-      setIsUploading(true)
-      try {
-        const uploadedUrl = await onUpload(file)
-        onChange(uploadedUrl)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to upload image')
-        // Revert preview on error
-        setPreviewUrl(value || '')
-        setSelectedFile(null)
-      } finally {
-        setIsUploading(false)
+      // Validate file
+      const validationError = validateFile(file);
+      if (validationError) {
+        setError(validationError);
+        return;
       }
-    } else {
-      // Just pass the file to onChange
-      onChange(file)
-    }
-  }, [value, onChange, onUpload, acceptedFormats, maxSizeInMB])
+
+      // Create preview URL
+      const objectUrl = URL.createObjectURL(file);
+      setPreviewUrl(objectUrl);
+      setSelectedFile(file);
+
+      // If onUpload is provided, upload the file
+      if (onUpload) {
+        setIsUploading(true);
+        try {
+          const uploadedUrl = await onUpload(file);
+          onChange(uploadedUrl);
+        } catch (err) {
+          setError(
+            err instanceof Error ? err.message : "Failed to upload image",
+          );
+          // Revert preview on error
+          setPreviewUrl(value || "");
+          setSelectedFile(null);
+        } finally {
+          setIsUploading(false);
+        }
+      } else {
+        // Just pass the file to onChange
+        onChange(file);
+      }
+    },
+    [value, onChange, onUpload, acceptedFormats, maxSizeInMB],
+  );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(true)
-  }, [])
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(false)
-  }, [])
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(false)
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
 
-    const files = Array.from(e.dataTransfer.files)
-    if (files.length > 0 && files[0]) {
-      handleFile(files[0])
-    }
-  }, [handleFile])
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0 && files[0]) {
+        handleFile(files[0]);
+      }
+    },
+    [handleFile],
+  );
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (files && files.length > 0 && files[0]) {
-      handleFile(files[0])
-    }
-  }, [handleFile])
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0 && files[0]) {
+        handleFile(files[0]);
+      }
+    },
+    [handleFile],
+  );
 
   const handleRemoveImage = useCallback(() => {
     // Clear all state
-    setPreviewUrl('')
-    setSelectedFile(null)
-    setError(null)
-    
+    setPreviewUrl("");
+    setSelectedFile(null);
+    setError(null);
+
     // Reset file input
     if (fileInputRef.current) {
-      fileInputRef.current.value = ''
+      fileInputRef.current.value = "";
     }
-    
+
     // Notify parent component that image was removed
-    onChange('')
-  }, [onChange])
+    onChange("");
+  }, [onChange]);
 
   const handleClickUpload = useCallback(() => {
-    fileInputRef.current?.click()
-  }, [])
+    fileInputRef.current?.click();
+  }, []);
 
   return (
-    <div 
-      className={cn('space-y-4', className)}
+    <div
+      className={cn("space-y-4", className)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -145,7 +156,7 @@ export function ImageUploader({
       <input
         ref={fileInputRef}
         type="file"
-        accept={acceptedFormats.join(',')}
+        accept={acceptedFormats.join(",")}
         onChange={handleFileSelect}
         className="hidden"
         disabled={isUploading}
@@ -164,9 +175,11 @@ export function ImageUploader({
         <div
           onClick={handleClickUpload}
           className={cn(
-            'relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all',
-            isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400',
-            isUploading && 'opacity-50 cursor-not-allowed'
+            "relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all",
+            isDragging
+              ? "border-blue-500 bg-blue-50"
+              : "border-gray-300 hover:border-gray-400",
+            isUploading && "opacity-50 cursor-not-allowed",
           )}
         >
           <div className="flex flex-col items-center space-y-4">
@@ -202,7 +215,7 @@ export function ImageUploader({
               </div>
             </div>
           )}
-          
+
           <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
             {/* Loading state for preview */}
             {isUploading && (
@@ -220,10 +233,10 @@ export function ImageUploader({
               alt="Preview"
               className="w-full h-full object-cover"
               onError={() => {
-                setError('Failed to load image preview')
+                setError("Failed to load image preview");
                 if (!selectedFile) {
                   // Only reset if this was a URL, not a selected file
-                  setPreviewUrl('')
+                  setPreviewUrl("");
                 }
               }}
             />
@@ -275,5 +288,5 @@ export function ImageUploader({
         </div>
       )}
     </div>
-  )
+  );
 }

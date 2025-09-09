@@ -4,16 +4,16 @@
  * custom metrics, alarms, and X-Ray tracing
  */
 
-import { Stack, StackProps, Duration, RemovalPolicy } from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as iam from 'aws-cdk-lib/aws-iam';
+import { Stack, StackProps, Duration, RemovalPolicy } from "aws-cdk-lib";
+import { Construct } from "constructs";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as snsSubscriptions from "aws-cdk-lib/aws-sns-subscriptions";
+import * as cloudwatchActions from "aws-cdk-lib/aws-cloudwatch-actions";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as kms from "aws-cdk-lib/aws-kms";
+import * as iam from "aws-cdk-lib/aws-iam";
 
 export interface MonitoringStackProps extends StackProps {
   environment: string;
@@ -37,7 +37,7 @@ export class MonitoringStack extends Stack {
   constructor(scope: Construct, id: string, props: MonitoringStackProps) {
     super(scope, id, props);
 
-    const { 
+    const {
       environment,
       schedulerFunction,
       publisherFunction,
@@ -45,23 +45,28 @@ export class MonitoringStack extends Stack {
       retryProcessorFunction,
       schedulerTable,
       retryTable,
-      alertEmail
+      alertEmail,
     } = props;
 
     // Create KMS key for encryption
-    this.kmsKey = new kms.Key(this, 'MonitoringKey', {
+    this.kmsKey = new kms.Key(this, "MonitoringKey", {
       enableKeyRotation: true,
       description: `KMS key for Content Scheduler monitoring - ${environment}`,
-      removalPolicy: environment === 'prod' ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY, // Explicit for prod
+      removalPolicy:
+        environment === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY, // Explicit for prod
       alias: `alias/content-scheduler-monitoring-${environment}`,
     });
 
     // Grant CloudWatch access to use the key
-    this.kmsKey.grantEncryptDecrypt(new iam.ServicePrincipal('cloudwatch.amazonaws.com'));
-    this.kmsKey.grantEncryptDecrypt(new iam.ServicePrincipal('sns.amazonaws.com'));
+    this.kmsKey.grantEncryptDecrypt(
+      new iam.ServicePrincipal("cloudwatch.amazonaws.com"),
+    );
+    this.kmsKey.grantEncryptDecrypt(
+      new iam.ServicePrincipal("sns.amazonaws.com"),
+    );
 
     // Create SNS topic for alerts with encryption
-    this.alertTopic = new sns.Topic(this, 'AlertTopic', {
+    this.alertTopic = new sns.Topic(this, "AlertTopic", {
       displayName: `Content Scheduler Alerts - ${environment}`,
       topicName: `content-scheduler-alerts-${environment}`,
       masterKey: this.kmsKey,
@@ -72,7 +77,7 @@ export class MonitoringStack extends Stack {
     // Add email subscription if provided
     if (alertEmail) {
       this.alertTopic.addSubscription(
-        new snsSubscriptions.EmailSubscription(alertEmail)
+        new snsSubscriptions.EmailSubscription(alertEmail),
       );
     }
 
@@ -84,14 +89,14 @@ export class MonitoringStack extends Stack {
       statusUpdaterFunction,
       retryProcessorFunction,
       schedulerTable,
-      retryTable
+      retryTable,
     );
 
     // Create business metrics dashboard
     this.businessDashboard = this.createBusinessDashboard(
       environment,
       publisherFunction,
-      schedulerTable
+      schedulerTable,
     );
 
     // Create cost monitoring dashboard
@@ -101,7 +106,7 @@ export class MonitoringStack extends Stack {
     this.slaDashboard = this.createSLADashboard(
       environment,
       publisherFunction,
-      schedulerTable
+      schedulerTable,
     );
 
     // Set up critical alarms
@@ -112,7 +117,7 @@ export class MonitoringStack extends Stack {
       statusUpdaterFunction,
       retryProcessorFunction,
       schedulerTable,
-      retryTable
+      retryTable,
     );
 
     // Note: X-Ray tracing should be enabled at Lambda function creation with:
@@ -130,9 +135,9 @@ export class MonitoringStack extends Stack {
     statusUpdaterFunction: lambda.Function,
     retryProcessorFunction: lambda.Function,
     schedulerTable: dynamodb.Table,
-    retryTable: dynamodb.Table
+    retryTable: dynamodb.Table,
   ): cloudwatch.Dashboard {
-    const dashboard = new cloudwatch.Dashboard(this, 'OperationalDashboard', {
+    const dashboard = new cloudwatch.Dashboard(this, "OperationalDashboard", {
       dashboardName: `ContentScheduler-Operational-${environment}`,
       periodOverride: cloudwatch.PeriodOverride.AUTO,
     });
@@ -143,99 +148,99 @@ export class MonitoringStack extends Stack {
       publisherFunction,
       statusUpdaterFunction,
       retryProcessorFunction,
-    ].map(fn => ({
+    ].map((fn) => ({
       invocations: new cloudwatch.Metric({
-        namespace: 'AWS/Lambda',
-        metricName: 'Invocations',
+        namespace: "AWS/Lambda",
+        metricName: "Invocations",
         dimensionsMap: { FunctionName: fn.functionName },
-        statistic: 'Sum',
+        statistic: "Sum",
       }),
       errors: new cloudwatch.Metric({
-        namespace: 'AWS/Lambda',
-        metricName: 'Errors',
+        namespace: "AWS/Lambda",
+        metricName: "Errors",
         dimensionsMap: { FunctionName: fn.functionName },
-        statistic: 'Sum',
+        statistic: "Sum",
       }),
       duration: new cloudwatch.Metric({
-        namespace: 'AWS/Lambda',
-        metricName: 'Duration',
+        namespace: "AWS/Lambda",
+        metricName: "Duration",
         dimensionsMap: { FunctionName: fn.functionName },
-        statistic: 'Average',
+        statistic: "Average",
       }),
       concurrentExecutions: new cloudwatch.Metric({
-        namespace: 'AWS/Lambda',
-        metricName: 'ConcurrentExecutions',
+        namespace: "AWS/Lambda",
+        metricName: "ConcurrentExecutions",
         dimensionsMap: { FunctionName: fn.functionName },
-        statistic: 'Maximum',
+        statistic: "Maximum",
       }),
     }));
 
     // Add Lambda widgets
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'Lambda Invocations',
-        left: lambdaMetrics.map(m => m.invocations),
+        title: "Lambda Invocations",
+        left: lambdaMetrics.map((m) => m.invocations),
         width: 12,
         height: 6,
       }),
       new cloudwatch.GraphWidget({
-        title: 'Lambda Errors',
-        left: lambdaMetrics.map(m => m.errors),
+        title: "Lambda Errors",
+        left: lambdaMetrics.map((m) => m.errors),
         width: 12,
         height: 6,
-      })
+      }),
     );
 
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'Lambda Duration (ms)',
-        left: lambdaMetrics.map(m => m.duration),
+        title: "Lambda Duration (ms)",
+        left: lambdaMetrics.map((m) => m.duration),
         width: 12,
         height: 6,
       }),
       new cloudwatch.GraphWidget({
-        title: 'Lambda Concurrent Executions',
-        left: lambdaMetrics.map(m => m.concurrentExecutions),
+        title: "Lambda Concurrent Executions",
+        left: lambdaMetrics.map((m) => m.concurrentExecutions),
         width: 12,
         height: 6,
-      })
+      }),
     );
 
     // DynamoDB metrics
-    const dynamoMetrics = [schedulerTable, retryTable].map(table => ({
+    const dynamoMetrics = [schedulerTable, retryTable].map((table) => ({
       consumedReadCapacity: new cloudwatch.Metric({
-        namespace: 'AWS/DynamoDB',
-        metricName: 'ConsumedReadCapacityUnits',
+        namespace: "AWS/DynamoDB",
+        metricName: "ConsumedReadCapacityUnits",
         dimensionsMap: { TableName: table.tableName },
-        statistic: 'Sum',
+        statistic: "Sum",
       }),
       consumedWriteCapacity: new cloudwatch.Metric({
-        namespace: 'AWS/DynamoDB',
-        metricName: 'ConsumedWriteCapacityUnits',
+        namespace: "AWS/DynamoDB",
+        metricName: "ConsumedWriteCapacityUnits",
         dimensionsMap: { TableName: table.tableName },
-        statistic: 'Sum',
+        statistic: "Sum",
       }),
       throttledRequests: new cloudwatch.Metric({
-        namespace: 'AWS/DynamoDB',
-        metricName: 'UserErrors',
+        namespace: "AWS/DynamoDB",
+        metricName: "UserErrors",
         dimensionsMap: { TableName: table.tableName },
-        statistic: 'Sum',
+        statistic: "Sum",
       }),
     }));
 
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'DynamoDB Read Capacity',
-        left: dynamoMetrics.map(m => m.consumedReadCapacity),
+        title: "DynamoDB Read Capacity",
+        left: dynamoMetrics.map((m) => m.consumedReadCapacity),
         width: 12,
         height: 6,
       }),
       new cloudwatch.GraphWidget({
-        title: 'DynamoDB Write Capacity',
-        left: dynamoMetrics.map(m => m.consumedWriteCapacity),
+        title: "DynamoDB Write Capacity",
+        left: dynamoMetrics.map((m) => m.consumedWriteCapacity),
         width: 12,
         height: 6,
-      })
+      }),
     );
 
     return dashboard;
@@ -247,156 +252,159 @@ export class MonitoringStack extends Stack {
   private createBusinessDashboard(
     environment: string,
     _publisherFunction: lambda.Function,
-    _schedulerTable: dynamodb.Table
+    _schedulerTable: dynamodb.Table,
   ): cloudwatch.Dashboard {
-    const dashboard = new cloudwatch.Dashboard(this, 'BusinessDashboard', {
+    const dashboard = new cloudwatch.Dashboard(this, "BusinessDashboard", {
       dashboardName: `ContentScheduler-Business-${environment}`,
       periodOverride: cloudwatch.PeriodOverride.AUTO,
     });
 
     // Custom business metrics
     const publishingSuccessRate = new cloudwatch.MathExpression({
-      expression: '(m1 - m2) / m1 * 100',
+      expression: "(m1 - m2) / m1 * 100",
       usingMetrics: {
         m1: new cloudwatch.Metric({
-          namespace: 'ContentScheduler',
-          metricName: 'PublishingAttempts',
-          statistic: 'Sum',
+          namespace: "ContentScheduler",
+          metricName: "PublishingAttempts",
+          statistic: "Sum",
         }),
         m2: new cloudwatch.Metric({
-          namespace: 'ContentScheduler',
-          metricName: 'PublishingFailures',
-          statistic: 'Sum',
+          namespace: "ContentScheduler",
+          metricName: "PublishingFailures",
+          statistic: "Sum",
         }),
       },
-      label: 'Publishing Success Rate (%)',
+      label: "Publishing Success Rate (%)",
     });
 
-    const platformMetrics = ['instagram', 'tiktok', 'youtube'].map(platform => ({
-      attempts: new cloudwatch.Metric({
-        namespace: 'ContentScheduler',
-        metricName: 'PublishingAttempts',
-        dimensionsMap: { Platform: platform },
-        statistic: 'Sum',
+    const platformMetrics = ["instagram", "tiktok", "youtube"].map(
+      (platform) => ({
+        attempts: new cloudwatch.Metric({
+          namespace: "ContentScheduler",
+          metricName: "PublishingAttempts",
+          dimensionsMap: { Platform: platform },
+          statistic: "Sum",
+        }),
+        failures: new cloudwatch.Metric({
+          namespace: "ContentScheduler",
+          metricName: "PublishingFailures",
+          dimensionsMap: { Platform: platform },
+          statistic: "Sum",
+        }),
+        latency: new cloudwatch.Metric({
+          namespace: "ContentScheduler",
+          metricName: "PublishingLatency",
+          dimensionsMap: { Platform: platform },
+          statistic: "Average",
+        }),
       }),
-      failures: new cloudwatch.Metric({
-        namespace: 'ContentScheduler',
-        metricName: 'PublishingFailures',
-        dimensionsMap: { Platform: platform },
-        statistic: 'Sum',
-      }),
-      latency: new cloudwatch.Metric({
-        namespace: 'ContentScheduler',
-        metricName: 'PublishingLatency',
-        dimensionsMap: { Platform: platform },
-        statistic: 'Average',
-      }),
-    }));
+    );
 
     // Add business metrics widgets
     dashboard.addWidgets(
       new cloudwatch.SingleValueWidget({
-        title: 'Overall Success Rate',
+        title: "Overall Success Rate",
         metrics: [publishingSuccessRate],
         width: 6,
         height: 4,
       }),
       new cloudwatch.SingleValueWidget({
-        title: 'Total Posts Published',
+        title: "Total Posts Published",
         metrics: [
           new cloudwatch.Metric({
-            namespace: 'ContentScheduler',
-            metricName: 'PostsPublished',
-            statistic: 'Sum',
+            namespace: "ContentScheduler",
+            metricName: "PostsPublished",
+            statistic: "Sum",
           }),
         ],
         width: 6,
         height: 4,
       }),
       new cloudwatch.SingleValueWidget({
-        title: 'Posts Scheduled',
+        title: "Posts Scheduled",
         metrics: [
           new cloudwatch.Metric({
-            namespace: 'ContentScheduler',
-            metricName: 'PostsScheduled',
-            statistic: 'Sum',
+            namespace: "ContentScheduler",
+            metricName: "PostsScheduled",
+            statistic: "Sum",
           }),
         ],
         width: 6,
         height: 4,
       }),
       new cloudwatch.SingleValueWidget({
-        title: 'Retry Queue Depth',
+        title: "Retry Queue Depth",
         metrics: [
           new cloudwatch.Metric({
-            namespace: 'ContentScheduler',
-            metricName: 'RetryQueueDepth',
-            statistic: 'Maximum',
+            namespace: "ContentScheduler",
+            metricName: "RetryQueueDepth",
+            statistic: "Maximum",
           }),
         ],
         width: 6,
         height: 4,
-      })
+      }),
     );
 
     // Platform-specific metrics
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'Publishing by Platform',
-        left: platformMetrics.map(m => m.attempts),
+        title: "Publishing by Platform",
+        left: platformMetrics.map((m) => m.attempts),
         width: 12,
         height: 6,
         stacked: true,
       }),
       new cloudwatch.GraphWidget({
-        title: 'Failures by Platform',
-        left: platformMetrics.map(m => m.failures),
+        title: "Failures by Platform",
+        left: platformMetrics.map((m) => m.failures),
         width: 12,
         height: 6,
         stacked: true,
-      })
+      }),
     );
 
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'Publishing Latency by Platform (ms)',
-        left: platformMetrics.map(m => m.latency),
+        title: "Publishing Latency by Platform (ms)",
+        left: platformMetrics.map((m) => m.latency),
         width: 24,
         height: 6,
-      })
+      }),
     );
 
     // Content type metrics
-    const contentTypeMetrics = ['image', 'video', 'carousel'].map(type => 
-      new cloudwatch.Metric({
-        namespace: 'ContentScheduler',
-        metricName: 'PostsPublished',
-        dimensionsMap: { ContentType: type },
-        statistic: 'Sum',
-      })
+    const contentTypeMetrics = ["image", "video", "carousel"].map(
+      (type) =>
+        new cloudwatch.Metric({
+          namespace: "ContentScheduler",
+          metricName: "PostsPublished",
+          dimensionsMap: { ContentType: type },
+          statistic: "Sum",
+        }),
     );
 
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'Content Types Published',
+        title: "Content Types Published",
         left: contentTypeMetrics,
         width: 12,
         height: 6,
         view: cloudwatch.GraphWidgetView.PIE,
       }),
       new cloudwatch.GraphWidget({
-        title: 'Publishing Trends',
+        title: "Publishing Trends",
         left: [
           new cloudwatch.Metric({
-            namespace: 'ContentScheduler',
-            metricName: 'PostsPublished',
-            statistic: 'Sum',
+            namespace: "ContentScheduler",
+            metricName: "PostsPublished",
+            statistic: "Sum",
             period: Duration.hours(1),
           }),
         ],
         width: 12,
         height: 6,
-      })
+      }),
     );
 
     return dashboard;
@@ -406,7 +414,7 @@ export class MonitoringStack extends Stack {
    * Create cost monitoring dashboard
    */
   private createCostDashboard(environment: string): cloudwatch.Dashboard {
-    const dashboard = new cloudwatch.Dashboard(this, 'CostDashboard', {
+    const dashboard = new cloudwatch.Dashboard(this, "CostDashboard", {
       dashboardName: `ContentScheduler-Cost-${environment}`,
       periodOverride: cloudwatch.PeriodOverride.AUTO,
     });
@@ -414,88 +422,92 @@ export class MonitoringStack extends Stack {
     // Cost metrics
     const costMetrics = {
       lambda: new cloudwatch.Metric({
-        namespace: 'AWS/Billing',
-        metricName: 'EstimatedCharges',
-        dimensionsMap: { 
-          Currency: 'USD',
-          ServiceName: 'AWSLambda',
+        namespace: "AWS/Billing",
+        metricName: "EstimatedCharges",
+        dimensionsMap: {
+          Currency: "USD",
+          ServiceName: "AWSLambda",
         },
-        statistic: 'Maximum',
+        statistic: "Maximum",
         period: Duration.hours(24),
       }),
       dynamodb: new cloudwatch.Metric({
-        namespace: 'AWS/Billing',
-        metricName: 'EstimatedCharges',
-        dimensionsMap: { 
-          Currency: 'USD',
-          ServiceName: 'AmazonDynamoDB',
+        namespace: "AWS/Billing",
+        metricName: "EstimatedCharges",
+        dimensionsMap: {
+          Currency: "USD",
+          ServiceName: "AmazonDynamoDB",
         },
-        statistic: 'Maximum',
+        statistic: "Maximum",
         period: Duration.hours(24),
       }),
       secretsManager: new cloudwatch.Metric({
-        namespace: 'AWS/Billing',
-        metricName: 'EstimatedCharges',
-        dimensionsMap: { 
-          Currency: 'USD',
-          ServiceName: 'AWSSecretsManager',
+        namespace: "AWS/Billing",
+        metricName: "EstimatedCharges",
+        dimensionsMap: {
+          Currency: "USD",
+          ServiceName: "AWSSecretsManager",
         },
-        statistic: 'Maximum',
+        statistic: "Maximum",
         period: Duration.hours(24),
       }),
     };
 
     const costPer1000Posts = new cloudwatch.MathExpression({
-      expression: '(m1 + m2 + m3) / m4 * 1000',
+      expression: "(m1 + m2 + m3) / m4 * 1000",
       usingMetrics: {
         m1: costMetrics.lambda,
         m2: costMetrics.dynamodb,
         m3: costMetrics.secretsManager,
         m4: new cloudwatch.Metric({
-          namespace: 'ContentScheduler',
-          metricName: 'PostsPublished',
-          statistic: 'Sum',
+          namespace: "ContentScheduler",
+          metricName: "PostsPublished",
+          statistic: "Sum",
           period: Duration.hours(24),
         }),
       },
-      label: 'Cost per 1000 Posts ($)',
+      label: "Cost per 1000 Posts ($)",
     });
 
     dashboard.addWidgets(
       new cloudwatch.SingleValueWidget({
-        title: 'Daily Lambda Cost',
+        title: "Daily Lambda Cost",
         metrics: [costMetrics.lambda],
         width: 6,
         height: 4,
       }),
       new cloudwatch.SingleValueWidget({
-        title: 'Daily DynamoDB Cost',
+        title: "Daily DynamoDB Cost",
         metrics: [costMetrics.dynamodb],
         width: 6,
         height: 4,
       }),
       new cloudwatch.SingleValueWidget({
-        title: 'Daily Secrets Manager Cost',
+        title: "Daily Secrets Manager Cost",
         metrics: [costMetrics.secretsManager],
         width: 6,
         height: 4,
       }),
       new cloudwatch.SingleValueWidget({
-        title: 'Cost per 1000 Posts',
+        title: "Cost per 1000 Posts",
         metrics: [costPer1000Posts],
         width: 6,
         height: 4,
-      })
+      }),
     );
 
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'Cost Trend (Daily)',
-        left: [costMetrics.lambda, costMetrics.dynamodb, costMetrics.secretsManager],
+        title: "Cost Trend (Daily)",
+        left: [
+          costMetrics.lambda,
+          costMetrics.dynamodb,
+          costMetrics.secretsManager,
+        ],
         width: 24,
         height: 6,
         stacked: true,
-      })
+      }),
     );
 
     return dashboard;
@@ -507,9 +519,9 @@ export class MonitoringStack extends Stack {
   private createSLADashboard(
     environment: string,
     publisherFunction: lambda.Function,
-    _schedulerTable: dynamodb.Table
+    _schedulerTable: dynamodb.Table,
   ): cloudwatch.Dashboard {
-    const dashboard = new cloudwatch.Dashboard(this, 'SLADashboard', {
+    const dashboard = new cloudwatch.Dashboard(this, "SLADashboard", {
       dashboardName: `ContentScheduler-SLA-${environment}`,
       periodOverride: cloudwatch.PeriodOverride.AUTO,
     });
@@ -517,48 +529,48 @@ export class MonitoringStack extends Stack {
     // SLA metrics
     const slaMetrics = {
       availability: new cloudwatch.MathExpression({
-        expression: '100 - (m1 / m2 * 100)',
+        expression: "100 - (m1 / m2 * 100)",
         usingMetrics: {
           m1: new cloudwatch.Metric({
-            namespace: 'AWS/Lambda',
-            metricName: 'Errors',
+            namespace: "AWS/Lambda",
+            metricName: "Errors",
             dimensionsMap: { FunctionName: publisherFunction.functionName },
-            statistic: 'Sum',
+            statistic: "Sum",
           }),
           m2: new cloudwatch.Metric({
-            namespace: 'AWS/Lambda',
-            metricName: 'Invocations',
+            namespace: "AWS/Lambda",
+            metricName: "Invocations",
             dimensionsMap: { FunctionName: publisherFunction.functionName },
-            statistic: 'Sum',
+            statistic: "Sum",
           }),
         },
-        label: 'Service Availability (%)',
+        label: "Service Availability (%)",
       }),
       publishingSuccess: new cloudwatch.MathExpression({
-        expression: '(m1 - m2) / m1 * 100',
+        expression: "(m1 - m2) / m1 * 100",
         usingMetrics: {
           m1: new cloudwatch.Metric({
-            namespace: 'ContentScheduler',
-            metricName: 'PublishingAttempts',
-            statistic: 'Sum',
+            namespace: "ContentScheduler",
+            metricName: "PublishingAttempts",
+            statistic: "Sum",
           }),
           m2: new cloudwatch.Metric({
-            namespace: 'ContentScheduler',
-            metricName: 'PublishingFailures',
-            statistic: 'Sum',
+            namespace: "ContentScheduler",
+            metricName: "PublishingFailures",
+            statistic: "Sum",
           }),
         },
-        label: 'Publishing Success Rate (%)',
+        label: "Publishing Success Rate (%)",
       }),
       schedulingLatency: new cloudwatch.Metric({
-        namespace: 'ContentScheduler',
-        metricName: 'SchedulingLatency',
-        statistic: 'Average',
+        namespace: "ContentScheduler",
+        metricName: "SchedulingLatency",
+        statistic: "Average",
       }),
       apiResponseTime: new cloudwatch.Metric({
-        namespace: 'ContentScheduler',
-        metricName: 'APIResponseTime',
-        statistic: 'Average',
+        namespace: "ContentScheduler",
+        metricName: "APIResponseTime",
+        statistic: "Average",
       }),
     };
 
@@ -572,54 +584,70 @@ export class MonitoringStack extends Stack {
 
     dashboard.addWidgets(
       new cloudwatch.SingleValueWidget({
-        title: 'Service Availability (Target: 99.99%)',
+        title: "Service Availability (Target: 99.99%)",
         metrics: [slaMetrics.availability],
         width: 6,
         height: 4,
         setPeriodToTimeRange: true,
       }),
       new cloudwatch.SingleValueWidget({
-        title: 'Publishing Success Rate (Target: 99.99%)',
+        title: "Publishing Success Rate (Target: 99.99%)",
         metrics: [slaMetrics.publishingSuccess],
         width: 6,
         height: 4,
         setPeriodToTimeRange: true,
       }),
       new cloudwatch.SingleValueWidget({
-        title: 'Avg Scheduling Latency (Target: <60s)',
+        title: "Avg Scheduling Latency (Target: <60s)",
         metrics: [slaMetrics.schedulingLatency],
         width: 6,
         height: 4,
         setPeriodToTimeRange: true,
       }),
       new cloudwatch.SingleValueWidget({
-        title: 'Avg API Response Time (Target: <200ms)',
+        title: "Avg API Response Time (Target: <200ms)",
         metrics: [slaMetrics.apiResponseTime],
         width: 6,
         height: 4,
         setPeriodToTimeRange: true,
-      })
+      }),
     );
 
     // SLA compliance over time
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'SLA Compliance Trends',
+        title: "SLA Compliance Trends",
         left: [slaMetrics.availability, slaMetrics.publishingSuccess],
         right: [slaMetrics.schedulingLatency, slaMetrics.apiResponseTime],
         width: 24,
         height: 8,
-        leftYAxis: { min: 95, max: 100, label: 'Percentage (%)' },
-        rightYAxis: { min: 0, label: 'Time (ms)' },
+        leftYAxis: { min: 95, max: 100, label: "Percentage (%)" },
+        rightYAxis: { min: 0, label: "Time (ms)" },
         leftAnnotations: [
-          { value: slaTargets.availability, label: 'Availability Target', color: '#00ff00' },
-          { value: slaTargets.publishingSuccess, label: 'Success Rate Target', color: '#0000ff' },
+          {
+            value: slaTargets.availability,
+            label: "Availability Target",
+            color: "#00ff00",
+          },
+          {
+            value: slaTargets.publishingSuccess,
+            label: "Success Rate Target",
+            color: "#0000ff",
+          },
         ],
         rightAnnotations: [
-          { value: slaTargets.schedulingLatency, label: 'Latency Target', color: '#ff0000' },
-          { value: slaTargets.apiResponseTime, label: 'Response Time Target', color: '#ff00ff' },
+          {
+            value: slaTargets.schedulingLatency,
+            label: "Latency Target",
+            color: "#ff0000",
+          },
+          {
+            value: slaTargets.apiResponseTime,
+            label: "Response Time Target",
+            color: "#ff00ff",
+          },
         ],
-      })
+      }),
     );
 
     return dashboard;
@@ -635,34 +663,38 @@ export class MonitoringStack extends Stack {
     statusUpdaterFunction: lambda.Function,
     retryProcessorFunction: lambda.Function,
     schedulerTable: dynamodb.Table,
-    retryTable: dynamodb.Table
+    retryTable: dynamodb.Table,
   ): void {
     // Publishing failures alarm
-    const publishingFailuresAlarm = new cloudwatch.Alarm(this, 'PublishingFailuresAlarm', {
-      alarmName: `${environment}-ContentScheduler-PublishingFailures`,
-      alarmDescription: 'Alert when publishing failures exceed threshold',
-      metric: new cloudwatch.Metric({
-        namespace: 'ContentScheduler',
-        metricName: 'PublishingFailures',
-        statistic: 'Sum',
-        period: Duration.minutes(1),
-      }),
-      threshold: 5,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    const publishingFailuresAlarm = new cloudwatch.Alarm(
+      this,
+      "PublishingFailuresAlarm",
+      {
+        alarmName: `${environment}-ContentScheduler-PublishingFailures`,
+        alarmDescription: "Alert when publishing failures exceed threshold",
+        metric: new cloudwatch.Metric({
+          namespace: "ContentScheduler",
+          metricName: "PublishingFailures",
+          statistic: "Sum",
+          period: Duration.minutes(1),
+        }),
+        threshold: 5,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      },
+    );
     publishingFailuresAlarm.addAlarmAction(
-      new cloudwatchActions.SnsAction(this.alertTopic)
+      new cloudwatchActions.SnsAction(this.alertTopic),
     );
 
     // Retry queue depth alarm
-    const retryQueueAlarm = new cloudwatch.Alarm(this, 'RetryQueueDepthAlarm', {
+    const retryQueueAlarm = new cloudwatch.Alarm(this, "RetryQueueDepthAlarm", {
       alarmName: `${environment}-ContentScheduler-RetryQueueDepth`,
-      alarmDescription: 'Alert when retry queue is too deep',
+      alarmDescription: "Alert when retry queue is too deep",
       metric: new cloudwatch.Metric({
-        namespace: 'ContentScheduler',
-        metricName: 'RetryQueueDepth',
-        statistic: 'Maximum',
+        namespace: "ContentScheduler",
+        metricName: "RetryQueueDepth",
+        statistic: "Maximum",
         period: Duration.minutes(5),
       }),
       threshold: 100,
@@ -670,24 +702,24 @@ export class MonitoringStack extends Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
     retryQueueAlarm.addAlarmAction(
-      new cloudwatchActions.SnsAction(this.alertTopic)
+      new cloudwatchActions.SnsAction(this.alertTopic),
     );
 
     // Lambda duration alarms
     [
-      { fn: schedulerFunction, name: 'Scheduler', threshold: 240000 }, // 4 minutes
-      { fn: publisherFunction, name: 'Publisher', threshold: 240000 },
-      { fn: statusUpdaterFunction, name: 'StatusUpdater', threshold: 60000 }, // 1 minute
-      { fn: retryProcessorFunction, name: 'RetryProcessor', threshold: 240000 },
+      { fn: schedulerFunction, name: "Scheduler", threshold: 240000 }, // 4 minutes
+      { fn: publisherFunction, name: "Publisher", threshold: 240000 },
+      { fn: statusUpdaterFunction, name: "StatusUpdater", threshold: 60000 }, // 1 minute
+      { fn: retryProcessorFunction, name: "RetryProcessor", threshold: 240000 },
     ].forEach(({ fn, name, threshold }) => {
       const durationAlarm = new cloudwatch.Alarm(this, `${name}DurationAlarm`, {
         alarmName: `${environment}-ContentScheduler-${name}-Duration`,
         alarmDescription: `Alert when ${name} function duration exceeds threshold`,
         metric: new cloudwatch.Metric({
-          namespace: 'AWS/Lambda',
-          metricName: 'Duration',
+          namespace: "AWS/Lambda",
+          metricName: "Duration",
           dimensionsMap: { FunctionName: fn.functionName },
-          statistic: 'Maximum',
+          statistic: "Maximum",
           period: Duration.minutes(5),
         }),
         threshold,
@@ -695,57 +727,64 @@ export class MonitoringStack extends Stack {
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       });
       durationAlarm.addAlarmAction(
-        new cloudwatchActions.SnsAction(this.alertTopic)
+        new cloudwatchActions.SnsAction(this.alertTopic),
       );
     });
 
     // DynamoDB throttling alarms
-    [schedulerTable, retryTable].forEach(table => {
-      const throttleAlarm = new cloudwatch.Alarm(this, `${table.node.id}ThrottleAlarm`, {
-        alarmName: `${environment}-ContentScheduler-${table.tableName}-Throttling`,
-        alarmDescription: `Alert when ${table.tableName} experiences throttling`,
-        metric: new cloudwatch.Metric({
-          namespace: 'AWS/DynamoDB',
-          metricName: 'UserErrors',
-          dimensionsMap: { TableName: table.tableName },
-          statistic: 'Sum',
-          period: Duration.minutes(1),
-        }),
-        threshold: 1,
-        evaluationPeriods: 1,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+    [schedulerTable, retryTable].forEach((table) => {
+      const throttleAlarm = new cloudwatch.Alarm(
+        this,
+        `${table.node.id}ThrottleAlarm`,
+        {
+          alarmName: `${environment}-ContentScheduler-${table.tableName}-Throttling`,
+          alarmDescription: `Alert when ${table.tableName} experiences throttling`,
+          metric: new cloudwatch.Metric({
+            namespace: "AWS/DynamoDB",
+            metricName: "UserErrors",
+            dimensionsMap: { TableName: table.tableName },
+            statistic: "Sum",
+            period: Duration.minutes(1),
+          }),
+          threshold: 1,
+          evaluationPeriods: 1,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        },
+      );
       throttleAlarm.addAlarmAction(
-        new cloudwatchActions.SnsAction(this.alertTopic)
+        new cloudwatchActions.SnsAction(this.alertTopic),
       );
     });
 
     // Cost alarm
-    const costAlarm = new cloudwatch.Alarm(this, 'DailyCostAlarm', {
+    const costAlarm = new cloudwatch.Alarm(this, "DailyCostAlarm", {
       alarmName: `${environment}-ContentScheduler-DailyCost`,
-      alarmDescription: 'Alert when daily cost exceeds threshold',
+      alarmDescription: "Alert when daily cost exceeds threshold",
       metric: new cloudwatch.MathExpression({
-        expression: 'm1 + m2 + m3',
+        expression: "m1 + m2 + m3",
         usingMetrics: {
           m1: new cloudwatch.Metric({
-            namespace: 'AWS/Billing',
-            metricName: 'EstimatedCharges',
-            dimensionsMap: { Currency: 'USD', ServiceName: 'AWSLambda' },
-            statistic: 'Maximum',
+            namespace: "AWS/Billing",
+            metricName: "EstimatedCharges",
+            dimensionsMap: { Currency: "USD", ServiceName: "AWSLambda" },
+            statistic: "Maximum",
             period: Duration.hours(24),
           }),
           m2: new cloudwatch.Metric({
-            namespace: 'AWS/Billing',
-            metricName: 'EstimatedCharges',
-            dimensionsMap: { Currency: 'USD', ServiceName: 'AmazonDynamoDB' },
-            statistic: 'Maximum',
+            namespace: "AWS/Billing",
+            metricName: "EstimatedCharges",
+            dimensionsMap: { Currency: "USD", ServiceName: "AmazonDynamoDB" },
+            statistic: "Maximum",
             period: Duration.hours(24),
           }),
           m3: new cloudwatch.Metric({
-            namespace: 'AWS/Billing',
-            metricName: 'EstimatedCharges',
-            dimensionsMap: { Currency: 'USD', ServiceName: 'AWSSecretsManager' },
-            statistic: 'Maximum',
+            namespace: "AWS/Billing",
+            metricName: "EstimatedCharges",
+            dimensionsMap: {
+              Currency: "USD",
+              ServiceName: "AWSSecretsManager",
+            },
+            statistic: "Maximum",
             period: Duration.hours(24),
           }),
         },
@@ -754,27 +793,25 @@ export class MonitoringStack extends Stack {
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
-    costAlarm.addAlarmAction(
-      new cloudwatchActions.SnsAction(this.alertTopic)
-    );
+    costAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.alertTopic));
 
     // SLA breach alarm
-    const slaBreachAlarm = new cloudwatch.Alarm(this, 'SLABreachAlarm', {
+    const slaBreachAlarm = new cloudwatch.Alarm(this, "SLABreachAlarm", {
       alarmName: `${environment}-ContentScheduler-SLABreach`,
-      alarmDescription: 'Alert when SLA is breached (>1% failures)',
+      alarmDescription: "Alert when SLA is breached (>1% failures)",
       metric: new cloudwatch.MathExpression({
-        expression: '100 - ((m1 - m2) / m1 * 100)',
+        expression: "100 - ((m1 - m2) / m1 * 100)",
         usingMetrics: {
           m1: new cloudwatch.Metric({
-            namespace: 'ContentScheduler',
-            metricName: 'PublishingAttempts',
-            statistic: 'Sum',
+            namespace: "ContentScheduler",
+            metricName: "PublishingAttempts",
+            statistic: "Sum",
             period: Duration.hours(1),
           }),
           m2: new cloudwatch.Metric({
-            namespace: 'ContentScheduler',
-            metricName: 'PublishingFailures',
-            statistic: 'Sum',
+            namespace: "ContentScheduler",
+            metricName: "PublishingFailures",
+            statistic: "Sum",
             period: Duration.hours(1),
           }),
         },
@@ -784,7 +821,7 @@ export class MonitoringStack extends Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
     slaBreachAlarm.addAlarmAction(
-      new cloudwatchActions.SnsAction(this.alertTopic)
+      new cloudwatchActions.SnsAction(this.alertTopic),
     );
   }
 

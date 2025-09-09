@@ -1,14 +1,14 @@
-import { type ReactNode } from 'react'
-import { useAuthStore } from '../stores/authStore'
-import { useBrandStore } from '../stores/brandStore'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
+import { type ReactNode } from "react";
+import { useAuthStore } from "../stores/authStore";
+import { useBrandStore } from "../stores/brandStore";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import {
   NavigationMenu,
   NavigationMenuItem,
   NavigationMenuList,
   navigationMenuTriggerStyle,
-} from '@/components/ui/navigation-menu'
+} from "@/components/ui/navigation-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,28 +16,27 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { ChevronDown, Settings, LogOut, Check, Building2 } from 'lucide-react'
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, Settings, LogOut, Check, Building2 } from "lucide-react";
 
 interface LayoutProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
-  const { user, logout } = useAuthStore()
-  const { selectedBrand, brands, setSelectedBrand } = useBrandStore()
-  const navigate = useNavigate()
-  const location = useLocation()
+  const { user, logout } = useAuthStore();
+  const { selectedBrand, brands, setSelectedBrand } = useBrandStore();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
+    logout();
+    navigate("/login");
+  };
 
   const isActiveRoute = (path: string) => {
-    return location.pathname === path
-  }
-
+    return location.pathname === path;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -45,10 +44,13 @@ export function Layout({ children }: LayoutProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <Link to="/dashboard" className="flex-shrink-0 flex items-center space-x-2">
-                <img 
-                  src="/postolio-icon.svg" 
-                  alt="Postolio Logo" 
+              <Link
+                to="/dashboard"
+                className="flex-shrink-0 flex items-center space-x-2"
+              >
+                <img
+                  src="/postolio-icon.svg"
+                  alt="Postolio Logo"
                   className="w-8 h-8"
                 />
                 <h1 className="text-xl font-bold text-foreground">Postolio</h1>
@@ -59,8 +61,10 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/campaigns"
                       className={`${navigationMenuTriggerStyle()} ${
-                        location.pathname === '/campaigns' || 
-                        location.pathname.startsWith('/campaigns/') ? '!bg-accent !text-accent-foreground' : ''
+                        location.pathname === "/campaigns" ||
+                        location.pathname.startsWith("/campaigns/")
+                          ? "!bg-accent !text-accent-foreground"
+                          : ""
                       }`}
                     >
                       Campaigns
@@ -70,7 +74,9 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/content"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/content') ? '!bg-accent !text-accent-foreground' : ''
+                        isActiveRoute("/content")
+                          ? "!bg-accent !text-accent-foreground"
+                          : ""
                       }`}
                     >
                       Content
@@ -80,7 +86,9 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/analytics"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/analytics') ? '!bg-accent !text-accent-foreground' : ''
+                        isActiveRoute("/analytics")
+                          ? "!bg-accent !text-accent-foreground"
+                          : ""
                       }`}
                     >
                       Analytics
@@ -90,7 +98,9 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/instagram-analytics"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/instagram-analytics') ? '!bg-accent !text-accent-foreground' : ''
+                        isActiveRoute("/instagram-analytics")
+                          ? "!bg-accent !text-accent-foreground"
+                          : ""
                       }`}
                     >
                       Instagram Analytics
@@ -100,7 +110,9 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/engagement"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/engagement') ? '!bg-accent !text-accent-foreground' : ''
+                        isActiveRoute("/engagement")
+                          ? "!bg-accent !text-accent-foreground"
+                          : ""
                       }`}
                     >
                       Engagement
@@ -110,7 +122,9 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/growth"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/growth') ? '!bg-accent !text-accent-foreground' : ''
+                        isActiveRoute("/growth")
+                          ? "!bg-accent !text-accent-foreground"
+                          : ""
                       }`}
                     >
                       Growth
@@ -120,7 +134,9 @@ export function Layout({ children }: LayoutProps) {
                     <Link
                       to="/ai-features"
                       className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/ai-features') ? '!bg-accent !text-accent-foreground' : ''
+                        isActiveRoute("/ai-features")
+                          ? "!bg-accent !text-accent-foreground"
+                          : ""
                       }`}
                     >
                       AI Features
@@ -135,18 +151,30 @@ export function Layout({ children }: LayoutProps) {
               {user && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="flex items-center space-x-2 px-3">
+                    <Button
+                      variant="ghost"
+                      className="flex items-center space-x-2 px-3"
+                    >
                       <span className="hidden sm:inline text-sm">
-                        {selectedBrand ? selectedBrand.name : 'No Brand Selected'}
+                        {selectedBrand
+                          ? selectedBrand.name
+                          : "No Brand Selected"}
                       </span>
                       <ChevronDown className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56 bg-white border border-gray-200 shadow-lg">
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-56 bg-white border border-gray-200 shadow-lg"
+                  >
                     <DropdownMenuLabel>
                       <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">Account</p>
-                        <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                        <p className="text-sm font-medium leading-none">
+                          Account
+                        </p>
+                        <p className="text-xs leading-none text-muted-foreground">
+                          {user.email}
+                        </p>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
@@ -161,11 +189,17 @@ export function Layout({ children }: LayoutProps) {
                           <DropdownMenuItem
                             key={brand.id}
                             onClick={() => setSelectedBrand(brand)}
-                            className={selectedBrand?.id === brand.id ? 'bg-accent font-medium' : ''}
+                            className={
+                              selectedBrand?.id === brand.id
+                                ? "bg-accent font-medium"
+                                : ""
+                            }
                           >
                             <div className="flex items-center justify-between w-full">
                               <span>{brand.name}</span>
-                              {selectedBrand?.id === brand.id && <Check className="w-4 h-4 text-blue-600" />}
+                              {selectedBrand?.id === brand.id && (
+                                <Check className="w-4 h-4 text-blue-600" />
+                              )}
                             </div>
                           </DropdownMenuItem>
                         ))}
@@ -174,13 +208,13 @@ export function Layout({ children }: LayoutProps) {
                     )}
 
                     {/* Brand Management */}
-                    <DropdownMenuItem onClick={() => navigate('/brands')}>
+                    <DropdownMenuItem onClick={() => navigate("/brands")}>
                       <Building2 className="w-4 h-4 mr-2" />
                       Manage Brands
                     </DropdownMenuItem>
-                    
+
                     {/* Settings */}
-                    <DropdownMenuItem onClick={() => navigate('/settings')}>
+                    <DropdownMenuItem onClick={() => navigate("/settings")}>
                       <Settings className="w-4 h-4 mr-2" />
                       Settings
                     </DropdownMenuItem>
@@ -188,7 +222,10 @@ export function Layout({ children }: LayoutProps) {
                     <DropdownMenuSeparator />
 
                     {/* Logout */}
-                    <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                    <DropdownMenuItem
+                      onClick={handleLogout}
+                      className="text-red-600"
+                    >
                       <LogOut className="w-4 h-4 mr-2" />
                       Logout
                     </DropdownMenuItem>
@@ -201,7 +238,7 @@ export function Layout({ children }: LayoutProps) {
       </nav>
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">{children}</main>
-      
+
       {/* Footer */}
       <footer className="bg-card border-t mt-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -210,22 +247,22 @@ export function Layout({ children }: LayoutProps) {
               © {new Date().getFullYear()} Postolio. All rights reserved.
             </div>
             <div className="flex items-center gap-1 text-xs md:text-sm">
-              <Link 
-                to="/privacy-policy" 
+              <Link
+                to="/privacy-policy"
                 className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-accent"
               >
                 Privacy Policy
               </Link>
               <span className="text-muted-foreground/50">•</span>
-              <Link 
-                to="/terms-of-service" 
+              <Link
+                to="/terms-of-service"
                 className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-accent"
               >
                 Terms of Service
               </Link>
               <span className="text-muted-foreground/50">•</span>
-              <Link 
-                to="/legal/data-deletion" 
+              <Link
+                to="/legal/data-deletion"
                 className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-accent"
               >
                 Data Deletion
@@ -235,5 +272,5 @@ export function Layout({ children }: LayoutProps) {
         </div>
       </footer>
     </div>
-  )
+  );
 }

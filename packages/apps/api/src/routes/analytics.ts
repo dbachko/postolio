@@ -126,8 +126,8 @@ const analytics: FastifyPluginAsync = async function (fastify) {
       try {
         if (!ensureAuth(request, reply)) return;
         const { brandId } = request.params as BrandParams;
-  // timezone query param accepted but currently unused; retain parsing if future logic needs it
-  // const { timezone = "UTC" } = request.query as { timezone?: string };
+        // timezone query param accepted but currently unused; retain parsing if future logic needs it
+        // const { timezone = "UTC" } = request.query as { timezone?: string };
         const userId = request.user.id;
 
         // Verify brand ownership
@@ -142,8 +142,9 @@ const analytics: FastifyPluginAsync = async function (fastify) {
           return reply.status(404).send({ error: "Brand not found" });
         }
 
-  // timezone currently unused in scheduling recommendation service; could be integrated later
-  const recommendation = await analyticsService.getSchedulingRecommendation(brandId);
+        // timezone currently unused in scheduling recommendation service; could be integrated later
+        const recommendation =
+          await analyticsService.getSchedulingRecommendation(brandId);
 
         reply.send({ recommendation });
       } catch (error) {
@@ -185,11 +186,9 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         }
 
         if (content.status !== "draft") {
-          return reply
-            .status(400)
-            .send({
-              error: "Content must be in draft status before scheduling",
-            });
+          return reply.status(400).send({
+            error: "Content must be in draft status before scheduling",
+          });
         }
 
         const customTimeDate = customTime ? new Date(customTime) : undefined;

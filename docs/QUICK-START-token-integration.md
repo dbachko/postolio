@@ -9,60 +9,62 @@ Since you have no customers yet, we can do a **clean architectural transition** 
 ### Day 1: Token Service Client (4-6 hours)
 
 #### 1. Create Token Service Client SDK
+
 **File**: `src/clients/token-service-client.ts`
 
 ```typescript
-import AWS from 'aws-sdk'
-import CircuitBreaker from 'opossum'
-import { z } from 'zod'
+import AWS from "aws-sdk";
+import CircuitBreaker from "opossum";
+import { z } from "zod";
 
 const TokenDataSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string().optional(),
   expiresAt: z.string(),
-  metadata: z.record(z.any()).optional()
-})
+  metadata: z.record(z.any()).optional(),
+});
 
 export class TokenServiceClient {
-  private apiUrl: string
-  private circuitBreaker: CircuitBreaker
-  
+  private apiUrl: string;
+  private circuitBreaker: CircuitBreaker;
+
   constructor() {
-    this.apiUrl = process.env.TOKEN_SERVICE_URL || 
-      `https://your-api-gateway-id.execute-api.us-east-1.amazonaws.com/prod`
-    
+    this.apiUrl =
+      process.env.TOKEN_SERVICE_URL ||
+      `https://your-api-gateway-id.execute-api.us-east-1.amazonaws.com/prod`;
+
     // Circuit breaker for resilience
     this.circuitBreaker = new CircuitBreaker(this.makeRequest.bind(this), {
       timeout: 5000,
       errorThresholdPercentage: 50,
-      resetTimeout: 30000
-    })
+      resetTimeout: 30000,
+    });
   }
-  
+
   async storeToken(params: {
-    userId: string
-    brandId: string
-    platform: string
-    accessToken: string
-    refreshToken?: string
-    expiresAt: Date
-    metadata?: Record<string, any>
+    userId: string;
+    brandId: string;
+    platform: string;
+    accessToken: string;
+    refreshToken?: string;
+    expiresAt: Date;
+    metadata?: Record<string, any>;
   }): Promise<void> {
     await this.circuitBreaker.fire({
-      method: 'POST',
-      path: '/tokens',
-      body: params
-    })
+      method: "POST",
+      path: "/tokens",
+      body: params,
+    });
   }
-  
+
   async getToken(userId: string, brandId: string, platform: string) {
     const response = await this.circuitBreaker.fire({
-      method: 'GET',
-      path: `/tokens/${userId}/${brandId}/${platform}`
-    })
-    return TokenDataSchema.parse(response)
+      method: "GET",
+      path: `/tokens/${userId}/${brandId}/${platform}`,
+    });
+    return TokenDataSchema.parse(response);
   }
-  
+
   private async makeRequest(options: any) {
     // Add AWS SigV4 signing here
     // Implementation details...
@@ -70,50 +72,52 @@ export class TokenServiceClient {
 }
 
 // Export singleton instance
-export const tokenServiceClient = new TokenServiceClient()
+export const tokenServiceClient = new TokenServiceClient();
 ```
 
 #### 2. Update OAuth Flow
+
 **File**: `src/routes/auth.ts`
 
 ```typescript
-import { tokenServiceClient } from '../clients/token-service-client'
+import { tokenServiceClient } from "../clients/token-service-client";
 
 // In the Instagram OAuth callback handler
-app.post('/api/auth/instagram/callback', async (request, reply) => {
+app.post("/api/auth/instagram/callback", async (request, reply) => {
   // ... existing OAuth code ...
-  
+
   // OLD: Store in database
   // await prisma.brand.update({
   //   where: { id: brandId },
   //   data: { instagramAccessToken: token.access_token }
   // })
-  
+
   // NEW: Store in Token Service
   await tokenServiceClient.storeToken({
     userId: brand.userId,
     brandId: brand.id,
-    platform: 'instagram',
+    platform: "instagram",
     accessToken: token.access_token,
     refreshToken: token.refresh_token,
     expiresAt: new Date(Date.now() + token.expires_in * 1000),
     metadata: {
       pageId: pageId,
-      accountId: accountId
-    }
-  })
-  
-  console.log(`✅ Token stored in Token Service for brand ${brand.id}`)
-})
+      accountId: accountId,
+    },
+  });
+
+  console.log(`✅ Token stored in Token Service for brand ${brand.id}`);
+});
 ```
 
 ### Day 2: Service Integration (4-6 hours)
 
 #### 3. Update Instagram Service
+
 **File**: `src/services/instagram.ts`
 
 ```typescript
-import { tokenServiceClient } from '../clients/token-service-client'
+import { tokenServiceClient } from "../clients/token-service-client";
 
 export class InstagramService {
   async getAccessToken(brand: Brand): Promise<string> {
@@ -121,49 +125,50 @@ export class InstagramService {
     const tokenData = await tokenServiceClient.getToken(
       brand.userId,
       brand.id,
-      'instagram'
-    )
-    
+      "instagram",
+    );
+
     // Check if token needs refresh (within 7 days of expiry)
-    const expiresAt = new Date(tokenData.expiresAt)
-    const refreshThreshold = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-    
+    const expiresAt = new Date(tokenData.expiresAt);
+    const refreshThreshold = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
     if (expiresAt < refreshThreshold) {
-      console.log(`Token expiring soon for brand ${brand.id}, refreshing...`)
+      console.log(`Token expiring soon for brand ${brand.id}, refreshing...`);
       const refreshed = await tokenServiceClient.refreshToken(
         brand.userId,
         brand.id,
-        'instagram'
-      )
-      return refreshed.accessToken
+        "instagram",
+      );
+      return refreshed.accessToken;
     }
-    
-    return tokenData.accessToken
+
+    return tokenData.accessToken;
   }
-  
+
   // Update all methods to use getAccessToken()
   async publishContent(brand: Brand, content: Content) {
-    const accessToken = await this.getAccessToken(brand)
+    const accessToken = await this.getAccessToken(brand);
     // ... rest of publishing logic
   }
 }
 ```
 
 #### 4. Update Scheduler Service
+
 **File**: `aws-infrastructure/lib/lambdas/scheduler-service/index.ts`
 
 ```typescript
 // When creating a schedule, include token data
 export const handler = async (event: any) => {
   // ... existing scheduler logic ...
-  
+
   // Fetch token for the schedule
   const tokenData = await tokenServiceClient.getToken(
     schedule.userId,
     schedule.brandId,
-    schedule.platform
-  )
-  
+    schedule.platform,
+  );
+
   // Include token in SQS message
   const message = {
     scheduleId: schedule.id,
@@ -174,50 +179,54 @@ export const handler = async (event: any) => {
     credentials: {
       accessToken: tokenData.accessToken,
       refreshToken: tokenData.refreshToken,
-      expiresAt: tokenData.expiresAt
+      expiresAt: tokenData.expiresAt,
     },
     content: {
       caption: schedule.caption,
       hashtags: schedule.hashtags,
-      mediaUrl: schedule.mediaUrl
-    }
-  }
-  
-  await sqs.sendMessage({
-    QueueUrl: process.env.PUBLISHER_QUEUE_URL,
-    MessageBody: JSON.stringify(message)
-  }).promise()
-}
+      mediaUrl: schedule.mediaUrl,
+    },
+  };
+
+  await sqs
+    .sendMessage({
+      QueueUrl: process.env.PUBLISHER_QUEUE_URL,
+      MessageBody: JSON.stringify(message),
+    })
+    .promise();
+};
 ```
 
 ### Day 3: Publisher Update & Cleanup (3-4 hours)
 
 #### 5. Update Publisher Lambda
+
 **File**: `aws-infrastructure/lib/lambdas/publishers/instagram/index.ts`
 
 ```typescript
 export const handler = async (event: SQSEvent) => {
   for (const record of event.Records) {
-    const message = JSON.parse(record.body)
-    
+    const message = JSON.parse(record.body);
+
     // NEW: Use credentials from message instead of API call
-    const { credentials, content } = message
-    
+    const { credentials, content } = message;
+
     // No more API callback needed!
     // OLD: const creds = await fetchCredentialsFromMainApp(message.contentId)
-    
+
     // Use the provided credentials
     const result = await publishToInstagram({
       accessToken: credentials.accessToken,
-      content: content
-    })
-    
-    console.log(`✅ Published content using Token Service credentials`)
+      content: content,
+    });
+
+    console.log(`✅ Published content using Token Service credentials`);
   }
-}
+};
 ```
 
 #### 6. Remove Credentials Endpoint
+
 **File**: `src/routes/publisher.ts`
 
 ```typescript
@@ -228,6 +237,7 @@ export const handler = async (event: SQSEvent) => {
 ```
 
 #### 7. Clean Database Schema
+
 **File**: `prisma/schema.prisma`
 
 ```prisma
@@ -249,6 +259,7 @@ model Brand {
 ```
 
 Run migration:
+
 ```bash
 npx prisma migrate dev --name remove-token-fields
 ```
@@ -274,6 +285,7 @@ npx prisma migrate dev --name remove-token-fields
 #### 9. Set Up Monitoring
 
 **CloudWatch Dashboard Widgets**:
+
 ```json
 {
   "TokenServiceLatency": {
@@ -303,6 +315,7 @@ npx prisma migrate dev --name remove-token-fields
 ## 🔧 Environment Variables
 
 Add to `.env`:
+
 ```bash
 # Token Service Configuration
 TOKEN_SERVICE_URL=https://your-api-gateway-id.execute-api.us-east-1.amazonaws.com/prod
@@ -326,6 +339,7 @@ TOKEN_SERVICE_REGION=us-east-1
 ## 🎯 Success Indicators
 
 After implementation, you should see:
+
 - ✅ All tokens in DynamoDB (check AWS Console)
 - ✅ Zero calls to `/publisher/credentials` endpoint
 - ✅ Publisher Lambda logs show "Using Token Service credentials"
@@ -335,6 +349,7 @@ After implementation, you should see:
 ## 🚨 Rollback Plan (If Needed)
 
 Since no customers yet, rollback is simple:
+
 1. Re-enable database token reading (uncomment old code)
 2. Re-enable `/publisher/credentials` endpoint
 3. Revert publisher Lambda to previous version
@@ -344,6 +359,7 @@ Since no customers yet, rollback is simple:
 ## 📊 Before/After Comparison
 
 ### Before (Current)
+
 ```
 OAuth → Database → Publisher calls API → Database → Instagram
          ↓
@@ -351,6 +367,7 @@ OAuth → Database → Publisher calls API → Database → Instagram
 ```
 
 ### After (Improved)
+
 ```
 OAuth → Token Service → EventBridge → Publisher → Instagram
             ↓
@@ -374,6 +391,7 @@ OAuth → Token Service → EventBridge → Publisher → Instagram
 ## 🎉 Completion
 
 Once implemented, you'll have:
+
 - **Enterprise-grade** token management
 - **Zero** token-related failures
 - **50ms** token retrieval

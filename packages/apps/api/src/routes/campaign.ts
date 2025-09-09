@@ -487,8 +487,17 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // Choose the appropriate update method based on the type of update
-        type UpdateResult = { success: boolean; message?: string; campaign?: unknown };
-        type RegenResult = { campaign: unknown; regenerationTriggered: boolean; regenerationReason?: string; message?: string };
+        type UpdateResult = {
+          success: boolean;
+          message?: string;
+          campaign?: unknown;
+        };
+        type RegenResult = {
+          campaign: unknown;
+          regenerationTriggered: boolean;
+          regenerationReason?: string;
+          message?: string;
+        };
         let rawResult: UpdateResult | RegenResult;
         const statusVal = updates.status as CampaignStatus | undefined;
         if (statusVal && ["paused", "active"].includes(statusVal)) {
@@ -506,23 +515,28 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           );
         }
 
-        const unified = (rawResult as UpdateResult).success !== undefined
-          ? {
-              success: (rawResult as UpdateResult).success,
-              campaign: (rawResult as UpdateResult).campaign,
-              message:
-                (rawResult as UpdateResult).message || "Campaign updated successfully",
-              regenerationTriggered: false,
-              regenerationReason: undefined,
-            }
-          : {
-              success: true,
-              campaign: (rawResult as RegenResult).campaign,
-              message:
-                (rawResult as RegenResult).message || "Campaign updated successfully",
-              regenerationTriggered: (rawResult as RegenResult).regenerationTriggered,
-              regenerationReason: (rawResult as RegenResult).regenerationReason,
-            };
+        const unified =
+          (rawResult as UpdateResult).success !== undefined
+            ? {
+                success: (rawResult as UpdateResult).success,
+                campaign: (rawResult as UpdateResult).campaign,
+                message:
+                  (rawResult as UpdateResult).message ||
+                  "Campaign updated successfully",
+                regenerationTriggered: false,
+                regenerationReason: undefined,
+              }
+            : {
+                success: true,
+                campaign: (rawResult as RegenResult).campaign,
+                message:
+                  (rawResult as RegenResult).message ||
+                  "Campaign updated successfully",
+                regenerationTriggered: (rawResult as RegenResult)
+                  .regenerationTriggered,
+                regenerationReason: (rawResult as RegenResult)
+                  .regenerationReason,
+              };
 
         return reply.send(unified);
       } catch (error) {

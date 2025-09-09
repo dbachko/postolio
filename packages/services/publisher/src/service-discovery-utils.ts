@@ -3,9 +3,12 @@ export function isCloudMapConfigured(): boolean {
 }
 
 export function isLocalUrl(url: string): boolean {
-  return url.includes('localhost') || url.includes('127.0.0.1');
+  return url.includes("localhost") || url.includes("127.0.0.1");
 }
 
-export function shouldUseServiceDiscovery(url: string, envVar?: string): boolean {
+export function shouldUseServiceDiscovery(
+  url: string,
+  envVar?: string,
+): boolean {
   return !envVar && isCloudMapConfigured() && isLocalUrl(url);
 }

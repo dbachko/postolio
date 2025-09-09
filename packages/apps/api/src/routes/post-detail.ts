@@ -168,8 +168,9 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
               const dataArr = (insightsResponse as Record<string, unknown>)
                 .data as unknown[];
               const insights: InstagramInsight[] = dataArr
-                .filter((d): d is InstagramInsight =>
-                  !!d && typeof d === "object" && "name" in d,
+                .filter(
+                  (d): d is InstagramInsight =>
+                    !!d && typeof d === "object" && "name" in d,
                 )
                 .map((d) => d as InstagramInsight);
               const getMetric = (name: string): number => {

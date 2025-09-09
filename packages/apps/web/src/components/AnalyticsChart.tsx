@@ -1,29 +1,32 @@
-
 interface EngagementTrend {
-  date: string
-  engagementRate: number
+  date: string;
+  engagementRate: number;
 }
 
 interface OptimalTimeSlot {
-  dayOfWeek: number
-  hour: number
-  engagementScore: number
-  sampleSize: number
-  dayName: string
-  timeFormatted: string
+  dayOfWeek: number;
+  hour: number;
+  engagementScore: number;
+  sampleSize: number;
+  dayName: string;
+  timeFormatted: string;
 }
 
 interface AnalyticsChartProps {
-  title: string
-  data: EngagementTrend[] | OptimalTimeSlot[]
-  type: 'engagement' | 'optimal-times'
+  title: string;
+  data: EngagementTrend[] | OptimalTimeSlot[];
+  type: "engagement" | "optimal-times";
 }
 
-export default function AnalyticsChart({ title, data, type }: AnalyticsChartProps) {
-  if (type === 'engagement') {
-    const engagementData = data as EngagementTrend[]
-    const maxRate = Math.max(...engagementData.map(d => d.engagementRate))
-    
+export default function AnalyticsChart({
+  title,
+  data,
+  type,
+}: AnalyticsChartProps) {
+  if (type === "engagement") {
+    const engagementData = data as EngagementTrend[];
+    const maxRate = Math.max(...engagementData.map((d) => d.engagementRate));
+
     return (
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h3 className="text-lg font-semibold mb-4">{title}</h3>
@@ -46,17 +49,20 @@ export default function AnalyticsChart({ title, data, type }: AnalyticsChartProp
           ))}
         </div>
       </div>
-    )
+    );
   }
 
-  const optimalData = data as OptimalTimeSlot[]
-  
+  const optimalData = data as OptimalTimeSlot[];
+
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h3 className="text-lg font-semibold mb-4">{title}</h3>
       <div className="grid gap-3">
         {optimalData.slice(0, 5).map((slot, index) => (
-          <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <div
+            key={index}
+            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+          >
             <div>
               <div className="font-medium">{slot.dayName}</div>
               <div className="text-sm text-gray-600">{slot.timeFormatted}</div>
@@ -73,5 +79,5 @@ export default function AnalyticsChart({ title, data, type }: AnalyticsChartProp
         ))}
       </div>
     </div>
-  )
+  );
 }

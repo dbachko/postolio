@@ -1,165 +1,177 @@
-import { useState, useEffect, useCallback } from 'react'
-import { apiClient } from '../lib/api'
+import { useState, useEffect, useCallback } from "react";
+import { apiClient } from "../lib/api";
 
 interface EngagementRules {
   autoLike: {
-    enabled: boolean
-    targetHashtags: string[]
-    maxLikesPerHour: number
-    likeProbability?: number
-  }
+    enabled: boolean;
+    targetHashtags: string[];
+    maxLikesPerHour: number;
+    likeProbability?: number;
+  };
   autoComment: {
-    enabled: boolean
-    templates: string[]
-    maxCommentsPerHour: number
-    commentProbability?: number
-  }
+    enabled: boolean;
+    templates: string[];
+    maxCommentsPerHour: number;
+    commentProbability?: number;
+  };
   autoFollow: {
-    enabled: boolean
-    maxFollowsPerHour: number
-    followProbability?: number
-    targetAccounts?: string[]
-  }
+    enabled: boolean;
+    maxFollowsPerHour: number;
+    followProbability?: number;
+    targetAccounts?: string[];
+  };
   autoUnfollow: {
-    enabled: boolean
-    maxUnfollowsPerHour: number
-    unfollowAfterDays: number
-  }
+    enabled: boolean;
+    maxUnfollowsPerHour: number;
+    unfollowAfterDays: number;
+  };
   safetyLimits: {
-    maxActionsPerHour: number
-    minDelayBetweenActions: number
-    respectBusinessHours: boolean
-  }
+    maxActionsPerHour: number;
+    minDelayBetweenActions: number;
+    respectBusinessHours: boolean;
+  };
 }
 
 interface EngagementSettingsProps {
-  brandId: string
+  brandId: string;
 }
 
-export default function EngagementSettings({ brandId }: EngagementSettingsProps) {
+export default function EngagementSettings({
+  brandId,
+}: EngagementSettingsProps) {
   const [rules, setRules] = useState<EngagementRules>({
     autoLike: {
       enabled: false,
       targetHashtags: [],
-      maxLikesPerHour: 30
+      maxLikesPerHour: 30,
     },
     autoComment: {
       enabled: false,
       templates: [],
-      maxCommentsPerHour: 10
+      maxCommentsPerHour: 10,
     },
     autoFollow: {
       enabled: false,
-      maxFollowsPerHour: 5
+      maxFollowsPerHour: 5,
     },
     autoUnfollow: {
       enabled: false,
       maxUnfollowsPerHour: 5,
-      unfollowAfterDays: 7
+      unfollowAfterDays: 7,
     },
     safetyLimits: {
       maxActionsPerHour: 50,
       minDelayBetweenActions: 60,
-      respectBusinessHours: true
-    }
-  })
-  
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [newHashtag, setNewHashtag] = useState('')
-  const [newComment, setNewComment] = useState('')
+      respectBusinessHours: true,
+    },
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [newHashtag, setNewHashtag] = useState("");
+  const [newComment, setNewComment] = useState("");
 
   const loadRules = useCallback(async () => {
-    setLoading(true)
-    setError('')
+    setLoading(true);
+    setError("");
     try {
-      const response = await apiClient.get<{rules: EngagementRules}>(`/api/engagement/rules/${brandId}`)
+      const response = await apiClient.get<{ rules: EngagementRules }>(
+        `/api/engagement/rules/${brandId}`,
+      );
       if (response.rules) {
-        setRules(response.rules)
+        setRules(response.rules);
       }
     } catch {
-      setError('Failed to load engagement rules')
+      setError("Failed to load engagement rules");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [brandId])
+  }, [brandId]);
 
   useEffect(() => {
-    loadRules()
-  }, [loadRules])
+    loadRules();
+  }, [loadRules]);
 
   // loadRules moved above with useCallback
 
   const saveRules = async () => {
-    setSaving(true)
-    setError('')
-    setSuccess('')
-    
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
     try {
-      await apiClient.post('/api/engagement/rules', {
+      await apiClient.post("/api/engagement/rules", {
         brandId,
-        rules
-      })
-      setSuccess('Engagement rules saved successfully!')
-      setTimeout(() => setSuccess(''), 3000)
+        rules,
+      });
+      setSuccess("Engagement rules saved successfully!");
+      setTimeout(() => setSuccess(""), 3000);
     } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'message' in err) {
-        setError((err as any).message || 'Failed to save engagement rules')
+      if (err && typeof err === "object" && "message" in err) {
+        setError((err as any).message || "Failed to save engagement rules");
       } else {
-        setError('Failed to save engagement rules')
+        setError("Failed to save engagement rules");
       }
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const addHashtag = () => {
-    if (newHashtag.trim() && !rules.autoLike.targetHashtags.includes(newHashtag.trim())) {
-      setRules(prev => ({
+    if (
+      newHashtag.trim() &&
+      !rules.autoLike.targetHashtags.includes(newHashtag.trim())
+    ) {
+      setRules((prev) => ({
         ...prev,
         autoLike: {
           ...prev.autoLike,
-          targetHashtags: [...prev.autoLike.targetHashtags, newHashtag.trim()]
-        }
-      }))
-      setNewHashtag('')
+          targetHashtags: [...prev.autoLike.targetHashtags, newHashtag.trim()],
+        },
+      }));
+      setNewHashtag("");
     }
-  }
+  };
 
   const removeHashtag = (hashtag: string) => {
-    setRules(prev => ({
+    setRules((prev) => ({
       ...prev,
       autoLike: {
         ...prev.autoLike,
-        targetHashtags: prev.autoLike.targetHashtags.filter(h => h !== hashtag)
-      }
-    }))
-  }
+        targetHashtags: prev.autoLike.targetHashtags.filter(
+          (h) => h !== hashtag,
+        ),
+      },
+    }));
+  };
 
   const addCommentTemplate = () => {
-    if (newComment.trim() && !rules.autoComment.templates.includes(newComment.trim())) {
-      setRules(prev => ({
+    if (
+      newComment.trim() &&
+      !rules.autoComment.templates.includes(newComment.trim())
+    ) {
+      setRules((prev) => ({
         ...prev,
         autoComment: {
           ...prev.autoComment,
-          templates: [...prev.autoComment.templates, newComment.trim()]
-        }
-      }))
-      setNewComment('')
+          templates: [...prev.autoComment.templates, newComment.trim()],
+        },
+      }));
+      setNewComment("");
     }
-  }
+  };
 
   const removeCommentTemplate = (comment: string) => {
-    setRules(prev => ({
+    setRules((prev) => ({
       ...prev,
       autoComment: {
         ...prev.autoComment,
-        templates: prev.autoComment.templates.filter(c => c !== comment)
-      }
-    }))
-  }
+        templates: prev.autoComment.templates.filter((c) => c !== comment),
+      },
+    }));
+  };
 
   if (loading) {
     return (
@@ -167,13 +179,15 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         <span className="ml-2">Loading engagement settings...</span>
       </div>
-    )
+    );
   }
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
-      <h3 className="text-lg font-semibold mb-6">Engagement Automation Settings</h3>
-      
+      <h3 className="text-lg font-semibold mb-6">
+        Engagement Automation Settings
+      </h3>
+
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
           {error}
@@ -195,16 +209,18 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
               <input
                 type="checkbox"
                 checked={rules.autoLike.enabled}
-                onChange={(e) => setRules(prev => ({
-                  ...prev,
-                  autoLike: { ...prev.autoLike, enabled: e.target.checked }
-                }))}
+                onChange={(e) =>
+                  setRules((prev) => ({
+                    ...prev,
+                    autoLike: { ...prev.autoLike, enabled: e.target.checked },
+                  }))
+                }
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm">Enable</span>
             </label>
           </div>
-          
+
           {rules.autoLike.enabled && (
             <div className="space-y-4">
               <div>
@@ -216,14 +232,19 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
                   min="1"
                   max="60"
                   value={rules.autoLike.maxLikesPerHour}
-                  onChange={(e) => setRules(prev => ({
-                    ...prev,
-                    autoLike: { ...prev.autoLike, maxLikesPerHour: parseInt(e.target.value) || 1 }
-                  }))}
+                  onChange={(e) =>
+                    setRules((prev) => ({
+                      ...prev,
+                      autoLike: {
+                        ...prev.autoLike,
+                        maxLikesPerHour: parseInt(e.target.value) || 1,
+                      },
+                    }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Target Hashtags
@@ -234,7 +255,7 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
                     placeholder="#photography"
                     value={newHashtag}
                     onChange={(e) => setNewHashtag(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && addHashtag()}
+                    onKeyPress={(e) => e.key === "Enter" && addHashtag()}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                   <button
@@ -273,16 +294,21 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
               <input
                 type="checkbox"
                 checked={rules.autoComment.enabled}
-                onChange={(e) => setRules(prev => ({
-                  ...prev,
-                  autoComment: { ...prev.autoComment, enabled: e.target.checked }
-                }))}
+                onChange={(e) =>
+                  setRules((prev) => ({
+                    ...prev,
+                    autoComment: {
+                      ...prev.autoComment,
+                      enabled: e.target.checked,
+                    },
+                  }))
+                }
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm">Enable</span>
             </label>
           </div>
-          
+
           {rules.autoComment.enabled && (
             <div className="space-y-4">
               <div>
@@ -294,14 +320,19 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
                   min="1"
                   max="20"
                   value={rules.autoComment.maxCommentsPerHour}
-                  onChange={(e) => setRules(prev => ({
-                    ...prev,
-                    autoComment: { ...prev.autoComment, maxCommentsPerHour: parseInt(e.target.value) || 1 }
-                  }))}
+                  onChange={(e) =>
+                    setRules((prev) => ({
+                      ...prev,
+                      autoComment: {
+                        ...prev.autoComment,
+                        maxCommentsPerHour: parseInt(e.target.value) || 1,
+                      },
+                    }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Comment Templates
@@ -312,7 +343,9 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
                     placeholder="Great shot! 📸"
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && addCommentTemplate()}
+                    onKeyPress={(e) =>
+                      e.key === "Enter" && addCommentTemplate()
+                    }
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                   <button
@@ -351,16 +384,21 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
               <input
                 type="checkbox"
                 checked={rules.autoFollow.enabled}
-                onChange={(e) => setRules(prev => ({
-                  ...prev,
-                  autoFollow: { ...prev.autoFollow, enabled: e.target.checked }
-                }))}
+                onChange={(e) =>
+                  setRules((prev) => ({
+                    ...prev,
+                    autoFollow: {
+                      ...prev.autoFollow,
+                      enabled: e.target.checked,
+                    },
+                  }))
+                }
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm">Enable</span>
             </label>
           </div>
-          
+
           {rules.autoFollow.enabled && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -371,10 +409,15 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
                 min="1"
                 max="15"
                 value={rules.autoFollow.maxFollowsPerHour}
-                onChange={(e) => setRules(prev => ({
-                  ...prev,
-                  autoFollow: { ...prev.autoFollow, maxFollowsPerHour: parseInt(e.target.value) || 1 }
-                }))}
+                onChange={(e) =>
+                  setRules((prev) => ({
+                    ...prev,
+                    autoFollow: {
+                      ...prev.autoFollow,
+                      maxFollowsPerHour: parseInt(e.target.value) || 1,
+                    },
+                  }))
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -394,14 +437,19 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
                 min="1"
                 max="80"
                 value={rules.safetyLimits.maxActionsPerHour}
-                onChange={(e) => setRules(prev => ({
-                  ...prev,
-                  safetyLimits: { ...prev.safetyLimits, maxActionsPerHour: parseInt(e.target.value) || 1 }
-                }))}
+                onChange={(e) =>
+                  setRules((prev) => ({
+                    ...prev,
+                    safetyLimits: {
+                      ...prev.safetyLimits,
+                      maxActionsPerHour: parseInt(e.target.value) || 1,
+                    },
+                  }))
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Minimum Delay Between Actions (seconds)
@@ -410,25 +458,37 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
                 type="number"
                 min="30"
                 value={rules.safetyLimits.minDelayBetweenActions}
-                onChange={(e) => setRules(prev => ({
-                  ...prev,
-                  safetyLimits: { ...prev.safetyLimits, minDelayBetweenActions: parseInt(e.target.value) || 30 }
-                }))}
+                onChange={(e) =>
+                  setRules((prev) => ({
+                    ...prev,
+                    safetyLimits: {
+                      ...prev.safetyLimits,
+                      minDelayBetweenActions: parseInt(e.target.value) || 30,
+                    },
+                  }))
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            
+
             <label className="flex items-center">
               <input
                 type="checkbox"
                 checked={rules.safetyLimits.respectBusinessHours}
-                onChange={(e) => setRules(prev => ({
-                  ...prev,
-                  safetyLimits: { ...prev.safetyLimits, respectBusinessHours: e.target.checked }
-                }))}
+                onChange={(e) =>
+                  setRules((prev) => ({
+                    ...prev,
+                    safetyLimits: {
+                      ...prev.safetyLimits,
+                      respectBusinessHours: e.target.checked,
+                    },
+                  }))
+                }
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
-              <span className="ml-2 text-sm">Only engage during business hours (9 AM - 6 PM)</span>
+              <span className="ml-2 text-sm">
+                Only engage during business hours (9 AM - 6 PM)
+              </span>
             </label>
           </div>
         </div>
@@ -440,9 +500,9 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
           disabled={saving}
           className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {saving ? 'Saving...' : 'Save Settings'}
+          {saving ? "Saving..." : "Save Settings"}
         </button>
       </div>
     </div>
-  )
+  );
 }

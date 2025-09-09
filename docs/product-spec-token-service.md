@@ -1,13 +1,14 @@
 # Token Service Integration & Microservices Communication Standards - Product Specification
 
 ## Executive Summary
+
 Establish secure, scalable OAuth token management and standardized inter-service communication patterns for Postolio's microservices architecture, eliminating token storage duplication and API key dependencies.
 
 ## Product Overview
 
 - **Purpose**: Centralize OAuth token management with enterprise-grade security while establishing clear service boundaries and communication standards
 - **Target Users**: Development team maintaining services, DevOps managing infrastructure, Security team ensuring compliance
-- **Key Scenarios**: 
+- **Key Scenarios**:
   - Secure storage and retrieval of OAuth tokens across multiple social platforms
   - Automatic token refresh without service interruption
   - Standardized service-to-service authentication and communication
@@ -32,12 +33,14 @@ Establish secure, scalable OAuth token management and standardized inter-service
 ## Current State Analysis
 
 ### What Exists (Working)
+
 - Token Service fully implemented with KMS encryption (unused)
 - EventBridge configured for event-driven architecture
 - Publisher Lambdas with circuit breaker patterns
 - Content Scheduler with DynamoDB sharding
 
 ### Critical Issues
+
 - **Duplicate Storage**: Tokens in both Prisma DB and DynamoDB (security risk)
 - **Tight Coupling**: Publisher calls back to main app for credentials (latency)
 - **Missing Integration**: Token Service not connected to main app
@@ -46,19 +49,25 @@ Establish secure, scalable OAuth token management and standardized inter-service
 ## Architecture Decisions
 
 ### Decision 1: Token Storage Strategy
+
 **Choice**: DynamoDB with KMS Customer Managed Keys
+
 - **Rationale**: Industry best practice (Hootsuite model), $0.000064/operation vs $0.05/secret with Secrets Manager
 - **Security**: Customer-managed KMS keys provide full control and audit trails
 - **Performance**: Single-digit millisecond latency even with encryption
 
 ### Decision 2: Service Communication Pattern
+
 **Choice**: Hybrid EventBridge + API Gateway
+
 - **Sync Operations**: API Gateway for user-facing requests (< 1s response)
 - **Async Operations**: EventBridge for background processing
 - **Rationale**: Combines low latency for UX with resilience for background tasks
 
 ### Decision 3: Authentication Strategy
+
 **Choice**: AWS IAM for service-to-service, JWT for client-to-service
+
 - **Internal**: IAM roles with temporary credentials (SigV4)
 - **External**: JWT tokens with short expiration (15 min)
 - **Rationale**: Zero-trust security model with minimal credential exposure
@@ -66,24 +75,28 @@ Establish secure, scalable OAuth token management and standardized inter-service
 ## Implementation Roadmap
 
 ### Phase 1: Token Service Integration (3 days)
+
 - Update main app to use Token Service API
 - Implement token service client SDK
 - Add fallback to database during migration
 - Monitor token service performance
 
 ### Phase 2: Token Migration (1 day)
+
 - Script to migrate existing tokens to DynamoDB
 - Encrypt tokens with KMS during migration
 - Verify token integrity post-migration
 - Update monitoring dashboards
 
 ### Phase 3: Publisher Optimization (2 days)
+
 - Include credentials in SQS messages
 - Remove `/publisher/credentials` endpoint
 - Update publisher to use Token Service directly
 - Test end-to-end publishing flow
 
 ### Phase 4: Database Cleanup (1 day)
+
 - Remove token columns from brands table
 - Update backup procedures
 - Clean unused API endpoints
@@ -91,12 +104,12 @@ Establish secure, scalable OAuth token management and standardized inter-service
 
 ## Service Boundaries
 
-| Service | Responsibility | Database | Communication |
-| ------- | -------------- | -------- | ------------- |
-| Main App | User management, content generation, campaigns | PostgreSQL | REST API + EventBridge |
-| Token Service | OAuth token storage, refresh, encryption | DynamoDB + KMS | Internal REST API |
-| Scheduler | Schedule management, EventBridge rules | DynamoDB (sharded) | EventBridge + API |
-| Publisher | Platform API integration, content publishing | DynamoDB (state) | SQS + EventBridge |
+| Service       | Responsibility                                 | Database           | Communication          |
+| ------------- | ---------------------------------------------- | ------------------ | ---------------------- |
+| Main App      | User management, content generation, campaigns | PostgreSQL         | REST API + EventBridge |
+| Token Service | OAuth token storage, refresh, encryption       | DynamoDB + KMS     | Internal REST API      |
+| Scheduler     | Schedule management, EventBridge rules         | DynamoDB (sharded) | EventBridge + API      |
+| Publisher     | Platform API integration, content publishing   | DynamoDB (state)   | SQS + EventBridge      |
 
 ## Success Metrics
 
@@ -122,6 +135,7 @@ Establish secure, scalable OAuth token management and standardized inter-service
 ## Communication Standards
 
 ### Event Naming Convention
+
 ```
 postolio.<service>.<entity>.<action>
 Examples:
@@ -131,6 +145,7 @@ Examples:
 ```
 
 ### API Response Format
+
 ```json
 {
   "success": boolean,
@@ -147,6 +162,7 @@ Examples:
 ```
 
 ### Service Health Check Standard
+
 ```
 GET /health
 Response: {
@@ -162,10 +178,12 @@ Response: {
 ## Cost Analysis
 
 ### Current State (Problematic)
+
 - Database token storage: Part of RDS costs (~$100/month)
 - Security risk of unencrypted tokens: Potential breach costs
 
 ### Future State (Optimized)
+
 - DynamoDB on-demand: ~$30/month for 100K operations
 - KMS encryption: $1/month per key + $0.03/10K requests
 - Total: < $35/month with enterprise security
@@ -180,14 +198,14 @@ Response: {
 
 ## Traceability
 
-| Feature | Implementation Tasks | Status |
-| ------- | -------------------- | ------ |
-| FEAT-TOKEN-1 | Token migration script, service integration | 📋 Planned |
-| FEAT-TOKEN-2 | IAM role configuration, SigV4 implementation | 📋 Planned |
-| FEAT-TOKEN-3 | Event schema registry, event handlers | ✅ Partial |
-| FEAT-TOKEN-4 | API Gateway configuration, rate limiting | 📋 Planned |
-| FEAT-TOKEN-5 | Parameter Store setup, service registry | 📋 Planned |
-| FEAT-TOKEN-6 | Refresh Lambda, expiry monitoring | ✅ Complete |
+| Feature      | Implementation Tasks                         | Status      |
+| ------------ | -------------------------------------------- | ----------- |
+| FEAT-TOKEN-1 | Token migration script, service integration  | 📋 Planned  |
+| FEAT-TOKEN-2 | IAM role configuration, SigV4 implementation | 📋 Planned  |
+| FEAT-TOKEN-3 | Event schema registry, event handlers        | ✅ Partial  |
+| FEAT-TOKEN-4 | API Gateway configuration, rate limiting     | 📋 Planned  |
+| FEAT-TOKEN-5 | Parameter Store setup, service registry      | 📋 Planned  |
+| FEAT-TOKEN-6 | Refresh Lambda, expiry monitoring            | ✅ Complete |
 
 ## Implementation Decisions
 

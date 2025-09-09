@@ -1,13 +1,14 @@
 # Instagram AI Agent Agency - Product Specification
 
 ## Executive Summary
+
 Specialized Instagram AI agent platform providing fully automated content creation, posting, and account management exclusively for Instagram creators and businesses.
 
 ## Product Overview
 
 - **Purpose**: Provide Instagram-specific AI agents that handle end-to-end account management with brand-consistent content creation
 - **Target Users**: Instagram creators, small businesses, personal brands, influencers lacking time/skills for consistent posting
-- **Key Scenarios**: 
+- **Key Scenarios**:
   - Fully automated daily Instagram posting with brand-consistent content
   - AI-generated captions, hashtags, and posting schedules based on analytics
   - Account growth through strategic content and engagement automation
@@ -55,18 +56,19 @@ Specialized Instagram AI agent platform providing fully automated content creati
 ## Traceability
 
 <!--sync-from-plan-->
-| Feature | Implementation Plan Tasks | Status |
-| ------- | ------------------------ | ------ |
-| FEAT-1 (Content Creation) | TASK-1,2,3 (OAuth, Service, UI) | ✅ Complete |
-| FEAT-2 (Analytics) | TASK-6,7,8,9,10,11 (Cache, Service, Routes, UI, Status) | ✅ Complete |
-| FEAT-5A (Content Calendar) | Autopilot calendar view | ✅ Complete |
-| FEAT-5B (Real-time Editing) | Click-to-edit with auto-save | ✅ Complete |
-| FEAT-5C (Auto-Publishing) | TASK-4 (Enhanced publishing) | ✅ Complete |
-| FEAT-6 (Campaign Autopilot) | Campaign configuration and management | ✅ Complete |
-| FEAT-7 (Campaign Monitoring) | Content page redesign for oversight | ✅ Complete |
-| FEAT-8 (Campaign Management) | Template system and coordination | ✅ Complete |
-| FEAT-1A (AI Learning) | Edit preference tracking and application | ✅ Complete |
-| FEAT-3,4 (Engagement, Growth) | Existing AI routes foundation | 📋 Future |
+
+| Feature                       | Implementation Plan Tasks                               | Status      |
+| ----------------------------- | ------------------------------------------------------- | ----------- |
+| FEAT-1 (Content Creation)     | TASK-1,2,3 (OAuth, Service, UI)                         | ✅ Complete |
+| FEAT-2 (Analytics)            | TASK-6,7,8,9,10,11 (Cache, Service, Routes, UI, Status) | ✅ Complete |
+| FEAT-5A (Content Calendar)    | Autopilot calendar view                                 | ✅ Complete |
+| FEAT-5B (Real-time Editing)   | Click-to-edit with auto-save                            | ✅ Complete |
+| FEAT-5C (Auto-Publishing)     | TASK-4 (Enhanced publishing)                            | ✅ Complete |
+| FEAT-6 (Campaign Autopilot)   | Campaign configuration and management                   | ✅ Complete |
+| FEAT-7 (Campaign Monitoring)  | Content page redesign for oversight                     | ✅ Complete |
+| FEAT-8 (Campaign Management)  | Template system and coordination                        | ✅ Complete |
+| FEAT-1A (AI Learning)         | Edit preference tracking and application                | ✅ Complete |
+| FEAT-3,4 (Engagement, Growth) | Existing AI routes foundation                           | 📋 Future   |
 
 ## Pricing Tiers
 
@@ -89,6 +91,7 @@ Specialized Instagram AI agent platform providing fully automated content creati
 ## User Experience Flow
 
 ### **Dedicated Autopilot Page (Primary)**
+
 - **Campaign Configuration**: Set post style, frequency, themes, and duration for focused campaigns
 - **Preview Generation**: Generate and show examples (first 3 posts) without creating full campaign
 - **Plan Overview**: Clear summary of what Autopilot will do over campaign duration
@@ -96,6 +99,7 @@ Specialized Instagram AI agent platform providing fully automated content creati
 - **One-Click Start**: Approve plan and let Autopilot schedule everything automatically
 
 ### **Autopilot Interface Structure**
+
 ```
 🎯 AUTOPILOT CONFIGURATION
 ├── Campaign: [Holiday Sale 2025] Duration: [Dec 1-15]
@@ -105,7 +109,7 @@ Specialized Instagram AI agent platform providing fully automated content creati
 
 📋 CAMPAIGN PREVIEW (First Week Examples)
 ├── Dec 1: "New sale launches today! 🎉" [Edit] [Regenerate]
-├── Dec 3: "Customer love story with Sarah..." [Edit] [Regenerate]  
+├── Dec 3: "Customer love story with Sarah..." [Edit] [Regenerate]
 ├── Dec 5: "Behind the scenes: packing orders" [Edit] [Regenerate]
 └── "...and 12 more posts following this pattern"
 
@@ -116,31 +120,36 @@ Specialized Instagram AI agent platform providing fully automated content creati
 ```
 
 ### **Content Calendar (Monitoring)**
+
 - **Read-Only Schedule**: View all scheduled content from active campaigns
 - **Campaign Grouping**: Posts organized by campaign with clear labeling
 - **Quick Actions**: Pause campaign, edit individual posts, view performance
 - **Status Monitoring**: Campaign progress, next post timing, AI learning updates
 
 ### **Post Editor (Individual Override)**
+
 - **In-Campaign Editing**: Modify any scheduled post without disrupting campaign
-- **Regeneration Options**: "Make similar" or "Try different approach" 
+- **Regeneration Options**: "Make similar" or "Try different approach"
 - **Auto-save**: Changes apply immediately to campaign schedule
 - **Learning Integration**: Edits improve future campaign generation
 
 ## UX Design Principles
 
 ### **Campaign-Centric Design**
+
 - **Primary State**: Configure campaign parameters, preview examples, approve and launch
 - **Secondary State**: Monitor scheduled content and make individual adjustments when needed
 - **Visual Hierarchy**: Emphasize campaign overview and approval, de-emphasize individual post management
 
 ### **Preview-Then-Commit Workflow**
+
 - **Configuration First**: Set all campaign parameters before any content generation
 - **Smart Previews**: Show representative examples (first 3 posts) not full campaign
 - **Batch Approval**: Single "Start Campaign" decision instead of per-post approvals
 - **Continuous Generation**: AI creates remaining posts following approved pattern
 
 ### **Simplified Decision Making**
+
 - **No Choice Paralysis**: Single AI-generated version per post, edit if needed
 - **Campaign Templates**: Save successful configurations for reuse
 - **Clear Commitments**: Exactly what Autopilot will do over campaign duration
@@ -148,18 +157,21 @@ Specialized Instagram AI agent platform providing fully automated content creati
 ## Implementation Guidelines
 
 ### **UX Specifications** ✅
+
 - **Primary Platform**: Desktop web interface (mobile later)
 - **Edit Flexibility**: No cutoff time - users can edit posts until moment of publishing
 - **Failure Handling**: Log errors and continue with available content, notify user via dashboard
 - **Learning Application**: All user edits apply globally to future content generation
 
 ### **Technical Requirements**
+
 - **Auto-Publishing**: Maintain current Instagram API integration for automated posting
 - **Real-time Editing**: Content modification system with immediate save
 - **Error Recovery**: Robust logging and graceful degradation for posting failures
 - **Learning Engine**: User edit tracking and preference application system
 
 ### **Content Pipeline Architecture**
+
 ```
 AI Generation → 2-Week Schedule → Auto-Publish
      ↑                ↑              ↑
@@ -169,6 +181,7 @@ User Learning    Real-time Edit   Error Logs
 ## Next Development Priorities
 
 ### **Phase 1: Dedicated Autopilot Page**
+
 - **FEAT-6A**: Campaign configuration interface with style, frequency, and theme selection
 - **FEAT-6B**: Preview generation showing first 3 posts as examples
 - **FEAT-6C**: Campaign plan overview with clear commitment summary
@@ -176,12 +189,14 @@ User Learning    Real-time Edit   Error Logs
 - **FEAT-6E**: One-click campaign start with automatic scheduling
 
 ### **Phase 2: Content Page Redesign**
+
 - **FEAT-7A**: Remove Generate Content button from current Content page
 - **FEAT-7B**: Transform Content page to campaign monitoring view
 - **FEAT-7C**: Campaign grouping and status indicators
 - **FEAT-7D**: Quick actions for pause/edit/performance viewing
 
 ### **Phase 3: Campaign Management**
+
 - **FEAT-8A**: Campaign templates and reusable configurations
 - **FEAT-8B**: Multi-campaign management and scheduling conflicts
 - **FEAT-8C**: Campaign performance analytics and optimization
@@ -190,6 +205,7 @@ User Learning    Real-time Edit   Error Logs
 ## Recent Implementations & Enhancements
 
 ### **Campaign Management System - COMPLETE** ✅
+
 - **Full Campaign Lifecycle**: Draft → Creating → Preview → Active → Completed/Failed
 - **Campaign Editing**: Comprehensive edit functionality for preview-status campaigns
 - **Brand Association**: Proper campaign filtering by brand ownership
@@ -197,6 +213,7 @@ User Learning    Real-time Edit   Error Logs
 - **Deletion Rules**: Smart deletion logic for non-active campaigns (draft, preview, creating, failed)
 
 ### **Content Editing & Data Integrity - COMPLETE** ✅
+
 - **PostEditor Safety**: Multiple validation layers preventing data corruption
 - **Autosave Protection**: Comprehensive safety checks preventing empty caption saves
 - **Cross-post Isolation**: Prevents form data contamination between different posts
@@ -204,18 +221,21 @@ User Learning    Real-time Edit   Error Logs
 - **Form Recovery**: Automatic detection and recovery from corrupted form states
 
 ### **Monitoring & Diagnostics - COMPLETE** ✅
+
 - **Data Integrity Scripts**: Comprehensive monitoring tools in `/scripts/` directory
 - **Campaign Recovery**: Automated tools for fixing stuck campaign processes
 - **Validation Layers**: Multi-tier validation (mutation, component, API, database levels)
 - **Error Handling**: Enhanced logging and debugging capabilities throughout system
 
 ### **API Enhancements - COMPLETE** ✅
+
 - **Campaign CRUD**: Full create, read, update, delete operations with brand filtering
 - **Content Validation**: Strict backend validation preventing empty/invalid content
 - **Learning Integration**: AI learning system analyzing user edits for improvements
 - **Status Management**: Comprehensive campaign status transitions and validation
 
 ### **User Experience Improvements - COMPLETE** ✅
+
 - **Date Handling**: Fixed timezone issues in campaign edit forms
 - **Notification Management**: AI learning notifications with manual dismiss only
 - **Form Validation**: Enhanced error handling and user feedback
@@ -224,6 +244,7 @@ User Learning    Real-time Edit   Error Logs
 ## Technical Architecture Updates
 
 ### **Safety & Validation Architecture**
+
 ```
 Frontend Validation → Component Validation → Mutation Validation → API Validation → Database Constraints
      ↓                    ↓                      ↓                   ↓                    ↓
@@ -231,6 +252,7 @@ Form State Safety    Component Recovery    Final Safety Check   Server Validatio
 ```
 
 ### **Campaign Management Pipeline**
+
 ```
 Configuration → Preview Generation → Edit & Approve → Background Execution → Monitoring
      ↓               ↓                    ↓                 ↓                  ↓
@@ -238,6 +260,7 @@ Configuration → Preview Generation → Edit & Approve → Background Execution
 ```
 
 ### **Data Integrity Monitoring**
+
 ```
 Real-time Validation → Monitoring Scripts → Recovery Tools → Audit Logs
         ↓                     ↓                  ↓             ↓
@@ -251,11 +274,13 @@ Real-time Validation → Monitoring Scripts → Recovery Tools → Audit Logs
 ## 🖼️ AI-Generated Image Storage & Optimization System
 
 ### Executive Summary
+
 Implement enterprise-grade image storage architecture using AWS S3 + CloudFront CDN with intelligent lifecycle management, modern format optimization (WebP/AVIF), and comprehensive retention policies for GDPR/CCPA compliance.
 
 ### Current State Analysis
 
 **Existing Implementation Issues:**
+
 - **Direct DALL-E/Midjourney URLs**: Images stored as external service URLs (temporary, unreliable)
 - **No Caching Strategy**: Each image request hits external APIs directly
 - **Format Limitations**: Only JPEG/PNG formats, no modern WebP/AVIF optimization
@@ -266,7 +291,7 @@ Implement enterprise-grade image storage architecture using AWS S3 + CloudFront 
 ### Core Features
 
 - **FEAT-IMG-1**: S3 Image Storage — Permanent storage with intelligent tiering for cost optimization
-- **FEAT-IMG-2**: CloudFront CDN Integration — Global edge caching with automatic format optimization 
+- **FEAT-IMG-2**: CloudFront CDN Integration — Global edge caching with automatic format optimization
 - **FEAT-IMG-3**: Retention Policy Engine — Automated lifecycle management with GDPR/CCPA compliance
 - **FEAT-IMG-4**: Image Processing Pipeline — Real-time WebP/AVIF conversion with quality optimization
 - **FEAT-IMG-5**: Frontend Integration — Optimized React components with progressive loading
@@ -284,56 +309,59 @@ Implement enterprise-grade image storage architecture using AWS S3 + CloudFront 
 ### Technical Architecture
 
 #### **Phase 1: S3 Storage Infrastructure**
+
 ```typescript
 // Image Storage Service Architecture
 interface ImageStorageConfig {
-  bucket: 'postolio-ai-images-prod' | 'postolio-ai-images-dev'
-  region: 'us-east-1' // CloudFront optimized
-  storageClass: 'STANDARD' | 'INTELLIGENT_TIERING'
-  encryption: 'AES256'
+  bucket: "postolio-ai-images-prod" | "postolio-ai-images-dev";
+  region: "us-east-1"; // CloudFront optimized
+  storageClass: "STANDARD" | "INTELLIGENT_TIERING";
+  encryption: "AES256";
 }
 
 interface ImageMetadata {
-  contentId: string
-  brandId: string
-  generatedAt: Date
-  source: 'dalle3' | 'midjourney'
-  originalPrompt: string
-  retentionPolicy: 'content-linked' | 'campaign-linked' | 'user-linked'
+  contentId: string;
+  brandId: string;
+  generatedAt: Date;
+  source: "dalle3" | "midjourney";
+  originalPrompt: string;
+  retentionPolicy: "content-linked" | "campaign-linked" | "user-linked";
   complianceFlags: {
-    gdprApplicable: boolean
-    ccpaApplicable: boolean
-  }
+    gdprApplicable: boolean;
+    ccpaApplicable: boolean;
+  };
 }
 ```
 
 #### **Phase 2: CDN Integration with Format Optimization**
+
 ```typescript
 // CloudFront Distribution Configuration
 interface CDNConfig {
   behaviors: {
-    '/images/*': {
-      origin: 'postolio-ai-images.s3.amazonaws.com'
-      caching: 'CachingOptimized'
-      compression: true
-      viewerProtocolPolicy: 'redirect-to-https'
-    }
-  }
+    "/images/*": {
+      origin: "postolio-ai-images.s3.amazonaws.com";
+      caching: "CachingOptimized";
+      compression: true;
+      viewerProtocolPolicy: "redirect-to-https";
+    };
+  };
   lambdaEdge: {
-    'origin-request': 'image-format-optimizer'
-    'origin-response': 'cache-control-setter'
-  }
+    "origin-request": "image-format-optimizer";
+    "origin-response": "cache-control-setter";
+  };
 }
 
 // Automatic Format Selection
 const getOptimalFormat = (userAgent: string, acceptHeader: string) => {
-  if (acceptHeader.includes('image/avif')) return 'avif'
-  if (acceptHeader.includes('image/webp')) return 'webp'
-  return 'jpeg'
-}
+  if (acceptHeader.includes("image/avif")) return "avif";
+  if (acceptHeader.includes("image/webp")) return "webp";
+  return "jpeg";
+};
 ```
 
 #### **Phase 3: Lifecycle Management & Compliance**
+
 ```typescript
 interface LifecyclePolicy {
   rules: [
@@ -364,36 +392,42 @@ interface RetentionManager {
 ### Implementation Plan
 
 #### **TASK-IMG-1: S3 Infrastructure Setup**
+
 - Configure production S3 bucket with encryption and versioning
 - Set up IAM roles with least-privilege access
 - Implement intelligent tiering for cost optimization
 - Create backup and disaster recovery policies
 
 #### **TASK-IMG-2: Image Processing Pipeline**
+
 - Modify `content-generator.ts` to download and store images in S3
 - Implement multi-format generation (JPEG, WebP, AVIF)
 - Add image compression and quality optimization
 - Create fallback mechanisms for processing failures
 
 #### **TASK-IMG-3: CloudFront CDN Configuration**
+
 - Set up CloudFront distribution with S3 origin
 - Configure Lambda@Edge for format optimization
 - Implement cache invalidation strategies
 - Set up monitoring and performance metrics
 
 #### **TASK-IMG-4: Frontend Integration**
+
 - Update React components to use CDN URLs
 - Implement progressive image loading with placeholders
 - Add responsive image sizing based on device
 - Create error handling for failed image loads
 
 #### **TASK-IMG-5: Retention & Compliance Engine**
+
 - Build automated lifecycle management system
 - Implement GDPR/CCPA deletion workflows
 - Create audit logging for compliance tracking
 - Set up monitoring for retention policy violations
 
 #### **TASK-IMG-6: Migration & Monitoring**
+
 - Migrate existing image URLs to S3 storage
 - Implement cost monitoring and alerts
 - Set up performance monitoring dashboards
@@ -402,6 +436,7 @@ interface RetentionManager {
 ### Cost Optimization Strategy
 
 #### **Updated Storage Cost Projections (With Decisions)**
+
 ```
 Assumptions:
 - 1,000 active users generating 3 images/day
@@ -412,7 +447,7 @@ Assumptions:
 
 Storage Costs (Monthly):
 - STANDARD (0-30 days): $2.30/TB × 0.135TB = $0.31
-- STANDARD_IA (30-90 days): $1.25/TB × 0.135TB = $0.17  
+- STANDARD_IA (30-90 days): $1.25/TB × 0.135TB = $0.17
 - GLACIER (90-365 days): $0.40/TB × 0.405TB = $0.16
 - DEEP_ARCHIVE (365+ days): $0.10/TB × 2.7TB = $0.27
 
@@ -428,6 +463,7 @@ Monthly Total: ~$11.65 for 1,000 users (< $0.012 per user)
 ```
 
 #### **Intelligent Tiering Benefits**
+
 - **30% cost reduction** through automated storage class transitions
 - **50% bandwidth savings** via modern format optimization (WebP/AVIF)
 - **60% faster load times** through edge caching
@@ -435,18 +471,21 @@ Monthly Total: ~$11.65 for 1,000 users (< $0.012 per user)
 ### Compliance & Security
 
 #### **GDPR Compliance Features**
+
 - **Right to Erasure**: Automated deletion of user images within 30 days
 - **Data Portability**: API endpoints for image export in standard formats
 - **Retention Minimization**: 7-year maximum retention with automatic purging
 - **Audit Trails**: Complete logging of image lifecycle events
 
-#### **CCPA Compliance Features**  
+#### **CCPA Compliance Features**
+
 - **Consumer Rights**: Self-service portal for image data requests
 - **Retention Disclosure**: Clear policy documentation with specific timeframes
 - **Opt-out Mechanisms**: Immediate cessation of image processing on request
 - **Third-party Integration**: Compliance tracking for AI service providers
 
 #### **Security Measures**
+
 - **Encryption**: AES-256 encryption at rest and TLS 1.3 in transit
 - **Access Control**: IAM roles with temporary credentials and MFA
 - **Network Security**: VPC endpoints for private S3 access
@@ -455,7 +494,7 @@ Monthly Total: ~$11.65 for 1,000 users (< $0.012 per user)
 ### Success Metrics
 
 - **METRIC-IMG-1**: Image Load Time — <500ms average globally (target: <200ms)
-- **METRIC-IMG-2**: Storage Cost per User — <$0.02/month per active user  
+- **METRIC-IMG-2**: Storage Cost per User — <$0.02/month per active user
 - **METRIC-IMG-3**: Format Optimization Rate — 80% of images served in WebP/AVIF
 - **METRIC-IMG-4**: Compliance Audit Score — 100% passing rate for retention policies
 - **METRIC-IMG-5**: CDN Cache Hit Rate — >90% cache efficiency
@@ -472,44 +511,54 @@ Monthly Total: ~$11.65 for 1,000 users (< $0.012 per user)
 ### Architecture Decisions (Based on Research & Requirements)
 
 #### **Infrastructure Decision: Multi-Region Replication**
+
 ✅ **YES** - Implementing multi-region replication for disaster recovery:
+
 - **Primary Region**: us-east-1 (CloudFront optimized, lowest latency)
 - **Secondary Region**: eu-west-1 (European compliance and failover)
 - **Replication Type**: Cross-Region Replication (CRR) with S3 RTC (Replication Time Control)
 - **RPO/RTO Targets**: 15-minute replication, 1-hour recovery time
 
 #### **Compliance Decision: Region-Specific Retention**
+
 ✅ **YES** - Implementing region-specific retention policies:
+
 ```typescript
 interface RegionalRetentionPolicy {
-  'EU': { maxRetention: 1095, gdprCompliant: true },    // 3 years max
-  'US': { maxRetention: 2555, ccpaCompliant: true },    // 7 years max
-  'UK': { maxRetention: 2190, ukGdprCompliant: true },  // 6 years max
-  'DEFAULT': { maxRetention: 365 }                       // 1 year default
+  EU: { maxRetention: 1095; gdprCompliant: true }; // 3 years max
+  US: { maxRetention: 2555; ccpaCompliant: true }; // 7 years max
+  UK: { maxRetention: 2190; ukGdprCompliant: true }; // 6 years max
+  DEFAULT: { maxRetention: 365 }; // 1 year default
 }
 ```
 
 #### **Performance Decision: Single Image Size**
+
 ✅ **SIMPLIFIED** - Single optimized image generation:
+
 - Generate one high-quality image (1080x1080 for Instagram)
 - Apply format optimization (WebP/AVIF) at CDN edge
 - Use browser-native responsive loading with CSS object-fit
 - Eliminates complexity of srcset management
 
 #### **Cost Decision: Object Tagging Strategy**
+
 ✅ **IMPLEMENTED** - Smart tagging for cost allocation:
+
 ```typescript
 interface S3ObjectTags {
-  'Brand': string        // Brand ID for cost attribution
-  'Campaign': string     // Campaign ID for ROI tracking
-  'Source': 'dalle3' | 'midjourney'
-  'CreatedAt': string    // ISO timestamp
-  'Region': string       // User's region for compliance
+  Brand: string; // Brand ID for cost attribution
+  Campaign: string; // Campaign ID for ROI tracking
+  Source: "dalle3" | "midjourney";
+  CreatedAt: string; // ISO timestamp
+  Region: string; // User's region for compliance
 }
 ```
 
 #### **Security Decision: SSE-KMS with S3 Bucket Keys**
+
 ✅ **INDUSTRY STANDARD** - Based on competitor analysis (Hootsuite on AWS):
+
 - **Development**: SSE-S3 (AWS-managed, cost-effective)
 - **Production**: SSE-KMS with S3 Bucket Keys (99% cost reduction vs CMK)
 - **Rationale**: Balances security, compliance, and cost for startups
@@ -522,16 +571,17 @@ interface S3ObjectTags {
 ### Integration with Existing System
 
 #### **Backend Changes Required**
+
 ```typescript
 // Update content-generator.ts with multi-region support
 const storeImageInS3 = async (imageUrl: string, metadata: ImageMetadata) => {
   const response = await fetch(imageUrl)
   const buffer = await response.buffer()
-  
+
   // Determine user region for compliance
   const userRegion = await getUserRegion(metadata.brandId)
   const retentionPolicy = getRegionalRetention(userRegion)
-  
+
   const s3Result = await s3.upload({
     Bucket: 'postolio-ai-images-prod',
     Key: `images/${metadata.contentId}/${Date.now()}.jpg`,
@@ -546,10 +596,10 @@ const storeImageInS3 = async (imageUrl: string, metadata: ImageMetadata) => {
     BucketKeyEnabled: true,  // 99% cost reduction
     Tagging: `Brand=${metadata.brandId}&Campaign=${metadata.campaignId}&Source=${metadata.source}&Region=${userRegion}`
   }).promise()
-  
+
   // Generate CDN URL with CloudFront distribution
   const cdnUrl = `https://d1234567890.cloudfront.net/${s3Result.Key}`
-  
+
   return { s3Key: s3Result.Key, cdnUrl, region: userRegion }
 }
 
@@ -561,45 +611,49 @@ ALTER TABLE content ADD COLUMN retention_expires_at TIMESTAMP;
 ```
 
 #### **Frontend Changes Required**
+
 ```tsx
 // Optimized Image Component
 interface OptimizedImageProps {
-  src: string
-  alt: string
-  sizes?: string
-  priority?: boolean
+  src: string;
+  alt: string;
+  sizes?: string;
+  priority?: boolean;
 }
 
-const OptimizedImage: React.FC<OptimizedImageProps> = ({ 
-  src, alt, sizes, priority 
+const OptimizedImage: React.FC<OptimizedImageProps> = ({
+  src,
+  alt,
+  sizes,
+  priority,
 }) => {
-  const [format, setFormat] = useState<'avif' | 'webp' | 'jpeg'>('jpeg')
-  const [loading, setLoading] = useState(true)
-  
+  const [format, setFormat] = useState<"avif" | "webp" | "jpeg">("jpeg");
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     // Detect browser support for modern formats
     const detectFormat = async () => {
-      if (await supportsAVIF()) setFormat('avif')
-      else if (await supportsWebP()) setFormat('webp')
-    }
-    detectFormat()
-  }, [])
-  
-  const optimizedSrc = `${src}?format=${format}&quality=85`
-  
+      if (await supportsAVIF()) setFormat("avif");
+      else if (await supportsWebP()) setFormat("webp");
+    };
+    detectFormat();
+  }, []);
+
+  const optimizedSrc = `${src}?format=${format}&quality=85`;
+
   return (
-    <img 
+    <img
       src={optimizedSrc}
       alt={alt}
-      loading={priority ? 'eager' : 'lazy'}
+      loading={priority ? "eager" : "lazy"}
       onLoad={() => setLoading(false)}
-      style={{ 
+      style={{
         opacity: loading ? 0.8 : 1,
-        transition: 'opacity 0.3s ease'
+        transition: "opacity 0.3s ease",
       }}
     />
-  )
-}
+  );
+};
 ```
 
 ### Industry Insights & Competitor Analysis
@@ -607,6 +661,7 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
 #### **Competitor Infrastructure Analysis (2025)**
 
 **Hootsuite (Enterprise Leader)**:
+
 - **Architecture**: 120+ microservices, 90% on Amazon EKS
 - **Multi-cluster**: Across multiple AWS Availability Zones
 - **Security**: AWS WAF, Amazon Inspector, GuardDuty, Security Hub
@@ -614,11 +669,13 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
 - **Pricing**: $99/month starting (10 channels)
 
 **Buffer (SMB Focus)**:
+
 - **Simplicity**: Focus on ease-of-use over complex features
 - **Cost-effective**: Unlimited team members on paid plans
 - **Free tier**: 3 channels for individual creators
 
 **ContentStudio (Rising Player)**:
+
 - **AI-first**: Built-in AI content generation
 - **14,500+ paid users**: Strong growth trajectory
 - **Pricing**: $25/month starting (very competitive)
@@ -634,21 +691,25 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
 #### **Implementation Timeline**
 
 **Phase 1 (Weeks 1-2)**: Infrastructure Setup
+
 - S3 buckets with replication
 - CloudFront distribution
 - SSE-KMS configuration
 
 **Phase 2 (Weeks 3-4)**: Integration
+
 - Backend service updates
 - Database schema migration
 - Frontend component updates
 
 **Phase 3 (Weeks 5-6)**: Optimization
+
 - Lambda@Edge functions
 - Format optimization
 - Performance tuning
 
 **Phase 4 (Week 7-8)**: Compliance & Monitoring
+
 - Regional retention policies
 - Audit logging
 - Cost monitoring dashboards
@@ -674,6 +735,7 @@ The system balances enterprise-grade features with startup pragmatism, ensuring 
 ## 📅 Content Calendar & Future Post Display System
 
 ### Executive Summary
+
 Comprehensive visual system for displaying published, scheduled, and future auto-generated content with intuitive filtering and status indicators, following industry best practices while introducing innovative placeholder management.
 
 ### Product Overview
@@ -712,6 +774,7 @@ Comprehensive visual system for displaying published, scheduled, and future auto
 ### Visual Design System
 
 #### **Status Color Coding (Industry Standard + Innovation)**
+
 ```
 Published:     ✅ Green (#10B981)   - Successfully posted to Instagram
 Scheduled:     📅 Blue (#3B82F6)    - Created and queued for posting
@@ -724,6 +787,7 @@ Draft:         📝 Yellow (#F59E0B)  - Saved but not scheduled
 #### **Calendar View Layouts**
 
 ##### **Monthly Grid View (Primary)**
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │ January 2025                      [Month] [Week] [List]│
@@ -737,14 +801,15 @@ Draft:         📝 Yellow (#F59E0B)  - Saved but not scheduled
 ```
 
 ##### **Weekly Timeline View (Detailed)**
+
 ```
 Time    Mon 2      Tue 3      Wed 4      Thu 5
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-9:00am  ✅ Posted  
+9:00am  ✅ Posted
 10:00am            📅 Scheduled
                    "New product launch..."
                    Campaign: Holiday Sale
-2:00pm  ✅ Posted  
+2:00pm  ✅ Posted
 3:00pm             ⚡ Generating...
                    Campaign: Daily Content
 4:00pm                        ⏳ Placeholder
@@ -752,6 +817,7 @@ Time    Mon 2      Tue 3      Wed 4      Thu 5
 ```
 
 ##### **List View (Scannable)**
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │ Upcoming Content                    [Filters ▼]      │
@@ -768,31 +834,33 @@ Time    Mon 2      Tue 3      Wed 4      Thu 5
 ### Placeholder Innovation System
 
 #### **Smart Placeholder Cards**
+
 ```typescript
 interface PlaceholderPost {
-  id: string
-  scheduledFor: Date
+  id: string;
+  scheduledFor: Date;
   campaign: {
-    id: string
-    name: string
-    theme: string
-    style: string
-  }
+    id: string;
+    name: string;
+    theme: string;
+    style: string;
+  };
   generationTiming: {
-    willGenerateAt: Date      // When AI will create
-    hoursBeforePost: number   // Buffer time
-    priority: number          // Generation queue position
-  }
+    willGenerateAt: Date; // When AI will create
+    hoursBeforePost: number; // Buffer time
+    priority: number; // Generation queue position
+  };
   actions: {
-    generateNow: boolean      // Force immediate generation
-    editSlot: boolean         // Change time/date
-    skipSlot: boolean         // Don't generate for this slot
+    generateNow: boolean; // Force immediate generation
+    editSlot: boolean; // Change time/date
+    skipSlot: boolean; // Don't generate for this slot
     // Note: Content preview removed per stakeholder decision
-  }
+  };
 }
 ```
 
 #### **Placeholder Visual Design (Simplified)**
+
 ```
 ┌─────────────────────────────┐
 │ ⏳ Auto-Generate            │
@@ -814,29 +882,32 @@ interface PlaceholderPost {
 ### Historical Calendar Access
 
 #### **Unlimited Historical Navigation**
+
 Based on stakeholder requirements, users can navigate to ANY historical month without restrictions. This enables comprehensive content history review and performance analysis across all time periods.
 
 #### **Performance Optimization Strategy**
+
 ```typescript
 interface HistoricalDataLoading {
-  strategy: 'lazy-loading'        // Load months only when accessed
+  strategy: "lazy-loading"; // Load months only when accessed
   cachePolicy: {
-    recentMonths: 6               // Keep 6 months in memory
-    olderMonths: 'on-demand'      // Load from API when requested
-  }
+    recentMonths: 6; // Keep 6 months in memory
+    olderMonths: "on-demand"; // Load from API when requested
+  };
   pagination: {
-    postsPerMonth: 100            // Initial load limit
-    loadMoreThreshold: 20         // Load more when user scrolls
-  }
+    postsPerMonth: 100; // Initial load limit
+    loadMoreThreshold: 20; // Load more when user scrolls
+  };
   performance: {
-    virtualScrolling: true        // For months with >50 posts
-    debounceNavigation: 300       // ms delay for rapid month changes
-    preloadAdjacentMonths: true   // Preload previous/next month
-  }
+    virtualScrolling: true; // For months with >50 posts
+    debounceNavigation: 300; // ms delay for rapid month changes
+    preloadAdjacentMonths: true; // Preload previous/next month
+  };
 }
 ```
 
 #### **Navigation UI Enhancement**
+
 ```
 ┌─────────────────────────────────────────────┐
 │ ◀ December 2024    January 2025    February 2025 ▶ │
@@ -847,6 +918,7 @@ interface HistoricalDataLoading {
 ```
 
 **Technical Considerations**:
+
 - Implement infinite scroll for year navigation
 - Use browser caching for recently viewed months
 - Consider archival after 2+ years (move to cold storage)
@@ -855,6 +927,7 @@ interface HistoricalDataLoading {
 ### Advanced Filtering System
 
 #### **Filter Panel Design**
+
 ```
 ┌─ Filter Content ────────────────────────────┐
 │                                             │
@@ -875,10 +948,11 @@ interface HistoricalDataLoading {
 ### Content Count & Summary Indicators
 
 #### **Campaign Progress Bar**
+
 ```
 Holiday Sale Campaign (Dec 1-15)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Published: 5 ████████░░░░░░░░░░░░░░░░░░ 
+Published: 5 ████████░░░░░░░░░░░░░░░░░░
 Scheduled: 3 ░░░░░░░░█████░░░░░░░░░░░░░
 Pending:   7 ░░░░░░░░░░░░░░███████████
 
@@ -886,6 +960,7 @@ Total: 15 posts | 33% Complete | 7 days remaining
 ```
 
 #### **Daily Content Density Indicator**
+
 ```
 Content Density This Week:
 Mon ████████ 8 posts (2 published, 3 scheduled, 3 pending)
@@ -900,35 +975,38 @@ Sun ██░░░░░░ 2 posts
 ### Drag-and-Drop Rescheduling System
 
 #### **Implementation Decision**
+
 YES - Full drag-and-drop rescheduling will be implemented directly in the calendar view, following industry best practices from Google Calendar, Calendly, and Later.
 
 #### **Drag Interaction Patterns**
+
 ```typescript
 interface DragAndDropBehavior {
   draggableStates: {
-    scheduled: true       // Can be moved to any future slot
-    placeholder: true     // Can be moved within campaign constraints
-    generating: false     // Locked during generation
-    published: false      // Cannot modify past content
-    failed: true         // Can be rescheduled for retry
-  }
-  
+    scheduled: true; // Can be moved to any future slot
+    placeholder: true; // Can be moved within campaign constraints
+    generating: false; // Locked during generation
+    published: false; // Cannot modify past content
+    failed: true; // Can be rescheduled for retry
+  };
+
   visualFeedback: {
-    dragPreview: 'ghost'  // Semi-transparent copy follows cursor
-    dropZones: 'highlight' // Valid drop targets glow
-    invalidZones: 'dim'   // Invalid targets become dimmed
-    snapToSlot: true      // Snaps to nearest time slot
-  }
-  
+    dragPreview: "ghost"; // Semi-transparent copy follows cursor
+    dropZones: "highlight"; // Valid drop targets glow
+    invalidZones: "dim"; // Invalid targets become dimmed
+    snapToSlot: true; // Snaps to nearest time slot
+  };
+
   constraints: {
-    minimumBuffer: 30     // Minutes between posts
-    campaignBounds: true  // Placeholders stay within campaign dates
-    conflictWarning: true // Alert when dropping on occupied slot
-  }
+    minimumBuffer: 30; // Minutes between posts
+    campaignBounds: true; // Placeholders stay within campaign dates
+    conflictWarning: true; // Alert when dropping on occupied slot
+  };
 }
 ```
 
 #### **Visual Feedback During Drag**
+
 ```
 While dragging:
 ┌─────────────────────────────┐
@@ -947,77 +1025,85 @@ While dragging:
 ```
 
 #### **Conflict Resolution**
+
 ```typescript
 interface ConflictResolution {
   strategies: {
-    swap: boolean         // Exchange positions with existing post
-    bump: boolean         // Push existing post to next available slot
-    merge: boolean        // Combine into multi-post slot (advanced)
-    cancel: boolean       // Abort operation and return to original
-  }
-  
+    swap: boolean; // Exchange positions with existing post
+    bump: boolean; // Push existing post to next available slot
+    merge: boolean; // Combine into multi-post slot (advanced)
+    cancel: boolean; // Abort operation and return to original
+  };
+
   userPrompt: {
-    title: "Time Slot Conflict"
-    message: "This slot already has scheduled content"
+    title: "Time Slot Conflict";
+    message: "This slot already has scheduled content";
     options: [
       "Replace existing post",
       "Swap positions",
       "Find next available slot",
-      "Cancel"
-    ]
-  }
+      "Cancel",
+    ];
+  };
 }
 ```
 
 #### **Mobile Touch Support**
+
 ```typescript
 interface TouchDragSupport {
-  longPressDelay: 500        // ms before drag activates
-  hapticFeedback: true       // Vibrate on drag start
-  scrollWhileDragging: true  // Auto-scroll near edges
-  zoomOut: true             // Zoom to week view during drag
+  longPressDelay: 500; // ms before drag activates
+  hapticFeedback: true; // Vibrate on drag start
+  scrollWhileDragging: true; // Auto-scroll near edges
+  zoomOut: true; // Zoom to week view during drag
 }
 ```
 
 #### **Best Practices (Research-Based)**
+
 Based on analysis of leading calendar platforms:
 
 **Google Calendar Patterns**:
+
 - Instant visual feedback with color changes
 - Smart conflict detection with options
 - Keyboard shortcuts for power users (Ctrl+drag to copy)
 
 **Calendly Insights**:
+
 - Clear unavailable slots with striped patterns
 - Time zone awareness during drag operations
 - Undo/redo stack for drag operations
 
 **Later (Instagram-specific)**:
+
 - Preview thumbnail moves with drag
 - Instagram-specific constraints (posting frequency limits)
 - Bulk drag for multiple selection
 
 #### **Implementation Requirements**
+
 ```typescript
 // React DnD Implementation
-import { DndProvider, useDrag, useDrop } from 'react-dnd'
+import { DndProvider, useDrag, useDrop } from "react-dnd";
 
 interface DraggablePost {
-  type: 'POST'
+  type: "POST";
   data: {
-    id: string
-    currentDate: Date
-    constraints: PostConstraints
-  }
-  canDrag: (post: Post) => boolean
-  onDrop: (post: Post, newDate: Date) => Promise<void>
-  onConflict: (conflict: Conflict) => ConflictResolution
+    id: string;
+    currentDate: Date;
+    constraints: PostConstraints;
+  };
+  canDrag: (post: Post) => boolean;
+  onDrop: (post: Post, newDate: Date) => Promise<void>;
+  onConflict: (conflict: Conflict) => ConflictResolution;
 }
 ```
 
 ### Interaction Patterns
 
 #### **Click Actions by Status**
+
 - **Published Post**: Opens Instagram post analytics and engagement metrics
 - **Scheduled Post**: Opens editor with option to modify or reschedule
 - **Generating Post**: Shows generation progress with option to cancel/retry
@@ -1025,29 +1111,31 @@ interface DraggablePost {
 - **Failed Post**: Shows error details with retry/edit options
 
 #### **Hover Information**
+
 ```typescript
 interface HoverTooltip {
   published: {
-    postedAt: Date
-    engagement: { likes: number, comments: number }
-    permalink: string
-  }
+    postedAt: Date;
+    engagement: { likes: number; comments: number };
+    permalink: string;
+  };
   scheduled: {
-    scheduledFor: Date
-    canEdit: boolean
-    timeUntilPost: string
-  }
+    scheduledFor: Date;
+    canEdit: boolean;
+    timeUntilPost: string;
+  };
   placeholder: {
-    campaign: string
-    willGenerateAt: Date
+    campaign: string;
+    willGenerateAt: Date;
     // Note: estimatedContent removed per stakeholder decision
-  }
+  };
 }
 ```
 
 ### Batch Operations
 
 #### **Multi-Select Mode**
+
 ```
 [✓] Select All | 12 posts selected
 
@@ -1073,6 +1161,7 @@ With selected posts:
 ### Technical Implementation Notes
 
 #### **Database Schema Additions**
+
 ```sql
 -- Add placeholder tracking
 ALTER TABLE content ADD COLUMN is_placeholder BOOLEAN DEFAULT FALSE;
@@ -1089,6 +1178,7 @@ CREATE TABLE user_calendar_preferences (
 ```
 
 #### **API Endpoints**
+
 ```typescript
 GET /api/calendar/posts
   ?view=month|week|list
@@ -1097,7 +1187,7 @@ GET /api/calendar/posts
   &status[]=published,scheduled,placeholder
   &campaignId=campaign-123
   &includePlaceholders=true
-  
+
 Response: {
   posts: [...],
   placeholders: [...],
@@ -1119,14 +1209,15 @@ Response: {
 
 ### Open Questions
 
-*All initial questions have been resolved through stakeholder feedback and incorporated into the specification above.*
+_All initial questions have been resolved through stakeholder feedback and incorporated into the specification above._
 
 ### Future Premium Features
 
 #### **AI Content Preview in Placeholders (Premium Tier)**
+
 - **Feature**: Show AI-predicted content preview in placeholder cards based on campaign settings
 - **Value Proposition**: Premium users get visibility into what AI will likely generate
-- **Implementation**: 
+- **Implementation**:
   - Light AI inference to generate preview text without full content creation
   - "This is an estimate" disclaimer to manage expectations
   - Refresh preview button to see alternative predictions
@@ -1134,6 +1225,7 @@ Response: {
 - **Technical Approach**: Use GPT-4o-mini for fast, cost-effective preview generation
 
 #### **Advanced Calendar Analytics (Premium Tier)**
+
 - **Feature**: Heatmaps showing optimal posting times based on historical engagement
 - **Feature**: Predictive performance indicators for scheduled content
 - **Feature**: A/B testing calendar view to compare different scheduling strategies
