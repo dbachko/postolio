@@ -1070,17 +1070,9 @@ export class ContentSchedulerStack extends cdk.Stack {
         },
       ],
     );
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/VideoBucket/Policy/Resource`,
-      [
-        {
-          id: "AwsSolutions-S10",
-          reason:
-            "Video bucket accessed via pre-signed URLs with HTTPS enforced at application level",
-        },
-      ],
-    );
+    // Note: No explicit BucketPolicy is synthesized for VideoBucket in some environments,
+    // so suppressions by path to "/VideoBucket/Policy/Resource" may fail. The bucket-level
+    // suppression above is sufficient for AwsSolutions-S10 in this stack.
 
     // Suppress secret rotation warnings
     NagSuppressions.addResourceSuppressions(platformCredentials, [
