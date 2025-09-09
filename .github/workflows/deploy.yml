@@ -136,6 +136,7 @@ jobs:
         id: matrix
         run: |
           SERVICES=()
+          ALL_SERVICES=("token-service" "publisher" "retry-handler" "dlq-processor" "schedule-management" "schedule-cleanup" "status-sync")
           
           # Check if manual deployment with specific services
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.services }}" != "all" ]]; then
@@ -144,6 +145,10 @@ jobs:
               SERVICES+=("\"$service\"")
             done
           else
+            # If any service anywhere changed, or infra changed, or pushing to main (dev env), deploy all microservices
+            if [[ "${{ steps.changes.outputs.any-service }}" == "true" || "${{ steps.changes.outputs.infra }}" == "true" || "${{ github.ref }}" == "refs/heads/main" ]]; then
+              for s in "${ALL_SERVICES[@]}"; do SERVICES+=("\"$s\""); done
+            else
             # Auto-detect changed services
             [[ "${{ steps.changes.outputs.token-service }}" == "true" ]] && SERVICES+=("\"token-service\"")
             [[ "${{ steps.changes.outputs.publisher }}" == "true" ]] && SERVICES+=("\"publisher\"")
@@ -152,6 +157,7 @@ jobs:
             [[ "${{ steps.changes.outputs.schedule-management }}" == "true" ]] && SERVICES+=("\"schedule-management\"")
             [[ "${{ steps.changes.outputs.schedule-cleanup }}" == "true" ]] && SERVICES+=("\"schedule-cleanup\"")
             [[ "${{ steps.changes.outputs.status-sync }}" == "true" ]] && SERVICES+=("\"status-sync\"")
+            fi
           fi
           
           if [ ${#SERVICES[@]} -eq 0 ]; then
