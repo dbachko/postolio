@@ -35,6 +35,7 @@ RUN npm i -g pnpm && apk add --no-cache libc6-compat python3 make g++ openssl
 
 # Bring in node_modules and full sources
 COPY --from=installer /app/node_modules ./node_modules
+COPY --from=installer /app/packages ./packages
 COPY --from=installer /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/full/ ./
 
