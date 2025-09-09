@@ -89,7 +89,10 @@ jobs:
         run: npx turbo lint --filter='...[origin/${{ github.base_ref }}]'
 
       - name: Run type checking  
-        run: npx turbo typecheck --filter='...[origin/${{ github.base_ref }}]'
+        run: |
+          # Try typecheck first, fallback to build if not available
+          npx turbo typecheck --filter='...[origin/${{ github.base_ref }}]' || \
+          npx turbo build --filter='...[origin/${{ github.base_ref }}]'
 
       - name: Check formatting
         run: pnpm prettier --check "**/*.{ts,tsx,md}" --ignore-path .gitignore

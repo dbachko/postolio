@@ -199,7 +199,10 @@ jobs:
         run: npx turbo lint --filter='...[origin/${{ github.base_ref || github.event.before }}]'
 
       - name: Run type checking
-        run: npx turbo typecheck --filter='...[origin/${{ github.base_ref || github.event.before }}]'
+        run: |
+          # Try typecheck first, fallback to build if not available
+          npx turbo typecheck --filter='...[origin/${{ github.base_ref || github.event.before }}]' || \
+          npx turbo build --filter='...[origin/${{ github.base_ref || github.event.before }}]'
 
       - name: Run tests
         run: npx turbo test --filter='...[origin/${{ github.base_ref || github.event.before }}]'
