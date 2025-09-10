@@ -489,9 +489,21 @@ jobs:
             echo "Function does not exist, deploying via CDK..."
             cd packages/infra/cdk
             pnpm install --frozen-lockfile
-            pnpm cdk deploy ${{ matrix.service }}-${{ needs.detect-changes.outputs.environment }} \
-              --require-approval never \
-              --context environment=${{ needs.detect-changes.outputs.environment }}
+
+            # Map microservice to the owning stack: token-service has its own stack; others are in ContentScheduler-<env>
+            if [ "${{ matrix.service }}" = "token-service" ]; then
+              STACK_NAME="TokenService-${{ needs.detect-changes.outputs.environment }}"
+            else
+              STACK_NAME="ContentScheduler-${{ needs.detect-changes.outputs.environment }}"
+            fi
+
+            if pnpm cdk ls | grep -xq "$STACK_NAME"; then
+              pnpm cdk deploy "$STACK_NAME" \
+                --require-approval never \
+                --context environment=${{ needs.detect-changes.outputs.environment }}
+            else
+              echo "Stack $STACK_NAME not found in CDK app; skipping CDK deploy"
+            fi
           fi
 
   # ============================================
