@@ -335,8 +335,9 @@ jobs:
             
             echo "Copied $LATEST_TAG to $NEW_TAG"
           else
-            echo "Latest image not found, cannot copy"
-            exit 1
+            echo "Warning: Latest image $LATEST_TAG not found, skipping copy"
+            echo "This is expected for the first deployment with new tagging format"
+            # Don't fail - this is OK for initial deployments
           fi
 
   # ============================================
