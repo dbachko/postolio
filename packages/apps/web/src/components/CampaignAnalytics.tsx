@@ -41,18 +41,21 @@ export function CampaignAnalytics({
   const metricsQuery = useQuery({
     queryKey: ["campaign-metrics", campaignId],
     queryFn: () => apiClient.getCampaignMetrics(campaignId),
+    enabled: !!campaignId,
   });
 
   // Fetch optimization recommendations
   const recommendationsQuery = useQuery({
     queryKey: ["campaign-recommendations", campaignId],
     queryFn: () => apiClient.getCampaignRecommendations(campaignId),
+    enabled: !!campaignId,
   });
 
   // Fetch ROI data
   const roiQuery = useQuery({
     queryKey: ["campaign-roi", campaignId],
     queryFn: () => apiClient.getCampaignROI(campaignId),
+    enabled: !!campaignId,
   });
 
   if (metricsQuery.isLoading) {

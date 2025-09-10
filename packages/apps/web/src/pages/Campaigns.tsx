@@ -100,7 +100,7 @@ export function Campaigns() {
   const urlCampaignQuery = useQuery<{ success: boolean; campaign: Campaign }>({
     queryKey: ["urlCampaign", urlCampaignId],
     queryFn: () => apiClient.getCampaign(urlCampaignId!),
-    enabled: !!urlCampaignId,
+    enabled: isRealCampaignId(urlCampaignId) && !!selectedBrand,
   });
 
   // Campaign details query for individual campaign view
