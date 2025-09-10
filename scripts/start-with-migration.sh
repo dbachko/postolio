@@ -37,15 +37,23 @@ if [ -z "${DATABASE_URL}" ]; then
 fi
 
 # Run Prisma migrations with retry logic (skip if schema is absent)
-if [ -f ./prisma/schema.prisma ]; then
-  echo "Running database migrations..."
+# Check both monorepo and standalone locations
+SCHEMA_PATH=""
+if [ -f ./packages/libs/database/prisma/schema.prisma ]; then
+  SCHEMA_PATH="./packages/libs/database/prisma/schema.prisma"
+elif [ -f ./prisma/schema.prisma ]; then
+  SCHEMA_PATH="./prisma/schema.prisma"
+fi
+
+if [ -n "${SCHEMA_PATH}" ]; then
+  echo "Running database migrations using schema at ${SCHEMA_PATH}..."
   MAX_RETRIES=5
   RETRY_COUNT=0
 
   while [ ${RETRY_COUNT} -lt ${MAX_RETRIES} ]; do
       echo "Migration attempt $((RETRY_COUNT + 1)) of ${MAX_RETRIES}..."
       
-      if npx prisma migrate deploy --schema=./prisma/schema.prisma 2>&1; then
+      if npx prisma migrate deploy --schema=${SCHEMA_PATH} 2>&1; then
           echo "Database migrations completed successfully"
           break
       else
@@ -62,7 +70,7 @@ if [ -f ./prisma/schema.prisma ]; then
       fi
   done
 else
-  echo "Prisma schema not found at ./prisma/schema.prisma — skipping migrations"
+  echo "Prisma schema not found — skipping migrations"
 fi
 
 # Start the application
