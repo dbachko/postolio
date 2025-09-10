@@ -168,7 +168,7 @@ const csrfPlugin: FastifyPluginAsync<CSRFOptions> = async (
 
 export default fp(csrfPlugin, {
   name: "csrf-protection",
-  fastify: "4.x",
+  fastify: "5.x",
 });
 
 // TypeScript declaration merging

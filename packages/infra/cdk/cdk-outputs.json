@@ -1,0 +1,8 @@
+{
+  "ServiceDiscovery-dev": {
+    "NamespaceName": "postolio-dev.local",
+    "NamespaceArn": "arn:aws:servicediscovery:us-east-1:000000000000:namespace/ns-g2p6cnqb7biozvj7",
+    "NamespaceId": "ns-g2p6cnqb7biozvj7",
+    "ExportsOutputFnGetAttNamespace9B63B8C8Id4C69F815": "ns-g2p6cnqb7biozvj7"
+  }
+}
