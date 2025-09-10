@@ -627,10 +627,6 @@ export class PostolioStack extends cdk.Stack {
             containerPort: 3000,
             executionRole,
             taskRole,
-            logging: ecs.LogDrivers.awsLogs({
-              streamPrefix: "postolio-api",
-              logRetention: logs.RetentionDays.ONE_WEEK,
-            }),
             secrets: {
               // Database credentials (from AWS Secrets Manager)
               DB_USERNAME: ecs.Secret.fromSecretsManager(dbSecret, "username"),
@@ -772,16 +768,6 @@ export class PostolioStack extends cdk.Stack {
     // Enable WebSocket support on target group
     // WebSocket connections require stickiness for proper session handling
     fargateService.targetGroup.enableCookieStickiness(cdk.Duration.hours(1));
-
-    // Add health check to the container
-    const container = fargateService.taskDefinition.defaultContainer!;
-    (container as ecs.ContainerDefinition).addHealthCheck({
-      command: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"],
-      interval: cdk.Duration.seconds(30),
-      timeout: cdk.Duration.seconds(5),
-      retries: 3,
-      startPeriod: cdk.Duration.seconds(120),
-    });
 
     // Configure ECS service deployment settings
     const cfnServiceConfig = fargateService.service.node
