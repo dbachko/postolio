@@ -257,6 +257,21 @@ export class ContentSchedulerStack extends cdk.Stack {
       autoDeleteObjects: environment !== "prod",
     });
 
+    // Enforce HTTPS (TLS) for all S3 requests to the video bucket (cdk-nag AwsSolutions-S10)
+    this.videoBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: "DenyInsecureTransport",
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ["s3:*"],
+        resources: [
+          this.videoBucket.bucketArn,
+          `${this.videoBucket.bucketArn}/*`,
+        ],
+        conditions: { Bool: { "aws:SecureTransport": "false" } },
+      }),
+    );
+
     // ==================== Secrets with Rotation ====================
 
     const platformCredentials = new secretsmanager.Secret(
