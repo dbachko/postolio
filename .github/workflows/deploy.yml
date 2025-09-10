@@ -542,7 +542,8 @@ jobs:
     if: |
       needs.detect-changes.outputs.api-changed == 'true' || 
       needs.detect-changes.outputs.infra-changed == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
     environment: ${{ needs.detect-changes.outputs.environment }}
     
     steps:
@@ -602,11 +603,12 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend
     runs-on: ubuntu-latest
-    needs: [detect-changes, deploy-main-app]
+    needs: [detect-changes, deploy-infrastructure]
     if: |
       needs.detect-changes.outputs.web-changed == 'true' || 
       needs.detect-changes.outputs.api-changed == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
     environment: ${{ needs.detect-changes.outputs.environment }}
     
     steps:
