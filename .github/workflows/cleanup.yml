@@ -99,16 +99,23 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Clean up Lambda versions
+        continue-on-error: true  # Don't fail if permissions are missing
         run: |
           RETENTION_COUNT=10  # Keep last 10 versions
           DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
           
           echo "🧹 Cleaning up Lambda versions (keeping last $RETENTION_COUNT)"
           
-          # List all postolio Lambda functions
+          # List all postolio Lambda functions (skip if no permissions)
           FUNCTIONS=$(aws lambda list-functions \
             --query 'Functions[?starts_with(FunctionName, `postolio`)].FunctionName' \
-            --output text)
+            --output text 2>/dev/null || echo "")
+          
+          if [[ -z "$FUNCTIONS" ]]; then
+            echo "⚠️  No Lambda functions found or no permissions to list them"
+            echo "ℹ️  Skipping Lambda cleanup"
+            exit 0
+          fi
           
           for FUNCTION in $FUNCTIONS; do
             echo "Processing function: $FUNCTION"
@@ -159,16 +166,23 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Clean up CloudWatch log streams
+        continue-on-error: true  # Don't fail if permissions are missing
         run: |
           RETENTION_DAYS="${{ github.event.inputs.retention_days || '30' }}"
           DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
           
           echo "🧹 Cleaning up CloudWatch log streams older than $RETENTION_DAYS days"
           
-          # Get all postolio log groups
+          # Get all postolio log groups (skip if no permissions)
           LOG_GROUPS=$(aws logs describe-log-groups \
             --query 'logGroups[?contains(logGroupName, `postolio`)].logGroupName' \
-            --output text)
+            --output text 2>/dev/null || echo "")
+          
+          if [[ -z "$LOG_GROUPS" ]]; then
+            echo "⚠️  No log groups found or no permissions to list them"
+            echo "ℹ️  Skipping CloudWatch logs cleanup"
+            exit 0
+          fi
           
           CUTOFF_TIMESTAMP=$(($(date +%s) - RETENTION_DAYS * 86400))000
           

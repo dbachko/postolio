@@ -640,6 +640,7 @@ jobs:
       - name: Build frontend
         working-directory: packages/apps/web
         env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_URL }}
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_FACEBOOK_APP_ID: ${{ vars.VITE_FACEBOOK_APP_ID }}
@@ -698,13 +699,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
+          pnpm-version: ${{ env.PNPM_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install Playwright
-        run: npx playwright install --with-deps
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: |
+          cd packages/apps/web
+          npx playwright install --with-deps
 
       - name: Run E2E tests
         env:
@@ -713,7 +720,7 @@ jobs:
           TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
         run: |
           cd packages/apps/web
-          npm run test:e2e
+          pnpm test:e2e
 
   # ============================================
   # STEP 9: Deployment Summary

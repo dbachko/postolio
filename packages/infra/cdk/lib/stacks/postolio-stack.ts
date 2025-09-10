@@ -627,6 +627,17 @@ export class PostolioStack extends cdk.Stack {
             containerPort: 3000,
             executionRole,
             taskRole,
+            healthCheck: {
+              command: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"],
+              interval: cdk.Duration.seconds(30),
+              timeout: cdk.Duration.seconds(5),
+              retries: 3,
+              startPeriod: cdk.Duration.seconds(120), // Give container more time to start
+            },
+            logging: ecs.LogDrivers.awsLogs({
+              streamPrefix: "postolio-api",
+              logRetention: logs.RetentionDays.ONE_WEEK,
+            }),
             secrets: {
               // Database credentials (from AWS Secrets Manager)
               DB_USERNAME: ecs.Secret.fromSecretsManager(dbSecret, "username"),
@@ -759,10 +770,10 @@ export class PostolioStack extends cdk.Stack {
     fargateService.targetGroup.configureHealthCheck({
       path: "/health",
       healthyHttpCodes: "200",
-      interval: cdk.Duration.seconds(30),
-      timeout: cdk.Duration.seconds(10), // Increased from default 5s
-      healthyThresholdCount: 2, // Reduced from 5 to speed up healthy status
-      unhealthyThresholdCount: 3, // Increased from 2 to be more tolerant
+      interval: cdk.Duration.seconds(20), // Check more frequently for faster failure detection
+      timeout: cdk.Duration.seconds(5),   // Faster timeout for quicker response
+      healthyThresholdCount: 2,           // Reduced from 5 to speed up healthy status
+      unhealthyThresholdCount: 2,         // Fail faster (reduced from 3)
     });
 
     // Enable WebSocket support on target group
@@ -775,6 +786,13 @@ export class PostolioStack extends cdk.Stack {
     cfnServiceConfig.deploymentConfiguration = {
       maximumPercent: 200,
       minimumHealthyPercent: 100, // Ensure zero-downtime deployments
+      deploymentCircuitBreaker: {
+        rollback: true,  // Automatically rollback on failure
+        enable: true,    // Enable circuit breaker
+      },
+      alarms: {
+        enable: false,   // Can be enabled later with CloudWatch alarms
+      },
     };
 
     // CRITICAL: Set health check grace period to allow container to start
