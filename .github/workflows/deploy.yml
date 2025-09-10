@@ -273,16 +273,10 @@ jobs:
             changed: ${{ needs.detect-changes.outputs.web-changed }}
     
     steps:
-      - name: Skip if not changed
-        if: matrix.service.changed != 'true' && github.event_name != 'workflow_dispatch'
-        run: echo "Service ${{ matrix.service.name }} has not changed, skipping build"
-
       - name: Checkout code
-        if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -290,18 +284,15 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ECR repo is managed by CDK; creation occurs in deploy-infrastructure
-
       - name: Set up Docker Buildx
-        if: matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch'
+        if: matrix.service.name == 'api' && (matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch')
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push Docker image (API only)
-        if: (matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch') && matrix.service.name == 'api'
+        if: matrix.service.name == 'api' && (matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch')
         uses: docker/build-push-action@v5
         env:
           REPO_NAME: postolio
@@ -316,6 +307,37 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
           build-args: |
             NODE_ENV=${{ needs.detect-changes.outputs.environment == 'prod' && 'production' || needs.detect-changes.outputs.environment }}
+
+      - name: Copy latest to commit tag if no changes (API only)
+        if: matrix.service.name == 'api' && matrix.service.changed != 'true' && github.event_name != 'workflow_dispatch'
+        env:
+          REPO_NAME: postolio
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ENV: ${{ needs.detect-changes.outputs.environment }}
+          SHA: ${{ github.sha }}
+        run: |
+          LATEST_TAG="$ENV-latest"
+          NEW_TAG="$ENV-$SHA"
+          
+          # Get manifest from latest
+          MANIFEST=$(aws ecr batch-get-image \
+            --repository-name $REPO_NAME \
+            --image-ids imageTag=$LATEST_TAG \
+            --query 'images[].imageManifest' \
+            --output text)
+          
+          if [ -n "$MANIFEST" ]; then
+            # Put the manifest with new tag
+            aws ecr put-image \
+              --repository-name $REPO_NAME \
+              --image-tag $NEW_TAG \
+              --image-manifest "$MANIFEST"
+            
+            echo "Copied $LATEST_TAG to $NEW_TAG"
+          else
+            echo "Latest image not found, cannot copy"
+            exit 1
+          fi
 
   # ============================================
   # STEP 4: Deploy Infrastructure
@@ -334,28 +356,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Install CDK dependencies
-        working-directory: packages/infra/cdk
-        run: pnpm install --frozen-lockfile
+      - name: CDK Setup
+        uses: ./.github/actions/cdk-setup
 
       - name: CDK Bootstrap (if needed)
         working-directory: packages/infra/cdk
@@ -462,48 +464,60 @@ jobs:
           # Artifacts are bundled with tsup; no install needed (avoids lockfile issues)
           zip -r ../${{ matrix.service }}.zip .
 
-      - name: Deploy Lambda function
+      - name: Set Function Name
+        id: vars
+        run: echo "function_name=postolio-${{ needs.detect-changes.outputs.environment }}-${{ matrix.service }}" >> $GITHUB_OUTPUT
+
+      - name: Check if Function Exists
+        id: check
         run: |
-          FUNCTION_NAME="postolio-${{ needs.detect-changes.outputs.environment }}-${{ matrix.service }}"
-          
-          # Check if function exists
-          if aws lambda get-function --function-name $FUNCTION_NAME &>/dev/null; then
-            echo "Updating existing Lambda function..."
-            aws lambda update-function-code \
-              --function-name $FUNCTION_NAME \
-              --zip-file fileb://packages/services/${{ matrix.service }}/${{ matrix.service }}.zip
-            
-            # Wait for update to complete
-            aws lambda wait function-updated \
-              --function-name $FUNCTION_NAME
-            
-            # Update environment variables if needed
-            aws lambda update-function-configuration \
-              --function-name $FUNCTION_NAME \
-              --environment Variables="{
-                NODE_ENV=${{ needs.detect-changes.outputs.environment }},
-                SERVICE_NAME=${{ matrix.service }},
-                ENVIRONMENT=${{ needs.detect-changes.outputs.environment }}
-              }"
+          if aws lambda get-function --function-name ${{ steps.vars.outputs.function_name }} &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
           else
-            echo "Function does not exist, deploying via CDK..."
-            cd packages/infra/cdk
-            pnpm install --frozen-lockfile
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
 
-            # Map microservice to the owning stack: token-service has its own stack; others are in ContentScheduler-<env>
-            if [ "${{ matrix.service }}" = "token-service" ]; then
-              STACK_NAME="TokenService-${{ needs.detect-changes.outputs.environment }}"
-            else
-              STACK_NAME="ContentScheduler-${{ needs.detect-changes.outputs.environment }}"
-            fi
+      - name: Update Lambda Code
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ steps.vars.outputs.function_name }} \
+            --zip-file fileb://packages/services/${{ matrix.service }}/${{ matrix.service }}.zip
 
-            if pnpm cdk ls | grep -xq "$STACK_NAME"; then
-              pnpm cdk deploy "$STACK_NAME" \
-                --require-approval never \
-                --context environment=${{ needs.detect-changes.outputs.environment }}
-            else
-              echo "Stack $STACK_NAME not found in CDK app; skipping CDK deploy"
-            fi
+          aws lambda wait function-updated \
+            --function-name ${{ steps.vars.outputs.function_name }}
+
+      - name: Update Lambda Configuration
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          aws lambda update-function-configuration \
+            --function-name ${{ steps.vars.outputs.function_name }} \
+            --environment Variables="{
+              NODE_ENV=${{ needs.detect-changes.outputs.environment }},
+              SERVICE_NAME=${{ matrix.service }},
+              ENVIRONMENT=${{ needs.detect-changes.outputs.environment }}
+            }"
+
+      - name: CDK Setup for New Function
+        if: steps.check.outputs.exists == 'false'
+        uses: ./.github/actions/cdk-setup
+
+      - name: Deploy via CDK
+        if: steps.check.outputs.exists == 'false'
+        working-directory: packages/infra/cdk
+        run: |
+          if [ "${{ matrix.service }}" = "token-service" ]; then
+            STACK_NAME="TokenService-${{ needs.detect-changes.outputs.environment }}"
+          else
+            STACK_NAME="ContentScheduler-${{ needs.detect-changes.outputs.environment }}"
+          fi
+
+          if pnpm cdk ls | grep -xq "$STACK_NAME"; then
+            pnpm cdk deploy "$STACK_NAME" \
+              --require-approval never \
+              --context environment=${{ needs.detect-changes.outputs.environment }}
+          else
+            echo "Stack $STACK_NAME not found in CDK app; skipping CDK deploy"
           fi
 
   # ============================================
@@ -512,7 +526,7 @@ jobs:
   deploy-main-app:
     name: Deploy Main Application
     runs-on: ubuntu-latest
-    needs: [detect-changes, deploy-infrastructure, deploy-microservices]
+    needs: [detect-changes, build-images, deploy-infrastructure, deploy-microservices]
     if: |
       needs.detect-changes.outputs.api-changed == 'true' || 
       needs.detect-changes.outputs.infra-changed == 'true' ||
@@ -523,27 +537,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Install CDK dependencies
-        working-directory: packages/infra/cdk
-        run: pnpm install --frozen-lockfile
+      - name: CDK Setup
+        uses: ./.github/actions/cdk-setup
 
       - name: Deploy Postolio Stack
         working-directory: packages/infra/cdk
