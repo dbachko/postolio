@@ -1,26 +1,45 @@
 name: 'CDK Setup'
 description: 'Common setup steps for CDK deployments'
+inputs:
+  aws-access-key-id:
+    description: 'AWS Access Key ID'
+    required: true
+  aws-secret-access-key:
+    description: 'AWS Secret Access Key'
+    required: true
+  aws-region:
+    description: 'AWS Region'
+    required: false
+    default: 'us-east-1'
+  pnpm-version:
+    description: 'pnpm version to use'
+    required: false
+    default: '9.9.0'
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '22'
 runs:
   using: 'composite'
   steps:
     - name: Setup pnpm
       uses: pnpm/action-setup@v4
       with:
-        version: ${{ env.PNPM_VERSION }}
+        version: ${{ inputs.pnpm-version }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ env.NODE_VERSION }}
+        node-version: ${{ inputs.node-version }}
         cache: 'pnpm'
         cache-dependency-path: pnpm-lock.yaml
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        aws-region: ${{ inputs.aws-region }}
 
     - name: Install CDK dependencies
       working-directory: packages/infra/cdk
