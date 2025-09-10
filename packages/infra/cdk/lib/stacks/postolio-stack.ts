@@ -627,13 +627,6 @@ export class PostolioStack extends cdk.Stack {
             containerPort: 3000,
             executionRole,
             taskRole,
-            healthCheck: {
-              command: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"],
-              interval: cdk.Duration.seconds(30),
-              timeout: cdk.Duration.seconds(5),
-              retries: 3,
-              startPeriod: cdk.Duration.seconds(120), // Give container more time to start
-            },
             logging: ecs.LogDrivers.awsLogs({
               streamPrefix: "postolio-api",
               logRetention: logs.RetentionDays.ONE_WEEK,
@@ -780,6 +773,16 @@ export class PostolioStack extends cdk.Stack {
     // WebSocket connections require stickiness for proper session handling
     fargateService.targetGroup.enableCookieStickiness(cdk.Duration.hours(1));
 
+    // Add health check to the container
+    const container = fargateService.taskDefinition.defaultContainer!;
+    (container as ecs.ContainerDefinition).addHealthCheck({
+      command: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"],
+      interval: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(5),
+      retries: 3,
+      startPeriod: cdk.Duration.seconds(120),
+    });
+
     // Configure ECS service deployment settings
     const cfnServiceConfig = fargateService.service.node
       .defaultChild as ecs.CfnService;
@@ -789,9 +792,6 @@ export class PostolioStack extends cdk.Stack {
       deploymentCircuitBreaker: {
         rollback: true,  // Automatically rollback on failure
         enable: true,    // Enable circuit breaker
-      },
-      alarms: {
-        enable: false,   // Can be enabled later with CloudWatch alarms
       },
     };
 
