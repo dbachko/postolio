@@ -570,7 +570,7 @@ jobs:
           pnpm cdk deploy Postolio-${{ needs.detect-changes.outputs.environment }} \
             --require-approval never \
             --context environment=${{ needs.detect-changes.outputs.environment }} \
-            --context imageTag=${{ needs.detect-changes.outputs.environment }}-${{ github.sha }} \
+            --context imageTag=api-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }} \
             --context domainName=${{ vars.DOMAIN_NAME }} \
             --context corsOrigin=${{ vars.CORS_ORIGIN }}
 

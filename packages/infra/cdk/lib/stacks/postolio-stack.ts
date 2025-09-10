@@ -606,9 +606,8 @@ export class PostolioStack extends cdk.Stack {
     );
 
     // Get the image tag from context, defaulting to 'latest' if not provided
-    // Now prefixed with 'api-' to distinguish from web images
-    const baseImageTag = this.node.tryGetContext("imageTag") || "latest";
-    const imageTag = baseImageTag.startsWith("api-") ? baseImageTag : `api-${baseImageTag}`;
+    // Image tag should already include 'api-' prefix from the workflow
+    const imageTag = this.node.tryGetContext("imageTag") || "api-latest";
 
     // ECS Service with Application Load Balancer (CloudFront domain passed as environment variable)
     const fargateService =
