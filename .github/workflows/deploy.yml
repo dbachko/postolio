@@ -301,8 +301,8 @@ jobs:
           file: ${{ matrix.service.path }}/Dockerfile
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ needs.detect-changes.outputs.environment }}-latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ matrix.service.name }}-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ matrix.service.name }}-${{ needs.detect-changes.outputs.environment }}-latest
           cache-from: type=gha,scope=${{ matrix.service.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
           build-args: |
@@ -316,8 +316,8 @@ jobs:
           ENV: ${{ needs.detect-changes.outputs.environment }}
           SHA: ${{ github.sha }}
         run: |
-          LATEST_TAG="$ENV-latest"
-          NEW_TAG="$ENV-$SHA"
+          LATEST_TAG="${{ matrix.service.name }}-$ENV-latest"
+          NEW_TAG="${{ matrix.service.name }}-$ENV-$SHA"
           
           # Get manifest from latest
           MANIFEST=$(aws ecr batch-get-image \
