@@ -1,11 +1,11 @@
-import * as cdk from "aws-cdk-lib";
-import * as events from "aws-cdk-lib/aws-events";
-import * as targets from "aws-cdk-lib/aws-events-targets";
-import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as iam from "aws-cdk-lib/aws-iam";
-import * as ssm from "aws-cdk-lib/aws-ssm";
-import { Construct } from "constructs";
-import { NagSuppressions } from "cdk-nag";
+import * as cdk from 'aws-cdk-lib';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
+import { Construct } from 'constructs';
+import { NagSuppressions } from 'cdk-nag';
 
 /**
  * Configuration for EventBridge scheduled rules
@@ -32,7 +32,7 @@ export interface ScheduleConfig {
 }
 
 export interface EventBridgeRulesStackProps extends cdk.StackProps {
-  environment: "dev" | "staging" | "prod";
+  environment: 'dev' | 'staging' | 'prod';
   mainLambdaFunction: lambda.Function;
   config?: ScheduleConfig;
 }
@@ -84,58 +84,58 @@ export class EventBridgeRulesStack extends cdk.Stack {
       dev: {
         autopilot: {
           enabled: true,
-          schedule: "rate(1 hour)", // Run every hour in dev for testing
-          timezone: "America/New_York",
+          schedule: 'rate(1 hour)', // Run every hour in dev for testing
+          timezone: 'America/New_York',
         },
         retention: {
           enabled: true,
-          schedule: "rate(12 hours)", // Twice daily in dev
+          schedule: 'rate(12 hours)', // Twice daily in dev
         },
         gdpr: {
           enabled: false, // Disabled in dev
-          schedule: "cron(0 4 ? * SUN *)", // Weekly on Sunday at 4 AM UTC
+          schedule: 'cron(0 4 ? * SUN *)', // Weekly on Sunday at 4 AM UTC
         },
         metrics: {
           enabled: true,
-          schedule: "rate(30 minutes)", // Every 30 minutes in dev
+          schedule: 'rate(30 minutes)', // Every 30 minutes in dev
         },
       },
       staging: {
         autopilot: {
           enabled: true,
-          schedule: "cron(0 2 * * ? *)", // Daily at 2 AM UTC
-          timezone: "America/New_York",
+          schedule: 'cron(0 2 * * ? *)', // Daily at 2 AM UTC
+          timezone: 'America/New_York',
         },
         retention: {
           enabled: true,
-          schedule: "cron(0 3 * * ? *)", // Daily at 3 AM UTC
+          schedule: 'cron(0 3 * * ? *)', // Daily at 3 AM UTC
         },
         gdpr: {
           enabled: true,
-          schedule: "cron(0 4 ? * SUN *)", // Weekly on Sunday at 4 AM UTC
+          schedule: 'cron(0 4 ? * SUN *)', // Weekly on Sunday at 4 AM UTC
         },
         metrics: {
           enabled: true,
-          schedule: "rate(1 hour)", // Every hour
+          schedule: 'rate(1 hour)', // Every hour
         },
       },
       prod: {
         autopilot: {
           enabled: true,
-          schedule: "cron(0 2,14 * * ? *)", // Twice daily at 2 AM and 2 PM UTC
-          timezone: "America/New_York",
+          schedule: 'cron(0 2,14 * * ? *)', // Twice daily at 2 AM and 2 PM UTC
+          timezone: 'America/New_York',
         },
         retention: {
           enabled: true,
-          schedule: "cron(0 3 * * ? *)", // Daily at 3 AM UTC
+          schedule: 'cron(0 3 * * ? *)', // Daily at 3 AM UTC
         },
         gdpr: {
           enabled: true,
-          schedule: "cron(0 4 ? * SUN *)", // Weekly on Sunday at 4 AM UTC
+          schedule: 'cron(0 4 ? * SUN *)', // Weekly on Sunday at 4 AM UTC
         },
         metrics: {
           enabled: true,
-          schedule: "cron(0/15 * * * ? *)", // Every 15 minutes
+          schedule: 'cron(0/15 * * * ? *)', // Every 15 minutes
         },
       },
     };
@@ -162,10 +162,10 @@ export class EventBridgeRulesStack extends cdk.Stack {
     });
 
     // Store a master configuration parameter
-    new ssm.StringParameter(this, "MasterScheduleConfig", {
+    new ssm.StringParameter(this, 'MasterScheduleConfig', {
       parameterName: `${parameterPrefix}/config`,
       stringValue: JSON.stringify(this.scheduleConfig),
-      description: "Master EventBridge schedule configuration",
+      description: 'Master EventBridge schedule configuration',
       tier: ssm.ParameterTier.STANDARD,
     });
   }
@@ -178,12 +178,10 @@ export class EventBridgeRulesStack extends cdk.Stack {
       return;
     }
 
-    const rule = new events.Rule(this, "AutopilotRule", {
+    const rule = new events.Rule(this, 'AutopilotRule', {
       ruleName: `postolio-${this.envName}-autopilot`,
-      description: "Trigger autopilot content generation",
-      schedule: events.Schedule.expression(
-        this.scheduleConfig.autopilot.schedule,
-      ),
+      description: 'Trigger autopilot content generation',
+      schedule: events.Schedule.expression(this.scheduleConfig.autopilot.schedule),
       enabled: true,
     });
 
@@ -191,23 +189,23 @@ export class EventBridgeRulesStack extends cdk.Stack {
     rule.addTarget(
       new targets.LambdaFunction(targetFunction, {
         event: events.RuleTargetInput.fromObject({
-          source: "postolio.scheduler",
-          "detail-type": "Scheduled Task",
+          source: 'postolio.scheduler',
+          'detail-type': 'Scheduled Task',
           detail: {
-            taskType: "autopilot",
+            taskType: 'autopilot',
             environment: this.envName,
             timestamp: events.EventField.time,
           },
         }),
         retryAttempts: 2,
         maxEventAge: cdk.Duration.hours(1),
-      }),
+      })
     );
 
     // Add tags for cost tracking
-    cdk.Tags.of(rule).add("Service", "Postolio");
-    cdk.Tags.of(rule).add("Component", "Autopilot");
-    cdk.Tags.of(rule).add("Environment", this.envName);
+    cdk.Tags.of(rule).add('Service', 'Postolio');
+    cdk.Tags.of(rule).add('Component', 'Autopilot');
+    cdk.Tags.of(rule).add('Environment', this.envName);
   }
 
   /**
@@ -218,34 +216,32 @@ export class EventBridgeRulesStack extends cdk.Stack {
       return;
     }
 
-    const rule = new events.Rule(this, "RetentionRule", {
+    const rule = new events.Rule(this, 'RetentionRule', {
       ruleName: `postolio-${this.envName}-retention`,
-      description: "Process expired content based on retention policies",
-      schedule: events.Schedule.expression(
-        this.scheduleConfig.retention.schedule,
-      ),
+      description: 'Process expired content based on retention policies',
+      schedule: events.Schedule.expression(this.scheduleConfig.retention.schedule),
       enabled: true,
     });
 
     rule.addTarget(
       new targets.LambdaFunction(targetFunction, {
         event: events.RuleTargetInput.fromObject({
-          source: "postolio.scheduler",
-          "detail-type": "Scheduled Task",
+          source: 'postolio.scheduler',
+          'detail-type': 'Scheduled Task',
           detail: {
-            taskType: "retention",
+            taskType: 'retention',
             environment: this.envName,
             timestamp: events.EventField.time,
           },
         }),
         retryAttempts: 3,
         maxEventAge: cdk.Duration.hours(2),
-      }),
+      })
     );
 
-    cdk.Tags.of(rule).add("Service", "Postolio");
-    cdk.Tags.of(rule).add("Component", "Retention");
-    cdk.Tags.of(rule).add("Environment", this.envName);
+    cdk.Tags.of(rule).add('Service', 'Postolio');
+    cdk.Tags.of(rule).add('Component', 'Retention');
+    cdk.Tags.of(rule).add('Environment', this.envName);
   }
 
   /**
@@ -256,9 +252,9 @@ export class EventBridgeRulesStack extends cdk.Stack {
       return;
     }
 
-    const rule = new events.Rule(this, "GDPRComplianceRule", {
+    const rule = new events.Rule(this, 'GDPRComplianceRule', {
       ruleName: `postolio-${this.envName}-gdpr`,
-      description: "Process GDPR compliance and data deletion requests",
+      description: 'Process GDPR compliance and data deletion requests',
       schedule: events.Schedule.expression(this.scheduleConfig.gdpr.schedule),
       enabled: true,
     });
@@ -266,23 +262,23 @@ export class EventBridgeRulesStack extends cdk.Stack {
     rule.addTarget(
       new targets.LambdaFunction(targetFunction, {
         event: events.RuleTargetInput.fromObject({
-          source: "postolio.scheduler",
-          "detail-type": "Scheduled Task",
+          source: 'postolio.scheduler',
+          'detail-type': 'Scheduled Task',
           detail: {
-            taskType: "gdpr",
+            taskType: 'gdpr',
             environment: this.envName,
             timestamp: events.EventField.time,
           },
         }),
         retryAttempts: 3,
         maxEventAge: cdk.Duration.hours(6),
-      }),
+      })
     );
 
-    cdk.Tags.of(rule).add("Service", "Postolio");
-    cdk.Tags.of(rule).add("Component", "GDPR");
-    cdk.Tags.of(rule).add("Environment", this.envName);
-    cdk.Tags.of(rule).add("Compliance", "GDPR");
+    cdk.Tags.of(rule).add('Service', 'Postolio');
+    cdk.Tags.of(rule).add('Component', 'GDPR');
+    cdk.Tags.of(rule).add('Environment', this.envName);
+    cdk.Tags.of(rule).add('Compliance', 'GDPR');
   }
 
   /**
@@ -293,34 +289,32 @@ export class EventBridgeRulesStack extends cdk.Stack {
       return;
     }
 
-    const rule = new events.Rule(this, "MetricsCollectionRule", {
+    const rule = new events.Rule(this, 'MetricsCollectionRule', {
       ruleName: `postolio-${this.envName}-metrics`,
-      description: "Collect and aggregate application metrics",
-      schedule: events.Schedule.expression(
-        this.scheduleConfig.metrics.schedule,
-      ),
+      description: 'Collect and aggregate application metrics',
+      schedule: events.Schedule.expression(this.scheduleConfig.metrics.schedule),
       enabled: true,
     });
 
     rule.addTarget(
       new targets.LambdaFunction(targetFunction, {
         event: events.RuleTargetInput.fromObject({
-          source: "postolio.scheduler",
-          "detail-type": "Scheduled Task",
+          source: 'postolio.scheduler',
+          'detail-type': 'Scheduled Task',
           detail: {
-            taskType: "metrics-collection",
+            taskType: 'metrics-collection',
             environment: this.envName,
             timestamp: events.EventField.time,
           },
         }),
         retryAttempts: 1,
         maxEventAge: cdk.Duration.minutes(30),
-      }),
+      })
     );
 
-    cdk.Tags.of(rule).add("Service", "Postolio");
-    cdk.Tags.of(rule).add("Component", "Metrics");
-    cdk.Tags.of(rule).add("Environment", this.envName);
+    cdk.Tags.of(rule).add('Service', 'Postolio');
+    cdk.Tags.of(rule).add('Component', 'Metrics');
+    cdk.Tags.of(rule).add('Environment', this.envName);
   }
 
   /**
@@ -330,24 +324,22 @@ export class EventBridgeRulesStack extends cdk.Stack {
     // Suppress IAM4 only for specific EventBridge managed policies
     NagSuppressions.addStackSuppressions(this, [
       {
-        id: "AwsSolutions-IAM4",
+        id: 'AwsSolutions-IAM4',
         reason:
-          "EventBridge service-linked role uses AWS managed policy for basic Lambda invocation",
-        appliesTo: [
-          "Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaRole",
-        ],
+          'EventBridge service-linked role uses AWS managed policy for basic Lambda invocation',
+        appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaRole'],
       },
     ]);
 
     // Suppress IAM5 with specific resource patterns
     NagSuppressions.addStackSuppressions(this, [
       {
-        id: "AwsSolutions-IAM5",
+        id: 'AwsSolutions-IAM5',
         reason:
-          "EventBridge requires wildcard for Lambda function versions and aliases within the specific function ARN",
+          'EventBridge requires wildcard for Lambda function versions and aliases within the specific function ARN',
         appliesTo: [
-          "Resource::arn:aws:lambda:*:*:function:postolio-*:*",
-          "Action::lambda:InvokeFunction",
+          'Resource::arn:aws:lambda:*:*:function:postolio-*:*',
+          'Action::lambda:InvokeFunction',
         ],
       },
     ]);
@@ -357,18 +349,18 @@ export class EventBridgeRulesStack extends cdk.Stack {
    * Export configuration for documentation
    */
   public exportConfiguration(): void {
-    new cdk.CfnOutput(this, "ScheduleConfiguration", {
+    new cdk.CfnOutput(this, 'ScheduleConfiguration', {
       value: JSON.stringify(this.scheduleConfig, null, 2),
-      description: "EventBridge schedule configuration",
+      description: 'EventBridge schedule configuration',
       exportName: `${this.stackName}-schedule-config`,
     });
 
     // Export individual rule ARNs for monitoring
     const ruleNames = [
-      "AutopilotRule",
-      "RetentionRule",
-      "GDPRComplianceRule",
-      "MetricsCollectionRule",
+      'AutopilotRule',
+      'RetentionRule',
+      'GDPRComplianceRule',
+      'MetricsCollectionRule',
     ];
     ruleNames.forEach((ruleName) => {
       const rule = this.node.tryFindChild(ruleName) as events.Rule;

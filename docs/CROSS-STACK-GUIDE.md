@@ -66,14 +66,14 @@ export class ContentSchedulerStack extends cdk.Stack {
     super(scope, id, props);
 
     // Create API Gateway
-    this.api = new apigateway.RestApi(this, "SchedulerApi", {
+    this.api = new apigateway.RestApi(this, 'SchedulerApi', {
       restApiName: `postolio-scheduler-${props.environment}-api`,
     });
 
     this.apiEndpoint = this.api.url;
 
     // Export for CloudFormation cross-stack references
-    new cdk.CfnOutput(this, "ApiEndpoint", {
+    new cdk.CfnOutput(this, 'ApiEndpoint', {
       value: this.apiEndpoint,
       exportName: `postolio-scheduler-${props.environment}-api-endpoint`,
     });
@@ -99,10 +99,10 @@ export class PostolioStack extends cdk.Stack {
       : cdk.Fn.importValue(`postolio-scheduler-${environment}-api-endpoint`);
 
     // Add to application secrets
-    const appSecrets = new secretsmanager.Secret(this, "AppSecrets", {
+    const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
       secretObjectValue: {
         schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
-        schedulerApiKey: cdk.SecretValue.unsafePlainText("generated-key"),
+        schedulerApiKey: cdk.SecretValue.unsafePlainText('generated-key'),
         // ... other secrets
       },
     });
@@ -117,17 +117,13 @@ export class PostolioStack extends cdk.Stack {
 const app = new cdk.App();
 
 // Deploy ContentScheduler first
-const contentSchedulerStack = new ContentSchedulerStack(
-  app,
-  "ContentScheduler-dev",
-  {
-    environment: "dev",
-  },
-);
+const contentSchedulerStack = new ContentSchedulerStack(app, 'ContentScheduler-dev', {
+  environment: 'dev',
+});
 
 // Deploy Postolio with direct reference
-const postolioStack = new PostolioStack(app, "Postolio-dev", {
-  environment: "dev",
+const postolioStack = new PostolioStack(app, 'Postolio-dev', {
+  environment: 'dev',
   contentSchedulerStack, // Pass direct reference
 });
 
@@ -161,20 +157,20 @@ export class ContentSchedulerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ContentSchedulerStackProps) {
     super(scope, id, props);
 
-    const api = new apigateway.RestApi(this, "SchedulerApi", {
-      restApiName: "content-scheduler-api",
+    const api = new apigateway.RestApi(this, 'SchedulerApi', {
+      restApiName: 'content-scheduler-api',
     });
 
     // Export values for cross-stack import
-    new cdk.CfnOutput(this, "ApiEndpoint", {
+    new cdk.CfnOutput(this, 'ApiEndpoint', {
       value: api.url,
-      description: "Content Scheduler API endpoint",
+      description: 'Content Scheduler API endpoint',
       exportName: `postolio-scheduler-${props.environment}-api-endpoint`,
     });
 
-    new cdk.CfnOutput(this, "ApiId", {
+    new cdk.CfnOutput(this, 'ApiId', {
       value: api.restApiId,
-      description: "Content Scheduler API ID",
+      description: 'Content Scheduler API ID',
       exportName: `postolio-scheduler-${props.environment}-api-id`,
     });
   }
@@ -191,20 +187,14 @@ export class PostolioStack extends cdk.Stack {
     const { environment } = props;
 
     // Import values from ContentScheduler stack
-    const schedulerApiUrl = cdk.Fn.importValue(
-      `postolio-scheduler-${environment}-api-endpoint`,
-    );
-    const schedulerApiId = cdk.Fn.importValue(
-      `postolio-scheduler-${environment}-api-id`,
-    );
+    const schedulerApiUrl = cdk.Fn.importValue(`postolio-scheduler-${environment}-api-endpoint`);
+    const schedulerApiId = cdk.Fn.importValue(`postolio-scheduler-${environment}-api-id`);
 
     // Use imported values
-    const appSecrets = new secretsmanager.Secret(this, "AppSecrets", {
+    const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
       secretObjectValue: {
         schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
-        schedulerApiKey: cdk.SecretValue.unsafePlainText(
-          generateApiKey(this, "scheduler"),
-        ),
+        schedulerApiKey: cdk.SecretValue.unsafePlainText(generateApiKey(this, 'scheduler')),
         userPoolId: cdk.SecretValue.unsafePlainText(userPoolId),
       },
     });
@@ -212,8 +202,8 @@ export class PostolioStack extends cdk.Stack {
     // Reference imported API Gateway (if needed)
     const importedApi = apigateway.RestApi.fromRestApiId(
       this,
-      "ImportedSchedulerApi",
-      schedulerApiId,
+      'ImportedSchedulerApi',
+      schedulerApiId
     );
   }
 }
@@ -256,24 +246,24 @@ export class ContentSchedulerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ContentSchedulerStackProps) {
     super(scope, id, props);
 
-    const api = new apigateway.RestApi(this, "SchedulerApi", {
-      restApiName: "content-scheduler-api",
+    const api = new apigateway.RestApi(this, 'SchedulerApi', {
+      restApiName: 'content-scheduler-api',
     });
 
     // Store in Parameter Store
-    new ssm.StringParameter(this, "ApiUrlParameter", {
+    new ssm.StringParameter(this, 'ApiUrlParameter', {
       parameterName: `/postolio/${this.stackName}/api-url`,
       stringValue: api.url,
-      description: "ContentScheduler API URL",
+      description: 'ContentScheduler API URL',
       tier: ssm.ParameterTier.STANDARD,
     });
 
-    new ssm.StringParameter(this, "ConfigParameter", {
+    new ssm.StringParameter(this, 'ConfigParameter', {
       parameterName: `/postolio/${this.stackName}/config`,
       stringValue: JSON.stringify({
         apiUrl: api.url,
         apiId: api.restApiId,
-        version: "v1",
+        version: 'v1',
         timeout: 30000,
         endpoints: {
           health: `${api.url}health`,
@@ -281,7 +271,7 @@ export class ContentSchedulerStack extends cdk.Stack {
           auth: `${api.url}auth`,
         },
       }),
-      description: "ContentScheduler configuration",
+      description: 'ContentScheduler configuration',
       tier: ssm.ParameterTier.STANDARD,
     });
   }
@@ -300,16 +290,16 @@ export class PostolioStack extends cdk.Stack {
     // Read from Parameter Store
     const schedulerApiUrl = ssm.StringParameter.valueFromLookup(
       this,
-      `/postolio/${schedulerStackName}/api-url`,
+      `/postolio/${schedulerStackName}/api-url`
     );
 
     const schedulerConfig = ssm.StringParameter.valueFromLookup(
       this,
-      `/postolio/${schedulerStackName}/config`,
+      `/postolio/${schedulerStackName}/config`
     );
 
     // Use parameter values
-    const appSecrets = new secretsmanager.Secret(this, "AppSecrets", {
+    const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
       secretObjectValue: {
         schedulerApiUrl: cdk.SecretValue.unsafePlainText(schedulerApiUrl),
         schedulerConfig: cdk.SecretValue.unsafePlainText(schedulerConfig),
@@ -349,34 +339,32 @@ export class ContentSchedulerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ContentSchedulerStackProps) {
     super(scope, id, props);
 
-    const api = new apigateway.RestApi(this, "SchedulerApi", {
-      restApiName: "content-scheduler-api",
+    const api = new apigateway.RestApi(this, 'SchedulerApi', {
+      restApiName: 'content-scheduler-api',
     });
 
     // Create shared configuration secret
-    this.configSecret = new secretsmanager.Secret(this, "SchedulerConfig", {
-      description: "ContentScheduler configuration and credentials",
+    this.configSecret = new secretsmanager.Secret(this, 'SchedulerConfig', {
+      description: 'ContentScheduler configuration and credentials',
       secretObjectValue: {
         apiUrl: cdk.SecretValue.unsafePlainText(api.url),
         apiId: cdk.SecretValue.unsafePlainText(api.restApiId),
-        apiKey: cdk.SecretValue.unsafePlainText(
-          generateApiKey(this, "scheduler"),
-        ),
-        version: cdk.SecretValue.unsafePlainText("v1"),
+        apiKey: cdk.SecretValue.unsafePlainText(generateApiKey(this, 'scheduler')),
+        version: cdk.SecretValue.unsafePlainText('v1'),
         endpoints: cdk.SecretValue.unsafePlainText(
           JSON.stringify({
             health: `${api.url}health`,
             schedules: `${api.url}schedules`,
             auth: `${api.url}auth`,
-          }),
+          })
         ),
       },
     });
 
     // Export secret ARN
-    new cdk.CfnOutput(this, "ConfigSecretArn", {
+    new cdk.CfnOutput(this, 'ConfigSecretArn', {
       value: this.configSecret.secretArn,
-      description: "ContentScheduler configuration secret ARN",
+      description: 'ContentScheduler configuration secret ARN',
       exportName: `postolio-scheduler-${props.environment}-config-secret-arn`,
     });
   }
@@ -392,27 +380,27 @@ export class PostolioStack extends cdk.Stack {
 
     // Import secret ARN from ContentScheduler stack
     const configSecretArn = cdk.Fn.importValue(
-      `postolio-scheduler-${props.environment}-config-secret-arn`,
+      `postolio-scheduler-${props.environment}-config-secret-arn`
     );
 
     // Reference the imported secret
     const schedulerConfig = secretsmanager.Secret.fromSecretArn(
       this,
-      "ImportedSchedulerConfig",
-      configSecretArn,
+      'ImportedSchedulerConfig',
+      configSecretArn
     );
 
     // Create application secrets that reference scheduler config
-    const appSecrets = new secretsmanager.Secret(this, "AppSecrets", {
+    const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
       secretObjectValue: {
         // Reference values from shared secret
-        schedulerApiUrl: schedulerConfig.secretValueFromJson("apiUrl"),
-        schedulerApiKey: schedulerConfig.secretValueFromJson("apiKey"),
-        schedulerEndpoints: schedulerConfig.secretValueFromJson("endpoints"),
+        schedulerApiUrl: schedulerConfig.secretValueFromJson('apiUrl'),
+        schedulerApiKey: schedulerConfig.secretValueFromJson('apiKey'),
+        schedulerEndpoints: schedulerConfig.secretValueFromJson('endpoints'),
 
         // Add application-specific secrets
-        jwtSecret: cdk.SecretValue.unsafePlainText("your-jwt-secret"),
-        openaiApiKey: cdk.SecretValue.unsafePlainText("your-openai-key"),
+        jwtSecret: cdk.SecretValue.unsafePlainText('your-jwt-secret'),
+        openaiApiKey: cdk.SecretValue.unsafePlainText('your-openai-key'),
       },
     });
 
@@ -505,11 +493,11 @@ Always validate imported values and provide fallbacks:
 ```typescript
 const schedulerApiUrl = props.contentSchedulerStack
   ? props.contentSchedulerStack.apiEndpoint
-  : process.env.SCHEDULER_API_URL || "https://placeholder-api.com";
+  : process.env.SCHEDULER_API_URL || 'https://placeholder-api.com';
 
 // Validate the URL format
-if (!schedulerApiUrl.startsWith("https://")) {
-  throw new Error("Scheduler API URL must use HTTPS");
+if (!schedulerApiUrl.startsWith('https://')) {
+  throw new Error('Scheduler API URL must use HTTPS');
 }
 ```
 
@@ -554,15 +542,15 @@ Protect sensitive configuration:
 
 ```typescript
 // Good: Use Secrets Manager for sensitive data
-const appSecrets = new secretsmanager.Secret(this, "AppSecrets", {
+const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
   secretObjectValue: {
     apiKey: cdk.SecretValue.unsafePlainText(generateSecureKey()),
   },
 });
 
 // Bad: Expose sensitive data in CloudFormation outputs
-new cdk.CfnOutput(this, "ApiKey", {
-  value: "super-secret-key-123", // DON'T DO THIS!
+new cdk.CfnOutput(this, 'ApiKey', {
+  value: 'super-secret-key-123', // DON'T DO THIS!
 });
 ```
 
@@ -571,38 +559,23 @@ new cdk.CfnOutput(this, "ApiKey", {
 The provided utilities simplify cross-stack operations:
 
 ```typescript
-import {
-  CrossStackConfigManager,
-  SchedulerIntegration,
-} from "../lib/utils/cross-stack-utils";
+import { CrossStackConfigManager, SchedulerIntegration } from '../lib/utils/cross-stack-utils';
 
 // In ContentScheduler stack
-const configManager = new CrossStackConfigManager(
-  this,
-  "postolio",
-  environment,
-);
+const configManager = new CrossStackConfigManager(this, 'postolio', environment);
 const schedulerIntegration = new SchedulerIntegration(configManager);
 
-schedulerIntegration.exportSchedulerConfig(
-  api.url,
-  generateApiKey(this, "scheduler"),
-  { health: `${api.url}health`, schedules: `${api.url}schedules` },
-);
+schedulerIntegration.exportSchedulerConfig(api.url, generateApiKey(this, 'scheduler'), {
+  health: `${api.url}health`,
+  schedules: `${api.url}schedules`,
+});
 
 // In Postolio stack
-const configManager = new CrossStackConfigManager(
-  this,
-  "postolio",
-  environment,
-);
+const configManager = new CrossStackConfigManager(this, 'postolio', environment);
 const schedulerIntegration = new SchedulerIntegration(configManager);
 
-const schedulerConfig = schedulerIntegration.importSchedulerConfig(
-  "ContentScheduler-dev",
-);
-const appSecrets =
-  schedulerIntegration.createAppSecretsWithScheduler(schedulerConfig);
+const schedulerConfig = schedulerIntegration.importSchedulerConfig('ContentScheduler-dev');
+const appSecrets = schedulerIntegration.createAppSecretsWithScheduler(schedulerConfig);
 ```
 
 ## 🐛 Troubleshooting

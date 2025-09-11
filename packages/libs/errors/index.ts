@@ -3,10 +3,10 @@ export class TokenServiceError extends Error {
     message: string,
     public code: string,
     public statusCode?: number,
-    public isRetryable?: boolean,
+    public isRetryable?: boolean
   ) {
     super(message);
-    this.name = "TokenServiceError";
+    this.name = 'TokenServiceError';
   }
 }
 
@@ -14,17 +14,17 @@ export class RateLimitError extends TokenServiceError {
   constructor(public retryAfter: number) {
     super(
       `Rate limit exceeded. Try again in ${retryAfter} seconds.`,
-      "RATE_LIMIT_EXCEEDED",
+      'RATE_LIMIT_EXCEEDED',
       429,
-      false,
+      false
     );
-    this.name = "RateLimitError";
+    this.name = 'RateLimitError';
   }
 }
 
 export class ValidationError extends TokenServiceError {
   constructor(message: string) {
-    super(message, "VALIDATION_ERROR", 400, false);
-    this.name = "ValidationError";
+    super(message, 'VALIDATION_ERROR', 400, false);
+    this.name = 'ValidationError';
   }
 }

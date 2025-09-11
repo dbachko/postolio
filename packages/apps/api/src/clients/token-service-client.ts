@@ -3,26 +3,26 @@
  * Addresses architectural, engineering, and security review findings
  */
 
-import CircuitBreaker from "opossum";
-import { SignatureV4 } from "@aws-sdk/signature-v4";
-import { Sha256 } from "@aws-crypto/sha256-js";
-import { defaultProvider } from "@aws-sdk/credential-provider-node";
-import { getServiceDiscovery } from "../utils/service-discovery-client.js";
-import { shouldUseServiceDiscovery } from "../utils/service-discovery.js";
-import type { StoreTokenParams, TokenData } from "../types/token-service.js";
-import { getRedisClient } from "../services/redis.js";
-import crypto from "crypto";
+import CircuitBreaker from 'opossum';
+import { SignatureV4 } from '@aws-sdk/signature-v4';
+import { Sha256 } from '@aws-crypto/sha256-js';
+import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { getServiceDiscovery } from '../utils/service-discovery-client.js';
+import { shouldUseServiceDiscovery } from '../utils/service-discovery.js';
+import type { StoreTokenParams, TokenData } from '../types/token-service.js';
+import { getRedisClient } from '../services/redis.js';
+import crypto from 'crypto';
 import {
   TokenServiceError,
   RateLimitError,
   ValidationError,
-} from "../errors/token-service-errors.js";
+} from '../errors/token-service-errors.js';
 
 // Proper type definitions
 interface RequestHeaders extends Record<string, string> {
-  "Content-Type": string;
-  "X-Request-ID": string;
-  "X-Correlation-ID": string;
+  'Content-Type': string;
+  'X-Request-ID': string;
+  'X-Correlation-ID': string;
 }
 
 interface TokenCacheEntry {
@@ -67,10 +67,7 @@ export class TokenServiceClient {
   constructor(config?: TokenServiceConfig) {
     // Set defaults with proper typing
     this.config = {
-      apiUrl:
-        config?.apiUrl ||
-        process.env.TOKEN_SERVICE_URL ||
-        "http://localhost:4001",
+      apiUrl: config?.apiUrl || process.env.TOKEN_SERVICE_URL || 'http://localhost:4001',
       timeout: config?.timeout || 30000,
       maxRetries: config?.maxRetries || 3,
       retryDelay: config?.retryDelay || 1000,
@@ -116,22 +113,22 @@ export class TokenServiceClient {
       await this.initPromise;
       return;
     }
-    throw new Error("TokenServiceClient not properly initialized");
+    throw new Error('TokenServiceClient not properly initialized');
   }
 
   private async initializeWithServiceDiscovery(): Promise<void> {
     if (shouldUseServiceDiscovery(this.baseURL, this.config.apiUrl)) {
       try {
         const discovery = getServiceDiscovery();
-        const tokenServiceUrl = await discovery.getServiceUrl("token-service");
+        const tokenServiceUrl = await discovery.getServiceUrl('token-service');
         this.baseURL = tokenServiceUrl;
-        this.logInfo("Token Service discovered via Cloud Map", {
+        this.logInfo('Token Service discovered via Cloud Map', {
           url: tokenServiceUrl,
         });
       } catch (error) {
-        this.logWarn("Token Service discovery failed, using fallback URL", {
+        this.logWarn('Token Service discovery failed, using fallback URL', {
           fallbackUrl: this.baseURL,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
@@ -141,14 +138,14 @@ export class TokenServiceClient {
     if (process.env.AWS_REGION || process.env.AWS_ACCESS_KEY_ID) {
       try {
         this.signer = new SignatureV4({
-          service: "execute-api",
-          region: process.env.AWS_REGION || "us-east-1",
+          service: 'execute-api',
+          region: process.env.AWS_REGION || 'us-east-1',
           credentials: defaultProvider(),
           sha256: Sha256,
         });
       } catch (error) {
-        this.logWarn("Failed to initialize AWS SigV4 signer", {
-          error: error instanceof Error ? error.message : "Unknown error",
+        this.logWarn('Failed to initialize AWS SigV4 signer', {
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
@@ -159,39 +156,35 @@ export class TokenServiceClient {
       timeout: this.config.timeout,
       errorThresholdPercentage: 50,
       resetTimeout: 30000,
-      name: "TokenServiceClient",
+      name: 'TokenServiceClient',
       volumeThreshold: 10, // Minimum requests before opening
       capacity: 100, // Rolling window size
     };
 
     this.circuitBreaker = new CircuitBreaker(
       async (operation: () => Promise<unknown>) => operation(),
-      options,
+      options
     );
 
-    this.circuitBreaker!.on("open", () => {
-      this.logError("Circuit breaker OPEN - failing fast", {
+    this.circuitBreaker!.on('open', () => {
+      this.logError('Circuit breaker OPEN - failing fast', {
         stats: this.circuitBreaker!.stats,
       });
     });
 
-    this.circuitBreaker!.on("halfOpen", () => {
-      this.logInfo("Circuit breaker HALF-OPEN - testing recovery");
+    this.circuitBreaker!.on('halfOpen', () => {
+      this.logInfo('Circuit breaker HALF-OPEN - testing recovery');
     });
 
-    this.circuitBreaker!.on("close", () => {
-      this.logInfo("Circuit breaker CLOSED - service healthy");
+    this.circuitBreaker!.on('close', () => {
+      this.logInfo('Circuit breaker CLOSED - service healthy');
     });
   }
 
   /**
    * Get a token with caching and deduplication
    */
-  async getToken(
-    userId: string,
-    brandId: string,
-    platform: string,
-  ): Promise<TokenData | null> {
+  async getToken(userId: string, brandId: string, platform: string): Promise<TokenData | null> {
     // Ensure initialization is complete
     await this.ensureInitialized();
 
@@ -201,7 +194,7 @@ export class TokenServiceClient {
     if (this.config.enableCache) {
       const cached = this.getFromCache(cacheKey);
       if (cached) {
-        this.logDebug("Cache hit", { cacheKey });
+        this.logDebug('Cache hit', { cacheKey });
         return cached;
       }
     }
@@ -209,20 +202,20 @@ export class TokenServiceClient {
     // Check for pending request (deduplication)
     const pendingKey = `get:${cacheKey}`;
     if (this.pendingRequests.has(pendingKey)) {
-      this.logDebug("Request deduplication", { pendingKey });
+      this.logDebug('Request deduplication', { pendingKey });
       const existing = this.pendingRequests.get(pendingKey);
       if (existing) return existing;
     }
 
     // Check rate limit
     if (this.config.enableRateLimit) {
-      await this.checkRateLimit("getToken");
+      await this.checkRateLimit('getToken');
     }
 
     // Make the request
     const promise = this.circuitBreaker!.fire(async () => {
       const path = `/tokens/${userId}/${platform}/${brandId}`;
-      const response = await this.makeRequest(path, "GET");
+      const response = await this.makeRequest(path, 'GET');
 
       if (response.status === 404) {
         return null;
@@ -232,9 +225,9 @@ export class TokenServiceClient {
         const error = await response.text();
         throw new TokenServiceError(
           `Failed to get token: ${error}`,
-          "TOKEN_GET_FAILED",
+          'TOKEN_GET_FAILED',
           response.status,
-          response.status >= 500,
+          response.status >= 500
         );
       }
 
@@ -247,7 +240,7 @@ export class TokenServiceClient {
 
       // Audit log
       if (this.config.enableAuditLog) {
-        await this.auditLog("GET_TOKEN", { userId, brandId, platform });
+        await this.auditLog('GET_TOKEN', { userId, brandId, platform });
       }
 
       return data;
@@ -277,12 +270,12 @@ export class TokenServiceClient {
 
     // Check rate limit
     if (this.config.enableRateLimit) {
-      await this.checkRateLimit("storeToken");
+      await this.checkRateLimit('storeToken');
     }
 
     await this.circuitBreaker!.fire(async () => {
       const path = `/tokens/${params.userId}/${params.platform}/${params.brandId}`;
-      const response = await this.makeRequest(path, "PUT", {
+      const response = await this.makeRequest(path, 'PUT', {
         accessToken: params.accessToken,
         refreshToken: params.refreshToken,
         expiresAt: params.expiresAt,
@@ -293,9 +286,9 @@ export class TokenServiceClient {
         const error = await response.text();
         throw new TokenServiceError(
           `Failed to store token: ${error}`,
-          "TOKEN_STORE_FAILED",
+          'TOKEN_STORE_FAILED',
           response.status,
-          response.status >= 500,
+          response.status >= 500
         );
       }
 
@@ -307,7 +300,7 @@ export class TokenServiceClient {
 
       // Audit log
       if (this.config.enableAuditLog) {
-        await this.auditLog("STORE_TOKEN", {
+        await this.auditLog('STORE_TOKEN', {
           userId: params.userId,
           brandId: params.brandId,
           platform: params.platform,
@@ -323,7 +316,7 @@ export class TokenServiceClient {
     path: string,
     method: string,
     body?: unknown,
-    retries = this.config.maxRetries,
+    retries = this.config.maxRetries
   ): Promise<Response> {
     const url = new URL(`${this.baseURL}${path}`);
     const requestId = crypto.randomUUID();
@@ -331,9 +324,9 @@ export class TokenServiceClient {
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         const headers: RequestHeaders = {
-          "Content-Type": "application/json",
-          "X-Request-ID": requestId,
-          "X-Correlation-ID": this.correlationId,
+          'Content-Type': 'application/json',
+          'X-Request-ID': requestId,
+          'X-Correlation-ID': this.correlationId,
         };
 
         // Sign request if we have a signer
@@ -373,7 +366,7 @@ export class TokenServiceClient {
         const duration = Date.now() - startTime;
 
         // Log request metrics
-        this.logDebug("Request completed", {
+        this.logDebug('Request completed', {
           method,
           path,
           status: response.status,
@@ -394,7 +387,7 @@ export class TokenServiceClient {
           const jitter = Math.random() * exponentialDelay * 0.1; // 10% jitter
           const delay = Math.min(exponentialDelay + jitter, 30000);
 
-          this.logWarn("Retrying request", {
+          this.logWarn('Retrying request', {
             method,
             path,
             status: response.status,
@@ -415,10 +408,10 @@ export class TokenServiceClient {
           const jitter = Math.random() * exponentialDelay * 0.1;
           const delay = Math.min(exponentialDelay + jitter, 30000);
 
-          this.logWarn("Network error, retrying", {
+          this.logWarn('Network error, retrying', {
             method,
             path,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
             attempt: attempt + 1,
             retryAfter: delay,
           });
@@ -432,9 +425,9 @@ export class TokenServiceClient {
 
     throw new TokenServiceError(
       `Failed after ${retries} attempts`,
-      "MAX_RETRIES_EXCEEDED",
+      'MAX_RETRIES_EXCEEDED',
       undefined,
-      false,
+      false
     );
   }
 
@@ -493,25 +486,17 @@ export class TokenServiceClient {
 
   // Validation
   private validateStoreTokenParams(params: StoreTokenParams): void {
-    if (
-      !params.userId ||
-      !params.brandId ||
-      !params.platform ||
-      !params.accessToken
-    ) {
-      throw new ValidationError("Missing required parameters");
+    if (!params.userId || !params.brandId || !params.platform || !params.accessToken) {
+      throw new ValidationError('Missing required parameters');
     }
 
     if (params.expiresAt && new Date(params.expiresAt) < new Date()) {
-      throw new ValidationError("Token already expired");
+      throw new ValidationError('Token already expired');
     }
   }
 
   // Audit logging
-  private async auditLog(
-    action: string,
-    data: Record<string, unknown>,
-  ): Promise<void> {
+  private async auditLog(action: string, data: Record<string, unknown>): Promise<void> {
     try {
       const redis = getRedisClient();
       if (redis) {
@@ -521,27 +506,27 @@ export class TokenServiceClient {
           timestamp: new Date().toISOString(),
           correlationId: this.correlationId,
         };
-        await redis.lpush("token-service:audit", JSON.stringify(logEntry));
-        await redis.ltrim("token-service:audit", 0, 10000); // Keep last 10k entries
+        await redis.lpush('token-service:audit', JSON.stringify(logEntry));
+        await redis.ltrim('token-service:audit', 0, 10000); // Keep last 10k entries
       }
     } catch (error) {
-      this.logWarn("Failed to write audit log", {
-        error: error instanceof Error ? error.message : "Unknown error",
+      this.logWarn('Failed to write audit log', {
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }
 
   // Structured logging
   private logDebug(message: string, context?: Record<string, unknown>): void {
-    if (process.env.LOG_LEVEL === "debug") {
+    if (process.env.LOG_LEVEL === 'debug') {
       console.debug(
         JSON.stringify({
-          level: "DEBUG",
+          level: 'DEBUG',
           message,
           correlationId: this.correlationId,
           timestamp: new Date().toISOString(),
           ...context,
-        }),
+        })
       );
     }
   }
@@ -549,36 +534,36 @@ export class TokenServiceClient {
   private logInfo(message: string, context?: Record<string, unknown>): void {
     console.info(
       JSON.stringify({
-        level: "INFO",
+        level: 'INFO',
         message,
         correlationId: this.correlationId,
         timestamp: new Date().toISOString(),
         ...context,
-      }),
+      })
     );
   }
 
   private logWarn(message: string, context?: Record<string, unknown>): void {
     console.warn(
       JSON.stringify({
-        level: "WARN",
+        level: 'WARN',
         message,
         correlationId: this.correlationId,
         timestamp: new Date().toISOString(),
         ...context,
-      }),
+      })
     );
   }
 
   private logError(message: string, context?: Record<string, unknown>): void {
     console.error(
       JSON.stringify({
-        level: "ERROR",
+        level: 'ERROR',
         message,
         correlationId: this.correlationId,
         timestamp: new Date().toISOString(),
         ...context,
-      }),
+      })
     );
   }
 
@@ -615,11 +600,11 @@ export class TokenServiceClient {
   // Health check endpoint
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await this.makeRequest("/health", "GET");
+      const response = await this.makeRequest('/health', 'GET');
       return response.ok;
     } catch (error) {
-      this.logWarn("Token service health check failed", {
-        error: error instanceof Error ? error.message : "Unknown error",
+      this.logWarn('Token service health check failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
       return false;
     }
@@ -628,14 +613,14 @@ export class TokenServiceClient {
   // Get service metrics
   async getMetrics(): Promise<Record<string, unknown> | null> {
     try {
-      const response = await this.makeRequest("/metrics", "GET");
+      const response = await this.makeRequest('/metrics', 'GET');
       if (!response.ok) {
         throw new Error(`Failed to get metrics: ${response.status}`);
       }
       return response.json() as Promise<Record<string, unknown>>;
     } catch (error) {
-      this.logWarn("Failed to get token service metrics", {
-        error: error instanceof Error ? error.message : "Unknown error",
+      this.logWarn('Failed to get token service metrics', {
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
       return null;
     }

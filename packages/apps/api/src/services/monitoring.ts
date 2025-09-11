@@ -8,7 +8,7 @@ export interface ApiMetrics {
 }
 
 export interface ErrorLog {
-  level: "error" | "warn" | "info";
+  level: 'error' | 'warn' | 'info';
   message: string;
   userId?: string;
   endpoint?: string;
@@ -20,14 +20,14 @@ export class MonitoringService {
   private metrics: ApiMetrics[] = [];
   private errors: ErrorLog[] = [];
 
-  trackApiCall(metrics: Omit<ApiMetrics, "timestamp">): void {
+  trackApiCall(metrics: Omit<ApiMetrics, 'timestamp'>): void {
     this.metrics.push({
       ...metrics,
       timestamp: new Date(),
     });
   }
 
-  logError(error: Omit<ErrorLog, "timestamp">): void {
+  logError(error: Omit<ErrorLog, 'timestamp'>): void {
     this.errors.push({
       ...error,
       timestamp: new Date(),
@@ -44,9 +44,7 @@ export class MonitoringService {
 
   // Get metrics for specific time period
   getMetricsInPeriod(startTime: Date, endTime: Date): ApiMetrics[] {
-    return this.metrics.filter(
-      (m) => m.timestamp >= startTime && m.timestamp <= endTime,
-    );
+    return this.metrics.filter((m) => m.timestamp >= startTime && m.timestamp <= endTime);
   }
 
   // Get error rate for endpoint
@@ -66,10 +64,7 @@ export class MonitoringService {
 
     if (relevantMetrics.length === 0) return 0;
 
-    const totalTime = relevantMetrics.reduce(
-      (sum, m) => sum + m.responseTime,
-      0,
-    );
+    const totalTime = relevantMetrics.reduce((sum, m) => sum + m.responseTime, 0);
     return totalTime / relevantMetrics.length;
   }
 

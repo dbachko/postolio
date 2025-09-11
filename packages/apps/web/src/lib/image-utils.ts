@@ -14,19 +14,19 @@ export const preloadImage = (url: string): Promise<void> => {
 
 // Check browser support for modern image formats
 export const supportsWebP = (): boolean => {
-  if (typeof window === "undefined") return false;
+  if (typeof window === 'undefined') return false;
 
-  const canvas = document.createElement("canvas");
+  const canvas = document.createElement('canvas');
   canvas.width = 1;
   canvas.height = 1;
-  return canvas.toDataURL("image/webp").indexOf("image/webp") === 5;
+  return canvas.toDataURL('image/webp').indexOf('image/webp') === 5;
 };
 
 // Future enhancement: AVIF support detection
 export const supportsAVIF = (): boolean => {
-  if (typeof window === "undefined") return false;
+  if (typeof window === 'undefined') return false;
 
   // Simple AVIF support detection
   const avif = new Image();
-  return "decode" in avif && avif.src.indexOf("data:image/avif") === 0;
+  return 'decode' in avif && avif.src.indexOf('data:image/avif') === 0;
 };

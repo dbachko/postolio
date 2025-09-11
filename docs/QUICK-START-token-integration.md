@@ -13,9 +13,9 @@ Since you have no customers yet, we can do a **clean architectural transition** 
 **File**: `src/clients/token-service-client.ts`
 
 ```typescript
-import AWS from "aws-sdk";
-import CircuitBreaker from "opossum";
-import { z } from "zod";
+import AWS from 'aws-sdk';
+import CircuitBreaker from 'opossum';
+import { z } from 'zod';
 
 const TokenDataSchema = z.object({
   accessToken: z.string(),
@@ -51,15 +51,15 @@ export class TokenServiceClient {
     metadata?: Record<string, any>;
   }): Promise<void> {
     await this.circuitBreaker.fire({
-      method: "POST",
-      path: "/tokens",
+      method: 'POST',
+      path: '/tokens',
       body: params,
     });
   }
 
   async getToken(userId: string, brandId: string, platform: string) {
     const response = await this.circuitBreaker.fire({
-      method: "GET",
+      method: 'GET',
       path: `/tokens/${userId}/${brandId}/${platform}`,
     });
     return TokenDataSchema.parse(response);
@@ -80,10 +80,10 @@ export const tokenServiceClient = new TokenServiceClient();
 **File**: `src/routes/auth.ts`
 
 ```typescript
-import { tokenServiceClient } from "../clients/token-service-client";
+import { tokenServiceClient } from '../clients/token-service-client';
 
 // In the Instagram OAuth callback handler
-app.post("/api/auth/instagram/callback", async (request, reply) => {
+app.post('/api/auth/instagram/callback', async (request, reply) => {
   // ... existing OAuth code ...
 
   // OLD: Store in database
@@ -96,7 +96,7 @@ app.post("/api/auth/instagram/callback", async (request, reply) => {
   await tokenServiceClient.storeToken({
     userId: brand.userId,
     brandId: brand.id,
-    platform: "instagram",
+    platform: 'instagram',
     accessToken: token.access_token,
     refreshToken: token.refresh_token,
     expiresAt: new Date(Date.now() + token.expires_in * 1000),
@@ -117,16 +117,12 @@ app.post("/api/auth/instagram/callback", async (request, reply) => {
 **File**: `src/services/instagram.ts`
 
 ```typescript
-import { tokenServiceClient } from "../clients/token-service-client";
+import { tokenServiceClient } from '../clients/token-service-client';
 
 export class InstagramService {
   async getAccessToken(brand: Brand): Promise<string> {
     // NEW: Get from Token Service
-    const tokenData = await tokenServiceClient.getToken(
-      brand.userId,
-      brand.id,
-      "instagram",
-    );
+    const tokenData = await tokenServiceClient.getToken(brand.userId, brand.id, 'instagram');
 
     // Check if token needs refresh (within 7 days of expiry)
     const expiresAt = new Date(tokenData.expiresAt);
@@ -134,11 +130,7 @@ export class InstagramService {
 
     if (expiresAt < refreshThreshold) {
       console.log(`Token expiring soon for brand ${brand.id}, refreshing...`);
-      const refreshed = await tokenServiceClient.refreshToken(
-        brand.userId,
-        brand.id,
-        "instagram",
-      );
+      const refreshed = await tokenServiceClient.refreshToken(brand.userId, brand.id, 'instagram');
       return refreshed.accessToken;
     }
 
@@ -166,7 +158,7 @@ export const handler = async (event: any) => {
   const tokenData = await tokenServiceClient.getToken(
     schedule.userId,
     schedule.brandId,
-    schedule.platform,
+    schedule.platform
   );
 
   // Include token in SQS message

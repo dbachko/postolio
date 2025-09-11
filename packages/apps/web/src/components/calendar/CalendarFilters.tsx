@@ -1,55 +1,48 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   useCalendarFilterStore,
   type ContentStatus,
   type ContentType,
-} from "../../stores/calendarFilterStore";
-import { apiClient, type Campaign } from "../../lib/api";
-import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { Calendar } from "../ui/calendar";
-import { format } from "date-fns";
-import { Search, X, Filter, Calendar as CalendarIcon } from "lucide-react";
+} from '../../stores/calendarFilterStore';
+import { apiClient, type Campaign } from '../../lib/api';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
+import { format } from 'date-fns';
+import { Search, X, Filter, Calendar as CalendarIcon } from 'lucide-react';
 
 interface CalendarFiltersProps {
   brandId: string;
 }
 
-const STATUS_OPTIONS: { value: ContentStatus; label: string; color: string }[] =
-  [
-    { value: "draft", label: "Draft", color: "bg-gray-100 text-gray-800" },
-    {
-      value: "scheduled",
-      label: "Scheduled",
-      color: "bg-blue-100 text-blue-800",
-    },
-    {
-      value: "published",
-      label: "Published",
-      color: "bg-green-100 text-green-800",
-    },
-    { value: "failed", label: "Failed", color: "bg-red-100 text-red-800" },
-    {
-      value: "skipped",
-      label: "Skipped",
-      color: "bg-yellow-100 text-yellow-800",
-    },
-  ];
+const STATUS_OPTIONS: { value: ContentStatus; label: string; color: string }[] = [
+  { value: 'draft', label: 'Draft', color: 'bg-gray-100 text-gray-800' },
+  {
+    value: 'scheduled',
+    label: 'Scheduled',
+    color: 'bg-blue-100 text-blue-800',
+  },
+  {
+    value: 'published',
+    label: 'Published',
+    color: 'bg-green-100 text-green-800',
+  },
+  { value: 'failed', label: 'Failed', color: 'bg-red-100 text-red-800' },
+  {
+    value: 'skipped',
+    label: 'Skipped',
+    color: 'bg-yellow-100 text-yellow-800',
+  },
+];
 
 const CONTENT_TYPE_OPTIONS: { value: ContentType; label: string }[] = [
-  { value: "post", label: "Posts" },
-  { value: "placeholder", label: "AI Placeholders" },
+  { value: 'post', label: 'Posts' },
+  { value: 'placeholder', label: 'AI Placeholders' },
 ];
 
 export function CalendarFilters({ brandId }: CalendarFiltersProps) {
@@ -62,7 +55,7 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
 
   // Fetch campaigns for filter dropdown
   const { data: campaignsData } = useQuery({
-    queryKey: ["campaigns", brandId],
+    queryKey: ['campaigns', brandId],
     queryFn: () => apiClient.listCampaigns(brandId),
     staleTime: 5 * 60 * 1000,
   });
@@ -71,10 +64,10 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
   const activeFilterCount = filters.getActiveFilterCount();
 
   const handleCampaignChange = (value: string) => {
-    if (value === "all") {
+    if (value === 'all') {
       filters.setCampaigns([]);
     } else {
-      const selectedCampaigns = value ? value.split(",") : [];
+      const selectedCampaigns = value ? value.split(',') : [];
       filters.setCampaigns(selectedCampaigns);
     }
   };
@@ -91,37 +84,26 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg border p-4 space-y-4">
+    <div className="space-y-4 rounded-lg border bg-white p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-500" />
+          <Filter className="h-4 w-4 text-gray-500" />
           <span className="font-medium">Filters</span>
-          {activeFilterCount > 0 && (
-            <Badge variant="secondary">{activeFilterCount} active</Badge>
-          )}
+          {activeFilterCount > 0 && <Badge variant="secondary">{activeFilterCount} active</Badge>}
         </div>
         {filters.hasActiveFilters() && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={filters.clearAll}
-            className="text-gray-500"
-          >
+          <Button variant="ghost" size="sm" onClick={filters.clearAll} className="text-gray-500">
             Clear All
           </Button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* Campaign Filter */}
         <div>
-          <Label className="text-xs text-gray-600 mb-1">Campaigns</Label>
+          <Label className="mb-1 text-xs text-gray-600">Campaigns</Label>
           <Select
-            value={
-              filters.campaigns.length === 0
-                ? "all"
-                : filters.campaigns.join(",")
-            }
+            value={filters.campaigns.length === 0 ? 'all' : filters.campaigns.join(',')}
             onValueChange={handleCampaignChange}
           >
             <SelectTrigger className="w-full">
@@ -140,22 +122,19 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
 
         {/* Status Filter */}
         <div>
-          <Label className="text-xs text-gray-600 mb-1">Status</Label>
+          <Label className="mb-1 text-xs text-gray-600">Status</Label>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-start">
                 {filters.statuses.length === 0
-                  ? "All statuses"
+                  ? 'All statuses'
                   : `${filters.statuses.length} selected`}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-56">
               <div className="space-y-2">
                 {STATUS_OPTIONS.map((option) => (
-                  <label
-                    key={option.value}
-                    className="flex items-center gap-2 cursor-pointer"
-                  >
+                  <label key={option.value} className="flex cursor-pointer items-center gap-2">
                     <input
                       type="checkbox"
                       checked={filters.statuses.includes(option.value)}
@@ -172,28 +151,21 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
 
         {/* Content Type Filter */}
         <div>
-          <Label className="text-xs text-gray-600 mb-1">Content Type</Label>
+          <Label className="mb-1 text-xs text-gray-600">Content Type</Label>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-start">
                 {filters.contentTypes.length === 2
-                  ? "All types"
+                  ? 'All types'
                   : filters.contentTypes
-                      .map(
-                        (t) =>
-                          CONTENT_TYPE_OPTIONS.find((o) => o.value === t)
-                            ?.label,
-                      )
-                      .join(", ")}
+                      .map((t) => CONTENT_TYPE_OPTIONS.find((o) => o.value === t)?.label)
+                      .join(', ')}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-48">
               <div className="space-y-2">
                 {CONTENT_TYPE_OPTIONS.map((option) => (
-                  <label
-                    key={option.value}
-                    className="flex items-center gap-2 cursor-pointer"
-                  >
+                  <label key={option.value} className="flex cursor-pointer items-center gap-2">
                     <input
                       type="checkbox"
                       checked={filters.contentTypes.includes(option.value)}
@@ -210,21 +182,19 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
 
         {/* Date Range Filter */}
         <div>
-          <Label className="text-xs text-gray-600 mb-1">Date Range</Label>
+          <Label className="mb-1 text-xs text-gray-600">Date Range</Label>
           <Popover open={isDateRangeOpen} onOpenChange={setIsDateRangeOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-start">
-                <CalendarIcon className="w-4 h-4 mr-2" />
+                <CalendarIcon className="mr-2 h-4 w-4" />
                 {filters.dateRange.start || filters.dateRange.end ? (
                   <span className="text-sm">
-                    {filters.dateRange.start &&
-                      format(filters.dateRange.start, "MMM d")}
-                    {filters.dateRange.start && filters.dateRange.end && " - "}
-                    {filters.dateRange.end &&
-                      format(filters.dateRange.end, "MMM d")}
+                    {filters.dateRange.start && format(filters.dateRange.start, 'MMM d')}
+                    {filters.dateRange.start && filters.dateRange.end && ' - '}
+                    {filters.dateRange.end && format(filters.dateRange.end, 'MMM d')}
                   </span>
                 ) : (
-                  "All dates"
+                  'All dates'
                 )}
               </Button>
             </PopoverTrigger>
@@ -236,9 +206,7 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
                     size="sm"
                     onClick={() => {
                       const today = new Date();
-                      const weekAgo = new Date(
-                        today.getTime() - 7 * 24 * 60 * 60 * 1000,
-                      );
+                      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
                       setTempDateRange({ start: weekAgo, end: today });
                     }}
                   >
@@ -249,9 +217,7 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
                     size="sm"
                     onClick={() => {
                       const today = new Date();
-                      const monthAgo = new Date(
-                        today.getTime() - 30 * 24 * 60 * 60 * 1000,
-                      );
+                      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
                       setTempDateRange({ start: monthAgo, end: today });
                     }}
                   >
@@ -262,9 +228,7 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
                     size="sm"
                     onClick={() => {
                       const today = new Date();
-                      const nextWeek = new Date(
-                        today.getTime() + 7 * 24 * 60 * 60 * 1000,
-                      );
+                      const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
                       setTempDateRange({ start: today, end: nextWeek });
                     }}
                   >
@@ -303,12 +267,8 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
                   </div>
                 </div>
 
-                <div className="flex gap-2 justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleClearDateRange}
-                  >
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={handleClearDateRange}>
                     Clear
                   </Button>
                   <Button size="sm" onClick={handleApplyDateRange}>
@@ -323,7 +283,7 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
 
       {/* Search Bar */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
         <Input
           type="text"
           placeholder="Search captions, hashtags, or campaigns..."
@@ -333,17 +293,17 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
         />
         {filters.searchQuery && (
           <button
-            onClick={() => filters.setSearchQuery("")}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2"
+            onClick={() => filters.setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 transform"
           >
-            <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+            <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
           </button>
         )}
       </div>
 
       {/* Active Filters Display */}
       {filters.hasActiveFilters() && (
-        <div className="flex flex-wrap gap-2 pt-2 border-t">
+        <div className="flex flex-wrap gap-2 border-t pt-2">
           {filters.campaigns.map((campaignId) => {
             const campaign = campaigns.find((c) => c.id === campaignId);
             return campaign ? (
@@ -351,63 +311,44 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
                 Campaign: {campaign.name}
                 <button
                   onClick={() =>
-                    filters.setCampaigns(
-                      filters.campaigns.filter((id) => id !== campaignId),
-                    )
+                    filters.setCampaigns(filters.campaigns.filter((id) => id !== campaignId))
                   }
                   className="ml-1"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="h-3 w-3" />
                 </button>
               </Badge>
             ) : null;
           })}
 
           {filters.statuses.map((status) => (
-            <Badge
-              key={status}
-              className={STATUS_OPTIONS.find((s) => s.value === status)?.color}
-            >
+            <Badge key={status} className={STATUS_OPTIONS.find((s) => s.value === status)?.color}>
               {STATUS_OPTIONS.find((s) => s.value === status)?.label}
-              <button
-                onClick={() => filters.toggleStatus(status)}
-                className="ml-1"
-              >
-                <X className="w-3 h-3" />
+              <button onClick={() => filters.toggleStatus(status)} className="ml-1">
+                <X className="h-3 w-3" />
               </button>
             </Badge>
           ))}
 
           {filters.contentTypes.length === 1 && (
             <Badge variant="secondary">
-              Type:{" "}
-              {
-                CONTENT_TYPE_OPTIONS.find(
-                  (t) => t.value === filters.contentTypes[0],
-                )?.label
-              }
+              Type: {CONTENT_TYPE_OPTIONS.find((t) => t.value === filters.contentTypes[0])?.label}
               <button
-                onClick={() =>
-                  filters.toggleContentType(filters.contentTypes[0])
-                }
+                onClick={() => filters.toggleContentType(filters.contentTypes[0])}
                 className="ml-1"
               >
-                <X className="w-3 h-3" />
+                <X className="h-3 w-3" />
               </button>
             </Badge>
           )}
 
           {(filters.dateRange.start || filters.dateRange.end) && (
             <Badge variant="secondary">
-              {filters.dateRange.start &&
-                format(filters.dateRange.start, "MMM d")}
-              {filters.dateRange.start && filters.dateRange.end && " - "}
-              {filters.dateRange.end && format(filters.dateRange.end, "MMM d")}
-              <button
-                onClick={() => filters.setDateRange(null, null)}
-                className="ml-1"
-              >
-                <X className="w-3 h-3" />
+              {filters.dateRange.start && format(filters.dateRange.start, 'MMM d')}
+              {filters.dateRange.start && filters.dateRange.end && ' - '}
+              {filters.dateRange.end && format(filters.dateRange.end, 'MMM d')}
+              <button onClick={() => filters.setDateRange(null, null)} className="ml-1">
+                <X className="h-3 w-3" />
               </button>
             </Badge>
           )}
@@ -415,11 +356,8 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
           {filters.searchQuery && (
             <Badge variant="secondary">
               Search: "{filters.searchQuery}"
-              <button
-                onClick={() => filters.setSearchQuery("")}
-                className="ml-1"
-              >
-                <X className="w-3 h-3" />
+              <button onClick={() => filters.setSearchQuery('')} className="ml-1">
+                <X className="h-3 w-3" />
               </button>
             </Badge>
           )}

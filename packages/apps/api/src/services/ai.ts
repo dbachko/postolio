@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from 'openai';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -27,14 +27,11 @@ export interface BrandAnalysisResult {
 
 export async function analyzeBrandStyle(
   posts: PostAnalysis[],
-  brandName: string,
+  brandName: string
 ): Promise<BrandAnalysisResult> {
   const postsText = posts
-    .map(
-      (post) =>
-        `Caption: ${post.caption}\nHashtags: ${post.hashtags.join(", ")}`,
-    )
-    .join("\n\n");
+    .map((post) => `Caption: ${post.caption}\nHashtags: ${post.hashtags.join(', ')}`)
+    .join('\n\n');
 
   const prompt = `Analyze the following Instagram posts for brand "${brandName}" and create a comprehensive brand style profile:
 
@@ -55,15 +52,15 @@ Return only valid JSON without any additional text or formatting.`;
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: 'gpt-4o',
       messages: [
         {
-          role: "system",
+          role: 'system',
           content:
-            "You are an expert Instagram brand analyst. Provide detailed, actionable brand analysis in JSON format only.",
+            'You are an expert Instagram brand analyst. Provide detailed, actionable brand analysis in JSON format only.',
         },
         {
-          role: "user",
+          role: 'user',
           content: prompt,
         },
       ],
@@ -73,7 +70,7 @@ Return only valid JSON without any additional text or formatting.`;
 
     const content = completion.choices[0]?.message?.content;
     if (!content) {
-      throw new Error("No content received from OpenAI");
+      throw new Error('No content received from OpenAI');
     }
 
     // Parse the JSON response
@@ -83,29 +80,29 @@ Return only valid JSON without any additional text or formatting.`;
     if (
       !analysis.styleProfile ||
       !analysis.recommendations ||
-      typeof analysis.confidence !== "number"
+      typeof analysis.confidence !== 'number'
     ) {
-      throw new Error("Invalid analysis structure received");
+      throw new Error('Invalid analysis structure received');
     }
 
     return analysis;
   } catch (error) {
-    console.error("Brand analysis error:", error);
+    console.error('Brand analysis error:', error);
 
     // Return fallback analysis
     return {
       styleProfile: {
-        colorPalette: ["#333333", "#ffffff"],
-        aestheticStyle: "Modern and clean",
-        contentThemes: ["lifestyle", "product"],
-        toneOfVoice: "Professional and friendly",
-        targetAudience: "General audience",
-        brandPersonality: ["authentic", "approachable"],
+        colorPalette: ['#333333', '#ffffff'],
+        aestheticStyle: 'Modern and clean',
+        contentThemes: ['lifestyle', 'product'],
+        toneOfVoice: 'Professional and friendly',
+        targetAudience: 'General audience',
+        brandPersonality: ['authentic', 'approachable'],
       },
       recommendations: [
-        "Maintain consistent visual style",
-        "Engage with audience regularly",
-        "Use trending hashtags strategically",
+        'Maintain consistent visual style',
+        'Engage with audience regularly',
+        'Use trending hashtags strategically',
       ],
       confidence: 0.5,
     };
@@ -119,17 +116,17 @@ export async function analyzeImageStyle(imageUrl: string): Promise<{
 }> {
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: 'gpt-4o',
       messages: [
         {
-          role: "user",
+          role: 'user',
           content: [
             {
-              type: "text",
-              text: "Analyze this image and describe its visual style, dominant colors, and aesthetic. Return a JSON object with: description (string), colors (array of hex colors), style (string). Return only JSON.",
+              type: 'text',
+              text: 'Analyze this image and describe its visual style, dominant colors, and aesthetic. Return a JSON object with: description (string), colors (array of hex colors), style (string). Return only JSON.',
             },
             {
-              type: "image_url",
+              type: 'image_url',
               image_url: { url: imageUrl },
             },
           ],
@@ -140,16 +137,16 @@ export async function analyzeImageStyle(imageUrl: string): Promise<{
 
     const content = completion.choices[0]?.message?.content;
     if (!content) {
-      throw new Error("No content received from image analysis");
+      throw new Error('No content received from image analysis');
     }
 
     return JSON.parse(content);
   } catch (error) {
-    console.error("Image analysis error:", error);
+    console.error('Image analysis error:', error);
     return {
-      description: "Unable to analyze image",
-      colors: ["#000000"],
-      style: "Unknown",
+      description: 'Unable to analyze image',
+      colors: ['#000000'],
+      style: 'Unknown',
     };
   }
 }

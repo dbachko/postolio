@@ -1,9 +1,9 @@
-import { useMemo } from "react";
-import { useCalendarFilterStore } from "../stores/calendarFilterStore";
+import { useMemo } from 'react';
+import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 
 interface ContentItem {
   id: string;
-  type: "content" | "placeholder";
+  type: 'content' | 'placeholder';
   caption: string;
   status: string;
   scheduledAt?: string | null;
@@ -26,8 +26,7 @@ export function useFilteredContent(items: ContentItem[]) {
     // Filter by campaigns
     if (filters.campaigns.length > 0) {
       filtered = filtered.filter(
-        (item) =>
-          item.campaignId && filters.campaigns.includes(item.campaignId),
+        (item) => item.campaignId && filters.campaigns.includes(item.campaignId)
       );
     }
 
@@ -37,23 +36,16 @@ export function useFilteredContent(items: ContentItem[]) {
         (item) =>
           item.status &&
           filters.statuses.includes(
-            item.status as
-              | "draft"
-              | "scheduled"
-              | "published"
-              | "failed"
-              | "skipped",
-          ),
+            item.status as 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'
+          )
       );
     }
 
     // Filter by content type
     if (filters.contentTypes.length > 0 && filters.contentTypes.length < 2) {
       filtered = filtered.filter((item) => {
-        const itemType = item.type === "placeholder" ? "placeholder" : "post";
-        return filters.contentTypes.includes(
-          itemType as "post" | "placeholder",
-        );
+        const itemType = item.type === 'placeholder' ? 'placeholder' : 'post';
+        return filters.contentTypes.includes(itemType as 'post' | 'placeholder');
       });
     }
 
@@ -77,15 +69,11 @@ export function useFilteredContent(items: ContentItem[]) {
     if (filters.searchQuery) {
       const query = filters.searchQuery.toLowerCase();
       filtered = filtered.filter((item) => {
-        const caption = (item.caption || "").toLowerCase();
-        const hashtags = (item.hashtags || []).join(" ").toLowerCase();
-        const campaign = (item.campaignName || "").toLowerCase();
+        const caption = (item.caption || '').toLowerCase();
+        const hashtags = (item.hashtags || []).join(' ').toLowerCase();
+        const campaign = (item.campaignName || '').toLowerCase();
 
-        return (
-          caption.includes(query) ||
-          hashtags.includes(query) ||
-          campaign.includes(query)
-        );
+        return caption.includes(query) || hashtags.includes(query) || campaign.includes(query);
       });
     }
 

@@ -1,15 +1,10 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-} from "@aws-sdk/lib-dynamodb";
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-const CIRCUIT_BREAKER_TABLE =
-  process.env.CIRCUIT_BREAKER_TABLE || "circuit-breaker-state";
+const CIRCUIT_BREAKER_TABLE = process.env.CIRCUIT_BREAKER_TABLE || 'circuit-breaker-state';
 
 export interface CircuitBreakerOptions {
   failureThreshold: number;
@@ -19,9 +14,9 @@ export interface CircuitBreakerOptions {
 }
 
 export enum CircuitState {
-  CLOSED = "CLOSED",
-  OPEN = "OPEN",
-  HALF_OPEN = "HALF_OPEN",
+  CLOSED = 'CLOSED',
+  OPEN = 'OPEN',
+  HALF_OPEN = 'HALF_OPEN',
 }
 
 interface CircuitBreakerState {
@@ -42,9 +37,9 @@ export class CircuitBreaker {
 
   constructor(
     private options: CircuitBreakerOptions,
-    serviceName?: string,
+    serviceName?: string
   ) {
-    this.serviceName = serviceName || "default";
+    this.serviceName = serviceName || 'default';
     // Load state asynchronously on first use
   }
 
@@ -56,16 +51,13 @@ export class CircuitBreaker {
         new GetCommand({
           TableName: CIRCUIT_BREAKER_TABLE,
           Key: { serviceName: this.serviceName },
-        }),
+        })
       );
 
       if (result.Item) {
         const savedState = result.Item as CircuitBreakerState;
         // Only restore if state is recent (within monitoring period)
-        if (
-          Date.now() - savedState.lastUpdated <
-          this.options.monitoringPeriod
-        ) {
+        if (Date.now() - savedState.lastUpdated < this.options.monitoringPeriod) {
           this.state = savedState.state;
           this.failures = savedState.failures;
           this.lastFailureTime = savedState.lastFailureTime;
@@ -73,7 +65,7 @@ export class CircuitBreaker {
         }
       }
     } catch (error) {
-      console.warn("Failed to load circuit breaker state:", error);
+      console.warn('Failed to load circuit breaker state:', error);
     } finally {
       this.initialized = true;
     }
@@ -95,10 +87,10 @@ export class CircuitBreaker {
             lastUpdated: Date.now(),
             ttl: Math.floor(Date.now() / 1000) + 3600, // 1 hour TTL
           },
-        }),
+        })
       );
     } catch (error) {
-      console.warn("Failed to save circuit breaker state:", error);
+      console.warn('Failed to save circuit breaker state:', error);
     }
   }
 
@@ -107,14 +99,11 @@ export class CircuitBreaker {
     await this.loadState();
 
     if (this.state === CircuitState.OPEN) {
-      if (
-        Date.now() - (this.lastFailureTime || 0) >
-        this.options.resetTimeout
-      ) {
+      if (Date.now() - (this.lastFailureTime || 0) > this.options.resetTimeout) {
         this.state = CircuitState.HALF_OPEN;
         await this.saveState();
       } else {
-        throw new Error("Circuit breaker is OPEN");
+        throw new Error('Circuit breaker is OPEN');
       }
     }
 
@@ -171,7 +160,7 @@ export class CircuitBreakerFactory {
         failureThreshold: 5,
         resetTimeout: 60000, // 1 minute
         monitoringPeriod: 60000,
-        persistState: process.env.NODE_ENV === "production", // Enable persistence in production
+        persistState: process.env.NODE_ENV === 'production', // Enable persistence in production
         ...options,
       };
       this.breakers.set(name, new CircuitBreaker(defaultOptions, name));

@@ -1,4 +1,4 @@
-import { Brain, Sparkles, X } from "lucide-react";
+import { Brain, Sparkles, X } from 'lucide-react';
 
 interface PostLearningFeedbackProps {
   isVisible: boolean;
@@ -13,33 +13,33 @@ export function PostLearningFeedback({
   message,
   appliedToFuturePosts,
   onDismiss,
-  className = "",
+  className = '',
 }: PostLearningFeedbackProps) {
   if (!isVisible) return null;
 
   return (
     <div
-      className={`bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 animate-in slide-in-from-top duration-300 ${className}`}
+      className={`animate-in slide-in-from-top rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50 p-4 duration-300 ${className}`}
     >
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <Brain className="w-5 h-5 text-blue-600" />
-          <Sparkles className="w-4 h-4 text-purple-600" />
+          <Brain className="h-5 w-5 text-blue-600" />
+          <Sparkles className="h-4 w-4 text-purple-600" />
         </div>
         <div className="flex-1">
           <div className="text-sm font-medium text-gray-900">{message}</div>
           {appliedToFuturePosts && (
-            <div className="text-xs text-gray-600 mt-1">
+            <div className="mt-1 text-xs text-gray-600">
               Improvements applied to ~{appliedToFuturePosts} future posts
             </div>
           )}
         </div>
         <button
           onClick={onDismiss}
-          className="text-gray-400 hover:text-gray-600 transition-colors"
+          className="text-gray-400 transition-colors hover:text-gray-600"
           aria-label="Dismiss learning notification"
         >
-          <X className="w-4 h-4" />
+          <X className="h-4 w-4" />
         </button>
       </div>
     </div>

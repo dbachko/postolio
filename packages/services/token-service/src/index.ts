@@ -3,27 +3,19 @@
  * Enterprise-grade token management with comprehensive security features
  */
 
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-} from "@aws-sdk/lib-dynamodb";
-import { KMSClient, EncryptCommand, DecryptCommand } from "@aws-sdk/client-kms";
-import { Logger } from "@aws-lambda-powertools/logger";
-import { Metrics, MetricUnit } from "@aws-lambda-powertools/metrics";
-import crypto from "crypto";
-import {
-  TokenServiceError,
-  ValidationError,
-  RateLimitError,
-} from "@postolio/errors";
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
+import { Logger } from '@aws-lambda-powertools/logger';
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
+import crypto from 'crypto';
+import { TokenServiceError, ValidationError, RateLimitError } from '@postolio/errors';
 
-const logger = new Logger({ serviceName: "token-service" });
+const logger = new Logger({ serviceName: 'token-service' });
 const metrics = new Metrics({
-  namespace: "TokenService",
-  serviceName: "token-service",
+  namespace: 'TokenService',
+  serviceName: 'token-service',
 });
 
 // Initialize AWS clients
@@ -32,14 +24,14 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const kmsClient = new KMSClient({});
 
 const TABLE_NAME = process.env.TOKENS_TABLE!;
-const AUDIT_TABLE_NAME = process.env.AUDIT_TABLE || "token-audit-logs";
+const AUDIT_TABLE_NAME = process.env.AUDIT_TABLE || 'token-audit-logs';
 const KMS_KEY_ID = process.env.KMS_KEY_ID!;
-const RATE_LIMIT_TABLE = process.env.RATE_LIMIT_TABLE || "token-rate-limits";
+const RATE_LIMIT_TABLE = process.env.RATE_LIMIT_TABLE || 'token-rate-limits';
 
 // Custom error classes
 class NotFoundError extends TokenServiceError {
   constructor(message: string) {
-    super(message, "NOT_FOUND", 404, false);
+    super(message, 'NOT_FOUND', 404, false);
   }
 }
 
@@ -77,7 +69,7 @@ interface AuditLogEntry {
   correlationId: string;
   ipAddress?: string;
   userAgent?: string;
-  result: "success" | "failure";
+  result: 'success' | 'failure';
   errorCode?: string;
   errorMessage?: string;
   metadata?: TokenMetadata;
@@ -102,18 +94,13 @@ async function encryptToken(token: string): Promise<string> {
       new EncryptCommand({
         KeyId: KMS_KEY_ID,
         Plaintext: Buffer.from(token),
-      }),
+      })
     );
 
-    return Buffer.from(response.CiphertextBlob!).toString("base64");
+    return Buffer.from(response.CiphertextBlob!).toString('base64');
   } catch (error) {
-    logger.error("Token encryption failed", { error });
-    throw new TokenServiceError(
-      "Failed to encrypt token",
-      "ENCRYPTION_ERROR",
-      500,
-      true,
-    );
+    logger.error('Token encryption failed', { error });
+    throw new TokenServiceError('Failed to encrypt token', 'ENCRYPTION_ERROR', 500, true);
   }
 }
 
@@ -121,26 +108,19 @@ async function decryptToken(encryptedToken: string): Promise<string> {
   try {
     const response = await kmsClient.send(
       new DecryptCommand({
-        CiphertextBlob: Buffer.from(encryptedToken, "base64"),
-      }),
+        CiphertextBlob: Buffer.from(encryptedToken, 'base64'),
+      })
     );
 
     return Buffer.from(response.Plaintext!).toString();
   } catch (error) {
-    logger.error("Token decryption failed", { error });
-    throw new TokenServiceError(
-      "Failed to decrypt token",
-      "DECRYPTION_ERROR",
-      500,
-      true,
-    );
+    logger.error('Token decryption failed', { error });
+    throw new TokenServiceError('Failed to decrypt token', 'DECRYPTION_ERROR', 500, true);
   }
 }
 
 // Audit logging function
-async function auditLog(
-  entry: Omit<AuditLogEntry, "id" | "timestamp">,
-): Promise<void> {
+async function auditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): Promise<void> {
   try {
     const logEntry: AuditLogEntry = {
       id: crypto.randomUUID(),
@@ -157,24 +137,21 @@ async function auditLog(
           ...logEntry,
           ttl: Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60, // 90 days retention
         },
-      }),
+      })
     );
 
-    logger.info("Audit log recorded", {
+    logger.info('Audit log recorded', {
       operation: entry.operation,
       result: entry.result,
     });
   } catch (error) {
     // Don't fail operations due to audit logging failures
-    logger.error("Failed to write audit log", { error, entry });
+    logger.error('Failed to write audit log', { error, entry });
   }
 }
 
 // Rate limiting check
-async function checkRateLimit(
-  userId: string,
-  platform?: string,
-): Promise<void> {
+async function checkRateLimit(userId: string, platform?: string): Promise<void> {
   const now = Date.now();
   const windowKey = Math.floor(now / RATE_LIMITS.perUser.windowMs).toString();
   const rateLimitKey = platform ? `${userId}#${platform}` : userId;
@@ -187,16 +164,14 @@ async function checkRateLimit(
           pk: `RATELIMIT#${rateLimitKey}`,
           sk: windowKey,
         },
-      }),
+      })
     );
 
     const limit = platform ? RATE_LIMITS.perUserPlatform : RATE_LIMITS.perUser;
     const currentCount = result.Item?.count || 0;
 
     if (currentCount >= limit.maxRequests) {
-      const retryAfter = Math.ceil(
-        (limit.windowMs - (now % limit.windowMs)) / 1000,
-      );
+      const retryAfter = Math.ceil((limit.windowMs - (now % limit.windowMs)) / 1000);
       const error = new RateLimitError(retryAfter);
       throw error;
     }
@@ -213,14 +188,14 @@ async function checkRateLimit(
           lastRequest: new Date().toISOString(),
           ttl: Math.floor(now / 1000) + 120, // Clean up after 2 minutes
         },
-      }),
+      })
     );
   } catch (error) {
     if (error instanceof RateLimitError) {
       throw error;
     }
     // Don't block on rate limit check failures
-    logger.warn("Rate limit check failed", { error });
+    logger.warn('Rate limit check failed', { error });
   }
 }
 
@@ -231,15 +206,15 @@ async function storeToken(
     requestId: string;
     correlationId: string;
     ipAddress?: string;
-  },
+  }
 ): Promise<void> {
   // Validate input
   if (!data.userId || !data.brandId || !data.platform || !data.accessToken) {
-    throw new ValidationError("Missing required fields");
+    throw new ValidationError('Missing required fields');
   }
 
   if (new Date(data.expiresAt) < new Date()) {
-    throw new ValidationError("Token already expired");
+    throw new ValidationError('Token already expired');
   }
 
   try {
@@ -261,50 +236,47 @@ async function storeToken(
       tokenVersion: 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      ttl:
-        Math.floor(new Date(data.expiresAt).getTime() / 1000) +
-        30 * 24 * 60 * 60,
+      ttl: Math.floor(new Date(data.expiresAt).getTime() / 1000) + 30 * 24 * 60 * 60,
     };
 
     await docClient.send(
       new PutCommand({
         TableName: TABLE_NAME,
         Item: item,
-      }),
+      })
     );
 
     await auditLog({
-      operation: "STORE_TOKEN",
+      operation: 'STORE_TOKEN',
       userId: data.userId,
       brandId: data.brandId,
       platform: data.platform,
       requestId: requestContext.requestId,
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
-      result: "success",
+      result: 'success',
       metadata: { hasRefreshToken: !!data.refreshToken },
     });
 
-    logger.info("Token stored successfully", {
+    logger.info('Token stored successfully', {
       userId: data.userId,
       brandId: data.brandId,
       platform: data.platform,
       correlationId: requestContext.correlationId,
     });
-    metrics.addMetric("TokensStored", MetricUnit.Count, 1);
+    metrics.addMetric('TokensStored', MetricUnit.Count, 1);
   } catch (error) {
     await auditLog({
-      operation: "STORE_TOKEN",
+      operation: 'STORE_TOKEN',
       userId: data.userId,
       brandId: data.brandId,
       platform: data.platform,
       requestId: requestContext.requestId,
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
-      result: "failure",
-      errorCode:
-        error instanceof TokenServiceError ? error.code : "UNKNOWN_ERROR",
-      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      result: 'failure',
+      errorCode: error instanceof TokenServiceError ? error.code : 'UNKNOWN_ERROR',
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
     });
     throw error;
   }
@@ -316,7 +288,7 @@ async function getToken(
     requestId: string;
     correlationId: string;
     ipAddress?: string;
-  },
+  }
 ): Promise<TokenData | null> {
   try {
     const result = await docClient.send(
@@ -326,19 +298,19 @@ async function getToken(
           pk: `${data.userId}#${data.platform}`,
           sk: data.brandId,
         },
-      }),
+      })
     );
 
     if (!result.Item) {
       await auditLog({
-        operation: "GET_TOKEN",
+        operation: 'GET_TOKEN',
         userId: data.userId,
         brandId: data.brandId,
         platform: data.platform,
         requestId: requestContext.requestId,
         correlationId: requestContext.correlationId,
         ipAddress: requestContext.ipAddress,
-        result: "success",
+        result: 'success',
         metadata: { found: false },
       });
       return null;
@@ -349,12 +321,12 @@ async function getToken(
     const refreshThreshold = Date.now() + 7 * 24 * 60 * 60 * 1000;
 
     if (expiryTime < refreshThreshold && result.Item.refreshToken) {
-      logger.info("Token needs refresh", {
+      logger.info('Token needs refresh', {
         ...data,
         expiresAt: result.Item.expiresAt,
         correlationId: requestContext.correlationId,
       });
-      metrics.addMetric("TokensNeedingRefresh", MetricUnit.Count, 1);
+      metrics.addMetric('TokensNeedingRefresh', MetricUnit.Count, 1);
 
       // Trigger async refresh if supported
       // This would be handled by a separate Lambda or service
@@ -363,18 +335,18 @@ async function getToken(
     const decryptedAccessToken = await decryptToken(result.Item.accessToken);
 
     await auditLog({
-      operation: "GET_TOKEN",
+      operation: 'GET_TOKEN',
       userId: data.userId,
       brandId: data.brandId,
       platform: data.platform,
       requestId: requestContext.requestId,
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
-      result: "success",
+      result: 'success',
       metadata: { found: true, needsRefresh: expiryTime < refreshThreshold },
     });
 
-    metrics.addMetric("TokensRetrieved", MetricUnit.Count, 1);
+    metrics.addMetric('TokensRetrieved', MetricUnit.Count, 1);
 
     return {
       accessToken: decryptedAccessToken,
@@ -387,17 +359,16 @@ async function getToken(
     };
   } catch (error) {
     await auditLog({
-      operation: "GET_TOKEN",
+      operation: 'GET_TOKEN',
       userId: data.userId,
       brandId: data.brandId,
       platform: data.platform,
       requestId: requestContext.requestId,
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
-      result: "failure",
-      errorCode:
-        error instanceof TokenServiceError ? error.code : "UNKNOWN_ERROR",
-      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      result: 'failure',
+      errorCode: error instanceof TokenServiceError ? error.code : 'UNKNOWN_ERROR',
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
     });
     throw error;
   }
@@ -410,14 +381,14 @@ async function rotateToken(
     requestId: string;
     correlationId: string;
     ipAddress?: string;
-  },
+  }
 ): Promise<TokenData> {
   try {
     // Get current token
     const currentToken = await getToken(data, requestContext);
 
     if (!currentToken) {
-      throw new NotFoundError("Token not found for rotation");
+      throw new NotFoundError('Token not found for rotation');
     }
 
     // Generate new token version
@@ -448,46 +419,45 @@ async function rotateToken(
           rotationCount: rotationCount,
         },
       },
-      requestContext,
+      requestContext
     );
 
     await auditLog({
-      operation: "ROTATE_TOKEN",
+      operation: 'ROTATE_TOKEN',
       userId: data.userId,
       brandId: data.brandId,
       platform: data.platform,
       requestId: requestContext.requestId,
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
-      result: "success",
+      result: 'success',
       metadata: {
         newVersion: newTokenVersion,
         rotationCount: rotationCount,
       },
     });
 
-    logger.info("Token rotated successfully", {
+    logger.info('Token rotated successfully', {
       ...data,
       newVersion: newTokenVersion,
       correlationId: requestContext.correlationId,
     });
 
-    metrics.addMetric("TokensRotated", MetricUnit.Count, 1);
+    metrics.addMetric('TokensRotated', MetricUnit.Count, 1);
 
     return rotatedToken;
   } catch (error) {
     await auditLog({
-      operation: "ROTATE_TOKEN",
+      operation: 'ROTATE_TOKEN',
       userId: data.userId,
       brandId: data.brandId,
       platform: data.platform,
       requestId: requestContext.requestId,
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
-      result: "failure",
-      errorCode:
-        error instanceof TokenServiceError ? error.code : "UNKNOWN_ERROR",
-      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      result: 'failure',
+      errorCode: error instanceof TokenServiceError ? error.code : 'UNKNOWN_ERROR',
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
     });
     throw error;
   }
@@ -496,10 +466,10 @@ async function rotateToken(
 // Parse path parameters
 function parsePathParameters(path: string): Record<string, string> {
   const params: Record<string, string> = {};
-  const parts = path.split("/").filter((p) => p);
+  const parts = path.split('/').filter((p) => p);
 
-  if (parts[0] === "tokens") {
-    if (parts[1] && !["batch", "health", "metrics"].includes(parts[1])) {
+  if (parts[0] === 'tokens') {
+    if (parts[1] && !['batch', 'health', 'metrics'].includes(parts[1])) {
       params.userId = parts[1];
       if (parts[2]) {
         params.platform = parts[2];
@@ -517,14 +487,11 @@ function parsePathParameters(path: string): Record<string, string> {
 }
 
 // Main Lambda handler with enhanced error handling
-export const handler = async (
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> => {
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const requestId = event.requestContext.requestId || crypto.randomUUID();
-  const correlationId =
-    event.headers["X-Correlation-ID"] || crypto.randomUUID();
+  const correlationId = event.headers['X-Correlation-ID'] || crypto.randomUUID();
   const ipAddress = event.requestContext.identity.sourceIp;
-  const userAgent = event.headers["User-Agent"];
+  const userAgent = event.headers['User-Agent'];
 
   const requestContext = {
     requestId,
@@ -533,7 +500,7 @@ export const handler = async (
     userAgent,
   };
 
-  logger.info("Request received", {
+  logger.info('Request received', {
     path: event.path,
     method: event.httpMethod,
     requestId,
@@ -543,13 +510,12 @@ export const handler = async (
 
   // CORS headers for all responses
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,PUT,POST,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers":
-      "Content-Type,Authorization,X-Correlation-ID",
-    "X-Request-ID": requestId,
-    "X-Correlation-ID": correlationId,
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Correlation-ID',
+    'X-Request-ID': requestId,
+    'X-Correlation-ID': correlationId,
   };
 
   try {
@@ -558,19 +524,19 @@ export const handler = async (
     const pathParams = parsePathParameters(path);
 
     // Handle OPTIONS for CORS
-    if (method === "OPTIONS") {
-      return { statusCode: 200, headers, body: "" };
+    if (method === 'OPTIONS') {
+      return { statusCode: 200, headers, body: '' };
     }
 
     // Health check
-    if (path === "/health" && method === "GET") {
+    if (path === '/health' && method === 'GET') {
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
-          status: "healthy",
-          service: "token-service",
-          version: "3.0.0",
+          status: 'healthy',
+          service: 'token-service',
+          version: '3.0.0',
           features: {
             encryption: true,
             rateLimit: true,
@@ -589,13 +555,13 @@ export const handler = async (
 
     // PUT /tokens/{userId}/{platform}/{brandId} - Store/update token
     if (
-      method === "PUT" &&
+      method === 'PUT' &&
       pathParams.userId &&
       pathParams.platform &&
       pathParams.brandId &&
       !pathParams.action
     ) {
-      const body = JSON.parse(event.body || "{}");
+      const body = JSON.parse(event.body || '{}');
       await storeToken(
         {
           userId: pathParams.userId,
@@ -603,7 +569,7 @@ export const handler = async (
           platform: pathParams.platform,
           ...body,
         },
-        requestContext,
+        requestContext
       );
 
       return {
@@ -615,7 +581,7 @@ export const handler = async (
 
     // GET /tokens/{userId}/{platform}/{brandId} - Get specific token
     if (
-      method === "GET" &&
+      method === 'GET' &&
       pathParams.userId &&
       pathParams.platform &&
       pathParams.brandId &&
@@ -627,14 +593,14 @@ export const handler = async (
           brandId: pathParams.brandId,
           platform: pathParams.platform,
         },
-        requestContext,
+        requestContext
       );
 
       if (!token) {
         return {
           statusCode: 404,
           headers,
-          body: JSON.stringify({ error: "Token not found" }),
+          body: JSON.stringify({ error: 'Token not found' }),
         };
       }
 
@@ -646,14 +612,14 @@ export const handler = async (
     }
 
     // POST /tokens/{userId}/{platform}/{brandId}/rotate - Rotate token
-    if (method === "POST" && pathParams.action === "rotate") {
+    if (method === 'POST' && pathParams.action === 'rotate') {
       const rotatedToken = await rotateToken(
         {
           userId: pathParams.userId,
           brandId: pathParams.brandId,
           platform: pathParams.platform,
         },
-        requestContext,
+        requestContext
       );
 
       return {
@@ -667,27 +633,24 @@ export const handler = async (
     return {
       statusCode: 404,
       headers,
-      body: JSON.stringify({ error: "Endpoint not found" }),
+      body: JSON.stringify({ error: 'Endpoint not found' }),
     };
   } catch (error) {
-    logger.error("Request failed", {
+    logger.error('Request failed', {
       error,
       requestId,
       correlationId,
     });
 
-    metrics.addMetric("RequestErrors", MetricUnit.Count, 1);
+    metrics.addMetric('RequestErrors', MetricUnit.Count, 1);
 
     if (error instanceof TokenServiceError) {
       const retryHeaders: Record<string, string> = { ...headers };
       if (error instanceof RateLimitError) {
-        retryHeaders["Retry-After"] = error.retryAfter.toString();
+        retryHeaders['Retry-After'] = error.retryAfter.toString();
       }
-      const statusCode =
-        typeof error.statusCode === "number" ? error.statusCode : 500;
-      const retryable =
-        (error as TokenServiceError & { retryable?: boolean }).retryable ??
-        false;
+      const statusCode = typeof error.statusCode === 'number' ? error.statusCode : 500;
+      const retryable = (error as TokenServiceError & { retryable?: boolean }).retryable ?? false;
       return {
         statusCode,
         headers: retryHeaders,
@@ -705,8 +668,8 @@ export const handler = async (
       statusCode: 500,
       headers,
       body: JSON.stringify({
-        error: "Internal server error",
-        code: "INTERNAL_ERROR",
+        error: 'Internal server error',
+        code: 'INTERNAL_ERROR',
         retryable: true,
         requestId,
         correlationId,

@@ -3,19 +3,19 @@
  */
 
 // Required environment variables
-const requiredEnvVars = ["DATABASE_URL", "JWT_SECRET"] as const;
+const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
 
 // Optional but important environment variables
 const optionalEnvVars = [
-  "OPENAI_API_KEY",
-  "FACEBOOK_APP_ID",
-  "FACEBOOK_APP_SECRET",
-  "S3_IMAGES_BUCKET",
-  "AWS_REGION",
-  "CLOUDFRONT_DISTRIBUTION_ID",
-  "CLOUDFRONT_DOMAIN",
-  "REDIS_URL",
-  "SCHEDULER_API_URL",
+  'OPENAI_API_KEY',
+  'FACEBOOK_APP_ID',
+  'FACEBOOK_APP_SECRET',
+  'S3_IMAGES_BUCKET',
+  'AWS_REGION',
+  'CLOUDFRONT_DISTRIBUTION_ID',
+  'CLOUDFRONT_DOMAIN',
+  'REDIS_URL',
+  'SCHEDULER_API_URL',
 ] as const;
 
 export interface EnvironmentConfig {
@@ -30,7 +30,7 @@ export interface EnvironmentConfig {
   CLOUDFRONT_DOMAIN?: string | undefined;
   REDIS_URL?: string | undefined;
   SCHEDULER_API_URL?: string | undefined;
-  NODE_ENV: "development" | "production" | "test";
+  NODE_ENV: 'development' | 'production' | 'test';
   PORT: number;
 }
 
@@ -48,29 +48,25 @@ export function validateEnvironment(): EnvironmentConfig {
   }
 
   if (missingVars.length > 0) {
-    throw new Error(
-      `Missing required environment variables: ${missingVars.join(", ")}`,
-    );
+    throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
   }
 
   // Validate JWT_SECRET length
   const jwtSecret = process.env.JWT_SECRET!;
   if (jwtSecret.length < 32) {
-    throw new Error(
-      "JWT_SECRET must be at least 32 characters long for security",
-    );
+    throw new Error('JWT_SECRET must be at least 32 characters long for security');
   }
 
   // Validate PORT
-  const port = parseInt(process.env.PORT || "3000", 10);
+  const port = parseInt(process.env.PORT || '3000', 10);
   if (isNaN(port) || port < 1 || port > 65535) {
-    throw new Error("PORT must be a valid port number between 1 and 65535");
+    throw new Error('PORT must be a valid port number between 1 and 65535');
   }
 
   // Validate NODE_ENV
-  const nodeEnv = process.env.NODE_ENV || "development";
-  if (!["development", "production", "test"].includes(nodeEnv)) {
-    throw new Error("NODE_ENV must be one of: development, production, test");
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  if (!['development', 'production', 'test'].includes(nodeEnv)) {
+    throw new Error('NODE_ENV must be one of: development, production, test');
   }
 
   // Warning for missing optional but important variables
@@ -81,9 +77,9 @@ export function validateEnvironment(): EnvironmentConfig {
     }
   }
 
-  if (missingOptional.length > 0 && nodeEnv === "production") {
+  if (missingOptional.length > 0 && nodeEnv === 'production') {
     console.warn(
-      `Warning: Missing optional environment variables in production: ${missingOptional.join(", ")}`,
+      `Warning: Missing optional environment variables in production: ${missingOptional.join(', ')}`
     );
   }
 
@@ -94,12 +90,12 @@ export function validateEnvironment(): EnvironmentConfig {
     FACEBOOK_APP_ID: process.env.FACEBOOK_APP_ID,
     FACEBOOK_APP_SECRET: process.env.FACEBOOK_APP_SECRET,
     S3_IMAGES_BUCKET: process.env.S3_IMAGES_BUCKET,
-    AWS_REGION: process.env.AWS_REGION || "us-east-1",
+    AWS_REGION: process.env.AWS_REGION || 'us-east-1',
     CLOUDFRONT_DISTRIBUTION_ID: process.env.CLOUDFRONT_DISTRIBUTION_ID,
     CLOUDFRONT_DOMAIN: process.env.CLOUDFRONT_DOMAIN,
     REDIS_URL: process.env.REDIS_URL,
     SCHEDULER_API_URL: process.env.SCHEDULER_API_URL,
-    NODE_ENV: nodeEnv as "development" | "production" | "test",
+    NODE_ENV: nodeEnv as 'development' | 'production' | 'test',
     PORT: port,
   };
 }

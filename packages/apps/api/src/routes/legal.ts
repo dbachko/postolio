@@ -1,8 +1,8 @@
-import { FastifyInstance } from "fastify";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { markdownToHtml } from "../utils/markdown.js";
+import { FastifyInstance } from 'fastify';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { markdownToHtml } from '../utils/markdown.js';
 
 // Get the directory of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -10,26 +10,21 @@ const __dirname = path.dirname(__filename);
 
 export default async function legalRoutes(fastify: FastifyInstance) {
   // Privacy Policy endpoint
-  fastify.get("/privacy-policy", async (request, reply) => {
+  fastify.get('/privacy-policy', async (request, reply) => {
     try {
       // Read the privacy policy markdown file
-      const privacyPolicyPath = path.join(
-        __dirname,
-        "..",
-        "..",
-        "../../legal/PRIVACY_POLICY.md",
-      );
-      let privacyPolicyContent = fs.readFileSync(privacyPolicyPath, "utf8");
+      const privacyPolicyPath = path.join(__dirname, '..', '..', '../../legal/PRIVACY_POLICY.md');
+      let privacyPolicyContent = fs.readFileSync(privacyPolicyPath, 'utf8');
 
       // Make copyright year dynamic
       const currentYear = new Date().getFullYear();
       privacyPolicyContent = privacyPolicyContent.replace(
         /© \d{4} Postolio/,
-        `© ${currentYear} Postolio`,
+        `© ${currentYear} Postolio`
       );
 
       // Check if client accepts HTML
-      const acceptsHtml = request.headers.accept?.includes("text/html");
+      const acceptsHtml = request.headers.accept?.includes('text/html');
 
       if (acceptsHtml) {
         // Return HTML version with basic styling
@@ -129,40 +124,31 @@ export default async function legalRoutes(fastify: FastifyInstance) {
 </html>
         `;
 
-        reply.type("text/html").send(htmlContent);
+        reply.type('text/html').send(htmlContent);
       } else {
         // Return markdown content for API consumers
-        reply.type("text/plain").send(privacyPolicyContent);
+        reply.type('text/plain').send(privacyPolicyContent);
       }
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      fastify.log.error({ message }, "Error serving privacy policy:");
-      reply.code(500).send({ error: "Failed to load privacy policy" });
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      fastify.log.error({ message }, 'Error serving privacy policy:');
+      reply.code(500).send({ error: 'Failed to load privacy policy' });
     }
   });
 
   // Terms of Service endpoint
-  fastify.get("/terms-of-service", async (request, reply) => {
+  fastify.get('/terms-of-service', async (request, reply) => {
     try {
       // Read the terms of service markdown file
-      const termsPath = path.join(
-        __dirname,
-        "..",
-        "..",
-        "legal/TERMS_OF_SERVICE.md",
-      );
-      let termsContent = fs.readFileSync(termsPath, "utf8");
+      const termsPath = path.join(__dirname, '..', '..', 'legal/TERMS_OF_SERVICE.md');
+      let termsContent = fs.readFileSync(termsPath, 'utf8');
 
       // Make copyright year dynamic
       const currentYear = new Date().getFullYear();
-      termsContent = termsContent.replace(
-        /© \d{4} Postolio/,
-        `© ${currentYear} Postolio`,
-      );
+      termsContent = termsContent.replace(/© \d{4} Postolio/, `© ${currentYear} Postolio`);
 
       // Check if client accepts HTML
-      const acceptsHtml = request.headers.accept?.includes("text/html");
+      const acceptsHtml = request.headers.accept?.includes('text/html');
 
       if (acceptsHtml) {
         // Return HTML version with basic styling
@@ -262,44 +248,43 @@ export default async function legalRoutes(fastify: FastifyInstance) {
 </html>
         `;
 
-        reply.type("text/html").send(htmlContent);
+        reply.type('text/html').send(htmlContent);
       } else {
         // Return markdown content for API consumers
-        reply.type("text/plain").send(termsContent);
+        reply.type('text/plain').send(termsContent);
       }
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      fastify.log.error({ message }, "Error serving terms of service:");
-      reply.code(500).send({ error: "Failed to load terms of service" });
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      fastify.log.error({ message }, 'Error serving terms of service:');
+      reply.code(500).send({ error: 'Failed to load terms of service' });
     }
   });
 
   // Legal info endpoint (JSON format for API consumers)
-  fastify.get("/legal-info", async () => {
+  fastify.get('/legal-info', async () => {
     return {
       privacyPolicy: {
-        url: "/legal/privacy-policy",
-        lastUpdated: "2025-01-13",
-        effectiveDate: "2025-01-13",
+        url: '/legal/privacy-policy',
+        lastUpdated: '2025-01-13',
+        effectiveDate: '2025-01-13',
       },
       termsOfService: {
-        url: "/legal/terms-of-service",
-        lastUpdated: "2025-01-13",
-        effectiveDate: "2025-01-13",
+        url: '/legal/terms-of-service',
+        lastUpdated: '2025-01-13',
+        effectiveDate: '2025-01-13',
       },
       dataDeletion: {
-        url: "/legal/data-deletion",
-        instructionsUrl: "/legal/data-deletion",
-        requestUrl: "/legal/data-deletion-request",
-        metaCallbackUrl: "/legal/meta-deletion-callback",
-        lastUpdated: "2025-01-10",
+        url: '/legal/data-deletion',
+        instructionsUrl: '/legal/data-deletion',
+        requestUrl: '/legal/data-deletion-request',
+        metaCallbackUrl: '/legal/meta-deletion-callback',
+        lastUpdated: '2025-01-10',
       },
       contact: {
-        privacy: "privacy@postolio.example",
-        legal: "legal@postolio.example",
-        support: "support@postolio.example",
-        dpo: "dpo@postolio.example",
+        privacy: 'privacy@postolio.example',
+        legal: 'legal@postolio.example',
+        support: 'support@postolio.example',
+        dpo: 'dpo@postolio.example',
       },
     };
   });

@@ -2,7 +2,7 @@ export interface CampaignFormData {
   name: string;
   startDate: string;
   endDate: string;
-  frequency: "daily" | "every2days" | "3weekly" | "";
+  frequency: 'daily' | 'every2days' | '3weekly' | '';
   themes: string[];
   style: string;
   postingTime: string;

@@ -1,55 +1,55 @@
-import { getDatabaseClient } from "../config/database.js";
-import { FastifyRequest } from "fastify";
-import { Prisma } from "@postolio/database";
+import { getDatabaseClient } from '../config/database.js';
+import { FastifyRequest } from 'fastify';
+import { Prisma } from '@postolio/database';
 
 const prisma = getDatabaseClient();
 
 export enum AuditEventType {
   // Authentication events
-  USER_REGISTER = "USER_REGISTER",
-  USER_LOGIN = "USER_LOGIN",
-  USER_LOGOUT = "USER_LOGOUT",
-  USER_LOGIN_FAILED = "USER_LOGIN_FAILED",
+  USER_REGISTER = 'USER_REGISTER',
+  USER_LOGIN = 'USER_LOGIN',
+  USER_LOGOUT = 'USER_LOGOUT',
+  USER_LOGIN_FAILED = 'USER_LOGIN_FAILED',
 
   // OAuth events
-  OAUTH_LOGIN = "OAUTH_LOGIN",
-  OAUTH_LINK = "OAUTH_LINK",
-  OAUTH_UNLINK = "OAUTH_UNLINK",
+  OAUTH_LOGIN = 'OAUTH_LOGIN',
+  OAUTH_LINK = 'OAUTH_LINK',
+  OAUTH_UNLINK = 'OAUTH_UNLINK',
 
   // Magic link events
-  MAGIC_LINK_SENT = "MAGIC_LINK_SENT",
-  MAGIC_LINK_VERIFIED = "MAGIC_LINK_VERIFIED",
-  MAGIC_LINK_FAILED = "MAGIC_LINK_FAILED",
+  MAGIC_LINK_SENT = 'MAGIC_LINK_SENT',
+  MAGIC_LINK_VERIFIED = 'MAGIC_LINK_VERIFIED',
+  MAGIC_LINK_FAILED = 'MAGIC_LINK_FAILED',
 
   // Email verification
-  EMAIL_VERIFICATION_SENT = "EMAIL_VERIFICATION_SENT",
-  EMAIL_VERIFIED = "EMAIL_VERIFIED",
+  EMAIL_VERIFICATION_SENT = 'EMAIL_VERIFICATION_SENT',
+  EMAIL_VERIFIED = 'EMAIL_VERIFIED',
 
   // Password events
-  PASSWORD_RESET_REQUESTED = "PASSWORD_RESET_REQUESTED",
-  PASSWORD_RESET_COMPLETED = "PASSWORD_RESET_COMPLETED",
-  PASSWORD_CHANGED = "PASSWORD_CHANGED",
+  PASSWORD_RESET_REQUESTED = 'PASSWORD_RESET_REQUESTED',
+  PASSWORD_RESET_COMPLETED = 'PASSWORD_RESET_COMPLETED',
+  PASSWORD_CHANGED = 'PASSWORD_CHANGED',
 
   // Security events
-  ACCOUNT_LOCKED = "ACCOUNT_LOCKED",
-  ACCOUNT_UNLOCKED = "ACCOUNT_UNLOCKED",
-  TWO_FACTOR_ENABLED = "TWO_FACTOR_ENABLED",
-  TWO_FACTOR_DISABLED = "TWO_FACTOR_DISABLED",
-  TWO_FACTOR_VERIFIED = "TWO_FACTOR_VERIFIED",
-  TWO_FACTOR_FAILED = "TWO_FACTOR_FAILED",
+  ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
+  ACCOUNT_UNLOCKED = 'ACCOUNT_UNLOCKED',
+  TWO_FACTOR_ENABLED = 'TWO_FACTOR_ENABLED',
+  TWO_FACTOR_DISABLED = 'TWO_FACTOR_DISABLED',
+  TWO_FACTOR_VERIFIED = 'TWO_FACTOR_VERIFIED',
+  TWO_FACTOR_FAILED = 'TWO_FACTOR_FAILED',
 
   // Session events
-  SESSION_CREATED = "SESSION_CREATED",
-  SESSION_EXPIRED = "SESSION_EXPIRED",
-  SESSION_INVALIDATED = "SESSION_INVALIDATED",
+  SESSION_CREATED = 'SESSION_CREATED',
+  SESSION_EXPIRED = 'SESSION_EXPIRED',
+  SESSION_INVALIDATED = 'SESSION_INVALIDATED',
 
   // Refresh token events
-  REFRESH_TOKEN_GENERATED = "REFRESH_TOKEN_GENERATED",
-  REFRESH_TOKEN_ROTATED = "REFRESH_TOKEN_ROTATED",
-  REFRESH_TOKEN_INVALIDATED = "REFRESH_TOKEN_INVALIDATED",
-  REFRESH_TOKEN_FAMILY_INVALIDATED = "REFRESH_TOKEN_FAMILY_INVALIDATED",
-  REFRESH_TOKEN_REUSE_DETECTED = "REFRESH_TOKEN_REUSE_DETECTED",
-  ALL_REFRESH_TOKENS_INVALIDATED = "ALL_REFRESH_TOKENS_INVALIDATED",
+  REFRESH_TOKEN_GENERATED = 'REFRESH_TOKEN_GENERATED',
+  REFRESH_TOKEN_ROTATED = 'REFRESH_TOKEN_ROTATED',
+  REFRESH_TOKEN_INVALIDATED = 'REFRESH_TOKEN_INVALIDATED',
+  REFRESH_TOKEN_FAMILY_INVALIDATED = 'REFRESH_TOKEN_FAMILY_INVALIDATED',
+  REFRESH_TOKEN_REUSE_DETECTED = 'REFRESH_TOKEN_REUSE_DETECTED',
+  ALL_REFRESH_TOKENS_INVALIDATED = 'ALL_REFRESH_TOKENS_INVALIDATED',
 }
 
 export interface AuditLogEntry {
@@ -91,7 +91,7 @@ export class AuditLogger {
 
       // Extract request information if available
       const ipAddress = request ? this.getClientIp(request) : undefined;
-      const userAgent = request?.headers["user-agent"] || undefined;
+      const userAgent = request?.headers['user-agent'] || undefined;
 
       // Create audit log entry
       await prisma.auditLog.create({
@@ -101,9 +101,7 @@ export class AuditLogger {
           eventType,
           ipAddress: ipAddress || null,
           userAgent: userAgent || null,
-          metadata: (metadata
-            ? JSON.parse(JSON.stringify(metadata))
-            : {}) as Prisma.InputJsonValue,
+          metadata: (metadata ? JSON.parse(JSON.stringify(metadata)) : {}) as Prisma.InputJsonValue,
           success,
           errorMessage: errorMessage || null,
         },
@@ -119,7 +117,7 @@ export class AuditLogger {
       });
     } catch (error) {
       // Don't let audit logging failures break the application
-      console.error("Failed to write audit log:", error);
+      console.error('Failed to write audit log:', error);
     }
   }
 
@@ -131,7 +129,7 @@ export class AuditLogger {
     userId: string,
     email: string,
     request: FastifyRequest,
-    metadata?: Record<string, unknown>,
+    metadata?: Record<string, unknown>
   ): Promise<void> {
     await this.log({
       userId,
@@ -151,7 +149,7 @@ export class AuditLogger {
     email: string,
     request: FastifyRequest,
     errorMessage: string,
-    metadata?: Record<string, unknown>,
+    metadata?: Record<string, unknown>
   ): Promise<void> {
     await this.log({
       email,
@@ -168,21 +166,21 @@ export class AuditLogger {
    */
   private static getClientIp(request: FastifyRequest): string {
     // Check for forwarded IP (when behind proxy/load balancer)
-    const forwarded = request.headers["x-forwarded-for"];
-    if (forwarded && typeof forwarded === "string") {
-      return forwarded.split(",")[0]?.trim() || "unknown";
+    const forwarded = request.headers['x-forwarded-for'];
+    if (forwarded && typeof forwarded === 'string') {
+      return forwarded.split(',')[0]?.trim() || 'unknown';
     } else if (forwarded && Array.isArray(forwarded) && forwarded[0]) {
-      return forwarded[0].split(",")[0]?.trim() || "unknown";
+      return forwarded[0].split(',')[0]?.trim() || 'unknown';
     }
 
     // Check for real IP header (CloudFront, Nginx)
-    const realIp = request.headers["x-real-ip"];
-    if (realIp && typeof realIp === "string") {
+    const realIp = request.headers['x-real-ip'];
+    if (realIp && typeof realIp === 'string') {
       return realIp;
     }
 
     // Fallback to socket IP
-    return request.ip || "unknown";
+    return request.ip || 'unknown';
   }
 
   /**
@@ -197,15 +195,7 @@ export class AuditLogger {
     success?: boolean;
     limit?: number;
   }): Promise<AuditLogEntry[]> {
-    const {
-      userId,
-      email,
-      eventType,
-      startDate,
-      endDate,
-      success,
-      limit = 100,
-    } = params;
+    const { userId, email, eventType, startDate, endDate, success, limit = 100 } = params;
 
     const where: Prisma.AuditLogWhereInput = {};
 
@@ -222,7 +212,7 @@ export class AuditLogger {
 
     return prisma.auditLog.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       take: limit,
     });
   }
@@ -230,10 +220,7 @@ export class AuditLogger {
   /**
    * Get failed login attempts for an email
    */
-  static async getFailedLoginAttempts(
-    email: string,
-    sinceMinutes: number = 60,
-  ): Promise<number> {
+  static async getFailedLoginAttempts(email: string, sinceMinutes: number = 60): Promise<number> {
     const since = new Date(Date.now() - sinceMinutes * 60 * 1000);
 
     const count = await prisma.auditLog.count({
@@ -254,7 +241,7 @@ export class AuditLogger {
   static async checkAccountLockout(
     email: string,
     maxAttempts: number = 5,
-    windowMinutes: number = 15,
+    windowMinutes: number = 15
   ): Promise<boolean> {
     const attempts = await this.getFailedLoginAttempts(email, windowMinutes);
 
@@ -313,7 +300,7 @@ export class AuditLogger {
           success: true,
           createdAt: { gte: thirtyDaysAgo },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         take: 10,
       }),
 
@@ -325,7 +312,7 @@ export class AuditLogger {
           success: false,
           createdAt: { gte: thirtyDaysAgo },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         take: 10,
       }),
 
@@ -344,7 +331,7 @@ export class AuditLogger {
           },
           createdAt: { gte: thirtyDaysAgo },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         take: 10,
       }),
     ]);

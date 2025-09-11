@@ -1,12 +1,12 @@
-import type { Content } from "../lib/api";
+import type { Content } from '../lib/api';
 
 export interface Placeholder {
   id: string;
-  type: "placeholder";
+  type: 'placeholder';
   campaignId: string;
   campaignName: string;
   scheduledAt: string;
-  status: "placeholder";
+  status: 'placeholder';
   message: string;
   caption: string;
   hashtags: string[];
@@ -16,4 +16,4 @@ export interface Placeholder {
   postedAt: undefined;
 }
 
-export type CalendarItem = (Content & { type: "content" }) | Placeholder;
+export type CalendarItem = (Content & { type: 'content' }) | Placeholder;

@@ -1,23 +1,20 @@
-import { Logger } from "@aws-lambda-powertools/logger";
-import { Tracer } from "@aws-lambda-powertools/tracer";
-import { Metrics, MetricUnit } from "@aws-lambda-powertools/metrics";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { Logger } from '@aws-lambda-powertools/logger';
+import { Tracer } from '@aws-lambda-powertools/tracer';
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   GetCommand,
   UpdateCommand,
   PutCommand,
-} from "@aws-sdk/lib-dynamodb";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { discoverService } from "@postolio/aws";
-import { signRequest } from "@postolio/aws";
-import { API_VERSIONS, API_BASE_URLS } from "@postolio/aws";
-import {
-  isLocalUrl,
-  shouldUseServiceDiscovery,
-} from "./service-discovery-utils";
-import { EventBridge } from "@aws-sdk/client-eventbridge";
+} from '@aws-sdk/lib-dynamodb';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { discoverService } from '@postolio/aws';
+import { signRequest } from '@postolio/aws';
+import { API_VERSIONS, API_BASE_URLS } from '@postolio/aws';
+import { isLocalUrl, shouldUseServiceDiscovery } from './service-discovery-utils';
+import { EventBridge } from '@aws-sdk/client-eventbridge';
 
 // Platform-specific character limits
 const PLATFORM_LIMITS = {
@@ -30,11 +27,11 @@ const PLATFORM_LIMITS = {
 } as const;
 
 // Initialize Powertools
-const logger = new Logger({ serviceName: "publisher" });
-const tracer = new Tracer({ serviceName: "publisher" });
+const logger = new Logger({ serviceName: 'publisher' });
+const tracer = new Tracer({ serviceName: 'publisher' });
 const metrics = new Metrics({
-  namespace: "ContentScheduler",
-  serviceName: "publisher",
+  namespace: 'ContentScheduler',
+  serviceName: 'publisher',
 });
 
 // Initialize AWS SDK clients
@@ -55,12 +52,7 @@ interface PublishEvent {
   userId?: string;
 }
 
-type PlatformName =
-  | "instagram"
-  | "facebook"
-  | "twitter"
-  | "linkedin"
-  | "youtube";
+type PlatformName = 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
 
 interface Schedule {
   scheduleId?: string;
@@ -69,7 +61,7 @@ interface Schedule {
   userId?: string;
   caption?: string;
   hashtags?: string[];
-  contentType?: "video" | "image" | "text" | string;
+  contentType?: 'video' | 'image' | 'text' | string;
   imageUrl?: string;
   mediaUrls?: string[];
   videoUrl?: string;
@@ -91,7 +83,7 @@ interface PlatformAdapter {
   publish(
     schedule: Schedule,
     credentials: Credentials,
-    mediaUrl: string | null,
+    mediaUrl: string | null
   ): Promise<PublishResult>;
   validateCredentials(credentials: Credentials): boolean;
   formatContent(schedule: Schedule): unknown;
@@ -108,15 +100,15 @@ interface PublishResult {
 class PlatformAdapterFactory {
   static getAdapter(platform: string): PlatformAdapter {
     switch (platform) {
-      case "instagram":
+      case 'instagram':
         return new InstagramAdapter();
-      case "facebook":
+      case 'facebook':
         return new FacebookAdapter();
-      case "twitter":
+      case 'twitter':
         return new TwitterAdapter();
-      case "linkedin":
+      case 'linkedin':
         return new LinkedInAdapter();
-      case "youtube":
+      case 'youtube':
         return new YouTubeAdapter();
       default:
         throw new Error(`Unsupported platform: ${platform}`);
@@ -129,17 +121,14 @@ class InstagramAdapter implements PlatformAdapter {
   async publish(
     schedule: Schedule,
     credentials: Credentials,
-    mediaUrl: string | null,
+    mediaUrl: string | null
   ): Promise<PublishResult> {
     try {
       if (!mediaUrl) {
-        throw new Error("Media URL is required for Instagram publishing");
+        throw new Error('Media URL is required for Instagram publishing');
       }
 
-      const formattedCaption = this.formatCaption(
-        schedule.caption,
-        schedule.hashtags,
-      );
+      const formattedCaption = this.formatCaption(schedule.caption, schedule.hashtags);
 
       // Step 1: Create media container
       const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
@@ -149,21 +138,18 @@ class InstagramAdapter implements PlatformAdapter {
         access_token: credentials.accessToken,
       });
 
-      logger.info("Creating Instagram media container", {
+      logger.info('Creating Instagram media container', {
         accountId: credentials.accountId,
         hasMediaUrl: !!mediaUrl,
       });
 
-      const createResponse = await fetch(
-        `${createMediaUrl}?${createMediaParams}`,
-        {
-          method: "POST",
-        },
-      );
+      const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {
+        method: 'POST',
+      });
 
       if (!createResponse.ok) {
         const errorText = await createResponse.text();
-        logger.error("Failed to create Instagram media container", {
+        logger.error('Failed to create Instagram media container', {
           status: createResponse.status,
           error: errorText,
         });
@@ -179,7 +165,7 @@ class InstagramAdapter implements PlatformAdapter {
       if (!creationId) {
         return {
           success: false,
-          error: "No creation ID returned from Instagram",
+          error: 'No creation ID returned from Instagram',
         };
       }
 
@@ -190,15 +176,15 @@ class InstagramAdapter implements PlatformAdapter {
         access_token: credentials.accessToken,
       });
 
-      logger.info("Publishing Instagram media", { creationId });
+      logger.info('Publishing Instagram media', { creationId });
 
       const publishResponse = await fetch(`${publishUrl}?${publishParams}`, {
-        method: "POST",
+        method: 'POST',
       });
 
       if (!publishResponse.ok) {
         const errorText = await publishResponse.text();
-        logger.error("Failed to publish Instagram media", {
+        logger.error('Failed to publish Instagram media', {
           status: publishResponse.status,
           error: errorText,
         });
@@ -211,21 +197,19 @@ class InstagramAdapter implements PlatformAdapter {
       // Step 3: Get the permalink
       const permalinkUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${postId}`;
       const permalinkParams = new URLSearchParams({
-        fields: "permalink",
+        fields: 'permalink',
         access_token: credentials.accessToken,
       });
 
-      const permalinkResponse = await fetch(
-        `${permalinkUrl}?${permalinkParams}`,
-      );
-      let permalink = "";
+      const permalinkResponse = await fetch(`${permalinkUrl}?${permalinkParams}`);
+      let permalink = '';
 
       if (permalinkResponse.ok) {
         const permalinkResult = await permalinkResponse.json();
-        permalink = permalinkResult.permalink || "";
+        permalink = permalinkResult.permalink || '';
       }
 
-      logger.info("Instagram content published successfully", {
+      logger.info('Instagram content published successfully', {
         postId,
         permalink,
       });
@@ -236,7 +220,7 @@ class InstagramAdapter implements PlatformAdapter {
         platformUrl: permalink,
       };
     } catch (error) {
-      logger.error("Instagram publishing failed", error as Error);
+      logger.error('Instagram publishing failed', error as Error);
       return { success: false, error: (error as Error).message };
     }
   }
@@ -248,22 +232,19 @@ class InstagramAdapter implements PlatformAdapter {
   formatContent(schedule: Schedule): unknown {
     return {
       caption: this.formatCaption(schedule.caption, schedule.hashtags),
-      mediaType: schedule.contentType === "video" ? "VIDEO" : "IMAGE",
+      mediaType: schedule.contentType === 'video' ? 'VIDEO' : 'IMAGE',
     };
   }
 
   private formatCaption(
     caption: string | undefined | null,
-    hashtags: string[] | undefined,
+    hashtags: string[] | undefined
   ): string {
-    const safeCaption = caption ?? "";
+    const safeCaption = caption ?? '';
     const hashtagString = hashtags?.length
-      ? "\n\n" + hashtags.map((tag) => `#${tag}`).join(" ")
-      : "";
-    return `${safeCaption}${hashtagString}`.slice(
-      0,
-      PLATFORM_LIMITS.INSTAGRAM_CAPTION,
-    );
+      ? '\n\n' + hashtags.map((tag) => `#${tag}`).join(' ')
+      : '';
+    return `${safeCaption}${hashtagString}`.slice(0, PLATFORM_LIMITS.INSTAGRAM_CAPTION);
   }
 }
 
@@ -272,12 +253,12 @@ class FacebookAdapter implements PlatformAdapter {
   async publish(
     schedule: Schedule,
     credentials: Credentials,
-    mediaUrl: string | null,
+    mediaUrl: string | null
   ): Promise<PublishResult> {
     void schedule;
     void credentials;
     void mediaUrl; // placeholder usage
-    return { success: false, error: "Facebook publishing not yet implemented" };
+    return { success: false, error: 'Facebook publishing not yet implemented' };
   }
 
   validateCredentials(credentials: Credentials): boolean {
@@ -294,12 +275,12 @@ class TwitterAdapter implements PlatformAdapter {
   async publish(
     schedule: Schedule,
     credentials: Credentials,
-    mediaUrl: string | null,
+    mediaUrl: string | null
   ): Promise<PublishResult> {
     void schedule;
     void credentials;
     void mediaUrl; // placeholder usage
-    return { success: false, error: "Twitter publishing not yet implemented" };
+    return { success: false, error: 'Twitter publishing not yet implemented' };
   }
 
   validateCredentials(credentials: Credentials): boolean {
@@ -316,12 +297,12 @@ class LinkedInAdapter implements PlatformAdapter {
   async publish(
     schedule: Schedule,
     credentials: Credentials,
-    mediaUrl: string | null,
+    mediaUrl: string | null
   ): Promise<PublishResult> {
     void schedule;
     void credentials;
     void mediaUrl; // placeholder usage
-    return { success: false, error: "LinkedIn publishing not yet implemented" };
+    return { success: false, error: 'LinkedIn publishing not yet implemented' };
   }
 
   validateCredentials(credentials: Credentials): boolean {
@@ -338,12 +319,12 @@ class YouTubeAdapter implements PlatformAdapter {
   async publish(
     schedule: Schedule,
     credentials: Credentials,
-    mediaUrl: string | null,
+    mediaUrl: string | null
   ): Promise<PublishResult> {
     void schedule;
     void credentials;
     void mediaUrl; // placeholder usage
-    return { success: false, error: "YouTube publishing not yet implemented" };
+    return { success: false, error: 'YouTube publishing not yet implemented' };
   }
 
   validateCredentials(credentials: Credentials): boolean {
@@ -352,26 +333,21 @@ class YouTubeAdapter implements PlatformAdapter {
 
   formatContent(schedule: Schedule): unknown {
     return {
-      title: schedule.caption
-        ?.split("\n")[0]
-        ?.slice(0, PLATFORM_LIMITS.YOUTUBE_TITLE),
-      description: schedule.caption?.slice(
-        0,
-        PLATFORM_LIMITS.YOUTUBE_DESCRIPTION,
-      ),
+      title: schedule.caption?.split('\n')[0]?.slice(0, PLATFORM_LIMITS.YOUTUBE_TITLE),
+      description: schedule.caption?.slice(0, PLATFORM_LIMITS.YOUTUBE_DESCRIPTION),
     };
   }
 }
 
 export const handler = async (event: PublishEvent): Promise<void> => {
-  logger.info("Publishing content", { scheduleId: event.scheduleId });
+  logger.info('Publishing content', { scheduleId: event.scheduleId });
 
   try {
     // Get schedule details from DynamoDB (contains content)
     const schedule = await getSchedule(event.scheduleId);
     if (!schedule) {
       // Schedule doesn't exist - likely an orphaned retry
-      logger.error("Schedule not found", {
+      logger.error('Schedule not found', {
         scheduleId: event.scheduleId,
         eventBrandId: event.brandId,
         eventUserId: event.userId,
@@ -383,18 +359,18 @@ export const handler = async (event: PublishEvent): Promise<void> => {
           event.scheduleId,
           event.brandId,
           event.userId,
-          "Schedule not found",
+          'Schedule not found'
         );
       }
 
       // Don't throw - just return to avoid endless retries
-      metrics.addMetric("ScheduleNotFound", MetricUnit.Count, 1);
+      metrics.addMetric('ScheduleNotFound', MetricUnit.Count, 1);
       metrics.publishStoredMetrics();
       return;
     }
 
     // Use content directly from schedule
-    logger.info("Using content from schedule", {
+    logger.info('Using content from schedule', {
       contentId: schedule.contentId,
       brandId: schedule.brandId,
       hasCaption: !!schedule.caption,
@@ -412,21 +388,15 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     const brandId = schedule.brandId || event.brandId;
 
     if (!brandId) {
-      throw new Error("Brand ID not found in schedule or event");
+      throw new Error('Brand ID not found in schedule or event');
     }
 
     if (!userId) {
-      throw new Error(
-        "User ID not found in schedule or event - required for token retrieval",
-      );
+      throw new Error('User ID not found in schedule or event - required for token retrieval');
     }
 
     // Get token from Token Service via Lambda invocation (improved)
-    const tokenData = await getTokenFromTokenService(
-      brandId,
-      userId,
-      schedule.platform,
-    );
+    const tokenData = await getTokenFromTokenService(brandId, userId, schedule.platform);
 
     // Prepare credentials based on platform
     const credentials = {
@@ -436,14 +406,14 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       expiresAt: tokenData.expiresAt,
     };
 
-    logger.info("Fetched credentials", {
+    logger.info('Fetched credentials', {
       brandId,
       hasToken: !!credentials.accessToken,
     });
 
     // If video content, get signed URL
     let mediaUrl = null;
-    if (schedule.contentType === "video" && schedule.videoUrl) {
+    if (schedule.contentType === 'video' && schedule.videoUrl) {
       mediaUrl = await getSignedVideoUrl(schedule.videoUrl);
     } else if (publishableSchedule.imageUrl) {
       mediaUrl = publishableSchedule.imageUrl;
@@ -458,23 +428,19 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     }
 
     // Publish to platform using adapter
-    const publishResult = await adapter.publish(
-      publishableSchedule,
-      credentials,
-      mediaUrl,
-    );
+    const publishResult = await adapter.publish(publishableSchedule, credentials, mediaUrl);
 
     if (!publishResult.success) {
-      throw new Error(publishResult.error || "Publishing failed");
+      throw new Error(publishResult.error || 'Publishing failed');
     }
 
     // Update schedule status with platform info
     await updateScheduleStatus(
       event.scheduleId,
-      "published",
+      'published',
       undefined,
       publishResult.platformPostId,
-      publishResult.platformUrl,
+      publishResult.platformUrl
     );
 
     // Emit EventBridge post.published event for downstream sync
@@ -482,8 +448,8 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       await eventBridge.putEvents({
         Entries: [
           {
-            Source: "postolio.platform",
-            DetailType: "post.published",
+            Source: 'postolio.platform',
+            DetailType: 'post.published',
             Time: new Date(),
             Detail: JSON.stringify({
               scheduleId: event.scheduleId,
@@ -497,58 +463,50 @@ export const handler = async (event: PublishEvent): Promise<void> => {
           },
         ],
       });
-      logger.info("Emitted post.published event to EventBridge");
+      logger.info('Emitted post.published event to EventBridge');
     } catch (emitErr) {
-      logger.warn("Failed to emit post.published event", { error: emitErr });
+      logger.warn('Failed to emit post.published event', { error: emitErr });
     }
 
-    metrics.addMetric("ContentPublished", MetricUnit.Count, 1);
-    metrics.addMetric(
-      `ContentPublished_${schedule.platform}`,
-      MetricUnit.Count,
-      1,
-    );
+    metrics.addMetric('ContentPublished', MetricUnit.Count, 1);
+    metrics.addMetric(`ContentPublished_${schedule.platform}`, MetricUnit.Count, 1);
 
-    logger.info("Content published successfully", {
+    logger.info('Content published successfully', {
       scheduleId: event.scheduleId,
       platform: schedule.platform,
     });
   } catch (error) {
-    logger.error("Failed to publish content", error as Error);
-    metrics.addMetric("PublishingError", MetricUnit.Count, 1);
+    logger.error('Failed to publish content', error as Error);
+    metrics.addMetric('PublishingError', MetricUnit.Count, 1);
 
     // Update schedule status to failed
-    await updateScheduleStatus(
-      event.scheduleId,
-      "failed",
-      (error as Error).message,
-    );
+    await updateScheduleStatus(event.scheduleId, 'failed', (error as Error).message);
 
     // Emit EventBridge post.failed event for downstream sync
     try {
       const schedule = await getSchedule(event.scheduleId).catch(
-        () => null as unknown as Schedule | null,
+        () => null as unknown as Schedule | null
       );
       await eventBridge.putEvents({
         Entries: [
           {
-            Source: "postolio.platform",
-            DetailType: "post.failed",
+            Source: 'postolio.platform',
+            DetailType: 'post.failed',
             Time: new Date(),
             Detail: JSON.stringify({
               scheduleId: event.scheduleId,
               contentId: schedule?.contentId,
               brandId: schedule?.brandId,
               platform: schedule?.platform,
-              error: (error as Error)?.message || "Unknown error",
+              error: (error as Error)?.message || 'Unknown error',
               attemptNumber: 1,
             }),
           },
         ],
       });
-      logger.info("Emitted post.failed event to EventBridge");
+      logger.info('Emitted post.failed event to EventBridge');
     } catch (emitErr) {
-      logger.warn("Failed to emit post.failed event", { error: emitErr });
+      logger.warn('Failed to emit post.failed event', { error: emitErr });
     }
 
     throw error;
@@ -563,15 +521,15 @@ async function getSchedule(scheduleId: string): Promise<Schedule | undefined> {
       TableName: process.env.SCHEDULES_TABLE!,
       Key: {
         pk: `SCHEDULE#${scheduleId}`,
-        sk: "METADATA",
+        sk: 'METADATA',
       },
-    }),
+    })
   );
 
   const item = result.Item as Record<string, unknown> | undefined;
   if (!item) return undefined;
-  if (typeof item.platform !== "string") {
-    logger.warn("Schedule item missing platform field", { scheduleId });
+  if (typeof item.platform !== 'string') {
+    logger.warn('Schedule item missing platform field', { scheduleId });
     return undefined;
   }
   return item as Schedule;
@@ -588,9 +546,9 @@ interface TokenServiceResponse {
 async function getTokenFromTokenService(
   brandId: string,
   userId: string,
-  platform: string,
+  platform: string
 ): Promise<TokenServiceResponse> {
-  logger.info("Fetching token from Token Service", {
+  logger.info('Fetching token from Token Service', {
     brandId,
     userId,
     platform,
@@ -598,65 +556,57 @@ async function getTokenFromTokenService(
 
   try {
     // Check if we should use service discovery
-    const defaultUrl = process.env.TOKEN_SERVICE_URL || "http://localhost:4001";
+    const defaultUrl = process.env.TOKEN_SERVICE_URL || 'http://localhost:4001';
     let tokenServiceUrl = defaultUrl;
 
     // Use service discovery if appropriate
-    if (
-      shouldUseServiceDiscovery(tokenServiceUrl, process.env.TOKEN_SERVICE_URL)
-    ) {
+    if (shouldUseServiceDiscovery(tokenServiceUrl, process.env.TOKEN_SERVICE_URL)) {
       try {
-        tokenServiceUrl = await discoverService("token-service");
-        logger.info("Token Service discovered via Cloud Map", {
+        tokenServiceUrl = await discoverService('token-service');
+        logger.info('Token Service discovered via Cloud Map', {
           url: tokenServiceUrl,
         });
       } catch (discoveryError) {
-        logger.warn("Service discovery failed", { error: discoveryError });
+        logger.warn('Service discovery failed', { error: discoveryError });
         // Don't throw here - we might still have a valid URL from env var
       }
     }
 
     // Only throw if we still have localhost URL after discovery attempt
     if (isLocalUrl(tokenServiceUrl) && tokenServiceUrl === defaultUrl) {
-      throw new Error(
-        "Token Service URL not configured and service discovery failed",
-      );
+      throw new Error('Token Service URL not configured and service discovery failed');
     }
 
     // Parse URL for signing
-    const url = new URL(
-      `${tokenServiceUrl}/tokens/${userId}/${platform}/${brandId}`,
-    );
+    const url = new URL(`${tokenServiceUrl}/tokens/${userId}/${platform}/${brandId}`);
 
     // Create HTTP request for signing
     // Sign the request with our shared signing utility
     const headers = await signRequest({
-      method: "GET",
+      method: 'GET',
       url,
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
     });
 
     // Make signed HTTP request
     const response = await fetch(url.toString(), {
-      method: "GET",
+      method: 'GET',
       headers,
     });
 
     if (!response.ok) {
-      logger.error("Token Service request failed", {
+      logger.error('Token Service request failed', {
         status: response.status,
         statusText: response.statusText,
       });
 
       if (response.status === 404) {
-        throw new Error("Token not found");
+        throw new Error('Token not found');
       }
 
-      throw new Error(
-        `Token Service error: ${response.status} ${response.statusText}`,
-      );
+      throw new Error(`Token Service error: ${response.status} ${response.statusText}`);
     }
 
     interface RawTokenResponse {
@@ -667,10 +617,10 @@ async function getTokenFromTokenService(
     const tokenData = (await response.json()) as RawTokenResponse;
 
     if (!tokenData.accessToken) {
-      throw new Error("Token Service returned no access token");
+      throw new Error('Token Service returned no access token');
     }
 
-    logger.info("Successfully fetched token from Token Service");
+    logger.info('Successfully fetched token from Token Service');
     return {
       accessToken: tokenData.accessToken,
       expiresAt: tokenData.expiresAt,
@@ -678,7 +628,7 @@ async function getTokenFromTokenService(
       pageId: tokenData.metadata?.pageId,
     };
   } catch (error) {
-    logger.error("Failed to get token from Token Service", { error });
+    logger.error('Failed to get token from Token Service', { error });
     throw error;
   }
 }
@@ -703,8 +653,8 @@ async function getSignedVideoUrl(videoKey: string): Promise<string> {
 async function logAudit(
   scheduleId: string,
   action: string,
-  result: "success" | "failure",
-  details?: Record<string, unknown>,
+  result: 'success' | 'failure',
+  details?: Record<string, unknown>
 ): Promise<void> {
   await docClient.send(
     new PutCommand({
@@ -719,7 +669,7 @@ async function logAudit(
         timestamp: new Date().toISOString(),
         ttl: Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60, // 90 days
       },
-    }),
+    })
   );
 }
 
@@ -727,24 +677,24 @@ async function createFailedScheduleEntry(
   scheduleId: string,
   brandId: string,
   userId: string,
-  errorMessage: string,
+  errorMessage: string
 ): Promise<void> {
   await docClient.send(
     new PutCommand({
       TableName: process.env.SCHEDULES_TABLE!,
       Item: {
         pk: `SCHEDULE#${scheduleId}`,
-        sk: "METADATA",
+        sk: 'METADATA',
         scheduleId,
         brandId,
         userId,
-        status: "failed",
+        status: 'failed',
         schedulingError: errorMessage,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         ttl: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60, // 7 days
       },
-    }),
+    })
   );
 }
 
@@ -753,44 +703,43 @@ async function updateScheduleStatus(
   status: string,
   errorMessage?: string,
   platformPostId?: string,
-  platformUrl?: string,
+  platformUrl?: string
 ): Promise<void> {
-  let updateExpression = "SET #status = :status, #updatedAt = :updatedAt";
+  let updateExpression = 'SET #status = :status, #updatedAt = :updatedAt';
 
   if (errorMessage) {
-    updateExpression += ", #error = :error";
-  } else if (status === "published") {
-    updateExpression += ", #publishedAt = :publishedAt";
-    if (platformPostId)
-      updateExpression += ", #platformPostId = :platformPostId";
-    if (platformUrl) updateExpression += ", #platformUrl = :platformUrl";
+    updateExpression += ', #error = :error';
+  } else if (status === 'published') {
+    updateExpression += ', #publishedAt = :publishedAt';
+    if (platformPostId) updateExpression += ', #platformPostId = :platformPostId';
+    if (platformUrl) updateExpression += ', #platformUrl = :platformUrl';
   }
 
   const expressionAttributeNames: Record<string, string> = {
-    "#status": "status",
-    "#updatedAt": "updatedAt",
+    '#status': 'status',
+    '#updatedAt': 'updatedAt',
   };
 
   const expressionAttributeValues: Record<string, string> = {
-    ":status": status,
-    ":updatedAt": new Date().toISOString(),
+    ':status': status,
+    ':updatedAt': new Date().toISOString(),
   };
 
   if (errorMessage) {
-    expressionAttributeNames["#error"] = "schedulingError";
-    expressionAttributeValues[":error"] = errorMessage;
-  } else if (status === "published") {
-    expressionAttributeNames["#publishedAt"] = "publishedAt";
-    expressionAttributeValues[":publishedAt"] = new Date().toISOString();
+    expressionAttributeNames['#error'] = 'schedulingError';
+    expressionAttributeValues[':error'] = errorMessage;
+  } else if (status === 'published') {
+    expressionAttributeNames['#publishedAt'] = 'publishedAt';
+    expressionAttributeValues[':publishedAt'] = new Date().toISOString();
 
     if (platformPostId) {
-      expressionAttributeNames["#platformPostId"] = "platformPostId";
-      expressionAttributeValues[":platformPostId"] = platformPostId;
+      expressionAttributeNames['#platformPostId'] = 'platformPostId';
+      expressionAttributeValues[':platformPostId'] = platformPostId;
     }
 
     if (platformUrl) {
-      expressionAttributeNames["#platformUrl"] = "platformUrl";
-      expressionAttributeValues[":platformUrl"] = platformUrl;
+      expressionAttributeNames['#platformUrl'] = 'platformUrl';
+      expressionAttributeValues[':platformUrl'] = platformUrl;
     }
   }
 
@@ -799,16 +748,16 @@ async function updateScheduleStatus(
       TableName: process.env.SCHEDULES_TABLE!,
       Key: {
         pk: `SCHEDULE#${scheduleId}`,
-        sk: "METADATA",
+        sk: 'METADATA',
       },
       UpdateExpression: updateExpression,
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,
-    }),
+    })
   );
 
   // Log audit
-  await logAudit(scheduleId, `status_update_${status}`, "success", {
+  await logAudit(scheduleId, `status_update_${status}`, 'success', {
     errorMessage,
     platformPostId,
     platformUrl,

@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
-import { useConnectionStatus } from "./ConnectionStatus";
-import { toast } from "sonner";
-import { WifiOff, Wifi, AlertCircle } from "lucide-react";
-import { useAuthStore } from "../stores/authStore";
+import { useState, useEffect } from 'react';
+import { useConnectionStatus } from './ConnectionStatus';
+import { toast } from 'sonner';
+import { WifiOff, Wifi, AlertCircle } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
 
 /**
  * Minimal WebSocket connection indicator following progressive disclosure pattern:
@@ -31,7 +31,7 @@ export function ConnectionIndicator() {
       return;
     }
 
-    if (connectionStatus !== "connected") {
+    if (connectionStatus !== 'connected') {
       // Start counting disconnection duration
       const startTime = Date.now();
       interval = setInterval(() => {
@@ -46,9 +46,7 @@ export function ConnectionIndicator() {
               <WifiOff className="h-4 w-4" />
               <div>
                 <p className="font-medium">Connection interrupted</p>
-                <p className="text-sm opacity-90">
-                  Your changes will sync when reconnected
-                </p>
+                <p className="text-sm opacity-90">Your changes will sync when reconnected</p>
               </div>
             </div>,
             {
@@ -60,7 +58,7 @@ export function ConnectionIndicator() {
                       onClick: () => reconnect(),
                     }
                   : undefined,
-            },
+            }
           );
           setToastId(id);
         }
@@ -75,7 +73,7 @@ export function ConnectionIndicator() {
         setToastId(undefined);
 
         // Show success briefly (only for authenticated users)
-        toast.success("Connection restored", {
+        toast.success('Connection restored', {
           duration: 2000,
           icon: <Wifi className="h-4 w-4" />,
         });
@@ -88,11 +86,7 @@ export function ConnectionIndicator() {
   }, [connectionStatus, retryIn, reconnect, toastId, isAuthenticated]);
 
   // Don't render anything when not authenticated, connected, or in first 3 seconds
-  if (
-    !isAuthenticated ||
-    connectionStatus === "connected" ||
-    disconnectedDuration < 3
-  ) {
+  if (!isAuthenticated || connectionStatus === 'connected' || disconnectedDuration < 3) {
     return null;
   }
 
@@ -100,31 +94,25 @@ export function ConnectionIndicator() {
   if (disconnectedDuration < 10) {
     return (
       <div
-        className="fixed bottom-4 right-4 z-40 p-2 cursor-pointer group"
+        className="group fixed bottom-4 right-4 z-40 cursor-pointer p-2"
         onClick={() => {
           toast.info(
-            connectionStatus === "connecting"
-              ? `Reconnecting... ${retryIn ? `(${retryIn}s)` : ""}`
-              : "Connection lost. Attempting to reconnect...",
-            { duration: 3000 },
+            connectionStatus === 'connecting'
+              ? `Reconnecting... ${retryIn ? `(${retryIn}s)` : ''}`
+              : 'Connection lost. Attempting to reconnect...',
+            { duration: 3000 }
           );
         }}
-        title={
-          connectionStatus === "connecting"
-            ? "Reconnecting..."
-            : "Connection lost"
-        }
+        title={connectionStatus === 'connecting' ? 'Reconnecting...' : 'Connection lost'}
       >
         <div className="relative">
           {/* Pulsing dot */}
-          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+          <div className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
 
           {/* Hover tooltip */}
           <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block">
-            <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
-              {connectionStatus === "connecting"
-                ? "Reconnecting..."
-                : "Connection interrupted"}
+            <div className="whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white">
+              {connectionStatus === 'connecting' ? 'Reconnecting...' : 'Connection interrupted'}
             </div>
           </div>
         </div>
@@ -148,7 +136,7 @@ export function MobileConnectionBanner() {
     // Only show on mobile devices when authenticated and disconnected for > 5 seconds
     const isMobile = window.innerWidth < 768;
 
-    if (isMobile && isAuthenticated && connectionStatus !== "connected") {
+    if (isMobile && isAuthenticated && connectionStatus !== 'connected') {
       const timer = setTimeout(() => setShow(true), 5000);
       return () => clearTimeout(timer);
     } else {
@@ -159,15 +147,12 @@ export function MobileConnectionBanner() {
   if (!show) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-yellow-900 px-4 py-2 text-sm flex items-center justify-between md:hidden">
+    <div className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between bg-yellow-500 px-4 py-2 text-sm text-yellow-900 md:hidden">
       <div className="flex items-center gap-2">
         <AlertCircle className="h-4 w-4" />
         <span>No connection. Changes will sync when online.</span>
       </div>
-      <button
-        onClick={() => setShow(false)}
-        className="text-yellow-900 hover:text-yellow-800"
-      >
+      <button onClick={() => setShow(false)} className="text-yellow-900 hover:text-yellow-800">
         ✕
       </button>
     </div>

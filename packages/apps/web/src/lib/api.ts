@@ -1,5 +1,5 @@
 // Basic types - avoiding complex type imports for now to resolve build issues
-import { convertFileToBase64 } from "./fileUtils";
+import { convertFileToBase64 } from './fileUtils';
 
 export interface User {
   id: string;
@@ -28,7 +28,7 @@ export interface Content {
   cdnImageUrl?: string | null;
   imageRegion?: string | null;
   retentionExpiresAt?: string | null;
-  status: "draft" | "scheduled" | "published" | "failed" | "skipped";
+  status: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
   scheduledAt: string | null;
   postedAt: string | null;
   createdAt: string;
@@ -73,14 +73,7 @@ export interface CampaignPreview {
 export interface Campaign {
   id: string;
   name: string;
-  status:
-    | "creating"
-    | "preview"
-    | "active"
-    | "paused"
-    | "completed"
-    | "failed"
-    | "processing";
+  status: 'creating' | 'preview' | 'active' | 'paused' | 'completed' | 'failed' | 'processing';
   brandId: string;
   config?: {
     duration?: { start: string; end: string };
@@ -106,7 +99,7 @@ export interface Campaign {
 export interface CampaignStatusResponse {
   success: boolean;
   status: {
-    status: Campaign["status"];
+    status: Campaign['status'];
     progress?: number;
     previewGenerated?: boolean;
     errorMessage?: string | null;
@@ -116,7 +109,7 @@ export interface CampaignStatusResponse {
 // API base URL configuration
 // Empty string means use relative URLs (for development with proxy)
 // Full URL for production or explicit configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 class ApiClient {
   private token: string | null = null;
@@ -125,26 +118,26 @@ class ApiClient {
   private static TIMEZONE_CACHE_DURATION = 30 * 1000; // 30 seconds
 
   constructor() {
-    this.token = localStorage.getItem("auth_token");
+    this.token = localStorage.getItem('auth_token');
   }
 
   setToken(token: string) {
     this.token = token;
-    localStorage.setItem("auth_token", token);
+    localStorage.setItem('auth_token', token);
   }
 
   removeToken() {
     this.token = null;
-    localStorage.removeItem("auth_token");
+    localStorage.removeItem('auth_token');
   }
 
   private getCSRFTokenFromCookie(): string | null {
     // Parse cookies to find CSRF token
-    const cookies = document.cookie.split(";");
+    const cookies = document.cookie.split(';');
     for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split("=");
+      const [name, value] = cookie.trim().split('=');
       // @fastify/csrf-protection uses _csrf cookie by default
-      if (name === "_csrf") {
+      if (name === '_csrf') {
         return decodeURIComponent(value);
       }
     }
@@ -163,7 +156,7 @@ class ApiClient {
       while (retryCount < maxRetries && !csrfToken) {
         try {
           const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
-            credentials: "include",
+            credentials: 'include',
             signal: AbortSignal.timeout(5000), // 5 second timeout
           });
 
@@ -176,38 +169,33 @@ class ApiClient {
             // Store token expiry for proactive refresh
             if (data.expiresIn) {
               const expiryTime = Date.now() + data.expiresIn * 1000;
-              sessionStorage.setItem("csrf_token_expiry", String(expiryTime));
+              sessionStorage.setItem('csrf_token_expiry', String(expiryTime));
             }
           } else if (response.status === 429) {
             // Rate limited - wait before retry
-            const retryAfter = response.headers.get("Retry-After");
+            const retryAfter = response.headers.get('Retry-After');
             const delay = retryAfter ? parseInt(retryAfter) * 1000 : 1000;
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
         } catch (error) {
-          console.warn(
-            `Failed to fetch CSRF token (attempt ${retryCount + 1}):`,
-            error,
-          );
+          console.warn(`Failed to fetch CSRF token (attempt ${retryCount + 1}):`, error);
           // Exponential backoff
           if (retryCount < maxRetries - 1) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, Math.pow(2, retryCount) * 1000),
-            );
+            await new Promise((resolve) => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
           }
         }
         retryCount++;
       }
     } else {
       // Check if token needs refresh (proactive)
-      const expiryTime = sessionStorage.getItem("csrf_token_expiry");
+      const expiryTime = sessionStorage.getItem('csrf_token_expiry');
       if (expiryTime) {
         const timeUntilExpiry = parseInt(expiryTime) - Date.now();
         // Refresh if less than 1 minute remaining
         if (timeUntilExpiry < 60000) {
           // Clear old token to force refresh
           document.cookie = `_csrf=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
-          sessionStorage.removeItem("csrf_token_expiry");
+          sessionStorage.removeItem('csrf_token_expiry');
           // Recursive call to get new token
           return this.ensureCSRFToken();
         }
@@ -221,27 +209,19 @@ class ApiClient {
     const now = Date.now();
 
     // Return cached timezone if still valid
-    if (
-      this.cachedTimezone &&
-      now - this.timezoneLastUpdated < ApiClient.TIMEZONE_CACHE_DURATION
-    ) {
+    if (this.cachedTimezone && now - this.timezoneLastUpdated < ApiClient.TIMEZONE_CACHE_DURATION) {
       return this.cachedTimezone;
     }
 
     // Update cache with fresh value
     this.cachedTimezone =
-      localStorage.getItem("userTimezone") ||
-      localStorage.getItem("detectedTimezone") ||
-      "UTC"; // neutral global fallback
+      localStorage.getItem('userTimezone') || localStorage.getItem('detectedTimezone') || 'UTC'; // neutral global fallback
     this.timezoneLastUpdated = now;
 
     return this.cachedTimezone;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {},
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string>),
@@ -249,7 +229,7 @@ class ApiClient {
 
     // Only set Content-Type if there's a body
     if (options.body) {
-      headers["Content-Type"] = "application/json";
+      headers['Content-Type'] = 'application/json';
     }
 
     if (this.token) {
@@ -257,24 +237,21 @@ class ApiClient {
     }
 
     // Include CSRF token for state-changing requests
-    if (
-      options.method &&
-      ["POST", "PUT", "DELETE", "PATCH"].includes(options.method)
-    ) {
+    if (options.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method)) {
       const csrfToken = await this.ensureCSRFToken();
       if (csrfToken) {
         // @fastify/csrf-protection accepts token in header as csrf-token
-        headers["csrf-token"] = csrfToken;
+        headers['csrf-token'] = csrfToken;
       }
     }
 
     // Include timezone header for all requests (cached for performance)
-    headers["X-Timezone"] = this.getTimezone();
+    headers['X-Timezone'] = this.getTimezone();
 
     const response = await fetch(url, {
       ...options,
       headers,
-      credentials: "include", // Include cookies in requests
+      credentials: 'include', // Include cookies in requests
     });
 
     if (!response.ok) {
@@ -283,17 +260,11 @@ class ApiClient {
         const errorText = await response.text();
         try {
           const errorData = JSON.parse(errorText);
-          if (
-            errorData.code === "CSRF_TOKEN_MISSING" ||
-            errorData.code === "CSRF_TOKEN_INVALID"
-          ) {
+          if (errorData.code === 'CSRF_TOKEN_MISSING' || errorData.code === 'CSRF_TOKEN_INVALID') {
             // Clear cookies by fetching a new CSRF token
-            const refreshResponse = await fetch(
-              `${API_BASE_URL}/api/csrf-token`,
-              {
-                credentials: "include",
-              },
-            );
+            const refreshResponse = await fetch(`${API_BASE_URL}/api/csrf-token`, {
+              credentials: 'include',
+            });
 
             if (refreshResponse.ok) {
               // Get the new token from cookie
@@ -301,11 +272,11 @@ class ApiClient {
 
               // Retry the request once with new token
               if (newCsrfToken) {
-                headers["csrf-token"] = newCsrfToken;
+                headers['csrf-token'] = newCsrfToken;
                 const retryResponse = await fetch(url, {
                   ...options,
                   headers,
-                  credentials: "include",
+                  credentials: 'include',
                 });
 
                 if (retryResponse.ok) {
@@ -320,37 +291,33 @@ class ApiClient {
       }
 
       // Handle 401 Unauthorized specifically
-      if (response.status === 401 && endpoint !== "/api/auth/me") {
+      if (response.status === 401 && endpoint !== '/api/auth/me') {
         // Clear the token and redirect to login
         this.removeToken();
         // Only redirect if not already on login/register page
         const currentPath = window.location.pathname;
-        if (currentPath !== "/login" && currentPath !== "/register") {
-          window.location.href = "/login";
+        if (currentPath !== '/login' && currentPath !== '/register') {
+          window.location.href = '/login';
         }
       }
 
       // Handle specific error codes with meaningful messages
       if (response.status === 413) {
-        throw new Error(
-          "Image too large. Please optimize your image to be under 10MB.",
-        );
+        throw new Error('Image too large. Please optimize your image to be under 10MB.');
       }
 
       const errorText = await response.text();
       try {
         const errorData = JSON.parse(errorText);
-        throw new Error(
-          errorData.error || errorData.message || "Request failed",
-        );
+        throw new Error(errorData.error || errorData.message || 'Request failed');
       } catch {
         // If JSON parsing fails, check for specific status codes
         if (response.status === 404) {
-          throw new Error("Resource not found");
+          throw new Error('Resource not found');
         } else if (response.status === 500) {
-          throw new Error("Server error. Please try again later.");
+          throw new Error('Server error. Please try again later.');
         } else if (response.status === 403) {
-          throw new Error("You do not have permission to perform this action");
+          throw new Error('You do not have permission to perform this action');
         } else if (errorText) {
           // If we have error text but it's not JSON, use it
           throw new Error(errorText);
@@ -371,8 +338,8 @@ class ApiClient {
     name?: string;
     timezone?: string;
   }): Promise<AuthResponse> {
-    return this.request("/api/auth/register", {
-      method: "POST",
+    return this.request('/api/auth/register', {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   }
@@ -382,35 +349,32 @@ class ApiClient {
     password: string;
     rememberMe?: boolean;
   }): Promise<AuthResponse> {
-    return this.request("/api/auth/login", {
-      method: "POST",
+    return this.request('/api/auth/login', {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async getProfile(): Promise<{ user: User }> {
-    return this.request("/api/auth/me");
+    return this.request('/api/auth/me');
   }
 
   async logout(): Promise<{ success: boolean; message: string }> {
-    const response = await this.request("/api/auth/logout", {
-      method: "POST",
+    const response = await this.request('/api/auth/logout', {
+      method: 'POST',
     });
     this.removeToken();
     return response as { success: boolean; message: string };
   }
 
   async refreshToken(): Promise<{ token: string }> {
-    return this.request("/api/auth/refresh", {
-      method: "POST",
+    return this.request('/api/auth/refresh', {
+      method: 'POST',
     });
   }
 
   // User timezone endpoints
-  async updateUserTimezone(data: {
-    timezone: string;
-    timezoneAutoDetected: boolean;
-  }): Promise<{
+  async updateUserTimezone(data: { timezone: string; timezoneAutoDetected: boolean }): Promise<{
     success: boolean;
     user: {
       id: string;
@@ -418,43 +382,38 @@ class ApiClient {
       timezoneAutoDetected: boolean;
     };
   }> {
-    return this.request("/api/users/timezone", {
-      method: "PATCH",
+    return this.request('/api/users/timezone', {
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
   // Brand timezone endpoints
-  async getBrandTimezone(
-    brandId: string,
-  ): Promise<{ timezone: string | null }> {
+  async getBrandTimezone(brandId: string): Promise<{ timezone: string | null }> {
     return this.request(`/api/brands/${brandId}/timezone`);
   }
 
   async updateBrandTimezone(
     brandId: string,
-    timezone: string | null,
+    timezone: string | null
   ): Promise<{
     success: boolean;
     brand: { id: string; postingTimezone: string | null };
   }> {
     return this.request(`/api/brands/${brandId}/timezone`, {
-      method: "PATCH",
+      method: 'PATCH',
       body: JSON.stringify({ timezone }),
     });
   }
 
   // Brand endpoints
   async getBrands(): Promise<{ brands: Brand[] }> {
-    return this.request("/api/brands/list");
+    return this.request('/api/brands/list');
   }
 
-  async createBrand(data: {
-    name: string;
-    description?: string;
-  }): Promise<{ brand: Brand }> {
-    return this.request("/api/brands/create", {
-      method: "POST",
+  async createBrand(data: { name: string; description?: string }): Promise<{ brand: Brand }> {
+    return this.request('/api/brands/create', {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   }
@@ -467,17 +426,15 @@ class ApiClient {
       hashtags: string[];
     }>;
   }): Promise<{ brand: Brand; analysis: Record<string, unknown> }> {
-    return this.request("/api/brands/analyze", {
-      method: "POST",
+    return this.request('/api/brands/analyze', {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async deleteBrand(
-    brandId: string,
-  ): Promise<{ message: string; deletedBrand: Brand }> {
+  async deleteBrand(brandId: string): Promise<{ message: string; deletedBrand: Brand }> {
     return this.request(`/api/brands/brand/${brandId}`, {
-      method: "DELETE",
+      method: 'DELETE',
     });
   }
 
@@ -486,41 +443,37 @@ class ApiClient {
     data: {
       name?: string;
       description?: string;
-    },
+    }
   ): Promise<{ message: string; brand: Brand }> {
     return this.request(`/api/brands/brand/${brandId}`, {
-      method: "PUT",
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
   // Instagram OAuth endpoints
-  async initializeInstagramOAuth(
-    brandId: string,
-  ): Promise<{ authUrl: string; state: string }> {
+  async initializeInstagramOAuth(brandId: string): Promise<{ authUrl: string; state: string }> {
     return this.request(`/api/auth/instagram/authorize?brandId=${brandId}`);
   }
 
   async getInstagramConnectionStatus(
     brandId: string,
-    refresh = false,
+    refresh = false
   ): Promise<{ connected: boolean; profile: Record<string, unknown> | null }> {
-    const queryParam = refresh ? "?refresh=true" : "";
+    const queryParam = refresh ? '?refresh=true' : '';
     return this.request(`/api/instagram/status/${brandId}${queryParam}`);
   }
 
   async disconnectInstagram(brandId: string): Promise<{ success: boolean }> {
     return this.request(`/api/instagram/disconnect`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify({ brandId }),
     });
   }
 
-  async refreshInstagramToken(
-    brandId: string,
-  ): Promise<{ success: boolean; expiresAt: string }> {
+  async refreshInstagramToken(brandId: string): Promise<{ success: boolean; expiresAt: string }> {
     return this.request(`/api/instagram/refresh-token`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify({ brandId }),
     });
   }
@@ -532,8 +485,8 @@ class ApiClient {
     theme?: string;
     style?: string;
   }): Promise<{ content: Content[]; metadata: Record<string, unknown> }> {
-    return this.request("/api/content/generate", {
-      method: "POST",
+    return this.request('/api/content/generate', {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   }
@@ -551,8 +504,8 @@ class ApiClient {
       // Convert File to base64 for upload (matching existing pattern)
       const imageData = await convertFileToBase64(data.imageFile);
 
-      return this.request("/api/content/create", {
-        method: "POST",
+      return this.request('/api/content/create', {
+        method: 'POST',
         body: JSON.stringify({
           brandId: data.brandId,
           caption: data.caption,
@@ -563,8 +516,8 @@ class ApiClient {
       });
     }
 
-    return this.request("/api/content/create", {
-      method: "POST",
+    return this.request('/api/content/create', {
+      method: 'POST',
       body: JSON.stringify({
         brandId: data.brandId,
         caption: data.caption,
@@ -583,21 +536,21 @@ class ApiClient {
     instagramPost?: Record<string, unknown>;
   }> {
     return this.request(`/api/instagram/publish/${contentId}`, {
-      method: "POST",
+      method: 'POST',
     });
   }
 
   async scheduleContent(
     contentId: string,
-    customTime?: string,
+    customTime?: string
   ): Promise<{
     success: boolean;
     scheduleId?: string;
     brandId?: string;
     error?: string;
   }> {
-    return this.request("/api/analytics/schedule", {
-      method: "POST",
+    return this.request('/api/analytics/schedule', {
+      method: 'POST',
       body: JSON.stringify({
         contentId,
         customTime,
@@ -619,15 +572,15 @@ class ApiClient {
       appliedToFuturePosts?: number;
     };
   }> {
-    return this.request("/api/content/update", {
-      method: "PUT",
+    return this.request('/api/content/update', {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
   async uploadContentImage(
     contentId: string,
-    file: File,
+    file: File
   ): Promise<{ success: boolean; content: Content; message: string }> {
     // Convert file to base64 (matching existing pattern)
     const base64Data = await convertFileToBase64(file);
@@ -636,8 +589,8 @@ class ApiClient {
       success: boolean;
       content: Content;
       message: string;
-    }>("/api/content/upload-image", {
-      method: "POST",
+    }>('/api/content/upload-image', {
+      method: 'POST',
       body: JSON.stringify({
         contentId,
         imageData: base64Data,
@@ -670,81 +623,69 @@ class ApiClient {
 
   // Analytics endpoints
   async get<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    return this.request(endpoint, { ...options, method: "GET" });
+    return this.request(endpoint, { ...options, method: 'GET' });
   }
 
-  async post<T>(
-    endpoint: string,
-    data?: unknown,
-    options?: RequestInit,
-  ): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> {
     return this.request(endpoint, {
       ...options,
-      method: "POST",
+      method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async put<T>(
-    endpoint: string,
-    data?: unknown,
-    options?: RequestInit,
-  ): Promise<T> {
+  async put<T>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> {
     return this.request(endpoint, {
       ...options,
-      method: "PUT",
+      method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
   async delete<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    return this.request(endpoint, { ...options, method: "DELETE" });
+    return this.request(endpoint, { ...options, method: 'DELETE' });
   }
 
   // Content endpoints (fixed duplicate method - keeping the correct one)
   /* Note: updateContent is already defined above at line 368-379 with PUT method */
 
-  async deletePost(
-    postId: string,
-  ): Promise<{ success: boolean; message: string }> {
+  async deletePost(postId: string): Promise<{ success: boolean; message: string }> {
     return this.request(`/api/content/post/${postId}`, {
-      method: "DELETE",
+      method: 'DELETE',
     });
   }
 
   async schedulePost(
     postId: string,
-    scheduledAt: string,
+    scheduledAt: string
   ): Promise<{ success: boolean; content: Content }> {
     return this.request(`/api/content/post/${postId}/schedule`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify({ scheduledAt }),
     });
   }
 
-  async publishPostNow(
-    postId: string,
-  ): Promise<{ success: boolean; content: Content }> {
+  async publishPostNow(postId: string): Promise<{ success: boolean; content: Content }> {
     return this.request(`/api/content/post/${postId}/publish-now`, {
-      method: "POST",
+      method: 'POST',
     });
   }
 
   // Calendar endpoints
   async getCalendarContent(
     brandId: string,
-    month?: string,
+    month?: string
   ): Promise<{
     success: boolean;
     data: {
       content: Content[];
       placeholders: Array<{
         id: string;
-        type: "placeholder";
+        type: 'placeholder';
         campaignId: string;
         campaignName: string;
         scheduledAt: string;
-        status: "placeholder";
+        status: 'placeholder';
         message: string;
       }>;
     };
@@ -755,25 +696,25 @@ class ApiClient {
 
   // Campaign endpoints
   async configureCampaign(
-    config: CampaignConfig,
+    config: CampaignConfig
   ): Promise<{ success: boolean; campaign: Campaign }> {
     // Handle both Date objects and strings for duration
     const getDurationString = (dateValue: Date | string): string => {
-      if (typeof dateValue === "string") {
+      if (typeof dateValue === 'string') {
         // Already a string, use directly
         return dateValue;
       }
       // Convert Date object to YYYY-MM-DD format
       const year = dateValue.getFullYear();
-      const month = String(dateValue.getMonth() + 1).padStart(2, "0");
-      const day = String(dateValue.getDate()).padStart(2, "0");
+      const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+      const day = String(dateValue.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     };
 
-    return this.request("/api/campaign/configure", {
-      method: "POST",
+    return this.request('/api/campaign/configure', {
+      method: 'POST',
       headers: {
-        "X-Timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
+        'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
       body: JSON.stringify({
         name: config.name,
@@ -793,43 +734,33 @@ class ApiClient {
 
   async previewCampaign(
     campaignId: string,
-    exampleCount = 3,
+    exampleCount = 3
   ): Promise<{ success: boolean; preview: CampaignPreview }> {
-    return this.request("/api/campaign/preview", {
-      method: "POST",
+    return this.request('/api/campaign/preview', {
+      method: 'POST',
       body: JSON.stringify({ configId: campaignId, exampleCount }),
     });
   }
 
-  async startCampaign(
-    campaignId: string,
-  ): Promise<{ success: boolean; message: string }> {
-    return this.request("/api/campaign/start", {
-      method: "POST",
+  async startCampaign(campaignId: string): Promise<{ success: boolean; message: string }> {
+    return this.request('/api/campaign/start', {
+      method: 'POST',
       body: JSON.stringify({ campaignId }),
     });
   }
 
-  async listCampaigns(
-    brandId?: string,
-  ): Promise<{ success: boolean; campaigns: Campaign[] }> {
-    const url = brandId
-      ? `/api/campaign/list?brandId=${brandId}`
-      : "/api/campaign/list";
+  async listCampaigns(brandId?: string): Promise<{ success: boolean; campaigns: Campaign[] }> {
+    const url = brandId ? `/api/campaign/list?brandId=${brandId}` : '/api/campaign/list';
     return this.request(url);
   }
 
-  async getCampaign(
-    campaignId: string,
-  ): Promise<{ success: boolean; campaign: Campaign }> {
+  async getCampaign(campaignId: string): Promise<{ success: boolean; campaign: Campaign }> {
     return this.request(`/api/campaign/${campaignId}`);
   }
 
-  async deleteCampaign(
-    campaignId: string,
-  ): Promise<{ success: boolean; message: string }> {
+  async deleteCampaign(campaignId: string): Promise<{ success: boolean; message: string }> {
     return this.request(`/api/campaign/${campaignId}`, {
-      method: "DELETE",
+      method: 'DELETE',
     });
   }
 
@@ -849,7 +780,7 @@ class ApiClient {
       endDate?: string;
       status?: string;
       priority?: number;
-    },
+    }
   ): Promise<{
     success: boolean;
     campaign: Campaign;
@@ -858,7 +789,7 @@ class ApiClient {
     cancelledCount?: number;
   }> {
     return this.request(`/api/campaign/${campaignId}`, {
-      method: "PUT",
+      method: 'PUT',
       body: JSON.stringify(updates),
     });
   }
@@ -866,10 +797,10 @@ class ApiClient {
   // Update campaign priority
   async updateCampaignPriority(
     campaignId: string,
-    priority: number,
+    priority: number
   ): Promise<{ success: boolean; campaign: Campaign }> {
     return this.request(`/api/campaign/${campaignId}/priority`, {
-      method: "PUT",
+      method: 'PUT',
       body: JSON.stringify({ priority }),
     });
   }
@@ -879,7 +810,7 @@ class ApiClient {
     success: boolean;
     coordination: unknown;
   }> {
-    return this.request("/api/campaign/coordination");
+    return this.request('/api/campaign/coordination');
   }
 
   // Post Detail Methods
@@ -937,7 +868,7 @@ class ApiClient {
   async getPostComments(
     postId: string,
     page = 1,
-    limit = 20,
+    limit = 20
   ): Promise<{
     success: boolean;
     data: {
@@ -953,9 +884,7 @@ class ApiClient {
       };
     };
   }> {
-    return this.request(
-      `/api/posts/${postId}/comments?page=${page}&limit=${limit}`,
-    );
+    return this.request(`/api/posts/${postId}/comments?page=${page}&limit=${limit}`);
   }
 
   async updatePost(
@@ -963,13 +892,13 @@ class ApiClient {
     data: {
       caption: string;
       hashtags: string[];
-    },
+    }
   ): Promise<{
     success: boolean;
     data: unknown;
   }> {
     return this.request(`/api/content/${postId}/edit`, {
-      method: "PATCH",
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
@@ -979,7 +908,7 @@ class ApiClient {
     data: unknown;
   }> {
     return this.request(`/api/content/${postId}/publish`, {
-      method: "POST",
+      method: 'POST',
     });
   }
 
@@ -1017,7 +946,7 @@ class ApiClient {
         id: string;
         name: string;
         metrics: unknown;
-        performance: "high" | "medium" | "low";
+        performance: 'high' | 'medium' | 'low';
       }>;
       summary: {
         totalCampaigns: number;
@@ -1029,8 +958,8 @@ class ApiClient {
     };
     lastUpdated: string;
   }> {
-    return this.request("/api/campaign/analytics/compare", {
-      method: "POST",
+    return this.request('/api/campaign/analytics/compare', {
+      method: 'POST',
       body: JSON.stringify({ campaignIds }),
     });
   }
@@ -1038,9 +967,9 @@ class ApiClient {
   async getCampaignRecommendations(campaignId: string): Promise<{
     success: boolean;
     data: Array<{
-      type: "frequency" | "content" | "timing" | "hashtags" | "themes";
+      type: 'frequency' | 'content' | 'timing' | 'hashtags' | 'themes';
       message: string;
-      priority: "high" | "medium" | "low";
+      priority: 'high' | 'medium' | 'low';
       impact: string;
       actionable: boolean;
       data?: unknown;
@@ -1048,9 +977,7 @@ class ApiClient {
     count: number;
     lastUpdated: string;
   }> {
-    return this.request(
-      `/api/campaign/analytics/${campaignId}/recommendations`,
-    );
+    return this.request(`/api/campaign/analytics/${campaignId}/recommendations`);
   }
 
   async getCampaignROI(campaignId: string): Promise<{
@@ -1104,7 +1031,7 @@ class ApiClient {
       themes?: string[];
       style?: string;
       contentIds?: string[];
-    },
+    }
   ): Promise<{
     success: boolean;
     data: {
@@ -1114,7 +1041,7 @@ class ApiClient {
     };
   }> {
     return this.request(`/api/campaigns/${campaignId}/regenerate-content`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify(params),
     });
   }
@@ -1122,7 +1049,7 @@ class ApiClient {
   async getRegenerationJobProgress(jobId: string): Promise<{
     success: boolean;
     data: {
-      status: "pending" | "processing" | "completed" | "failed";
+      status: 'pending' | 'processing' | 'completed' | 'failed';
       progress: number;
       total: number;
       completed: number;
@@ -1138,7 +1065,7 @@ class ApiClient {
     message: string;
   }> {
     return this.request(`/api/campaigns/regeneration-jobs/${jobId}`, {
-      method: "DELETE",
+      method: 'DELETE',
     });
   }
 }

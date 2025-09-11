@@ -1,9 +1,9 @@
-import { randomBytes } from "crypto";
-import Redis from "ioredis";
-import { getDatabaseClient } from "../config/database.js";
-import { AuditLogger, AuditEventType } from "./audit-logger.js";
-import { signJWT } from "./jwt.js";
-import { getRedisUrl } from "../utils/redis-url.js";
+import { randomBytes } from 'crypto';
+import Redis from 'ioredis';
+import { getDatabaseClient } from '../config/database.js';
+import { AuditLogger, AuditEventType } from './audit-logger.js';
+import { signJWT } from './jwt.js';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
@@ -32,15 +32,15 @@ export class RefreshTokenService {
   static async generateRefreshToken(
     userId: string,
     ipAddress?: string,
-    userAgent?: string,
+    userAgent?: string
   ): Promise<{
     refreshToken: string;
     accessToken: string;
     family: string;
   }> {
     // Generate token and family ID
-    const token = randomBytes(this.TOKEN_LENGTH).toString("hex");
-    const family = randomBytes(16).toString("hex");
+    const token = randomBytes(this.TOKEN_LENGTH).toString('hex');
+    const family = randomBytes(16).toString('hex');
 
     // Create expiry date
     const expiresAt = new Date();
@@ -61,7 +61,7 @@ export class RefreshTokenService {
     await redis.setex(
       `refresh-token:${token}`,
       this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
-      JSON.stringify(tokenData),
+      JSON.stringify(tokenData)
     );
 
     // Track token family for rotation detection
@@ -72,7 +72,7 @@ export class RefreshTokenService {
         userId,
         currentGeneration: 1,
         createdAt: new Date(),
-      }),
+      })
     );
 
     // Generate new access token
@@ -82,12 +82,12 @@ export class RefreshTokenService {
     });
 
     if (!user) {
-      throw new Error("User not found");
+      throw new Error('User not found');
     }
 
     const accessToken = signJWT(
       { id: user.id, email: user.email },
-      "15m", // Short-lived access token
+      '15m' // Short-lived access token
     );
 
     // Log token generation
@@ -107,7 +107,7 @@ export class RefreshTokenService {
   static async rotateRefreshToken(
     oldToken: string,
     ipAddress?: string,
-    userAgent?: string,
+    userAgent?: string
   ): Promise<{
     refreshToken: string;
     accessToken: string;
@@ -134,10 +134,7 @@ export class RefreshTokenService {
 
     if (!familyData) {
       // Family expired or doesn't exist - potential security issue
-      await this.invalidateTokenFamily(
-        oldTokenParsed.family,
-        oldTokenParsed.userId,
-      );
+      await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
       await AuditLogger.log({
         userId: oldTokenParsed.userId,
         eventType: AuditEventType.REFRESH_TOKEN_REUSE_DETECTED,
@@ -157,10 +154,7 @@ export class RefreshTokenService {
     // Check for token reuse (generation mismatch)
     if (oldTokenParsed.generation !== family.currentGeneration) {
       // Token reuse detected - invalidate entire family
-      await this.invalidateTokenFamily(
-        oldTokenParsed.family,
-        oldTokenParsed.userId,
-      );
+      await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
       await AuditLogger.log({
         userId: oldTokenParsed.userId,
         eventType: AuditEventType.REFRESH_TOKEN_REUSE_DETECTED,
@@ -179,19 +173,12 @@ export class RefreshTokenService {
     // Check max generations
     if (oldTokenParsed.generation >= this.MAX_GENERATIONS) {
       // Force new family creation
-      await this.invalidateTokenFamily(
-        oldTokenParsed.family,
-        oldTokenParsed.userId,
-      );
-      return this.generateRefreshToken(
-        oldTokenParsed.userId,
-        ipAddress,
-        userAgent,
-      );
+      await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
+      return this.generateRefreshToken(oldTokenParsed.userId, ipAddress, userAgent);
     }
 
     // Generate new token in same family
-    const newToken = randomBytes(this.TOKEN_LENGTH).toString("hex");
+    const newToken = randomBytes(this.TOKEN_LENGTH).toString('hex');
     const newGeneration = oldTokenParsed.generation + 1;
 
     const expiresAt = new Date();
@@ -212,7 +199,7 @@ export class RefreshTokenService {
     await redis.setex(
       `refresh-token:${newToken}`,
       this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
-      JSON.stringify(newTokenData),
+      JSON.stringify(newTokenData)
     );
 
     // Update family generation
@@ -223,7 +210,7 @@ export class RefreshTokenService {
         ...family,
         currentGeneration: newGeneration,
         lastRotatedAt: new Date(),
-      }),
+      })
     );
 
     // Invalidate old token
@@ -236,12 +223,12 @@ export class RefreshTokenService {
     });
 
     if (!user) {
-      throw new Error("User not found");
+      throw new Error('User not found');
     }
 
     const accessToken = signJWT(
       { id: user.id, email: user.email },
-      "15m", // Short-lived access token
+      '15m' // Short-lived access token
     );
 
     // Log rotation
@@ -297,10 +284,7 @@ export class RefreshTokenService {
   /**
    * Invalidate entire token family (security breach response)
    */
-  static async invalidateTokenFamily(
-    family: string,
-    userId: string,
-  ): Promise<void> {
+  static async invalidateTokenFamily(family: string, userId: string): Promise<void> {
     // Delete family tracking
     await redis.del(`token-family:${family}`);
 
@@ -374,7 +358,7 @@ export class RefreshTokenService {
     await redis.setex(
       `refresh-token:${token}`,
       this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
-      JSON.stringify(parsed),
+      JSON.stringify(parsed)
     );
 
     return parsed;

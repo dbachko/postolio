@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import { apiClient } from "../lib/api";
-import { PageHeader } from "@/components/PageHeader";
-import AnalyticsChart from "../components/AnalyticsChart";
-import SchedulingPanel from "../components/SchedulingPanel";
-import { useBrandStore } from "../stores/brandStore";
+import { useState, useEffect } from 'react';
+import { apiClient } from '../lib/api';
+import { PageHeader } from '@/components/PageHeader';
+import AnalyticsChart from '../components/AnalyticsChart';
+import SchedulingPanel from '../components/SchedulingPanel';
+import { useBrandStore } from '../stores/brandStore';
 
 interface AnalyticsReport {
   totalPosts: number;
@@ -55,11 +55,10 @@ interface ScheduledPost {
 export default function Analytics() {
   const { selectedBrand } = useBrandStore();
   const [report, setReport] = useState<AnalyticsReport | null>(null);
-  const [schedulingStats, setSchedulingStats] =
-    useState<SchedulingStats | null>(null);
+  const [schedulingStats, setSchedulingStats] = useState<SchedulingStats | null>(null);
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [daysPeriod, setDaysPeriod] = useState(30);
 
   useEffect(() => {
@@ -77,9 +76,9 @@ export default function Analytics() {
     try {
       const response = await apiClient.getBrands();
       // Brand management is handled by the brand store
-      console.log("Brands loaded:", response.brands);
+      console.log('Brands loaded:', response.brands);
     } catch {
-      setError("Failed to load brands");
+      setError('Failed to load brands');
     }
   };
 
@@ -87,22 +86,20 @@ export default function Analytics() {
     if (!selectedBrand?.id) return;
 
     setLoading(true);
-    setError("");
+    setError('');
 
     try {
       const [reportResponse, statsResponse] = await Promise.all([
         apiClient.get<{ report: AnalyticsReport }>(
-          `/api/analytics/report/${selectedBrand.id}?days=${daysPeriod}`,
+          `/api/analytics/report/${selectedBrand.id}?days=${daysPeriod}`
         ),
-        apiClient.get<{ stats: SchedulingStats }>(
-          `/api/analytics/stats/${selectedBrand.id}`,
-        ),
+        apiClient.get<{ stats: SchedulingStats }>(`/api/analytics/stats/${selectedBrand.id}`),
       ]);
 
       setReport(reportResponse.report);
       setSchedulingStats(statsResponse.stats);
     } catch {
-      setError("Failed to load analytics data");
+      setError('Failed to load analytics data');
     } finally {
       setLoading(false);
     }
@@ -113,11 +110,11 @@ export default function Analytics() {
 
     try {
       const response = await apiClient.get<{ scheduledPosts: ScheduledPost[] }>(
-        `/api/analytics/scheduled/${selectedBrand.id}`,
+        `/api/analytics/scheduled/${selectedBrand.id}`
       );
       setScheduledPosts(response.scheduledPosts);
     } catch (err) {
-      console.error("Failed to load scheduled posts:", err);
+      console.error('Failed to load scheduled posts:', err);
     }
   };
 
@@ -131,13 +128,13 @@ export default function Analytics() {
       // Reload stats
       loadAnalytics();
     } catch {
-      setError("Failed to cancel scheduled post");
+      setError('Failed to cancel scheduled post');
     }
   };
 
   const handleReschedulePost = async (contentId: string, newTime: string) => {
     try {
-      await apiClient.put("/api/analytics/reschedule", {
+      await apiClient.put('/api/analytics/reschedule', {
         contentId,
         newTime,
       });
@@ -145,7 +142,7 @@ export default function Analytics() {
       // Reload scheduling data
       loadSchedulingData();
     } catch {
-      setError("Failed to reschedule post");
+      setError('Failed to reschedule post');
     }
   };
 
@@ -157,30 +154,29 @@ export default function Analytics() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
-      <div className="max-w-6xl mx-auto">
+      <div className="mx-auto max-w-6xl">
         <PageHeader
           title="Analytics & Scheduling"
           description="Track performance and manage your posting schedule"
         />
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6 mt-6">
+          <div className="mb-6 mt-6 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700">
             {error}
           </div>
         )}
 
-        <div className="mb-6 mt-6 flex flex-wrap gap-3 items-center">
+        <div className="mb-6 mt-6 flex flex-wrap items-center gap-3">
           {selectedBrand && (
             <div className="text-sm text-gray-600">
-              Analytics for:{" "}
-              <span className="font-medium">{selectedBrand.name}</span>
+              Analytics for: <span className="font-medium">{selectedBrand.name}</span>
             </div>
           )}
 
           <select
             value={daysPeriod}
             onChange={(e) => setDaysPeriod(Number(e.target.value))}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
           >
             <option value={7}>Last 7 days</option>
             <option value={30}>Last 30 days</option>
@@ -189,8 +185,8 @@ export default function Analytics() {
         </div>
 
         {loading && (
-          <div className="text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="py-8 text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
             <p className="mt-2 text-gray-600">Loading analytics...</p>
           </div>
         )}
@@ -198,38 +194,28 @@ export default function Analytics() {
         {report && !loading && (
           <>
             {/* Overview Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-500">
-                  Total Posts
-                </h3>
-                <p className="text-2xl font-bold text-gray-900">
-                  {report.totalPosts}
-                </p>
+            <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg bg-white p-6 shadow-md">
+                <h3 className="text-sm font-medium text-gray-500">Total Posts</h3>
+                <p className="text-2xl font-bold text-gray-900">{report.totalPosts}</p>
               </div>
 
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-500">
-                  Total Impressions
-                </h3>
+              <div className="rounded-lg bg-white p-6 shadow-md">
+                <h3 className="text-sm font-medium text-gray-500">Total Impressions</h3>
                 <p className="text-2xl font-bold text-gray-900">
                   {formatNumber(report.totalImpressions)}
                 </p>
               </div>
 
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-500">
-                  Total Reach
-                </h3>
+              <div className="rounded-lg bg-white p-6 shadow-md">
+                <h3 className="text-sm font-medium text-gray-500">Total Reach</h3>
                 <p className="text-2xl font-bold text-gray-900">
                   {formatNumber(report.totalReach)}
                 </p>
               </div>
 
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-500">
-                  Avg. Engagement Rate
-                </h3>
+              <div className="rounded-lg bg-white p-6 shadow-md">
+                <h3 className="text-sm font-medium text-gray-500">Avg. Engagement Rate</h3>
                 <p className="text-2xl font-bold text-green-600">
                   {report.averageEngagementRate.toFixed(1)}%
                 </p>
@@ -238,41 +224,31 @@ export default function Analytics() {
 
             {/* Scheduling Stats */}
             {schedulingStats && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                  <h3 className="text-sm font-medium text-gray-500">
-                    Scheduled
-                  </h3>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {schedulingStats.scheduled}
-                  </p>
+              <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
+                <div className="rounded-lg bg-white p-6 shadow-md">
+                  <h3 className="text-sm font-medium text-gray-500">Scheduled</h3>
+                  <p className="text-2xl font-bold text-blue-600">{schedulingStats.scheduled}</p>
                 </div>
 
-                <div className="bg-white p-6 rounded-lg shadow-md">
+                <div className="rounded-lg bg-white p-6 shadow-md">
                   <h3 className="text-sm font-medium text-gray-500">Posted</h3>
-                  <p className="text-2xl font-bold text-green-600">
-                    {schedulingStats.posted}
-                  </p>
+                  <p className="text-2xl font-bold text-green-600">{schedulingStats.posted}</p>
                 </div>
 
-                <div className="bg-white p-6 rounded-lg shadow-md">
+                <div className="rounded-lg bg-white p-6 shadow-md">
                   <h3 className="text-sm font-medium text-gray-500">Failed</h3>
-                  <p className="text-2xl font-bold text-red-600">
-                    {schedulingStats.failed}
-                  </p>
+                  <p className="text-2xl font-bold text-red-600">{schedulingStats.failed}</p>
                 </div>
 
-                <div className="bg-white p-6 rounded-lg shadow-md">
+                <div className="rounded-lg bg-white p-6 shadow-md">
                   <h3 className="text-sm font-medium text-gray-500">Draft</h3>
-                  <p className="text-2xl font-bold text-yellow-600">
-                    {schedulingStats.draft}
-                  </p>
+                  <p className="text-2xl font-bold text-yellow-600">{schedulingStats.draft}</p>
                 </div>
               </div>
             )}
 
             {/* Charts and Data */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
               <AnalyticsChart
                 title="Engagement Trends"
                 data={report.engagementTrends}
@@ -287,58 +263,41 @@ export default function Analytics() {
             </div>
 
             {/* Top Performing Posts */}
-            <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-              <h3 className="text-lg font-semibold mb-4">
-                Top Performing Posts
-              </h3>
+            <div className="mb-8 rounded-lg bg-white p-6 shadow-md">
+              <h3 className="mb-4 text-lg font-semibold">Top Performing Posts</h3>
               <div className="overflow-x-auto">
                 <table className="min-w-full">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">
-                        Post ID
-                      </th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">
-                        Impressions
-                      </th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">
-                        Reach
-                      </th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">
-                        Engagement
-                      </th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-500">
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">Post ID</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">Impressions</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">Reach</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">Engagement</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">
                         Engagement Rate
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {report.topPerformingPosts
-                      .slice(0, 5)
-                      .map((post, index) => (
-                        <tr key={index} className="border-b">
-                          <td className="py-3 px-4 text-sm text-gray-900 truncate max-w-32">
-                            {post.postId}
-                          </td>
-                          <td className="py-3 px-4 text-sm text-gray-900">
-                            {formatNumber(post.impressions)}
-                          </td>
-                          <td className="py-3 px-4 text-sm text-gray-900">
-                            {formatNumber(post.reach)}
-                          </td>
-                          <td className="py-3 px-4 text-sm text-gray-900">
-                            {formatNumber(
-                              post.likes +
-                                post.comments +
-                                post.saves +
-                                post.shares,
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-sm font-medium text-green-600">
-                            {post.engagementRate.toFixed(1)}%
-                          </td>
-                        </tr>
-                      ))}
+                    {report.topPerformingPosts.slice(0, 5).map((post, index) => (
+                      <tr key={index} className="border-b">
+                        <td className="max-w-32 truncate px-4 py-3 text-sm text-gray-900">
+                          {post.postId}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {formatNumber(post.impressions)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {formatNumber(post.reach)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {formatNumber(post.likes + post.comments + post.saves + post.shares)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-green-600">
+                          {post.engagementRate.toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -354,8 +313,8 @@ export default function Analytics() {
         )}
 
         {!loading && !report && selectedBrand && (
-          <div className="text-center py-12">
-            <div className="text-gray-400 mb-4">
+          <div className="py-12 text-center">
+            <div className="mb-4 text-gray-400">
               <svg
                 className="mx-auto h-12 w-12"
                 fill="none"
@@ -370,12 +329,8 @@ export default function Analytics() {
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No analytics data available
-            </h3>
-            <p className="text-gray-500">
-              Start posting content to see analytics and insights.
-            </p>
+            <h3 className="mb-2 text-lg font-medium text-gray-900">No analytics data available</h3>
+            <p className="text-gray-500">Start posting content to see analytics and insights.</p>
           </div>
         )}
       </div>

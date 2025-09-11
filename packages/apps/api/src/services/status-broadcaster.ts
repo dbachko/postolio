@@ -1,15 +1,10 @@
-import type { FastifyInstance } from "fastify";
-import type { Redis } from "ioredis";
+import type { FastifyInstance } from 'fastify';
+import type { Redis } from 'ioredis';
 
-export type ContentStatus =
-  | "draft"
-  | "scheduled"
-  | "published"
-  | "failed"
-  | "skipped";
+export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
 
 export interface StatusChangeEvent {
-  type: "status_change";
+  type: 'status_change';
   contentId: string;
   oldStatus: ContentStatus;
   newStatus: ContentStatus;
@@ -20,7 +15,7 @@ export interface StatusChangeEvent {
 export class StatusBroadcaster {
   constructor(
     private fastify: FastifyInstance,
-    private redis: Redis,
+    private redis: Redis
   ) {}
 
   /**
@@ -32,7 +27,7 @@ export class StatusBroadcaster {
     brandId: string,
     oldStatus: ContentStatus,
     newStatus: ContentStatus,
-    metadata?: Record<string, unknown>,
+    metadata?: Record<string, unknown>
   ): Promise<void> {
     const timestamp = Date.now();
 
@@ -40,34 +35,31 @@ export class StatusBroadcaster {
     try {
       await this.redis.xadd(
         `events:${brandId}`,
-        "MAXLEN",
-        "~",
-        "10000", // Keep approximately 10k events max
-        "*", // Auto-generate ID
-        "type",
-        "status_change",
-        "contentId",
+        'MAXLEN',
+        '~',
+        '10000', // Keep approximately 10k events max
+        '*', // Auto-generate ID
+        'type',
+        'status_change',
+        'contentId',
         contentId,
-        "oldStatus",
+        'oldStatus',
         oldStatus,
-        "newStatus",
+        'newStatus',
         newStatus,
-        "metadata",
+        'metadata',
         JSON.stringify(metadata || {}),
-        "timestamp",
-        timestamp.toString(),
+        'timestamp',
+        timestamp.toString()
       );
     } catch (error) {
-      this.fastify.log.error(
-        { error, brandId, contentId },
-        "Failed to store event in Redis",
-      );
+      this.fastify.log.error({ error, brandId, contentId }, 'Failed to store event in Redis');
     }
 
     // Broadcast to connected WebSocket clients
     try {
       this.fastify.broadcastToRoom(`brand:${brandId}`, {
-        type: "status_update",
+        type: 'status_update',
         data: {
           contentId,
           oldStatus,
@@ -77,45 +69,39 @@ export class StatusBroadcaster {
         },
       });
     } catch (error) {
-      this.fastify.log.error(
-        { error, brandId },
-        "Failed to broadcast to WebSocket clients",
-      );
+      this.fastify.log.error({ error, brandId }, 'Failed to broadcast to WebSocket clients');
     }
   }
 
   /**
    * Get recent events for a brand (for catch-up on reconnection)
    */
-  async getRecentEvents(
-    brandId: string,
-    limit: number = 100,
-  ): Promise<StatusChangeEvent[]> {
+  async getRecentEvents(brandId: string, limit: number = 100): Promise<StatusChangeEvent[]> {
     try {
       // Get events from Redis Stream in reverse order (newest first)
       const events = await this.redis.xrevrange(
         `events:${brandId}`,
-        "+", // End (newest)
-        "-", // Start (oldest)
-        "COUNT",
-        limit.toString(),
+        '+', // End (newest)
+        '-', // Start (oldest)
+        'COUNT',
+        limit.toString()
       );
 
       return events
         .map(([, fields]) => {
           const data = this.parseStreamFields(fields);
           return {
-            type: "status_change" as const,
-            contentId: data.contentId || "",
-            oldStatus: (data.oldStatus || "draft") as ContentStatus,
-            newStatus: (data.newStatus || "draft") as ContentStatus,
+            type: 'status_change' as const,
+            contentId: data.contentId || '',
+            oldStatus: (data.oldStatus || 'draft') as ContentStatus,
+            newStatus: (data.newStatus || 'draft') as ContentStatus,
             metadata: data.metadata ? JSON.parse(data.metadata) : undefined,
-            timestamp: new Date(parseInt(data.timestamp || "0")).toISOString(),
+            timestamp: new Date(parseInt(data.timestamp || '0')).toISOString(),
           };
         })
-        .filter((event) => event.contentId !== "");
+        .filter((event) => event.contentId !== '');
     } catch (error) {
-      this.fastify.log.error({ error, brandId }, "Failed to get recent events");
+      this.fastify.log.error({ error, brandId }, 'Failed to get recent events');
       return [];
     }
   }
@@ -128,13 +114,13 @@ export class StatusBroadcaster {
 
     try {
       // Get all events
-      const events = await this.redis.xrange(`events:${brandId}`, "-", "+");
+      const events = await this.redis.xrange(`events:${brandId}`, '-', '+');
 
       // Find events to delete
       const toDelete: string[] = [];
       for (const [id, fields] of events) {
         const data = this.parseStreamFields(fields);
-        const timestamp = parseInt(data.timestamp || "0");
+        const timestamp = parseInt(data.timestamp || '0');
         if (timestamp < sevenDaysAgo) {
           toDelete.push(id);
         }
@@ -145,10 +131,7 @@ export class StatusBroadcaster {
         await this.redis.xdel(`events:${brandId}`, ...toDelete);
       }
     } catch (error) {
-      this.fastify.log.error(
-        { error, brandId },
-        "Failed to cleanup old events",
-      );
+      this.fastify.log.error({ error, brandId }, 'Failed to cleanup old events');
     }
   }
 
@@ -162,7 +145,7 @@ export class StatusBroadcaster {
       oldStatus: ContentStatus;
       newStatus: ContentStatus;
       metadata?: Record<string, unknown>;
-    }>,
+    }>
   ): Promise<void> {
     // Group by brand for efficient broadcasting
     const changesByBrand = new Map<string, typeof changes>();
@@ -175,9 +158,7 @@ export class StatusBroadcaster {
     }
 
     // Process each brand's changes
-    for (const [brandId, brandChanges] of Array.from(
-      changesByBrand.entries(),
-    )) {
+    for (const [brandId, brandChanges] of Array.from(changesByBrand.entries())) {
       const timestamp = Date.now();
 
       // Store all events for this brand in a pipeline
@@ -186,42 +167,36 @@ export class StatusBroadcaster {
       for (const change of brandChanges) {
         pipeline.xadd(
           `events:${brandId}`,
-          "MAXLEN",
-          "~",
-          "10000",
-          "*",
-          "type",
-          "status_change",
-          "contentId",
+          'MAXLEN',
+          '~',
+          '10000',
+          '*',
+          'type',
+          'status_change',
+          'contentId',
           change.contentId,
-          "oldStatus",
+          'oldStatus',
           change.oldStatus,
-          "newStatus",
+          'newStatus',
           change.newStatus,
-          "metadata",
+          'metadata',
           JSON.stringify(change.metadata || {}),
-          "timestamp",
-          timestamp.toString(),
+          'timestamp',
+          timestamp.toString()
         );
       }
 
       try {
         await pipeline.exec();
       } catch (_error: unknown) {
-        const message =
-          _error instanceof Error
-            ? _error.message
-            : "An unknown error occurred";
-        this.fastify.log.error(
-          { error: message, brandId },
-          "Failed to store batch events",
-        );
+        const message = _error instanceof Error ? _error.message : 'An unknown error occurred';
+        this.fastify.log.error({ error: message, brandId }, 'Failed to store batch events');
       }
 
       // Broadcast batch update to WebSocket clients
       try {
         this.fastify.broadcastToRoom(`brand:${brandId}`, {
-          type: "batch_status_update",
+          type: 'batch_status_update',
           data: brandChanges.map((change) => ({
             contentId: change.contentId,
             oldStatus: change.oldStatus,
@@ -231,12 +206,8 @@ export class StatusBroadcaster {
           })),
         });
       } catch (error: unknown) {
-        const message =
-          error instanceof Error ? error.message : "An unknown error occurred";
-        this.fastify.log.error(
-          { error: message, brandId },
-          "Failed to broadcast batch update",
-        );
+        const message = error instanceof Error ? error.message : 'An unknown error occurred';
+        this.fastify.log.error({ error: message, brandId }, 'Failed to broadcast batch update');
       }
     }
   }
@@ -250,29 +221,22 @@ export class StatusBroadcaster {
     newestEvent: string | null;
   }> {
     try {
-      const info = (await this.redis.xinfo(
-        "STREAM",
-        `events:${brandId}`,
-      )) as unknown[];
+      const info = (await this.redis.xinfo('STREAM', `events:${brandId}`)) as unknown[];
 
       return {
         totalEvents: (info[1] as number) || 0, // length field
         oldestEvent:
-          info[3] && typeof info[3] === "string"
+          info[3] && typeof info[3] === 'string'
             ? (() => {
-                const parts = info[3].split("-");
-                return parts[0]
-                  ? new Date(parseInt(parts[0])).toISOString()
-                  : null;
+                const parts = info[3].split('-');
+                return parts[0] ? new Date(parseInt(parts[0])).toISOString() : null;
               })()
             : null,
         newestEvent:
-          info[5] && typeof info[5] === "string"
+          info[5] && typeof info[5] === 'string'
             ? (() => {
-                const parts = info[5].split("-");
-                return parts[0]
-                  ? new Date(parseInt(parts[0])).toISOString()
-                  : null;
+                const parts = info[5].split('-');
+                return parts[0] ? new Date(parseInt(parts[0])).toISOString() : null;
               })()
             : null,
       };

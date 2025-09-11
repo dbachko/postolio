@@ -1,20 +1,20 @@
-import speakeasy from "speakeasy";
-import QRCode from "qrcode";
-import { getDatabaseClient } from "../config/database.js";
-import { AuditLogger, AuditEventType } from "./audit-logger.js";
-import Redis from "ioredis";
-import { EmailService } from "./email.js";
-import { randomBytes } from "crypto";
-import { Prisma } from "@postolio/database";
-import { getRedisUrl } from "../utils/redis-url.js";
+import speakeasy from 'speakeasy';
+import QRCode from 'qrcode';
+import { getDatabaseClient } from '../config/database.js';
+import { AuditLogger, AuditEventType } from './audit-logger.js';
+import Redis from 'ioredis';
+import { EmailService } from './email.js';
+import { randomBytes } from 'crypto';
+import { Prisma } from '@postolio/database';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
 
 export enum TwoFactorMethod {
-  TOTP = "totp", // Time-based One-Time Password (Google Authenticator)
-  EMAIL = "email", // Email verification code
-  SMS = "sms", // SMS verification code (future implementation)
+  TOTP = 'totp', // Time-based One-Time Password (Google Authenticator)
+  EMAIL = 'email', // Email verification code
+  SMS = 'sms', // SMS verification code (future implementation)
 }
 
 // Removed unused _TwoFactorSetup interface (was not referenced)
@@ -30,7 +30,7 @@ export class TwoFactorService {
   static async setupTwoFactor(
     userId: string,
     method: TwoFactorMethod,
-    phoneNumber?: string,
+    phoneNumber?: string
   ): Promise<{
     success: boolean;
     qrCode?: string;
@@ -52,7 +52,7 @@ export class TwoFactorService {
       if (existing?.twoFactorEnabled) {
         return {
           success: false,
-          message: "Two-factor authentication is already enabled",
+          message: 'Two-factor authentication is already enabled',
         };
       }
 
@@ -72,7 +72,7 @@ export class TwoFactorService {
           if (!email) {
             return {
               success: false,
-              message: "User email not found for email 2FA",
+              message: 'User email not found for email 2FA',
             };
           }
           result = await this.setupEmail(userId, email);
@@ -82,7 +82,7 @@ export class TwoFactorService {
           if (!phoneNumber) {
             return {
               success: false,
-              message: "Phone number is required for SMS authentication",
+              message: 'Phone number is required for SMS authentication',
             };
           }
           result = await this.setupSMS();
@@ -90,14 +90,14 @@ export class TwoFactorService {
         default:
           return {
             success: false,
-            message: "Invalid two-factor method",
+            message: 'Invalid two-factor method',
           };
       }
 
       // Generate backup codes
       const backupCodes = this.generateBackupCodes();
       const hashedBackupCodes = await Promise.all(
-        backupCodes.map((code) => this.hashBackupCode(code)),
+        backupCodes.map((code) => this.hashBackupCode(code))
       );
 
       // Store temporarily until verified
@@ -109,7 +109,7 @@ export class TwoFactorService {
           secret: result.secret,
           backupCodes: hashedBackupCodes,
           phoneNumber,
-        }),
+        })
       );
 
       return {
@@ -117,10 +117,10 @@ export class TwoFactorService {
         backupCodes,
       };
     } catch (error) {
-      console.error("2FA setup error:", error);
+      console.error('2FA setup error:', error);
       return {
         success: false,
-        message: "Failed to setup two-factor authentication",
+        message: 'Failed to setup two-factor authentication',
       };
     }
   }
@@ -142,16 +142,16 @@ export class TwoFactorService {
     // Generate secret
     const secret = speakeasy.generateSecret({
       name: `Postolio (${user?.email})`,
-      issuer: "Postolio",
+      issuer: 'Postolio',
       length: 32,
     });
 
     // Generate QR code
     const otpauthUrl = speakeasy.otpauthURL({
       secret: secret.base32,
-      label: user?.email || "user",
-      issuer: "Postolio",
-      encoding: "base32",
+      label: user?.email || 'user',
+      issuer: 'Postolio',
+      encoding: 'base32',
     });
 
     const qrCode = await QRCode.toDataURL(otpauthUrl);
@@ -168,7 +168,7 @@ export class TwoFactorService {
    */
   private static async setupEmail(
     userId: string,
-    email: string,
+    email: string
   ): Promise<{
     success: boolean;
     message?: string;
@@ -181,12 +181,12 @@ export class TwoFactorService {
     const emailResult = await EmailService.sendTwoFactorCode(email, code);
 
     if (!emailResult.success) {
-      throw new Error("Failed to send verification code");
+      throw new Error('Failed to send verification code');
     }
 
     return {
       success: true,
-      message: "Verification code sent to your email",
+      message: 'Verification code sent to your email',
     };
   }
 
@@ -200,7 +200,7 @@ export class TwoFactorService {
     // TODO: Implement SMS provider integration (Twilio, AWS SNS, etc.)
     return {
       success: false,
-      message: "SMS authentication not yet implemented",
+      message: 'SMS authentication not yet implemented',
     };
   }
 
@@ -210,7 +210,7 @@ export class TwoFactorService {
   static async verifySetup(
     userId: string,
     code: string,
-    ipAddress?: string,
+    ipAddress?: string
   ): Promise<{
     success: boolean;
     message?: string;
@@ -221,7 +221,7 @@ export class TwoFactorService {
       if (!setupData) {
         return {
           success: false,
-          message: "Setup session expired. Please start over.",
+          message: 'Setup session expired. Please start over.',
         };
       }
 
@@ -233,7 +233,7 @@ export class TwoFactorService {
         case TwoFactorMethod.TOTP:
           verified = speakeasy.totp.verify({
             secret: setup.secret,
-            encoding: "base32",
+            encoding: 'base32',
             token: code,
             window: 2,
           });
@@ -258,13 +258,13 @@ export class TwoFactorService {
           await redis.del(`2fa-setup:${userId}`);
           return {
             success: false,
-            message: "Too many failed attempts. Setup cancelled.",
+            message: 'Too many failed attempts. Setup cancelled.',
           };
         }
 
         return {
           success: false,
-          message: "Invalid verification code",
+          message: 'Invalid verification code',
         };
       }
 
@@ -295,13 +295,13 @@ export class TwoFactorService {
 
       return {
         success: true,
-        message: "Two-factor authentication enabled successfully",
+        message: 'Two-factor authentication enabled successfully',
       };
     } catch (error) {
-      console.error("2FA verification error:", error);
+      console.error('2FA verification error:', error);
       return {
         success: false,
-        message: "Failed to verify two-factor authentication",
+        message: 'Failed to verify two-factor authentication',
       };
     }
   }
@@ -313,7 +313,7 @@ export class TwoFactorService {
     userId: string,
     code: string,
     trustDevice: boolean = false,
-    ipAddress?: string,
+    ipAddress?: string
   ): Promise<{
     success: boolean;
     trustedToken?: string;
@@ -334,7 +334,7 @@ export class TwoFactorService {
       if (!user?.twoFactorEnabled) {
         return {
           success: true,
-          message: "Two-factor not enabled",
+          message: 'Two-factor not enabled',
         };
       }
 
@@ -363,7 +363,7 @@ export class TwoFactorService {
             if (user.twoFactorSecret) {
               verified = speakeasy.totp.verify({
                 secret: user.twoFactorSecret,
-                encoding: "base32",
+                encoding: 'base32',
                 token: code,
                 window: 2,
               });
@@ -394,18 +394,18 @@ export class TwoFactorService {
 
         return {
           success: false,
-          message: "Invalid verification code",
+          message: 'Invalid verification code',
         };
       }
 
       // Generate trusted device token if requested
       let trustedToken: string | undefined;
       if (trustDevice) {
-        trustedToken = randomBytes(32).toString("hex");
+        trustedToken = randomBytes(32).toString('hex');
         await redis.setex(
           `trusted-device:${trustedToken}`,
           30 * 24 * 60 * 60, // 30 days
-          userId,
+          userId
         );
       }
 
@@ -424,13 +424,13 @@ export class TwoFactorService {
       return {
         success: true,
         ...(trustedToken && { trustedToken }),
-        message: "Two-factor authentication verified",
+        message: 'Two-factor authentication verified',
       };
     } catch (error) {
-      console.error("2FA code verification error:", error);
+      console.error('2FA code verification error:', error);
       return {
         success: false,
-        message: "Failed to verify code",
+        message: 'Failed to verify code',
       };
     }
   }
@@ -452,14 +452,10 @@ export class TwoFactorService {
         },
       });
 
-      if (
-        !user ||
-        !user.twoFactorEnabled ||
-        user.twoFactorMethod !== TwoFactorMethod.EMAIL
-      ) {
+      if (!user || !user.twoFactorEnabled || user.twoFactorMethod !== TwoFactorMethod.EMAIL) {
         return {
           success: false,
-          message: "Email two-factor not enabled",
+          message: 'Email two-factor not enabled',
         };
       }
 
@@ -474,7 +470,7 @@ export class TwoFactorService {
       if (attempts > 5) {
         return {
           success: false,
-          message: "Too many code requests. Please try again later.",
+          message: 'Too many code requests. Please try again later.',
         };
       }
 
@@ -483,22 +479,19 @@ export class TwoFactorService {
 
       await redis.setex(`2fa-email-code:${userId}`, this.CODE_EXPIRY, code);
 
-      const emailResult = await EmailService.sendTwoFactorCode(
-        user.email,
-        code,
-      );
+      const emailResult = await EmailService.sendTwoFactorCode(user.email, code);
 
       return {
         success: emailResult.success,
         message: emailResult.success
-          ? "Verification code sent to your email"
-          : "Failed to send verification code",
+          ? 'Verification code sent to your email'
+          : 'Failed to send verification code',
       };
     } catch (error) {
-      console.error("Send email code error:", error);
+      console.error('Send email code error:', error);
       return {
         success: false,
-        message: "Failed to send verification code",
+        message: 'Failed to send verification code',
       };
     }
   }
@@ -509,14 +502,14 @@ export class TwoFactorService {
   static async disableTwoFactor(
     userId: string,
     password: string,
-    ipAddress?: string,
+    ipAddress?: string
   ): Promise<{
     success: boolean;
     message?: string;
   }> {
     try {
       // Verify password before disabling 2FA
-      const bcrypt = await import("bcrypt");
+      const bcrypt = await import('bcrypt');
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { password: true, email: true },
@@ -525,26 +518,23 @@ export class TwoFactorService {
       if (!user) {
         return {
           success: false,
-          message: "User not found",
+          message: 'User not found',
         };
       }
 
-      const validPassword = await bcrypt.default.compare(
-        password,
-        user.password,
-      );
+      const validPassword = await bcrypt.default.compare(password, user.password);
       if (!validPassword) {
         await AuditLogger.log({
           userId,
           email: user.email,
           eventType: AuditEventType.TWO_FACTOR_DISABLED,
-          metadata: { reason: "Invalid password", ipAddress },
+          metadata: { reason: 'Invalid password', ipAddress },
           success: false,
         });
 
         return {
           success: false,
-          message: "Invalid password",
+          message: 'Invalid password',
         };
       }
 
@@ -571,13 +561,13 @@ export class TwoFactorService {
 
       return {
         success: true,
-        message: "Two-factor authentication disabled",
+        message: 'Two-factor authentication disabled',
       };
     } catch (error) {
-      console.error("Disable 2FA error:", error);
+      console.error('Disable 2FA error:', error);
       return {
         success: false,
-        message: "Failed to disable two-factor authentication",
+        message: 'Failed to disable two-factor authentication',
       };
     }
   }
@@ -589,7 +579,7 @@ export class TwoFactorService {
     const codes: string[] = [];
     for (let i = 0; i < this.BACKUP_CODE_COUNT; i++) {
       // Generate 10-character alphanumeric codes
-      const code = randomBytes(5).toString("hex").toUpperCase();
+      const code = randomBytes(5).toString('hex').toUpperCase();
       codes.push(code);
     }
     return codes;
@@ -599,11 +589,8 @@ export class TwoFactorService {
    * Hash backup code for storage
    */
   private static async hashBackupCode(code: string): Promise<string> {
-    const crypto = await import("crypto");
-    return crypto.default
-      .createHash("sha256")
-      .update(code.toUpperCase())
-      .digest("hex");
+    const crypto = await import('crypto');
+    return crypto.default.createHash('sha256').update(code.toUpperCase()).digest('hex');
   }
 
   /**
@@ -631,7 +618,7 @@ export class TwoFactorService {
    */
   static async regenerateBackupCodes(
     userId: string,
-    password: string,
+    password: string
   ): Promise<{
     success: boolean;
     backupCodes?: string[];
@@ -639,7 +626,7 @@ export class TwoFactorService {
   }> {
     try {
       // Verify password
-      const bcrypt = await import("bcrypt");
+      const bcrypt = await import('bcrypt');
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -651,25 +638,22 @@ export class TwoFactorService {
       if (!user || !user.twoFactorEnabled) {
         return {
           success: false,
-          message: "Two-factor authentication not enabled",
+          message: 'Two-factor authentication not enabled',
         };
       }
 
-      const validPassword = await bcrypt.default.compare(
-        password,
-        user.password,
-      );
+      const validPassword = await bcrypt.default.compare(password, user.password);
       if (!validPassword) {
         return {
           success: false,
-          message: "Invalid password",
+          message: 'Invalid password',
         };
       }
 
       // Generate new backup codes
       const backupCodes = this.generateBackupCodes();
       const hashedBackupCodes = await Promise.all(
-        backupCodes.map((code) => this.hashBackupCode(code)),
+        backupCodes.map((code) => this.hashBackupCode(code))
       );
 
       // Update user
@@ -681,13 +665,13 @@ export class TwoFactorService {
       return {
         success: true,
         backupCodes,
-        message: "Backup codes regenerated successfully",
+        message: 'Backup codes regenerated successfully',
       };
     } catch (error) {
-      console.error("Regenerate backup codes error:", error);
+      console.error('Regenerate backup codes error:', error);
       return {
         success: false,
-        message: "Failed to regenerate backup codes",
+        message: 'Failed to regenerate backup codes',
       };
     }
   }

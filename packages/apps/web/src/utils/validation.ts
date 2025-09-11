@@ -12,7 +12,7 @@ export function validatePassword(password: string): {
   if (password.length < 8) {
     return {
       valid: false,
-      message: "Password must be at least 8 characters",
+      message: 'Password must be at least 8 characters',
     };
   }
 
@@ -24,14 +24,11 @@ export function validatePassword(password: string): {
     // eslint-disable-next-line no-useless-escape
     const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
 
-    const complexityCount = [hasUpper, hasLower, hasNumber, hasSymbol].filter(
-      Boolean,
-    ).length;
+    const complexityCount = [hasUpper, hasLower, hasNumber, hasSymbol].filter(Boolean).length;
     if (complexityCount < 3) {
       return {
         valid: false,
-        message:
-          "Add 3 of: uppercase, lowercase, number, symbol (or use 15+ chars)",
+        message: 'Add 3 of: uppercase, lowercase, number, symbol (or use 15+ chars)',
       };
     }
   }
@@ -40,7 +37,7 @@ export function validatePassword(password: string): {
 }
 
 // Password strength levels
-export type PasswordLevel = "weak" | "fair" | "good" | "strong" | "excellent";
+export type PasswordLevel = 'weak' | 'fair' | 'good' | 'strong' | 'excellent';
 
 export interface PasswordStrength {
   level: PasswordLevel;
@@ -56,8 +53,8 @@ export function getPasswordStrength(password: string): PasswordStrength {
 
   if (length < 8) {
     return {
-      level: "weak",
-      message: "Too short - min 8 characters",
+      level: 'weak',
+      message: 'Too short - min 8 characters',
       showComplexityRules: true,
       progress: (length / 8) * 20,
     };
@@ -65,8 +62,8 @@ export function getPasswordStrength(password: string): PasswordStrength {
 
   if (length < 12) {
     return {
-      level: "fair",
-      message: "Add complexity or use 15+ chars",
+      level: 'fair',
+      message: 'Add complexity or use 15+ chars',
       showComplexityRules: true,
       progress: 20 + ((length - 8) / 4) * 20,
     };
@@ -75,8 +72,8 @@ export function getPasswordStrength(password: string): PasswordStrength {
   if (length < 15) {
     const remaining = 15 - length;
     return {
-      level: "good",
-      message: `${remaining} more char${remaining > 1 ? "s" : ""} removes requirements!`,
+      level: 'good',
+      message: `${remaining} more char${remaining > 1 ? 's' : ''} removes requirements!`,
       showComplexityRules: true,
       progress: 40 + ((length - 12) / 3) * 20,
     };
@@ -84,16 +81,16 @@ export function getPasswordStrength(password: string): PasswordStrength {
 
   if (length < 20) {
     return {
-      level: "strong",
-      message: "✨ Great! No special chars needed",
+      level: 'strong',
+      message: '✨ Great! No special chars needed',
       showComplexityRules: false,
       progress: 60 + ((length - 15) / 5) * 20,
     };
   }
 
   return {
-    level: "excellent",
-    message: "🎉 Excellent passphrase!",
+    level: 'excellent',
+    message: '🎉 Excellent passphrase!',
     showComplexityRules: false,
     progress: 100,
   };
@@ -102,11 +99,11 @@ export function getPasswordStrength(password: string): PasswordStrength {
 // Get color for password strength level
 export function getStrengthColor(level: PasswordLevel): string {
   const colors = {
-    weak: "#EF4444", // Red
-    fair: "#F59E0B", // Orange
-    good: "#EAB308", // Yellow
-    strong: "#84CC16", // Light Green
-    excellent: "#10B981", // Green
+    weak: '#EF4444', // Red
+    fair: '#F59E0B', // Orange
+    good: '#EAB308', // Yellow
+    strong: '#84CC16', // Light Green
+    excellent: '#10B981', // Green
   };
   return colors[level];
 }
@@ -114,15 +111,14 @@ export function getStrengthColor(level: PasswordLevel): string {
 // Form validation rules for react-hook-form
 export const validationRules = {
   email: {
-    required: "Email is required",
-    validate: (value: string) =>
-      validateEmail(value) || "Please enter a valid email address",
+    required: 'Email is required',
+    validate: (value: string) => validateEmail(value) || 'Please enter a valid email address',
   },
   password: {
-    required: "Password is required",
+    required: 'Password is required',
     minLength: {
       value: 8,
-      message: "Password must be at least 8 characters",
+      message: 'Password must be at least 8 characters',
     },
     validate: (value: string) => {
       const result = validatePassword(value);
@@ -133,11 +129,11 @@ export const validationRules = {
     required: false, // Make name optional in progressive disclosure
     minLength: {
       value: 2,
-      message: "Name must be at least 2 characters",
+      message: 'Name must be at least 2 characters',
     },
     maxLength: {
       value: 100,
-      message: "Name must be less than 100 characters",
+      message: 'Name must be less than 100 characters',
     },
   },
 };

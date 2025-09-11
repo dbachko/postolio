@@ -1,16 +1,13 @@
-import { FastifyPluginAsync } from "fastify";
-import { PasswordResetService } from "../services/password-reset.js";
-import { validateAndSanitize } from "../middleware/validation.js";
-import {
-  passwordResetRequestSchema,
-  passwordResetSchema,
-} from "../schemas/auth.js";
-import { enhancedRateLimiters } from "../services/enhanced-rate-limiter.js";
+import { FastifyPluginAsync } from 'fastify';
+import { PasswordResetService } from '../services/password-reset.js';
+import { validateAndSanitize } from '../middleware/validation.js';
+import { passwordResetRequestSchema, passwordResetSchema } from '../schemas/auth.js';
+import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 
 const passwordResetRoutes: FastifyPluginAsync = async (fastify) => {
   // Request password reset
   fastify.post<{ Body: { email: string } }>(
-    "/password/reset-request",
+    '/password/reset-request',
     {
       preHandler: [
         validateAndSanitize(passwordResetRequestSchema),
@@ -31,14 +28,14 @@ const passwordResetRoutes: FastifyPluginAsync = async (fastify) => {
         success: true,
         message: result.message,
       });
-    },
+    }
   );
 
   // Reset password with token
   fastify.post<{
     Body: { token: string; password: string; confirmPassword: string };
   }>(
-    "/password/reset",
+    '/password/reset',
     {
       preHandler: validateAndSanitize(passwordResetSchema),
     },
@@ -46,11 +43,7 @@ const passwordResetRoutes: FastifyPluginAsync = async (fastify) => {
       const { token, password } = request.body;
       const ipAddress = request.ip;
 
-      const result = await PasswordResetService.resetPassword(
-        token,
-        password,
-        ipAddress,
-      );
+      const result = await PasswordResetService.resetPassword(token, password, ipAddress);
 
       if (!result.success) {
         return reply.code(400).send({ error: result.message });
@@ -66,19 +59,19 @@ const passwordResetRoutes: FastifyPluginAsync = async (fastify) => {
         success: true,
         message: result.message,
       });
-    },
+    }
   );
 
   // Validate reset token
   fastify.get<{ Params: { token: string } }>(
-    "/password/reset-validate/:token",
+    '/password/reset-validate/:token',
     async (request, reply) => {
       const { token } = request.params;
 
-      if (!token || typeof token !== "string" || token.length !== 32) {
+      if (!token || typeof token !== 'string' || token.length !== 32) {
         return reply.code(400).send({
           valid: false,
-          message: "Invalid token format",
+          message: 'Invalid token format',
         });
       }
 
@@ -86,20 +79,18 @@ const passwordResetRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.send({
         valid: result.valid,
-        email: result.email
-          ? result.email.replace(/^(.{2}).*(@.*)$/, "$1***$2")
-          : undefined,
+        email: result.email ? result.email.replace(/^(.{2}).*(@.*)$/, '$1***$2') : undefined,
       });
-    },
+    }
   );
 
   // Check if password reset is configured
-  fastify.get("/password/reset-status", async (request, reply) => {
+  fastify.get('/password/reset-status', async (request, reply) => {
     return reply.send({
       configured: PasswordResetService.isConfigured(),
       message: PasswordResetService.isConfigured()
-        ? "Password reset is available"
-        : "Password reset requires email configuration",
+        ? 'Password reset is available'
+        : 'Password reset requires email configuration',
     });
   });
 };

@@ -3,7 +3,7 @@
  * Centralized database client management with test support
  */
 
-import { PrismaClient } from "@postolio/database";
+import { PrismaClient } from '@postolio/database';
 
 interface QueryEventLike {
   query: string;
@@ -21,7 +21,7 @@ export function getDatabaseUrl(): string {
 
   if (!DB_USERNAME || !DB_PASSWORD || !DB_HOST || !DB_PORT || !DB_NAME) {
     throw new Error(
-      "Missing required database environment variables: DATABASE_URL or DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME",
+      'Missing required database environment variables: DATABASE_URL or DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME'
     );
   }
 
@@ -43,9 +43,9 @@ export function getDatabaseClient(): PrismaClient {
     // Enhanced Prisma configuration with connection pooling
     prismaInstance = new PrismaClient({
       log:
-        process.env.NODE_ENV === "development"
-          ? ["query", "info", "warn", "error"]
-          : ["warn", "error"],
+        process.env.NODE_ENV === 'development'
+          ? ['query', 'info', 'warn', 'error']
+          : ['warn', 'error'],
 
       datasources: {
         db: {
@@ -58,28 +58,28 @@ export function getDatabaseClient(): PrismaClient {
     });
 
     // Connection event handlers
-    prismaInstance.$on("query" as never, (e: QueryEventLike) => {
-      if (process.env.LOG_QUERIES === "true") {
-        console.log("Query: " + e.query);
-        console.log("Duration: " + e.duration + "ms");
+    prismaInstance.$on('query' as never, (e: QueryEventLike) => {
+      if (process.env.LOG_QUERIES === 'true') {
+        console.log('Query: ' + e.query);
+        console.log('Duration: ' + e.duration + 'ms');
       }
     });
 
     // Graceful shutdown handlers
     const gracefulShutdown = async () => {
-      console.log("🔌 Disconnecting from database...");
+      console.log('🔌 Disconnecting from database...');
       try {
         await prismaInstance?.$disconnect();
-        console.log("✅ Database disconnected successfully");
+        console.log('✅ Database disconnected successfully');
       } catch (error) {
-        console.error("❌ Error disconnecting from database:", error);
+        console.error('❌ Error disconnecting from database:', error);
       }
     };
 
     // Handle process termination
-    process.on("SIGINT", gracefulShutdown);
-    process.on("SIGTERM", gracefulShutdown);
-    process.on("beforeExit", gracefulShutdown);
+    process.on('SIGINT', gracefulShutdown);
+    process.on('SIGTERM', gracefulShutdown);
+    process.on('beforeExit', gracefulShutdown);
   }
 
   return prismaInstance;
@@ -99,7 +99,7 @@ export async function disconnectDatabase(): Promise<void> {
  * Health check for database connection
  */
 export async function checkDatabaseHealth(): Promise<{
-  status: "healthy" | "unhealthy";
+  status: 'healthy' | 'unhealthy';
   latency?: number;
   error?: string;
 }> {
@@ -110,13 +110,13 @@ export async function checkDatabaseHealth(): Promise<{
     const latency = Date.now() - start;
 
     return {
-      status: "healthy",
+      status: 'healthy',
       latency,
     };
   } catch (error) {
     return {
-      status: "unhealthy",
-      error: error instanceof Error ? error.message : "Unknown database error",
+      status: 'unhealthy',
+      error: error instanceof Error ? error.message : 'Unknown database error',
     };
   }
 }
@@ -142,7 +142,7 @@ export async function getDatabaseMetrics(): Promise<{
     const connectionCount =
       Array.isArray(result) &&
       result[0] &&
-      typeof (result[0] as ConnectionRow).connections !== "undefined"
+      typeof (result[0] as ConnectionRow).connections !== 'undefined'
         ? Number((result[0] as ConnectionRow).connections)
         : 0;
     return {
@@ -150,7 +150,7 @@ export async function getDatabaseMetrics(): Promise<{
       // Additional metrics can be added here
     };
   } catch (error) {
-    console.error("Failed to get database metrics:", error);
+    console.error('Failed to get database metrics:', error);
     return {};
   }
 }

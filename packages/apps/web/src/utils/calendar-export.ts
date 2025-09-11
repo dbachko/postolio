@@ -1,10 +1,10 @@
-import Papa from "papaparse";
-import { jsPDF } from "jspdf";
-import { format } from "date-fns";
+import Papa from 'papaparse';
+import { jsPDF } from 'jspdf';
+import { format } from 'date-fns';
 
 interface ExportContent {
   id: string;
-  type?: "content" | "placeholder";
+  type?: 'content' | 'placeholder';
   caption?: string;
   hashtags?: string[];
   status?: string;
@@ -19,7 +19,7 @@ interface ExportContent {
 function downloadFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  const link = document.createElement('a');
   link.href = url;
   link.download = filename;
   document.body.appendChild(link);
@@ -30,11 +30,11 @@ function downloadFile(content: string, filename: string, mimeType: string) {
 
 // Format date for export
 function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return "";
+  if (!dateString) return '';
   try {
-    return format(new Date(dateString), "yyyy-MM-dd HH:mm");
+    return format(new Date(dateString), 'yyyy-MM-dd HH:mm');
   } catch {
-    return "";
+    return '';
   }
 }
 
@@ -45,21 +45,21 @@ export async function exportToCSV(
   options?: {
     includeHeaders?: boolean;
     selectedFields?: string[];
-  },
+  }
 ) {
   const { includeHeaders = true, selectedFields } = options || {};
 
   const data = content.map((item) => {
     const row: Record<string, string | number> = {
-      "Post ID": item.id,
-      Type: item.type === "placeholder" ? "AI Placeholder" : "Post",
-      Caption: item.caption || "",
-      Hashtags: (item.hashtags || []).join(" "),
-      Status: item.status || "",
+      'Post ID': item.id,
+      Type: item.type === 'placeholder' ? 'AI Placeholder' : 'Post',
+      Caption: item.caption || '',
+      Hashtags: (item.hashtags || []).join(' '),
+      Status: item.status || '',
       Scheduled: formatDate(item.scheduledAt),
       Published: formatDate(item.postedAt),
-      Campaign: item.campaignName || item.campaignId || "",
-      "Instagram URL": item.instagramPermalink || "",
+      Campaign: item.campaignName || item.campaignId || '',
+      'Instagram URL': item.instagramPermalink || '',
     };
 
     // Filter fields if specified
@@ -81,7 +81,7 @@ export async function exportToCSV(
     skipEmptyLines: true,
   });
 
-  downloadFile(csv, filename, "text/csv;charset=utf-8;");
+  downloadFile(csv, filename, 'text/csv;charset=utf-8;');
 
   return { success: true, rowCount: data.length };
 }
@@ -94,7 +94,7 @@ export async function exportToPDF(
     includeImages?: boolean;
     groupByCampaign?: boolean;
     dateRange?: { start: Date; end: Date };
-  },
+  }
 ) {
   const { groupByCampaign = false, dateRange } = options || {};
 
@@ -115,9 +115,9 @@ export async function exportToPDF(
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text(
-      `${format(dateRange.start, "MMM d, yyyy")} - ${format(dateRange.end, "MMM d, yyyy")}`,
+      `${format(dateRange.start, 'MMM d, yyyy')} - ${format(dateRange.end, 'MMM d, yyyy')}`,
       margin,
-      yPosition,
+      yPosition
     );
     yPosition += 10;
   }
@@ -125,14 +125,14 @@ export async function exportToPDF(
   // Summary statistics
   doc.setFontSize(10);
   doc.setTextColor(60);
-  const published = content.filter((c) => c.status === "published").length;
-  const scheduled = content.filter((c) => c.status === "scheduled").length;
-  const draft = content.filter((c) => c.status === "draft").length;
+  const published = content.filter((c) => c.status === 'published').length;
+  const scheduled = content.filter((c) => c.status === 'scheduled').length;
+  const draft = content.filter((c) => c.status === 'draft').length;
 
   doc.text(
     `Total: ${content.length} | Published: ${published} | Scheduled: ${scheduled} | Draft: ${draft}`,
     margin,
-    yPosition,
+    yPosition
   );
   yPosition += 15;
 
@@ -144,14 +144,14 @@ export async function exportToPDF(
   if (groupByCampaign) {
     contentGroups = new Map();
     content.forEach((item) => {
-      const key = item.campaignName || item.campaignId || "No Campaign";
+      const key = item.campaignName || item.campaignId || 'No Campaign';
       if (!contentGroups.has(key)) {
         contentGroups.set(key, []);
       }
       contentGroups.get(key)!.push(item);
     });
   } else {
-    contentGroups = new Map([["All Content", content]]);
+    contentGroups = new Map([['All Content', content]]);
   }
 
   // Render content
@@ -167,10 +167,10 @@ export async function exportToPDF(
     // Group header
     if (groupByCampaign) {
       doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
+      doc.setFont('helvetica', 'bold');
       doc.text(groupName, margin, yPosition);
       yPosition += lineHeight;
-      doc.setFont("helvetica", "normal");
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
     }
 
@@ -184,25 +184,22 @@ export async function exportToPDF(
 
       // Date and status
       const dateStr = formatDate(item.scheduledAt || item.postedAt);
-      const statusBadge = `[${item.status?.toUpperCase() || "DRAFT"}]`;
-      doc.setFont("helvetica", "bold");
+      const statusBadge = `[${item.status?.toUpperCase() || 'DRAFT'}]`;
+      doc.setFont('helvetica', 'bold');
       doc.text(`${dateStr} ${statusBadge}`, margin, yPosition);
       yPosition += lineHeight - 2;
 
       // Caption (truncated)
-      doc.setFont("helvetica", "normal");
-      const caption = item.caption || "No caption";
+      doc.setFont('helvetica', 'normal');
+      const caption = item.caption || 'No caption';
       const maxCaptionLength = 80;
       const truncatedCaption =
         caption.length > maxCaptionLength
-          ? caption.substring(0, maxCaptionLength) + "..."
+          ? caption.substring(0, maxCaptionLength) + '...'
           : caption;
 
       // Word wrap for caption
-      const lines = doc.splitTextToSize(
-        truncatedCaption,
-        pageWidth - 2 * margin,
-      );
+      const lines = doc.splitTextToSize(truncatedCaption, pageWidth - 2 * margin);
       lines.forEach((line: string) => {
         if (yPosition > pageHeight - 20) {
           doc.addPage();
@@ -216,7 +213,7 @@ export async function exportToPDF(
       if (item.hashtags && item.hashtags.length > 0) {
         doc.setFontSize(8);
         doc.setTextColor(100);
-        const hashtagText = item.hashtags.slice(0, 5).join(" ");
+        const hashtagText = item.hashtags.slice(0, 5).join(' ');
         doc.text(hashtagText, margin + 5, yPosition);
         yPosition += lineHeight - 1;
         doc.setTextColor(0);
@@ -230,7 +227,7 @@ export async function exportToPDF(
   });
 
   // Save the PDF
-  const timestamp = format(new Date(), "yyyy-MM-dd");
+  const timestamp = format(new Date(), 'yyyy-MM-dd');
   doc.save(`${brandName}-calendar-${timestamp}.pdf`);
 
   return { success: true, pageCount: doc.getNumberOfPages() };
@@ -239,7 +236,7 @@ export async function exportToPDF(
 // Export to iCal format (future enhancement)
 export async function exportToICal(
   content: ExportContent[],
-  brandName: string,
+  brandName: string
 ): Promise<{ success: boolean; eventCount: number }> {
   // This is a placeholder for future iCal export functionality
   // Would require an iCal library like 'ical-generator'
@@ -261,8 +258,8 @@ X-WR-TIMEZONE:UTC
     const formatICalDate = (date: Date) => {
       return date
         .toISOString()
-        .replace(/[-:]/g, "")
-        .replace(/\.\d{3}/, "");
+        .replace(/[-:]/g, '')
+        .replace(/\.\d{3}/, '');
     };
 
     icalContent += `
@@ -271,19 +268,15 @@ UID:${item.id}@postolio.app
 DTSTAMP:${formatICalDate(new Date())}
 DTSTART:${formatICalDate(startDate)}
 DTEND:${formatICalDate(endDate)}
-SUMMARY:${item.type === "placeholder" ? "[AI] " : ""}${item.campaignName || "Instagram Post"}
-DESCRIPTION:${(item.caption || "").replace(/\n/g, "\\n").substring(0, 200)}
-STATUS:${item.status === "published" ? "CONFIRMED" : "TENTATIVE"}
+SUMMARY:${item.type === 'placeholder' ? '[AI] ' : ''}${item.campaignName || 'Instagram Post'}
+DESCRIPTION:${(item.caption || '').replace(/\n/g, '\\n').substring(0, 200)}
+STATUS:${item.status === 'published' ? 'CONFIRMED' : 'TENTATIVE'}
 END:VEVENT`;
   });
 
-  icalContent += "\nEND:VCALENDAR";
+  icalContent += '\nEND:VCALENDAR';
 
-  downloadFile(
-    icalContent,
-    `${brandName}-calendar.ics`,
-    "text/calendar;charset=utf-8;",
-  );
+  downloadFile(icalContent, `${brandName}-calendar.ics`, 'text/calendar;charset=utf-8;');
 
   return { success: true, eventCount: validContent.length };
 }

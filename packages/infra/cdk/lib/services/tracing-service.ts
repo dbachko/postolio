@@ -41,11 +41,7 @@ export class TracingService {
     console.error(`Captured error:`, error);
   }
 
-  async traceOperation<T>(
-    name: string,
-    operation: () => Promise<T>,
-    metadata?: any,
-  ): Promise<T> {
+  async traceOperation<T>(name: string, operation: () => Promise<T>, metadata?: any): Promise<T> {
     // Stub implementation
     console.log(`Tracing operation: ${name}`, metadata);
     const segment = this.startSegment(name);

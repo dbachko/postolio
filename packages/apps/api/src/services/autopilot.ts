@@ -3,23 +3,17 @@
  * Removed node-cron dependency, now triggered by EventBridge rules
  */
 
-import {
-  generateInstagramContent,
-  type ContentGenerationRequest,
-} from "./content-generator.js";
-import type { StyleProfile } from "./ai.js";
-import { analyzeBrandStyle } from "./ai.js";
-import { schedulerService } from "./scheduler.js";
+import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
+import type { StyleProfile } from './ai.js';
+import { analyzeBrandStyle } from './ai.js';
+import { schedulerService } from './scheduler.js';
 import {
   SCHEDULER_TIME_INTERVALS,
   SCHEDULER_LIMITS,
   getPostingIntervalMs,
-} from "../constants/scheduler.js";
-import type {
-  EventBridgeScheduledEvent,
-  LambdaResponse,
-} from "../types/aws-events.js";
-import { getDatabaseClient } from "../config/database.js";
+} from '../constants/scheduler.js';
+import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-events.js';
+import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
 
@@ -29,7 +23,7 @@ export interface AutopilotConfig {
   maxContentPerGeneration: number;
   contentStrategy?: {
     themes?: string[];
-    postingFrequency?: "daily" | "every-other-day" | "weekly";
+    postingFrequency?: 'daily' | 'every-other-day' | 'weekly';
     optimalTimes?: { hour: number; minute: number }[];
   };
 }
@@ -63,23 +57,16 @@ class AutopilotService {
         try {
           const generated = await this.generateContentForBrand(gap);
           totalGenerated += generated;
-          console.log(
-            `Generated ${generated} posts for brand: ${gap.brandName}`,
-          );
+          console.log(`Generated ${generated} posts for brand: ${gap.brandName}`);
         } catch (error) {
-          console.error(
-            `Failed to generate content for brand ${gap.brandName}:`,
-            error,
-          );
+          console.error(`Failed to generate content for brand ${gap.brandName}:`, error);
         }
       }
 
-      console.log(
-        `Autopilot generation complete. Total generated: ${totalGenerated}`,
-      );
+      console.log(`Autopilot generation complete. Total generated: ${totalGenerated}`);
       return { totalGenerated, gaps };
     } catch (error) {
-      console.error("Autopilot generation failed:", error);
+      console.error('Autopilot generation failed:', error);
       throw error;
     }
   }
@@ -88,17 +75,15 @@ class AutopilotService {
    * Lambda handler for EventBridge trigger
    * This will be called by AWS Lambda when triggered by EventBridge
    */
-  async handleEventBridgeTrigger(
-    event: EventBridgeScheduledEvent,
-  ): Promise<LambdaResponse> {
+  async handleEventBridgeTrigger(event: EventBridgeScheduledEvent): Promise<LambdaResponse> {
     console.log(
-      "Autopilot triggered by EventBridge:",
+      'Autopilot triggered by EventBridge:',
       JSON.stringify({
         id: event.id,
         time: event.time,
-        detailType: event["detail-type"],
+        detailType: event['detail-type'],
         taskType: event.detail?.taskType,
-      }),
+      })
     );
 
     const result = await this.runAutopilotGeneration();
@@ -106,7 +91,7 @@ class AutopilotService {
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: "Autopilot generation completed",
+        message: 'Autopilot generation completed',
         totalGenerated: result.totalGenerated,
         gaps: result.gaps.length,
         eventId: event.id,
@@ -124,18 +109,18 @@ class AutopilotService {
     generated: number;
   }> {
     try {
-      console.log("Manual autopilot trigger initiated...");
+      console.log('Manual autopilot trigger initiated...');
       const result = await this.runAutopilotGeneration();
       return {
         success: true,
-        message: "Autopilot generation completed successfully",
+        message: 'Autopilot generation completed successfully',
         generated: result.totalGenerated,
       };
     } catch (error) {
-      console.error("Manual autopilot trigger failed:", error);
+      console.error('Manual autopilot trigger failed:', error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: error instanceof Error ? error.message : 'Unknown error',
         generated: 0,
       };
     }
@@ -157,10 +142,10 @@ class AutopilotService {
         include: {
           content: {
             where: {
-              status: { in: ["scheduled", "published"] },
+              status: { in: ['scheduled', 'published'] },
               scheduledAt: { not: null },
             },
-            orderBy: { scheduledAt: "desc" },
+            orderBy: { scheduledAt: 'desc' },
           },
         },
       });
@@ -174,7 +159,7 @@ class AutopilotService {
 
       return gaps;
     } catch (error) {
-      console.error("Error detecting content gaps:", error);
+      console.error('Error detecting content gaps:', error);
       return [];
     }
   }
@@ -190,56 +175,50 @@ class AutopilotService {
       content?: Array<{ scheduledAt: Date | null }>;
       styleProfile?: unknown;
     },
-    targetDaysAhead: number,
+    targetDaysAhead: number
   ): Promise<ContentGap> {
     const now = new Date();
-    const targetDate = new Date(
-      now.getTime() + targetDaysAhead * 24 * 60 * 60 * 1000,
-    );
+    const targetDate = new Date(now.getTime() + targetDaysAhead * 24 * 60 * 60 * 1000);
 
     // Get brand's content strategy or default
-    const prefsObj =
-      (brand.preferences as Record<string, unknown> | null | undefined) ||
-      undefined;
+    const prefsObj = (brand.preferences as Record<string, unknown> | null | undefined) || undefined;
     const rawStrategy =
-      prefsObj && typeof prefsObj === "object" && "contentStrategy" in prefsObj
+      prefsObj && typeof prefsObj === 'object' && 'contentStrategy' in prefsObj
         ? (prefsObj.contentStrategy as unknown)
         : undefined;
     const contentStrategy = (
-      rawStrategy && typeof rawStrategy === "object"
+      rawStrategy && typeof rawStrategy === 'object'
         ? (rawStrategy as {
-            postingFrequency?: "daily" | "every-other-day" | "weekly";
+            postingFrequency?: 'daily' | 'every-other-day' | 'weekly';
             themes?: string[];
           })
         : undefined
     ) as
       | {
-          postingFrequency?: "daily" | "every-other-day" | "weekly";
+          postingFrequency?: 'daily' | 'every-other-day' | 'weekly';
           themes?: string[];
         }
       | undefined;
     const strategy = contentStrategy || {
-      postingFrequency: "daily",
-      themes: ["lifestyle", "inspiration", "behind-the-scenes"],
+      postingFrequency: 'daily',
+      themes: ['lifestyle', 'inspiration', 'behind-the-scenes'],
     };
 
     // Calculate expected posts based on frequency
     let expectedPostsPerWeek = 7; // daily
-    if (strategy.postingFrequency === "every-other-day") {
+    if (strategy.postingFrequency === 'every-other-day') {
       expectedPostsPerWeek = 3.5;
-    } else if (strategy.postingFrequency === "weekly") {
+    } else if (strategy.postingFrequency === 'weekly') {
       expectedPostsPerWeek = 1;
     }
 
-    const expectedTotalPosts = Math.ceil(
-      (targetDaysAhead / 7) * expectedPostsPerWeek,
-    );
+    const expectedTotalPosts = Math.ceil((targetDaysAhead / 7) * expectedPostsPerWeek);
 
     // Count scheduled content within target period
     const scheduledContent = await prisma.content.count({
       where: {
         brandId: brand.id,
-        status: { in: ["scheduled", "published"] },
+        status: { in: ['scheduled', 'published'] },
         scheduledAt: {
           gte: now,
           lte: targetDate,
@@ -255,7 +234,7 @@ class AutopilotService {
         brandId: brand.id,
         scheduledAt: { not: null },
       },
-      orderBy: { scheduledAt: "desc" },
+      orderBy: { scheduledAt: 'desc' },
     });
 
     // Find next scheduled date after now
@@ -264,7 +243,7 @@ class AutopilotService {
         brandId: brand.id,
         scheduledAt: { gte: now },
       },
-      orderBy: { scheduledAt: "asc" },
+      orderBy: { scheduledAt: 'asc' },
     });
 
     return {
@@ -293,12 +272,9 @@ class AutopilotService {
       // Get brand's style profile
       const rawStyle = brand.styleProfile as unknown;
       let styleProfile: StyleProfile | undefined;
-      if (rawStyle && typeof rawStyle === "object") {
+      if (rawStyle && typeof rawStyle === 'object') {
         const possible = rawStyle as Record<string, unknown>;
-        if (
-          Array.isArray(possible.colorPalette) &&
-          typeof possible.aestheticStyle === "string"
-        ) {
+        if (Array.isArray(possible.colorPalette) && typeof possible.aestheticStyle === 'string') {
           styleProfile = possible as unknown as StyleProfile;
         }
       }
@@ -315,51 +291,47 @@ class AutopilotService {
       }
 
       // Get content strategy
-      const prefs = brand.preferences as
-        | Record<string, unknown>
-        | null
-        | undefined;
+      const prefs = brand.preferences as Record<string, unknown> | null | undefined;
       const rawStrategy2 =
-        prefs && typeof prefs === "object" && "contentStrategy" in prefs
+        prefs && typeof prefs === 'object' && 'contentStrategy' in prefs
           ? (prefs.contentStrategy as unknown)
           : undefined;
       const contentStrategy =
-        rawStrategy2 && typeof rawStrategy2 === "object"
+        rawStrategy2 && typeof rawStrategy2 === 'object'
           ? (rawStrategy2 as {
               themes?: string[];
-              postingFrequency?: "daily" | "every-other-day" | "weekly";
+              postingFrequency?: 'daily' | 'every-other-day' | 'weekly';
             })
           : undefined;
       const strategy = contentStrategy || {
-        themes: ["lifestyle", "inspiration", "behind-the-scenes"],
-        postingFrequency: "daily",
+        themes: ['lifestyle', 'inspiration', 'behind-the-scenes'],
+        postingFrequency: 'daily',
       };
 
       // Ensure styleProfile is a full StyleProfile (fallback values)
       const fullStyleProfile: StyleProfile = {
-        colorPalette: styleProfile?.colorPalette || ["#000000", "#FFFFFF"],
-        aestheticStyle: styleProfile?.aestheticStyle || "modern",
-        contentThemes: styleProfile?.contentThemes || ["lifestyle"],
-        toneOfVoice: styleProfile?.toneOfVoice || "Friendly and professional",
-        targetAudience: styleProfile?.targetAudience || "General audience",
-        brandPersonality: styleProfile?.brandPersonality || ["authentic"],
+        colorPalette: styleProfile?.colorPalette || ['#000000', '#FFFFFF'],
+        aestheticStyle: styleProfile?.aestheticStyle || 'modern',
+        contentThemes: styleProfile?.contentThemes || ['lifestyle'],
+        toneOfVoice: styleProfile?.toneOfVoice || 'Friendly and professional',
+        targetAudience: styleProfile?.targetAudience || 'General audience',
+        brandPersonality: styleProfile?.brandPersonality || ['authentic'],
       };
 
       // Generate content requests
       const contentRequests: ContentGenerationRequest[] = [];
       const postsToGenerate = Math.min(
         gap.missingDays,
-        SCHEDULER_LIMITS.MAX_AUTOPILOT_POSTS_PER_RUN,
+        SCHEDULER_LIMITS.MAX_AUTOPILOT_POSTS_PER_RUN
       );
 
       for (let i = 0; i < postsToGenerate; i++) {
-        const theme =
-          strategy.themes?.[i % strategy.themes.length] || "lifestyle";
+        const theme = strategy.themes?.[i % strategy.themes.length] || 'lifestyle';
         contentRequests.push({
           brandId: gap.brandId,
           count: 1,
           theme,
-          style: styleProfile.aestheticStyle || "modern",
+          style: styleProfile.aestheticStyle || 'modern',
         });
       }
 
@@ -370,7 +342,7 @@ class AutopilotService {
           const generatedContent = await generateInstagramContent(
             fullStyleProfile,
             brand.name,
-            request,
+            request
           );
 
           // Save generated content to database
@@ -383,10 +355,10 @@ class AutopilotService {
                 imageRegion: content.imageRegion ?? null,
                 retentionExpiresAt: content.retentionExpiresAt ?? null,
                 hashtags: content.hashtags,
-                status: "scheduled", // Auto-schedule autopilot content
+                status: 'scheduled', // Auto-schedule autopilot content
                 brandId: gap.brandId,
                 generationParams: {
-                  source: "autopilot",
+                  source: 'autopilot',
                   theme: request.theme,
                   style: request.style,
                   generatedAt: new Date().toISOString(),
@@ -396,10 +368,7 @@ class AutopilotService {
             totalGenerated++;
           }
         } catch (error) {
-          console.error(
-            `Failed to generate content batch for brand ${brand.name}:`,
-            error,
-          );
+          console.error(`Failed to generate content batch for brand ${brand.name}:`, error);
         }
       }
 
@@ -410,10 +379,7 @@ class AutopilotService {
 
       return totalGenerated;
     } catch (error) {
-      console.error(
-        `Error generating content for brand ${gap.brandId}:`,
-        error,
-      );
+      console.error(`Error generating content for brand ${gap.brandId}:`, error);
       return 0;
     }
   }
@@ -423,21 +389,21 @@ class AutopilotService {
    */
   private async scheduleGeneratedContent(
     brandId: string,
-    strategy: { postingFrequency?: "daily" | "every-other-day" | "weekly" },
+    strategy: { postingFrequency?: 'daily' | 'every-other-day' | 'weekly' }
   ): Promise<void> {
     try {
       // Get unscheduled draft content for this brand
       const unscheduledContent = await prisma.content.findMany({
         where: {
           brandId,
-          status: "draft",
+          status: 'draft',
           scheduledAt: null,
           generationParams: {
-            path: ["source"],
-            equals: "autopilot",
+            path: ['source'],
+            equals: 'autopilot',
           },
         },
-        orderBy: { createdAt: "asc" },
+        orderBy: { createdAt: 'asc' },
       });
 
       if (unscheduledContent.length === 0) {
@@ -445,9 +411,7 @@ class AutopilotService {
       }
 
       // Determine posting interval based on frequency
-      const intervalMs = getPostingIntervalMs(
-        strategy.postingFrequency || "daily",
-      );
+      const intervalMs = getPostingIntervalMs(strategy.postingFrequency || 'daily');
 
       // Find the next available time slot
       let nextScheduleTime = await this.getNextAvailableSlot(brandId);
@@ -460,11 +424,9 @@ class AutopilotService {
         nextScheduleTime = new Date(nextScheduleTime.getTime() + intervalMs);
       }
 
-      console.log(
-        `Scheduled ${unscheduledContent.length} autopilot posts for brand ${brandId}`,
-      );
+      console.log(`Scheduled ${unscheduledContent.length} autopilot posts for brand ${brandId}`);
     } catch (error) {
-      console.error("Error scheduling generated content:", error);
+      console.error('Error scheduling generated content:', error);
     }
   }
 
@@ -483,7 +445,7 @@ class AutopilotService {
         brandId,
         scheduledAt: { gte: now },
       },
-      orderBy: { scheduledAt: "desc" },
+      orderBy: { scheduledAt: 'desc' },
     });
 
     if (!lastScheduled?.scheduledAt) {
@@ -492,8 +454,7 @@ class AutopilotService {
 
     // Schedule with minimum interval after the last post
     const nextSlot = new Date(
-      lastScheduled.scheduledAt.getTime() +
-        SCHEDULER_TIME_INTERVALS.MIN_POST_INTERVAL_MS,
+      lastScheduled.scheduledAt.getTime() + SCHEDULER_TIME_INTERVALS.MIN_POST_INTERVAL_MS
     );
     return nextSlot > tomorrow ? nextSlot : tomorrow;
   }
@@ -520,17 +481,14 @@ class AutopilotService {
             where: {
               scheduledAt: { gte: new Date() },
             },
-            orderBy: { scheduledAt: "asc" },
+            orderBy: { scheduledAt: 'asc' },
           },
         },
       });
 
       const brandStatuses = await Promise.all(
         brands.map(async (brand) => {
-          const gap = await this.analyzeContentGap(
-            brand,
-            SCHEDULER_LIMITS.TARGET_DAYS_AHEAD,
-          );
+          const gap = await this.analyzeContentGap(brand, SCHEDULER_LIMITS.TARGET_DAYS_AHEAD);
           const nextPost = brand.content[0]?.scheduledAt ?? null;
 
           return {
@@ -540,14 +498,14 @@ class AutopilotService {
             nextPost,
             gapDays: gap.missingDays,
           };
-        }),
+        })
       );
 
       return {
         brandStatuses,
       };
     } catch (error) {
-      console.error("Error getting autopilot status:", error);
+      console.error('Error getting autopilot status:', error);
       return {
         brandStatuses: [],
       };
@@ -557,24 +515,16 @@ class AutopilotService {
   /**
    * Update autopilot configuration for a brand
    */
-  async updateBrandConfig(
-    brandId: string,
-    config: Partial<AutopilotConfig>,
-  ): Promise<boolean> {
+  async updateBrandConfig(brandId: string, config: Partial<AutopilotConfig>): Promise<boolean> {
     try {
       const currentPrefs = await prisma.brand.findUnique({
         where: { id: brandId },
         select: { preferences: true },
       });
 
-      const existingPrefs = currentPrefs?.preferences as
-        | Record<string, unknown>
-        | null
-        | undefined;
+      const existingPrefs = currentPrefs?.preferences as Record<string, unknown> | null | undefined;
       const existingAutopilot =
-        existingPrefs &&
-        typeof existingPrefs === "object" &&
-        "autopilot" in existingPrefs
+        existingPrefs && typeof existingPrefs === 'object' && 'autopilot' in existingPrefs
           ? (existingPrefs.autopilot as unknown)
           : undefined;
       const updatedPrefsObj = {
@@ -592,7 +542,7 @@ class AutopilotService {
 
       return true;
     } catch (error) {
-      console.error("Error updating autopilot config:", error);
+      console.error('Error updating autopilot config:', error);
       return false;
     }
   }

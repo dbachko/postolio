@@ -1,5 +1,5 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { monitoringService } from "../services/monitoring.js";
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { monitoringService } from '../services/monitoring.js';
 
 // Simple monitoring middleware functions
 export function trackRequest(request: FastifyRequest & { startTime?: number }) {
@@ -8,7 +8,7 @@ export function trackRequest(request: FastifyRequest & { startTime?: number }) {
 
 export function logResponse(
   request: FastifyRequest & { startTime?: number; user?: { id?: string } },
-  reply: FastifyReply,
+  reply: FastifyReply
 ) {
   const responseTime = Date.now() - (request.startTime ?? Date.now());
 
@@ -33,7 +33,7 @@ export function logResponse(
   // Log errors automatically
   if (reply.statusCode >= 400) {
     monitoringService.logError({
-      level: reply.statusCode >= 500 ? "error" : "warn",
+      level: reply.statusCode >= 500 ? 'error' : 'warn',
       message: `HTTP ${reply.statusCode} ${request.method} ${request.url}`,
       ...(userId ? { userId } : {}),
       endpoint: request.url,
@@ -43,21 +43,21 @@ export function logResponse(
 
 const monitoringPlugin: FastifyPluginAsync = async function (fastify) {
   // Decorate fastify instance with monitoring functions for manual use
-  fastify.decorate("trackRequest", trackRequest);
-  fastify.decorate("logResponse", logResponse);
+  fastify.decorate('trackRequest', trackRequest);
+  fastify.decorate('logResponse', logResponse);
 
   // Add global hooks for automatic monitoring
-  fastify.addHook("onRequest", async (request) => {
+  fastify.addHook('onRequest', async (request) => {
     trackRequest(request);
   });
 
-  fastify.addHook("onResponse", async (request, reply) => {
+  fastify.addHook('onResponse', async (request, reply) => {
     logResponse(request, reply);
   });
 };
 
 // Extend FastifyRequest interface to include startTime
-declare module "fastify" {
+declare module 'fastify' {
   interface FastifyRequest {
     startTime?: number;
   }

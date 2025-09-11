@@ -1,7 +1,7 @@
-import { test, expect } from "../fixtures/auth.fixture";
-import { WebSocketHelper } from "../utils/websocket-helper";
+import { test, expect } from '../fixtures/auth.fixture';
+import { WebSocketHelper } from '../utils/websocket-helper';
 
-test.describe("WebSocket Redis Failure Handling", () => {
+test.describe('WebSocket Redis Failure Handling', () => {
   let wsHelper: WebSocketHelper;
 
   test.beforeEach(async ({ authenticatedPage }) => {
@@ -9,9 +9,7 @@ test.describe("WebSocket Redis Failure Handling", () => {
     await wsHelper.setupMessageMonitoring();
   });
 
-  test("should handle Redis unavailability gracefully", async ({
-    authenticatedPage,
-  }) => {
+  test('should handle Redis unavailability gracefully', async ({ authenticatedPage }) => {
     // Wait for initial connection
     await wsHelper.waitForConnection();
 
@@ -19,11 +17,11 @@ test.describe("WebSocket Redis Failure Handling", () => {
     await authenticatedPage.evaluate(() => {
       const sockets = (window as any).__websockets || [];
       if (sockets[0] && sockets[0].readyState === WebSocket.OPEN) {
-        const event = new MessageEvent("message", {
+        const event = new MessageEvent('message', {
           data: JSON.stringify({
-            type: "system_error",
-            error: "Redis connection failed",
-            code: "REDIS_ERROR",
+            type: 'system_error',
+            error: 'Redis connection failed',
+            code: 'REDIS_ERROR',
             fallbackMode: true,
           }),
         });
@@ -34,15 +32,12 @@ test.describe("WebSocket Redis Failure Handling", () => {
     // Should show degraded mode indicator
     await authenticatedPage.waitForFunction(
       () => {
-        const status = document.querySelector(
-          '[data-testid="connection-status"]',
-        );
+        const status = document.querySelector('[data-testid="connection-status"]');
         return (
-          status?.textContent?.includes("Limited") ||
-          status?.textContent?.includes("Degraded")
+          status?.textContent?.includes('Limited') || status?.textContent?.includes('Degraded')
         );
       },
-      { timeout: 5000 },
+      { timeout: 5000 }
     );
 
     // Connection should remain active (degraded mode)
@@ -55,24 +50,20 @@ test.describe("WebSocket Redis Failure Handling", () => {
       if (sockets[0]) {
         sockets[0].send(
           JSON.stringify({
-            type: "schedule_content",
-            data: { contentId: "test-no-redis" },
-          }),
+            type: 'schedule_content',
+            data: { contentId: 'test-no-redis' },
+          })
         );
       }
     });
 
     // Verify message was sent
-    const messages = await wsHelper.getMessages("sent");
-    const testMessage = messages.find(
-      (m) => m.data?.data?.contentId === "test-no-redis",
-    );
+    const messages = await wsHelper.getMessages('sent');
+    const testMessage = messages.find((m) => m.data?.data?.contentId === 'test-no-redis');
     expect(testMessage).toBeTruthy();
   });
 
-  test("should queue messages when Redis recovery is expected", async ({
-    authenticatedPage,
-  }) => {
+  test('should queue messages when Redis recovery is expected', async ({ authenticatedPage }) => {
     // Wait for initial connection
     await wsHelper.waitForConnection();
 
@@ -80,11 +71,11 @@ test.describe("WebSocket Redis Failure Handling", () => {
     await authenticatedPage.evaluate(() => {
       const sockets = (window as any).__websockets || [];
       if (sockets[0] && sockets[0].readyState === WebSocket.OPEN) {
-        const event = new MessageEvent("message", {
+        const event = new MessageEvent('message', {
           data: JSON.stringify({
-            type: "system_warning",
-            warning: "Redis temporarily unavailable",
-            code: "REDIS_TEMP_FAILURE",
+            type: 'system_warning',
+            warning: 'Redis temporarily unavailable',
+            code: 'REDIS_TEMP_FAILURE',
             retryAfter: 5000,
           }),
         });
@@ -98,12 +89,12 @@ test.describe("WebSocket Redis Failure Handling", () => {
       if (sockets[0]) {
         sockets[0].send(
           JSON.stringify({
-            type: "broadcast_update",
+            type: 'broadcast_update',
             data: {
-              contentId: "critical-update",
+              contentId: 'critical-update',
               requiresPersistence: true,
             },
-          }),
+          })
         );
       }
     });
@@ -116,11 +107,11 @@ test.describe("WebSocket Redis Failure Handling", () => {
     await authenticatedPage.evaluate(() => {
       const sockets = (window as any).__websockets || [];
       if (sockets[0] && sockets[0].readyState === WebSocket.OPEN) {
-        const event = new MessageEvent("message", {
+        const event = new MessageEvent('message', {
           data: JSON.stringify({
-            type: "system_recovered",
-            message: "Redis connection restored",
-            code: "REDIS_RECOVERED",
+            type: 'system_recovered',
+            message: 'Redis connection restored',
+            code: 'REDIS_RECOVERED',
           }),
         });
         sockets[0].dispatchEvent(event);
@@ -130,24 +121,20 @@ test.describe("WebSocket Redis Failure Handling", () => {
     // Queue should be processed
     await authenticatedPage.waitForFunction(
       () => {
-        const queueData = localStorage.getItem("offlineQueue");
+        const queueData = localStorage.getItem('offlineQueue');
         if (!queueData) return true;
         const queue = JSON.parse(queueData);
         return !Array.isArray(queue) || queue.length === 0;
       },
-      { timeout: 10000 },
+      { timeout: 10000 }
     );
 
     // Status should return to normal
-    const status = await authenticatedPage.locator(
-      '[data-testid="connection-status"]',
-    );
-    await expect(status).toContainText("Live");
+    const status = await authenticatedPage.locator('[data-testid="connection-status"]');
+    await expect(status).toContainText('Live');
   });
 
-  test("should handle Redis Stream backpressure", async ({
-    authenticatedPage,
-  }) => {
+  test('should handle Redis Stream backpressure', async ({ authenticatedPage }) => {
     // Wait for initial connection
     await wsHelper.waitForConnection();
 
@@ -155,11 +142,11 @@ test.describe("WebSocket Redis Failure Handling", () => {
     await authenticatedPage.evaluate(() => {
       const sockets = (window as any).__websockets || [];
       if (sockets[0] && sockets[0].readyState === WebSocket.OPEN) {
-        const event = new MessageEvent("message", {
+        const event = new MessageEvent('message', {
           data: JSON.stringify({
-            type: "backpressure",
-            warning: "Redis Stream buffer full",
-            code: "STREAM_BACKPRESSURE",
+            type: 'backpressure',
+            warning: 'Redis Stream buffer full',
+            code: 'STREAM_BACKPRESSURE',
             delay: 1000,
           }),
         });
@@ -177,9 +164,9 @@ test.describe("WebSocket Redis Failure Handling", () => {
         if (sockets[0]) {
           sockets[0].send(
             JSON.stringify({
-              type: "test_message",
+              type: 'test_message',
               data: { index },
-            }),
+            })
           );
         }
       }, i);
@@ -192,16 +179,12 @@ test.describe("WebSocket Redis Failure Handling", () => {
     expect(duration).toBeGreaterThan(1000);
 
     // All messages should eventually be sent
-    const messages = await wsHelper.getMessages("sent");
-    const testMessages = messages.filter(
-      (m) => m.data?.type === "test_message",
-    );
+    const messages = await wsHelper.getMessages('sent');
+    const testMessages = messages.filter((m) => m.data?.type === 'test_message');
     expect(testMessages.length).toBe(5);
   });
 
-  test("should fallback to polling when Redis pub/sub fails", async ({
-    authenticatedPage,
-  }) => {
+  test('should fallback to polling when Redis pub/sub fails', async ({ authenticatedPage }) => {
     // Wait for initial connection
     await wsHelper.waitForConnection();
 
@@ -209,12 +192,12 @@ test.describe("WebSocket Redis Failure Handling", () => {
     await authenticatedPage.evaluate(() => {
       const sockets = (window as any).__websockets || [];
       if (sockets[0] && sockets[0].readyState === WebSocket.OPEN) {
-        const event = new MessageEvent("message", {
+        const event = new MessageEvent('message', {
           data: JSON.stringify({
-            type: "pubsub_failure",
-            error: "Redis pub/sub unavailable",
-            code: "PUBSUB_ERROR",
-            fallback: "polling",
+            type: 'pubsub_failure',
+            error: 'Redis pub/sub unavailable',
+            code: 'PUBSUB_ERROR',
+            fallback: 'polling',
             interval: 3000,
           }),
         });
@@ -226,26 +209,20 @@ test.describe("WebSocket Redis Failure Handling", () => {
     await authenticatedPage.waitForFunction(
       () => {
         const messages = (window as any).__websocketMessages || [];
-        return messages.some(
-          (m: any) => m.type === "sent" && m.data?.type === "poll_updates",
-        );
+        return messages.some((m: any) => m.type === 'sent' && m.data?.type === 'poll_updates');
       },
-      { timeout: 5000 },
+      { timeout: 5000 }
     );
 
     // Verify polling requests are sent periodically
     await authenticatedPage.waitForTimeout(3500);
 
-    const messages = await wsHelper.getMessages("sent");
-    const pollMessages = messages.filter(
-      (m) => m.data?.type === "poll_updates",
-    );
+    const messages = await wsHelper.getMessages('sent');
+    const pollMessages = messages.filter((m) => m.data?.type === 'poll_updates');
     expect(pollMessages.length).toBeGreaterThanOrEqual(1);
   });
 
-  test("should handle Redis memory limit warnings", async ({
-    authenticatedPage,
-  }) => {
+  test('should handle Redis memory limit warnings', async ({ authenticatedPage }) => {
     // Wait for initial connection
     await wsHelper.waitForConnection();
 
@@ -253,13 +230,13 @@ test.describe("WebSocket Redis Failure Handling", () => {
     await authenticatedPage.evaluate(() => {
       const sockets = (window as any).__websockets || [];
       if (sockets[0] && sockets[0].readyState === WebSocket.OPEN) {
-        const event = new MessageEvent("message", {
+        const event = new MessageEvent('message', {
           data: JSON.stringify({
-            type: "memory_warning",
-            warning: "Redis memory usage high",
-            code: "REDIS_MEMORY_HIGH",
-            usage: "95%",
-            recommendation: "reduce_cache_ttl",
+            type: 'memory_warning',
+            warning: 'Redis memory usage high',
+            code: 'REDIS_MEMORY_HIGH',
+            usage: '95%',
+            recommendation: 'reduce_cache_ttl',
           }),
         });
         sockets[0].dispatchEvent(event);
@@ -269,18 +246,17 @@ test.describe("WebSocket Redis Failure Handling", () => {
     // Should show warning notification
     await authenticatedPage.waitForFunction(
       () => {
-        const toasts = document.querySelectorAll("[data-sonner-toast]");
+        const toasts = document.querySelectorAll('[data-sonner-toast]');
         return Array.from(toasts).some(
           (toast) =>
-            toast.textContent?.includes("memory") ||
-            toast.textContent?.includes("performance"),
+            toast.textContent?.includes('memory') || toast.textContent?.includes('performance')
         );
       },
-      { timeout: 5000 },
+      { timeout: 5000 }
     );
 
     // Should adjust behavior (reduce message frequency)
-    const messagesBefore = (await wsHelper.getMessages("sent")).length;
+    const messagesBefore = (await wsHelper.getMessages('sent')).length;
 
     // Send test messages with delay
     for (let i = 0; i < 3; i++) {
@@ -289,23 +265,23 @@ test.describe("WebSocket Redis Failure Handling", () => {
         if (sockets[0]) {
           sockets[0].send(
             JSON.stringify({
-              type: "test_reduced",
+              type: 'test_reduced',
               data: { timestamp: Date.now() },
-            }),
+            })
           );
         }
       });
       await authenticatedPage.waitForTimeout(500);
     }
 
-    const messagesAfter = await wsHelper.getMessages("sent");
+    const messagesAfter = await wsHelper.getMessages('sent');
     const newMessages = messagesAfter.slice(messagesBefore);
 
     // Messages should be batched or reduced
     expect(newMessages.length).toBeLessThanOrEqual(3);
   });
 
-  test("should handle complete Redis failure with data persistence", async ({
+  test('should handle complete Redis failure with data persistence', async ({
     authenticatedPage,
   }) => {
     // Wait for initial connection
@@ -314,26 +290,23 @@ test.describe("WebSocket Redis Failure Handling", () => {
     // Add important data to track
     await authenticatedPage.evaluate(() => {
       const importantData = {
-        pendingSchedules: ["schedule-1", "schedule-2"],
+        pendingSchedules: ['schedule-1', 'schedule-2'],
         lastSync: Date.now(),
       };
-      sessionStorage.setItem(
-        "ws-important-data",
-        JSON.stringify(importantData),
-      );
+      sessionStorage.setItem('ws-important-data', JSON.stringify(importantData));
     });
 
     // Simulate complete Redis failure
     await authenticatedPage.evaluate(() => {
       const sockets = (window as any).__websockets || [];
       if (sockets[0] && sockets[0].readyState === WebSocket.OPEN) {
-        const event = new MessageEvent("message", {
+        const event = new MessageEvent('message', {
           data: JSON.stringify({
-            type: "redis_failure",
-            error: "Redis completely unavailable",
-            code: "REDIS_COMPLETE_FAILURE",
-            fallback: "local_storage",
-            action: "persist_critical_data",
+            type: 'redis_failure',
+            error: 'Redis completely unavailable',
+            code: 'REDIS_COMPLETE_FAILURE',
+            fallback: 'local_storage',
+            action: 'persist_critical_data',
           }),
         });
         sockets[0].dispatchEvent(event);
@@ -343,26 +316,24 @@ test.describe("WebSocket Redis Failure Handling", () => {
     // Should persist critical data locally
     await authenticatedPage.waitForFunction(
       () => {
-        const backup = localStorage.getItem("redis-backup");
+        const backup = localStorage.getItem('redis-backup');
         return backup !== null;
       },
-      { timeout: 5000 },
+      { timeout: 5000 }
     );
 
     // Verify data was persisted
     const backup = await authenticatedPage.evaluate(() => {
-      return localStorage.getItem("redis-backup");
+      return localStorage.getItem('redis-backup');
     });
 
     expect(backup).toBeTruthy();
     const parsedBackup = JSON.parse(backup!);
-    expect(parsedBackup).toHaveProperty("timestamp");
-    expect(parsedBackup).toHaveProperty("data");
+    expect(parsedBackup).toHaveProperty('timestamp');
+    expect(parsedBackup).toHaveProperty('data');
 
     // Connection should switch to local-only mode
-    const status = await authenticatedPage.locator(
-      '[data-testid="connection-status"]',
-    );
-    await expect(status).toContainText("Local");
+    const status = await authenticatedPage.locator('[data-testid="connection-status"]');
+    await expect(status).toContainText('Local');
   });
 });

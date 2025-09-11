@@ -10,9 +10,9 @@ import {
   ReceiveMessageCommand,
   Message,
   MessageAttributeValue,
-} from "@aws-sdk/client-sqs";
-import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+} from '@aws-sdk/client-sqs';
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   PutCommand,
@@ -20,14 +20,10 @@ import {
   UpdateCommand,
   QueryCommand,
   BatchGetCommand,
-} from "@aws-sdk/lib-dynamodb";
-import {
-  CloudWatchClient,
-  PutMetricDataCommand,
-  MetricDatum,
-} from "@aws-sdk/client-cloudwatch";
-import { TracingService } from "@postolio/aws";
-import { EventBusService } from "@postolio/aws";
+} from '@aws-sdk/lib-dynamodb';
+import { CloudWatchClient, PutMetricDataCommand, MetricDatum } from '@aws-sdk/client-cloudwatch';
+import { TracingService } from '@postolio/aws';
+import { EventBusService } from '@postolio/aws';
 
 const sqsClient = new SQSClient({});
 const snsClient = new SNSClient({});
@@ -37,11 +33,10 @@ const cloudWatchClient = new CloudWatchClient({});
 const tracingService = new TracingService();
 const eventBus = EventBusService.getInstance();
 
-const DLQ_STATE_TABLE =
-  process.env.DLQ_STATE_TABLE_NAME || "dlq-processing-state";
+const DLQ_STATE_TABLE = process.env.DLQ_STATE_TABLE_NAME || 'dlq-processing-state';
 const ALERT_TOPIC_ARN = process.env.DLQ_ALERT_TOPIC_ARN;
-const MAX_RETRY_COUNT = parseInt(process.env.DLQ_MAX_RETRIES || "5");
-const RETRY_DELAY_BASE = parseInt(process.env.DLQ_RETRY_DELAY_BASE || "60000"); // 1 minute base
+const MAX_RETRY_COUNT = parseInt(process.env.DLQ_MAX_RETRIES || '5');
+const RETRY_DELAY_BASE = parseInt(process.env.DLQ_RETRY_DELAY_BASE || '60000'); // 1 minute base
 
 export interface DLQMessage {
   messageId: string;
@@ -69,7 +64,7 @@ interface MessageState {
 export interface ProcessingResult {
   success: boolean;
   messageId: string;
-  action: "reprocessed" | "deleted" | "parked" | "alerted";
+  action: 'reprocessed' | 'deleted' | 'parked' | 'alerted';
   error?: string;
 }
 
@@ -100,13 +95,13 @@ export class DLQProcessor {
   async processDLQ(
     dlqUrl: string,
     originalQueueUrl: string,
-    processorFn?: (message: unknown) => Promise<boolean>,
+    processorFn?: (message: unknown) => Promise<boolean>
   ): Promise<ProcessingResult[]> {
     const dlqName = this.extractQueueName(dlqUrl);
     const results: ProcessingResult[] = [];
 
     return await tracingService.traceOperation(
-      "DLQ.process",
+      'DLQ.process',
       async () => {
         // Check if already processing this queue
         if (this.processingQueues.get(dlqName)) {
@@ -121,10 +116,8 @@ export class DLQProcessor {
           const messages = await this.receiveMessages(dlqUrl);
 
           // Batch load all message states for performance
-          const messageIds = messages.map((msg) => msg.MessageId || "");
-          const messageStates = await this.batchLoadMessageStates(
-            messageIds.filter((id) => id),
-          );
+          const messageIds = messages.map((msg) => msg.MessageId || '');
+          const messageStates = await this.batchLoadMessageStates(messageIds.filter((id) => id));
 
           for (const message of messages) {
             const result = await this.processMessage(
@@ -132,7 +125,7 @@ export class DLQProcessor {
               dlqName,
               originalQueueUrl,
               processorFn,
-              messageStates,
+              messageStates
             );
             results.push(result);
 
@@ -148,7 +141,7 @@ export class DLQProcessor {
           this.processingQueues.delete(dlqName);
         }
       },
-      { dlqName, messageCount: results.length },
+      { dlqName, messageCount: results.length }
     );
   }
 
@@ -160,18 +153,16 @@ export class DLQProcessor {
     dlqName: string,
     originalQueueUrl: string,
     processorFn?: (message: unknown) => Promise<boolean>,
-    messageStates?: Map<string, MessageState>,
+    messageStates?: Map<string, MessageState>
   ): Promise<ProcessingResult> {
     const message = this.parseSQSMessage(sqsMessage, dlqName);
 
     try {
       // Use batch-loaded state if available, otherwise load individually
       const state =
-        messageStates?.get(message.messageId) ||
-        (await this.loadMessageState(message.messageId));
+        messageStates?.get(message.messageId) || (await this.loadMessageState(message.messageId));
       message.retryCount = state?.retryCount || 0;
-      message.firstFailureTime =
-        state?.firstFailureTime || new Date().toISOString();
+      message.firstFailureTime = state?.firstFailureTime || new Date().toISOString();
 
       // Check if max retries exceeded
       if (message.retryCount >= MAX_RETRY_COUNT) {
@@ -180,14 +171,11 @@ export class DLQProcessor {
 
       // Check message age
       const messageAge =
-        Date.now() -
-        new Date(
-          message.firstFailureTime || new Date().toISOString(),
-        ).getTime();
+        Date.now() - new Date(message.firstFailureTime || new Date().toISOString()).getTime();
       const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
 
       if (messageAge > maxAge) {
-        return await this.parkMessage(message, "Message too old");
+        return await this.parkMessage(message, 'Message too old');
       }
 
       // Attempt to reprocess
@@ -203,7 +191,7 @@ export class DLQProcessor {
         return {
           success: true,
           messageId: message.messageId,
-          action: "reprocessed",
+          action: 'reprocessed',
         };
       } else {
         // Update retry count
@@ -218,19 +206,15 @@ export class DLQProcessor {
         return {
           success: false,
           messageId: message.messageId,
-          action: "reprocessed",
-          error: "Processing failed, message requeued",
+          action: 'reprocessed',
+          error: 'Processing failed, message requeued',
         };
       }
     } catch (error) {
-      console.error(
-        `Error processing DLQ message: ${message.messageId}`,
-        error,
-      );
+      console.error(`Error processing DLQ message: ${message.messageId}`, error);
 
       // Update error state
-      message.errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+      message.errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await this.updateMessageState(message);
 
       // Alert if critical
@@ -241,7 +225,7 @@ export class DLQProcessor {
       return {
         success: false,
         messageId: message.messageId,
-        action: "alerted",
+        action: 'alerted',
         error: message.errorMessage,
       };
     }
@@ -250,22 +234,17 @@ export class DLQProcessor {
   /**
    * Default processor - attempts to resend to original queue
    */
-  private async defaultProcessor(
-    message: DLQMessage,
-    originalQueueUrl: string,
-  ): Promise<boolean> {
+  private async defaultProcessor(message: DLQMessage, originalQueueUrl: string): Promise<boolean> {
     try {
       await sqsClient.send(
         new SendMessageCommand({
           QueueUrl: originalQueueUrl,
           MessageBody: message.body,
           MessageAttributes: message.messageAttributes,
-        }),
+        })
       );
 
-      console.log(
-        `Successfully reprocessed message ${message.messageId} to original queue`,
-      );
+      console.log(`Successfully reprocessed message ${message.messageId} to original queue`);
       return true;
     } catch (error) {
       console.error(`Failed to reprocess message ${message.messageId}`, error);
@@ -276,13 +255,8 @@ export class DLQProcessor {
   /**
    * Park message for manual inspection
    */
-  private async parkMessage(
-    message: DLQMessage,
-    reason?: string,
-  ): Promise<ProcessingResult> {
-    console.log(
-      `Parking message ${message.messageId}: ${reason || "Max retries exceeded"}`,
-    );
+  private async parkMessage(message: DLQMessage, reason?: string): Promise<ProcessingResult> {
+    console.log(`Parking message ${message.messageId}: ${reason || 'Max retries exceeded'}`);
 
     // Store in DynamoDB for inspection
     await docClient.send(
@@ -290,24 +264,21 @@ export class DLQProcessor {
         TableName: DLQ_STATE_TABLE,
         Item: {
           messageId: message.messageId,
-          status: "parked",
+          status: 'parked',
           dlqName: message.dlqName,
           body: message.body,
           attributes: message.attributes,
           retryCount: message.retryCount,
           firstFailureTime: message.firstFailureTime,
           lastFailureTime: new Date().toISOString(),
-          parkReason: reason || "Max retries exceeded",
+          parkReason: reason || 'Max retries exceeded',
           ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60, // 30 days TTL
         },
-      }),
+      })
     );
 
     // Send alert
-    await this.sendAlert(
-      message,
-      new Error(reason || "Message parked after max retries"),
-    );
+    await this.sendAlert(message, new Error(reason || 'Message parked after max retries'));
 
     // Delete from DLQ
     if (message.receiptHandle) {
@@ -316,24 +287,24 @@ export class DLQProcessor {
 
     // Publish event
     await eventBus.publish(
-      "dlq.message.parked",
+      'dlq.message.parked',
       {
         messageId: message.messageId,
         dlqName: message.dlqName,
-        reason: reason || "Max retries exceeded",
+        reason: reason || 'Max retries exceeded',
         retryCount: message.retryCount,
       },
       {
         correlationId: message.messageId,
-        userId: "system",
-        brandId: "system",
-      },
+        userId: 'system',
+        brandId: 'system',
+      }
     );
 
     return {
       success: false,
       messageId: message.messageId,
-      action: "parked",
+      action: 'parked',
     };
   }
 
@@ -344,8 +315,8 @@ export class DLQProcessor {
     if (!ALERT_TOPIC_ARN) return;
 
     const alertMessage = {
-      type: "DLQ_PROCESSING_FAILURE",
-      severity: message.retryCount >= MAX_RETRY_COUNT ? "CRITICAL" : "WARNING",
+      type: 'DLQ_PROCESSING_FAILURE',
+      severity: message.retryCount >= MAX_RETRY_COUNT ? 'CRITICAL' : 'WARNING',
       dlqName: message.dlqName,
       messageId: message.messageId,
       retryCount: message.retryCount,
@@ -361,10 +332,10 @@ export class DLQProcessor {
           TopicArn: ALERT_TOPIC_ARN,
           Subject: `[${alertMessage.severity}] DLQ Processing Failure - ${message.dlqName}`,
           Message: JSON.stringify(alertMessage, null, 2),
-        }),
+        })
       );
     } catch (alertError) {
-      console.error("Failed to send DLQ alert", alertError);
+      console.error('Failed to send DLQ alert', alertError);
     }
   }
 
@@ -378,9 +349,9 @@ export class DLQProcessor {
         MaxNumberOfMessages: 10,
         VisibilityTimeout: 300, // 5 minutes
         WaitTimeSeconds: 5,
-        MessageAttributeNames: ["All"],
-        AttributeNames: ["All"],
-      }),
+        MessageAttributeNames: ['All'],
+        AttributeNames: ['All'],
+      })
     );
 
     return result.Messages || [];
@@ -389,15 +360,12 @@ export class DLQProcessor {
   /**
    * Delete message from DLQ
    */
-  private async deleteMessage(
-    dlqUrl: string,
-    receiptHandle: string,
-  ): Promise<void> {
+  private async deleteMessage(dlqUrl: string, receiptHandle: string): Promise<void> {
     await sqsClient.send(
       new DeleteMessageCommand({
         QueueUrl: dlqUrl,
         ReceiptHandle: receiptHandle,
-      }),
+      })
     );
   }
 
@@ -407,7 +375,7 @@ export class DLQProcessor {
   private async requeueMessage(
     message: DLQMessage,
     dlqUrl: string,
-    delaySeconds: number,
+    delaySeconds: number
   ): Promise<void> {
     await sqsClient.send(
       new SendMessageCommand({
@@ -417,15 +385,15 @@ export class DLQProcessor {
         MessageAttributes: {
           ...message.messageAttributes,
           RetryCount: {
-            DataType: "Number",
+            DataType: 'Number',
             StringValue: String(message.retryCount + 1),
           },
           LastFailureTime: {
-            DataType: "String",
+            DataType: 'String',
             StringValue: new Date().toISOString(),
           },
         },
-      }),
+      })
     );
 
     // Delete original message
@@ -437,15 +405,13 @@ export class DLQProcessor {
   /**
    * Load message processing state
    */
-  private async loadMessageState(
-    messageId: string,
-  ): Promise<MessageState | null> {
+  private async loadMessageState(messageId: string): Promise<MessageState | null> {
     try {
       const result = await docClient.send(
         new GetCommand({
           TableName: DLQ_STATE_TABLE,
           Key: { messageId },
-        }),
+        })
       );
       return (result.Item as MessageState) || null;
     } catch {
@@ -456,9 +422,7 @@ export class DLQProcessor {
   /**
    * Batch load message states for performance optimization
    */
-  private async batchLoadMessageStates(
-    messageIds: string[],
-  ): Promise<Map<string, MessageState>> {
+  private async batchLoadMessageStates(messageIds: string[]): Promise<Map<string, MessageState>> {
     const stateMap = new Map<string, MessageState>();
 
     if (messageIds.length === 0) {
@@ -479,7 +443,7 @@ export class DLQProcessor {
                 Keys: keys,
               },
             },
-          }),
+          })
         );
 
         // Process responses
@@ -490,7 +454,7 @@ export class DLQProcessor {
           }
         }
       } catch (error) {
-        console.error("Error batch loading message states:", error);
+        console.error('Error batch loading message states:', error);
         // Fallback to individual loads for this batch if batch fails
         for (const messageId of batch) {
           const state = await this.loadMessageState(messageId);
@@ -513,17 +477,17 @@ export class DLQProcessor {
         TableName: DLQ_STATE_TABLE,
         Key: { messageId: message.messageId },
         UpdateExpression:
-          "SET retryCount = :retryCount, lastFailureTime = :lastFailure, errorMessage = :error, #status = :status",
+          'SET retryCount = :retryCount, lastFailureTime = :lastFailure, errorMessage = :error, #status = :status',
         ExpressionAttributeNames: {
-          "#status": "status",
+          '#status': 'status',
         },
         ExpressionAttributeValues: {
-          ":retryCount": message.retryCount + 1,
-          ":lastFailure": new Date().toISOString(),
-          ":error": message.errorMessage || "Unknown error",
-          ":status": "retrying",
+          ':retryCount': message.retryCount + 1,
+          ':lastFailure': new Date().toISOString(),
+          ':error': message.errorMessage || 'Unknown error',
+          ':status': 'retrying',
         },
-      }),
+      })
     );
   }
 
@@ -536,15 +500,15 @@ export class DLQProcessor {
         new UpdateCommand({
           TableName: DLQ_STATE_TABLE,
           Key: { messageId },
-          UpdateExpression: "SET #status = :status, completedAt = :completedAt",
+          UpdateExpression: 'SET #status = :status, completedAt = :completedAt',
           ExpressionAttributeNames: {
-            "#status": "status",
+            '#status': 'status',
           },
           ExpressionAttributeValues: {
-            ":status": "completed",
-            ":completedAt": new Date().toISOString(),
+            ':status': 'completed',
+            ':completedAt': new Date().toISOString(),
           },
-        }),
+        })
       );
     } catch {
       // Ignore if doesn't exist
@@ -563,36 +527,33 @@ export class DLQProcessor {
   /**
    * Update CloudWatch metrics
    */
-  private async updateMetrics(
-    dlqName: string,
-    result: ProcessingResult,
-  ): Promise<void> {
+  private async updateMetrics(dlqName: string, result: ProcessingResult): Promise<void> {
     const metrics: Partial<MetricDatum>[] = [];
 
     if (result.success) {
       metrics.push({
-        MetricName: "MessagesReprocessed",
+        MetricName: 'MessagesReprocessed',
         Value: 1,
-        Unit: "Count",
+        Unit: 'Count',
       });
-    } else if (result.action === "parked") {
+    } else if (result.action === 'parked') {
       metrics.push({
-        MetricName: "MessagesParked",
+        MetricName: 'MessagesParked',
         Value: 1,
-        Unit: "Count",
+        Unit: 'Count',
       });
-    } else if (result.action === "alerted") {
+    } else if (result.action === 'alerted') {
       metrics.push({
-        MetricName: "AlertsSent",
+        MetricName: 'AlertsSent',
         Value: 1,
-        Unit: "Count",
+        Unit: 'Count',
       });
     }
 
     if (metrics.length > 0) {
       await cloudWatchClient.send(
         new PutMetricDataCommand({
-          Namespace: "Postolio/DLQ",
+          Namespace: 'Postolio/DLQ',
           MetricData: metrics.map(
             (m) =>
               ({
@@ -600,16 +561,16 @@ export class DLQProcessor {
                 Value: m.Value,
                 Unit: m.Unit,
                 Dimensions: [
-                  { Name: "QueueName", Value: dlqName },
+                  { Name: 'QueueName', Value: dlqName },
                   {
-                    Name: "Environment",
-                    Value: process.env.ENVIRONMENT || "dev",
+                    Name: 'Environment',
+                    Value: process.env.ENVIRONMENT || 'dev',
                   },
                 ],
                 Timestamp: new Date(),
-              }) as MetricDatum,
+              }) as MetricDatum
           ),
-        }),
+        })
       );
     }
   }
@@ -627,33 +588,30 @@ export class DLQProcessor {
           TopicArn: ALERT_TOPIC_ARN,
           Subject: `[WARNING] High DLQ message count - ${dlqName}`,
           Message: JSON.stringify({
-            type: "HIGH_DLQ_COUNT",
+            type: 'HIGH_DLQ_COUNT',
             dlqName,
             totalMessages: stats.totalMessages,
             threshold: 100,
             timestamp: new Date().toISOString(),
           }),
-        }),
+        })
       );
     }
 
     // Alert if messages too old
-    if (
-      stats.oldestMessageAge &&
-      stats.oldestMessageAge > 24 * 60 * 60 * 1000
-    ) {
+    if (stats.oldestMessageAge && stats.oldestMessageAge > 24 * 60 * 60 * 1000) {
       await snsClient.send(
         new PublishCommand({
           TopicArn: ALERT_TOPIC_ARN,
           Subject: `[WARNING] Old messages in DLQ - ${dlqName}`,
           Message: JSON.stringify({
-            type: "OLD_DLQ_MESSAGES",
+            type: 'OLD_DLQ_MESSAGES',
             dlqName,
             oldestMessageAge: stats.oldestMessageAge,
-            threshold: "24 hours",
+            threshold: '24 hours',
             timestamp: new Date().toISOString(),
           }),
-        }),
+        })
       );
     }
   }
@@ -665,12 +623,12 @@ export class DLQProcessor {
     const result = await docClient.send(
       new QueryCommand({
         TableName: DLQ_STATE_TABLE,
-        IndexName: "by-dlq-status",
-        KeyConditionExpression: "dlqName = :dlqName",
+        IndexName: 'by-dlq-status',
+        KeyConditionExpression: 'dlqName = :dlqName',
         ExpressionAttributeValues: {
-          ":dlqName": dlqName,
+          ':dlqName': dlqName,
         },
-      }),
+      })
     );
 
     const messages = result.Items || [];
@@ -679,17 +637,13 @@ export class DLQProcessor {
     return {
       queueName: dlqName,
       totalMessages: messages.length,
-      processedMessages: messages.filter((m) => m.status === "completed")
-        .length,
-      failedMessages: messages.filter((m) => m.status === "failed").length,
-      parkedMessages: messages.filter((m) => m.status === "parked").length,
+      processedMessages: messages.filter((m) => m.status === 'completed').length,
+      failedMessages: messages.filter((m) => m.status === 'failed').length,
+      parkedMessages: messages.filter((m) => m.status === 'parked').length,
       oldestMessageAge:
         messages.length > 0
           ? Math.max(
-              ...messages.map(
-                (m) =>
-                  now - new Date(m.firstFailureTime || m.createdAt).getTime(),
-              ),
+              ...messages.map((m) => now - new Date(m.firstFailureTime || m.createdAt).getTime())
             )
           : undefined,
       processingRate: this.calculateProcessingRate(messages),
@@ -700,14 +654,14 @@ export class DLQProcessor {
    * Calculate message processing rate
    */
   private calculateProcessingRate(
-    messages: Array<{ status?: string; completedAt?: string }>,
+    messages: Array<{ status?: string; completedAt?: string }>
   ): number {
     const lastHour = Date.now() - 60 * 60 * 1000;
     const processedLastHour = messages.filter(
       (m) =>
-        m.status === "completed" &&
+        m.status === 'completed' &&
         m.completedAt !== undefined &&
-        new Date(m.completedAt).getTime() > lastHour,
+        new Date(m.completedAt).getTime() > lastHour
     ).length;
     return processedLastHour;
   }
@@ -723,11 +677,8 @@ export class DLQProcessor {
       messageAttributes: sqsMessage.MessageAttributes,
       receiptHandle: sqsMessage.ReceiptHandle!,
       dlqName,
-      retryCount: parseInt(
-        sqsMessage.MessageAttributes?.RetryCount?.StringValue || "0",
-      ),
-      lastFailureTime:
-        sqsMessage.MessageAttributes?.LastFailureTime?.StringValue,
+      retryCount: parseInt(sqsMessage.MessageAttributes?.RetryCount?.StringValue || '0'),
+      lastFailureTime: sqsMessage.MessageAttributes?.LastFailureTime?.StringValue,
     };
   }
 
@@ -735,7 +686,7 @@ export class DLQProcessor {
    * Extract queue name from URL
    */
   private extractQueueName(queueUrl: string): string {
-    return queueUrl.split("/").pop() || "unknown";
+    return queueUrl.split('/').pop() || 'unknown';
   }
 
   /**
@@ -743,32 +694,30 @@ export class DLQProcessor {
    */
   async reprocessParkedMessages(
     dlqName: string,
-    messageIds?: string[],
+    messageIds?: string[]
   ): Promise<ProcessingResult[]> {
     // Filter by provided messageIds later (we query all parked for dlqName then subset if list provided)
 
     const result = await docClient.send(
       new QueryCommand({
         TableName: DLQ_STATE_TABLE,
-        IndexName: "by-dlq-status",
-        KeyConditionExpression: "dlqName = :dlqName AND #status = :status",
+        IndexName: 'by-dlq-status',
+        KeyConditionExpression: 'dlqName = :dlqName AND #status = :status',
         ExpressionAttributeNames: {
-          "#status": "status",
+          '#status': 'status',
         },
         ExpressionAttributeValues: {
-          ":dlqName": dlqName,
-          ":status": "parked",
+          ':dlqName': dlqName,
+          ':status': 'parked',
         },
-      }),
+      })
     );
 
     const results: ProcessingResult[] = [];
 
     // Optionally narrow items by provided messageIds
     if (messageIds && messageIds.length > 0) {
-      result.Items = (result.Items || []).filter((i) =>
-        messageIds.includes(i.messageId),
-      );
+      result.Items = (result.Items || []).filter((i) => messageIds.includes(i.messageId));
     }
 
     for (const item of result.Items || []) {
@@ -778,7 +727,7 @@ export class DLQProcessor {
         body: item.body,
         attributes: item.attributes || {},
         messageAttributes: item.messageAttributes,
-        receiptHandle: "",
+        receiptHandle: '',
         dlqName: item.dlqName,
         retryCount: 0,
         firstFailureTime: item.firstFailureTime,
@@ -792,15 +741,15 @@ export class DLQProcessor {
           MessageAttributes: {
             ...message.messageAttributes,
             RetryCount: {
-              DataType: "Number",
-              StringValue: "0",
+              DataType: 'Number',
+              StringValue: '0',
             },
             ReprocessedAt: {
-              DataType: "String",
+              DataType: 'String',
               StringValue: new Date().toISOString(),
             },
           },
-        }),
+        })
       );
 
       // Update state
@@ -808,22 +757,21 @@ export class DLQProcessor {
         new UpdateCommand({
           TableName: DLQ_STATE_TABLE,
           Key: { messageId: item.messageId },
-          UpdateExpression:
-            "SET #status = :status, reprocessedAt = :reprocessedAt",
+          UpdateExpression: 'SET #status = :status, reprocessedAt = :reprocessedAt',
           ExpressionAttributeNames: {
-            "#status": "status",
+            '#status': 'status',
           },
           ExpressionAttributeValues: {
-            ":status": "reprocessing",
-            ":reprocessedAt": new Date().toISOString(),
+            ':status': 'reprocessing',
+            ':reprocessedAt': new Date().toISOString(),
           },
-        }),
+        })
       );
 
       results.push({
         success: true,
         messageId: item.messageId,
-        action: "reprocessed",
+        action: 'reprocessed',
       });
     }
 

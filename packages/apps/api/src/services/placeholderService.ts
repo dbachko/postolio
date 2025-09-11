@@ -1,12 +1,12 @@
-import type { Campaign, Content } from "@postolio/database";
+import type { Campaign, Content } from '@postolio/database';
 
 export interface CalendarPlaceholder {
   id: string;
-  type: "placeholder";
+  type: 'placeholder';
   campaignId: string;
   campaignName: string;
   scheduledAt: string;
-  status: "placeholder";
+  status: 'placeholder';
   message: string;
 }
 
@@ -14,14 +14,14 @@ export function computePlaceholders(
   campaigns: Campaign[],
   existingContent: Content[],
   monthStart: Date,
-  monthEnd: Date,
+  monthEnd: Date
 ): CalendarPlaceholder[] {
   const placeholders: CalendarPlaceholder[] = [];
 
   campaigns.forEach((campaign) => {
     const raw = campaign.config as unknown;
     const config =
-      raw && typeof raw === "object"
+      raw && typeof raw === 'object'
         ? (raw as {
             frequency?: string;
             duration?: { start?: string; end?: string };
@@ -30,34 +30,30 @@ export function computePlaceholders(
         : {};
     if (!config?.frequency || !config?.duration) return;
 
-    const { frequency, duration, postingTime = "12:00" } = config;
+    const { frequency, duration, postingTime = '12:00' } = config;
     if (!duration?.start || !duration?.end) return;
     const campaignStart = new Date(duration.start);
     const campaignEnd = new Date(duration.end);
 
     // Calculate posting schedule within month bounds
-    const scheduleStart = new Date(
-      Math.max(monthStart.getTime(), campaignStart.getTime()),
-    );
-    const scheduleEnd = new Date(
-      Math.min(monthEnd.getTime(), campaignEnd.getTime()),
-    );
+    const scheduleStart = new Date(Math.max(monthStart.getTime(), campaignStart.getTime()));
+    const scheduleEnd = new Date(Math.min(monthEnd.getTime(), campaignEnd.getTime()));
 
     // Skip if campaign doesn't overlap with this month
     if (scheduleStart > scheduleEnd) return;
 
     // Generate placeholder dates based on frequency
     const intervalDays =
-      frequency === "daily"
+      frequency === 'daily'
         ? 1
-        : frequency === "every2days"
+        : frequency === 'every2days'
           ? 2
-          : frequency === "3weekly"
+          : frequency === '3weekly'
             ? 2.33
             : 7;
 
     const currentDate = new Date(scheduleStart);
-    const [hours, minutes] = postingTime.split(":").map(Number);
+    const [hours, minutes] = postingTime.split(':').map(Number);
 
     while (currentDate <= scheduleEnd) {
       // Set the posting time
@@ -77,12 +73,12 @@ export function computePlaceholders(
         // Only show future placeholders
         placeholders.push({
           id: `placeholder-${campaign.id}-${scheduledAt.toISOString()}`,
-          type: "placeholder",
+          type: 'placeholder',
           campaignId: campaign.id,
           campaignName: campaign.name,
           scheduledAt: scheduledAt.toISOString(),
-          status: "placeholder",
-          message: "Content will be generated closer to scheduled date",
+          status: 'placeholder',
+          message: 'Content will be generated closer to scheduled date',
         });
       }
 
@@ -98,7 +94,6 @@ export function computePlaceholders(
 
   // Sort by scheduled time
   return placeholders.sort(
-    (a, b) =>
-      new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime(),
+    (a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
   );
 }

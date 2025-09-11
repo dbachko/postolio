@@ -3,7 +3,7 @@
  * Stub implementation for build compatibility
  */
 
-import { EventBridge } from "@aws-sdk/client-eventbridge";
+import { EventBridge } from '@aws-sdk/client-eventbridge';
 
 export class EventBusService {
   private static instance: EventBusService;
@@ -35,7 +35,7 @@ export class EventBusService {
       source: string;
       detailType: string;
       detail: any;
-    }>,
+    }>
   ): Promise<void> {
     // Stub implementation
     console.log(`Putting ${events.length} events`);
@@ -45,10 +45,10 @@ export class EventBusService {
     // Stub implementation
     console.log(`Publishing event: ${eventType}`);
     await this.putEvent({
-      source: "postolio",
+      source: 'postolio',
       detailType: eventType,
       detail: detail,
-      eventBusName: "default",
+      eventBusName: 'default',
     });
   }
 }

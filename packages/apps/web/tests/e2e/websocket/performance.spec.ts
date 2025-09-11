@@ -1,7 +1,7 @@
-import { test, expect } from "../fixtures/auth.fixture";
-import { WebSocketHelper } from "../utils/websocket-helper";
+import { test, expect } from '../fixtures/auth.fixture';
+import { WebSocketHelper } from '../utils/websocket-helper';
 
-test.describe("WebSocket Performance & Memory Tests", () => {
+test.describe('WebSocket Performance & Memory Tests', () => {
   let wsHelper: WebSocketHelper;
 
   test.beforeEach(async ({ authenticatedPage }) => {
@@ -9,7 +9,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     await wsHelper.setupMessageMonitoring();
   });
 
-  test("should handle high message frequency without memory leaks", async ({
+  test('should handle high message frequency without memory leaks', async ({
     authenticatedPage,
   }) => {
     // Wait for initial connection
@@ -32,12 +32,12 @@ test.describe("WebSocket Performance & Memory Tests", () => {
         const sockets = (window as any).__websockets || [];
         if (sockets[0] && sockets[0].readyState === WebSocket.OPEN) {
           // Simulate incoming message
-          const event = new MessageEvent("message", {
+          const event = new MessageEvent('message', {
             data: JSON.stringify({
-              type: "status_update",
+              type: 'status_update',
               data: {
                 contentId: `content-${index}`,
-                status: "scheduled",
+                status: 'scheduled',
                 timestamp: Date.now(),
               },
             }),
@@ -88,9 +88,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     });
   });
 
-  test("should cleanup event listeners on disconnect", async ({
-    authenticatedPage,
-  }) => {
+  test('should cleanup event listeners on disconnect', async ({ authenticatedPage }) => {
     // Wait for initial connection
     await wsHelper.waitForConnection();
 
@@ -101,7 +99,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
         // Count event listeners (this is a proxy metric)
         const ws = sockets[0];
         let count = 0;
-        ["open", "close", "error", "message"].forEach((event) => {
+        ['open', 'close', 'error', 'message'].forEach((event) => {
           // Note: This is browser-specific and may not work in all browsers
           const listeners = (ws as any)._events?.[event];
           if (Array.isArray(listeners)) {
@@ -130,7 +128,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
       if (sockets[0]) {
         const ws = sockets[0];
         let count = 0;
-        ["open", "close", "error", "message"].forEach((event) => {
+        ['open', 'close', 'error', 'message'].forEach((event) => {
           const listeners = (ws as any)._events?.[event];
           if (Array.isArray(listeners)) {
             count += listeners.length;
@@ -147,21 +145,19 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     expect(finalListeners).toBeLessThanOrEqual(initialListeners + 2);
   });
 
-  test("should handle large message payloads efficiently", async ({
-    authenticatedPage,
-  }) => {
+  test('should handle large message payloads efficiently', async ({ authenticatedPage }) => {
     // Wait for initial connection
     await wsHelper.waitForConnection();
 
     // Create large payload (1MB)
     const largeData = {
-      type: "bulk_update",
+      type: 'bulk_update',
       data: {
         items: Array.from({ length: 10000 }, (_, i) => ({
           id: `item-${i}`,
           caption: `This is a test caption for item ${i}`,
-          hashtags: ["#test", "#content", "#automated"],
-          status: "scheduled",
+          hashtags: ['#test', '#content', '#automated'],
+          status: 'scheduled',
           scheduledAt: new Date().toISOString(),
           metadata: {
             views: Math.floor(Math.random() * 10000),
@@ -178,7 +174,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     await authenticatedPage.evaluate((payload) => {
       const sockets = (window as any).__websockets || [];
       if (sockets[0] && sockets[0].readyState === WebSocket.OPEN) {
-        const event = new MessageEvent("message", {
+        const event = new MessageEvent('message', {
           data: JSON.stringify(payload),
         });
         sockets[0].dispatchEvent(event);
@@ -189,11 +185,9 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     await authenticatedPage.waitForFunction(
       () => {
         const messages = (window as any).__websocketMessages || [];
-        return messages.some(
-          (m: any) => m.type === "received" && m.data?.type === "bulk_update",
-        );
+        return messages.some((m: any) => m.type === 'received' && m.data?.type === 'bulk_update');
       },
-      { timeout: 5000 },
+      { timeout: 5000 }
     );
 
     const endTime = Date.now();
@@ -216,7 +210,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     expect(isResponsive).toBe(true);
   });
 
-  test("should throttle reconnection attempts to prevent CPU spikes", async ({
+  test('should throttle reconnection attempts to prevent CPU spikes', async ({
     authenticatedPage,
   }) => {
     // Wait for initial connection
@@ -272,7 +266,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     });
   });
 
-  test("should efficiently batch UI updates for multiple status changes", async ({
+  test('should efficiently batch UI updates for multiple status changes', async ({
     authenticatedPage,
   }) => {
     // Wait for initial connection
@@ -291,7 +285,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ["data-status", "class"],
+        attributeFilter: ['data-status', 'class'],
       });
 
       (window as any).__observer = observer;
@@ -303,12 +297,12 @@ test.describe("WebSocket Performance & Memory Tests", () => {
       await authenticatedPage.evaluate((index) => {
         const sockets = (window as any).__websockets || [];
         if (sockets[0] && sockets[0].readyState === WebSocket.OPEN) {
-          const event = new MessageEvent("message", {
+          const event = new MessageEvent('message', {
             data: JSON.stringify({
-              type: "status_update",
+              type: 'status_update',
               data: {
                 contentId: `content-${index % 10}`, // Update same 10 items
-                status: index % 2 === 0 ? "scheduled" : "published",
+                status: index % 2 === 0 ? 'scheduled' : 'published',
                 timestamp: Date.now(),
               },
             }),
@@ -331,9 +325,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     expect(renderCount).toBeLessThan(updates * 0.5);
   });
 
-  test("should not accumulate timer/interval references", async ({
-    authenticatedPage,
-  }) => {
+  test('should not accumulate timer/interval references', async ({ authenticatedPage }) => {
     // Wait for initial connection
     await wsHelper.waitForConnection();
 
@@ -394,9 +386,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     expect(timerStats.intervals).toBeLessThan(5);
   });
 
-  test("should handle message queue overflow gracefully", async ({
-    authenticatedPage,
-  }) => {
+  test('should handle message queue overflow gracefully', async ({ authenticatedPage }) => {
     // Wait for initial connection
     await wsHelper.waitForConnection();
 
@@ -407,13 +397,13 @@ test.describe("WebSocket Performance & Memory Tests", () => {
       // Monitor offline queue size
       const originalSetItem = localStorage.setItem;
       localStorage.setItem = function (key: string, value: string) {
-        if (key === "offlineQueue") {
+        if (key === 'offlineQueue') {
           try {
             const queue = JSON.parse(value);
             if (Array.isArray(queue)) {
               (window as any).__maxQueueSize = Math.max(
                 (window as any).__maxQueueSize,
-                queue.length,
+                queue.length
               );
             }
           } catch (e) {}
@@ -429,10 +419,10 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     for (let i = 0; i < 200; i++) {
       await authenticatedPage.evaluate((index) => {
         // Simulate queueing action
-        const queue = JSON.parse(localStorage.getItem("offlineQueue") || "[]");
+        const queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
         queue.push({
           id: `msg-${index}`,
-          type: "test_message",
+          type: 'test_message',
           data: { index },
           timestamp: Date.now(),
         });
@@ -442,7 +432,7 @@ test.describe("WebSocket Performance & Memory Tests", () => {
           queue.shift(); // Remove oldest
         }
 
-        localStorage.setItem("offlineQueue", JSON.stringify(queue));
+        localStorage.setItem('offlineQueue', JSON.stringify(queue));
       }, i);
     }
 
@@ -460,12 +450,12 @@ test.describe("WebSocket Performance & Memory Tests", () => {
     // Queue should be processed without errors
     await authenticatedPage.waitForFunction(
       () => {
-        const queueData = localStorage.getItem("offlineQueue");
+        const queueData = localStorage.getItem('offlineQueue');
         if (!queueData) return true;
         const queue = JSON.parse(queueData);
         return !Array.isArray(queue) || queue.length === 0;
       },
-      { timeout: 15000 },
+      { timeout: 15000 }
     );
   });
 });

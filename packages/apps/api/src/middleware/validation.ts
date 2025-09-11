@@ -1,5 +1,5 @@
-import { FastifyRequest, FastifyReply } from "fastify";
-import { z } from "zod";
+import { FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 
 // Recursive JSON-like type for sanitized input
 type JsonPrimitive = string | number | boolean | null;
@@ -14,10 +14,7 @@ type JsonValue = JsonPrimitive | JsonObject | JsonArray;
  * Creates a preHandler that validates request body against a Zod schema
  */
 export function validateBody<T extends z.ZodType>(schema: T) {
-  return async (
-    request: FastifyRequest<{ Body: z.infer<T> }>,
-    reply: FastifyReply,
-  ) => {
+  return async (request: FastifyRequest<{ Body: z.infer<T> }>, reply: FastifyReply) => {
     try {
       // Validate and transform the body
       const validatedData = schema.parse(request.body);
@@ -28,13 +25,13 @@ export function validateBody<T extends z.ZodType>(schema: T) {
       if (error instanceof z.ZodError) {
         // Format Zod errors for client
         const formattedErrors = error.errors.map((err) => ({
-          field: err.path.join("."),
+          field: err.path.join('.'),
           message: err.message,
           code: err.code,
         }));
 
         return reply.status(400).send({
-          error: "Validation failed",
+          error: 'Validation failed',
           details: formattedErrors,
           issues: error.issues,
         });
@@ -50,23 +47,20 @@ export function validateBody<T extends z.ZodType>(schema: T) {
  * Validate query parameters
  */
 export function validateQuery<T extends z.ZodType>(schema: T) {
-  return async (
-    request: FastifyRequest<{ Querystring: z.infer<T> }>,
-    reply: FastifyReply,
-  ) => {
+  return async (request: FastifyRequest<{ Querystring: z.infer<T> }>, reply: FastifyReply) => {
     try {
       const validatedData = schema.parse(request.query);
       request.query = validatedData;
     } catch (error) {
       if (error instanceof z.ZodError) {
         const formattedErrors = error.errors.map((err) => ({
-          field: err.path.join("."),
+          field: err.path.join('.'),
           message: err.message,
           code: err.code,
         }));
 
         return reply.status(400).send({
-          error: "Invalid query parameters",
+          error: 'Invalid query parameters',
           details: formattedErrors,
         });
       }
@@ -80,23 +74,20 @@ export function validateQuery<T extends z.ZodType>(schema: T) {
  * Validate route parameters
  */
 export function validateParams<T extends z.ZodType>(schema: T) {
-  return async (
-    request: FastifyRequest<{ Params: z.infer<T> }>,
-    reply: FastifyReply,
-  ) => {
+  return async (request: FastifyRequest<{ Params: z.infer<T> }>, reply: FastifyReply) => {
     try {
       const validatedData = schema.parse(request.params);
       request.params = validatedData;
     } catch (error) {
       if (error instanceof z.ZodError) {
         const formattedErrors = error.errors.map((err) => ({
-          field: err.path.join("."),
+          field: err.path.join('.'),
           message: err.message,
           code: err.code,
         }));
 
         return reply.status(400).send({
-          error: "Invalid route parameters",
+          error: 'Invalid route parameters',
           details: formattedErrors,
         });
       }
@@ -112,24 +103,22 @@ export function validateParams<T extends z.ZodType>(schema: T) {
  */
 export function sanitizeInput<T extends JsonValue>(input: unknown): T {
   const value = input as JsonValue;
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const cleaned = value
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-      .replace(/on\w+\s*=\s*"[^"]*"/gi, "")
-      .replace(/on\w+\s*=\s*'[^']*'/gi, "")
-      .replace(/javascript:/gi, "")
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
+      .replace(/on\w+\s*=\s*'[^']*'/gi, '')
+      .replace(/javascript:/gi, '')
       .trim();
     return cleaned as unknown as T;
   }
 
   if (Array.isArray(value)) {
-    const arr = (value as JsonArray).map((item) =>
-      sanitizeInput(item),
-    ) as JsonArray;
+    const arr = (value as JsonArray).map((item) => sanitizeInput(item)) as JsonArray;
     return arr as unknown as T;
   }
 
-  if (value && typeof value === "object") {
+  if (value && typeof value === 'object') {
     const record = value as JsonObject;
     const sanitized: JsonObject = {};
     for (const key of Object.keys(record)) {
@@ -146,10 +135,7 @@ export function sanitizeInput<T extends JsonValue>(input: unknown): T {
  * Combines validation with input sanitization
  */
 export function validateAndSanitize<T extends z.ZodType>(schema: T) {
-  return async (
-    request: FastifyRequest<{ Body: z.infer<T> }>,
-    reply: FastifyReply,
-  ) => {
+  return async (request: FastifyRequest<{ Body: z.infer<T> }>, reply: FastifyReply) => {
     try {
       // First sanitize the input
       const sanitizedBody = sanitizeInput(request.body);
@@ -162,13 +148,13 @@ export function validateAndSanitize<T extends z.ZodType>(schema: T) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         const formattedErrors = error.errors.map((err) => ({
-          field: err.path.join("."),
+          field: err.path.join('.'),
           message: err.message,
           code: err.code,
         }));
 
         return reply.status(400).send({
-          error: "Validation failed",
+          error: 'Validation failed',
           details: formattedErrors,
         });
       }

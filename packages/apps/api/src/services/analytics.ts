@@ -1,5 +1,5 @@
-import { PrismaClient, Prisma } from "@postolio/database";
-import { instagramService } from "./instagram.js";
+import { PrismaClient, Prisma } from '@postolio/database';
+import { instagramService } from './instagram.js';
 
 const prisma = new PrismaClient();
 
@@ -71,7 +71,7 @@ interface StoredAnalytics {
 }
 
 function isStoredAnalytics(value: unknown): value is StoredAnalytics {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== 'object') return false;
   return true; // Relaxed guard; specific property access is defensive
 }
 
@@ -84,7 +84,7 @@ class AnalyticsService {
       const content = await prisma.content.findFirst({
         where: {
           id: contentId,
-          status: "published",
+          status: 'published',
           instagramPostId: { not: null },
         },
         include: {
@@ -103,7 +103,7 @@ class AnalyticsService {
 
       const mediaInsightsRaw = (await instagramService.getMediaInsights(
         content.brand,
-        content.instagramPostId,
+        content.instagramPostId
       )) as unknown;
       const insights = Array.isArray(mediaInsightsRaw)
         ? mediaInsightsRaw.reduce<InsightMetrics>((acc, metric) => {
@@ -113,24 +113,24 @@ class AnalyticsService {
             };
             const name = m.name;
             const firstVal = m.values?.[0]?.value;
-            if (typeof name === "string" && typeof firstVal === "number") {
+            if (typeof name === 'string' && typeof firstVal === 'number') {
               switch (name) {
-                case "impressions":
+                case 'impressions':
                   acc.impressions = firstVal;
                   break;
-                case "reach":
+                case 'reach':
                   acc.reach = firstVal;
                   break;
-                case "likes":
+                case 'likes':
                   acc.likes = firstVal;
                   break;
-                case "comments":
+                case 'comments':
                   acc.comments = firstVal;
                   break;
-                case "saves":
+                case 'saves':
                   acc.saves = firstVal;
                   break;
-                case "shares":
+                case 'shares':
                   acc.shares = firstVal;
                   break;
               }
@@ -159,7 +159,7 @@ class AnalyticsService {
 
       return metrics;
     } catch (error) {
-      console.error("Failed to collect post metrics:", error);
+      console.error('Failed to collect post metrics:', error);
       return null;
     }
   }
@@ -180,10 +180,7 @@ class AnalyticsService {
   /**
    * Store metrics in database
    */
-  private async storeMetrics(
-    contentId: string,
-    metrics: PostMetrics,
-  ): Promise<void> {
+  private async storeMetrics(contentId: string, metrics: PostMetrics): Promise<void> {
     try {
       // Update content with metrics
       await prisma.content.update({
@@ -196,7 +193,7 @@ class AnalyticsService {
         },
       });
     } catch (error) {
-      console.error("Failed to store metrics:", error);
+      console.error('Failed to store metrics:', error);
     }
   }
 
@@ -208,11 +205,11 @@ class AnalyticsService {
       const contents = await prisma.content.findMany({
         where: {
           brandId: brandId,
-          status: "published",
+          status: 'published',
           analytics: { not: Prisma.JsonNull },
         },
         orderBy: {
-          postedAt: "desc",
+          postedAt: 'desc',
         },
         take: 100, // Analyze last 100 posts
       });
@@ -227,14 +224,9 @@ class AnalyticsService {
 
       for (const content of contents) {
         const analyticsRaw = content.analytics;
-        if (
-          !isStoredAnalytics(analyticsRaw) ||
-          typeof analyticsRaw.engagementRate !== "number"
-        )
+        if (!isStoredAnalytics(analyticsRaw) || typeof analyticsRaw.engagementRate !== 'number')
           continue;
-        const base: StoredAnalytics = isStoredAnalytics(analyticsRaw)
-          ? analyticsRaw
-          : {};
+        const base: StoredAnalytics = isStoredAnalytics(analyticsRaw) ? analyticsRaw : {};
         const analytics: StoredAnalytics & { engagementRate: number } = {
           impressions: base.impressions,
           reach: base.reach,
@@ -264,7 +256,7 @@ class AnalyticsService {
       for (const [key, data] of timeSlotMap) {
         if (data.count < 2) continue; // Need at least 2 posts for reliability
 
-        const keyParts = key.split("-");
+        const keyParts = key.split('-');
         if (keyParts.length !== 2 || !keyParts[0] || !keyParts[1]) continue; // Skip malformed keys
 
         const dayOfWeek = parseInt(keyParts[0], 10);
@@ -281,11 +273,9 @@ class AnalyticsService {
       }
 
       // Sort by engagement score and return top 10
-      return optimalTimes
-        .sort((a, b) => b.engagementScore - a.engagementScore)
-        .slice(0, 10);
+      return optimalTimes.sort((a, b) => b.engagementScore - a.engagementScore).slice(0, 10);
     } catch (error) {
-      console.error("Failed to analyze optimal times:", error);
+      console.error('Failed to analyze optimal times:', error);
       return this.getDefaultOptimalTimes();
     }
   }
@@ -308,9 +298,7 @@ class AnalyticsService {
   /**
    * Generate scheduling recommendation for new content
    */
-  async getSchedulingRecommendation(
-    brandId: string,
-  ): Promise<SchedulingRecommendation> {
+  async getSchedulingRecommendation(brandId: string): Promise<SchedulingRecommendation> {
     try {
       const optimalTimes = await this.analyzeOptimalTimes(brandId);
       const now = new Date();
@@ -346,14 +334,13 @@ class AnalyticsService {
       // Determine confidence based on sample size
       const topTimeSlot = optimalTimes[0];
       let confidence = 60;
-      let reason = "Based on optimal engagement patterns for your brand";
+      let reason = 'Based on optimal engagement patterns for your brand';
       if (topTimeSlot) {
         confidence = Math.min(95, Math.max(60, topTimeSlot.sampleSize * 10));
         if (topTimeSlot.sampleSize === 0) {
-          reason =
-            "Based on general Instagram best practices (not enough brand data yet)";
+          reason = 'Based on general Instagram best practices (not enough brand data yet)';
         } else if (topTimeSlot.sampleSize < 5) {
-          reason = "Based on limited brand data and general best practices";
+          reason = 'Based on limited brand data and general best practices';
         }
       }
 
@@ -364,7 +351,7 @@ class AnalyticsService {
         alternativeTimes,
       };
     } catch (error) {
-      console.error("Failed to generate scheduling recommendation:", error);
+      console.error('Failed to generate scheduling recommendation:', error);
 
       // Fallback recommendation
       const tomorrow = new Date();
@@ -374,7 +361,7 @@ class AnalyticsService {
       return {
         recommendedTime: tomorrow,
         confidence: 60,
-        reason: "Default recommendation due to analysis error",
+        reason: 'Default recommendation due to analysis error',
         alternativeTimes: [],
       };
     }
@@ -385,7 +372,7 @@ class AnalyticsService {
    */
   async generateAnalyticsReport(
     brandId: string,
-    daysPeriod: number = 30,
+    daysPeriod: number = 30
   ): Promise<AnalyticsReport> {
     try {
       const cutoffDate = new Date();
@@ -394,12 +381,12 @@ class AnalyticsService {
       const contents = await prisma.content.findMany({
         where: {
           brandId: brandId,
-          status: "published",
+          status: 'published',
           postedAt: { gte: cutoffDate },
           analytics: { not: Prisma.JsonNull },
         },
         orderBy: {
-          postedAt: "desc",
+          postedAt: 'desc',
         },
       });
 
@@ -430,7 +417,7 @@ class AnalyticsService {
 
         const postedAt = content.postedAt || content.createdAt;
         if (!postedAt) continue; // skip if no date
-        const dateKey = postedAt.toISOString().split("T")[0];
+        const dateKey = postedAt.toISOString().split('T')[0];
 
         const daily = dailyEngagement[dateKey as string] || {
           total: 0,
@@ -456,8 +443,7 @@ class AnalyticsService {
         });
       }
 
-      const averageEngagementRate =
-        totalReach > 0 ? (totalEngagements / totalReach) * 100 : 0;
+      const averageEngagementRate = totalReach > 0 ? (totalEngagements / totalReach) * 100 : 0;
       const optimalTimes = await this.analyzeOptimalTimes(brandId);
       const topPerformingPosts = postMetrics
         .sort((a, b) => b.engagementRate - a.engagementRate)
@@ -481,7 +467,7 @@ class AnalyticsService {
         engagementTrends,
       };
     } catch (error) {
-      console.error("Failed to generate analytics report:", error);
+      console.error('Failed to generate analytics report:', error);
       return this.getEmptyReport();
     }
   }
@@ -509,7 +495,7 @@ class AnalyticsService {
     try {
       const postedContents = await prisma.content.findMany({
         where: {
-          status: "published",
+          status: 'published',
           instagramPostId: { not: null },
           // Only collect for posts that are at least 1 hour old and less than 30 days old
           postedAt: {
@@ -528,7 +514,7 @@ class AnalyticsService {
 
       console.log(`Collected metrics for ${postedContents.length} posts`);
     } catch (error) {
-      console.error("Failed to schedule metrics collection:", error);
+      console.error('Failed to schedule metrics collection:', error);
     }
   }
 
@@ -536,24 +522,16 @@ class AnalyticsService {
    * Get day name from day number
    */
   getDayName(dayOfWeek: number): string {
-    const days = [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-    ];
-    return days[dayOfWeek] ?? "Unknown";
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[dayOfWeek] ?? 'Unknown';
   }
 
   /**
    * Format hour for display
    */
   formatHour(hour: number): string {
-    if (hour === 0) return "12:00 AM";
-    if (hour === 12) return "12:00 PM";
+    if (hour === 0) return '12:00 AM';
+    if (hour === 12) return '12:00 PM';
     if (hour < 12) return `${hour}:00 AM`;
     return `${hour - 12}:00 PM`;
   }

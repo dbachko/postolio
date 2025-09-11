@@ -3,8 +3,8 @@
  * Centralized management of all service clients with service discovery
  */
 
-import { TokenServiceClient } from "../clients/token-service-client.js";
-import { ContentSchedulerClient } from "../clients/content-scheduler-client.js";
+import { TokenServiceClient } from '../clients/token-service-client.js';
+import { ContentSchedulerClient } from '../clients/content-scheduler-client.js';
 
 export class ServiceClients {
   private static instance: ServiceClients | null = null;
@@ -35,10 +35,10 @@ export class ServiceClients {
         // TokenServiceClient with RESTful endpoints and enhanced features
         this._tokenService = new TokenServiceClient();
         console.log(
-          "✅ Token Service client initialized with RESTful endpoints and enhanced features",
+          '✅ Token Service client initialized with RESTful endpoints and enhanced features'
         );
       } catch (error) {
-        console.error("❌ Failed to initialize Token Service client:", error);
+        console.error('❌ Failed to initialize Token Service client:', error);
         throw error;
       }
     }
@@ -53,14 +53,11 @@ export class ServiceClients {
       try {
         // Use the static factory method for service discovery
         this._schedulerService = await ContentSchedulerClient.create({
-          debugLogging: process.env.NODE_ENV === "development",
+          debugLogging: process.env.NODE_ENV === 'development',
         });
-        console.log("✅ Content Scheduler client initialized");
+        console.log('✅ Content Scheduler client initialized');
       } catch (error) {
-        console.error(
-          "❌ Failed to initialize Content Scheduler client:",
-          error,
-        );
+        console.error('❌ Failed to initialize Content Scheduler client:', error);
         throw error;
       }
     }
@@ -71,27 +68,27 @@ export class ServiceClients {
    * Health check for all service clients
    */
   async healthCheck(): Promise<{
-    tokenService: "healthy" | "unhealthy" | "not_initialized";
-    schedulerService: "healthy" | "unhealthy" | "not_initialized";
-    overall: "healthy" | "degraded" | "unhealthy";
+    tokenService: 'healthy' | 'unhealthy' | 'not_initialized';
+    schedulerService: 'healthy' | 'unhealthy' | 'not_initialized';
+    overall: 'healthy' | 'degraded' | 'unhealthy';
   }> {
     const results: {
-      tokenService: "healthy" | "unhealthy" | "not_initialized";
-      schedulerService: "healthy" | "unhealthy" | "not_initialized";
-      overall: "healthy" | "degraded" | "unhealthy";
+      tokenService: 'healthy' | 'unhealthy' | 'not_initialized';
+      schedulerService: 'healthy' | 'unhealthy' | 'not_initialized';
+      overall: 'healthy' | 'degraded' | 'unhealthy';
     } = {
-      tokenService: "not_initialized",
-      schedulerService: "not_initialized",
-      overall: "healthy",
+      tokenService: 'not_initialized',
+      schedulerService: 'not_initialized',
+      overall: 'healthy',
     };
 
     // Check Token Service
     if (this._tokenService) {
       try {
         await this._tokenService.healthCheck();
-        results.tokenService = "healthy";
+        results.tokenService = 'healthy';
       } catch {
-        results.tokenService = "unhealthy";
+        results.tokenService = 'unhealthy';
       }
     }
 
@@ -99,31 +96,27 @@ export class ServiceClients {
     if (this._schedulerService) {
       try {
         await this._schedulerService.healthCheck();
-        results.schedulerService = "healthy";
+        results.schedulerService = 'healthy';
       } catch {
-        results.schedulerService = "unhealthy";
+        results.schedulerService = 'unhealthy';
       }
     }
 
     // Determine overall health based on individual service health
     const services = [results.tokenService, results.schedulerService];
-    const unhealthyCount = services.filter(
-      (status) => status === "unhealthy",
-    ).length;
-    const uninitializedCount = services.filter(
-      (status) => status === "not_initialized",
-    ).length;
+    const unhealthyCount = services.filter((status) => status === 'unhealthy').length;
+    const uninitializedCount = services.filter((status) => status === 'not_initialized').length;
 
     if (unhealthyCount > 0) {
       if (unhealthyCount === services.length) {
-        results.overall = "unhealthy";
+        results.overall = 'unhealthy';
       } else {
-        results.overall = "degraded";
+        results.overall = 'degraded';
       }
     } else if (uninitializedCount === services.length) {
-      results.overall = "unhealthy"; // All services uninitialized
+      results.overall = 'unhealthy'; // All services uninitialized
     } else {
-      results.overall = "healthy";
+      results.overall = 'healthy';
     }
 
     return results;
@@ -133,7 +126,7 @@ export class ServiceClients {
    * Refresh service discovery for all clients
    */
   async refreshServiceDiscovery(): Promise<void> {
-    console.log("🔄 Refreshing service discovery for all clients...");
+    console.log('🔄 Refreshing service discovery for all clients...');
 
     // Gracefully shutdown existing clients
     const shutdownPromises: Promise<void>[] = [];
@@ -142,10 +135,10 @@ export class ServiceClients {
       shutdownPromises.push(
         this._tokenService
           .healthCheck()
-          .then(() => console.log("Token service gracefully stopped"))
+          .then(() => console.log('Token service gracefully stopped'))
           .catch((error: unknown) =>
-            console.warn("Token service was unhealthy during refresh:", error),
-          ),
+            console.warn('Token service was unhealthy during refresh:', error)
+          )
       );
     }
 
@@ -153,13 +146,10 @@ export class ServiceClients {
       shutdownPromises.push(
         this._schedulerService
           .healthCheck()
-          .then(() => console.log("Scheduler service gracefully stopped"))
+          .then(() => console.log('Scheduler service gracefully stopped'))
           .catch((error: unknown) =>
-            console.warn(
-              "Scheduler service was unhealthy during refresh:",
-              error,
-            ),
-          ),
+            console.warn('Scheduler service was unhealthy during refresh:', error)
+          )
       );
     }
 
@@ -170,7 +160,7 @@ export class ServiceClients {
     this._tokenService = null;
     this._schedulerService = null;
 
-    console.log("✅ Service discovery refresh completed");
+    console.log('✅ Service discovery refresh completed');
   }
 }
 
@@ -192,16 +182,13 @@ export async function getSchedulerService(): Promise<ContentSchedulerClient> {
  * Initialize all service clients (optional, for eager initialization)
  */
 export async function initializeAllServices(): Promise<void> {
-  console.log("🚀 Initializing all service clients...");
+  console.log('🚀 Initializing all service clients...');
 
   try {
-    await Promise.all([
-      serviceClients.getTokenService(),
-      serviceClients.getSchedulerService(),
-    ]);
-    console.log("✅ All service clients initialized successfully");
+    await Promise.all([serviceClients.getTokenService(), serviceClients.getSchedulerService()]);
+    console.log('✅ All service clients initialized successfully');
   } catch (error) {
-    console.error("❌ Failed to initialize some service clients:", error);
+    console.error('❌ Failed to initialize some service clients:', error);
     throw error;
   }
 }

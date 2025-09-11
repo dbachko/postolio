@@ -29,25 +29,25 @@ Gap: No VPC configuration implemented
 ```typescript
 // aws-infrastructure/lib/scheduler/content-scheduler-stack.ts
 
-import * as ec2 from "aws-cdk-lib/aws-ec2";
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
 // Create VPC with proper subnet configuration
-const vpc = new ec2.Vpc(this, "SchedulerVPC", {
+const vpc = new ec2.Vpc(this, 'SchedulerVPC', {
   maxAzs: 2,
   natGateways: 2, // HA NAT gateways
   subnetConfiguration: [
     {
-      name: "Public",
+      name: 'Public',
       subnetType: ec2.SubnetType.PUBLIC,
       cidrMask: 24,
     },
     {
-      name: "Private",
+      name: 'Private',
       subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       cidrMask: 24,
     },
     {
-      name: "Isolated",
+      name: 'Isolated',
       subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
       cidrMask: 24,
     },
@@ -65,9 +65,9 @@ const vpc = new ec2.Vpc(this, "SchedulerVPC", {
 
 ```typescript
 // Create security groups for different components
-const lambdaSecurityGroup = new ec2.SecurityGroup(this, "LambdaSG", {
+const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSG', {
   vpc,
-  description: "Security group for Lambda functions",
+  description: 'Security group for Lambda functions',
   allowAllOutbound: false, // Explicit outbound rules
 });
 
@@ -75,19 +75,19 @@ const lambdaSecurityGroup = new ec2.SecurityGroup(this, "LambdaSG", {
 lambdaSecurityGroup.addEgressRule(
   ec2.Peer.anyIpv4(),
   ec2.Port.tcp(443),
-  "Allow HTTPS to AWS services",
+  'Allow HTTPS to AWS services'
 );
 
 // Allow connection to RDS
-const rdsSecurityGroup = new ec2.SecurityGroup(this, "RDSSG", {
+const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RDSSG', {
   vpc,
-  description: "Security group for RDS",
+  description: 'Security group for RDS',
 });
 
 rdsSecurityGroup.addIngressRule(
   lambdaSecurityGroup,
   ec2.Port.tcp(5432),
-  "Allow PostgreSQL from Lambda",
+  'Allow PostgreSQL from Lambda'
 );
 ```
 
@@ -95,10 +95,10 @@ rdsSecurityGroup.addIngressRule(
 
 ```typescript
 // Configure Lambda with VPC
-const apiLambda = new lambda.Function(this, "ApiHandler", {
+const apiLambda = new lambda.Function(this, 'ApiHandler', {
   runtime: lambda.Runtime.NODEJS_20_X,
-  handler: "index.handler",
-  code: lambda.Code.fromAsset("lambda"),
+  handler: 'index.handler',
+  code: lambda.Code.fromAsset('lambda'),
   vpc: vpc,
   vpcSubnets: {
     subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -112,16 +112,16 @@ const apiLambda = new lambda.Function(this, "ApiHandler", {
 });
 
 // Add VPC endpoints for AWS services to avoid internet routing
-const s3Endpoint = vpc.addGatewayEndpoint("S3Endpoint", {
+const s3Endpoint = vpc.addGatewayEndpoint('S3Endpoint', {
   service: ec2.GatewayVpcEndpointAwsService.S3,
 });
 
-const dynamoEndpoint = vpc.addGatewayEndpoint("DynamoEndpoint", {
+const dynamoEndpoint = vpc.addGatewayEndpoint('DynamoEndpoint', {
   service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
 });
 
 // Interface endpoints for other services
-const secretsEndpoint = vpc.addInterfaceEndpoint("SecretsEndpoint", {
+const secretsEndpoint = vpc.addInterfaceEndpoint('SecretsEndpoint', {
   service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
   subnets: {
     subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -134,11 +134,8 @@ const secretsEndpoint = vpc.addInterfaceEndpoint("SecretsEndpoint", {
 ```typescript
 // Configure NAT instances for cost optimization (optional)
 const natInstance = new ec2.NatProvider.instance({
-  instanceType: ec2.InstanceType.of(
-    ec2.InstanceClass.T3,
-    ec2.InstanceSize.MICRO,
-  ),
-  keyName: "nat-instance-key",
+  instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+  keyName: 'nat-instance-key',
 });
 
 // Or use managed NAT Gateway (recommended for production)
@@ -165,18 +162,18 @@ Internet Gateway
 
 ```typescript
 // 1. Use provisioned concurrency for critical functions
-const alias = new lambda.Alias(this, "ProdAlias", {
-  aliasName: "prod",
+const alias = new lambda.Alias(this, 'ProdAlias', {
+  aliasName: 'prod',
   version: apiLambda.currentVersion,
   provisionedConcurrentExecutions: 5,
 });
 
 // 2. Optimize ENI management
-const lambdaWithOptimizedENI = new lambda.Function(this, "OptimizedLambda", {
+const lambdaWithOptimizedENI = new lambda.Function(this, 'OptimizedLambda', {
   // ... other config
   vpc: vpc,
   allowPublicSubnet: false,
-  filesystem: lambda.FileSystem.fromEfsAccessPoint(accessPoint, "/mnt/efs"), // Share ENI across invocations
+  filesystem: lambda.FileSystem.fromEfsAccessPoint(accessPoint, '/mnt/efs'), // Share ENI across invocations
 });
 ```
 

@@ -28,9 +28,9 @@ graph LR
 
 ```typescript
 // src/services/platform-adapters/instagram-api-client.ts
-import axios, { AxiosInstance } from "axios";
-import { CircuitBreaker } from "../shared/circuit-breaker";
-import { logger } from "../shared/logger";
+import axios, { AxiosInstance } from 'axios';
+import { CircuitBreaker } from '../shared/circuit-breaker';
+import { logger } from '../shared/logger';
 
 export interface InstagramMediaUploadResponse {
   id: string;
@@ -44,19 +44,19 @@ export interface InstagramPublishResponse {
 export class InstagramAPIClient {
   private readonly client: AxiosInstance;
   private readonly circuitBreaker: CircuitBreaker;
-  private readonly baseURL = "https://graph.facebook.com/v18.0";
+  private readonly baseURL = 'https://graph.facebook.com/v18.0';
 
   constructor() {
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: 30000,
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
     });
 
     this.circuitBreaker = new CircuitBreaker({
-      name: "instagram-api",
+      name: 'instagram-api',
       threshold: 5,
       timeout: 60000,
       resetTimeout: 30000,
@@ -69,7 +69,7 @@ export class InstagramAPIClient {
     // Request interceptor for logging
     this.client.interceptors.request.use(
       (config) => {
-        logger.debug("Instagram API Request", {
+        logger.debug('Instagram API Request', {
           method: config.method,
           url: config.url,
           // Never log access tokens
@@ -77,9 +77,9 @@ export class InstagramAPIClient {
         return config;
       },
       (error) => {
-        logger.error("Instagram API Request Error", error);
+        logger.error('Instagram API Request Error', error);
         return Promise.reject(error);
-      },
+      }
     );
 
     // Response interceptor for error handling
@@ -88,8 +88,7 @@ export class InstagramAPIClient {
       async (error) => {
         if (error.response?.status === 429) {
           // Rate limited - extract retry after
-          const retryAfter =
-            error.response.headers["x-business-use-case-usage"];
+          const retryAfter = error.response.headers['x-business-use-case-usage'];
           throw new RateLimitError(retryAfter);
         }
 
@@ -99,7 +98,7 @@ export class InstagramAPIClient {
         }
 
         throw error;
-      },
+      }
     );
   }
 
@@ -107,7 +106,7 @@ export class InstagramAPIClient {
     accountId: string,
     imageUrl: string,
     caption: string,
-    accessToken: string,
+    accessToken: string
   ): Promise<InstagramMediaUploadResponse> {
     return this.circuitBreaker.execute(async () => {
       const response = await this.client.post(`/${accountId}/media`, {
@@ -123,7 +122,7 @@ export class InstagramAPIClient {
   async publishMedia(
     accountId: string,
     creationId: string,
-    accessToken: string,
+    accessToken: string
   ): Promise<InstagramPublishResponse> {
     return this.circuitBreaker.execute(async () => {
       const response = await this.client.post(`/${accountId}/media_publish`, {
@@ -135,15 +134,11 @@ export class InstagramAPIClient {
     });
   }
 
-  async getMediaInsights(
-    mediaId: string,
-    metrics: string[],
-    accessToken: string,
-  ): Promise<any> {
+  async getMediaInsights(mediaId: string, metrics: string[], accessToken: string): Promise<any> {
     return this.circuitBreaker.execute(async () => {
       const response = await this.client.get(`/${mediaId}/insights`, {
         params: {
-          metric: metrics.join(","),
+          metric: metrics.join(','),
           access_token: accessToken,
         },
       });
@@ -163,16 +158,16 @@ import {
   PlatformContent,
   PublishResult,
   PlatformCredentials,
-} from "../platform-adapter";
-import { InstagramAPIClient } from "./instagram-api-client";
-import { TokenManager } from "../token-manager";
-import { IdempotencyStore } from "../idempotency-store";
-import { EventBus } from "../event-bus";
-import { retry } from "../utils/retry";
-import { createHash } from "crypto";
+} from '../platform-adapter';
+import { InstagramAPIClient } from './instagram-api-client';
+import { TokenManager } from '../token-manager';
+import { IdempotencyStore } from '../idempotency-store';
+import { EventBus } from '../event-bus';
+import { retry } from '../utils/retry';
+import { createHash } from 'crypto';
 
 export class RealInstagramAdapter implements PlatformAdapter {
-  platform = "instagram";
+  platform = 'instagram';
   private apiClient: InstagramAPIClient;
   private tokenManager: TokenManager;
   private idempotencyStore: IdempotencyStore;
@@ -194,20 +189,20 @@ export class RealInstagramAdapter implements PlatformAdapter {
     const warnings: string[] = [];
 
     if (!content.mediaUrl) {
-      errors.push("Instagram requires at least one image or video");
+      errors.push('Instagram requires at least one image or video');
     }
 
     if (content.caption.length > 2200) {
-      errors.push("Caption exceeds Instagram limit of 2,200 characters");
+      errors.push('Caption exceeds Instagram limit of 2,200 characters');
     }
 
     if (content.hashtags.length > 30) {
-      warnings.push("Instagram allows maximum 30 hashtags");
+      warnings.push('Instagram allows maximum 30 hashtags');
     }
 
     // Validate media URL is accessible
     if (content.mediaUrl && !this.isValidMediaUrl(content.mediaUrl)) {
-      errors.push("Media URL must be publicly accessible HTTPS URL");
+      errors.push('Media URL must be publicly accessible HTTPS URL');
     }
 
     return {
@@ -220,13 +215,11 @@ export class RealInstagramAdapter implements PlatformAdapter {
   formatContent(content: PlatformContent): PlatformContent {
     const formattedHashtags = content.hashtags
       .slice(0, 30)
-      .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
+      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
 
-    const fullCaption = `${content.caption}\n\n${formattedHashtags.join(" ")}`;
+    const fullCaption = `${content.caption}\n\n${formattedHashtags.join(' ')}`;
     const finalCaption =
-      fullCaption.length > 2200
-        ? fullCaption.substring(0, 2197) + "..."
-        : fullCaption;
+      fullCaption.length > 2200 ? fullCaption.substring(0, 2197) + '...' : fullCaption;
 
     return {
       ...content,
@@ -237,7 +230,7 @@ export class RealInstagramAdapter implements PlatformAdapter {
 
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
     // 1. Generate idempotency key
     const idempotencyKey = this.generateIdempotencyKey(content, credentials);
@@ -245,7 +238,7 @@ export class RealInstagramAdapter implements PlatformAdapter {
     // 2. Check for duplicate
     const existing = await this.idempotencyStore.get(idempotencyKey);
     if (existing) {
-      console.log("Duplicate post prevented", { idempotencyKey });
+      console.log('Duplicate post prevented', { idempotencyKey });
       return existing;
     }
 
@@ -263,22 +256,19 @@ export class RealInstagramAdapter implements PlatformAdapter {
             credentials.platformSpecific?.accountId,
             formattedContent.mediaUrl!,
             formattedContent.caption,
-            validToken.accessToken,
+            validToken.accessToken
           ),
         {
           retries: 3,
-          backoff: "exponential",
+          backoff: 'exponential',
           onRetry: (error, attempt) => {
             console.log(`Retry attempt ${attempt} for media upload`, error);
           },
-        },
+        }
       );
 
       // 6. Wait for media processing (Instagram requirement)
-      await this.waitForMediaProcessing(
-        mediaContainer.id,
-        validToken.accessToken,
-      );
+      await this.waitForMediaProcessing(mediaContainer.id, validToken.accessToken);
 
       // 7. Publish media
       const publishResult = await retry(
@@ -286,17 +276,17 @@ export class RealInstagramAdapter implements PlatformAdapter {
           this.apiClient.publishMedia(
             credentials.platformSpecific?.accountId,
             mediaContainer.id,
-            validToken.accessToken,
+            validToken.accessToken
           ),
         {
           retries: 3,
-          backoff: "exponential",
-        },
+          backoff: 'exponential',
+        }
       );
 
       // 8. Create result
       const result: PublishResult = {
-        platform: "instagram",
+        platform: 'instagram',
         postId: publishResult.id,
         permalink: publishResult.permalink,
         publishedAt: new Date().toISOString(),
@@ -307,9 +297,9 @@ export class RealInstagramAdapter implements PlatformAdapter {
 
       // 10. Emit success event
       await this.eventBus.emit({
-        type: "content.published",
+        type: 'content.published',
         data: {
-          platform: "instagram",
+          platform: 'instagram',
           contentId: content.metadata?.contentId,
           postId: publishResult.id,
           publishedAt: result.publishedAt,
@@ -320,9 +310,9 @@ export class RealInstagramAdapter implements PlatformAdapter {
     } catch (error) {
       // Emit failure event
       await this.eventBus.emit({
-        type: "content.publish.failed",
+        type: 'content.publish.failed',
         data: {
-          platform: "instagram",
+          platform: 'instagram',
           contentId: content.metadata?.contentId,
           error: error.message,
         },
@@ -332,35 +322,17 @@ export class RealInstagramAdapter implements PlatformAdapter {
     }
   }
 
-  async getInsights(
-    postId: string,
-    credentials: PlatformCredentials,
-  ): Promise<any> {
+  async getInsights(postId: string, credentials: PlatformCredentials): Promise<any> {
     const validToken = await this.ensureValidToken(credentials);
 
-    const metrics = [
-      "impressions",
-      "reach",
-      "engagement",
-      "saved",
-      "comments",
-      "likes",
-      "shares",
-    ];
+    const metrics = ['impressions', 'reach', 'engagement', 'saved', 'comments', 'likes', 'shares'];
 
-    return this.apiClient.getMediaInsights(
-      postId,
-      metrics,
-      validToken.accessToken,
-    );
+    return this.apiClient.getMediaInsights(postId, metrics, validToken.accessToken);
   }
 
-  async deletePost(
-    postId: string,
-    credentials: PlatformCredentials,
-  ): Promise<boolean> {
+  async deletePost(postId: string, credentials: PlatformCredentials): Promise<boolean> {
     // Instagram Graph API doesn't support deletion
-    throw new Error("Instagram API does not support post deletion");
+    throw new Error('Instagram API does not support post deletion');
   }
 
   getRateLimits(): RateLimits {
@@ -380,14 +352,12 @@ export class RealInstagramAdapter implements PlatformAdapter {
     return this.tokenManager.refreshInstagramToken(refreshToken);
   }
 
-  private async ensureValidToken(
-    credentials: PlatformCredentials,
-  ): Promise<PlatformCredentials> {
+  private async ensureValidToken(credentials: PlatformCredentials): Promise<PlatformCredentials> {
     if (this.isTokenExpired(credentials)) {
       if (credentials.refreshToken) {
         return this.refreshToken(credentials.refreshToken);
       }
-      throw new Error("Token expired and no refresh token available");
+      throw new Error('Token expired and no refresh token available');
     }
     return credentials;
   }
@@ -399,16 +369,16 @@ export class RealInstagramAdapter implements PlatformAdapter {
 
   private generateIdempotencyKey(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): string {
     const data = `${credentials.platformSpecific?.accountId}-${content.caption}-${content.mediaUrl}`;
-    return createHash("sha256").update(data).digest("hex");
+    return createHash('sha256').update(data).digest('hex');
   }
 
   private isValidMediaUrl(url: string): boolean {
     try {
       const parsed = new URL(url);
-      return parsed.protocol === "https:";
+      return parsed.protocol === 'https:';
     } catch {
       return false;
     }
@@ -417,34 +387,31 @@ export class RealInstagramAdapter implements PlatformAdapter {
   private async waitForMediaProcessing(
     containerId: string,
     accessToken: string,
-    maxAttempts = 10,
+    maxAttempts = 10
   ): Promise<void> {
     for (let i = 0; i < maxAttempts; i++) {
       // Check container status
       const status = await this.checkMediaStatus(containerId, accessToken);
 
-      if (status === "FINISHED") {
+      if (status === 'FINISHED') {
         return;
       }
 
-      if (status === "ERROR") {
-        throw new Error("Media processing failed");
+      if (status === 'ERROR') {
+        throw new Error('Media processing failed');
       }
 
       // Wait before next check
       await this.sleep(2000 * Math.pow(1.5, i)); // Exponential backoff
     }
 
-    throw new Error("Media processing timeout");
+    throw new Error('Media processing timeout');
   }
 
-  private async checkMediaStatus(
-    containerId: string,
-    accessToken: string,
-  ): Promise<string> {
+  private async checkMediaStatus(containerId: string, accessToken: string): Promise<string> {
     // Implementation would check the media container status
     // This is a simplified version
-    return "FINISHED";
+    return 'FINISHED';
   }
 
   private sleep(ms: number): Promise<void> {
@@ -459,19 +426,15 @@ export class RealInstagramAdapter implements PlatformAdapter {
 
 ```typescript
 // src/services/microservices-client.ts
-import axios, { AxiosInstance } from "axios";
-import { STS } from "aws-sdk";
+import axios, { AxiosInstance } from 'axios';
+import { STS } from 'aws-sdk';
 
 export class MicroservicesClient {
   private tokenServiceClient: AxiosInstance;
   private schedulerServiceClient: AxiosInstance;
   private sts: STS;
 
-  constructor(config: {
-    tokenServiceUrl: string;
-    schedulerServiceUrl: string;
-    region: string;
-  }) {
+  constructor(config: { tokenServiceUrl: string; schedulerServiceUrl: string; region: string }) {
     this.sts = new STS({ region: config.region });
 
     this.tokenServiceClient = axios.create({
@@ -510,13 +473,11 @@ export class MicroservicesClient {
     refreshToken?: string;
     expiresAt: number;
   }): Promise<void> {
-    await this.tokenServiceClient.post("/tokens", data);
+    await this.tokenServiceClient.post('/tokens', data);
   }
 
   async getToken(userId: string, platform: string): Promise<any> {
-    const response = await this.tokenServiceClient.get(
-      `/tokens/${userId}/${platform}`,
-    );
+    const response = await this.tokenServiceClient.get(`/tokens/${userId}/${platform}`);
     return response.data;
   }
 
@@ -528,7 +489,7 @@ export class MicroservicesClient {
     scheduledAt: Date;
     content: any;
   }): Promise<{ scheduleId: string }> {
-    const response = await this.schedulerServiceClient.post("/schedules", {
+    const response = await this.schedulerServiceClient.post('/schedules', {
       ...data,
       scheduledAt: data.scheduledAt.toISOString(),
     });
@@ -549,12 +510,12 @@ export class HybridPlatformAdapter implements PlatformAdapter {
   constructor(
     private realAdapter: PlatformAdapter,
     private microservicesClient: MicroservicesClient,
-    private mode: "direct" | "scheduled" | "auto" = "auto",
+    private mode: 'direct' | 'scheduled' | 'auto' = 'auto'
   ) {}
 
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
     // Store token in microservices
     await this.microservicesClient.storeToken({
@@ -582,7 +543,7 @@ export class HybridPlatformAdapter implements PlatformAdapter {
         publishedAt: content.metadata?.scheduledAt || new Date().toISOString(),
         metadata: {
           scheduleId: schedule.scheduleId,
-          status: "scheduled",
+          status: 'scheduled',
         },
       };
     } else {
@@ -592,8 +553,8 @@ export class HybridPlatformAdapter implements PlatformAdapter {
   }
 
   private shouldSchedule(content: PlatformContent): boolean {
-    if (this.mode === "scheduled") return true;
-    if (this.mode === "direct") return false;
+    if (this.mode === 'scheduled') return true;
+    if (this.mode === 'direct') return false;
 
     // Auto mode: schedule if more than 5 minutes in future
     const scheduledAt = content.metadata?.scheduledAt;
@@ -614,21 +575,21 @@ export class HybridPlatformAdapter implements PlatformAdapter {
 
 ```typescript
 // src/services/platform-adapters/microservices-adapter.ts
-import { EventBridge } from "aws-sdk";
+import { EventBridge } from 'aws-sdk';
 
 export class MicroservicesPlatformAdapter implements PlatformAdapter {
   private eventBridge: EventBridge;
 
   constructor(
     private microservicesClient: MicroservicesClient,
-    private eventBusName: string,
+    private eventBusName: string
   ) {
     this.eventBridge = new EventBridge();
   }
 
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
     // 1. Store token
     await this.microservicesClient.storeToken({
@@ -654,8 +615,8 @@ export class MicroservicesPlatformAdapter implements PlatformAdapter {
       .putEvents({
         Entries: [
           {
-            Source: "postolio.content",
-            DetailType: "content.scheduled",
+            Source: 'postolio.content',
+            DetailType: 'content.scheduled',
             EventBusName: this.eventBusName,
             Detail: JSON.stringify({
               scheduleId: schedule.scheduleId,
@@ -675,7 +636,7 @@ export class MicroservicesPlatformAdapter implements PlatformAdapter {
       publishedAt: content.metadata?.scheduledAt || new Date().toISOString(),
       metadata: {
         scheduleId: schedule.scheduleId,
-        status: "scheduled",
+        status: 'scheduled',
       },
     };
   }
@@ -727,7 +688,7 @@ export class MicroservicesPlatformAdapter implements PlatformAdapter {
 ### Unit Tests
 
 ```typescript
-describe("RealInstagramAdapter", () => {
+describe('RealInstagramAdapter', () => {
   let adapter: RealInstagramAdapter;
   let mockApiClient: jest.Mocked<InstagramAPIClient>;
 
@@ -740,8 +701,8 @@ describe("RealInstagramAdapter", () => {
     });
   });
 
-  describe("publish", () => {
-    it("should prevent duplicate posts", async () => {
+  describe('publish', () => {
+    it('should prevent duplicate posts', async () => {
       const content = createTestContent();
       const credentials = createTestCredentials();
 
@@ -757,11 +718,11 @@ describe("RealInstagramAdapter", () => {
       expect(mockApiClient.createMediaContainer).toHaveBeenCalledTimes(1);
     });
 
-    it("should retry on transient errors", async () => {
+    it('should retry on transient errors', async () => {
       mockApiClient.createMediaContainer
-        .mockRejectedValueOnce(new Error("Network error"))
-        .mockRejectedValueOnce(new Error("Network error"))
-        .mockResolvedValueOnce({ id: "media-123" });
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockResolvedValueOnce({ id: 'media-123' });
 
       const result = await adapter.publish(content, credentials);
 
@@ -769,7 +730,7 @@ describe("RealInstagramAdapter", () => {
       expect(mockApiClient.createMediaContainer).toHaveBeenCalledTimes(3);
     });
 
-    it("should refresh expired tokens", async () => {
+    it('should refresh expired tokens', async () => {
       const expiredCredentials = {
         ...credentials,
         expiresAt: Date.now() - 1000,
@@ -786,14 +747,14 @@ describe("RealInstagramAdapter", () => {
 ### Integration Tests
 
 ```typescript
-describe("Platform Integration", () => {
-  it("should publish to real Instagram sandbox", async () => {
+describe('Platform Integration', () => {
+  it('should publish to real Instagram sandbox', async () => {
     const adapter = new RealInstagramAdapter(productionDependencies);
 
     const result = await adapter.publish(testContent, sandboxCredentials);
 
     expect(result.postId).toMatch(/^\d+_\d+$/);
-    expect(result.permalink).toContain("instagram.com");
+    expect(result.permalink).toContain('instagram.com');
   });
 });
 ```
@@ -801,15 +762,15 @@ describe("Platform Integration", () => {
 ### Load Tests
 
 ```typescript
-describe("Load Testing", () => {
-  it("should handle 100 concurrent publishes", async () => {
+describe('Load Testing', () => {
+  it('should handle 100 concurrent publishes', async () => {
     const promises = Array.from({ length: 100 }, (_, i) =>
-      adapter.publish({ ...testContent, caption: `Test ${i}` }, credentials),
+      adapter.publish({ ...testContent, caption: `Test ${i}` }, credentials)
     );
 
     const results = await Promise.allSettled(promises);
 
-    const successful = results.filter((r) => r.status === "fulfilled");
+    const successful = results.filter((r) => r.status === 'fulfilled');
     expect(successful.length).toBeGreaterThan(95); // 95% success rate
   });
 });
@@ -844,16 +805,16 @@ export class PlatformAdapterFactory {
 export class CanaryPlatformAdapter implements PlatformAdapter {
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
-    const canaryPercentage = getConfig("canaryPercentage", 10);
+    const canaryPercentage = getConfig('canaryPercentage', 10);
     const isCanary = Math.random() * 100 < canaryPercentage;
 
     if (isCanary) {
       try {
         return await this.newAdapter.publish(content, credentials);
       } catch (error) {
-        console.error("Canary adapter failed, falling back", error);
+        console.error('Canary adapter failed, falling back', error);
         return await this.oldAdapter.publish(content, credentials);
       }
     }
@@ -870,13 +831,13 @@ export class CanaryPlatformAdapter implements PlatformAdapter {
 ```typescript
 // Custom CloudWatch metrics
 const metrics = {
-  "Platform.Publish.Success": Counter,
-  "Platform.Publish.Duration": Histogram,
-  "Platform.Publish.Error": Counter,
-  "Platform.CircuitBreaker.Open": Gauge,
-  "Platform.TokenRefresh.Success": Counter,
-  "Platform.RateLimit.Hit": Counter,
-  "Platform.Idempotency.Duplicate": Counter,
+  'Platform.Publish.Success': Counter,
+  'Platform.Publish.Duration': Histogram,
+  'Platform.Publish.Error': Counter,
+  'Platform.CircuitBreaker.Open': Gauge,
+  'Platform.TokenRefresh.Success': Counter,
+  'Platform.RateLimit.Hit': Counter,
+  'Platform.Idempotency.Duplicate': Counter,
 };
 ```
 

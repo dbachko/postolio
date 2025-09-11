@@ -1,4 +1,4 @@
-import { test as base, Page } from "@playwright/test";
+import { test as base, Page } from '@playwright/test';
 
 export interface AuthFixtures {
   authenticatedPage: Page;
@@ -13,16 +13,16 @@ export const test = base.extend<AuthFixtures>({
   testUser: async ({}, use) => {
     // Test user credentials
     const user = {
-      email: "test@example.com",
-      password: "Test123!@#",
-      token: "", // Will be populated after login
+      email: 'test@example.com',
+      password: 'Test123!@#',
+      token: '', // Will be populated after login
     };
     await use(user);
   },
 
   authenticatedPage: async ({ page, testUser, baseURL }, use) => {
     // Navigate to login
-    await page.goto("/login");
+    await page.goto('/login');
 
     // Perform login
     await page.fill('input[type="email"]', testUser.email);
@@ -30,16 +30,16 @@ export const test = base.extend<AuthFixtures>({
     await page.click('button[type="submit"]');
 
     // Wait for authentication to complete
-    await page.waitForURL("/dashboard", { timeout: 10000 });
+    await page.waitForURL('/dashboard', { timeout: 10000 });
 
     // Extract token from localStorage
     testUser.token = await page.evaluate(() => {
-      const authStore = localStorage.getItem("auth-storage");
+      const authStore = localStorage.getItem('auth-storage');
       if (authStore) {
         const parsed = JSON.parse(authStore);
-        return parsed.state?.token || "";
+        return parsed.state?.token || '';
       }
-      return "";
+      return '';
     });
 
     await use(page);
@@ -49,4 +49,4 @@ export const test = base.extend<AuthFixtures>({
   },
 });
 
-export { expect } from "@playwright/test";
+export { expect } from '@playwright/test';

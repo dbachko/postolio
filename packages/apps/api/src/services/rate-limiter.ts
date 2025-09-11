@@ -1,5 +1,5 @@
-import { redisService } from "./redis.js";
-import type { FastifyRequest, FastifyReply } from "fastify";
+import { redisService } from './redis.js';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 
 interface RateLimitConfig {
   windowMs: number; // Time window in milliseconds
@@ -33,7 +33,7 @@ export class RateLimiter {
 
     if (currentCount === null) {
       // Redis unavailable, allow request (fail open)
-      console.warn("Redis unavailable for rate limiting, allowing request");
+      console.warn('Redis unavailable for rate limiting, allowing request');
       return {
         allowed: true,
         remaining: this.config.maxRequests - 1,
@@ -71,41 +71,33 @@ export class RateLimiter {
 export const campaignRateLimiter = new RateLimiter({
   windowMs: 60 * 1000, // 1 minute window
   maxRequests: 10, // 10 campaign operations per minute per user
-  keyPrefix: "campaign_rl",
+  keyPrefix: 'campaign_rl',
 });
 
 export const pauseResumeRateLimiter = new RateLimiter({
   windowMs: 5 * 60 * 1000, // 5 minute window
   maxRequests: 20, // 20 pause/resume operations per 5 minutes per user
-  keyPrefix: "pause_resume_rl",
+  keyPrefix: 'pause_resume_rl',
 });
 
 /**
  * Fastify middleware for rate limiting
  */
 export function createRateLimitMiddleware(rateLimiter: RateLimiter) {
-  return async (
-    request: FastifyRequest & { user?: { id?: string } },
-    reply: FastifyReply,
-  ) => {
+  return async (request: FastifyRequest & { user?: { id?: string } }, reply: FastifyReply) => {
     const userId =
-      request.user?.id ||
-      (request.headers["x-user-id"] as string | undefined) ||
-      "anonymous";
+      request.user?.id || (request.headers['x-user-id'] as string | undefined) || 'anonymous';
 
     const result = await rateLimiter.checkRateLimit(userId);
 
-    reply.header("X-RateLimit-Limit", rateLimiter["config"].maxRequests);
-    reply.header("X-RateLimit-Remaining", result.remaining);
-    reply.header(
-      "X-RateLimit-Reset",
-      Math.floor(result.resetTime.getTime() / 1000),
-    );
+    reply.header('X-RateLimit-Limit', rateLimiter['config'].maxRequests);
+    reply.header('X-RateLimit-Remaining', result.remaining);
+    reply.header('X-RateLimit-Reset', Math.floor(result.resetTime.getTime() / 1000));
 
     if (!result.allowed) {
-      reply.header("Retry-After", result.retryAfter || 60);
+      reply.header('Retry-After', result.retryAfter || 60);
       return reply.code(429).send({
-        error: "Too many requests",
+        error: 'Too many requests',
         message: `Rate limit exceeded. Try again in ${result.retryAfter || 60} seconds.`,
         retryAfter: result.retryAfter || 60,
       });

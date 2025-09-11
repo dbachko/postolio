@@ -1,8 +1,8 @@
-import React, { useState, useCallback, useRef } from "react";
-import { Upload, X, Image as ImageIcon, AlertCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "./ui/button";
-import { Alert, AlertDescription } from "./ui/alert";
+import React, { useState, useCallback, useRef } from 'react';
+import { Upload, X, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from './ui/button';
+import { Alert, AlertDescription } from './ui/alert';
 
 interface ImageUploaderProps {
   value?: string;
@@ -19,10 +19,10 @@ export function ImageUploader({
   onUpload,
   className,
   maxSizeInMB = 10,
-  acceptedFormats = ["image/jpeg", "image/png", "image/webp", "image/gif"],
+  acceptedFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
 }: ImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string>(value || "");
+  const [previewUrl, setPreviewUrl] = useState<string>(value || '');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export function ImageUploader({
   const validateFile = (file: File): string | null => {
     // Check file type
     if (!acceptedFormats.includes(file.type)) {
-      return `Invalid file type. Accepted formats: ${acceptedFormats.map((f) => f.split("/")[1]).join(", ")}`;
+      return `Invalid file type. Accepted formats: ${acceptedFormats.map((f) => f.split('/')[1]).join(', ')}`;
     }
 
     // Check file size
@@ -73,11 +73,9 @@ export function ImageUploader({
           const uploadedUrl = await onUpload(file);
           onChange(uploadedUrl);
         } catch (err) {
-          setError(
-            err instanceof Error ? err.message : "Failed to upload image",
-          );
+          setError(err instanceof Error ? err.message : 'Failed to upload image');
           // Revert preview on error
-          setPreviewUrl(value || "");
+          setPreviewUrl(value || '');
           setSelectedFile(null);
         } finally {
           setIsUploading(false);
@@ -87,7 +85,7 @@ export function ImageUploader({
         onChange(file);
       }
     },
-    [value, onChange, onUpload, acceptedFormats, maxSizeInMB],
+    [value, onChange, onUpload, acceptedFormats, maxSizeInMB]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -113,7 +111,7 @@ export function ImageUploader({
         handleFile(files[0]);
       }
     },
-    [handleFile],
+    [handleFile]
   );
 
   const handleFileSelect = useCallback(
@@ -123,22 +121,22 @@ export function ImageUploader({
         handleFile(files[0]);
       }
     },
-    [handleFile],
+    [handleFile]
   );
 
   const handleRemoveImage = useCallback(() => {
     // Clear all state
-    setPreviewUrl("");
+    setPreviewUrl('');
     setSelectedFile(null);
     setError(null);
 
     // Reset file input
     if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      fileInputRef.current.value = '';
     }
 
     // Notify parent component that image was removed
-    onChange("");
+    onChange('');
   }, [onChange]);
 
   const handleClickUpload = useCallback(() => {
@@ -147,7 +145,7 @@ export function ImageUploader({
 
   return (
     <div
-      className={cn("space-y-4", className)}
+      className={cn('space-y-4', className)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -156,7 +154,7 @@ export function ImageUploader({
       <input
         ref={fileInputRef}
         type="file"
-        accept={acceptedFormats.join(",")}
+        accept={acceptedFormats.join(',')}
         onChange={handleFileSelect}
         className="hidden"
         disabled={isUploading}
@@ -175,27 +173,25 @@ export function ImageUploader({
         <div
           onClick={handleClickUpload}
           className={cn(
-            "relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all",
-            isDragging
-              ? "border-blue-500 bg-blue-50"
-              : "border-gray-300 hover:border-gray-400",
-            isUploading && "opacity-50 cursor-not-allowed",
+            'relative cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-all',
+            isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400',
+            isUploading && 'cursor-not-allowed opacity-50'
           )}
         >
           <div className="flex flex-col items-center space-y-4">
             {isUploading ? (
               <>
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+                <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600" />
                 <p className="text-sm text-gray-600">Uploading image...</p>
               </>
             ) : (
               <>
-                <Upload className="w-12 h-12 text-gray-400" />
+                <Upload className="h-12 w-12 text-gray-400" />
                 <div>
                   <p className="text-sm font-medium text-gray-700">
                     Drop your image here or click to browse
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="mt-1 text-xs text-gray-500">
                     Supports: JPEG, PNG, WebP, GIF (max {maxSizeInMB}MB)
                   </p>
                 </div>
@@ -205,23 +201,23 @@ export function ImageUploader({
         </div>
       ) : (
         /* Image Preview */
-        <div className="relative group">
+        <div className="group relative">
           {/* Drag overlay when dragging over existing image */}
           {isDragging && (
-            <div className="absolute inset-0 z-20 bg-blue-500 bg-opacity-90 rounded-lg flex items-center justify-center">
-              <div className="text-white text-center">
-                <Upload className="w-12 h-12 mx-auto mb-2" />
+            <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-blue-500 bg-opacity-90">
+              <div className="text-center text-white">
+                <Upload className="mx-auto mb-2 h-12 w-12" />
                 <p className="text-sm font-medium">Drop to replace image</p>
               </div>
             </div>
           )}
 
-          <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
+          <div className="relative aspect-square overflow-hidden rounded-lg bg-gray-100">
             {/* Loading state for preview */}
             {isUploading && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
-                <div className="text-white text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2" />
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black bg-opacity-50">
+                <div className="text-center text-white">
+                  <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-white" />
                   <p className="text-sm">Uploading...</p>
                 </div>
               </div>
@@ -231,19 +227,19 @@ export function ImageUploader({
             <img
               src={previewUrl}
               alt="Preview"
-              className="w-full h-full object-cover"
+              className="h-full w-full object-cover"
               onError={() => {
-                setError("Failed to load image preview");
+                setError('Failed to load image preview');
                 if (!selectedFile) {
                   // Only reset if this was a URL, not a selected file
-                  setPreviewUrl("");
+                  setPreviewUrl('');
                 }
               }}
             />
 
             {/* Actions Overlay - Only show buttons on hover, no background overlay */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity space-x-2 pointer-events-auto">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="pointer-events-auto space-x-2 opacity-0 transition-opacity group-hover:opacity-100">
                 <Button
                   type="button"
                   variant="secondary"
@@ -252,7 +248,7 @@ export function ImageUploader({
                   disabled={isUploading}
                   className="shadow-lg"
                 >
-                  <Upload className="w-4 h-4 mr-1" />
+                  <Upload className="mr-1 h-4 w-4" />
                   Replace
                 </Button>
                 <Button
@@ -263,7 +259,7 @@ export function ImageUploader({
                   disabled={isUploading}
                   className="shadow-lg"
                 >
-                  <X className="w-4 h-4 mr-1" />
+                  <X className="mr-1 h-4 w-4" />
                   Remove
                 </Button>
               </div>
@@ -283,7 +279,7 @@ export function ImageUploader({
       {/* Alternative Upload Button (when image exists) */}
       {previewUrl && !isUploading && (
         <div className="flex items-center justify-center text-sm text-gray-600">
-          <ImageIcon className="w-4 h-4 mr-1" />
+          <ImageIcon className="mr-1 h-4 w-4" />
           <span>Image ready for post</span>
         </div>
       )}

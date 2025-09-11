@@ -1,16 +1,16 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Request schemas
 export const PublishRequestSchema = z.object({
   userId: z.string().min(1),
   brandId: z.string().min(1),
-  platform: z.enum(["instagram", "facebook", "linkedin", "tiktok"]),
+  platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']),
   contentId: z.string().min(1),
   scheduleId: z.string().optional(), // Added for schedule tracking
   content: z.object({
     caption: z.string().max(2200), // Instagram caption limit
     mediaUrl: z.string().url().optional(),
-    mediaType: z.enum(["IMAGE", "VIDEO", "CAROUSEL"]).optional(),
+    mediaType: z.enum(['IMAGE', 'VIDEO', 'CAROUSEL']).optional(),
     hashtags: z.array(z.string()).max(30).optional(),
     mentions: z.array(z.string()).optional(),
     location: z
@@ -53,8 +53,8 @@ export const PostFailedEventSchema = z.object({
 // Validation utilities
 export class ValidationError extends Error {
   constructor(public errors: z.ZodError) {
-    super("Validation failed");
-    this.name = "ValidationError";
+    super('Validation failed');
+    this.name = 'ValidationError';
   }
 }
 
@@ -70,7 +70,7 @@ export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): T {
 export const TokenRecordSchema = z.object({
   pk: z.string(), // userId#platform
   sk: z.string(), // brandId
-  platform: z.enum(["instagram", "facebook", "linkedin", "tiktok"]),
+  platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']),
   encryptedAccessToken: z.string(),
   encryptedRefreshToken: z.string().optional(),
   expiresAt: z.number(),
@@ -86,7 +86,7 @@ export const ScheduleRequestSchema = z.object({
   userId: z.string().min(1),
   brandId: z.string().min(1),
   contentId: z.string().min(1),
-  platform: z.enum(["instagram", "facebook", "linkedin", "tiktok"]),
+  platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']),
   scheduledAt: z.string().datetime(),
   content: z.object({
     caption: z.string(),

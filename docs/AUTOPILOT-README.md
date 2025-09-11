@@ -117,7 +117,7 @@ interface AutopilotConfig {
   maxContentPerGeneration: number; // 1-10 posts
   contentStrategy: {
     themes: string[]; // Content themes array
-    postingFrequency: "daily" | "every-other-day" | "weekly";
+    postingFrequency: 'daily' | 'every-other-day' | 'weekly';
     optimalTimes: { hour: number; minute: number }[];
   };
 }
@@ -138,17 +138,17 @@ interface AutopilotConfig {
 
 ```javascript
 // Enable with custom config
-const response = await fetch("/autopilot/brands/brand123/config", {
-  method: "PATCH",
+const response = await fetch('/autopilot/brands/brand123/config', {
+  method: 'PATCH',
   headers: {
     Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   },
   body: JSON.stringify({
     enabled: true,
     contentStrategy: {
-      themes: ["travel", "adventure", "lifestyle"],
-      postingFrequency: "every-other-day",
+      themes: ['travel', 'adventure', 'lifestyle'],
+      postingFrequency: 'every-other-day',
     },
   }),
 });
@@ -158,8 +158,8 @@ const response = await fetch("/autopilot/brands/brand123/config", {
 
 ```javascript
 // Trigger autopilot manually
-const response = await fetch("/autopilot/trigger", {
-  method: "POST",
+const response = await fetch('/autopilot/trigger', {
+  method: 'POST',
   headers: {
     Authorization: `Bearer ${token}`,
   },
@@ -173,7 +173,7 @@ console.log(`Generated ${result.data.generated} posts`);
 
 ```javascript
 // Check autopilot status
-const response = await fetch("/autopilot/status", {
+const response = await fetch('/autopilot/status', {
   headers: {
     Authorization: `Bearer ${token}`,
   },

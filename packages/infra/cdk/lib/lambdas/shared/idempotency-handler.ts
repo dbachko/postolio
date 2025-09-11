@@ -1,13 +1,9 @@
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-} from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 
 export class IdempotencyError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "IdempotencyError";
+    this.name = 'IdempotencyError';
   }
 }
 
@@ -23,9 +19,9 @@ export class IdempotencyHandler {
 
   constructor(
     private docClient: DynamoDBDocumentClient,
-    private options: IdempotencyOptions,
+    private options: IdempotencyOptions
   ) {
-    this.keyField = options.keyField || "idempotencyKey";
+    this.keyField = options.keyField || 'idempotencyKey';
     this.ttlSeconds = options.ttlSeconds || 86400; // 24 hours default
   }
 
@@ -36,7 +32,7 @@ export class IdempotencyHandler {
         new GetCommand({
           TableName: this.options.tableName,
           Key: { [this.keyField]: key },
-        }),
+        })
       );
 
       if (getResult.Item) {
@@ -46,9 +42,7 @@ export class IdempotencyHandler {
           return false; // Don't process again
         } else {
           // Different request with same key
-          throw new IdempotencyError(
-            `Different request with same idempotency key: ${key}`,
-          );
+          throw new IdempotencyError(`Different request with same idempotency key: ${key}`);
         }
       }
 
@@ -64,12 +58,12 @@ export class IdempotencyHandler {
             ttl,
           },
           ConditionExpression: `attribute_not_exists(${this.keyField})`,
-        }),
+        })
       );
 
       return true; // Process this request
     } catch (error: any) {
-      if (error.name === "ConditionalCheckFailedException") {
+      if (error.name === 'ConditionalCheckFailedException') {
         // Race condition - another process recorded the key
         return false; // Don't process again
       }
@@ -88,7 +82,7 @@ export class IdempotencyHandler {
           completedAt: new Date().toISOString(),
           ttl,
         },
-      }),
+      })
     );
   }
 }

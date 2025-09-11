@@ -1,9 +1,9 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { analyticsService } from "../services/analytics.js";
-import { schedulerService } from "../services/scheduler.js";
-import { schedulerAdapter } from "../services/scheduler-adapter.js";
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { analyticsService } from '../services/analytics.js';
+import { schedulerService } from '../services/scheduler.js';
+import { schedulerAdapter } from '../services/scheduler-adapter.js';
 
-import { getDatabaseClient } from "../config/database.js";
+import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
 
@@ -29,10 +29,10 @@ interface BulkScheduleBody {
 
 function ensureAuth(
   request: FastifyRequest,
-  reply: FastifyReply,
+  reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string; email: string } } {
   if (!request.user || !request.user.id) {
-    reply.code(401).send({ error: "Authentication required" });
+    reply.code(401).send({ error: 'Authentication required' });
     return false;
   }
   return true;
@@ -41,7 +41,7 @@ function ensureAuth(
 const analytics: FastifyPluginAsync = async function (fastify) {
   // Get analytics report for a brand
   fastify.get(
-    "/report/:brandId",
+    '/report/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -59,27 +59,24 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
-        const report = await analyticsService.generateAnalyticsReport(
-          brandId,
-          days,
-        );
+        const report = await analyticsService.generateAnalyticsReport(brandId, days);
 
         reply.send({ report });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to generate analytics report",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to generate analytics report',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Get optimal posting times for a brand
   fastify.get(
-    "/optimal-times/:brandId",
+    '/optimal-times/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -96,11 +93,10 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
-        const optimalTimes =
-          await analyticsService.analyzeOptimalTimes(brandId);
+        const optimalTimes = await analyticsService.analyzeOptimalTimes(brandId);
 
         reply.send({
           optimalTimes: optimalTimes.map((time) => ({
@@ -111,16 +107,16 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to analyze optimal times",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to analyze optimal times',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Get scheduling recommendation for new content
   fastify.get(
-    "/schedule-recommendation/:brandId",
+    '/schedule-recommendation/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -139,89 +135,84 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
         // timezone currently unused in scheduling recommendation service; could be integrated later
-        const recommendation =
-          await analyticsService.getSchedulingRecommendation(brandId);
+        const recommendation = await analyticsService.getSchedulingRecommendation(brandId);
 
         reply.send({ recommendation });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to get scheduling recommendation",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to get scheduling recommendation',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Schedule content for posting
-  fastify.post(
-    "/schedule",
-    { preHandler: fastify.authenticate },
-    async function (request, reply) {
-      try {
-        if (!ensureAuth(request, reply)) return;
-        const { contentId, customTime } = request.body as ScheduleBody;
+  fastify.post('/schedule', { preHandler: fastify.authenticate }, async function (request, reply) {
+    try {
+      if (!ensureAuth(request, reply)) return;
+      const { contentId, customTime } = request.body as ScheduleBody;
 
-        if (!contentId) {
-          return reply.status(400).send({ error: "contentId is required" });
-        }
+      if (!contentId) {
+        return reply.status(400).send({ error: 'contentId is required' });
+      }
 
-        const userId = request.user.id;
+      const userId = request.user.id;
 
-        // Verify content ownership
-        const content = await prisma.content.findFirst({
-          where: {
-            id: contentId,
-            brand: {
-              userId: userId,
-            },
+      // Verify content ownership
+      const content = await prisma.content.findFirst({
+        where: {
+          id: contentId,
+          brand: {
+            userId: userId,
           },
-        });
+        },
+      });
 
-        if (!content) {
-          return reply.status(404).send({ error: "Content not found" });
-        }
+      if (!content) {
+        return reply.status(404).send({ error: 'Content not found' });
+      }
 
-        if (content.status !== "draft") {
-          return reply.status(400).send({
-            error: "Content must be in draft status before scheduling",
-          });
-        }
-
-        const customTimeDate = customTime ? new Date(customTime) : undefined;
-        const result = await schedulerAdapter.scheduleContent(
-          contentId,
-          customTimeDate,
-          request.user.id,
-        );
-
-        if (result.success) {
-          reply.send({
-            success: true,
-            scheduleId: result.scheduleId,
-            brandId: result.brandId,
-          });
-        } else {
-          reply.status(400).send({
-            success: false,
-            error: result.error,
-          });
-        }
-      } catch (error) {
-        reply.status(500).send({
-          error: "Failed to schedule content",
-          message: error instanceof Error ? error.message : "Unknown error",
+      if (content.status !== 'draft') {
+        return reply.status(400).send({
+          error: 'Content must be in draft status before scheduling',
         });
       }
-    },
-  );
+
+      const customTimeDate = customTime ? new Date(customTime) : undefined;
+      const result = await schedulerAdapter.scheduleContent(
+        contentId,
+        customTimeDate,
+        request.user.id
+      );
+
+      if (result.success) {
+        reply.send({
+          success: true,
+          scheduleId: result.scheduleId,
+          brandId: result.brandId,
+        });
+      } else {
+        reply.status(400).send({
+          success: false,
+          error: result.error,
+        });
+      }
+    } catch (error) {
+      reply.status(500).send({
+        error: 'Failed to schedule content',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 
   // Get scheduled posts for a brand
   fastify.get(
-    "/scheduled/:brandId",
+    '/scheduled/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -238,7 +229,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
         const scheduledPosts = await schedulerService.getUpcomingPosts(brandId);
@@ -246,16 +237,16 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         reply.send({ scheduledPosts });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to get scheduled posts",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to get scheduled posts',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Cancel a scheduled post
   fastify.delete(
-    "/scheduled/:contentId",
+    '/scheduled/:contentId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -274,7 +265,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!content) {
-          return reply.status(404).send({ error: "Content not found" });
+          return reply.status(404).send({ error: 'Content not found' });
         }
 
         const success = await schedulerService.cancelScheduledPost(contentId);
@@ -282,89 +273,72 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         if (success) {
           reply.send({ success: true });
         } else {
-          reply
-            .status(500)
-            .send({ success: false, error: "Failed to cancel scheduled post" });
+          reply.status(500).send({ success: false, error: 'Failed to cancel scheduled post' });
         }
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to cancel scheduled post",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to cancel scheduled post',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Reschedule a post
-  fastify.put(
-    "/reschedule",
-    { preHandler: fastify.authenticate },
-    async function (request, reply) {
-      try {
-        if (!ensureAuth(request, reply)) return;
-        const { contentId, newTime } = request.body as RescheduleBody;
+  fastify.put('/reschedule', { preHandler: fastify.authenticate }, async function (request, reply) {
+    try {
+      if (!ensureAuth(request, reply)) return;
+      const { contentId, newTime } = request.body as RescheduleBody;
 
-        if (!contentId || !newTime) {
-          return reply
-            .status(400)
-            .send({ error: "contentId and newTime are required" });
-        }
+      if (!contentId || !newTime) {
+        return reply.status(400).send({ error: 'contentId and newTime are required' });
+      }
 
-        const userId = request.user.id;
+      const userId = request.user.id;
 
-        // Verify content ownership
-        const content = await prisma.content.findFirst({
-          where: {
-            id: contentId,
-            brand: {
-              userId: userId,
-            },
+      // Verify content ownership
+      const content = await prisma.content.findFirst({
+        where: {
+          id: contentId,
+          brand: {
+            userId: userId,
           },
-        });
+        },
+      });
 
-        if (!content) {
-          return reply.status(404).send({ error: "Content not found" });
-        }
+      if (!content) {
+        return reply.status(404).send({ error: 'Content not found' });
+      }
 
-        const result = await schedulerService.reschedulePost(
-          contentId,
-          new Date(newTime),
-        );
+      const result = await schedulerService.reschedulePost(contentId, new Date(newTime));
 
-        if (result.success) {
-          reply.send({ success: true });
-        } else {
-          reply.status(400).send({
-            success: false,
-            error: result.error,
-          });
-        }
-      } catch (error) {
-        reply.status(500).send({
-          error: "Failed to reschedule post",
-          message: error instanceof Error ? error.message : "Unknown error",
+      if (result.success) {
+        reply.send({ success: true });
+      } else {
+        reply.status(400).send({
+          success: false,
+          error: result.error,
         });
       }
-    },
-  );
+    } catch (error) {
+      reply.status(500).send({
+        error: 'Failed to reschedule post',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 
   // Bulk schedule multiple content items
   fastify.post(
-    "/bulk-schedule",
+    '/bulk-schedule',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
         if (!ensureAuth(request, reply)) return;
         const { contentIds, startTime } = request.body as BulkScheduleBody;
 
-        if (
-          !contentIds ||
-          !Array.isArray(contentIds) ||
-          contentIds.length === 0
-        ) {
-          return reply
-            .status(400)
-            .send({ error: "contentIds array is required" });
+        if (!contentIds || !Array.isArray(contentIds) || contentIds.length === 0) {
+          return reply.status(400).send({ error: 'contentIds array is required' });
         }
 
         const userId = request.user.id;
@@ -380,16 +354,11 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         });
 
         if (contents.length !== contentIds.length) {
-          return reply
-            .status(404)
-            .send({ error: "Some content items not found" });
+          return reply.status(404).send({ error: 'Some content items not found' });
         }
 
         const customStartTime = startTime ? new Date(startTime) : undefined;
-        const results = await schedulerService.bulkSchedule(
-          contentIds,
-          customStartTime,
-        );
+        const results = await schedulerService.bulkSchedule(contentIds, customStartTime);
 
         reply.send({
           success: true,
@@ -397,16 +366,16 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to bulk schedule content",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to bulk schedule content',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Get scheduling statistics for a brand
   fastify.get(
-    "/stats/:brandId",
+    '/stats/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -423,7 +392,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
         const stats = await schedulerService.getSchedulingStats(brandId);
@@ -431,16 +400,16 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         reply.send({ stats });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to get scheduling statistics",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to get scheduling statistics',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Collect metrics for a specific post
   fastify.post(
-    "/collect-metrics/:contentId",
+    '/collect-metrics/:contentId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -459,13 +428,11 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!content) {
-          return reply.status(404).send({ error: "Content not found" });
+          return reply.status(404).send({ error: 'Content not found' });
         }
 
-        if (content.status !== "published") {
-          return reply
-            .status(400)
-            .send({ error: "Content must be posted to collect metrics" });
+        if (content.status !== 'published') {
+          return reply.status(400).send({ error: 'Content must be posted to collect metrics' });
         }
 
         const metrics = await analyticsService.collectPostMetrics(contentId);
@@ -478,16 +445,16 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         } else {
           reply.status(400).send({
             success: false,
-            error: "Failed to collect metrics",
+            error: 'Failed to collect metrics',
           });
         }
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to collect post metrics",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to collect post metrics',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 };
 

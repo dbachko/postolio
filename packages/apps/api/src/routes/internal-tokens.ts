@@ -1,28 +1,26 @@
-import { FastifyPluginAsync } from "fastify";
-import { z } from "zod";
-import { prisma } from "../config/database.js";
-import { getTokenService } from "../services/service-clients.js";
+import { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
+import { prisma } from '../config/database.js';
+import { getTokenService } from '../services/service-clients.js';
 
 // Token encryption configuration
 const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY;
 if (!ENCRYPTION_KEY) {
-  throw new Error(
-    "TOKEN_ENCRYPTION_KEY environment variable is required for token encryption",
-  );
+  throw new Error('TOKEN_ENCRYPTION_KEY environment variable is required for token encryption');
 }
 
 // Validate encryption key format (256 bits = 64 hex characters for AES-256)
 if (!/^[0-9a-fA-F]{64}$/.test(ENCRYPTION_KEY)) {
   throw new Error(
-    "TOKEN_ENCRYPTION_KEY must be exactly 64 hexadecimal characters (256 bits). " +
-      "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+    'TOKEN_ENCRYPTION_KEY must be exactly 64 hexadecimal characters (256 bits). ' +
+      "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
   );
 }
 
 // Request schema
 const GetTokenSchema = z.object({
   brandId: z.string().min(1),
-  platform: z.enum(["instagram", "facebook", "linkedin"]),
+  platform: z.enum(['instagram', 'facebook', 'linkedin']),
   requesterId: z.string().min(1), // User ID making the request
 });
 
@@ -38,20 +36,18 @@ const TokenResponseSchema = z.object({
 
 const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
   // Internal token retrieval endpoint (for service-to-service communication)
-  fastify.post("/api/internal/tokens/get", async (request, reply) => {
+  fastify.post('/api/internal/tokens/get', async (request, reply) => {
     try {
       // Parse and validate request
-      const { brandId, platform, requesterId } = GetTokenSchema.parse(
-        request.body,
-      );
+      const { brandId, platform, requesterId } = GetTokenSchema.parse(request.body);
 
       // Log token access for audit
       fastify.log.info({
-        action: "token.access.requested",
+        action: 'token.access.requested',
         brandId,
         platform,
         requesterId,
-        source: request.headers["user-agent"] || "unknown",
+        source: request.headers['user-agent'] || 'unknown',
         ip: request.ip,
       });
 
@@ -67,24 +63,20 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!brand || brand.userId !== requesterId) {
         fastify.log.warn({
-          action: "token.access.denied",
-          reason: !brand ? "brand_not_found" : "unauthorized",
+          action: 'token.access.denied',
+          reason: !brand ? 'brand_not_found' : 'unauthorized',
           brandId,
           requesterId,
           actualOwnerId: brand?.userId,
         });
         return reply.code(404).send({
-          error: "Brand not found",
+          error: 'Brand not found',
         });
       }
 
       // Get the token from Token Service
       const tokenServiceClient = await getTokenService();
-      const token = await tokenServiceClient.getToken(
-        brand.user.id,
-        brand.id,
-        platform,
-      );
+      const token = await tokenServiceClient.getToken(brand.user.id, brand.id, platform);
 
       if (!token) {
         return reply.code(404).send({
@@ -101,7 +93,7 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
       let tokenData: TokenDataBase | undefined;
 
       switch (platform) {
-        case "instagram": {
+        case 'instagram': {
           tokenData = {
             accessToken: token.accessToken,
             accountId: token.metadata?.accountId || brand.instagramAccountId,
@@ -110,25 +102,25 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
 
           // Token Service handles refresh automatically
           const preferences =
-            typeof brand.preferences === "object" &&
+            typeof brand.preferences === 'object' &&
             brand.preferences &&
             !Array.isArray(brand.preferences)
               ? (brand.preferences as Record<string, unknown>)
               : undefined;
           const tokenExpiresAt =
-            preferences && typeof preferences.tokenExpiresAt === "string"
+            preferences && typeof preferences.tokenExpiresAt === 'string'
               ? preferences.tokenExpiresAt
               : undefined;
           if (tokenExpiresAt) {
             const expiryDate = new Date(tokenExpiresAt);
             const daysUntilExpiry = Math.floor(
-              (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+              (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
             );
 
             // Refresh if expiring in less than 7 days
             if (daysUntilExpiry < 7) {
               fastify.log.info({
-                action: "token.refresh.needed",
+                action: 'token.refresh.needed',
                 brandId,
                 platform,
                 daysUntilExpiry,
@@ -137,7 +129,7 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
               // TODO: Implement token refresh logic
               // For now, just log a warning
               fastify.log.warn(
-                `Instagram token for brand ${brandId} expires in ${daysUntilExpiry} days`,
+                `Instagram token for brand ${brandId} expires in ${daysUntilExpiry} days`
               );
             }
 
@@ -146,16 +138,16 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
           break;
         }
 
-        case "facebook":
+        case 'facebook':
           // TODO: Implement Facebook token retrieval
           return reply.code(501).send({
-            error: "Facebook platform not yet implemented",
+            error: 'Facebook platform not yet implemented',
           });
 
-        case "linkedin":
+        case 'linkedin':
           // TODO: Implement LinkedIn token retrieval
           return reply.code(501).send({
-            error: "LinkedIn platform not yet implemented",
+            error: 'LinkedIn platform not yet implemented',
           });
 
         default:
@@ -166,34 +158,30 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Log successful token access
       fastify.log.info({
-        action: "token.access.granted",
+        action: 'token.access.granted',
         brandId,
         platform,
         requesterId,
       });
 
       // Return token data
-      return reply.send(
-        TokenResponseSchema.parse(
-          tokenData || { accessToken: token.accessToken },
-        ),
-      );
+      return reply.send(TokenResponseSchema.parse(tokenData || { accessToken: token.accessToken }));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
-          error: "Invalid request",
+          error: 'Invalid request',
           details: error.errors,
         });
       }
 
       fastify.log.error({
-        action: "token.access.error",
-        error: error instanceof Error ? error.message : "Unknown error",
+        action: 'token.access.error',
+        error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
       });
 
       return reply.code(500).send({
-        error: "Internal server error",
+        error: 'Internal server error',
       });
     }
   });

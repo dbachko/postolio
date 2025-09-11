@@ -242,19 +242,19 @@ class SecureTokenManager {
 
     // 2. DynamoDB encryption at rest
     await dynamodb.putItem({
-      TableName: "oauth-tokens",
+      TableName: 'oauth-tokens',
       Item: {
         ...tokenData,
         accessToken: encrypted,
         // Additional security metadata
         encryptionKeyId: this.kmsKeyId,
-        encryptionVersion: "v1",
+        encryptionVersion: 'v1',
       },
     });
 
     // 3. Audit logging
     await this.auditLog.record({
-      action: "TOKEN_STORED",
+      action: 'TOKEN_STORED',
       platform: token.platform,
       userId: token.userId,
     });
@@ -309,22 +309,9 @@ class SecureTokenManager {
 ```typescript
 interface TokenManager {
   // Core operations
-  storeToken(
-    userId: string,
-    brandId: string,
-    platform: string,
-    token: OAuthToken,
-  ): Promise<void>;
-  getToken(
-    userId: string,
-    brandId: string,
-    platform: string,
-  ): Promise<OAuthToken | null>;
-  refreshToken(
-    userId: string,
-    brandId: string,
-    platform: string,
-  ): Promise<OAuthToken>;
+  storeToken(userId: string, brandId: string, platform: string, token: OAuthToken): Promise<void>;
+  getToken(userId: string, brandId: string, platform: string): Promise<OAuthToken | null>;
+  refreshToken(userId: string, brandId: string, platform: string): Promise<OAuthToken>;
   revokeToken(userId: string, brandId: string, platform: string): Promise<void>;
 
   // Bulk operations
@@ -345,7 +332,7 @@ class DualWriteTokenManager implements TokenManager {
     userId: string,
     brandId: string,
     platform: string,
-    token: OAuthToken,
+    token: OAuthToken
   ): Promise<void> {
     // Write to both systems
     await Promise.all([
@@ -357,16 +344,12 @@ class DualWriteTokenManager implements TokenManager {
     await this.compareAndLog(userId, brandId, platform);
   }
 
-  async getToken(
-    userId: string,
-    brandId: string,
-    platform: string,
-  ): Promise<OAuthToken | null> {
+  async getToken(userId: string, brandId: string, platform: string): Promise<OAuthToken | null> {
     // Read from new system, fallback to old
     try {
       return await this.dynamoStore.getToken(userId, brandId, platform);
     } catch (error) {
-      console.warn("DynamoDB read failed, falling back to PostgreSQL", error);
+      console.warn('DynamoDB read failed, falling back to PostgreSQL', error);
       return await this.postgresStore.getToken(userId, brandId, platform);
     }
   }

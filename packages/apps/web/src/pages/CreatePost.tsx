@@ -1,24 +1,24 @@
-import { useNavigate } from "react-router-dom";
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../lib/api";
-import { useBrandStore } from "../stores/brandStore";
-import { Card } from "../components/ui/card";
-import { Button } from "../components/ui/button";
-import { ArrowLeft, Upload, Hash, Type, AlertCircle } from "lucide-react";
-import { Label } from "../components/ui/label";
-import { Textarea } from "../components/ui/textarea";
-import { Input } from "../components/ui/input";
-import { Alert, AlertDescription } from "../components/ui/alert";
-import { validateImageFile } from "../lib/fileUtils";
+import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '../lib/api';
+import { useBrandStore } from '../stores/brandStore';
+import { Card } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { ArrowLeft, Upload, Hash, Type, AlertCircle } from 'lucide-react';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Input } from '../components/ui/input';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import { validateImageFile } from '../lib/fileUtils';
 
 export function CreatePost() {
   const navigate = useNavigate();
   const { selectedBrand } = useBrandStore();
   const queryClient = useQueryClient();
 
-  const [caption, setCaption] = useState("");
-  const [hashtags, setHashtags] = useState("");
+  const [caption, setCaption] = useState('');
+  const [hashtags, setHashtags] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<{
@@ -38,20 +38,18 @@ export function CreatePost() {
       return apiClient.createManualContent(data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["content"] });
-      navigate("/content");
+      queryClient.invalidateQueries({ queryKey: ['content'] });
+      navigate('/content');
     },
     onError: (error: Error) => {
-      console.error("Failed to create post:", error);
-      setMutationError(
-        error.message || "Failed to create post. Please try again.",
-      );
+      console.error('Failed to create post:', error);
+      setMutationError(error.message || 'Failed to create post. Please try again.');
     },
   });
 
   const validateCaption = (value: string): string | undefined => {
     if (!value.trim()) {
-      return "Caption is required";
+      return 'Caption is required';
     }
     if (value.length > 2200) {
       return `Caption exceeds Instagram limit (${value.length}/2200 characters)`;
@@ -67,12 +65,12 @@ export function CreatePost() {
     }
 
     const invalidTags = tags.filter((tag) => {
-      const cleanTag = tag.startsWith("#") ? tag.substring(1) : tag;
+      const cleanTag = tag.startsWith('#') ? tag.substring(1) : tag;
       return !/^[a-zA-Z0-9_]+$/.test(cleanTag);
     });
 
     if (invalidTags.length > 0) {
-      return `Invalid hashtags: ${invalidTags.join(", ")}. Only letters, numbers, and underscores allowed`;
+      return `Invalid hashtags: ${invalidTags.join(', ')}. Only letters, numbers, and underscores allowed`;
     }
 
     return undefined;
@@ -127,7 +125,7 @@ export function CreatePost() {
     const hashtagArray = hashtags
       .split(/[\s,]+/)
       .filter((tag) => tag.length > 0)
-      .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
+      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
 
     createPostMutation.mutate({
       brandId: selectedBrand.id,
@@ -142,7 +140,7 @@ export function CreatePost() {
       <div className="container mx-auto p-6">
         <Card className="p-6">
           <p className="text-muted-foreground">Please select a brand first</p>
-          <Button onClick={() => navigate("/brands")} className="mt-4">
+          <Button onClick={() => navigate('/brands')} className="mt-4">
             Go to Brands
           </Button>
         </Card>
@@ -152,13 +150,8 @@ export function CreatePost() {
 
   return (
     <div className="container mx-auto p-6">
-      <div className="flex items-center gap-4 mb-6">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate(-1)}
-          aria-label="Back"
-        >
+      <div className="mb-6 flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -188,25 +181,18 @@ export function CreatePost() {
               type="file"
               accept="image/*"
               onChange={handleImageChange}
-              className={`cursor-pointer ${errors.image ? "border-red-500" : ""}`}
+              className={`cursor-pointer ${errors.image ? 'border-red-500' : ''}`}
               aria-label="Upload post image"
-              aria-describedby={errors.image ? "image-error" : "image-help"}
+              aria-describedby={errors.image ? 'image-error' : 'image-help'}
               aria-invalid={!!errors.image}
             />
             {errors.image && (
-              <p
-                id="image-error"
-                className="text-sm text-red-500 mt-1"
-                role="alert"
-              >
+              <p id="image-error" className="mt-1 text-sm text-red-500" role="alert">
                 {errors.image}
               </p>
             )}
             {!errors.image && (
-              <p
-                id="image-help"
-                className="text-sm text-muted-foreground sr-only"
-              >
+              <p id="image-help" className="text-muted-foreground sr-only text-sm">
                 Upload an image for your post (optional, max 10MB)
               </p>
             )}
@@ -238,28 +224,22 @@ export function CreatePost() {
                 }
               }}
               placeholder="Write your caption here..."
-              className={`min-h-[150px] ${errors.caption ? "border-red-500" : ""}`}
+              className={`min-h-[150px] ${errors.caption ? 'border-red-500' : ''}`}
               maxLength={2200}
               required
               aria-label="Post caption"
-              aria-describedby={
-                errors.caption ? "caption-error" : "caption-help"
-              }
+              aria-describedby={errors.caption ? 'caption-error' : 'caption-help'}
               aria-invalid={!!errors.caption}
               aria-required="true"
             />
             {errors.caption && (
-              <p
-                id="caption-error"
-                className="text-sm text-red-500"
-                role="alert"
-              >
+              <p id="caption-error" className="text-sm text-red-500" role="alert">
                 {errors.caption}
               </p>
             )}
             <p
               id="caption-help"
-              className={`text-sm ${caption.length > 2000 ? "text-orange-500" : "text-muted-foreground"}`}
+              className={`text-sm ${caption.length > 2000 ? 'text-orange-500' : 'text-muted-foreground'}`}
               aria-live="polite"
             >
               {caption.length}/2200 characters
@@ -283,40 +263,27 @@ export function CreatePost() {
                 }
               }}
               placeholder="Enter hashtags separated by spaces or commas"
-              className={errors.hashtags ? "border-red-500" : ""}
+              className={errors.hashtags ? 'border-red-500' : ''}
               aria-label="Post hashtags"
-              aria-describedby={
-                errors.hashtags ? "hashtags-error" : "hashtags-help"
-              }
+              aria-describedby={errors.hashtags ? 'hashtags-error' : 'hashtags-help'}
               aria-invalid={!!errors.hashtags}
             />
             {errors.hashtags && (
-              <p
-                id="hashtags-error"
-                className="text-sm text-red-500"
-                role="alert"
-              >
+              <p id="hashtags-error" className="text-sm text-red-500" role="alert">
                 {errors.hashtags}
               </p>
             )}
-            <p id="hashtags-help" className="text-sm text-muted-foreground">
+            <p id="hashtags-help" className="text-muted-foreground text-sm">
               Separate hashtags with spaces or commas (max 30)
             </p>
           </div>
 
           {/* Action Buttons */}
           <div className="flex gap-4">
-            <Button
-              type="submit"
-              disabled={!caption || createPostMutation.isPending}
-            >
-              {createPostMutation.isPending ? "Creating..." : "Create Post"}
+            <Button type="submit" disabled={!caption || createPostMutation.isPending}>
+              {createPostMutation.isPending ? 'Creating...' : 'Create Post'}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(-1)}
-            >
+            <Button type="button" variant="outline" onClick={() => navigate(-1)}>
               Cancel
             </Button>
           </div>

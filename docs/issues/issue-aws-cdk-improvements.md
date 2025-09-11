@@ -13,9 +13,9 @@ Based on comprehensive AWS CDK MCP Server analysis, implement critical improveme
 ### 🔴 Critical Security - VPC Implementation
 
 ```typescript
-const vpc = new ec2.Vpc(this, "Vpc", {
+const vpc = new ec2.Vpc(this, 'Vpc', {
   maxAzs: 2,
-  natGateways: environment === "prod" ? 2 : 1,
+  natGateways: environment === 'prod' ? 2 : 1,
   flowLogs: { destination: ec2.FlowLogDestination.toCloudWatchLogs() },
 });
 ```
@@ -26,7 +26,7 @@ const vpc = new ec2.Vpc(this, "Vpc", {
 ### 🔴 Reliability - Circuit Breaker Pattern
 
 ```typescript
-import CircuitBreaker from "opossum";
+import CircuitBreaker from 'opossum';
 const breaker = new CircuitBreaker(callPlatformAPI, {
   timeout: 3000,
   errorThresholdPercentage: 50,
@@ -57,7 +57,7 @@ architecture: lambda.Architecture.ARM_64; // Graviton2
 ### 🟢 CloudFront Distribution
 
 ```typescript
-const distribution = new cloudfront.Distribution(this, "VideoDistribution", {
+const distribution = new cloudfront.Distribution(this, 'VideoDistribution', {
   defaultBehavior: {
     origin: new origins.S3Origin(this.videoBucket),
     cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
@@ -71,8 +71,8 @@ const distribution = new cloudfront.Distribution(this, "VideoDistribution", {
 ### 🟢 CDK Unit Tests
 
 ```typescript
-test("Has encryption enabled", () => {
-  template.hasResourceProperties("AWS::DynamoDB::Table", {
+test('Has encryption enabled', () => {
+  template.hasResourceProperties('AWS::DynamoDB::Table', {
     SSESpecification: { SSEEnabled: true },
   });
 });
@@ -90,9 +90,9 @@ Replace manual retry with `aws-lambda-stepfunctions` construct
 ### ElastiCache for Hot Data
 
 ```typescript
-const cache = new elasticache.CfnCacheCluster(this, "ScheduleCache", {
-  cacheNodeType: "cache.t4g.micro",
-  engine: "redis",
+const cache = new elasticache.CfnCacheCluster(this, 'ScheduleCache', {
+  cacheNodeType: 'cache.t4g.micro',
+  engine: 'redis',
 });
 ```
 

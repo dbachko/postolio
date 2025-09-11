@@ -120,19 +120,19 @@ class SecureTokenManager {
 ```typescript
 // Replace mock implementation with actual API calls
 export class InstagramAdapter implements PlatformAdapter {
-  private readonly graphAPI = "https://graph.facebook.com/v18.0";
+  private readonly graphAPI = 'https://graph.facebook.com/v18.0';
   private circuitBreaker: CircuitBreaker;
 
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
     // 1. Validate and refresh token if needed
     const token = await this.ensureValidToken(credentials);
 
     // 2. Upload media with circuit breaker
     const mediaId = await this.circuitBreaker.execute(() =>
-      this.uploadMedia(content.mediaUrl, token),
+      this.uploadMedia(content.mediaUrl, token)
     );
 
     // 3. Create post with idempotency
@@ -144,7 +144,7 @@ export class InstagramAdapter implements PlatformAdapter {
 
     // 4. Emit success event
     await this.eventBus.publish({
-      type: "content.published",
+      type: 'content.published',
       data: result,
     });
 
@@ -158,10 +158,7 @@ export class InstagramAdapter implements PlatformAdapter {
 ```typescript
 // Integrate with SQS for async processing
 export class QueuedPlatformService {
-  async schedulePublish(
-    content: PlatformContent,
-    scheduledAt: Date,
-  ): Promise<void> {
+  async schedulePublish(content: PlatformContent, scheduledAt: Date): Promise<void> {
     // Send to EventBridge Scheduler
     await scheduler.createSchedule({
       name: `publish-${content.id}`,
@@ -185,12 +182,12 @@ export class MicroservicesPlatformAdapter implements PlatformAdapter {
   constructor(
     private tokenService: TokenServiceClient,
     private schedulerService: SchedulerServiceClient,
-    private eventBus: EventBusClient,
+    private eventBus: EventBusClient
   ) {}
 
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
     // 1. Store token securely
     await this.tokenService.storeToken({
@@ -210,7 +207,7 @@ export class MicroservicesPlatformAdapter implements PlatformAdapter {
     return {
       platform: this.platform,
       scheduleId: schedule.id,
-      status: "scheduled",
+      status: 'scheduled',
     };
   }
 }
@@ -272,8 +269,8 @@ export class ResilientPublisher {
 ```typescript
 // Add comprehensive metrics
 export class ObservablePlatformAdapter {
-  @Metrics.track("platform.publish.duration")
-  @Trace.span("platform.publish")
+  @Metrics.track('platform.publish.duration')
+  @Trace.span('platform.publish')
   async publish(content: PlatformContent): Promise<PublishResult> {
     const startTime = Date.now();
 
@@ -281,14 +278,14 @@ export class ObservablePlatformAdapter {
       const result = await this.performPublish(content);
 
       // Success metrics
-      this.metrics.increment("platform.publish.success", {
+      this.metrics.increment('platform.publish.success', {
         platform: this.platform,
       });
 
       return result;
     } catch (error) {
       // Error metrics
-      this.metrics.increment("platform.publish.error", {
+      this.metrics.increment('platform.publish.error', {
         platform: this.platform,
         errorType: error.constructor.name,
       });
@@ -296,13 +293,9 @@ export class ObservablePlatformAdapter {
       throw error;
     } finally {
       // Duration metric
-      this.metrics.histogram(
-        "platform.publish.duration",
-        Date.now() - startTime,
-        {
-          platform: this.platform,
-        },
-      );
+      this.metrics.histogram('platform.publish.duration', Date.now() - startTime, {
+        platform: this.platform,
+      });
     }
   }
 }
@@ -338,7 +331,7 @@ export class SafePlatformAdapter {
     private adapter: PlatformAdapter,
     private rateLimiter: RateLimiter,
     private circuitBreaker: CircuitBreaker,
-    private idempotencyStore: IdempotencyStore,
+    private idempotencyStore: IdempotencyStore
   ) {}
 
   async publish(content: PlatformContent): Promise<PublishResult> {
@@ -351,9 +344,7 @@ export class SafePlatformAdapter {
     if (existing) return existing;
 
     // 3. Circuit breaker protection
-    const result = await this.circuitBreaker.execute(() =>
-      this.adapter.publish(content),
-    );
+    const result = await this.circuitBreaker.execute(() => this.adapter.publish(content));
 
     // 4. Store for idempotency
     await this.idempotencyStore.set(idempotencyKey, result);
@@ -406,24 +397,24 @@ export class OptimizedPlatformAdapter {
 ### Required Test Coverage
 
 ```typescript
-describe("PlatformAdapter", () => {
-  describe("Error Handling", () => {
-    it("should retry on transient errors");
-    it("should circuit break on repeated failures");
-    it("should handle token expiry");
-    it("should prevent duplicate posts");
+describe('PlatformAdapter', () => {
+  describe('Error Handling', () => {
+    it('should retry on transient errors');
+    it('should circuit break on repeated failures');
+    it('should handle token expiry');
+    it('should prevent duplicate posts');
   });
 
-  describe("Performance", () => {
-    it("should handle 100 concurrent publishes");
-    it("should respect rate limits");
-    it("should cache repeated requests");
+  describe('Performance', () => {
+    it('should handle 100 concurrent publishes');
+    it('should respect rate limits');
+    it('should cache repeated requests');
   });
 
-  describe("Integration", () => {
-    it("should publish to real Instagram API");
-    it("should handle media upload failures");
-    it("should emit correct events");
+  describe('Integration', () => {
+    it('should publish to real Instagram API');
+    it('should handle media upload failures');
+    it('should emit correct events');
   });
 });
 ```

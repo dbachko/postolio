@@ -1,19 +1,16 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import {
-  engagementService,
-  type EngagementRules,
-} from "../services/engagement.js";
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { engagementService, type EngagementRules } from '../services/engagement.js';
 
-import { getDatabaseClient } from "../config/database.js";
+import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
 
 function ensureAuth(
   request: FastifyRequest,
-  reply: FastifyReply,
+  reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string } } {
   if (!request.user || !request.user.id) {
-    reply.code(401).send({ error: "Authentication required" });
+    reply.code(401).send({ error: 'Authentication required' });
     return false;
   }
   return true;
@@ -21,70 +18,61 @@ function ensureAuth(
 
 const engagement: FastifyPluginAsync = async function (fastify) {
   // Create or update engagement rules
-  fastify.post(
-    "/rules",
-    { preHandler: fastify.authenticate },
-    async function (request, reply) {
-      try {
-        if (!ensureAuth(request, reply)) return;
+  fastify.post('/rules', { preHandler: fastify.authenticate }, async function (request, reply) {
+    try {
+      if (!ensureAuth(request, reply)) return;
 
-        const { brandId, rules } = request.body as {
-          brandId: string;
-          rules: Omit<EngagementRules, "brandId">;
-        };
+      const { brandId, rules } = request.body as {
+        brandId: string;
+        rules: Omit<EngagementRules, 'brandId'>;
+      };
 
-        if (!brandId || !rules) {
-          return reply
-            .status(400)
-            .send({ error: "brandId and rules are required" });
-        }
-
-        const userId = request.user.id;
-
-        // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId: userId,
-          },
-        });
-
-        if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
-        }
-
-        // Set default safety limits if not provided
-        const engagementRules: EngagementRules = {
-          brandId,
-          ...rules,
-          safetyLimits: {
-            maxActionsPerHour: rules.safetyLimits?.maxActionsPerHour ?? 50,
-            minDelayBetweenActions:
-              rules.safetyLimits?.minDelayBetweenActions ?? 60,
-            respectBusinessHours:
-              rules.safetyLimits?.respectBusinessHours ?? true,
-          },
-        };
-
-        const savedRules =
-          await engagementService.setEngagementRules(engagementRules);
-
-        reply.status(201).send({
-          success: true,
-          rules: savedRules,
-        });
-      } catch (error) {
-        reply.status(400).send({
-          error: "Failed to create engagement rules",
-          message: error instanceof Error ? error.message : "Unknown error",
-        });
+      if (!brandId || !rules) {
+        return reply.status(400).send({ error: 'brandId and rules are required' });
       }
-    },
-  );
+
+      const userId = request.user.id;
+
+      // Verify brand ownership
+      const brand = await prisma.brand.findFirst({
+        where: {
+          id: brandId,
+          userId: userId,
+        },
+      });
+
+      if (!brand) {
+        return reply.status(404).send({ error: 'Brand not found' });
+      }
+
+      // Set default safety limits if not provided
+      const engagementRules: EngagementRules = {
+        brandId,
+        ...rules,
+        safetyLimits: {
+          maxActionsPerHour: rules.safetyLimits?.maxActionsPerHour ?? 50,
+          minDelayBetweenActions: rules.safetyLimits?.minDelayBetweenActions ?? 60,
+          respectBusinessHours: rules.safetyLimits?.respectBusinessHours ?? true,
+        },
+      };
+
+      const savedRules = await engagementService.setEngagementRules(engagementRules);
+
+      reply.status(201).send({
+        success: true,
+        rules: savedRules,
+      });
+    } catch (error) {
+      reply.status(400).send({
+        error: 'Failed to create engagement rules',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 
   // Get engagement rules for a brand
   fastify.get(
-    "/rules/:brandId",
+    '/rules/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -102,7 +90,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
         const rules = await engagementService.getEngagementRules(brandId);
@@ -110,23 +98,23 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         if (!rules) {
           return reply.send({
             rules: null,
-            message: "No engagement rules configured",
+            message: 'No engagement rules configured',
           });
         }
 
         reply.send({ rules });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to get engagement rules",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to get engagement rules',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Update engagement rules
   fastify.put(
-    "/rules/:brandId",
+    '/rules/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -134,11 +122,11 @@ const engagement: FastifyPluginAsync = async function (fastify) {
 
         const { brandId } = request.params as { brandId: string };
         const { rules } = request.body as {
-          rules: Omit<EngagementRules, "brandId">;
+          rules: Omit<EngagementRules, 'brandId'>;
         };
 
         if (!rules) {
-          return reply.status(400).send({ error: "rules are required" });
+          return reply.status(400).send({ error: 'rules are required' });
         }
 
         const userId = request.user.id;
@@ -152,7 +140,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
         const engagementRules: EngagementRules = {
@@ -160,8 +148,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
           ...rules,
         };
 
-        const updatedRules =
-          await engagementService.setEngagementRules(engagementRules);
+        const updatedRules = await engagementService.setEngagementRules(engagementRules);
 
         reply.send({
           success: true,
@@ -169,16 +156,16 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         });
       } catch (error) {
         reply.status(400).send({
-          error: "Failed to update engagement rules",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to update engagement rules',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Delete engagement rules
   fastify.delete(
-    "/rules/:brandId",
+    '/rules/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -196,7 +183,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
         // Remove engagement rules
@@ -210,16 +197,16 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         reply.send({ success: true });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to delete engagement rules",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to delete engagement rules',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Get engagement statistics
   fastify.get(
-    "/stats/:brandId",
+    '/stats/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -238,7 +225,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
         const stats = await engagementService.getEngagementStats(brandId, days);
@@ -246,16 +233,16 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         reply.send({ stats });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to get engagement statistics",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to get engagement statistics',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Start engagement automation for a brand
   fastify.post(
-    "/start/:brandId",
+    '/start/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -273,22 +260,18 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
         // Check if engagement rules exist
         const rules = await engagementService.getEngagementRules(brandId);
         if (!rules) {
-          return reply
-            .status(400)
-            .send({ error: "No engagement rules configured" });
+          return reply.status(400).send({ error: 'No engagement rules configured' });
         }
 
         // Check if Instagram is connected
         if (!brand.instagramAccountId) {
-          return reply
-            .status(400)
-            .send({ error: "Instagram account not connected" });
+          return reply.status(400).send({ error: 'Instagram account not connected' });
         }
 
         // Mark engagement as active
@@ -301,20 +284,20 @@ const engagement: FastifyPluginAsync = async function (fastify) {
 
         reply.send({
           success: true,
-          message: "Engagement automation started",
+          message: 'Engagement automation started',
         });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to start engagement automation",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to start engagement automation',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Stop engagement automation for a brand
   fastify.post(
-    "/stop/:brandId",
+    '/stop/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -332,7 +315,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
         // Mark engagement as inactive
@@ -345,20 +328,20 @@ const engagement: FastifyPluginAsync = async function (fastify) {
 
         reply.send({
           success: true,
-          message: "Engagement automation stopped",
+          message: 'Engagement automation stopped',
         });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to stop engagement automation",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to stop engagement automation',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Get engagement status for a brand
   fastify.get(
-    "/status/:brandId",
+    '/status/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       try {
@@ -376,7 +359,7 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         });
 
         if (!brand) {
-          return reply.status(404).send({ error: "Brand not found" });
+          return reply.status(404).send({ error: 'Brand not found' });
         }
 
         const rules = await engagementService.getEngagementRules(brandId);
@@ -394,11 +377,11 @@ const engagement: FastifyPluginAsync = async function (fastify) {
         });
       } catch (error) {
         reply.status(500).send({
-          error: "Failed to get engagement status",
-          message: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to get engagement status',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 };
 

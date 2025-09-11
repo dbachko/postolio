@@ -1,6 +1,6 @@
-import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
-import { parseISO } from "date-fns";
-import { BROWSER_DETECTION_FALLBACK } from "../constants/timezone";
+import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
+import { parseISO } from 'date-fns';
+import { BROWSER_DETECTION_FALLBACK } from '../constants/timezone';
 
 // Session-based cache for timezone detection
 let cachedUserTimezone: string | null = null;
@@ -17,7 +17,7 @@ export const getUserTimezone = (): string => {
 
   // Check localStorage for persisted detected timezone (only once per session)
   if (!hasCheckedLocalStorage) {
-    const storedTimezone = localStorage.getItem("detectedTimezone");
+    const storedTimezone = localStorage.getItem('detectedTimezone');
     hasCheckedLocalStorage = true;
     if (storedTimezone) {
       cachedUserTimezone = storedTimezone;
@@ -28,12 +28,12 @@ export const getUserTimezone = (): string => {
   try {
     cachedUserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     // Persist to localStorage for next session
-    localStorage.setItem("detectedTimezone", cachedUserTimezone);
+    localStorage.setItem('detectedTimezone', cachedUserTimezone);
     return cachedUserTimezone;
   } catch {
     // Fallback to UTC if browser doesn't support timezone detection
     cachedUserTimezone = BROWSER_DETECTION_FALLBACK;
-    localStorage.setItem("detectedTimezone", cachedUserTimezone);
+    localStorage.setItem('detectedTimezone', cachedUserTimezone);
     return cachedUserTimezone;
   }
 };
@@ -44,7 +44,7 @@ export const getUserTimezone = (): string => {
 export const clearTimezoneCache = (): void => {
   cachedUserTimezone = null;
   hasCheckedLocalStorage = false;
-  localStorage.removeItem("detectedTimezone");
+  localStorage.removeItem('detectedTimezone');
 };
 
 /**
@@ -52,11 +52,11 @@ export const clearTimezoneCache = (): void => {
  */
 export const formatInUserTimezone = (
   utcDate: string | Date,
-  formatStr: string = "MMM d, yyyy h:mm a",
-  timezone?: string,
+  formatStr: string = 'MMM d, yyyy h:mm a',
+  timezone?: string
 ): string => {
   const tz = timezone || getUserTimezone();
-  const date = typeof utcDate === "string" ? parseISO(utcDate) : utcDate;
+  const date = typeof utcDate === 'string' ? parseISO(utcDate) : utcDate;
 
   // Format the date in the user's timezone
   const formatted = formatInTimeZone(date, tz, formatStr);
@@ -71,11 +71,11 @@ export const formatInUserTimezone = (
  */
 export const formatCompact = (
   utcDate: string | Date,
-  formatStr: string = "MMM d, h:mm a",
-  timezone?: string,
+  formatStr: string = 'MMM d, h:mm a',
+  timezone?: string
 ): string => {
   const tz = timezone || getUserTimezone();
-  const date = typeof utcDate === "string" ? parseISO(utcDate) : utcDate;
+  const date = typeof utcDate === 'string' ? parseISO(utcDate) : utcDate;
   return formatInTimeZone(date, tz, formatStr);
 };
 
@@ -90,12 +90,9 @@ export const convertLocalToUTC = (localDate: Date, timezone?: string): Date => {
 /**
  * Convert UTC to user's local time
  */
-export const convertUTCToLocal = (
-  utcDate: string | Date,
-  timezone?: string,
-): Date => {
+export const convertUTCToLocal = (utcDate: string | Date, timezone?: string): Date => {
   const tz = timezone || getUserTimezone();
-  const date = typeof utcDate === "string" ? parseISO(utcDate) : utcDate;
+  const date = typeof utcDate === 'string' ? parseISO(utcDate) : utcDate;
   return toZonedTime(date, tz);
 };
 
@@ -107,17 +104,17 @@ export const getTimezoneAbbr = (timezone?: string): string => {
   const date = new Date();
 
   try {
-    const formatted = new Intl.DateTimeFormat("en-US", {
+    const formatted = new Intl.DateTimeFormat('en-US', {
       timeZone: tz,
-      timeZoneName: "short",
+      timeZoneName: 'short',
     }).format(date);
 
     // Extract the timezone abbreviation from the formatted string
-    const parts = formatted.split(" ");
+    const parts = formatted.split(' ');
     return parts[parts.length - 1] || tz;
   } catch {
     // Fallback to showing the timezone identifier if formatting fails
-    return tz.split("/").pop() || tz;
+    return tz.split('/').pop() || tz;
   }
 };
 
@@ -127,8 +124,8 @@ export const getTimezoneAbbr = (timezone?: string): string => {
 export const getTimezoneOffset = (timezone?: string): number => {
   const tz = timezone || getUserTimezone();
   const now = new Date();
-  const utcDate = new Date(now.toLocaleString("en-US", { timeZone: "UTC" }));
-  const tzDate = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+  const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const tzDate = new Date(now.toLocaleString('en-US', { timeZone: tz }));
   return (tzDate.getTime() - utcDate.getTime()) / (1000 * 60 * 60);
 };
 
@@ -138,20 +135,16 @@ export const getTimezoneOffset = (timezone?: string): number => {
 export const formatWithRelativeTimezone = (
   utcDate: string | Date,
   userTimezone: string,
-  contentTimezone?: string,
+  contentTimezone?: string
 ): string => {
-  const formatted = formatInUserTimezone(
-    utcDate,
-    "MMM d, yyyy h:mm a",
-    userTimezone,
-  );
+  const formatted = formatInUserTimezone(utcDate, 'MMM d, yyyy h:mm a', userTimezone);
 
   // If content was scheduled in a different timezone, show both
   if (contentTimezone && contentTimezone !== userTimezone) {
     const contentFormatted = formatInTimeZone(
-      typeof utcDate === "string" ? parseISO(utcDate) : utcDate,
+      typeof utcDate === 'string' ? parseISO(utcDate) : utcDate,
       contentTimezone,
-      "h:mm a zzz",
+      'h:mm a zzz'
     );
     return `${formatted} (scheduled as ${contentFormatted})`;
   }
@@ -163,53 +156,53 @@ export const formatWithRelativeTimezone = (
  * Common timezones for UI selection
  */
 export const COMMON_TIMEZONES = [
-  { value: "auto", label: "🔄 Auto-detect from browser", group: "System" },
+  { value: 'auto', label: '🔄 Auto-detect from browser', group: 'System' },
   {
-    value: "America/New_York",
-    label: "🗽 Eastern Time (New York)",
-    group: "US & Canada",
+    value: 'America/New_York',
+    label: '🗽 Eastern Time (New York)',
+    group: 'US & Canada',
   },
   {
-    value: "America/Chicago",
-    label: "🏙️ Central Time (Chicago)",
-    group: "US & Canada",
+    value: 'America/Chicago',
+    label: '🏙️ Central Time (Chicago)',
+    group: 'US & Canada',
   },
   {
-    value: "America/Denver",
-    label: "🏔️ Mountain Time (Denver)",
-    group: "US & Canada",
+    value: 'America/Denver',
+    label: '🏔️ Mountain Time (Denver)',
+    group: 'US & Canada',
   },
   {
-    value: "America/Los_Angeles",
-    label: "🌴 Pacific Time (Los Angeles)",
-    group: "US & Canada",
+    value: 'America/Los_Angeles',
+    label: '🌴 Pacific Time (Los Angeles)',
+    group: 'US & Canada',
   },
   {
-    value: "America/Phoenix",
-    label: "🌵 Arizona Time (no DST)",
-    group: "US & Canada",
+    value: 'America/Phoenix',
+    label: '🌵 Arizona Time (no DST)',
+    group: 'US & Canada',
   },
-  { value: "America/Anchorage", label: "🐻 Alaska Time", group: "US & Canada" },
-  { value: "Pacific/Honolulu", label: "🌺 Hawaii Time", group: "US & Canada" },
-  { value: "America/Toronto", label: "🍁 Toronto Time", group: "Americas" },
+  { value: 'America/Anchorage', label: '🐻 Alaska Time', group: 'US & Canada' },
+  { value: 'Pacific/Honolulu', label: '🌺 Hawaii Time', group: 'US & Canada' },
+  { value: 'America/Toronto', label: '🍁 Toronto Time', group: 'Americas' },
   {
-    value: "America/Mexico_City",
-    label: "🇲🇽 Mexico City Time",
-    group: "Americas",
+    value: 'America/Mexico_City',
+    label: '🇲🇽 Mexico City Time',
+    group: 'Americas',
   },
-  { value: "America/Sao_Paulo", label: "🇧🇷 São Paulo Time", group: "Americas" },
-  { value: "Europe/London", label: "🇬🇧 London Time", group: "Europe" },
-  { value: "Europe/Paris", label: "🇫🇷 Paris Time", group: "Europe" },
-  { value: "Europe/Berlin", label: "🇩🇪 Berlin Time", group: "Europe" },
-  { value: "Europe/Moscow", label: "🇷🇺 Moscow Time", group: "Europe" },
-  { value: "Asia/Dubai", label: "🇦🇪 Dubai Time", group: "Asia" },
-  { value: "Asia/Kolkata", label: "🇮🇳 India Time", group: "Asia" },
-  { value: "Asia/Shanghai", label: "🇨🇳 China Time", group: "Asia" },
-  { value: "Asia/Tokyo", label: "🇯🇵 Tokyo Time", group: "Asia" },
-  { value: "Asia/Seoul", label: "🇰🇷 Seoul Time", group: "Asia" },
-  { value: "Australia/Sydney", label: "🇦🇺 Sydney Time", group: "Pacific" },
-  { value: "Pacific/Auckland", label: "🇳🇿 Auckland Time", group: "Pacific" },
-  { value: "UTC", label: "🌍 UTC", group: "Other" },
+  { value: 'America/Sao_Paulo', label: '🇧🇷 São Paulo Time', group: 'Americas' },
+  { value: 'Europe/London', label: '🇬🇧 London Time', group: 'Europe' },
+  { value: 'Europe/Paris', label: '🇫🇷 Paris Time', group: 'Europe' },
+  { value: 'Europe/Berlin', label: '🇩🇪 Berlin Time', group: 'Europe' },
+  { value: 'Europe/Moscow', label: '🇷🇺 Moscow Time', group: 'Europe' },
+  { value: 'Asia/Dubai', label: '🇦🇪 Dubai Time', group: 'Asia' },
+  { value: 'Asia/Kolkata', label: '🇮🇳 India Time', group: 'Asia' },
+  { value: 'Asia/Shanghai', label: '🇨🇳 China Time', group: 'Asia' },
+  { value: 'Asia/Tokyo', label: '🇯🇵 Tokyo Time', group: 'Asia' },
+  { value: 'Asia/Seoul', label: '🇰🇷 Seoul Time', group: 'Asia' },
+  { value: 'Australia/Sydney', label: '🇦🇺 Sydney Time', group: 'Pacific' },
+  { value: 'Pacific/Auckland', label: '🇳🇿 Auckland Time', group: 'Pacific' },
+  { value: 'UTC', label: '🌍 UTC', group: 'Other' },
 ];
 
 /**
@@ -220,9 +213,9 @@ export const getTimezoneLabel = (timezone: string): string => {
   if (tz) return tz.label;
 
   // Format unknown timezone nicely
-  const parts = timezone.split("/");
+  const parts = timezone.split('/');
   if (parts.length > 1) {
-    return parts[parts.length - 1].replace(/_/g, " ");
+    return parts[parts.length - 1].replace(/_/g, ' ');
   }
   return timezone;
 };
@@ -252,12 +245,12 @@ export const getOptimalPostingTimes = (): string[] => {
   // Instagram optimal times (in local timezone)
   // Source: Sprout Social research
   return [
-    "06:00", // Early morning
-    "09:00", // Morning commute
-    "12:00", // Lunch break
-    "17:00", // After work
-    "19:00", // Evening
-    "21:00", // Before bed
+    '06:00', // Early morning
+    '09:00', // Morning commute
+    '12:00', // Lunch break
+    '17:00', // After work
+    '19:00', // Evening
+    '21:00', // Before bed
   ];
 };
 
@@ -267,10 +260,10 @@ export const getOptimalPostingTimes = (): string[] => {
 export const createDateInTimezone = (
   date: Date,
   time: string, // "HH:mm" format
-  timezone?: string,
+  timezone?: string
 ): Date => {
   const tz = timezone || getUserTimezone();
-  const [hours, minutes] = time.split(":").map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
 
   // Create date in the target timezone
   const localDate = new Date(date);

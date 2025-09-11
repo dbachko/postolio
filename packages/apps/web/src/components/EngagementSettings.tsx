@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { apiClient } from "../lib/api";
+import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '../lib/api';
 
 interface EngagementRules {
   autoLike: {
@@ -36,9 +36,7 @@ interface EngagementSettingsProps {
   brandId: string;
 }
 
-export default function EngagementSettings({
-  brandId,
-}: EngagementSettingsProps) {
+export default function EngagementSettings({ brandId }: EngagementSettingsProps) {
   const [rules, setRules] = useState<EngagementRules>({
     autoLike: {
       enabled: false,
@@ -68,23 +66,23 @@ export default function EngagementSettings({
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [newHashtag, setNewHashtag] = useState("");
-  const [newComment, setNewComment] = useState("");
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [newHashtag, setNewHashtag] = useState('');
+  const [newComment, setNewComment] = useState('');
 
   const loadRules = useCallback(async () => {
     setLoading(true);
-    setError("");
+    setError('');
     try {
       const response = await apiClient.get<{ rules: EngagementRules }>(
-        `/api/engagement/rules/${brandId}`,
+        `/api/engagement/rules/${brandId}`
       );
       if (response.rules) {
         setRules(response.rules);
       }
     } catch {
-      setError("Failed to load engagement rules");
+      setError('Failed to load engagement rules');
     } finally {
       setLoading(false);
     }
@@ -98,21 +96,21 @@ export default function EngagementSettings({
 
   const saveRules = async () => {
     setSaving(true);
-    setError("");
-    setSuccess("");
+    setError('');
+    setSuccess('');
 
     try {
-      await apiClient.post("/api/engagement/rules", {
+      await apiClient.post('/api/engagement/rules', {
         brandId,
         rules,
       });
-      setSuccess("Engagement rules saved successfully!");
-      setTimeout(() => setSuccess(""), 3000);
+      setSuccess('Engagement rules saved successfully!');
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err: unknown) {
-      if (err && typeof err === "object" && "message" in err) {
-        setError((err as any).message || "Failed to save engagement rules");
+      if (err && typeof err === 'object' && 'message' in err) {
+        setError((err as any).message || 'Failed to save engagement rules');
       } else {
-        setError("Failed to save engagement rules");
+        setError('Failed to save engagement rules');
       }
     } finally {
       setSaving(false);
@@ -120,10 +118,7 @@ export default function EngagementSettings({
   };
 
   const addHashtag = () => {
-    if (
-      newHashtag.trim() &&
-      !rules.autoLike.targetHashtags.includes(newHashtag.trim())
-    ) {
+    if (newHashtag.trim() && !rules.autoLike.targetHashtags.includes(newHashtag.trim())) {
       setRules((prev) => ({
         ...prev,
         autoLike: {
@@ -131,7 +126,7 @@ export default function EngagementSettings({
           targetHashtags: [...prev.autoLike.targetHashtags, newHashtag.trim()],
         },
       }));
-      setNewHashtag("");
+      setNewHashtag('');
     }
   };
 
@@ -140,18 +135,13 @@ export default function EngagementSettings({
       ...prev,
       autoLike: {
         ...prev.autoLike,
-        targetHashtags: prev.autoLike.targetHashtags.filter(
-          (h) => h !== hashtag,
-        ),
+        targetHashtags: prev.autoLike.targetHashtags.filter((h) => h !== hashtag),
       },
     }));
   };
 
   const addCommentTemplate = () => {
-    if (
-      newComment.trim() &&
-      !rules.autoComment.templates.includes(newComment.trim())
-    ) {
+    if (newComment.trim() && !rules.autoComment.templates.includes(newComment.trim())) {
       setRules((prev) => ({
         ...prev,
         autoComment: {
@@ -159,7 +149,7 @@ export default function EngagementSettings({
           templates: [...prev.autoComment.templates, newComment.trim()],
         },
       }));
-      setNewComment("");
+      setNewComment('');
     }
   };
 
@@ -176,26 +166,24 @@ export default function EngagementSettings({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
         <span className="ml-2">Loading engagement settings...</span>
       </div>
     );
   }
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h3 className="text-lg font-semibold mb-6">
-        Engagement Automation Settings
-      </h3>
+    <div className="rounded-lg bg-white p-6 shadow-md">
+      <h3 className="mb-6 text-lg font-semibold">Engagement Automation Settings</h3>
 
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="mb-4 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+        <div className="mb-4 rounded border border-green-400 bg-green-100 px-4 py-3 text-green-700">
           {success}
         </div>
       )}
@@ -203,7 +191,7 @@ export default function EngagementSettings({
       <div className="space-y-8">
         {/* Auto Like Settings */}
         <div className="border-b pb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4 flex items-center justify-between">
             <h4 className="text-md font-medium">Auto Like</h4>
             <label className="flex items-center">
               <input
@@ -224,7 +212,7 @@ export default function EngagementSettings({
           {rules.autoLike.enabled && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="mb-2 block text-sm font-medium text-gray-700">
                   Max Likes per Hour (limit: 60)
                 </label>
                 <input
@@ -241,26 +229,26 @@ export default function EngagementSettings({
                       },
                     }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="mb-2 block text-sm font-medium text-gray-700">
                   Target Hashtags
                 </label>
-                <div className="flex space-x-2 mb-2">
+                <div className="mb-2 flex space-x-2">
                   <input
                     type="text"
                     placeholder="#photography"
                     value={newHashtag}
                     onChange={(e) => setNewHashtag(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && addHashtag()}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    onKeyPress={(e) => e.key === 'Enter' && addHashtag()}
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
                   />
                   <button
                     onClick={addHashtag}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                   >
                     Add
                   </button>
@@ -269,7 +257,7 @@ export default function EngagementSettings({
                   {rules.autoLike.targetHashtags.map((hashtag, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
+                      className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-800"
                     >
                       {hashtag}
                       <button
@@ -288,7 +276,7 @@ export default function EngagementSettings({
 
         {/* Auto Comment Settings */}
         <div className="border-b pb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4 flex items-center justify-between">
             <h4 className="text-md font-medium">Auto Comment</h4>
             <label className="flex items-center">
               <input
@@ -312,7 +300,7 @@ export default function EngagementSettings({
           {rules.autoComment.enabled && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="mb-2 block text-sm font-medium text-gray-700">
                   Max Comments per Hour (limit: 20)
                 </label>
                 <input
@@ -329,28 +317,26 @@ export default function EngagementSettings({
                       },
                     }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="mb-2 block text-sm font-medium text-gray-700">
                   Comment Templates
                 </label>
-                <div className="flex space-x-2 mb-2">
+                <div className="mb-2 flex space-x-2">
                   <input
                     type="text"
                     placeholder="Great shot! 📸"
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    onKeyPress={(e) =>
-                      e.key === "Enter" && addCommentTemplate()
-                    }
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    onKeyPress={(e) => e.key === 'Enter' && addCommentTemplate()}
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
                   />
                   <button
                     onClick={addCommentTemplate}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                   >
                     Add
                   </button>
@@ -359,7 +345,7 @@ export default function EngagementSettings({
                   {rules.autoComment.templates.map((template, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
+                      className="flex items-center justify-between rounded-lg bg-gray-50 p-2"
                     >
                       <span className="text-sm">{template}</span>
                       <button
@@ -378,7 +364,7 @@ export default function EngagementSettings({
 
         {/* Auto Follow Settings */}
         <div className="border-b pb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4 flex items-center justify-between">
             <h4 className="text-md font-medium">Auto Follow</h4>
             <label className="flex items-center">
               <input
@@ -401,7 +387,7 @@ export default function EngagementSettings({
 
           {rules.autoFollow.enabled && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
                 Max Follows per Hour (limit: 15)
               </label>
               <input
@@ -418,7 +404,7 @@ export default function EngagementSettings({
                     },
                   }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
               />
             </div>
           )}
@@ -426,10 +412,10 @@ export default function EngagementSettings({
 
         {/* Safety Limits */}
         <div>
-          <h4 className="text-md font-medium mb-4">Safety Limits</h4>
+          <h4 className="text-md mb-4 font-medium">Safety Limits</h4>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
                 Max Total Actions per Hour (limit: 80)
               </label>
               <input
@@ -446,12 +432,12 @@ export default function EngagementSettings({
                     },
                   }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
                 Minimum Delay Between Actions (seconds)
               </label>
               <input
@@ -467,7 +453,7 @@ export default function EngagementSettings({
                     },
                   }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -486,9 +472,7 @@ export default function EngagementSettings({
                 }
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
-              <span className="ml-2 text-sm">
-                Only engage during business hours (9 AM - 6 PM)
-              </span>
+              <span className="ml-2 text-sm">Only engage during business hours (9 AM - 6 PM)</span>
             </label>
           </div>
         </div>
@@ -498,9 +482,9 @@ export default function EngagementSettings({
         <button
           onClick={saveRules}
           disabled={saving}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {saving ? "Saving..." : "Save Settings"}
+          {saving ? 'Saving...' : 'Save Settings'}
         </button>
       </div>
     </div>

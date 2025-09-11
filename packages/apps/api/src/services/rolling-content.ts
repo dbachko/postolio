@@ -1,11 +1,8 @@
-import { PrismaClient } from "@postolio/database";
-import {
-  generateInstagramContent,
-  type ContentGenerationRequest,
-} from "./content-generator.js";
-import { schedulerService } from "./scheduler.js";
-import { analyzeBrandStyle } from "./ai.js";
-import type { StyleProfile } from "./ai.js";
+import { PrismaClient } from '@postolio/database';
+import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
+import { schedulerService } from './scheduler.js';
+import { analyzeBrandStyle } from './ai.js';
+import type { StyleProfile } from './ai.js';
 
 const prisma = new PrismaClient();
 
@@ -48,10 +45,10 @@ class RollingContentService {
             include: {
               content: {
                 where: {
-                  status: { in: ["scheduled", "published"] },
+                  status: { in: ['scheduled', 'published'] },
                   scheduledAt: { not: null },
                 },
-                orderBy: { scheduledAt: "asc" },
+                orderBy: { scheduledAt: 'asc' },
               },
             },
           },
@@ -59,35 +56,26 @@ class RollingContentService {
       });
 
       if (!content || !content.brand) {
-        console.log(
-          `Content ${contentId} or brand not found for rolling generation`,
-        );
+        console.log(`Content ${contentId} or brand not found for rolling generation`);
         return;
       }
 
-      console.log(
-        `Post published for ${content.brand.name}, checking rolling generation needs...`,
-      );
+      console.log(`Post published for ${content.brand.name}, checking rolling generation needs...`);
 
       // Check if we need to generate more content
       await this.checkAndGenerateContent(content.brandId, content.campaignId);
     } catch (error) {
-      console.error("Error in rolling content generation:", error);
+      console.error('Error in rolling content generation:', error);
     }
   }
 
   /**
    * Check content queue status and generate if needed
    */
-  async checkAndGenerateContent(
-    brandId: string,
-    campaignId?: string | null,
-  ): Promise<void> {
+  async checkAndGenerateContent(brandId: string, campaignId?: string | null): Promise<void> {
     // Prevent multiple simultaneous generations for the same brand
     if (this.isProcessing.has(brandId)) {
-      console.log(
-        `Rolling generation already in progress for brand: ${brandId}`,
-      );
+      console.log(`Rolling generation already in progress for brand: ${brandId}`);
       return;
     }
 
@@ -104,12 +92,12 @@ class RollingContentService {
           daysAhead: queueStatus.daysAhead,
           needsGeneration: queueStatus.needsGeneration,
           minRequired: queueStatus.minQueueSize,
-        }),
+        })
       );
 
       if (!queueStatus.needsGeneration) {
         console.log(
-          `Brand ${brandId} has sufficient content (${queueStatus.daysAhead} days ahead)`,
+          `Brand ${brandId} has sufficient content (${queueStatus.daysAhead} days ahead)`
         );
         return;
       }
@@ -124,26 +112,21 @@ class RollingContentService {
   /**
    * Check content queue status for a brand
    */
-  private async checkContentQueue(
-    brandId: string,
-    config = DEFAULT_CONFIG,
-  ): Promise<QueueStatus> {
+  private async checkContentQueue(brandId: string, config = DEFAULT_CONFIG): Promise<QueueStatus> {
     const now = new Date();
-    const maxDate = new Date(
-      now.getTime() + config.maxQueueSize * 24 * 60 * 60 * 1000,
-    );
+    const maxDate = new Date(now.getTime() + config.maxQueueSize * 24 * 60 * 60 * 1000);
 
     // Get all scheduled content for this brand in the next maxQueueSize days
     const scheduledContent = await prisma.content.findMany({
       where: {
         brandId,
-        status: { in: ["scheduled", "published"] },
+        status: { in: ['scheduled', 'published'] },
         scheduledAt: {
           gte: now,
           lte: maxDate,
         },
       },
-      orderBy: { scheduledAt: "asc" },
+      orderBy: { scheduledAt: 'asc' },
     });
 
     const totalScheduled = scheduledContent.length;
@@ -152,10 +135,7 @@ class RollingContentService {
     const lastContent = scheduledContent[scheduledContent.length - 1];
     const daysAhead =
       totalScheduled > 0 && lastContent?.scheduledAt
-        ? Math.ceil(
-            (lastContent.scheduledAt.getTime() - now.getTime()) /
-              (24 * 60 * 60 * 1000),
-          )
+        ? Math.ceil((lastContent.scheduledAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
         : 0;
 
     return {
@@ -173,7 +153,7 @@ class RollingContentService {
   private async generateAndScheduleContent(
     brandId: string,
     campaignId: string | null | undefined,
-    queueStatus: QueueStatus,
+    queueStatus: QueueStatus
   ): Promise<void> {
     try {
       // Get brand information and style profile
@@ -182,7 +162,7 @@ class RollingContentService {
         include: {
           campaigns: {
             where: {
-              status: "active",
+              status: 'active',
               ...(campaignId && { id: campaignId }),
             },
             include: { content: true },
@@ -195,44 +175,36 @@ class RollingContentService {
       }
 
       // Get active campaign or use brand defaults
-      const activeCampaign =
-        brand.campaigns.find((c) => c.id === campaignId) || brand.campaigns[0];
-      let themes = ["lifestyle", "inspiration", "behind-the-scenes"]; // defaults
-      let style = "modern"; // default
+      const activeCampaign = brand.campaigns.find((c) => c.id === campaignId) || brand.campaigns[0];
+      let themes = ['lifestyle', 'inspiration', 'behind-the-scenes']; // defaults
+      let style = 'modern'; // default
 
       if (activeCampaign) {
         const configRaw = activeCampaign.config as unknown;
         const config =
-          configRaw && typeof configRaw === "object"
+          configRaw && typeof configRaw === 'object'
             ? (configRaw as { themes?: string[]; style?: string })
             : {};
         themes = config.themes || themes;
         style = config.style || style;
-        console.log(
-          `Using campaign ${activeCampaign.name} for rolling generation`,
-        );
+        console.log(`Using campaign ${activeCampaign.name} for rolling generation`);
       } else {
         // Use brand preferences if no active campaign
         const prefsRaw = brand.preferences as unknown;
         let prefs: { themes?: string[]; style?: string } | undefined;
-        if (
-          prefsRaw &&
-          typeof prefsRaw === "object" &&
-          "contentStrategy" in prefsRaw
-        ) {
+        if (prefsRaw && typeof prefsRaw === 'object' && 'contentStrategy' in prefsRaw) {
           const maybeRecord = prefsRaw as Record<string, unknown>;
 
           const contentStrategyVal = maybeRecord.contentStrategy;
-          if (contentStrategyVal && typeof contentStrategyVal === "object") {
+          if (contentStrategyVal && typeof contentStrategyVal === 'object') {
             const csObj = contentStrategyVal as {
               themes?: unknown;
               style?: unknown;
             };
             const themesVal = Array.isArray(csObj.themes)
-              ? csObj.themes.filter((t): t is string => typeof t === "string")
+              ? csObj.themes.filter((t): t is string => typeof t === 'string')
               : undefined;
-            const styleVal =
-              typeof csObj.style === "string" ? csObj.style : undefined;
+            const styleVal = typeof csObj.style === 'string' ? csObj.style : undefined;
             prefs = { themes: themesVal, style: styleVal };
           }
         }
@@ -259,7 +231,7 @@ class RollingContentService {
       // Calculate how many posts to generate
       const postsNeeded = Math.min(
         DEFAULT_CONFIG.batchSize,
-        DEFAULT_CONFIG.targetQueueSize - queueStatus.daysAhead,
+        DEFAULT_CONFIG.targetQueueSize - queueStatus.daysAhead
       );
 
       console.log(`Generating ${postsNeeded} posts for brand: ${brand.name}`);
@@ -276,11 +248,7 @@ class RollingContentService {
           style,
         };
 
-        const content = await generateInstagramContent(
-          styleProfile,
-          brand.name,
-          contentRequest,
-        );
+        const content = await generateInstagramContent(styleProfile, brand.name, contentRequest);
         generatedContent.push(...content);
       }
 
@@ -297,10 +265,10 @@ class RollingContentService {
             retentionExpiresAt: content.retentionExpiresAt ?? null,
             brandId,
             campaignId: activeCampaign?.id || null,
-            status: "scheduled", // Auto-schedule rolling content
+            status: 'scheduled', // Auto-schedule rolling content
             generationParams: {
-              source: "rolling_generation",
-              theme: content.imagePrompt || "lifestyle",
+              source: 'rolling_generation',
+              theme: content.imagePrompt || 'lifestyle',
               style,
               generatedAt: new Date().toISOString(),
               rollingGeneration: true,
@@ -313,13 +281,13 @@ class RollingContentService {
         await schedulerService.scheduleContent(savedContent.id, nextSlot);
 
         console.log(
-          `Generated and scheduled rolling content: ${savedContent.id} for ${nextSlot.toISOString()}`,
+          `Generated and scheduled rolling content: ${savedContent.id} for ${nextSlot.toISOString()}`
         );
       }
 
       console.log(`Rolling generation complete for brand: ${brand.name}`);
     } catch (error) {
-      console.error("Error generating rolling content:", error);
+      console.error('Error generating rolling content:', error);
       throw error;
     }
   }
@@ -336,7 +304,7 @@ class RollingContentService {
         brandId,
         scheduledAt: { gte: now },
       },
-      orderBy: { scheduledAt: "desc" },
+      orderBy: { scheduledAt: 'desc' },
     });
 
     if (!lastScheduled?.scheduledAt) {
@@ -349,9 +317,7 @@ class RollingContentService {
 
     // Schedule 24 hours after the last post (daily frequency)
     // In production, this should respect the campaign's frequency settings
-    const nextSlot = new Date(
-      lastScheduled.scheduledAt.getTime() + 24 * 60 * 60 * 1000,
-    );
+    const nextSlot = new Date(lastScheduled.scheduledAt.getTime() + 24 * 60 * 60 * 1000);
 
     // Ensure it's at a reasonable hour (9 AM to 8 PM)
     if (nextSlot.getHours() < 9) {
@@ -369,7 +335,7 @@ class RollingContentService {
    */
   async triggerManual(
     brandId: string,
-    campaignId?: string,
+    campaignId?: string
   ): Promise<{ success: boolean; message: string; generated: number }> {
     try {
       const queueStatus = await this.checkContentQueue(brandId);
@@ -390,10 +356,10 @@ class RollingContentService {
         generated: DEFAULT_CONFIG.batchSize,
       };
     } catch (error) {
-      console.error("Manual rolling generation failed:", error);
+      console.error('Manual rolling generation failed:', error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: error instanceof Error ? error.message : 'Unknown error',
         generated: 0,
       };
     }

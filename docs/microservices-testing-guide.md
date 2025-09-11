@@ -141,17 +141,17 @@ DLQ_STATE_TABLE_NAME="test-dlq-state"
 
 ```typescript
 // Verify sensitive headers are not logged
-test("should NOT log sensitive headers", async () => {
+test('should NOT log sensitive headers', async () => {
   const event = createEventWithHeaders({
-    authorization: "Bearer secret", // Should NOT appear
-    "content-type": "application/json", // Should appear
+    authorization: 'Bearer secret', // Should NOT appear
+    'content-type': 'application/json', // Should appear
   });
 
   await handler(event);
 
   const loggedHeaders = getLoggedHeaders();
-  expect(loggedHeaders).not.toHaveProperty("authorization");
-  expect(loggedHeaders).toHaveProperty("content-type");
+  expect(loggedHeaders).not.toHaveProperty('authorization');
+  expect(loggedHeaders).toHaveProperty('content-type');
 });
 ```
 
@@ -159,15 +159,15 @@ test("should NOT log sensitive headers", async () => {
 
 ```typescript
 // Verify Zod schema validation
-test("should reject invalid platform", async () => {
+test('should reject invalid platform', async () => {
   const response = await handler({
     body: JSON.stringify({
-      platform: "invalid-platform", // Not in enum
+      platform: 'invalid-platform', // Not in enum
     }),
   });
 
   expect(response.statusCode).toBe(400);
-  expect(response.body).toContain("Invalid enum value");
+  expect(response.body).toContain('Invalid enum value');
 });
 ```
 
@@ -177,7 +177,7 @@ test("should reject invalid platform", async () => {
 
 ```typescript
 // Verify batch loading is used for multiple messages
-test("should use BatchGetCommand", async () => {
+test('should use BatchGetCommand', async () => {
   const messages = createMessages(50);
   await processor.processMessages(messages);
 
@@ -193,9 +193,9 @@ test("should use BatchGetCommand", async () => {
 
 ```typescript
 // Verify client reuse across invocations
-test("should reuse DynamoDB client", () => {
-  const firstImport = require("./token-service");
-  const secondImport = require("./token-service");
+test('should reuse DynamoDB client', () => {
+  const firstImport = require('./token-service');
+  const secondImport = require('./token-service');
 
   expect(DynamoDBClient).toHaveBeenCalledTimes(1); // Created once
 });
@@ -243,8 +243,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -376,26 +376,26 @@ npm install -g artillery
 ```yaml
 # artillery-config.yml
 config:
-  target: "http://localhost:3000"
+  target: 'http://localhost:3000'
   phases:
     - duration: 60
       arrivalRate: 10
       rampTo: 50
   defaults:
     headers:
-      Authorization: "Bearer {{ $randomString() }}"
+      Authorization: 'Bearer {{ $randomString() }}'
 
 scenarios:
-  - name: "Token Service Load Test"
+  - name: 'Token Service Load Test'
     flow:
       - post:
-          url: "/api/tokens"
+          url: '/api/tokens'
           json:
-            userId: "user{{ $randomNumber(1, 1000) }}"
-            brandId: "brand{{ $randomNumber(1, 100) }}"
-            platform: "instagram"
-            accessToken: "token{{ $randomString() }}"
-            expiresAt: "{{ $randomNumber(1700000000000, 1800000000000) }}"
+            userId: 'user{{ $randomNumber(1, 1000) }}'
+            brandId: 'brand{{ $randomNumber(1, 100) }}'
+            platform: 'instagram'
+            accessToken: 'token{{ $randomString() }}'
+            expiresAt: '{{ $randomNumber(1700000000000, 1800000000000) }}'
 ```
 
 3. **Run Load Test:**

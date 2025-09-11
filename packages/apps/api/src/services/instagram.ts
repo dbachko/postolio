@@ -1,13 +1,13 @@
-import axios from "axios";
-import { redisService } from "./redis.js";
-import * as crypto from "crypto";
-import { analyticsCache } from "./analytics-cache.js";
-import { PublisherCredentialsService } from "./publisher-credentials.js";
+import axios from 'axios';
+import { redisService } from './redis.js';
+import * as crypto from 'crypto';
+import { analyticsCache } from './analytics-cache.js';
+import { PublisherCredentialsService } from './publisher-credentials.js';
 
 export interface InstagramPost {
   id: string;
   caption: string;
-  media_type: "IMAGE" | "VIDEO" | "CAROUSEL_ALBUM";
+  media_type: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM';
   media_url: string;
   permalink: string;
   timestamp: string;
@@ -146,7 +146,7 @@ class InstagramService {
    */
   private async getCredentials(brand: BrandData) {
     if (!brand.id) {
-      throw new Error("Brand ID is required to fetch credentials");
+      throw new Error('Brand ID is required to fetch credentials');
     }
     return PublisherCredentialsService.getCredentialsForBrand(brand.id);
   }
@@ -155,7 +155,7 @@ class InstagramService {
    * Get default profile picture URL when none is available
    */
   private getDefaultProfilePicture(): string {
-    return "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150";
+    return 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150';
   }
 
   /**
@@ -182,7 +182,7 @@ class InstagramService {
 
       // Clean up old windows
       for (const [key] of this.rateLimitWindow) {
-        const keyTime = parseInt(key.split("_")[1] || "0");
+        const keyTime = parseInt(key.split('_')[1] || '0');
         if (keyTime < windowStart - 60 * 60 * 1000) {
           this.rateLimitWindow.delete(key);
         }
@@ -196,7 +196,7 @@ class InstagramService {
    * Refresh Instagram access token
    */
   async refreshAccessToken(
-    currentToken: string,
+    currentToken: string
   ): Promise<{ accessToken: string; expiresAt: string } | null> {
     try {
       const url = `https://graph.facebook.com/v23.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.FACEBOOK_APP_ID}&client_secret=${process.env.FACEBOOK_APP_SECRET}&fb_exchange_token=${currentToken}`;
@@ -217,7 +217,7 @@ class InstagramService {
 
       return null;
     } catch (error) {
-      console.error("Token refresh failed:", error);
+      console.error('Token refresh failed:', error);
       return null;
     }
   }
@@ -227,14 +227,14 @@ class InstagramService {
    */
   static validateWebhookSignature(payload: string, signature: string): boolean {
     const expectedSignature = crypto
-      .createHmac("sha256", process.env.FACEBOOK_APP_SECRET || "test_secret")
+      .createHmac('sha256', process.env.FACEBOOK_APP_SECRET || 'test_secret')
       .update(payload)
-      .digest("hex");
+      .digest('hex');
 
-    const receivedSignature = signature.replace("sha256=", "");
+    const receivedSignature = signature.replace('sha256=', '');
     return crypto.timingSafeEqual(
-      Buffer.from(expectedSignature, "hex"),
-      Buffer.from(receivedSignature, "hex"),
+      Buffer.from(expectedSignature, 'hex'),
+      Buffer.from(receivedSignature, 'hex')
     );
   }
 
@@ -243,7 +243,7 @@ class InstagramService {
    */
   async getProfile(brand: BrandData): Promise<InstagramProfile> {
     if (!this.isConfigured(brand)) {
-      throw new Error("Instagram not connected for this brand");
+      throw new Error('Instagram not connected for this brand');
     }
 
     try {
@@ -252,11 +252,11 @@ class InstagramService {
       // Get fresh credentials from Token Service
       const credentials = await this.getCredentials(brand);
       if (!credentials) {
-        throw new Error("Failed to get Instagram credentials");
+        throw new Error('Failed to get Instagram credentials');
       }
 
       const fields =
-        "id,username,name,biography,followers_count,media_count,profile_picture_url,website";
+        'id,username,name,biography,followers_count,media_count,profile_picture_url,website';
       const url = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}?fields=${fields}&access_token=${credentials.accessToken}`;
 
       const response = await axios.get(url);
@@ -265,20 +265,19 @@ class InstagramService {
       return {
         id: profile.id,
         username: profile.username,
-        account_type: "BUSINESS", // Since we're using Instagram Business API, this is always a business account
+        account_type: 'BUSINESS', // Since we're using Instagram Business API, this is always a business account
         media_count: profile.media_count || 0,
         followers_count: profile.followers_count || 0,
         follows_count: profile.follows_count || 0,
-        name: profile.name || "",
-        biography: profile.biography || "",
-        website: profile.website || "",
-        profile_picture_url:
-          profile.profile_picture_url || this.getDefaultProfilePicture(),
+        name: profile.name || '',
+        biography: profile.biography || '',
+        website: profile.website || '',
+        profile_picture_url: profile.profile_picture_url || this.getDefaultProfilePicture(),
       };
     } catch (error) {
-      console.error("Failed to fetch Instagram profile:", error);
+      console.error('Failed to fetch Instagram profile:', error);
       throw new Error(
-        `Failed to fetch Instagram profile: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to fetch Instagram profile: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }
@@ -286,12 +285,9 @@ class InstagramService {
   /**
    * Get recent posts from Instagram account
    */
-  async getRecentPosts(
-    brand: BrandData,
-    limit: number = 25,
-  ): Promise<InstagramPost[]> {
+  async getRecentPosts(brand: BrandData, limit: number = 25): Promise<InstagramPost[]> {
     if (!this.isConfigured(brand)) {
-      throw new Error("Instagram not connected for this brand");
+      throw new Error('Instagram not connected for this brand');
     }
 
     try {
@@ -300,11 +296,11 @@ class InstagramService {
       // Get fresh credentials from Token Service
       const credentials = await this.getCredentials(brand);
       if (!credentials) {
-        throw new Error("Failed to get Instagram credentials");
+        throw new Error('Failed to get Instagram credentials');
       }
 
       const fields =
-        "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count";
+        'id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count';
       const url = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media?fields=${fields}&limit=${limit}&access_token=${credentials.accessToken}`;
 
       const response = await axios.get(url);
@@ -322,7 +318,7 @@ class InstagramService {
       }
       return mediaData.map((media: RawMediaItem) => {
         // Extract hashtags from caption
-        const caption = media.caption || "";
+        const caption = media.caption || '';
         const hashtagMatches = caption.match(/#\w+/g) || [];
         const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
 
@@ -339,9 +335,9 @@ class InstagramService {
         };
       });
     } catch (error) {
-      console.error("Failed to fetch Instagram posts:", error);
+      console.error('Failed to fetch Instagram posts:', error);
       throw new Error(
-        `Failed to fetch Instagram posts: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to fetch Instagram posts: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }
@@ -349,12 +345,9 @@ class InstagramService {
   /**
    * Publish media to Instagram
    */
-  async publishMedia(
-    brand: BrandData,
-    request: PublishMediaRequest,
-  ): Promise<PublishMediaResult> {
+  async publishMedia(brand: BrandData, request: PublishMediaRequest): Promise<PublishMediaResult> {
     if (!this.isConfigured(brand)) {
-      throw new Error("Instagram not connected for this brand");
+      throw new Error('Instagram not connected for this brand');
     }
 
     try {
@@ -363,11 +356,11 @@ class InstagramService {
       // Get fresh credentials from Token Service
       const credentials = await this.getCredentials(brand);
       if (!credentials) {
-        throw new Error("Failed to get Instagram credentials");
+        throw new Error('Failed to get Instagram credentials');
       }
 
       // Step 1: Create media container
-      const caption = `${request.caption}\n\n${request.hashtags.map((tag) => `#${tag}`).join(" ")}`;
+      const caption = `${request.caption}\n\n${request.hashtags.map((tag) => `#${tag}`).join(' ')}`;
       const containerUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media`;
 
       const containerData = {
@@ -399,9 +392,9 @@ class InstagramService {
         published: true,
       };
     } catch (error) {
-      console.error("Failed to publish Instagram media:", error);
+      console.error('Failed to publish Instagram media:', error);
       throw new Error(
-        `Failed to publish Instagram media: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to publish Instagram media: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }
@@ -409,12 +402,9 @@ class InstagramService {
   /**
    * Get media insights for analytics
    */
-  async getMediaInsights(
-    brand: BrandData,
-    mediaId: string,
-  ): Promise<MediaInsightMetric[]> {
+  async getMediaInsights(brand: BrandData, mediaId: string): Promise<MediaInsightMetric[]> {
     if (!this.isConfigured(brand)) {
-      throw new Error("Instagram not connected for this brand");
+      throw new Error('Instagram not connected for this brand');
     }
 
     try {
@@ -423,20 +413,19 @@ class InstagramService {
       // Get fresh credentials from Token Service
       const credentials = await this.getCredentials(brand);
       if (!credentials) {
-        throw new Error("Failed to get Instagram credentials");
+        throw new Error('Failed to get Instagram credentials');
       }
 
-      const metrics =
-        "impressions,reach,engagement,likes,comments,saves,shares";
+      const metrics = 'impressions,reach,engagement,likes,comments,saves,shares';
       const url = `https://graph.facebook.com/v23.0/${mediaId}/insights?metric=${metrics}&access_token=${credentials.accessToken}`;
 
       const response = await axios.get(url);
       const data = response.data?.data;
       return Array.isArray(data) ? (data as MediaInsightMetric[]) : [];
     } catch (error) {
-      console.error("Failed to fetch media insights:", error);
+      console.error('Failed to fetch media insights:', error);
       throw new Error(
-        `Failed to fetch media insights: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to fetch media insights: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }
@@ -447,10 +436,10 @@ class InstagramService {
   async getPostComments(
     brand: BrandData,
     mediaId: string,
-    limit: number = 25,
+    limit: number = 25
   ): Promise<{ data: InstagramComment[]; total: number }> {
     if (!this.isConfigured(brand)) {
-      throw new Error("Instagram not connected for this brand");
+      throw new Error('Instagram not connected for this brand');
     }
 
     try {
@@ -459,7 +448,7 @@ class InstagramService {
       // Get fresh credentials from Token Service
       const credentials = await this.getCredentials(brand);
       if (!credentials) {
-        throw new Error("Failed to get Instagram credentials");
+        throw new Error('Failed to get Instagram credentials');
       }
 
       // First, get the total count
@@ -470,26 +459,22 @@ class InstagramService {
       // Then get the actual comments
       const url = `https://graph.facebook.com/v23.0/${mediaId}/comments?fields=id,text,username,timestamp,like_count&limit=${limit}&access_token=${credentials.accessToken}`;
       const response = await axios.get(url);
-      const commentsRaw = Array.isArray(response.data?.data)
-        ? response.data.data
-        : [];
+      const commentsRaw = Array.isArray(response.data?.data) ? response.data.data : [];
       const comments: InstagramComment[] = commentsRaw.map((c: unknown) => {
         const obj = c as Record<string, unknown>;
         return {
-          id: String(obj.id ?? ""),
-          text: typeof obj.text === "string" ? obj.text : undefined,
-          username: typeof obj.username === "string" ? obj.username : undefined,
-          timestamp:
-            typeof obj.timestamp === "string" ? obj.timestamp : undefined,
-          like_count:
-            typeof obj.like_count === "number" ? obj.like_count : undefined,
+          id: String(obj.id ?? ''),
+          text: typeof obj.text === 'string' ? obj.text : undefined,
+          username: typeof obj.username === 'string' ? obj.username : undefined,
+          timestamp: typeof obj.timestamp === 'string' ? obj.timestamp : undefined,
+          like_count: typeof obj.like_count === 'number' ? obj.like_count : undefined,
         };
       });
       return { data: comments, total };
     } catch (error) {
-      console.error("Failed to fetch post comments:", error);
+      console.error('Failed to fetch post comments:', error);
       throw new Error(
-        `Failed to fetch post comments: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to fetch post comments: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }
@@ -499,20 +484,17 @@ class InstagramService {
    */
   async getAccountInsights(
     brand: BrandData,
-    timeRange: "7d" | "30d" | "90d" = "7d",
+    timeRange: '7d' | '30d' | '90d' = '7d'
   ): Promise<AnalyticsOverview> {
     if (!this.isConfigured(brand)) {
-      throw new Error("Instagram not configured for this brand");
+      throw new Error('Instagram not configured for this brand');
     }
 
-    const today = new Date().toISOString().split("T")[0];
-    const cacheKey = `${brand.instagramAccountId || "unknown"}_${timeRange}`;
+    const today = new Date().toISOString().split('T')[0];
+    const cacheKey = `${brand.instagramAccountId || 'unknown'}_${timeRange}`;
 
     // Check cache first
-    const cachedData = await analyticsCache.getAccountInsights(
-      cacheKey!,
-      today!,
-    );
+    const cachedData = await analyticsCache.getAccountInsights(cacheKey!, today!);
     if (cachedData) {
       return {
         data: cachedData,
@@ -524,7 +506,7 @@ class InstagramService {
     // Check rate limit before API call
     const canMakeRequest = await this.checkRateLimit(brand.instagramAccountId!);
     if (!canMakeRequest) {
-      throw new Error("Rate limit exceeded for Instagram API");
+      throw new Error('Rate limit exceeded for Instagram API');
     }
 
     try {
@@ -534,13 +516,13 @@ class InstagramService {
       // Calculate date range
       const endDate = new Date();
       const startDate = new Date();
-      const days = timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : 90;
+      const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
       startDate.setDate(endDate.getDate() - days);
 
       // Get fresh credentials from Token Service
       const credentials = await this.getCredentials(brand);
       if (!credentials) {
-        throw new Error("Failed to get Instagram credentials");
+        throw new Error('Failed to get Instagram credentials');
       }
 
       // Get follower count (lifetime metric)
@@ -548,16 +530,16 @@ class InstagramService {
       const followerResponse = await axios.get(followerUrl);
 
       // Get insights for the time range
-      const metricsUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/insights?metric=impressions,reach,profile_views&period=day&since=${startDate.toISOString().split("T")[0]}&until=${endDate.toISOString().split("T")[0]}&access_token=${credentials.accessToken}`;
+      const metricsUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/insights?metric=impressions,reach,profile_views&period=day&since=${startDate.toISOString().split('T')[0]}&until=${endDate.toISOString().split('T')[0]}&access_token=${credentials.accessToken}`;
       const insightsResponse = await axios.get(metricsUrl);
 
       // Process insights data
       const insights = insightsResponse.data.data;
       const processedData: AccountInsights = {
         followers: followerResponse.data.followers_count || 0,
-        impressions: this.aggregateInsightValues(insights, "impressions"),
-        reach: this.aggregateInsightValues(insights, "reach"),
-        profile_views: this.aggregateInsightValues(insights, "profile_views"),
+        impressions: this.aggregateInsightValues(insights, 'impressions'),
+        reach: this.aggregateInsightValues(insights, 'reach'),
+        profile_views: this.aggregateInsightValues(insights, 'profile_views'),
       };
 
       // Cache the result
@@ -569,9 +551,9 @@ class InstagramService {
         fromCache: false,
       };
     } catch (error) {
-      console.error("Failed to fetch account insights:", error);
+      console.error('Failed to fetch account insights:', error);
       throw new Error(
-        `Failed to fetch account insights: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to fetch account insights: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }
@@ -579,18 +561,13 @@ class InstagramService {
   /**
    * Get recent posts with performance data
    */
-  async getRecentPostsPerformance(
-    brand: BrandData,
-    limit: number = 10,
-  ): Promise<PostPerformance> {
+  async getRecentPostsPerformance(brand: BrandData, limit: number = 10): Promise<PostPerformance> {
     if (!this.isConfigured(brand)) {
-      throw new Error("Instagram not configured for this brand");
+      throw new Error('Instagram not configured for this brand');
     }
 
     // Check cache first
-    const cachedPosts = await analyticsCache.getRecentPosts(
-      brand.instagramAccountId!,
-    );
+    const cachedPosts = await analyticsCache.getRecentPosts(brand.instagramAccountId!);
     if (cachedPosts) {
       type CachedPost = {
         id?: unknown;
@@ -603,24 +580,19 @@ class InstagramService {
       const posts = cachedPosts.posts
         .filter(
           (
-            p: CachedPost,
+            p: CachedPost
           ): p is Required<
             Pick<
-              PostPerformance["posts"][number],
-              | "id"
-              | "caption"
-              | "impressions"
-              | "engagement"
-              | "media_url"
-              | "posted_at"
+              PostPerformance['posts'][number],
+              'id' | 'caption' | 'impressions' | 'engagement' | 'media_url' | 'posted_at'
             >
           > =>
-            typeof p.id === "string" &&
-            typeof p.caption === "string" &&
-            typeof p.impressions === "number" &&
-            typeof p.engagement === "number" &&
-            typeof p.media_url === "string" &&
-            typeof p.posted_at === "string",
+            typeof p.id === 'string' &&
+            typeof p.caption === 'string' &&
+            typeof p.impressions === 'number' &&
+            typeof p.engagement === 'number' &&
+            typeof p.media_url === 'string' &&
+            typeof p.posted_at === 'string'
         )
         .slice(0, limit)
         .map((p) => ({
@@ -640,14 +612,14 @@ class InstagramService {
     // Check rate limit
     const canMakeRequest = await this.checkRateLimit(brand.instagramAccountId!);
     if (!canMakeRequest) {
-      throw new Error("Rate limit exceeded for Instagram API");
+      throw new Error('Rate limit exceeded for Instagram API');
     }
 
     try {
       // Get fresh credentials from Token Service
       const credentials = await this.getCredentials(brand);
       if (!credentials) {
-        throw new Error("Failed to get Instagram credentials");
+        throw new Error('Failed to get Instagram credentials');
       }
 
       // Get recent media
@@ -665,9 +637,9 @@ class InstagramService {
           const insights = insightsResponse.data.data;
           posts.push({
             id: media.id,
-            caption: media.caption || "",
-            impressions: this.getInsightValue(insights, "impressions"),
-            engagement: this.getInsightValue(insights, "engagement"),
+            caption: media.caption || '',
+            impressions: this.getInsightValue(insights, 'impressions'),
+            engagement: this.getInsightValue(insights, 'engagement'),
             media_url: media.media_url,
             posted_at: media.timestamp,
           });
@@ -675,7 +647,7 @@ class InstagramService {
           // If insights fail for individual post, include it without metrics
           posts.push({
             id: media.id,
-            caption: media.caption || "",
+            caption: media.caption || '',
             impressions: 0,
             engagement: 0,
             media_url: media.media_url,
@@ -692,9 +664,9 @@ class InstagramService {
         lastUpdated: new Date().toISOString(),
       };
     } catch (error) {
-      console.error("Failed to fetch recent posts performance:", error);
+      console.error('Failed to fetch recent posts performance:', error);
       throw new Error(
-        `Failed to fetch recent posts performance: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to fetch recent posts performance: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }
@@ -708,20 +680,17 @@ class InstagramService {
     nextRefreshAllowed: string;
   }> {
     if (!this.isConfigured(brand)) {
-      throw new Error("Instagram not configured for this brand");
+      throw new Error('Instagram not configured for this brand');
     }
 
     // Check if user is within rate limits
-    const rateLimitCount = await analyticsCache.getRateLimit(
-      brand.instagramAccountId!,
-    );
+    const rateLimitCount = await analyticsCache.getRateLimit(brand.instagramAccountId!);
     if (rateLimitCount >= 180) {
       // Leave some buffer before 200 limit
       const nextRefresh = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
       return {
         success: false,
-        message:
-          "Rate limit nearly exceeded. Please wait before refreshing again.",
+        message: 'Rate limit nearly exceeded. Please wait before refreshing again.',
         nextRefreshAllowed: nextRefresh.toISOString(),
       };
     }
@@ -732,19 +701,19 @@ class InstagramService {
       await analyticsCache.clear(); // This clears all analytics cache - in production you'd be more selective
 
       // Force fresh data fetch
-      await this.getAccountInsights(brand, "7d");
+      await this.getAccountInsights(brand, '7d');
       await this.getRecentPostsPerformance(brand, 10);
 
       return {
         success: true,
-        message: "Analytics data refreshed successfully",
+        message: 'Analytics data refreshed successfully',
         nextRefreshAllowed: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes
       };
     } catch (error) {
-      console.error("Failed to refresh analytics data:", error);
+      console.error('Failed to refresh analytics data:', error);
       return {
         success: false,
-        message: `Failed to refresh data: ${error instanceof Error ? error.message : "Unknown error"}`,
+        message: `Failed to refresh data: ${error instanceof Error ? error.message : 'Unknown error'}`,
         nextRefreshAllowed: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       };
     }
@@ -759,15 +728,11 @@ class InstagramService {
     rateLimitRemaining: number;
   }> {
     if (!this.isConfigured(brand)) {
-      throw new Error("Instagram not configured for this brand");
+      throw new Error('Instagram not configured for this brand');
     }
 
-    const status = await analyticsCache.getCacheStatus(
-      brand.instagramAccountId!,
-    );
-    const rateLimitCount = await analyticsCache.getRateLimit(
-      brand.instagramAccountId!,
-    );
+    const status = await analyticsCache.getCacheStatus(brand.instagramAccountId!);
+    const rateLimitCount = await analyticsCache.getRateLimit(brand.instagramAccountId!);
 
     return {
       lastUpdated: status.lastUpdated,
@@ -781,14 +746,11 @@ class InstagramService {
    */
   private aggregateInsightValues(
     insights: Array<{ name?: string; values?: Array<{ value?: number }> }>,
-    metricName: string,
+    metricName: string
   ): number {
     const metric = insights.find((insight) => insight.name === metricName);
     if (!metric || !Array.isArray(metric.values)) return 0;
-    return metric.values.reduce(
-      (sum, v) => sum + (typeof v.value === "number" ? v.value : 0),
-      0,
-    );
+    return metric.values.reduce((sum, v) => sum + (typeof v.value === 'number' ? v.value : 0), 0);
   }
 
   /**
@@ -796,11 +758,11 @@ class InstagramService {
    */
   private getInsightValue(
     insights: Array<{ name?: string; values?: Array<{ value?: number }> }>,
-    metricName: string,
+    metricName: string
   ): number {
     const metric = insights.find((insight) => insight.name === metricName);
     const first = metric?.values?.[0];
-    return typeof first?.value === "number" ? first.value : 0;
+    return typeof first?.value === 'number' ? first.value : 0;
   }
 
   /**
@@ -809,14 +771,14 @@ class InstagramService {
   async handleWebhookEvent(event: InstagramWebhookEvent): Promise<void> {
     try {
       // Process Instagram webhook events
-      console.log("Processing Instagram webhook event:", JSON.stringify(event));
+      console.log('Processing Instagram webhook event:', JSON.stringify(event));
 
       // Implementation depends on specific webhook events you want to handle
       // Common events: media published, comments, mentions, etc.
     } catch (error: unknown) {
       console.error(
-        "Failed to handle webhook event:",
-        JSON.stringify(error, Object.getOwnPropertyNames(error as object)),
+        'Failed to handle webhook event:',
+        JSON.stringify(error, Object.getOwnPropertyNames(error as object))
       );
     }
   }

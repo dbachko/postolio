@@ -15,10 +15,7 @@ export class DLQProcessor {
     return DLQProcessor.instance;
   }
 
-  async processMessages(
-    queueUrl: string,
-    processorName: string,
-  ): Promise<void> {
+  async processMessages(queueUrl: string, processorName: string): Promise<void> {
     // Stub implementation
     console.log(`Processing messages from ${queueUrl} using ${processorName}`);
   }
@@ -28,11 +25,7 @@ export class DLQProcessor {
     console.log(`Retrying message to ${targetQueue}`);
   }
 
-  async processDLQ(
-    dlqUrl: string,
-    originalQueue: string,
-    processorFn?: any,
-  ): Promise<any[]> {
+  async processDLQ(dlqUrl: string, originalQueue: string, processorFn?: any): Promise<any[]> {
     // Stub implementation
     console.log(`Processing DLQ ${dlqUrl} with processor`);
     return [];
@@ -44,10 +37,7 @@ export class DLQProcessor {
     return { queueName, messageCount: 0 };
   }
 
-  async reprocessParkedMessages(
-    queueName: string,
-    messageIds: string[],
-  ): Promise<any> {
+  async reprocessParkedMessages(queueName: string, messageIds: string[]): Promise<any> {
     // Stub implementation
     console.log(`Reprocessing ${messageIds.length} messages from ${queueName}`);
     return { success: true, processed: messageIds.length };

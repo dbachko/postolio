@@ -4,14 +4,14 @@
  * Provides endpoints for CSRF token generation and validation.
  */
 
-import { FastifyPluginAsync } from "fastify";
+import { FastifyPluginAsync } from 'fastify';
 
 const csrfRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * Generate CSRF token endpoint
    * Frontend calls this to get a fresh CSRF token
    */
-  fastify.get("/csrf-token", async (request, reply) => {
+  fastify.get('/csrf-token', async (request, reply) => {
     const token = reply.generateCsrf();
 
     return {
@@ -24,10 +24,10 @@ const csrfRoutes: FastifyPluginAsync = async (fastify) => {
    * Verify CSRF token endpoint (optional, for testing)
    * This endpoint is automatically protected by CSRF
    */
-  fastify.post("/csrf-verify", async () => {
+  fastify.post('/csrf-verify', async () => {
     return {
       success: true,
-      message: "CSRF token is valid",
+      message: 'CSRF token is valid',
     };
   });
 };

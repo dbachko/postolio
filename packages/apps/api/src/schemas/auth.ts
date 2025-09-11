@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 /**
  * NIST 2024 Password Guidelines
@@ -9,21 +9,21 @@ import { z } from "zod";
  */
 const passwordSchema = z
   .string()
-  .min(15, "Password must be at least 15 characters long")
-  .max(128, "Password must be less than 128 characters")
-  .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-  .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-  .regex(/[0-9]/, "Password must contain at least one number");
+  .min(15, 'Password must be at least 15 characters long')
+  .max(128, 'Password must be less than 128 characters')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one number');
 
 /**
  * Email validation with common rules
  */
 const emailSchema = z
   .string()
-  .email("Invalid email address")
+  .email('Invalid email address')
   .toLowerCase()
   .trim()
-  .max(255, "Email must be less than 255 characters");
+  .max(255, 'Email must be less than 255 characters');
 
 /**
  * Registration schema
@@ -34,8 +34,8 @@ export const registerSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, "Name is required")
-    .max(100, "Name must be less than 100 characters")
+    .min(1, 'Name is required')
+    .max(100, 'Name must be less than 100 characters')
     .optional(),
   timezone: z.string().optional(), // Browser-detected timezone (e.g., 'America/New_York')
 });
@@ -45,7 +45,7 @@ export const registerSchema = z.object({
  */
 export const loginSchema = z.object({
   email: emailSchema,
-  password: z.string().min(1, "Password is required"),
+  password: z.string().min(1, 'Password is required'),
   rememberMe: z.boolean().optional(),
 });
 
@@ -63,8 +63,8 @@ export const magicLinkRequestSchema = z.object({
 export const magicLinkVerifySchema = z.object({
   token: z
     .string()
-    .length(32, "Invalid token format")
-    .regex(/^[a-zA-Z0-9_-]+$/, "Invalid token characters"),
+    .length(32, 'Invalid token format')
+    .regex(/^[a-zA-Z0-9_-]+$/, 'Invalid token characters'),
 });
 
 /**
@@ -73,8 +73,8 @@ export const magicLinkVerifySchema = z.object({
 export const emailVerifySchema = z.object({
   token: z
     .string()
-    .length(32, "Invalid token format")
-    .regex(/^[a-zA-Z0-9_-]+$/, "Invalid token characters"),
+    .length(32, 'Invalid token format')
+    .regex(/^[a-zA-Z0-9_-]+$/, 'Invalid token characters'),
 });
 
 /**
@@ -91,21 +91,21 @@ export const passwordResetSchema = z
   .object({
     token: z
       .string()
-      .length(32, "Invalid token format")
-      .regex(/^[a-zA-Z0-9_-]+$/, "Invalid token characters"),
+      .length(32, 'Invalid token format')
+      .regex(/^[a-zA-Z0-9_-]+$/, 'Invalid token characters'),
     password: passwordSchema,
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
-    path: ["confirmPassword"],
+    path: ['confirmPassword'],
   });
 
 /**
  * OAuth callback schema
  */
 export const oauthCallbackSchema = z.object({
-  code: z.string().min(1, "Authorization code is required"),
+  code: z.string().min(1, 'Authorization code is required'),
   state: z.string().optional(),
   redirectUri: z.string().url().optional(),
 });
@@ -114,14 +114,14 @@ export const oauthCallbackSchema = z.object({
  * Google OAuth token schema
  */
 export const googleTokenSchema = z.object({
-  credential: z.string().min(1, "Google credential is required"),
+  credential: z.string().min(1, 'Google credential is required'),
 });
 
 /**
  * Facebook OAuth token schema
  */
 export const facebookTokenSchema = z.object({
-  code: z.string().min(1, "Authorization code is required"),
+  code: z.string().min(1, 'Authorization code is required'),
   redirectUri: z.string().url().optional(),
 });
 
@@ -129,10 +129,10 @@ export const facebookTokenSchema = z.object({
  * Two-factor authentication setup schema
  */
 export const twoFactorSetupSchema = z.object({
-  type: z.enum(["totp", "sms", "email"]),
+  type: z.enum(['totp', 'sms', 'email']),
   phoneNumber: z
     .string()
-    .regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format")
+    .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format')
     .optional(),
 });
 
@@ -142,8 +142,8 @@ export const twoFactorSetupSchema = z.object({
 export const twoFactorVerifySchema = z.object({
   code: z
     .string()
-    .length(6, "Code must be 6 digits")
-    .regex(/^\d+$/, "Code must contain only numbers"),
+    .length(6, 'Code must be 6 digits')
+    .regex(/^\d+$/, 'Code must contain only numbers'),
   trustDevice: z.boolean().optional().default(false),
 });
 
@@ -152,17 +152,17 @@ export const twoFactorVerifySchema = z.object({
  */
 export const changePasswordSchema = z
   .object({
-    currentPassword: z.string().min(1, "Current password is required"),
+    currentPassword: z.string().min(1, 'Current password is required'),
     newPassword: passwordSchema,
     confirmPassword: z.string(),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     message: "Passwords don't match",
-    path: ["confirmPassword"],
+    path: ['confirmPassword'],
   })
   .refine((data) => data.currentPassword !== data.newPassword, {
-    message: "New password must be different from current password",
-    path: ["newPassword"],
+    message: 'New password must be different from current password',
+    path: ['newPassword'],
   });
 
 /**
@@ -172,11 +172,11 @@ export const updateProfileSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, "Name is required")
-    .max(100, "Name must be less than 100 characters")
+    .min(1, 'Name is required')
+    .max(100, 'Name must be less than 100 characters')
     .optional(),
   email: emailSchema.optional(),
-  profilePicture: z.string().url("Invalid URL format").optional().nullable(),
+  profilePicture: z.string().url('Invalid URL format').optional().nullable(),
 });
 
 // Type exports
@@ -185,9 +185,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type MagicLinkRequestInput = z.infer<typeof magicLinkRequestSchema>;
 export type MagicLinkVerifyInput = z.infer<typeof magicLinkVerifySchema>;
 export type EmailVerifyInput = z.infer<typeof emailVerifySchema>;
-export type PasswordResetRequestInput = z.infer<
-  typeof passwordResetRequestSchema
->;
+export type PasswordResetRequestInput = z.infer<typeof passwordResetRequestSchema>;
 export type PasswordResetInput = z.infer<typeof passwordResetSchema>;
 export type OAuthCallbackInput = z.infer<typeof oauthCallbackSchema>;
 export type GoogleTokenInput = z.infer<typeof googleTokenSchema>;

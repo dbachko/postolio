@@ -2,7 +2,7 @@
  * Zod validation schemas for API endpoints
  */
 
-import { z } from "zod";
+import { z } from 'zod';
 
 /**
  * Common pagination query parameters
@@ -24,28 +24,28 @@ export const PaginationSchema = z.object({
  * Post detail params
  */
 export const PostDetailParamsSchema = z.object({
-  postId: z.string().cuid("Invalid post ID format"),
+  postId: z.string().cuid('Invalid post ID format'),
 });
 
 /**
  * Brand params
  */
 export const BrandParamsSchema = z.object({
-  brandId: z.string().cuid("Invalid brand ID format"),
+  brandId: z.string().cuid('Invalid brand ID format'),
 });
 
 /**
  * Campaign params
  */
 export const CampaignParamsSchema = z.object({
-  campaignId: z.string().cuid("Invalid campaign ID format"),
+  campaignId: z.string().cuid('Invalid campaign ID format'),
 });
 
 /**
  * Content params
  */
 export const ContentParamsSchema = z.object({
-  contentId: z.string().cuid("Invalid content ID format"),
+  contentId: z.string().cuid('Invalid content ID format'),
 });
 
 /**
@@ -55,25 +55,19 @@ export const DateRangeSchema = z.object({
   startDate: z
     .string()
     .optional()
-    .refine(
-      (val) => !val || !isNaN(Date.parse(val)),
-      "Invalid start date format",
-    ),
+    .refine((val) => !val || !isNaN(Date.parse(val)), 'Invalid start date format'),
   endDate: z
     .string()
     .optional()
-    .refine(
-      (val) => !val || !isNaN(Date.parse(val)),
-      "Invalid end date format",
-    ),
+    .refine((val) => !val || !isNaN(Date.parse(val)), 'Invalid end date format'),
 });
 
 /**
  * Sort parameters
  */
 export const SortSchema = z.object({
-  sortBy: z.enum(["createdAt", "updatedAt", "name", "priority"]).optional(),
-  sortOrder: z.enum(["asc", "desc"]).optional(),
+  sortBy: z.enum(['createdAt', 'updatedAt', 'name', 'priority']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
 });
 
 /**
@@ -94,13 +88,13 @@ export const CampaignCreateSchema = z.object({
   name: z.string().min(1).max(100),
   brandId: z.string().cuid(),
   config: z.object({
-    frequency: z.enum(["daily", "every-other-day", "weekly"]),
+    frequency: z.enum(['daily', 'every-other-day', 'weekly']),
     themes: z.array(z.string()).min(1).max(10),
     duration: z.number().int().min(1).max(365),
     priority: z.number().int().min(1).max(10).default(5),
     postingTime: z.string().optional(),
   }),
-  status: z.enum(["creating", "preview", "active", "paused"]).optional(),
+  status: z.enum(['creating', 'preview', 'active', 'paused']).optional(),
 });
 
 /**
@@ -110,12 +104,12 @@ export const CampaignUpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   config: z
     .object({
-      frequency: z.enum(["daily", "every-other-day", "weekly"]).optional(),
+      frequency: z.enum(['daily', 'every-other-day', 'weekly']).optional(),
       themes: z.array(z.string()).min(1).max(10).optional(),
       priority: z.number().int().min(1).max(10).optional(),
     })
     .optional(),
-  status: z.enum(["active", "paused"]).optional(),
+  status: z.enum(['active', 'paused']).optional(),
 });
 
 /**
@@ -141,7 +135,7 @@ export const ScheduleContentSchema = z.object({
     .string()
     .refine(
       (val) => !isNaN(Date.parse(val)) && new Date(val) > new Date(),
-      "Scheduled time must be in the future",
+      'Scheduled time must be in the future'
     ),
   timezone: z.string().optional(),
 });
@@ -152,10 +146,8 @@ export const ScheduleContentSchema = z.object({
 export const AnalyticsRequestSchema = z
   .object({
     brandId: z.string().cuid(),
-    timeRange: z.enum(["7d", "30d", "90d"]),
-    metrics: z
-      .array(z.enum(["impressions", "reach", "engagement", "growth"]))
-      .optional(),
+    timeRange: z.enum(['7d', '30d', '90d']),
+    metrics: z.array(z.enum(['impressions', 'reach', 'engagement', 'growth'])).optional(),
   })
   .merge(DateRangeSchema);
 
@@ -165,7 +157,7 @@ export const AnalyticsRequestSchema = z
 export const SearchSchema = z
   .object({
     q: z.string().min(1).max(200),
-    type: z.enum(["content", "campaign", "brand"]).optional(),
+    type: z.enum(['content', 'campaign', 'brand']).optional(),
   })
   .merge(PaginationSchema);
 
@@ -174,7 +166,7 @@ export const SearchSchema = z
  */
 export function validateRequest<T>(
   schema: z.ZodSchema<T>,
-  data: unknown,
+  data: unknown
 ): { success: true; data: T } | { success: false; errors: string[] } {
   const result = schema.safeParse(data);
 
@@ -183,7 +175,7 @@ export function validateRequest<T>(
   }
 
   const errors = result.error.issues.map((issue) => {
-    const path = issue.path.join(".");
+    const path = issue.path.join('.');
     return path ? `${path}: ${issue.message}` : issue.message;
   });
 

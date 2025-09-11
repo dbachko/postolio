@@ -1,7 +1,7 @@
-import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
-import jwt from "@fastify/jwt";
+import { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import jwt from '@fastify/jwt';
 
-declare module "@fastify/jwt" {
+declare module '@fastify/jwt' {
   interface FastifyJWT {
     user: {
       id: string;
@@ -10,35 +10,28 @@ declare module "@fastify/jwt" {
   }
 }
 
-declare module "fastify" {
+declare module 'fastify' {
   interface FastifyInstance {
-    authenticate: (
-      request: FastifyRequest,
-      reply: FastifyReply,
-    ) => Promise<void>;
+    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   // Register JWT plugin
   await fastify.register(jwt, {
-    secret: process.env.JWT_SECRET || "fallback-secret-for-development",
+    secret: process.env.JWT_SECRET || 'fallback-secret-for-development',
   });
 
   // Cookie plugin is registered elsewhere in the application
 
   // Authentication decorator
   fastify.decorate(
-    "authenticate",
-    async function (
-      this: typeof fastify,
-      request: FastifyRequest,
-      reply: FastifyReply,
-    ) {
+    'authenticate',
+    async function (this: typeof fastify, request: FastifyRequest, reply: FastifyReply) {
       try {
         // Check for token in Authorization header first
         const authHeader = request.headers.authorization;
-        if (authHeader && authHeader.startsWith("Bearer ")) {
+        if (authHeader && authHeader.startsWith('Bearer ')) {
           const token = authHeader.slice(7);
           request.user = await fastify.jwt.verify(token);
         } else {
@@ -49,13 +42,13 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
         // Validate that user object has required fields
         if (!request.user || !request.user.id || !request.user.email) {
-          throw new Error("Invalid user token payload");
+          throw new Error('Invalid user token payload');
         }
       } catch {
         // Send 401 response - Fastify will stop the request chain
-        return reply.code(401).send({ error: "Authentication required" });
+        return reply.code(401).send({ error: 'Authentication required' });
       }
-    },
+    }
   );
 };
 

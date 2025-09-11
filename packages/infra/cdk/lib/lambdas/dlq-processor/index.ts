@@ -3,28 +3,28 @@
  * Automatically processes messages from Dead Letter Queues
  */
 
-import { ScheduledEvent, Context } from "aws-lambda";
-import { DLQProcessor } from "../../services/dlq-processor";
+import { ScheduledEvent, Context } from 'aws-lambda';
+import { DLQProcessor } from '../../services/dlq-processor';
 
 const dlqProcessor = DLQProcessor.getInstance();
 
 // DLQ to Original Queue mapping
 const DLQ_MAPPINGS = {
-  "postolio-content-publisher-dlq": {
+  'postolio-content-publisher-dlq': {
     originalQueue: process.env.PUBLISHER_QUEUE_URL,
-    processor: "contentPublisher",
+    processor: 'contentPublisher',
   },
-  "postolio-scheduler-dlq": {
+  'postolio-scheduler-dlq': {
     originalQueue: process.env.SCHEDULER_QUEUE_URL,
-    processor: "scheduler",
+    processor: 'scheduler',
   },
-  "postolio-token-refresh-dlq": {
+  'postolio-token-refresh-dlq': {
     originalQueue: process.env.TOKEN_REFRESH_QUEUE_URL,
-    processor: "tokenRefresh",
+    processor: 'tokenRefresh',
   },
-  "postolio-analytics-dlq": {
+  'postolio-analytics-dlq': {
     originalQueue: process.env.ANALYTICS_QUEUE_URL,
-    processor: "analytics",
+    processor: 'analytics',
   },
 };
 
@@ -32,11 +32,11 @@ const DLQ_MAPPINGS = {
 const PROCESSORS = {
   contentPublisher: async (message: any): Promise<boolean> => {
     try {
-      console.log("Reprocessing content publisher message:", message);
+      console.log('Reprocessing content publisher message:', message);
 
       // Validate message structure
       if (!message.contentId || !message.platform) {
-        console.error("Invalid message structure for content publisher");
+        console.error('Invalid message structure for content publisher');
         return false;
       }
 
@@ -45,62 +45,61 @@ const PROCESSORS = {
       // For now, return true if message is valid
       return true;
     } catch (error) {
-      console.error("Content publisher processor error:", error);
+      console.error('Content publisher processor error:', error);
       return false;
     }
   },
 
   scheduler: async (message: any): Promise<boolean> => {
     try {
-      console.log("Reprocessing scheduler message:", message);
+      console.log('Reprocessing scheduler message:', message);
 
       // Validate schedule is still relevant
       if (message.scheduledTime) {
         const scheduledTime = new Date(message.scheduledTime);
         if (scheduledTime < new Date()) {
-          console.log("Schedule is in the past, marking as processed");
+          console.log('Schedule is in the past, marking as processed');
           return true; // Don't retry past schedules
         }
       }
 
       return true;
     } catch (error) {
-      console.error("Scheduler processor error:", error);
+      console.error('Scheduler processor error:', error);
       return false;
     }
   },
 
   tokenRefresh: async (message: any): Promise<boolean> => {
     try {
-      console.log("Reprocessing token refresh message:", message);
+      console.log('Reprocessing token refresh message:', message);
 
       // Token refresh messages are time-sensitive
       // If too old, skip
       const messageTime = new Date(message.timestamp || 0);
-      const ageInHours =
-        (Date.now() - messageTime.getTime()) / (1000 * 60 * 60);
+      const ageInHours = (Date.now() - messageTime.getTime()) / (1000 * 60 * 60);
 
       if (ageInHours > 24) {
-        console.log("Token refresh message too old, skipping");
+        console.log('Token refresh message too old, skipping');
         return true; // Mark as processed to remove from DLQ
       }
 
       return true;
     } catch (error) {
-      console.error("Token refresh processor error:", error);
+      console.error('Token refresh processor error:', error);
       return false;
     }
   },
 
   analytics: async (message: any): Promise<boolean> => {
     try {
-      console.log("Reprocessing analytics message:", message);
+      console.log('Reprocessing analytics message:', message);
 
       // Analytics messages can be batched if old
       // For now, always attempt reprocessing
       return true;
     } catch (error) {
-      console.error("Analytics processor error:", error);
+      console.error('Analytics processor error:', error);
       return false;
     }
   },
@@ -109,11 +108,8 @@ const PROCESSORS = {
 /**
  * Lambda handler for scheduled DLQ processing
  */
-export const handler = async (
-  event: ScheduledEvent,
-  context: Context,
-): Promise<any> => {
-  console.log("DLQ Processor triggered:", JSON.stringify(event));
+export const handler = async (event: ScheduledEvent, context: Context): Promise<any> => {
+  console.log('DLQ Processor triggered:', JSON.stringify(event));
 
   const results = {
     processed: 0,
@@ -140,14 +136,14 @@ export const handler = async (
         const processingResults = await dlqProcessor.processDLQ(
           dlqUrl,
           config.originalQueue,
-          processorFn,
+          processorFn
         );
 
         // Aggregate results
         for (const result of processingResults) {
           if (result.success) {
             results.processed++;
-          } else if (result.action === "parked") {
+          } else if (result.action === 'parked') {
             results.parked++;
           } else {
             results.failed++;
@@ -168,12 +164,10 @@ export const handler = async (
 
     // Get overall stats for monitoring
     const stats = await Promise.all(
-      Object.keys(DLQ_MAPPINGS).map((dlqName) =>
-        dlqProcessor.getDLQStats(dlqName),
-      ),
+      Object.keys(DLQ_MAPPINGS).map((dlqName) => dlqProcessor.getDLQStats(dlqName))
     );
 
-    console.log("DLQ Processing Complete:", {
+    console.log('DLQ Processing Complete:', {
       results,
       stats,
     });
@@ -181,20 +175,20 @@ export const handler = async (
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: "DLQ processing completed",
+        message: 'DLQ processing completed',
         results,
         stats,
         timestamp: new Date().toISOString(),
       }),
     };
   } catch (error) {
-    console.error("DLQ Processor error:", error);
+    console.error('DLQ Processor error:', error);
 
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: "DLQ processing failed",
-        error: error instanceof Error ? error.message : "Unknown error",
+        message: 'DLQ processing failed',
+        error: error instanceof Error ? error.message : 'Unknown error',
         results,
         timestamp: new Date().toISOString(),
       }),
@@ -205,11 +199,8 @@ export const handler = async (
 /**
  * Lambda handler for manual reprocessing
  */
-export const reprocessHandler = async (
-  event: any,
-  context: Context,
-): Promise<any> => {
-  console.log("Manual DLQ reprocess triggered:", JSON.stringify(event));
+export const reprocessHandler = async (event: any, context: Context): Promise<any> => {
+  console.log('Manual DLQ reprocess triggered:', JSON.stringify(event));
 
   const { dlqName, messageIds } = event;
 
@@ -217,33 +208,30 @@ export const reprocessHandler = async (
     return {
       statusCode: 400,
       body: JSON.stringify({
-        error: "dlqName is required",
+        error: 'dlqName is required',
       }),
     };
   }
 
   try {
-    const results = await dlqProcessor.reprocessParkedMessages(
-      dlqName,
-      messageIds,
-    );
+    const results = await dlqProcessor.reprocessParkedMessages(dlqName, messageIds);
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: "Reprocessing initiated",
+        message: 'Reprocessing initiated',
         results,
         count: results.length,
         timestamp: new Date().toISOString(),
       }),
     };
   } catch (error) {
-    console.error("Reprocess error:", error);
+    console.error('Reprocess error:', error);
 
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: error instanceof Error ? error.message : "Reprocess failed",
+        error: error instanceof Error ? error.message : 'Reprocess failed',
         timestamp: new Date().toISOString(),
       }),
     };

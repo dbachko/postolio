@@ -1,26 +1,19 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { useAuthStore } from "@/stores/authStore";
-import { useNavigate } from "react-router-dom";
-import { CheckCircle, AlertCircle } from "lucide-react";
-import { TIMEOUTS } from "@/constants/timeouts";
-import type {
-  FacebookAuthResponse,
-  FacebookLoginResponse,
-} from "@/types/oauth";
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { useAuthStore } from '@/stores/authStore';
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle, AlertCircle } from 'lucide-react';
+import { TIMEOUTS } from '@/constants/timeouts';
+import type { FacebookAuthResponse, FacebookLoginResponse } from '@/types/oauth';
 
 interface FacebookSignInIsolatedProps {
-  mode: "signin" | "signup" | "link";
+  mode: 'signin' | 'signup' | 'link';
   onSuccess?: () => void;
   onError?: (error: string) => void;
 }
 
-export function FacebookSignInIsolated({
-  mode,
-  onSuccess,
-  onError,
-}: FacebookSignInIsolatedProps) {
+export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSignInIsolatedProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const { setUser, setToken } = useAuthStore();
@@ -29,15 +22,14 @@ export function FacebookSignInIsolated({
 
   // Check if Facebook OAuth is configured
   const isConfigured =
-    import.meta.env.VITE_FACEBOOK_APP_ID &&
-    import.meta.env.VITE_FACEBOOK_APP_ID !== "";
+    import.meta.env.VITE_FACEBOOK_APP_ID && import.meta.env.VITE_FACEBOOK_APP_ID !== '';
 
   const handleFacebookResponse = useCallback(
     async (authResponse: FacebookAuthResponse) => {
       if (!authResponse || !authResponse.accessToken) {
-        const errorMsg = "No access token received from Facebook";
+        const errorMsg = 'No access token received from Facebook';
         onError?.(errorMsg);
-        toast.error("Facebook sign-in failed", {
+        toast.error('Facebook sign-in failed', {
           description: errorMsg,
           icon: <AlertCircle className="text-red-500" />,
         });
@@ -47,20 +39,17 @@ export function FacebookSignInIsolated({
       setIsLoading(true);
 
       try {
-        const endpoint =
-          mode === "link"
-            ? "/api/auth/facebook/link"
-            : "/api/auth/facebook/verify";
+        const endpoint = mode === 'link' ? '/api/auth/facebook/link' : '/api/auth/facebook/verify';
 
         const response = await fetch(endpoint, {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
-            ...(mode === "link" && localStorage.getItem("token")
-              ? { Authorization: `Bearer ${localStorage.getItem("token")}` }
+            'Content-Type': 'application/json',
+            ...(mode === 'link' && localStorage.getItem('token')
+              ? { Authorization: `Bearer ${localStorage.getItem('token')}` }
               : {}),
           },
-          credentials: "include",
+          credentials: 'include',
           body: JSON.stringify({
             accessToken: authResponse.accessToken,
             userID: authResponse.userID,
@@ -70,40 +59,37 @@ export function FacebookSignInIsolated({
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || "Facebook authentication failed");
+          throw new Error(data.error || 'Facebook authentication failed');
         }
 
-        if (mode !== "link") {
+        if (mode !== 'link') {
           // Store auth data
           setToken(data.token);
           setUser(data.user);
-          localStorage.setItem("token", data.token);
+          localStorage.setItem('token', data.token);
 
-          const actionText = data.isNewUser ? "Account created" : "Signed in";
+          const actionText = data.isNewUser ? 'Account created' : 'Signed in';
           toast.success(`${actionText} successfully!`, {
-            description: "Welcome to Postolio! Redirecting...",
+            description: 'Welcome to Postolio! Redirecting...',
             icon: <CheckCircle className="text-green-500" />,
             duration: TIMEOUTS.TOAST_DURATION,
           });
 
           setTimeout(() => {
-            navigate("/dashboard");
+            navigate('/dashboard');
           }, TIMEOUTS.SUCCESS_REDIRECT);
         } else {
-          toast.success("Facebook account linked!", {
-            description: "You can now sign in with Facebook",
+          toast.success('Facebook account linked!', {
+            description: 'You can now sign in with Facebook',
             icon: <CheckCircle className="text-green-500" />,
           });
         }
 
         onSuccess?.();
       } catch (error) {
-        const errorMsg =
-          error instanceof Error
-            ? error.message
-            : "Facebook authentication failed";
+        const errorMsg = error instanceof Error ? error.message : 'Facebook authentication failed';
         onError?.(errorMsg);
-        toast.error("Authentication failed", {
+        toast.error('Authentication failed', {
           description: errorMsg,
           icon: <AlertCircle className="text-red-500" />,
         });
@@ -111,13 +97,13 @@ export function FacebookSignInIsolated({
         setIsLoading(false);
       }
     },
-    [mode, navigate, onError, onSuccess, setToken, setUser],
+    [mode, navigate, onError, onSuccess, setToken, setUser]
   );
 
   const handleFacebookLogin = useCallback(() => {
     if (!window.FB || !isSDKLoaded) {
-      toast.error("Facebook SDK not loaded", {
-        description: "Please try again in a moment",
+      toast.error('Facebook SDK not loaded', {
+        description: 'Please try again in a moment',
         icon: <AlertCircle className="text-red-500" />,
       });
       return;
@@ -132,20 +118,20 @@ export function FacebookSignInIsolated({
             handleFacebookResponse(response.authResponse);
           } else {
             setIsLoading(false);
-            if (response.status !== "unknown") {
-              toast.error("Facebook sign-in cancelled", {
+            if (response.status !== 'unknown') {
+              toast.error('Facebook sign-in cancelled', {
                 icon: <AlertCircle className="text-red-500" />,
               });
             }
           }
         },
-        { scope: "public_profile,email" },
+        { scope: 'public_profile,email' }
       );
     } catch (error) {
       setIsLoading(false);
-      console.error("Facebook login error:", error);
-      toast.error("Facebook sign-in failed", {
-        description: "An unexpected error occurred",
+      console.error('Facebook login error:', error);
+      toast.error('Facebook sign-in failed', {
+        description: 'An unexpected error occurred',
         icon: <AlertCircle className="text-red-500" />,
       });
     }
@@ -169,7 +155,7 @@ export function FacebookSignInIsolated({
 
     window.fbAsyncInit = function () {
       // Call the old init if it existed
-      if (oldInit && typeof oldInit === "function") {
+      if (oldInit && typeof oldInit === 'function') {
         oldInit();
       }
 
@@ -178,33 +164,31 @@ export function FacebookSignInIsolated({
           appId: import.meta.env.VITE_FACEBOOK_APP_ID,
           cookie: true,
           xfbml: false, // Don't parse XFBML to avoid DOM manipulation
-          version: "v18.0",
+          version: 'v18.0',
           autoLogAppEvents: false,
         });
 
         setIsSDKLoaded(true);
         sdkLoadedRef.current = true;
       } catch (error) {
-        console.error("Failed to initialize Facebook SDK:", error);
-        onError?.("Failed to initialize Facebook Sign-In");
+        console.error('Failed to initialize Facebook SDK:', error);
+        onError?.('Failed to initialize Facebook Sign-In');
       }
     };
 
     // Check if script already exists
-    const existingScript = document.querySelector(
-      'script[src*="facebook.net/en_US/sdk.js"]',
-    );
+    const existingScript = document.querySelector('script[src*="facebook.net/en_US/sdk.js"]');
     if (existingScript) {
       // SDK script exists but hasn't loaded yet
       return;
     }
 
     // Load the SDK asynchronously
-    const script = document.createElement("script");
-    script.src = "https://connect.facebook.net/en_US/sdk.js";
+    const script = document.createElement('script');
+    script.src = 'https://connect.facebook.net/en_US/sdk.js';
     script.async = true;
     script.defer = true;
-    script.id = "facebook-jssdk";
+    script.id = 'facebook-jssdk';
 
     document.body.appendChild(script);
 
@@ -218,11 +202,9 @@ export function FacebookSignInIsolated({
 
   if (!isConfigured) {
     return (
-      <div className="w-full p-3 text-center border rounded-md bg-muted/50">
-        <p className="text-sm text-muted-foreground">
-          Facebook Sign-In not configured
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
+      <div className="bg-muted/50 w-full rounded-md border p-3 text-center">
+        <p className="text-muted-foreground text-sm">Facebook Sign-In not configured</p>
+        <p className="text-muted-foreground mt-1 text-xs">
           See FACEBOOK_OAUTH_SETUP.md for instructions
         </p>
       </div>
@@ -230,9 +212,9 @@ export function FacebookSignInIsolated({
   }
 
   const buttonText = {
-    signin: "Sign in with Facebook",
-    signup: "Sign up with Facebook",
-    link: "Link Facebook Account",
+    signin: 'Sign in with Facebook',
+    signup: 'Sign up with Facebook',
+    link: 'Link Facebook Account',
   }[mode];
 
   return (
@@ -244,9 +226,9 @@ export function FacebookSignInIsolated({
       disabled={isLoading || !isSDKLoaded}
     >
       {isLoading ? (
-        "Connecting..."
+        'Connecting...'
       ) : !isSDKLoaded ? (
-        "Loading..."
+        'Loading...'
       ) : (
         <>
           <svg

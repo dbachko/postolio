@@ -3,7 +3,7 @@
  * Centralized event contract definitions for all services
  */
 
-import { z } from "zod";
+import { z } from 'zod';
 
 // Base event metadata schema
 export const EventMetadataSchema = z.object({
@@ -12,19 +12,19 @@ export const EventMetadataSchema = z.object({
   correlationId: z.string().uuid(),
   causationId: z.string().uuid().optional(),
   timestamp: z.string().datetime(),
-  version: z.string().default("1.0"),
+  version: z.string().default('1.0'),
 });
 
 // Base platform event schema
 export const PlatformEventSchema = z.object({
   id: z.string().uuid(),
   source: z.enum([
-    "postolio.content",
-    "postolio.scheduler",
-    "postolio.platform",
-    "postolio.campaign",
-    "postolio.analytics",
-    "postolio.token",
+    'postolio.content',
+    'postolio.scheduler',
+    'postolio.platform',
+    'postolio.campaign',
+    'postolio.analytics',
+    'postolio.token',
   ]),
   type: z.string(),
   timestamp: z.string().datetime(),
@@ -34,8 +34,8 @@ export const PlatformEventSchema = z.object({
 
 // Content Events
 export const ContentCreatedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.content"),
-  type: z.literal("content.created"),
+  source: z.literal('postolio.content'),
+  type: z.literal('content.created'),
   data: z.object({
     contentId: z.string(),
     brandId: z.string(),
@@ -43,13 +43,13 @@ export const ContentCreatedEventSchema = PlatformEventSchema.extend({
     hashtags: z.array(z.string()),
     mediaUrl: z.string().url().optional(),
     campaignId: z.string().optional(),
-    status: z.enum(["draft", "scheduled", "published"]),
+    status: z.enum(['draft', 'scheduled', 'published']),
   }),
 });
 
 export const ContentUpdatedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.content"),
-  type: z.literal("content.updated"),
+  source: z.literal('postolio.content'),
+  type: z.literal('content.updated'),
   data: z.object({
     contentId: z.string(),
     brandId: z.string(),
@@ -57,14 +57,14 @@ export const ContentUpdatedEventSchema = PlatformEventSchema.extend({
       caption: z.string().optional(),
       hashtags: z.array(z.string()).optional(),
       mediaUrl: z.string().url().optional(),
-      status: z.enum(["draft", "scheduled", "published"]).optional(),
+      status: z.enum(['draft', 'scheduled', 'published']).optional(),
     }),
   }),
 });
 
 export const ContentDeletedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.content"),
-  type: z.literal("content.deleted"),
+  source: z.literal('postolio.content'),
+  type: z.literal('content.deleted'),
   data: z.object({
     contentId: z.string(),
     brandId: z.string(),
@@ -73,21 +73,21 @@ export const ContentDeletedEventSchema = PlatformEventSchema.extend({
 
 // Schedule Events
 export const ScheduleCreatedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.scheduler"),
-  type: z.literal("schedule.created"),
+  source: z.literal('postolio.scheduler'),
+  type: z.literal('schedule.created'),
   data: z.object({
     scheduleId: z.string(),
     contentId: z.string(),
     brandId: z.string(),
-    platform: z.enum(["instagram", "facebook", "linkedin", "tiktok"]),
+    platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']),
     scheduledAt: z.string().datetime(),
     timezone: z.string(),
   }),
 });
 
 export const ScheduleUpdatedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.scheduler"),
-  type: z.literal("schedule.updated"),
+  source: z.literal('postolio.scheduler'),
+  type: z.literal('schedule.updated'),
   data: z.object({
     scheduleId: z.string(),
     updates: z.object({
@@ -104,8 +104,8 @@ export const ScheduleUpdatedEventSchema = PlatformEventSchema.extend({
 });
 
 export const ScheduleCanceledEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.scheduler"),
-  type: z.literal("schedule.canceled"),
+  source: z.literal('postolio.scheduler'),
+  type: z.literal('schedule.canceled'),
   data: z.object({
     scheduleId: z.string(),
     contentId: z.string(),
@@ -115,14 +115,14 @@ export const ScheduleCanceledEventSchema = PlatformEventSchema.extend({
 });
 
 export const ScheduleReadyEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.scheduler"),
-  type: z.literal("schedule.ready"),
+  source: z.literal('postolio.scheduler'),
+  type: z.literal('schedule.ready'),
   data: z.object({
     scheduleId: z.string(),
     contentId: z.string(),
     brandId: z.string(),
     userId: z.string(),
-    platform: z.enum(["instagram", "facebook", "linkedin", "tiktok"]),
+    platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']),
     content: z.object({
       caption: z.string(),
       hashtags: z.array(z.string()),
@@ -133,13 +133,13 @@ export const ScheduleReadyEventSchema = PlatformEventSchema.extend({
 
 // Platform Publishing Events
 export const PostPublishedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.platform"),
-  type: z.literal("post.published"),
+  source: z.literal('postolio.platform'),
+  type: z.literal('post.published'),
   data: z.object({
     scheduleId: z.string(),
     contentId: z.string(),
     brandId: z.string(),
-    platform: z.enum(["instagram", "facebook", "linkedin", "tiktok"]),
+    platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']),
     platformPostId: z.string(),
     permalink: z.string().url(),
     publishedAt: z.string().datetime(),
@@ -147,13 +147,13 @@ export const PostPublishedEventSchema = PlatformEventSchema.extend({
 });
 
 export const PostFailedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.platform"),
-  type: z.literal("post.failed"),
+  source: z.literal('postolio.platform'),
+  type: z.literal('post.failed'),
   data: z.object({
     scheduleId: z.string(),
     contentId: z.string(),
     brandId: z.string(),
-    platform: z.enum(["instagram", "facebook", "linkedin", "tiktok"]),
+    platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']),
     error: z.object({
       code: z.string(),
       message: z.string(),
@@ -166,15 +166,15 @@ export const PostFailedEventSchema = PlatformEventSchema.extend({
 
 // Campaign Events
 export const CampaignCreatedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.campaign"),
-  type: z.literal("campaign.created"),
+  source: z.literal('postolio.campaign'),
+  type: z.literal('campaign.created'),
   data: z.object({
     campaignId: z.string(),
     brandId: z.string(),
     name: z.string(),
     config: z.object({
       duration: z.number(),
-      frequency: z.enum(["daily", "weekly"]),
+      frequency: z.enum(['daily', 'weekly']),
       themes: z.array(z.string()),
       priority: z.number().min(1).max(10),
     }),
@@ -183,8 +183,8 @@ export const CampaignCreatedEventSchema = PlatformEventSchema.extend({
 });
 
 export const CampaignStartedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.campaign"),
-  type: z.literal("campaign.started"),
+  source: z.literal('postolio.campaign'),
+  type: z.literal('campaign.started'),
   data: z.object({
     campaignId: z.string(),
     brandId: z.string(),
@@ -193,8 +193,8 @@ export const CampaignStartedEventSchema = PlatformEventSchema.extend({
 });
 
 export const CampaignCompletedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.campaign"),
-  type: z.literal("campaign.completed"),
+  source: z.literal('postolio.campaign'),
+  type: z.literal('campaign.completed'),
   data: z.object({
     campaignId: z.string(),
     brandId: z.string(),
@@ -209,41 +209,41 @@ export const CampaignCompletedEventSchema = PlatformEventSchema.extend({
 
 // Token Events
 export const TokenRefreshedEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.token"),
-  type: z.literal("token.refreshed"),
+  source: z.literal('postolio.token'),
+  type: z.literal('token.refreshed'),
   data: z.object({
     brandId: z.string(),
-    platform: z.enum(["instagram", "facebook", "linkedin", "tiktok"]),
+    platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']),
     expiresAt: z.string().datetime(),
   }),
 });
 
 export const TokenExpiredEventSchema = PlatformEventSchema.extend({
-  source: z.literal("postolio.token"),
-  type: z.literal("token.expired"),
+  source: z.literal('postolio.token'),
+  type: z.literal('token.expired'),
   data: z.object({
     brandId: z.string(),
-    platform: z.enum(["instagram", "facebook", "linkedin", "tiktok"]),
+    platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok']),
     expiredAt: z.string().datetime(),
   }),
 });
 
 // Event Registry Map
 export const EventSchemaRegistry = {
-  "content.created": ContentCreatedEventSchema,
-  "content.updated": ContentUpdatedEventSchema,
-  "content.deleted": ContentDeletedEventSchema,
-  "schedule.created": ScheduleCreatedEventSchema,
-  "schedule.updated": ScheduleUpdatedEventSchema,
-  "schedule.canceled": ScheduleCanceledEventSchema,
-  "schedule.ready": ScheduleReadyEventSchema,
-  "post.published": PostPublishedEventSchema,
-  "post.failed": PostFailedEventSchema,
-  "campaign.created": CampaignCreatedEventSchema,
-  "campaign.started": CampaignStartedEventSchema,
-  "campaign.completed": CampaignCompletedEventSchema,
-  "token.refreshed": TokenRefreshedEventSchema,
-  "token.expired": TokenExpiredEventSchema,
+  'content.created': ContentCreatedEventSchema,
+  'content.updated': ContentUpdatedEventSchema,
+  'content.deleted': ContentDeletedEventSchema,
+  'schedule.created': ScheduleCreatedEventSchema,
+  'schedule.updated': ScheduleUpdatedEventSchema,
+  'schedule.canceled': ScheduleCanceledEventSchema,
+  'schedule.ready': ScheduleReadyEventSchema,
+  'post.published': PostPublishedEventSchema,
+  'post.failed': PostFailedEventSchema,
+  'campaign.created': CampaignCreatedEventSchema,
+  'campaign.started': CampaignStartedEventSchema,
+  'campaign.completed': CampaignCompletedEventSchema,
+  'token.refreshed': TokenRefreshedEventSchema,
+  'token.expired': TokenExpiredEventSchema,
 } as const;
 
 // Type exports
@@ -259,19 +259,13 @@ export type PostPublishedEvent = z.infer<typeof PostPublishedEventSchema>;
 export type PostFailedEvent = z.infer<typeof PostFailedEventSchema>;
 export type CampaignCreatedEvent = z.infer<typeof CampaignCreatedEventSchema>;
 export type CampaignStartedEvent = z.infer<typeof CampaignStartedEventSchema>;
-export type CampaignCompletedEvent = z.infer<
-  typeof CampaignCompletedEventSchema
->;
+export type CampaignCompletedEvent = z.infer<typeof CampaignCompletedEventSchema>;
 export type TokenRefreshedEvent = z.infer<typeof TokenRefreshedEventSchema>;
 export type TokenExpiredEvent = z.infer<typeof TokenExpiredEventSchema>;
 
 // Event validation helper
-export function validateEvent(
-  eventType: string,
-  eventData: unknown,
-): PlatformEvent {
-  const schema =
-    EventSchemaRegistry[eventType as keyof typeof EventSchemaRegistry];
+export function validateEvent(eventType: string, eventData: unknown): PlatformEvent {
+  const schema = EventSchemaRegistry[eventType as keyof typeof EventSchemaRegistry];
   if (!schema) {
     throw new Error(`Unknown event type: ${eventType}`);
   }
@@ -283,7 +277,7 @@ export class EventBuilder {
   static createEvent<T extends keyof typeof EventSchemaRegistry>(
     type: T,
     data: any,
-    metadata: z.infer<typeof EventMetadataSchema>,
+    metadata: z.infer<typeof EventMetadataSchema>
   ): PlatformEvent {
     const event = {
       id: crypto.randomUUID(),
@@ -302,7 +296,7 @@ export class EventBuilder {
   }
 
   private static getSourceFromType(type: string): string {
-    const [domain] = type.split(".");
+    const [domain] = type.split('.');
     return `postolio.${domain}`;
   }
 }

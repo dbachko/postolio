@@ -1,18 +1,17 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { signJWT } from "../services/jwt.js";
-import { getDatabaseClient } from "../config/database.js";
-import bcrypt from "bcrypt";
-import { randomBytes } from "crypto";
-import axios from "axios";
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { signJWT } from '../services/jwt.js';
+import { getDatabaseClient } from '../config/database.js';
+import bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
+import axios from 'axios';
 
 const prisma = getDatabaseClient();
 
 // Facebook App configuration
-const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || "";
-const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || "";
+const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || '';
+const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || '';
 const FACEBOOK_REDIRECT_URI =
-  process.env.FACEBOOK_OAUTH_REDIRECT_URI ||
-  "http://localhost:3000/api/auth/facebook/callback";
+  process.env.FACEBOOK_OAUTH_REDIRECT_URI || 'http://localhost:3000/api/auth/facebook/callback';
 
 interface FacebookTokenBody {
   code: string; // The authorization code from Facebook
@@ -32,10 +31,10 @@ interface FacebookUserInfo {
 
 function ensureAuth(
   request: FastifyRequest,
-  reply: FastifyReply,
+  reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string; email?: string } } {
   if (!request.user) {
-    reply.code(401).send({ error: "Unauthorized" });
+    reply.code(401).send({ error: 'Unauthorized' });
     return false;
   }
   return true;
@@ -43,108 +42,70 @@ function ensureAuth(
 
 const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
   // Facebook OAuth callback - exchanges code for token and gets user info
-  fastify.post<{ Body: FacebookTokenBody }>(
-    "/facebook/callback",
-    async (request, reply) => {
-      try {
-        const { code, redirectUri = FACEBOOK_REDIRECT_URI } = request.body;
+  fastify.post<{ Body: FacebookTokenBody }>('/facebook/callback', async (request, reply) => {
+    try {
+      const { code, redirectUri = FACEBOOK_REDIRECT_URI } = request.body;
 
-        if (!code) {
-          return reply
-            .code(400)
-            .send({ error: "No authorization code provided" });
-        }
+      if (!code) {
+        return reply.code(400).send({ error: 'No authorization code provided' });
+      }
 
-        // Exchange code for access token
-        const tokenResponse = await axios.get(
-          "https://graph.facebook.com/v18.0/oauth/access_token",
-          {
-            params: {
-              client_id: FACEBOOK_APP_ID,
-              client_secret: FACEBOOK_APP_SECRET,
-              redirect_uri: redirectUri,
-              code,
-            },
-          },
-        );
+      // Exchange code for access token
+      const tokenResponse = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
+        params: {
+          client_id: FACEBOOK_APP_ID,
+          client_secret: FACEBOOK_APP_SECRET,
+          redirect_uri: redirectUri,
+          code,
+        },
+      });
 
-        const { access_token } = tokenResponse.data;
+      const { access_token } = tokenResponse.data;
 
-        if (!access_token) {
-          return reply
-            .code(401)
-            .send({ error: "Failed to get access token from Facebook" });
-        }
+      if (!access_token) {
+        return reply.code(401).send({ error: 'Failed to get access token from Facebook' });
+      }
 
-        // Get user information from Facebook
-        const userResponse = await axios.get(
-          "https://graph.facebook.com/v18.0/me",
-          {
-            params: {
-              fields: "id,email,name,picture",
-              access_token,
-            },
-          },
-        );
+      // Get user information from Facebook
+      const userResponse = await axios.get('https://graph.facebook.com/v18.0/me', {
+        params: {
+          fields: 'id,email,name,picture',
+          access_token,
+        },
+      });
 
-        const fbUserInfo: FacebookUserInfo = userResponse.data;
+      const fbUserInfo: FacebookUserInfo = userResponse.data;
 
-        // Facebook may not provide email in some cases
-        const email = fbUserInfo.email || `${fbUserInfo.id}@facebook.local`;
+      // Facebook may not provide email in some cases
+      const email = fbUserInfo.email || `${fbUserInfo.id}@facebook.local`;
 
-        // Check if user exists with this email or Facebook ID
-        let user = await prisma.user.findFirst({
-          where: {
-            OR: [{ email }, { facebookId: fbUserInfo.id }],
-          },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            facebookId: true,
-            subscriptionTier: true,
-            emailVerified: true,
-          },
-        });
+      // Check if user exists with this email or Facebook ID
+      let user = await prisma.user.findFirst({
+        where: {
+          OR: [{ email }, { facebookId: fbUserInfo.id }],
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          facebookId: true,
+          subscriptionTier: true,
+          emailVerified: true,
+        },
+      });
 
-        let isNewUser = false;
+      let isNewUser = false;
 
-        if (user) {
-          // User exists - update Facebook ID if not set
-          if (!user.facebookId) {
-            user = await prisma.user.update({
-              where: { id: user.id },
-              data: {
-                facebookId: fbUserInfo.id,
-                profilePicture: fbUserInfo.picture?.data?.url || null,
-                // If Facebook provided an email, it's verified
-                ...(fbUserInfo.email && { emailVerified: true }),
-              },
-              select: {
-                id: true,
-                email: true,
-                name: true,
-                facebookId: true,
-                subscriptionTier: true,
-                emailVerified: true,
-              },
-            });
-          }
-        } else {
-          // Create new user with Facebook OAuth
-          // Generate a cryptographically secure random password for OAuth users
-          const secureRandomPassword = randomBytes(32).toString("hex");
-          const hashedPassword = await bcrypt.hash(secureRandomPassword, 10);
-
-          user = await prisma.user.create({
+      if (user) {
+        // User exists - update Facebook ID if not set
+        if (!user.facebookId) {
+          user = await prisma.user.update({
+            where: { id: user.id },
             data: {
-              email,
-              password: hashedPassword,
-              name: fbUserInfo.name,
               facebookId: fbUserInfo.id,
               profilePicture: fbUserInfo.picture?.data?.url || null,
-              emailVerified: !!fbUserInfo.email, // Only verified if we got a real email
-              subscriptionTier: "free",
+              // If Facebook provided an email, it's verified
+              ...(fbUserInfo.email && { emailVerified: true }),
             },
             select: {
               id: true,
@@ -155,50 +116,75 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
               emailVerified: true,
             },
           });
-          isNewUser = true;
         }
+      } else {
+        // Create new user with Facebook OAuth
+        // Generate a cryptographically secure random password for OAuth users
+        const secureRandomPassword = randomBytes(32).toString('hex');
+        const hashedPassword = await bcrypt.hash(secureRandomPassword, 10);
 
-        // Generate JWT token
-        const token = signJWT({
-          id: user.id,
-          email: user.email,
+        user = await prisma.user.create({
+          data: {
+            email,
+            password: hashedPassword,
+            name: fbUserInfo.name,
+            facebookId: fbUserInfo.id,
+            profilePicture: fbUserInfo.picture?.data?.url || null,
+            emailVerified: !!fbUserInfo.email, // Only verified if we got a real email
+            subscriptionTier: 'free',
+          },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            facebookId: true,
+            subscriptionTier: true,
+            emailVerified: true,
+          },
         });
-
-        // Set HTTP-only cookie for enhanced security
-        reply.setCookie("auth_token", token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          path: "/",
-          maxAge: 7 * 24 * 60 * 60, // 7 days
-        });
-
-        return reply.send({ token, user, isNewUser });
-      } catch (error) {
-        console.error("Facebook OAuth error:", error);
-
-        // Handle specific Facebook API errors
-        if (axios.isAxiosError(error)) {
-          const fbError = error.response?.data?.error;
-          if (fbError) {
-            return reply.code(400).send({
-              error: "Facebook authentication failed",
-              details: fbError.message || "Unknown Facebook error",
-            });
-          }
-        }
-
-        return reply.code(500).send({
-          error: "Authentication failed",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
+        isNewUser = true;
       }
-    },
-  );
+
+      // Generate JWT token
+      const token = signJWT({
+        id: user.id,
+        email: user.email,
+      });
+
+      // Set HTTP-only cookie for enhanced security
+      reply.setCookie('auth_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+      });
+
+      return reply.send({ token, user, isNewUser });
+    } catch (error) {
+      console.error('Facebook OAuth error:', error);
+
+      // Handle specific Facebook API errors
+      if (axios.isAxiosError(error)) {
+        const fbError = error.response?.data?.error;
+        if (fbError) {
+          return reply.code(400).send({
+            error: 'Facebook authentication failed',
+            details: fbError.message || 'Unknown Facebook error',
+          });
+        }
+      }
+
+      return reply.code(500).send({
+        error: 'Authentication failed',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 
   // Link existing account with Facebook
   fastify.post<{ Body: FacebookTokenBody }>(
-    "/facebook/link",
+    '/facebook/link',
     {
       preHandler: fastify.authenticate,
     },
@@ -210,7 +196,7 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Exchange code for access token
         const tokenResponse = await axios.get(
-          "https://graph.facebook.com/v18.0/oauth/access_token",
+          'https://graph.facebook.com/v18.0/oauth/access_token',
           {
             params: {
               client_id: FACEBOOK_APP_ID,
@@ -218,21 +204,18 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
               redirect_uri: redirectUri,
               code,
             },
-          },
+          }
         );
 
         const { access_token } = tokenResponse.data;
 
         // Get user information
-        const userResponse = await axios.get(
-          "https://graph.facebook.com/v18.0/me",
-          {
-            params: {
-              fields: "id,picture",
-              access_token,
-            },
+        const userResponse = await axios.get('https://graph.facebook.com/v18.0/me', {
+          params: {
+            fields: 'id,picture',
+            access_token,
           },
-        );
+        });
 
         const fbUserInfo: FacebookUserInfo = userResponse.data;
 
@@ -246,7 +229,7 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (existingFacebookUser) {
           return reply.code(409).send({
-            error: "This Facebook account is already linked to another user",
+            error: 'This Facebook account is already linked to another user',
           });
         }
 
@@ -268,21 +251,21 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
         return reply.send({
           user: updatedUser,
-          message: "Facebook account linked successfully",
+          message: 'Facebook account linked successfully',
         });
       } catch (error) {
-        console.error("Facebook link error:", error);
+        console.error('Facebook link error:', error);
         return reply.code(500).send({
-          error: "Failed to link Facebook account",
-          details: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to link Facebook account',
+          details: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Unlink Facebook account
   fastify.delete(
-    "/facebook/unlink",
+    '/facebook/unlink',
     {
       preHandler: fastify.authenticate,
     },
@@ -298,7 +281,7 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (!user?.facebookId) {
-          return reply.code(400).send({ error: "No Facebook account linked" });
+          return reply.code(400).send({ error: 'No Facebook account linked' });
         }
 
         const updatedUser = await prisma.user.update({
@@ -316,27 +299,27 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
         return reply.send({
           user: updatedUser,
-          message: "Facebook account unlinked successfully",
+          message: 'Facebook account unlinked successfully',
         });
       } catch (error) {
-        console.error("Facebook unlink error:", error);
+        console.error('Facebook unlink error:', error);
         return reply.code(500).send({
-          error: "Failed to unlink Facebook account",
-          details: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to unlink Facebook account',
+          details: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Get Facebook login URL
-  fastify.get("/facebook/login-url", async (request, reply) => {
+  fastify.get('/facebook/login-url', async (request, reply) => {
     const params = new URLSearchParams({
       client_id: FACEBOOK_APP_ID,
       redirect_uri: FACEBOOK_REDIRECT_URI,
-      scope: "email,public_profile",
-      response_type: "code",
-      auth_type: "rerequest",
-      display: "popup",
+      scope: 'email,public_profile',
+      response_type: 'code',
+      auth_type: 'rerequest',
+      display: 'popup',
     });
 
     const loginUrl = `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`;

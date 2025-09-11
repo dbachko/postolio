@@ -1,13 +1,13 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import aiService from "../services/ai-features.js";
-import learningService from "../services/learning.js";
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import aiService from '../services/ai-features.js';
+import learningService from '../services/learning.js';
 
 function ensureAuth(
   request: FastifyRequest,
-  reply: FastifyReply,
+  reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string; email: string } } {
   if (!request.user || !request.user.id) {
-    reply.code(401).send({ error: "Authentication required" });
+    reply.code(401).send({ error: 'Authentication required' });
     return false;
   }
   return true;
@@ -28,7 +28,7 @@ interface CompetitorAnalysisBody {
 interface ContentSuggestionsBody {
   brandId: string;
   context: string;
-  contentType: "post" | "story" | "reel";
+  contentType: 'post' | 'story' | 'reel';
 }
 
 interface ScheduleOptimizeBody {
@@ -58,7 +58,7 @@ interface LearningStatsParams {
 export default async function aiRoutes(fastify: FastifyInstance) {
   // Optimize hashtags with AI
   fastify.post<{ Body: HashtagOptimizeBody }>(
-    "/hashtags/optimize",
+    '/hashtags/optimize',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       if (!ensureAuth(request, reply)) return;
@@ -68,30 +68,26 @@ export default async function aiRoutes(fastify: FastifyInstance) {
 
         if (!brandId || !content || !currentHashtags) {
           return reply.code(400).send({
-            error: "Brand ID, content, and current hashtags are required",
+            error: 'Brand ID, content, and current hashtags are required',
           });
         }
 
-        const optimization = await aiService.optimizeHashtags(
-          brandId,
-          content,
-          currentHashtags,
-        );
+        const optimization = await aiService.optimizeHashtags(brandId, content, currentHashtags);
 
         reply.send({
           success: true,
           ...optimization,
         });
       } catch (error) {
-        console.error("Hashtag optimization error:", error);
-        reply.code(500).send({ error: "Failed to optimize hashtags" });
+        console.error('Hashtag optimization error:', error);
+        reply.code(500).send({ error: 'Failed to optimize hashtags' });
       }
-    },
+    }
   );
 
   // Analyze competitors
   fastify.post<{ Body: CompetitorAnalysisBody }>(
-    "/competitors/analyze",
+    '/competitors/analyze',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       if (!ensureAuth(request, reply)) return;
@@ -100,9 +96,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
         const { brandId, competitors } = request.body;
 
         if (!brandId || !competitors || !Array.isArray(competitors)) {
-          return reply
-            .code(400)
-            .send({ error: "Brand ID and competitors array are required" });
+          return reply.code(400).send({ error: 'Brand ID and competitors array are required' });
         }
 
         const result = await aiService.analyzeCompetitors(brandId, competitors);
@@ -112,15 +106,15 @@ export default async function aiRoutes(fastify: FastifyInstance) {
           ...result,
         });
       } catch (error) {
-        console.error("Competitor analysis error:", error);
-        reply.code(500).send({ error: "Failed to analyze competitors" });
+        console.error('Competitor analysis error:', error);
+        reply.code(500).send({ error: 'Failed to analyze competitors' });
       }
-    },
+    }
   );
 
   // Suggest content ideas
   fastify.post<{ Body: ContentSuggestionsBody }>(
-    "/content/suggestions",
+    '/content/suggestions',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       if (!ensureAuth(request, reply)) return;
@@ -130,32 +124,26 @@ export default async function aiRoutes(fastify: FastifyInstance) {
 
         if (!brandId || !context || !contentType) {
           return reply.code(400).send({
-            error: "Brand ID, context, and content type are required",
+            error: 'Brand ID, context, and content type are required',
           });
         }
 
-        const result = await aiService.suggestContentIdeas(
-          brandId,
-          context,
-          contentType,
-        );
+        const result = await aiService.suggestContentIdeas(brandId, context, contentType);
 
         reply.send({
           success: true,
           ...result,
         });
       } catch (error) {
-        console.error("Content suggestions error:", error);
-        reply
-          .code(500)
-          .send({ error: "Failed to generate content suggestions" });
+        console.error('Content suggestions error:', error);
+        reply.code(500).send({ error: 'Failed to generate content suggestions' });
       }
-    },
+    }
   );
 
   // Optimize posting schedule
   fastify.post<{ Body: ScheduleOptimizeBody }>(
-    "/schedule/optimize",
+    '/schedule/optimize',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       if (!ensureAuth(request, reply)) return;
@@ -164,7 +152,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
         const { brandId } = request.body;
 
         if (!brandId) {
-          return reply.code(400).send({ error: "Brand ID is required" });
+          return reply.code(400).send({ error: 'Brand ID is required' });
         }
 
         const result = await aiService.optimizeSchedule(brandId);
@@ -174,15 +162,15 @@ export default async function aiRoutes(fastify: FastifyInstance) {
           ...result,
         });
       } catch (error) {
-        console.error("Schedule optimization error:", error);
-        reply.code(500).send({ error: "Failed to optimize schedule" });
+        console.error('Schedule optimization error:', error);
+        reply.code(500).send({ error: 'Failed to optimize schedule' });
       }
-    },
+    }
   );
 
   // Apply learning from user edits
   fastify.post<{ Body: ApplyLearningBody }>(
-    "/apply-learning",
+    '/apply-learning',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       if (!ensureAuth(request, reply)) return;
@@ -192,8 +180,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
 
         if (!brandId || !originalContent || !editedContent) {
           return reply.code(400).send({
-            error:
-              "Brand ID, original content, and edited content are required",
+            error: 'Brand ID, original content, and edited content are required',
           });
         }
 
@@ -201,14 +188,11 @@ export default async function aiRoutes(fastify: FastifyInstance) {
         const editAnalysis = await learningService.analyzeUserEdit(
           brandId,
           originalContent,
-          editedContent,
+          editedContent
         );
 
         // Apply learning to style profile
-        const results = await learningService.applyLearningToStyleProfile(
-          brandId,
-          editAnalysis,
-        );
+        const results = await learningService.applyLearningToStyleProfile(brandId, editAnalysis);
 
         reply.send({
           success: true,
@@ -218,15 +202,15 @@ export default async function aiRoutes(fastify: FastifyInstance) {
           message: `AI learned from your edits and applied insights to ${results.appliedToFuturePosts} future posts`,
         });
       } catch (error) {
-        console.error("Learning application error:", error);
-        reply.code(500).send({ error: "Failed to apply learning from edits" });
+        console.error('Learning application error:', error);
+        reply.code(500).send({ error: 'Failed to apply learning from edits' });
       }
-    },
+    }
   );
 
   // Get learning analytics and stats
   fastify.get<{ Params: LearningStatsParams }>(
-    "/learning-stats/:brandId",
+    '/learning-stats/:brandId',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
       if (!ensureAuth(request, reply)) return;
@@ -235,7 +219,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
         const { brandId } = request.params;
 
         if (!brandId) {
-          return reply.code(400).send({ error: "Brand ID is required" });
+          return reply.code(400).send({ error: 'Brand ID is required' });
         }
 
         const analytics = await learningService.getLearningAnalytics(brandId);
@@ -245,11 +229,9 @@ export default async function aiRoutes(fastify: FastifyInstance) {
           analytics,
         });
       } catch (error) {
-        console.error("Learning analytics error:", error);
-        reply
-          .code(500)
-          .send({ error: "Failed to retrieve learning analytics" });
+        console.error('Learning analytics error:', error);
+        reply.code(500).send({ error: 'Failed to retrieve learning analytics' });
       }
-    },
+    }
   );
 }

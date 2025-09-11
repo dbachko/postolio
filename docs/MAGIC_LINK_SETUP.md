@@ -184,12 +184,12 @@ grep SMTP .env
 
 ```javascript
 // Add this test script as test-email.js
-const nodemailer = require("nodemailer");
+const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransporter({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === "true",
+  secure: process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -198,9 +198,9 @@ const transporter = nodemailer.createTransporter({
 
 transporter.verify((error, success) => {
   if (error) {
-    console.log("SMTP Error:", error);
+    console.log('SMTP Error:', error);
   } else {
-    console.log("SMTP Ready");
+    console.log('SMTP Ready');
   }
 });
 ```

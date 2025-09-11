@@ -1,8 +1,8 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance } from 'fastify';
 
-import { autopilotService } from "../services/autopilot.js";
+import { autopilotService } from '../services/autopilot.js';
 
-import { getDatabaseClient } from "../config/database.js";
+import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
 
@@ -12,14 +12,14 @@ interface AutopilotConfigUpdate {
   maxContentPerGeneration?: number;
   contentStrategy?: {
     themes?: string[];
-    postingFrequency?: "daily" | "every-other-day" | "weekly";
+    postingFrequency?: 'daily' | 'every-other-day' | 'weekly';
     optimalTimes?: { hour: number; minute: number }[];
   };
 }
 
 export default async function autopilotRoutes(fastify: FastifyInstance) {
   // Authentication hook for all autopilot routes
-  fastify.addHook("preHandler", async (request, reply) => {
+  fastify.addHook('preHandler', async (request, reply) => {
     try {
       await request.jwtVerify();
     } catch (err) {
@@ -30,7 +30,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
   /**
    * Manual trigger for autopilot content generation
    */
-  fastify.post("/trigger", async (_request, reply) => {
+  fastify.post('/trigger', async (_request, reply) => {
     try {
       const result = await autopilotService.triggerManual();
 
@@ -43,11 +43,11 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
         },
       });
     } catch (error) {
-      console.error("Autopilot trigger error:", error);
+      console.error('Autopilot trigger error:', error);
       reply.status(500).send({
         success: false,
-        message: "Failed to trigger autopilot generation",
-        error: error instanceof Error ? error.message : "Unknown error",
+        message: 'Failed to trigger autopilot generation',
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -55,7 +55,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
   /**
    * Get autopilot status for all brands
    */
-  fastify.get("/status", async (_request, reply) => {
+  fastify.get('/status', async (_request, reply) => {
     try {
       const status = await autopilotService.getAutopilotStatus();
 
@@ -64,11 +64,11 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
         data: status,
       });
     } catch (error) {
-      console.error("Autopilot status error:", error);
+      console.error('Autopilot status error:', error);
       reply.status(500).send({
         success: false,
-        message: "Failed to get autopilot status",
-        error: error instanceof Error ? error.message : "Unknown error",
+        message: 'Failed to get autopilot status',
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -77,46 +77,46 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
    * Update autopilot configuration for a specific brand
    */
   fastify.patch(
-    "/brands/:brandId/config",
+    '/brands/:brandId/config',
     {
       schema: {
         params: {
-          type: "object",
+          type: 'object',
           properties: {
-            brandId: { type: "string" },
+            brandId: { type: 'string' },
           },
-          required: ["brandId"],
+          required: ['brandId'],
         },
         body: {
-          type: "object",
+          type: 'object',
           properties: {
-            enabled: { type: "boolean" },
-            minDaysAhead: { type: "number", minimum: 7, maximum: 30 },
+            enabled: { type: 'boolean' },
+            minDaysAhead: { type: 'number', minimum: 7, maximum: 30 },
             maxContentPerGeneration: {
-              type: "number",
+              type: 'number',
               minimum: 1,
               maximum: 10,
             },
             contentStrategy: {
-              type: "object",
+              type: 'object',
               properties: {
                 themes: {
-                  type: "array",
-                  items: { type: "string" },
+                  type: 'array',
+                  items: { type: 'string' },
                 },
                 postingFrequency: {
-                  type: "string",
-                  enum: ["daily", "every-other-day", "weekly"],
+                  type: 'string',
+                  enum: ['daily', 'every-other-day', 'weekly'],
                 },
                 optimalTimes: {
-                  type: "array",
+                  type: 'array',
                   items: {
-                    type: "object",
+                    type: 'object',
                     properties: {
-                      hour: { type: "number", minimum: 0, maximum: 23 },
-                      minute: { type: "number", minimum: 0, maximum: 59 },
+                      hour: { type: 'number', minimum: 0, maximum: 23 },
+                      minute: { type: 'number', minimum: 0, maximum: 59 },
                     },
-                    required: ["hour", "minute"],
+                    required: ['hour', 'minute'],
                   },
                 },
               },
@@ -134,7 +134,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
           maxContentPerGeneration?: number;
           contentStrategy?: {
             themes?: string[];
-            postingFrequency?: "daily" | "every-other-day" | "weekly";
+            postingFrequency?: 'daily' | 'every-other-day' | 'weekly';
             optimalTimes?: { hour: number; minute: number }[];
           };
         }
@@ -143,9 +143,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
         // Verify user owns this brand
         const userId = (request.user as { id?: string } | undefined)?.id;
         if (!userId) {
-          return reply
-            .status(401)
-            .send({ success: false, message: "Authentication required" });
+          return reply.status(401).send({ success: false, message: 'Authentication required' });
         }
         const brand = await prisma.brand.findFirst({
           where: {
@@ -157,50 +155,47 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
         if (!brand) {
           return reply.status(404).send({
             success: false,
-            message: "Brand not found or access denied",
+            message: 'Brand not found or access denied',
           });
         }
 
-        const success = await autopilotService.updateBrandConfig(
-          brandId,
-          config,
-        );
+        const success = await autopilotService.updateBrandConfig(brandId, config);
 
         if (success) {
           reply.send({
             success: true,
-            message: "Autopilot configuration updated successfully",
+            message: 'Autopilot configuration updated successfully',
           });
         } else {
           reply.status(500).send({
             success: false,
-            message: "Failed to update autopilot configuration",
+            message: 'Failed to update autopilot configuration',
           });
         }
       } catch (error) {
-        console.error("Autopilot config update error:", error);
+        console.error('Autopilot config update error:', error);
         reply.status(500).send({
           success: false,
-          message: "Failed to update autopilot configuration",
-          error: error instanceof Error ? error.message : "Unknown error",
+          message: 'Failed to update autopilot configuration',
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   /**
    * Get autopilot configuration for a specific brand
    */
   fastify.get(
-    "/brands/:brandId/config",
+    '/brands/:brandId/config',
     {
       schema: {
         params: {
-          type: "object",
+          type: 'object',
           properties: {
-            brandId: { type: "string" },
+            brandId: { type: 'string' },
           },
-          required: ["brandId"],
+          required: ['brandId'],
         },
       },
     },
@@ -211,9 +206,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
         // Verify user owns this brand
         const userId = (request.user as { id?: string } | undefined)?.id;
         if (!userId) {
-          return reply
-            .status(401)
-            .send({ success: false, message: "Authentication required" });
+          return reply.status(401).send({ success: false, message: 'Authentication required' });
         }
         const brand = await prisma.brand.findFirst({
           where: {
@@ -230,21 +223,19 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
         if (!brand) {
           return reply.status(404).send({
             success: false,
-            message: "Brand not found or access denied",
+            message: 'Brand not found or access denied',
           });
         }
 
         type BrandPreferences = { autopilot?: unknown };
         const prefs = brand.preferences as BrandPreferences | null;
-        const autopilotConfig = (prefs?.autopilot as
-          | AutopilotConfigUpdate
-          | undefined) || {
+        const autopilotConfig = (prefs?.autopilot as AutopilotConfigUpdate | undefined) || {
           enabled: false,
           minDaysAhead: 14,
           maxContentPerGeneration: 5,
           contentStrategy: {
-            themes: ["lifestyle", "inspiration"],
-            postingFrequency: "daily",
+            themes: ['lifestyle', 'inspiration'],
+            postingFrequency: 'daily',
             optimalTimes: [
               { hour: 9, minute: 0 },
               { hour: 18, minute: 0 },
@@ -261,26 +252,24 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
           },
         });
       } catch (error) {
-        console.error("Autopilot config fetch error:", error);
+        console.error('Autopilot config fetch error:', error);
         reply.status(500).send({
           success: false,
-          message: "Failed to get autopilot configuration",
-          error: error instanceof Error ? error.message : "Unknown error",
+          message: 'Failed to get autopilot configuration',
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   /**
    * Get content gaps analysis for all user's brands
    */
-  fastify.get("/gaps", async (request, reply) => {
+  fastify.get('/gaps', async (request, reply) => {
     try {
       const userId = (request.user as { id?: string } | undefined)?.id;
       if (!userId) {
-        return reply
-          .status(401)
-          .send({ success: false, message: "Authentication required" });
+        return reply.status(401).send({ success: false, message: 'Authentication required' });
       }
 
       // Get user's brands
@@ -289,10 +278,10 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
         include: {
           content: {
             where: {
-              status: { in: ["scheduled", "published"] },
+              status: { in: ['scheduled', 'published'] },
               scheduledAt: { not: null },
             },
-            orderBy: { scheduledAt: "desc" },
+            orderBy: { scheduledAt: 'desc' },
             take: 5,
           },
         },
@@ -327,12 +316,12 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
             lastScheduled: brand.content[0]?.scheduledAt || null,
             recentContent: brand.content.map((c) => ({
               id: c.id,
-              caption: c.caption.substring(0, 100) + "...",
+              caption: c.caption.substring(0, 100) + '...',
               scheduledAt: c.scheduledAt,
               status: c.status,
             })),
           };
-        }),
+        })
       );
 
       reply.send({
@@ -341,18 +330,17 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
           analysis: gapsAnalysis,
           summary: {
             totalBrands: brands.length,
-            brandsNeedingContent: gapsAnalysis.filter((g) => g.needsGeneration)
-              .length,
+            brandsNeedingContent: gapsAnalysis.filter((g) => g.needsGeneration).length,
             totalGap: gapsAnalysis.reduce((sum, g) => sum + g.contentGap, 0),
           },
         },
       });
     } catch (error) {
-      console.error("Autopilot gaps analysis error:", error);
+      console.error('Autopilot gaps analysis error:', error);
       reply.status(500).send({
         success: false,
-        message: "Failed to analyze content gaps",
-        error: error instanceof Error ? error.message : "Unknown error",
+        message: 'Failed to analyze content gaps',
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });

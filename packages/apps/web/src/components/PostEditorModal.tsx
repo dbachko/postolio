@@ -1,27 +1,21 @@
-import { useState, useEffect, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { useTimezone } from "../contexts/TimezoneContext";
-import { convertLocalToUTC } from "../lib/timezone";
-import { apiClient, type Content } from "../lib/api";
-import { ImageUploader } from "./ImageUploader";
-import { PostCaptionEditor } from "./PostCaptionEditor";
-import { PostHashtagEditor } from "./PostHashtagEditor";
-import { PostScheduler } from "./PostScheduler";
-import { PostStatusCard } from "./PostStatusCard";
-import { PostSaveIndicator, type SaveStatus } from "./PostSaveIndicator";
-import { PostLearningFeedback } from "./PostLearningFeedback";
-import { usePostSchedulerStore } from "../stores/postSchedulerStore";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "./ui/dialog";
-import { Label } from "./ui/label";
-import { Button } from "./ui/button";
-import { Save } from "lucide-react";
+import { useState, useEffect, useRef } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { useTimezone } from '../contexts/TimezoneContext';
+import { convertLocalToUTC } from '../lib/timezone';
+import { apiClient, type Content } from '../lib/api';
+import { ImageUploader } from './ImageUploader';
+import { PostCaptionEditor } from './PostCaptionEditor';
+import { PostHashtagEditor } from './PostHashtagEditor';
+import { PostScheduler } from './PostScheduler';
+import { PostStatusCard } from './PostStatusCard';
+import { PostSaveIndicator, type SaveStatus } from './PostSaveIndicator';
+import { PostLearningFeedback } from './PostLearningFeedback';
+import { usePostSchedulerStore } from '../stores/postSchedulerStore';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Label } from './ui/label';
+import { Button } from './ui/button';
+import { Save } from 'lucide-react';
 
 interface PostEditorModalProps {
   content: Content | null;
@@ -36,20 +30,16 @@ interface FormData {
   scheduledAt: string;
 }
 
-export function PostEditorModal({
-  content,
-  isOpen,
-  onClose,
-}: PostEditorModalProps) {
+export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalProps) {
   const queryClient = useQueryClient();
   const resetSchedulerStore = usePostSchedulerStore((state) => state.reset);
   const [formData, setFormData] = useState<FormData>({
-    caption: "",
+    caption: '',
     hashtags: [],
-    cdnImageUrl: "",
-    scheduledAt: "",
+    cdnImageUrl: '',
+    scheduledAt: '',
   });
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [showLearningMessage, setShowLearningMessage] = useState(false);
@@ -59,25 +49,23 @@ export function PostEditorModal({
     isVisible: boolean;
     message: string;
     appliedToFuturePosts?: number;
-  }>({ isVisible: false, message: "" });
+  }>({ isVisible: false, message: '' });
 
   // Helper function to update content in cache
   const updateContentInCache = (updatedContent: Content) => {
     queryClient.setQueryData(
-      ["contentHistory", updatedContent.id],
+      ['contentHistory', updatedContent.id],
       (oldData: { content: Content[] } | undefined) => {
         if (oldData?.content) {
           return {
             ...oldData,
             content: oldData.content.map((item: Content) =>
-              item.id === updatedContent.id
-                ? { ...item, ...updatedContent }
-                : item,
+              item.id === updatedContent.id ? { ...item, ...updatedContent } : item
             ),
           };
         }
         return oldData;
-      },
+      }
     );
   };
 
@@ -85,12 +73,12 @@ export function PostEditorModal({
   useEffect(() => {
     if (content && isOpen) {
       const initialData = {
-        caption: content.caption || "",
+        caption: content.caption || '',
         hashtags: content.hashtags || [],
-        cdnImageUrl: content.cdnImageUrl || "",
+        cdnImageUrl: content.cdnImageUrl || '',
         scheduledAt: content.scheduledAt
           ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm")
-          : "",
+          : '',
       };
       setFormData(initialData);
       originalDataRef.current = initialData;
@@ -102,15 +90,15 @@ export function PostEditorModal({
   // Reset form data when modal is closed
   useEffect(() => {
     if (!isOpen) {
-      console.log("Modal closed - resetting form data");
+      console.log('Modal closed - resetting form data');
       setFormData({
-        caption: "",
+        caption: '',
         hashtags: [],
-        cdnImageUrl: "",
-        scheduledAt: "",
+        cdnImageUrl: '',
+        scheduledAt: '',
       });
-      setLearningFeedback({ isVisible: false, message: "" });
-      setSaveStatus("idle");
+      setLearningFeedback({ isVisible: false, message: '' });
+      setSaveStatus('idle');
       setHasChanges(false);
       setShowLearningMessage(false);
       originalDataRef.current = null;
@@ -140,8 +128,7 @@ export function PostEditorModal({
 
     const hasFormChanges =
       newData.caption !== originalDataRef.current.caption ||
-      JSON.stringify(newData.hashtags) !==
-        JSON.stringify(originalDataRef.current.hashtags) ||
+      JSON.stringify(newData.hashtags) !== JSON.stringify(originalDataRef.current.hashtags) ||
       newData.cdnImageUrl !== originalDataRef.current.cdnImageUrl ||
       newData.scheduledAt !== originalDataRef.current.scheduledAt;
 
@@ -151,8 +138,7 @@ export function PostEditorModal({
     if (hasFormChanges && !showLearningMessage) {
       const textChanged =
         newData.caption !== originalDataRef.current.caption ||
-        JSON.stringify(newData.hashtags) !==
-          JSON.stringify(originalDataRef.current.hashtags);
+        JSON.stringify(newData.hashtags) !== JSON.stringify(originalDataRef.current.hashtags);
       if (textChanged) {
         setShowLearningMessage(true);
       }
@@ -170,7 +156,7 @@ export function PostEditorModal({
       scheduledAt?: string;
     }) => {
       // Critical logging before mutation
-      console.log("MUTATION CALL:", {
+      console.log('MUTATION CALL:', {
         contentId: data.contentId,
         caption: data.caption,
         captionLength: data.caption?.length || 0,
@@ -182,28 +168,24 @@ export function PostEditorModal({
 
       // Final safety check before API call
       if (!data.caption || data.caption.trim().length === 0) {
-        console.error(
-          "CRITICAL ERROR: Attempting to call API with empty caption!",
-          data,
-        );
-        throw new Error("Cannot update content with empty caption");
+        console.error('CRITICAL ERROR: Attempting to call API with empty caption!', data);
+        throw new Error('Cannot update content with empty caption');
       }
 
       return apiClient.updateContent(data);
     },
     onMutate: () => {
-      setSaveStatus("saving");
+      setSaveStatus('saving');
     },
     onSuccess: (response) => {
-      setSaveStatus("saved");
+      setSaveStatus('saved');
       setLastSaved(new Date());
 
       // Show learning feedback if AI learned from edits
       if (response.learning?.learningActive) {
         setLearningFeedback({
           isVisible: true,
-          message:
-            response.learning.message || "AI is learning from your edits...",
+          message: response.learning.message || 'AI is learning from your edits...',
           appliedToFuturePosts: response.learning.appliedToFuturePosts,
         });
         // Note: Notification will persist until user manually closes it
@@ -216,15 +198,15 @@ export function PostEditorModal({
 
       // Show "AI is learning" message briefly
       setTimeout(() => {
-        setSaveStatus("idle");
+        setSaveStatus('idle');
       }, 2000);
     },
     onError: (error) => {
-      setSaveStatus("error");
-      console.error("Failed to update content:", error);
+      setSaveStatus('error');
+      console.error('Failed to update content:', error);
 
       setTimeout(() => {
-        setSaveStatus("idle");
+        setSaveStatus('idle');
       }, 3000);
     },
   });
@@ -236,22 +218,19 @@ export function PostEditorModal({
 
     // Safety check: Never save with empty caption
     if (!formData.caption || formData.caption.trim().length === 0) {
-      console.error("Cannot save with empty caption");
+      console.error('Cannot save with empty caption');
       return;
     }
 
-    console.log("💾 Manually saving content:", {
+    console.log('💾 Manually saving content:', {
       contentId: content.id,
-      caption: formData.caption.substring(0, 30) + "...",
+      caption: formData.caption.substring(0, 30) + '...',
       timestamp: new Date().toISOString(),
     });
 
     // Convert scheduledAt from local input to UTC ISO if present
     const payloadScheduledAt = formData.scheduledAt
-      ? convertLocalToUTC(
-          new Date(formData.scheduledAt),
-          timezone,
-        ).toISOString()
+      ? convertLocalToUTC(new Date(formData.scheduledAt), timezone).toISOString()
       : undefined;
 
     updateContentMutation.mutate({
@@ -280,7 +259,7 @@ export function PostEditorModal({
   };
 
   const handleImageChange = async (fileOrUrl: string | File) => {
-    if (typeof fileOrUrl === "string") {
+    if (typeof fileOrUrl === 'string') {
       // Direct URL update (e.g., when removing the image)
       const newData = { ...formData, cdnImageUrl: fileOrUrl };
       setFormData(newData);
@@ -297,19 +276,16 @@ export function PostEditorModal({
 
       // Upload to server
       if (content) {
-        setSaveStatus("saving");
+        setSaveStatus('saving');
         try {
-          const response = await apiClient.uploadContentImage(
-            content.id,
-            fileOrUrl,
-          );
+          const response = await apiClient.uploadContentImage(content.id, fileOrUrl);
           if (response.success && response.content) {
             // Update with the server's response - use cdnImageUrl if available
             const newImageUrl = response.content.cdnImageUrl || objectUrl;
             const newData = { ...formData, cdnImageUrl: newImageUrl };
             setFormData(newData);
             checkForChanges(newData);
-            setSaveStatus("saved");
+            setSaveStatus('saved');
             setLastSaved(new Date());
 
             // Clean up the object URL since we now have the server URL
@@ -327,19 +303,19 @@ export function PostEditorModal({
             // Cache is already updated, no need to invalidate
 
             setTimeout(() => {
-              setSaveStatus("idle");
+              setSaveStatus('idle');
             }, 2000);
           }
         } catch (error) {
-          console.error("Failed to upload image:", error);
-          setSaveStatus("error");
+          console.error('Failed to upload image:', error);
+          setSaveStatus('error');
           // Revert to previous image on error
           setFormData((prev) => ({
             ...prev,
-            cdnImageUrl: content.cdnImageUrl || "",
+            cdnImageUrl: content.cdnImageUrl || '',
           }));
           setTimeout(() => {
-            setSaveStatus("idle");
+            setSaveStatus('idle');
           }, 3000);
         }
       }
@@ -347,7 +323,7 @@ export function PostEditorModal({
   };
 
   const handleScheduledAtChange = (value: string) => {
-    console.log("Scheduled time changed:", {
+    console.log('Scheduled time changed:', {
       from: formData.scheduledAt,
       to: value,
       contentId: content?.id,
@@ -362,20 +338,20 @@ export function PostEditorModal({
     if (hasChanges) {
       await saveChanges();
     }
-    setSaveStatus("idle");
+    setSaveStatus('idle');
     setLastSaved(null);
     onClose();
   };
 
   const handleDismissLearning = () => {
-    setLearningFeedback({ isVisible: false, message: "" });
+    setLearningFeedback({ isVisible: false, message: '' });
   };
 
   if (!content) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Post</DialogTitle>
           <PostSaveIndicator
@@ -394,15 +370,9 @@ export function PostEditorModal({
         />
 
         <div className="space-y-6">
-          <PostCaptionEditor
-            value={formData.caption}
-            onChange={handleCaptionChange}
-          />
+          <PostCaptionEditor value={formData.caption} onChange={handleCaptionChange} />
 
-          <PostHashtagEditor
-            hashtags={formData.hashtags}
-            onChange={handleHashtagsChange}
-          />
+          <PostHashtagEditor hashtags={formData.hashtags} onChange={handleHashtagsChange} />
 
           {/* Image Upload */}
           <div className="space-y-2">
@@ -411,12 +381,7 @@ export function PostEditorModal({
               value={formData.cdnImageUrl || content.cdnImageUrl || undefined}
               onChange={handleImageChange}
               maxSizeInMB={10}
-              acceptedFormats={[
-                "image/jpeg",
-                "image/jpg",
-                "image/png",
-                "image/webp",
-              ]}
+              acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
             />
           </div>
 
@@ -427,14 +392,7 @@ export function PostEditorModal({
           />
 
           <PostStatusCard
-            status={
-              content.status as
-                | "draft"
-                | "scheduled"
-                | "published"
-                | "failed"
-                | "skipped"
-            }
+            status={content.status as 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'}
             createdAt={content.createdAt}
           />
         </div>

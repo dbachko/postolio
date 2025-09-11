@@ -1,28 +1,22 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuthStore } from "../stores/authStore";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Checkbox } from "@/components/ui/checkbox";
-import { GoogleSignInIsolated } from "@/components/auth/GoogleSignInIsolated";
-import { FacebookSignInIsolated } from "@/components/auth/FacebookSignInIsolated";
-import { MagicLinkForm } from "@/components/auth/MagicLinkForm";
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../stores/authStore';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
+import { GoogleSignInIsolated } from '@/components/auth/GoogleSignInIsolated';
+import { FacebookSignInIsolated } from '@/components/auth/FacebookSignInIsolated';
+import { MagicLinkForm } from '@/components/auth/MagicLinkForm';
 
 export function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [showMagicLink, setShowMagicLink] = useState(false);
 
   const { login } = useAuthStore();
@@ -31,39 +25,34 @@ export function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError("");
+    setError('');
 
     try {
       await login(email, password, rememberMe);
-      navigate("/dashboard");
+      navigate('/dashboard');
     } catch {
-      setError("Invalid email or password");
+      setError('Invalid email or password');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <div className="flex-1 flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen flex-col">
+      <div className="bg-background flex flex-1 items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">
-              Sign in to your account
-            </CardTitle>
+            <CardTitle className="text-center text-2xl">Sign in to your account</CardTitle>
             <CardDescription className="text-center">
-              Or{" "}
-              <Link
-                to="/register"
-                className="font-medium text-primary hover:underline"
-              >
+              Or{' '}
+              <Link to="/register" className="text-primary font-medium hover:underline">
                 create a new account
               </Link>
             </CardDescription>
           </CardHeader>
           <CardContent>
             {/* OAuth Providers */}
-            <div className="space-y-3 mb-6">
+            <div className="mb-6 space-y-3">
               <GoogleSignInIsolated mode="signin" />
               <FacebookSignInIsolated mode="signin" />
             </div>
@@ -74,20 +63,15 @@ export function Login() {
                 <span className="w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Or continue with
-                </span>
+                <span className="bg-background text-muted-foreground px-2">Or continue with</span>
               </div>
             </div>
 
             {/* Magic Link Option */}
             {showMagicLink ? (
               <>
-                <MagicLinkForm
-                  mode="signin"
-                  onSuccess={() => navigate("/dashboard")}
-                />
-                <div className="text-center mt-4">
+                <MagicLinkForm mode="signin" onSuccess={() => navigate('/dashboard')} />
+                <div className="mt-4 text-center">
                   <Button
                     type="button"
                     variant="ghost"
@@ -121,10 +105,7 @@ export function Login() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password">Password</Label>
-                    <Link
-                      to="/password/reset"
-                      className="text-sm text-primary hover:underline"
-                    >
+                    <Link to="/password/reset" className="text-primary text-sm hover:underline">
                       Forgot password?
                     </Link>
                   </div>
@@ -143,23 +124,18 @@ export function Login() {
                   <Checkbox
                     id="remember"
                     checked={rememberMe}
-                    onCheckedChange={(checked) =>
-                      setRememberMe(checked as boolean)
-                    }
+                    onCheckedChange={(checked) => setRememberMe(checked as boolean)}
                   />
-                  <Label
-                    htmlFor="remember"
-                    className="text-sm font-normal cursor-pointer"
-                  >
+                  <Label htmlFor="remember" className="cursor-pointer text-sm font-normal">
                     Remember me for 30 days
                   </Label>
                 </div>
                 <Button type="submit" disabled={isLoading} className="w-full">
-                  {isLoading ? "Signing in..." : "Sign in"}
+                  {isLoading ? 'Signing in...' : 'Sign in'}
                 </Button>
 
                 {/* Magic Link Alternative */}
-                <div className="text-center mt-4">
+                <div className="mt-4 text-center">
                   <Button
                     type="button"
                     variant="ghost"
@@ -176,28 +152,19 @@ export function Login() {
       </div>
 
       {/* Footer */}
-      <footer className="py-6 px-4 border-t">
-        <div className="flex justify-center items-center text-sm text-muted-foreground space-x-4">
+      <footer className="border-t px-4 py-6">
+        <div className="text-muted-foreground flex items-center justify-center space-x-4 text-sm">
           <span>© {new Date().getFullYear()} Postolio</span>
           <span>•</span>
-          <Link
-            to="/privacy-policy"
-            className="hover:text-foreground transition-colors"
-          >
+          <Link to="/privacy-policy" className="hover:text-foreground transition-colors">
             Privacy Policy
           </Link>
           <span>•</span>
-          <Link
-            to="/terms-of-service"
-            className="hover:text-foreground transition-colors"
-          >
+          <Link to="/terms-of-service" className="hover:text-foreground transition-colors">
             Terms of Service
           </Link>
           <span>•</span>
-          <a
-            href="mailto:legal@postolio.example"
-            className="hover:text-foreground transition-colors"
-          >
+          <a href="mailto:legal@postolio.example" className="hover:text-foreground transition-colors">
             Legal
           </a>
         </div>

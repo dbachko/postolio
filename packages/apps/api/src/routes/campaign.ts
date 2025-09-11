@@ -1,18 +1,15 @@
-import { FastifyPluginAsync, FastifyRequest } from "fastify";
+import { FastifyPluginAsync, FastifyRequest } from 'fastify';
 
-import { verifyJWT } from "../services/jwt.js";
-import { campaignService, type CampaignConfig } from "../services/campaign.js";
-import { CampaignStatus } from "@postolio/database";
-import { campaignJobService } from "../services/campaign-jobs.js";
-import {
-  pauseResumeRateLimiter,
-  campaignRateLimiter,
-} from "../services/rate-limiter.js";
-import { validateCampaignUpdateRequest } from "../utils/campaign-validation.js";
-import { regenerationService } from "../services/regeneration-queue.js";
-import { TimezoneService } from "../services/timezone.js";
+import { verifyJWT } from '../services/jwt.js';
+import { campaignService, type CampaignConfig } from '../services/campaign.js';
+import { CampaignStatus } from '@postolio/database';
+import { campaignJobService } from '../services/campaign-jobs.js';
+import { pauseResumeRateLimiter, campaignRateLimiter } from '../services/rate-limiter.js';
+import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js';
+import { regenerationService } from '../services/regeneration-queue.js';
+import { TimezoneService } from '../services/timezone.js';
 
-import { getDatabaseClient } from "../config/database.js";
+import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
 
@@ -41,12 +38,10 @@ interface StartCampaignBody {
 
 const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   // Helper function to authenticate and get user ID
-  const authenticateRequest = async (
-    request: FastifyRequest & { user?: { id: string } },
-  ) => {
+  const authenticateRequest = async (request: FastifyRequest & { user?: { id: string } }) => {
     const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      throw new Error("Authentication required");
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new Error('Authentication required');
     }
 
     const token = authHeader.substring(7);
@@ -54,331 +49,274 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       decoded = verifyJWT(token);
     } catch (jwtError) {
-      console.error("JWT verification error:", jwtError);
-      throw new Error("Invalid authentication token");
+      console.error('JWT verification error:', jwtError);
+      throw new Error('Invalid authentication token');
     }
 
     // Store user ID for rate limiting
     // Provide minimal user object including required email if present on decoded token
     type DecodedToken = { id: string; email?: string };
     const tokenData = decoded as unknown as DecodedToken;
-    request.user = { id: tokenData.id, email: tokenData.email || "" };
+    request.user = { id: tokenData.id, email: tokenData.email || '' };
     return decoded.id;
   };
 
   // Configure campaign
-  fastify.post<{ Body: ConfigureCampaignBody }>(
-    "/configure",
-    async (request, reply) => {
-      try {
-        const userId = await authenticateRequest(request);
-        const body = request.body;
+  fastify.post<{ Body: ConfigureCampaignBody }>('/configure', async (request, reply) => {
+    try {
+      const userId = await authenticateRequest(request);
+      const body = request.body;
 
-        // Get brand's timezone for proper date interpretation
-        // If brand doesn't have a timezone set, fall back to user's detected timezone
-        let brandTimezone = await TimezoneService.getBrandTimezone(
-          body.brandId,
-        );
+      // Get brand's timezone for proper date interpretation
+      // If brand doesn't have a timezone set, fall back to user's detected timezone
+      let brandTimezone = await TimezoneService.getBrandTimezone(body.brandId);
 
-        // If brand timezone is UTC (default) and we have user's timezone from header, use that
-        if (brandTimezone === "UTC") {
-          const detectedTimezone = await TimezoneService.detectTimezone(
-            request,
-            userId,
+      // If brand timezone is UTC (default) and we have user's timezone from header, use that
+      if (brandTimezone === 'UTC') {
+        const detectedTimezone = await TimezoneService.detectTimezone(request, userId);
+        if (detectedTimezone !== 'UTC') {
+          brandTimezone = detectedTimezone;
+
+          // Save the detected timezone to BOTH brand and user for future use
+          await Promise.all([
+            // Update brand timezone
+            prisma.brand.update({
+              where: { id: body.brandId },
+              data: { postingTimezone: detectedTimezone },
+            }),
+            // Update user timezone as auto-detected (if not already set)
+            prisma.user.update({
+              where: {
+                id: userId,
+                // Only update if user doesn't have a manually set timezone
+                OR: [{ timezone: null }, { timezone: 'UTC' }, { timezoneAutoDetected: true }],
+              },
+              data: {
+                timezone: detectedTimezone,
+                timezoneAutoDetected: true,
+              },
+            }),
+          ]);
+          console.log(
+            `Auto-detected and saved timezone ${detectedTimezone} for user ${userId} and brand ${body.brandId}`
           );
-          if (detectedTimezone !== "UTC") {
-            brandTimezone = detectedTimezone;
-
-            // Save the detected timezone to BOTH brand and user for future use
-            await Promise.all([
-              // Update brand timezone
-              prisma.brand.update({
-                where: { id: body.brandId },
-                data: { postingTimezone: detectedTimezone },
-              }),
-              // Update user timezone as auto-detected (if not already set)
-              prisma.user.update({
-                where: {
-                  id: userId,
-                  // Only update if user doesn't have a manually set timezone
-                  OR: [
-                    { timezone: null },
-                    { timezone: "UTC" },
-                    { timezoneAutoDetected: true },
-                  ],
-                },
-                data: {
-                  timezone: detectedTimezone,
-                  timezoneAutoDetected: true,
-                },
-              }),
-            ]);
-            console.log(
-              `Auto-detected and saved timezone ${detectedTimezone} for user ${userId} and brand ${body.brandId}`,
-            );
-          }
         }
+      }
 
-        console.log(
-          `Campaign configuration using timezone: ${brandTimezone} for brand ${body.brandId}`,
-        );
+      console.log(
+        `Campaign configuration using timezone: ${brandTimezone} for brand ${body.brandId}`
+      );
 
-        // Convert date strings to Date objects with timezone awareness
-        const config: CampaignConfig = {
-          name: body.name,
-          brandId: body.brandId,
-          duration: {
-            start: TimezoneService.parseTimezoneAwareDate(
-              body.duration.start,
-              brandTimezone,
-            ),
-            end: TimezoneService.parseTimezoneAwareDate(
-              body.duration.end,
-              brandTimezone,
-            ),
-          },
-          frequency: body.frequency,
-          themes: body.themes,
-          style: body.style,
-          postingTime: body.postingTime,
-          ...(body.priority !== undefined ? { priority: body.priority } : {}),
-        };
+      // Convert date strings to Date objects with timezone awareness
+      const config: CampaignConfig = {
+        name: body.name,
+        brandId: body.brandId,
+        duration: {
+          start: TimezoneService.parseTimezoneAwareDate(body.duration.start, brandTimezone),
+          end: TimezoneService.parseTimezoneAwareDate(body.duration.end, brandTimezone),
+        },
+        frequency: body.frequency,
+        themes: body.themes,
+        style: body.style,
+        postingTime: body.postingTime,
+        ...(body.priority !== undefined ? { priority: body.priority } : {}),
+      };
 
-        // Validate campaign configuration
-        const validationErrors = campaignService.validateCampaignConfig(config);
+      // Validate campaign configuration
+      const validationErrors = campaignService.validateCampaignConfig(config);
 
-        if (validationErrors.length > 0) {
-          return reply.code(400).send({
-            error: "Validation failed",
-            details: validationErrors,
-          });
-        }
-
-        // Create campaign, passing the detected timezone
-        const campaign = await campaignService.configureCampaign(
-          config,
-          userId,
-          brandTimezone,
-        );
-
-        return reply.code(201).send({
-          success: true,
-          campaign: {
-            id: campaign.id,
-            name: campaign.name,
-            brandId: campaign.brandId,
-            status: campaign.status,
-            config: campaign.config,
-            createdAt: campaign.createdAt,
-            brand: campaign.brand,
-          },
-        });
-      } catch (error) {
-        console.error("Campaign configuration error:", error);
-
-        if (error instanceof Error) {
-          if (error.message.includes("Authentication")) {
-            return reply.code(401).send({ error: error.message });
-          }
-          if (
-            error.message.includes("Brand not found") ||
-            error.message.includes("access denied")
-          ) {
-            return reply
-              .code(404)
-              .send({ error: "Brand not found or access denied" });
-          }
-          if (
-            error.message.includes("start date") ||
-            error.message.includes("end date")
-          ) {
-            return reply.code(400).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: "Failed to configure campaign. Please try again.",
+      if (validationErrors.length > 0) {
+        return reply.code(400).send({
+          error: 'Validation failed',
+          details: validationErrors,
         });
       }
-    },
-  );
+
+      // Create campaign, passing the detected timezone
+      const campaign = await campaignService.configureCampaign(config, userId, brandTimezone);
+
+      return reply.code(201).send({
+        success: true,
+        campaign: {
+          id: campaign.id,
+          name: campaign.name,
+          brandId: campaign.brandId,
+          status: campaign.status,
+          config: campaign.config,
+          createdAt: campaign.createdAt,
+          brand: campaign.brand,
+        },
+      });
+    } catch (error) {
+      console.error('Campaign configuration error:', error);
+
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          return reply.code(401).send({ error: error.message });
+        }
+        if (error.message.includes('Brand not found') || error.message.includes('access denied')) {
+          return reply.code(404).send({ error: 'Brand not found or access denied' });
+        }
+        if (error.message.includes('start date') || error.message.includes('end date')) {
+          return reply.code(400).send({ error: error.message });
+        }
+      }
+
+      return reply.code(500).send({
+        error: 'Failed to configure campaign. Please try again.',
+      });
+    }
+  });
 
   // Get campaign status (for polling)
-  fastify.get<{ Params: { id: string } }>(
-    "/status/:id",
-    async (request, reply) => {
-      try {
-        const userId = await authenticateRequest(request);
-        const { id } = request.params;
-
-        if (!id) {
-          return reply.code(400).send({ error: "Campaign ID is required" });
-        }
-
-        // Get campaign status from job service
-        const status = await campaignJobService.getCampaignStatus(id);
-
-        if (!status) {
-          return reply.code(404).send({ error: "Campaign not found" });
-        }
-
-        // Verify ownership by checking the campaign
-        const campaign = await prisma.campaign.findFirst({
-          where: {
-            id,
-            brand: {
-              userId,
-            },
-          },
-        });
-
-        if (!campaign) {
-          return reply
-            .code(404)
-            .send({ error: "Campaign not found or access denied" });
-        }
-
-        return reply.send({
-          success: true,
-          status: {
-            id: status.id,
-            status: status.status,
-            progress: status.progress,
-            errorMessage: status.errorMessage,
-            previewGenerated: status.previewGenerated,
-            isRunning: campaignJobService.isJobRunning(id),
-          },
-        });
-      } catch (error) {
-        console.error("Get campaign status error:", error);
-
-        if (error instanceof Error) {
-          if (error.message.includes("Authentication")) {
-            return reply.code(401).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: "Failed to get campaign status. Please try again.",
-        });
-      }
-    },
-  );
-
-  // Generate campaign preview
-  fastify.post<{ Body: PreviewCampaignBody }>(
-    "/preview",
-    async (request, reply) => {
-      try {
-        const userId = await authenticateRequest(request);
-        const { configId, exampleCount = 3 } = request.body;
-
-        if (!configId) {
-          return reply.code(400).send({ error: "Campaign ID is required" });
-        }
-
-        if (exampleCount < 1 || exampleCount > 10) {
-          return reply
-            .code(400)
-            .send({ error: "Example count must be between 1 and 10" });
-        }
-
-        const preview = await campaignService.generateCampaignPreview(
-          configId,
-          userId,
-          exampleCount,
-        );
-
-        return reply.send({
-          success: true,
-          preview,
-        });
-      } catch (error) {
-        console.error("Campaign preview error:", error);
-
-        if (error instanceof Error) {
-          if (error.message.includes("Authentication")) {
-            return reply.code(401).send({ error: error.message });
-          }
-          if (
-            error.message.includes("not found") ||
-            error.message.includes("access denied")
-          ) {
-            return reply
-              .code(404)
-              .send({ error: "Campaign not found or access denied" });
-          }
-          if (error.message.includes("style profile")) {
-            return reply.code(400).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: "Failed to generate campaign preview. Please try again.",
-        });
-      }
-    },
-  );
-
-  // Start campaign
-  fastify.post<{ Body: StartCampaignBody }>(
-    "/start",
-    async (request, reply) => {
-      try {
-        const userId = await authenticateRequest(request);
-        const { campaignId } = request.body;
-
-        if (!campaignId) {
-          return reply.code(400).send({ error: "Campaign ID is required" });
-        }
-
-        const result = await campaignService.startCampaign(campaignId, userId);
-
-        if (!result.success) {
-          if (
-            result.error?.includes("not found") ||
-            result.error?.includes("access denied")
-          ) {
-            return reply.code(404).send({ error: result.error });
-          }
-          if (result.error?.includes("style profile")) {
-            return reply.code(400).send({ error: result.error });
-          }
-          return reply
-            .code(400)
-            .send({ error: result.error || "Failed to start campaign" });
-        }
-
-        return reply.send({
-          success: true,
-          campaign: result.campaign,
-          scheduledPosts: result.scheduledPosts,
-          message: `Campaign started successfully. ${result.scheduledPosts} posts have been scheduled.`,
-        });
-      } catch (error) {
-        console.error("Campaign start error:", error);
-
-        if (error instanceof Error) {
-          if (error.message.includes("Authentication")) {
-            return reply.code(401).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: "Failed to start campaign. Please try again.",
-        });
-      }
-    },
-  );
-
-  // Get campaign details
-  fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
+  fastify.get<{ Params: { id: string } }>('/status/:id', async (request, reply) => {
     try {
       const userId = await authenticateRequest(request);
       const { id } = request.params;
 
       if (!id) {
-        return reply.code(400).send({ error: "Campaign ID is required" });
+        return reply.code(400).send({ error: 'Campaign ID is required' });
+      }
+
+      // Get campaign status from job service
+      const status = await campaignJobService.getCampaignStatus(id);
+
+      if (!status) {
+        return reply.code(404).send({ error: 'Campaign not found' });
+      }
+
+      // Verify ownership by checking the campaign
+      const campaign = await prisma.campaign.findFirst({
+        where: {
+          id,
+          brand: {
+            userId,
+          },
+        },
+      });
+
+      if (!campaign) {
+        return reply.code(404).send({ error: 'Campaign not found or access denied' });
+      }
+
+      return reply.send({
+        success: true,
+        status: {
+          id: status.id,
+          status: status.status,
+          progress: status.progress,
+          errorMessage: status.errorMessage,
+          previewGenerated: status.previewGenerated,
+          isRunning: campaignJobService.isJobRunning(id),
+        },
+      });
+    } catch (error) {
+      console.error('Get campaign status error:', error);
+
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          return reply.code(401).send({ error: error.message });
+        }
+      }
+
+      return reply.code(500).send({
+        error: 'Failed to get campaign status. Please try again.',
+      });
+    }
+  });
+
+  // Generate campaign preview
+  fastify.post<{ Body: PreviewCampaignBody }>('/preview', async (request, reply) => {
+    try {
+      const userId = await authenticateRequest(request);
+      const { configId, exampleCount = 3 } = request.body;
+
+      if (!configId) {
+        return reply.code(400).send({ error: 'Campaign ID is required' });
+      }
+
+      if (exampleCount < 1 || exampleCount > 10) {
+        return reply.code(400).send({ error: 'Example count must be between 1 and 10' });
+      }
+
+      const preview = await campaignService.generateCampaignPreview(configId, userId, exampleCount);
+
+      return reply.send({
+        success: true,
+        preview,
+      });
+    } catch (error) {
+      console.error('Campaign preview error:', error);
+
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          return reply.code(401).send({ error: error.message });
+        }
+        if (error.message.includes('not found') || error.message.includes('access denied')) {
+          return reply.code(404).send({ error: 'Campaign not found or access denied' });
+        }
+        if (error.message.includes('style profile')) {
+          return reply.code(400).send({ error: error.message });
+        }
+      }
+
+      return reply.code(500).send({
+        error: 'Failed to generate campaign preview. Please try again.',
+      });
+    }
+  });
+
+  // Start campaign
+  fastify.post<{ Body: StartCampaignBody }>('/start', async (request, reply) => {
+    try {
+      const userId = await authenticateRequest(request);
+      const { campaignId } = request.body;
+
+      if (!campaignId) {
+        return reply.code(400).send({ error: 'Campaign ID is required' });
+      }
+
+      const result = await campaignService.startCampaign(campaignId, userId);
+
+      if (!result.success) {
+        if (result.error?.includes('not found') || result.error?.includes('access denied')) {
+          return reply.code(404).send({ error: result.error });
+        }
+        if (result.error?.includes('style profile')) {
+          return reply.code(400).send({ error: result.error });
+        }
+        return reply.code(400).send({ error: result.error || 'Failed to start campaign' });
+      }
+
+      return reply.send({
+        success: true,
+        campaign: result.campaign,
+        scheduledPosts: result.scheduledPosts,
+        message: `Campaign started successfully. ${result.scheduledPosts} posts have been scheduled.`,
+      });
+    } catch (error) {
+      console.error('Campaign start error:', error);
+
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          return reply.code(401).send({ error: error.message });
+        }
+      }
+
+      return reply.code(500).send({
+        error: 'Failed to start campaign. Please try again.',
+      });
+    }
+  });
+
+  // Get campaign details
+  fastify.get<{ Params: { id: string } }>('/:id', async (request, reply) => {
+    try {
+      const userId = await authenticateRequest(request);
+      const { id } = request.params;
+
+      if (!id) {
+        return reply.code(400).send({ error: 'Campaign ID is required' });
       }
 
       const campaign = await campaignService.getCampaign(id, userId);
@@ -388,31 +326,26 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         campaign,
       });
     } catch (error) {
-      console.error("Get campaign error:", error);
+      console.error('Get campaign error:', error);
 
       if (error instanceof Error) {
-        if (error.message.includes("Authentication")) {
+        if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message });
         }
-        if (
-          error.message.includes("not found") ||
-          error.message.includes("access denied")
-        ) {
-          return reply
-            .code(404)
-            .send({ error: "Campaign not found or access denied" });
+        if (error.message.includes('not found') || error.message.includes('access denied')) {
+          return reply.code(404).send({ error: 'Campaign not found or access denied' });
         }
       }
 
       return reply.code(500).send({
-        error: "Failed to retrieve campaign details. Please try again.",
+        error: 'Failed to retrieve campaign details. Please try again.',
       });
     }
   });
 
   // Update campaign configuration
   interface UpdateCampaignBody {
-    status?: "active" | "paused" | "completed" | "draft";
+    status?: 'active' | 'paused' | 'completed' | 'draft';
     themes?: string[];
     style?: string;
     frequency?: string;
@@ -421,21 +354,21 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     priority?: number;
   }
   fastify.put<{ Params: { id: string }; Body: UpdateCampaignBody }>(
-    "/:id",
+    '/:id',
     async (request, reply) => {
       try {
         const userId = await authenticateRequest(request);
         const { id } = request.params;
 
         if (!id) {
-          return reply.code(400).send({ error: "Campaign ID is required" });
+          return reply.code(400).send({ error: 'Campaign ID is required' });
         }
 
         // Validate request schema
         const validation = validateCampaignUpdateRequest(request.body);
         if (!validation.valid) {
           return reply.code(400).send({
-            error: "Invalid request data",
+            error: 'Invalid request data',
             details: validation.errors.map((err) => ({
               field: err.field,
               message: err.message,
@@ -447,39 +380,37 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const updates = validation.sanitizedData!;
 
         // Apply rate limiting for pause/resume operations
-        if (updates.status && ["paused", "active"].includes(updates.status)) {
-          const rateLimitCheck =
-            await pauseResumeRateLimiter.checkRateLimit(userId);
+        if (updates.status && ['paused', 'active'].includes(updates.status)) {
+          const rateLimitCheck = await pauseResumeRateLimiter.checkRateLimit(userId);
           if (!rateLimitCheck.allowed) {
-            reply.header("X-RateLimit-Limit", 20);
-            reply.header("X-RateLimit-Remaining", rateLimitCheck.remaining);
+            reply.header('X-RateLimit-Limit', 20);
+            reply.header('X-RateLimit-Remaining', rateLimitCheck.remaining);
             reply.header(
-              "X-RateLimit-Reset",
-              Math.floor(rateLimitCheck.resetTime.getTime() / 1000),
+              'X-RateLimit-Reset',
+              Math.floor(rateLimitCheck.resetTime.getTime() / 1000)
             );
-            reply.header("Retry-After", rateLimitCheck.retryAfter || 300);
+            reply.header('Retry-After', rateLimitCheck.retryAfter || 300);
 
             return reply.code(429).send({
-              error: "Too many pause/resume requests",
+              error: 'Too many pause/resume requests',
               message: `Rate limit exceeded. Try again in ${rateLimitCheck.retryAfter || 300} seconds.`,
               retryAfter: rateLimitCheck.retryAfter || 300,
             });
           }
         } else {
           // Apply general campaign rate limiting for other updates
-          const rateLimitCheck =
-            await campaignRateLimiter.checkRateLimit(userId);
+          const rateLimitCheck = await campaignRateLimiter.checkRateLimit(userId);
           if (!rateLimitCheck.allowed) {
-            reply.header("X-RateLimit-Limit", 10);
-            reply.header("X-RateLimit-Remaining", rateLimitCheck.remaining);
+            reply.header('X-RateLimit-Limit', 10);
+            reply.header('X-RateLimit-Remaining', rateLimitCheck.remaining);
             reply.header(
-              "X-RateLimit-Reset",
-              Math.floor(rateLimitCheck.resetTime.getTime() / 1000),
+              'X-RateLimit-Reset',
+              Math.floor(rateLimitCheck.resetTime.getTime() / 1000)
             );
-            reply.header("Retry-After", rateLimitCheck.retryAfter || 60);
+            reply.header('Retry-After', rateLimitCheck.retryAfter || 60);
 
             return reply.code(429).send({
-              error: "Too many campaign requests",
+              error: 'Too many campaign requests',
               message: `Rate limit exceeded. Try again in ${rateLimitCheck.retryAfter || 60} seconds.`,
               retryAfter: rateLimitCheck.retryAfter || 60,
             });
@@ -500,7 +431,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         };
         let rawResult: UpdateResult | RegenResult;
         const statusVal = updates.status as CampaignStatus | undefined;
-        if (statusVal && ["paused", "active"].includes(statusVal)) {
+        if (statusVal && ['paused', 'active'].includes(statusVal)) {
           rawResult = await campaignService.updateCampaign(id, userId, {
             ...updates,
             status: statusVal,
@@ -508,11 +439,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         } else {
           const { status: _ignoredStatus, ...rest } = updates; // status handled only by direct update path
           void _ignoredStatus;
-          rawResult = await campaignService.updateCampaignWithRegeneration(
-            id,
-            rest,
-            userId,
-          );
+          rawResult = await campaignService.updateCampaignWithRegeneration(id, rest, userId);
         }
 
         const unified =
@@ -520,149 +447,133 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
             ? {
                 success: (rawResult as UpdateResult).success,
                 campaign: (rawResult as UpdateResult).campaign,
-                message:
-                  (rawResult as UpdateResult).message ||
-                  "Campaign updated successfully",
+                message: (rawResult as UpdateResult).message || 'Campaign updated successfully',
                 regenerationTriggered: false,
                 regenerationReason: undefined,
               }
             : {
                 success: true,
                 campaign: (rawResult as RegenResult).campaign,
-                message:
-                  (rawResult as RegenResult).message ||
-                  "Campaign updated successfully",
-                regenerationTriggered: (rawResult as RegenResult)
-                  .regenerationTriggered,
-                regenerationReason: (rawResult as RegenResult)
-                  .regenerationReason,
+                message: (rawResult as RegenResult).message || 'Campaign updated successfully',
+                regenerationTriggered: (rawResult as RegenResult).regenerationTriggered,
+                regenerationReason: (rawResult as RegenResult).regenerationReason,
               };
 
         return reply.send(unified);
       } catch (error) {
-        console.error("Update campaign error:", error);
+        console.error('Update campaign error:', error);
 
         if (error instanceof Error) {
-          if (error.message.includes("Authentication")) {
+          if (error.message.includes('Authentication')) {
             return reply.code(401).send({ error: error.message });
           }
-          if (
-            error.message.includes("not found") ||
-            error.message.includes("access denied")
-          ) {
-            return reply
-              .code(404)
-              .send({ error: "Campaign not found or access denied" });
+          if (error.message.includes('not found') || error.message.includes('access denied')) {
+            return reply.code(404).send({ error: 'Campaign not found or access denied' });
           }
           if (
-            error.message.includes("cannot be updated") ||
-            error.message.includes("already active")
+            error.message.includes('cannot be updated') ||
+            error.message.includes('already active')
           ) {
             return reply.code(400).send({ error: error.message });
           }
-          if (error.message.includes("Invalid status transition")) {
+          if (error.message.includes('Invalid status transition')) {
             return reply.code(400).send({ error: error.message });
           }
         }
 
         return reply.code(500).send({
-          error: "Failed to update campaign. Please try again.",
+          error: 'Failed to update campaign. Please try again.',
         });
       }
-    },
+    }
   );
 
   // List user's campaigns
-  fastify.get<{ Querystring: { brandId?: string } }>(
-    "/list",
-    async (request, reply) => {
-      try {
-        const userId = await authenticateRequest(request);
-        const { brandId } = request.query;
+  fastify.get<{ Querystring: { brandId?: string } }>('/list', async (request, reply) => {
+    try {
+      const userId = await authenticateRequest(request);
+      const { brandId } = request.query;
 
-        // Build where clause - filter by brandId if provided, otherwise show all user's campaigns
-        const whereClause: { brand: { userId: string }; brandId?: string } = {
-          brand: {
+      // Build where clause - filter by brandId if provided, otherwise show all user's campaigns
+      const whereClause: { brand: { userId: string }; brandId?: string } = {
+        brand: {
+          userId,
+        },
+      };
+
+      if (brandId) {
+        // Verify the user owns this brand before filtering
+        const brand = await prisma.brand.findFirst({
+          where: {
+            id: brandId,
             userId,
           },
-        };
+        });
 
-        if (brandId) {
-          // Verify the user owns this brand before filtering
-          const brand = await prisma.brand.findFirst({
-            where: {
-              id: brandId,
-              userId,
-            },
-          });
-
-          if (!brand) {
-            return reply
-              .code(404)
-              .send({ error: "Brand not found or access denied" });
-          }
-
-          whereClause.brandId = brandId;
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found or access denied' });
         }
 
-        const campaigns = await prisma.campaign.findMany({
-          where: whereClause,
-          include: {
-            brand: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            _count: {
-              select: {
-                content: true,
-              },
-            },
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        });
-
-        return reply.send({
-          success: true,
-          campaigns: campaigns.map((campaign) => ({
-            id: campaign.id,
-            name: campaign.name,
-            status: campaign.status,
-            brand: campaign.brand,
-            contentCount: campaign._count.content,
-            config: campaign.config,
-            createdAt: campaign.createdAt,
-            startedAt: campaign.startedAt,
-            completedAt: campaign.completedAt,
-          })),
-        });
-      } catch (error) {
-        console.error("List campaigns error:", error);
-
-        if (error instanceof Error) {
-          if (error.message.includes("Authentication")) {
-            return reply.code(401).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: "Failed to retrieve campaigns. Please try again.",
-        });
+        whereClause.brandId = brandId;
       }
-    },
-  );
+
+      const campaigns = await prisma.campaign.findMany({
+        where: whereClause,
+        include: {
+          brand: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          _count: {
+            select: {
+              content: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      return reply.send({
+        success: true,
+        campaigns: campaigns.map((campaign) => ({
+          id: campaign.id,
+          name: campaign.name,
+          status: campaign.status,
+          brand: campaign.brand,
+          contentCount: campaign._count.content,
+          config: campaign.config,
+          createdAt: campaign.createdAt,
+          startedAt: campaign.startedAt,
+          completedAt: campaign.completedAt,
+        })),
+      });
+    } catch (error) {
+      console.error('List campaigns error:', error);
+
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          return reply.code(401).send({ error: error.message });
+        }
+      }
+
+      return reply.code(500).send({
+        error: 'Failed to retrieve campaigns. Please try again.',
+      });
+    }
+  });
 
   // Delete campaign (only if not started)
-  fastify.delete<{ Params: { id: string } }>("/:id", async (request, reply) => {
+  fastify.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
     try {
       const userId = await authenticateRequest(request);
       const { id } = request.params;
 
       if (!id) {
-        return reply.code(400).send({ error: "Campaign ID is required" });
+        return reply.code(400).send({ error: 'Campaign ID is required' });
       }
 
       // Check if campaign exists and user owns it
@@ -683,16 +594,14 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!campaign) {
-        return reply
-          .code(404)
-          .send({ error: "Campaign not found or access denied" });
+        return reply.code(404).send({ error: 'Campaign not found or access denied' });
       }
 
       // Only allow deletion of campaigns that haven't been started
-      const deletableStatuses = ["draft", "preview", "creating", "failed"];
+      const deletableStatuses = ['draft', 'preview', 'creating', 'failed'];
       if (!deletableStatuses.includes(campaign.status)) {
         return reply.code(400).send({
-          error: `Cannot delete campaigns with status '${campaign.status}'. Only campaigns with status: ${deletableStatuses.join(", ")} can be deleted.`,
+          error: `Cannot delete campaigns with status '${campaign.status}'. Only campaigns with status: ${deletableStatuses.join(', ')} can be deleted.`,
         });
       }
 
@@ -703,7 +612,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.send({
         success: true,
-        message: "Campaign deleted successfully",
+        message: 'Campaign deleted successfully',
         deletedCampaign: {
           id: campaign.id,
           name: campaign.name,
@@ -712,16 +621,16 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
     } catch (error) {
-      console.error("Delete campaign error:", error);
+      console.error('Delete campaign error:', error);
 
       if (error instanceof Error) {
-        if (error.message.includes("Authentication")) {
+        if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message });
         }
       }
 
       return reply.code(500).send({
-        error: "Failed to delete campaign. Please try again.",
+        error: 'Failed to delete campaign. Please try again.',
       });
     }
   });
@@ -730,11 +639,11 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.put<{
     Params: { id: string };
     Body: { priority: number };
-  }>("/:id/priority", async (request, reply) => {
+  }>('/:id/priority', async (request, reply) => {
     try {
       const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return reply.code(401).send({ error: "Authentication required" });
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Authentication required' });
       }
 
       const token = authHeader.substring(7);
@@ -742,61 +651,56 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         decoded = verifyJWT(token);
       } catch (jwtError) {
-        console.error("JWT verification error:", jwtError);
-        return reply.code(401).send({ error: "Invalid authentication token" });
+        console.error('JWT verification error:', jwtError);
+        return reply.code(401).send({ error: 'Invalid authentication token' });
       }
 
       const { id } = request.params;
       const { priority } = request.body;
 
       if (!id) {
-        return reply.code(400).send({ error: "Campaign ID is required" });
+        return reply.code(400).send({ error: 'Campaign ID is required' });
       }
 
-      if (typeof priority !== "number" || priority < 1 || priority > 10) {
-        return reply
-          .code(400)
-          .send({ error: "Priority must be a number between 1 and 10" });
+      if (typeof priority !== 'number' || priority < 1 || priority > 10) {
+        return reply.code(400).send({ error: 'Priority must be a number between 1 and 10' });
       }
 
       const updatedCampaign = await campaignService.updateCampaignPriority(
         id,
         priority,
-        decoded.id,
+        decoded.id
       );
 
       return reply.send({
         success: true,
-        message: "Campaign priority updated successfully",
+        message: 'Campaign priority updated successfully',
         campaign: updatedCampaign,
       });
     } catch (error) {
-      console.error("Update campaign priority error:", error);
+      console.error('Update campaign priority error:', error);
 
       if (error instanceof Error) {
-        if (
-          error.message.includes("Authentication") ||
-          error.message.includes("access denied")
-        ) {
+        if (error.message.includes('Authentication') || error.message.includes('access denied')) {
           return reply.code(401).send({ error: error.message });
         }
-        if (error.message.includes("not found")) {
+        if (error.message.includes('not found')) {
           return reply.code(404).send({ error: error.message });
         }
       }
 
       return reply.code(500).send({
-        error: "Failed to update campaign priority. Please try again.",
+        error: 'Failed to update campaign priority. Please try again.',
       });
     }
   });
 
   // Get campaign coordination summary
-  fastify.get("/coordination", async (request, reply) => {
+  fastify.get('/coordination', async (request, reply) => {
     try {
       const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return reply.code(401).send({ error: "Authentication required" });
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Authentication required' });
       }
 
       const token = authHeader.substring(7);
@@ -804,29 +708,27 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         decoded = verifyJWT(token);
       } catch (jwtError) {
-        console.error("JWT verification error:", jwtError);
-        return reply.code(401).send({ error: "Invalid authentication token" });
+        console.error('JWT verification error:', jwtError);
+        return reply.code(401).send({ error: 'Invalid authentication token' });
       }
 
-      const coordination = await campaignService.getCampaignCoordination(
-        decoded.id,
-      );
+      const coordination = await campaignService.getCampaignCoordination(decoded.id);
 
       return reply.send({
         success: true,
         coordination,
       });
     } catch (error) {
-      console.error("Get campaign coordination error:", error);
+      console.error('Get campaign coordination error:', error);
 
       if (error instanceof Error) {
-        if (error.message.includes("Authentication")) {
+        if (error.message.includes('Authentication')) {
           return reply.code(401).send({ error: error.message });
         }
       }
 
       return reply.code(500).send({
-        error: "Failed to get campaign coordination. Please try again.",
+        error: 'Failed to get campaign coordination. Please try again.',
       });
     }
   });
@@ -838,7 +740,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     contentIds?: string[];
   }
   fastify.post<{ Params: { id: string }; Body: RegenerateContentBody }>(
-    "/:id/regenerate-content",
+    '/:id/regenerate-content',
     async (request, reply) => {
       try {
         const userId = await authenticateRequest(request);
@@ -855,21 +757,19 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (!campaign) {
-          return reply.code(404).send({ error: "Campaign not found" });
+          return reply.code(404).send({ error: 'Campaign not found' });
         }
 
         if (campaign.brand.userId !== userId) {
-          return reply.code(403).send({ error: "Access denied" });
+          return reply.code(403).send({ error: 'Access denied' });
         }
 
         // Determine which content to regenerate
         const targetContentIds =
-          contentIds && contentIds.length > 0
-            ? contentIds
-            : campaign.content.map((c) => c.id);
+          contentIds && contentIds.length > 0 ? contentIds : campaign.content.map((c) => c.id);
 
         if (targetContentIds.length === 0) {
-          return reply.code(400).send({ error: "No content to regenerate" });
+          return reply.code(400).send({ error: 'No content to regenerate' });
         }
 
         // Start regeneration job
@@ -877,7 +777,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           campaignId,
           targetContentIds,
           userId,
-          { themes, style },
+          { themes, style }
         );
 
         return reply.send({
@@ -885,29 +785,26 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           data: regenerationJob,
         });
       } catch (error) {
-        console.error("Content regeneration error:", error);
+        console.error('Content regeneration error:', error);
         return reply.code(500).send({
-          error: "Failed to start content regeneration. Please try again.",
+          error: 'Failed to start content regeneration. Please try again.',
         });
       }
-    },
+    }
   );
 
   // Get regeneration job progress
   fastify.get<{ Params: { jobId: string } }>(
-    "/regeneration-jobs/:jobId",
+    '/regeneration-jobs/:jobId',
     async (request, reply) => {
       try {
         const userId = await authenticateRequest(request);
         const { jobId } = request.params;
 
-        const progress = await regenerationService.getJobProgress(
-          jobId,
-          userId,
-        );
+        const progress = await regenerationService.getJobProgress(jobId, userId);
 
         if (!progress) {
-          return reply.code(404).send({ error: "Job not found" });
+          return reply.code(404).send({ error: 'Job not found' });
         }
 
         return reply.send({
@@ -915,17 +812,17 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           data: progress,
         });
       } catch (error) {
-        console.error("Get job progress error:", error);
+        console.error('Get job progress error:', error);
         return reply.code(500).send({
-          error: "Failed to get job progress. Please try again.",
+          error: 'Failed to get job progress. Please try again.',
         });
       }
-    },
+    }
   );
 
   // Cancel regeneration job
   fastify.delete<{ Params: { jobId: string } }>(
-    "/regeneration-jobs/:jobId",
+    '/regeneration-jobs/:jobId',
     async (request, reply) => {
       try {
         const userId = await authenticateRequest(request);
@@ -934,22 +831,20 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const cancelled = await regenerationService.cancelJob(jobId, userId);
 
         if (!cancelled) {
-          return reply
-            .code(404)
-            .send({ error: "Job not found or already completed" });
+          return reply.code(404).send({ error: 'Job not found or already completed' });
         }
 
         return reply.send({
           success: true,
-          message: "Job cancelled successfully",
+          message: 'Job cancelled successfully',
         });
       } catch (error) {
-        console.error("Cancel job error:", error);
+        console.error('Cancel job error:', error);
         return reply.code(500).send({
-          error: "Failed to cancel job. Please try again.",
+          error: 'Failed to cancel job. Please try again.',
         });
       }
-    },
+    }
   );
 };
 

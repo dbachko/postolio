@@ -1,5 +1,5 @@
-import Redis from "ioredis";
-import { getRedisUrl } from "../utils/redis-url.js";
+import Redis from 'ioredis';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 interface AccountInsights {
   followers: number;
@@ -36,30 +36,23 @@ export class AnalyticsCache {
       maxRetriesPerRequest: 1,
     });
 
-    this.redis.on("error", (err: unknown) => {
+    this.redis.on('error', (err: unknown) => {
       if (err instanceof Error) {
-        console.error("AnalyticsCache Redis error:", err.message, err.stack);
+        console.error('AnalyticsCache Redis error:', err.message, err.stack);
       } else {
-        console.error("AnalyticsCache Redis error:", err);
+        console.error('AnalyticsCache Redis error:', err);
       }
     });
   }
 
   // Account insights (TTL: 1 hour)
-  async setAccountInsights(
-    brandId: string,
-    date: string,
-    data: AccountInsights,
-  ): Promise<void> {
+  async setAccountInsights(brandId: string, date: string, data: AccountInsights): Promise<void> {
     if (!this.redis) return;
     const key = `analytics:account:${brandId}:${date}`;
     await this.redis.setex(key, 3600, JSON.stringify(data)); // 1 hour TTL
   }
 
-  async getAccountInsights(
-    brandId: string,
-    date: string,
-  ): Promise<AccountInsights | null> {
+  async getAccountInsights(brandId: string, date: string): Promise<AccountInsights | null> {
     if (!this.redis) return null;
     const key = `analytics:account:${brandId}:${date}`;
     const data = await this.redis.get(key);
@@ -67,20 +60,13 @@ export class AnalyticsCache {
   }
 
   // Media insights (TTL: 6 hours)
-  async setMediaInsights(
-    brandId: string,
-    mediaId: string,
-    data: MediaInsights,
-  ): Promise<void> {
+  async setMediaInsights(brandId: string, mediaId: string, data: MediaInsights): Promise<void> {
     if (!this.redis) return;
     const key = `analytics:media:${brandId}:${mediaId}`;
     await this.redis.setex(key, 21600, JSON.stringify(data)); // 6 hours TTL
   }
 
-  async getMediaInsights(
-    brandId: string,
-    mediaId: string,
-  ): Promise<MediaInsights | null> {
+  async getMediaInsights(brandId: string, mediaId: string): Promise<MediaInsights | null> {
     if (!this.redis) return null;
     const key = `analytics:media:${brandId}:${mediaId}`;
     const data = await this.redis.get(key);
@@ -136,7 +122,7 @@ export class AnalyticsCache {
 
   async clear(): Promise<void> {
     if (!this.redis) return;
-    const keys = await this.redis.keys("analytics:*");
+    const keys = await this.redis.keys('analytics:*');
     if (keys.length > 0) {
       await this.redis.del(...keys);
     }
@@ -150,22 +136,22 @@ export class AnalyticsCache {
   // Check if data exists and is fresh
   async isDataFresh(
     brandId: string,
-    type: "account" | "media" | "posts",
-    identifier?: string,
+    type: 'account' | 'media' | 'posts',
+    identifier?: string
   ): Promise<boolean> {
     let key: string;
 
     switch (type) {
-      case "account": {
-        const today = new Date().toISOString().split("T")[0];
+      case 'account': {
+        const today = new Date().toISOString().split('T')[0];
         key = `analytics:account:${brandId}:${today}`;
         break;
       }
-      case "media":
+      case 'media':
         if (!identifier) return false;
         key = `analytics:media:${brandId}:${identifier}`;
         break;
-      case "posts":
+      case 'posts':
         key = `analytics:posts:${brandId}:recent`;
         break;
       default:
@@ -184,7 +170,7 @@ export class AnalyticsCache {
     postsDataAge: number;
     rateLimitCount: number;
   }> {
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().split('T')[0];
     const accountKey = `analytics:account:${brandId}:${today}`;
     const postsKey = `analytics:posts:${brandId}:recent`;
 
@@ -196,9 +182,7 @@ export class AnalyticsCache {
 
     return {
       lastUpdated:
-        accountTTL > 0
-          ? new Date(Date.now() - (3600 - accountTTL) * 1000).toISOString()
-          : null,
+        accountTTL > 0 ? new Date(Date.now() - (3600 - accountTTL) * 1000).toISOString() : null,
       accountDataAge: accountTTL > 0 ? 3600 - accountTTL : -1,
       postsDataAge: postsTTL > 0 ? 1800 - postsTTL : -1,
       rateLimitCount,

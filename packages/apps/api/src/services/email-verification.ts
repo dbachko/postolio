@@ -1,8 +1,8 @@
-import { nanoid } from "nanoid";
-import { getDatabaseClient } from "../config/database.js";
-import { EmailService } from "./email.js";
-import Redis from "ioredis";
-import { getRedisUrl } from "../utils/redis-url.js";
+import { nanoid } from 'nanoid';
+import { getDatabaseClient } from '../config/database.js';
+import { EmailService } from './email.js';
+import Redis from 'ioredis';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
@@ -21,7 +21,7 @@ export class EmailVerificationService {
    * Send verification email to user
    */
   static async sendVerificationEmail(
-    userId: string,
+    userId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
       // Get user details
@@ -33,14 +33,14 @@ export class EmailVerificationService {
       if (!user) {
         return {
           success: false,
-          message: "User not found",
+          message: 'User not found',
         };
       }
 
       if (user.emailVerified) {
         return {
           success: false,
-          message: "Email already verified",
+          message: 'Email already verified',
         };
       }
 
@@ -52,7 +52,7 @@ export class EmailVerificationService {
         return {
           success: false,
           message:
-            "Verification email recently sent. Please check your inbox or wait a few minutes.",
+            'Verification email recently sent. Please check your inbox or wait a few minutes.',
         };
       }
 
@@ -67,36 +67,29 @@ export class EmailVerificationService {
         createdAt: Date.now(),
       };
 
-      await redis.setex(
-        verificationKey,
-        this.TOKEN_EXPIRY,
-        JSON.stringify(verificationData),
-      );
+      await redis.setex(verificationKey, this.TOKEN_EXPIRY, JSON.stringify(verificationData));
 
       // Set cooldown
-      await redis.setex(cooldownKey, this.RESEND_COOLDOWN, "1");
+      await redis.setex(cooldownKey, this.RESEND_COOLDOWN, '1');
 
       // Send verification email using centralized email service
-      const emailResult = await EmailService.sendVerificationEmail(
-        user.email,
-        token,
-      );
+      const emailResult = await EmailService.sendVerificationEmail(user.email, token);
 
       if (!emailResult.success) {
         // Remove cooldown if email failed to send
         await redis.del(cooldownKey);
-        throw new Error(emailResult.error || "Failed to send email");
+        throw new Error(emailResult.error || 'Failed to send email');
       }
 
       return {
         success: true,
-        message: "Verification email sent! Check your inbox.",
+        message: 'Verification email sent! Check your inbox.',
       };
     } catch (error) {
-      console.error("Email verification error:", error);
+      console.error('Email verification error:', error);
       return {
         success: false,
-        message: "Failed to send verification email. Please try again.",
+        message: 'Failed to send verification email. Please try again.',
       };
     }
   }
@@ -116,7 +109,7 @@ export class EmailVerificationService {
       if (!data) {
         return {
           success: false,
-          message: "Invalid or expired verification link",
+          message: 'Invalid or expired verification link',
         };
       }
 
@@ -137,14 +130,14 @@ export class EmailVerificationService {
 
       return {
         success: true,
-        message: "Email verified successfully!",
+        message: 'Email verified successfully!',
         userId: verificationData.userId,
       };
     } catch (error) {
-      console.error("Email verification error:", error);
+      console.error('Email verification error:', error);
       return {
         success: false,
-        message: "Failed to verify email",
+        message: 'Failed to verify email',
       };
     }
   }

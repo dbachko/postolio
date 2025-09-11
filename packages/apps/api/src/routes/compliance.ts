@@ -1,12 +1,12 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { getRetentionManager } from "../services/retention-manager.js";
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { getRetentionManager } from '../services/retention-manager.js';
 
 export async function complianceRoutes(app: FastifyInstance) {
   const retentionManager = getRetentionManager(app);
 
   // GDPR - Delete all user data
   app.post(
-    "/api/compliance/gdpr-delete",
+    '/api/compliance/gdpr-delete',
     {
       preHandler: app.authenticate,
     },
@@ -14,33 +14,33 @@ export async function complianceRoutes(app: FastifyInstance) {
       try {
         const user = request.user;
         if (!user?.id) {
-          return reply.code(401).send({ error: "Unauthorized" });
+          return reply.code(401).send({ error: 'Unauthorized' });
         }
 
         // Log the deletion request for compliance
-        app.log.info({ userId: user.id }, "GDPR deletion request received");
+        app.log.info({ userId: user.id }, 'GDPR deletion request received');
 
         // Process the deletion
         const result = await retentionManager.deleteUserData(user.id);
 
         return reply.send({
           success: true,
-          message: "Your data has been deleted in compliance with GDPR",
+          message: 'Your data has been deleted in compliance with GDPR',
           ...result,
         });
       } catch (error) {
-        app.log.error({ error }, "GDPR deletion failed");
+        app.log.error({ error }, 'GDPR deletion failed');
         return reply.code(500).send({
-          error: "Failed to process deletion request",
-          message: "Please contact support for assistance",
+          error: 'Failed to process deletion request',
+          message: 'Please contact support for assistance',
         });
       }
-    },
+    }
   );
 
   // GDPR - Export user data
   app.get(
-    "/api/compliance/gdpr-export",
+    '/api/compliance/gdpr-export',
     {
       preHandler: app.authenticate,
     },
@@ -48,11 +48,11 @@ export async function complianceRoutes(app: FastifyInstance) {
       try {
         const user = request.user;
         if (!user?.id) {
-          return reply.code(401).send({ error: "Unauthorized" });
+          return reply.code(401).send({ error: 'Unauthorized' });
         }
 
         // Get all user data from database
-        const { PrismaClient } = await import("@postolio/database");
+        const { PrismaClient } = await import('@postolio/database');
         const prisma = new PrismaClient();
 
         const userData = await prisma.user.findUnique({
@@ -70,34 +70,27 @@ export async function complianceRoutes(app: FastifyInstance) {
         await prisma.$disconnect();
 
         // Remove sensitive fields
-        if (
-          userData &&
-          typeof userData === "object" &&
-          "password" in userData
-        ) {
+        if (userData && typeof userData === 'object' && 'password' in userData) {
           delete (userData as { password?: string }).password;
         }
 
         return reply
-          .header("Content-Type", "application/json")
-          .header(
-            "Content-Disposition",
-            'attachment; filename="user-data-export.json"',
-          )
+          .header('Content-Type', 'application/json')
+          .header('Content-Disposition', 'attachment; filename="user-data-export.json"')
           .send({
             exportDate: new Date().toISOString(),
             userData,
           });
       } catch (error) {
-        app.log.error({ error }, "GDPR export failed");
-        return reply.code(500).send({ error: "Failed to export user data" });
+        app.log.error({ error }, 'GDPR export failed');
+        return reply.code(500).send({ error: 'Failed to export user data' });
       }
-    },
+    }
   );
 
   // Get retention statistics (admin only)
   app.get(
-    "/api/compliance/retention-stats",
+    '/api/compliance/retention-stats',
     {
       preHandler: app.authenticate,
     },
@@ -106,17 +99,15 @@ export async function complianceRoutes(app: FastifyInstance) {
         const stats = await retentionManager.getRetentionStats();
         return reply.send(stats);
       } catch (error) {
-        app.log.error({ error }, "Failed to get retention stats");
-        return reply
-          .code(500)
-          .send({ error: "Failed to get retention statistics" });
+        app.log.error({ error }, 'Failed to get retention stats');
+        return reply.code(500).send({ error: 'Failed to get retention statistics' });
       }
-    },
+    }
   );
 
   // Manual trigger for retention processing (admin only)
   app.post(
-    "/api/compliance/process-retention",
+    '/api/compliance/process-retention',
     {
       preHandler: app.authenticate,
     },
@@ -124,7 +115,7 @@ export async function complianceRoutes(app: FastifyInstance) {
       try {
         // In production, add admin role check here
 
-        app.log.info("Manual retention processing triggered");
+        app.log.info('Manual retention processing triggered');
 
         // Run asynchronously
         setImmediate(() => {
@@ -133,20 +124,18 @@ export async function complianceRoutes(app: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: "Retention processing started in background",
+          message: 'Retention processing started in background',
         });
       } catch (error) {
-        app.log.error({ error }, "Failed to trigger retention processing");
-        return reply
-          .code(500)
-          .send({ error: "Failed to trigger retention processing" });
+        app.log.error({ error }, 'Failed to trigger retention processing');
+        return reply.code(500).send({ error: 'Failed to trigger retention processing' });
       }
-    },
+    }
   );
 
   // Delete specific brand data
   app.delete<{ Params: { brandId: string } }>(
-    "/api/compliance/brand/:brandId",
+    '/api/compliance/brand/:brandId',
     {
       preHandler: app.authenticate,
     },
@@ -154,13 +143,13 @@ export async function complianceRoutes(app: FastifyInstance) {
       try {
         const user = request.user;
         if (!user?.id) {
-          return reply.code(401).send({ error: "Unauthorized" });
+          return reply.code(401).send({ error: 'Unauthorized' });
         }
 
         const { brandId } = request.params;
 
         // Verify user owns the brand
-        const { PrismaClient } = await import("@postolio/database");
+        const { PrismaClient } = await import('@postolio/database');
         const prisma = new PrismaClient();
 
         const brand = await prisma.brand.findFirst({
@@ -172,9 +161,7 @@ export async function complianceRoutes(app: FastifyInstance) {
 
         if (!brand) {
           await prisma.$disconnect();
-          return reply
-            .code(404)
-            .send({ error: "Brand not found or unauthorized" });
+          return reply.code(404).send({ error: 'Brand not found or unauthorized' });
         }
 
         const result = await retentionManager.deleteBrandData(brandId);
@@ -188,13 +175,13 @@ export async function complianceRoutes(app: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: "Brand and all associated data deleted",
+          message: 'Brand and all associated data deleted',
           ...result,
         });
       } catch (error) {
-        app.log.error({ error }, "Brand deletion failed");
-        return reply.code(500).send({ error: "Failed to delete brand data" });
+        app.log.error({ error }, 'Brand deletion failed');
+        return reply.code(500).send({ error: 'Failed to delete brand data' });
       }
-    },
+    }
   );
 }

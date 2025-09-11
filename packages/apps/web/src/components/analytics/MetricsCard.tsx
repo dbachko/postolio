@@ -1,7 +1,7 @@
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Badge } from "../ui/badge";
-import { TrendingUp, TrendingDown } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import { cn } from '../../lib/utils';
 
 interface MetricsCardProps {
   title: string;
@@ -32,17 +32,13 @@ export function MetricsCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
+        <CardTitle className="text-muted-foreground text-sm font-medium">{title}</CardTitle>
         {icon && <div className="text-muted-foreground">{icon}</div>}
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{formatValue(value)}</div>
         <div className="flex items-center justify-between">
-          {description && (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          )}
+          {description && <p className="text-muted-foreground text-xs">{description}</p>}
           {hasTrend && (
             <div className="flex items-center space-x-1">
               {isPositiveTrend ? (
@@ -53,13 +49,11 @@ export function MetricsCard({
               <Badge
                 variant="secondary"
                 className={cn(
-                  "text-xs",
-                  isPositiveTrend
-                    ? "text-green-700 bg-green-100"
-                    : "text-red-700 bg-red-100",
+                  'text-xs',
+                  isPositiveTrend ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                 )}
               >
-                {isPositiveTrend ? "+" : ""}
+                {isPositiveTrend ? '+' : ''}
                 {trend.toFixed(1)}%
               </Badge>
             </div>

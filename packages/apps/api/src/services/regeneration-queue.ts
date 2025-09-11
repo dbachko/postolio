@@ -1,12 +1,9 @@
-import { Queue, Worker, Job } from "bullmq";
-import Redis from "ioredis";
-import { prisma } from "../config/database.js";
-import {
-  generateInstagramContent,
-  type ContentGenerationRequest,
-} from "./content-generator.js";
-import type { StyleProfile } from "./ai.js";
-import { getRedisUrl } from "../utils/redis-url.js";
+import { Queue, Worker, Job } from 'bullmq';
+import Redis from 'ioredis';
+import { prisma } from '../config/database.js';
+import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
+import type { StyleProfile } from './ai.js';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 // Fixed batch size as per product decision
 const BATCH_SIZE = 5;
@@ -33,7 +30,7 @@ interface RegenerationJobData {
 
 // Job progress interface
 interface RegenerationProgress {
-  status: "pending" | "processing" | "completed" | "failed";
+  status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
   total: number;
   completed: number;
@@ -42,14 +39,14 @@ interface RegenerationProgress {
 }
 
 // Create regeneration queue
-export const regenerationQueue = new Queue("content-regeneration", {
+export const regenerationQueue = new Queue('content-regeneration', {
   connection: redisConnection,
   defaultJobOptions: {
     removeOnComplete: 10,
     removeOnFail: 20,
     attempts: 3,
     backoff: {
-      type: "exponential",
+      type: 'exponential',
       delay: 2000,
     },
   },
@@ -57,12 +54,12 @@ export const regenerationQueue = new Queue("content-regeneration", {
 
 // Queue processor worker
 const regenerationWorker = new Worker(
-  "content-regeneration",
+  'content-regeneration',
   async (job: Job<RegenerationJobData>) => {
     const { campaignId, contentIds, regenerationParams } = job.data;
 
     console.log(
-      `Starting regeneration job for campaign ${campaignId} with ${contentIds.length} items`,
+      `Starting regeneration job for campaign ${campaignId} with ${contentIds.length} items`
     );
 
     const results = {
@@ -90,36 +87,36 @@ const regenerationWorker = new Worker(
 
           // Create a basic StyleProfile for regeneration
           const brandProfile: StyleProfile = {
-            colorPalette: ["#333333", "#ffffff"],
-            aestheticStyle: regenerationParams.style || "modern",
-            contentThemes: regenerationParams.themes || ["lifestyle"],
-            toneOfVoice: "engaging",
-            targetAudience: "general",
-            brandPersonality: ["professional", "engaging"],
+            colorPalette: ['#333333', '#ffffff'],
+            aestheticStyle: regenerationParams.style || 'modern',
+            contentThemes: regenerationParams.themes || ['lifestyle'],
+            toneOfVoice: 'engaging',
+            targetAudience: 'general',
+            brandPersonality: ['professional', 'engaging'],
           };
 
           // Generate new content with regeneration parameters
           const contentRequest: ContentGenerationRequest = {
             brandId: existingContent.brandId,
             count: 1,
-            theme: regenerationParams.themes?.[0] || "lifestyle",
+            theme: regenerationParams.themes?.[0] || 'lifestyle',
             style: regenerationParams.style,
           };
 
           const newContentArray = await generateInstagramContent(
             brandProfile,
             existingContent.brand.name,
-            contentRequest,
+            contentRequest
           );
 
           if (!newContentArray || newContentArray.length === 0) {
-            throw new Error("Failed to generate content");
+            throw new Error('Failed to generate content');
           }
 
           const newContent = newContentArray[0];
 
           if (!newContent) {
-            throw new Error("No content generated");
+            throw new Error('No content generated');
           }
 
           // Update existing content with new generated data
@@ -134,14 +131,11 @@ const regenerationWorker = new Worker(
               retentionExpiresAt: newContent.retentionExpiresAt || null,
               generationParams: {
                 ...(((existingContent.generationParams as unknown) &&
-                typeof existingContent.generationParams === "object"
-                  ? (existingContent.generationParams as Record<
-                      string,
-                      unknown
-                    >)
+                typeof existingContent.generationParams === 'object'
+                  ? (existingContent.generationParams as Record<string, unknown>)
                   : {}) || {}),
                 regeneratedAt: new Date().toISOString(),
-                regenerationReason: "campaign-edit",
+                regenerationReason: 'campaign-edit',
                 originalParams: existingContent.generationParams,
                 newTheme: regenerationParams.themes?.[0],
                 newStyle: regenerationParams.style,
@@ -150,14 +144,13 @@ const regenerationWorker = new Worker(
           });
 
           results.completed++;
-          return { contentId, status: "success" };
+          return { contentId, status: 'success' };
         } catch (error) {
           results.failed++;
-          const errorMessage =
-            error instanceof Error ? error.message : "Unknown error";
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           results.errors.push(`Content ${contentId}: ${errorMessage}`);
           console.error(`Failed to regenerate content ${contentId}:`, error);
-          return { contentId, status: "failed", error: errorMessage };
+          return { contentId, status: 'failed', error: errorMessage };
         }
       });
 
@@ -165,14 +158,10 @@ const regenerationWorker = new Worker(
       await Promise.allSettled(batchPromises);
 
       // Update job progress
-      const progress = Math.floor(
-        ((i + batch.length) / contentIds.length) * 100,
-      );
+      const progress = Math.floor(((i + batch.length) / contentIds.length) * 100);
       await job.updateProgress(progress);
 
-      console.log(
-        `Batch ${Math.floor(i / BATCH_SIZE) + 1} completed. Progress: ${progress}%`,
-      );
+      console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1} completed. Progress: ${progress}%`);
     }
 
     // Update campaign status if regeneration completed
@@ -180,7 +169,7 @@ const regenerationWorker = new Worker(
       await prisma.campaign.update({
         where: { id: campaignId },
         data: {
-          status: "preview",
+          status: 'preview',
           errorMessage: null,
         },
       });
@@ -188,22 +177,22 @@ const regenerationWorker = new Worker(
       await prisma.campaign.update({
         where: { id: campaignId },
         data: {
-          status: "failed",
-          errorMessage: `All content regeneration failed. Errors: ${results.errors.join("; ")}`,
+          status: 'failed',
+          errorMessage: `All content regeneration failed. Errors: ${results.errors.join('; ')}`,
         },
       });
     } else {
       await prisma.campaign.update({
         where: { id: campaignId },
         data: {
-          status: "preview",
-          errorMessage: `Partial regeneration completed. ${results.failed} items failed: ${results.errors.join("; ")}`,
+          status: 'preview',
+          errorMessage: `Partial regeneration completed. ${results.failed} items failed: ${results.errors.join('; ')}`,
         },
       });
     }
 
     console.log(
-      `Regeneration job completed for campaign ${campaignId}. Completed: ${results.completed}, Failed: ${results.failed}`,
+      `Regeneration job completed for campaign ${campaignId}. Completed: ${results.completed}, Failed: ${results.failed}`
     );
 
     return {
@@ -217,7 +206,7 @@ const regenerationWorker = new Worker(
   {
     connection: redisConnection,
     concurrency: 1, // Process one regeneration job at a time
-  },
+  }
 );
 
 // Regeneration service class
@@ -229,10 +218,10 @@ export class RegenerationService {
     campaignId: string,
     contentIds: string[],
     userId: string,
-    regenerationParams: RegenerationJobData["regenerationParams"] = {},
+    regenerationParams: RegenerationJobData['regenerationParams'] = {}
   ): Promise<{ jobId: string; totalContent: number; estimatedTime: number }> {
     // Add job to queue
-    const job = await regenerationQueue.add("regenerate-content", {
+    const job = await regenerationQueue.add('regenerate-content', {
       campaignId,
       contentIds,
       userId,
@@ -243,7 +232,7 @@ export class RegenerationService {
     const estimatedTime = Math.ceil(contentIds.length * 7.5); // seconds
 
     console.log(
-      `Queued regeneration job ${job.id} for campaign ${campaignId} with ${contentIds.length} items`,
+      `Queued regeneration job ${job.id} for campaign ${campaignId} with ${contentIds.length} items`
     );
 
     return {
@@ -256,10 +245,7 @@ export class RegenerationService {
   /**
    * Get regeneration job progress
    */
-  async getJobProgress(
-    jobId: string,
-    userId?: string,
-  ): Promise<RegenerationProgress | null> {
+  async getJobProgress(jobId: string, userId?: string): Promise<RegenerationProgress | null> {
     try {
       const job = await Job.fromId(regenerationQueue, jobId);
 
@@ -283,10 +269,10 @@ export class RegenerationService {
       const total = contentIds.length;
       const completed = Math.floor((progress / 100) * total);
 
-      let status: RegenerationProgress["status"] = "pending";
-      if (state === "completed") status = "completed";
-      else if (state === "failed") status = "failed";
-      else if (state === "active") status = "processing";
+      let status: RegenerationProgress['status'] = 'pending';
+      if (state === 'completed') status = 'completed';
+      else if (state === 'failed') status = 'failed';
+      else if (state === 'active') status = 'processing';
 
       const result: RegenerationProgress = {
         status,
@@ -361,5 +347,5 @@ export async function cleanup() {
 }
 
 // Handle process termination
-process.on("SIGTERM", cleanup);
-process.on("SIGINT", cleanup);
+process.on('SIGTERM', cleanup);
+process.on('SIGINT', cleanup);

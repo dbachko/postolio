@@ -1,6 +1,6 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import type { Brand } from "../lib/api";
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import type { Brand } from '../lib/api';
 
 interface BrandState {
   brands: Brand[];
@@ -40,9 +40,7 @@ export const useBrandStore = create<BrandState>()(
         const current = get();
         if (current.selectedBrand) {
           // Check if the currently selected brand still exists in the new brands list
-          const stillExists = brands.find(
-            (b) => b.id === current.selectedBrand?.id,
-          );
+          const stillExists = brands.find((b) => b.id === current.selectedBrand?.id);
           if (stillExists) {
             // Update the selected brand with fresh data
             set({ selectedBrand: stillExists });
@@ -76,7 +74,7 @@ export const useBrandStore = create<BrandState>()(
       updateBrand: (updatedBrand) => {
         const current = get();
         const updatedBrands = current.brands.map((b) =>
-          b.id === updatedBrand.id ? updatedBrand : b,
+          b.id === updatedBrand.id ? updatedBrand : b
         );
 
         // Update selected brand if it's the one being updated
@@ -92,10 +90,10 @@ export const useBrandStore = create<BrandState>()(
       },
     }),
     {
-      name: "brand-storage",
+      name: 'brand-storage',
       partialize: (state) => ({
         selectedBrand: state.selectedBrand,
       }),
-    },
-  ),
+    }
+  )
 );

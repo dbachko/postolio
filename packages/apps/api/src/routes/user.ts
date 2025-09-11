@@ -1,18 +1,18 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { getDatabaseClient } from "../config/database.js";
-import { TimezoneService } from "../services/timezone.js";
-import { verifyJWT } from "../services/jwt.js";
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { getDatabaseClient } from '../config/database.js';
+import { TimezoneService } from '../services/timezone.js';
+import { verifyJWT } from '../services/jwt.js';
 
 const prisma = getDatabaseClient();
 
 // Helper function to verify authentication and extract user ID
 async function authenticateRequest(
   request: FastifyRequest,
-  reply: FastifyReply,
+  reply: FastifyReply
 ): Promise<string | null> {
   const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    reply.code(401).send({ error: "Authentication required" });
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    reply.code(401).send({ error: 'Authentication required' });
     return null;
   }
 
@@ -22,18 +22,18 @@ async function authenticateRequest(
     return decoded.id;
   } catch (err: unknown) {
     const e = err as { name?: string; message?: string } | undefined;
-    const msg = e?.message?.toLowerCase() || "";
+    const msg = e?.message?.toLowerCase() || '';
     if (
-      e?.name === "JsonWebTokenError" ||
-      e?.name === "TokenExpiredError" ||
-      msg.includes("jwt") ||
-      msg.includes("auth") ||
-      msg.includes("token")
+      e?.name === 'JsonWebTokenError' ||
+      e?.name === 'TokenExpiredError' ||
+      msg.includes('jwt') ||
+      msg.includes('auth') ||
+      msg.includes('token')
     ) {
-      reply.code(401).send({ error: "Authentication required" });
+      reply.code(401).send({ error: 'Authentication required' });
     } else {
-      request.log.error({ err: e }, "Authentication verification failed");
-      reply.code(500).send({ error: "Internal server error" });
+      request.log.error({ err: e }, 'Authentication verification failed');
+      reply.code(500).send({ error: 'Internal server error' });
     }
     return null;
   }
@@ -41,31 +41,26 @@ async function authenticateRequest(
 
 // Type guards for proper input validation
 function isTimezoneUpdateBody(
-  body: unknown,
+  body: unknown
 ): body is { timezone: string; timezoneAutoDetected: boolean } {
-  if (!body || typeof body !== "object") return false;
+  if (!body || typeof body !== 'object') return false;
 
   const obj = body as Record<string, unknown>;
 
-  return (
-    typeof obj.timezone === "string" &&
-    typeof obj.timezoneAutoDetected === "boolean"
-  );
+  return typeof obj.timezone === 'string' && typeof obj.timezoneAutoDetected === 'boolean';
 }
 
-function isBrandTimezoneUpdateBody(
-  body: unknown,
-): body is { timezone: string | null } {
-  if (!body || typeof body !== "object") return false;
+function isBrandTimezoneUpdateBody(body: unknown): body is { timezone: string | null } {
+  if (!body || typeof body !== 'object') return false;
 
   const obj = body as Record<string, unknown>;
 
-  return obj.timezone === null || typeof obj.timezone === "string";
+  return obj.timezone === null || typeof obj.timezone === 'string';
 }
 
 // Validation helpers using type guards
 function validateTimezoneUpdate(
-  body: unknown,
+  body: unknown
 ): { timezone: string; timezoneAutoDetected: boolean } | null {
   if (isTimezoneUpdateBody(body)) {
     return body;
@@ -73,9 +68,7 @@ function validateTimezoneUpdate(
   return null;
 }
 
-function validateBrandTimezoneUpdate(
-  body: unknown,
-): { timezone: string | null } | null {
+function validateBrandTimezoneUpdate(body: unknown): { timezone: string | null } | null {
   if (isBrandTimezoneUpdateBody(body)) {
     return body;
   }
@@ -84,57 +77,51 @@ function validateBrandTimezoneUpdate(
 
 const userRoutes: FastifyPluginAsync = async (fastify) => {
   // Update user timezone preferences
-  fastify.patch(
-    "/api/users/timezone",
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      // Verify authentication
-      const userId = await authenticateRequest(request, reply);
-      if (!userId) return;
+  fastify.patch('/api/users/timezone', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Verify authentication
+    const userId = await authenticateRequest(request, reply);
+    if (!userId) return;
 
-      try {
-        // Validate request body
-        const validatedData = validateTimezoneUpdate(request.body);
-        if (!validatedData) {
-          return reply.status(400).send({
-            error:
-              "Invalid request body. Expected { timezone: string, timezoneAutoDetected: boolean }",
-          });
-        }
-
-        const { timezone, timezoneAutoDetected } = validatedData;
-
-        // Validate timezone if not auto-detected
-        if (
-          !timezoneAutoDetected &&
-          !TimezoneService.isValidTimezone(timezone)
-        ) {
-          return reply.status(400).send({ error: "Invalid timezone" });
-        }
-
-        const updatedUser = await prisma.user.update({
-          where: { id: userId },
-          data: {
-            timezone: timezone, // Store the actual timezone value even when auto-detected
-            timezoneAutoDetected,
-          },
-          select: {
-            id: true,
-            timezone: true,
-            timezoneAutoDetected: true,
-          },
+    try {
+      // Validate request body
+      const validatedData = validateTimezoneUpdate(request.body);
+      if (!validatedData) {
+        return reply.status(400).send({
+          error:
+            'Invalid request body. Expected { timezone: string, timezoneAutoDetected: boolean }',
         });
-
-        return { success: true, user: updatedUser };
-      } catch (err: unknown) {
-        request.log.error({ err }, "Failed to update user timezone");
-        return reply.code(500).send({ error: "Internal server error" });
       }
-    },
-  );
+
+      const { timezone, timezoneAutoDetected } = validatedData;
+
+      // Validate timezone if not auto-detected
+      if (!timezoneAutoDetected && !TimezoneService.isValidTimezone(timezone)) {
+        return reply.status(400).send({ error: 'Invalid timezone' });
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          timezone: timezone, // Store the actual timezone value even when auto-detected
+          timezoneAutoDetected,
+        },
+        select: {
+          id: true,
+          timezone: true,
+          timezoneAutoDetected: true,
+        },
+      });
+
+      return { success: true, user: updatedUser };
+    } catch (err: unknown) {
+      request.log.error({ err }, 'Failed to update user timezone');
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+  });
 
   // Get brand timezone
   fastify.get(
-    "/api/brands/:brandId/timezone",
+    '/api/brands/:brandId/timezone',
     async (request: FastifyRequest, reply: FastifyReply) => {
       // Verify authentication
       const userId = await authenticateRequest(request, reply);
@@ -155,22 +142,20 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (!brand) {
-          return reply
-            .status(404)
-            .send({ error: "Brand not found or access denied" });
+          return reply.status(404).send({ error: 'Brand not found or access denied' });
         }
 
         return { timezone: brand.postingTimezone };
       } catch (err: unknown) {
-        request.log.error({ err }, "Failed to get brand timezone");
-        return reply.code(500).send({ error: "Internal server error" });
+        request.log.error({ err }, 'Failed to get brand timezone');
+        return reply.code(500).send({ error: 'Internal server error' });
       }
-    },
+    }
   );
 
   // Update brand timezone
   fastify.patch(
-    "/api/brands/:brandId/timezone",
+    '/api/brands/:brandId/timezone',
     async (request: FastifyRequest, reply: FastifyReply) => {
       // Verify authentication
       const userId = await authenticateRequest(request, reply);
@@ -183,7 +168,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         const validatedData = validateBrandTimezoneUpdate(request.body);
         if (!validatedData) {
           return reply.status(400).send({
-            error: "Invalid request body. Expected { timezone: string | null }",
+            error: 'Invalid request body. Expected { timezone: string | null }',
           });
         }
 
@@ -198,14 +183,12 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (!brand) {
-          return reply
-            .status(404)
-            .send({ error: "Brand not found or access denied" });
+          return reply.status(404).send({ error: 'Brand not found or access denied' });
         }
 
         // Validate timezone if provided
         if (timezone && !TimezoneService.isValidTimezone(timezone)) {
-          return reply.status(400).send({ error: "Invalid timezone" });
+          return reply.status(400).send({ error: 'Invalid timezone' });
         }
 
         const updatedBrand = await prisma.brand.update({
@@ -221,10 +204,10 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
 
         return { success: true, brand: updatedBrand };
       } catch (err: unknown) {
-        request.log.error({ err }, "Failed to update brand timezone");
-        return reply.code(500).send({ error: "Internal server error" });
+        request.log.error({ err }, 'Failed to update brand timezone');
+        return reply.code(500).send({ error: 'Internal server error' });
       }
-    },
+    }
   );
 };
 

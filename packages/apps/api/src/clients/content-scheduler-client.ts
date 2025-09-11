@@ -3,43 +3,28 @@
  * Provides type-safe integration with AWS Content Scheduler microservice
  */
 
-import { randomUUID } from "crypto";
-import { z } from "zod";
-import axios, { AxiosInstance, AxiosError } from "axios";
-import { aws4Interceptor } from "aws4-axios";
-import * as https from "https";
-import CircuitBreaker from "opossum";
-import type { Options as CircuitBreakerOptions } from "opossum";
-import { defaultProvider } from "@aws-sdk/credential-provider-node";
-import {
-  getServiceDiscovery,
-  SERVICES,
-} from "../utils/service-discovery-client.js";
-import { isCloudMapConfigured } from "../utils/service-discovery.js";
+import { randomUUID } from 'crypto';
+import { z } from 'zod';
+import axios, { AxiosInstance, AxiosError } from 'axios';
+import { aws4Interceptor } from 'aws4-axios';
+import * as https from 'https';
+import CircuitBreaker from 'opossum';
+import type { Options as CircuitBreakerOptions } from 'opossum';
+import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { getServiceDiscovery, SERVICES } from '../utils/service-discovery-client.js';
+import { isCloudMapConfigured } from '../utils/service-discovery.js';
 
 // ==================== Validation Schemas ====================
 
-const PlatformSchema = z.enum([
-  "instagram",
-  "facebook",
-  "twitter",
-  "linkedin",
-  "youtube",
-]);
+const PlatformSchema = z.enum(['instagram', 'facebook', 'twitter', 'linkedin', 'youtube']);
 const ScheduleStatusSchema = z.enum([
-  "scheduled",
-  "processing",
-  "published",
-  "failed",
-  "cancelled",
+  'scheduled',
+  'processing',
+  'published',
+  'failed',
+  'cancelled',
 ]);
-const ContentTypeSchema = z.enum([
-  "image",
-  "video",
-  "carousel",
-  "reel",
-  "story",
-]);
+const ContentTypeSchema = z.enum(['image', 'video', 'carousel', 'reel', 'story']);
 
 // Schema that matches Lambda's expected format
 const CreateScheduleInputSchema = z.object({
@@ -73,18 +58,16 @@ const UpdateScheduleInputSchema = z
   .refine(
     (data) => {
       // If any of the API Gateway fields are provided, all must be provided (including userId for security)
-      const hasAnyApiField =
-        data.brandId || data.contentId || data.platform || data.userId;
-      const hasRequiredApiFields =
-        data.brandId && data.contentId && data.platform && data.userId;
+      const hasAnyApiField = data.brandId || data.contentId || data.platform || data.userId;
+      const hasRequiredApiFields = data.brandId && data.contentId && data.platform && data.userId;
 
       return !hasAnyApiField || hasRequiredApiFields;
     },
     {
       message:
-        "When updating schedule, brandId, contentId, userId, and platform must all be provided together for API Gateway validation and security",
-      path: ["brandId", "contentId", "userId", "platform"],
-    },
+        'When updating schedule, brandId, contentId, userId, and platform must all be provided together for API Gateway validation and security',
+      path: ['brandId', 'contentId', 'userId', 'platform'],
+    }
   );
 
 // Response schema from Lambda
@@ -145,28 +128,28 @@ export class SchedulerError extends Error {
     message: string,
     public code: string,
     public statusCode?: number,
-    public details?: ErrorDetails,
+    public details?: ErrorDetails
   ) {
     super(message);
-    this.name = "SchedulerError";
+    this.name = 'SchedulerError';
   }
 }
 
 export class ValidationError extends SchedulerError {
   constructor(message: string, details?: ErrorDetails) {
-    super(message, "VALIDATION_ERROR", 400, details);
+    super(message, 'VALIDATION_ERROR', 400, details);
   }
 }
 
 export class NetworkError extends SchedulerError {
   constructor(message: string, details?: ErrorDetails) {
-    super(message, "NETWORK_ERROR", 0, details);
+    super(message, 'NETWORK_ERROR', 0, details);
   }
 }
 
 export class RateLimitError extends SchedulerError {
   constructor(message: string, retryAfter?: number) {
-    super(message, "RATE_LIMIT_ERROR", 429, { retryAfter });
+    super(message, 'RATE_LIMIT_ERROR', 429, { retryAfter });
   }
 }
 
@@ -214,10 +197,7 @@ export class ContentSchedulerClient {
   private client: AxiosInstance;
   private circuitBreaker: CircuitBreaker; // CircuitBreaker instance
   private config: ContentSchedulerConfig;
-  private cache: Map<
-    string,
-    { data: CacheValue; timestamp: number; etag?: string }
-  >;
+  private cache: Map<string, { data: CacheValue; timestamp: number; etag?: string }>;
   private debug: boolean;
   private region: string;
 
@@ -233,7 +213,7 @@ export class ContentSchedulerClient {
     this.cache = new Map();
 
     // Normalize and sanitize base URL (remove trailing slashes) to avoid SigV4 canonical path mismatches
-    const normalizedBaseURL = this.config.baseURL.replace(/\/+$/, "");
+    const normalizedBaseURL = this.config.baseURL.replace(/\/+$/, '');
 
     // Infer AWS region from execute-api hostname if possible (fallback to env or us-east-1)
     const inferredRegion: string = (() => {
@@ -244,7 +224,7 @@ export class ContentSchedulerClient {
       } catch {
         /* ignore parse errors */
       }
-      return process.env.AWS_REGION || "us-east-1";
+      return process.env.AWS_REGION || 'us-east-1';
     })();
     this.region = inferredRegion;
     this.debug = this.config.debugLogging ?? true; // default on for now per request for comprehensive logging
@@ -254,7 +234,7 @@ export class ContentSchedulerClient {
       baseURL: normalizedBaseURL,
       timeout: this.config.timeout || 10000,
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       httpsAgent: new https.Agent({
         keepAlive: true,
@@ -271,17 +251,17 @@ export class ContentSchedulerClient {
       // NOTE: Do NOT delete Authorization header here - it will be added by SigV4 interceptor
       // Only clean up Host header as it's set by the HTTP agent
       if (req.headers) {
-        delete (req.headers as Record<string, unknown>)["Host"];
-        delete (req.headers as Record<string, unknown>)["host"];
+        delete (req.headers as Record<string, unknown>)['Host'];
+        delete (req.headers as Record<string, unknown>)['host'];
       }
 
       // Avoid accidental double slashes which break canonical request
       if (req.url) {
         // Preserve query string while normalizing path
-        const parts = req.url.split("?");
-        const pathPart = parts[0] || "/";
+        const parts = req.url.split('?');
+        const pathPart = parts[0] || '/';
         const queryPart = parts[1];
-        const normalizedPath = pathPart.replace(/\/+/g, "/");
+        const normalizedPath = pathPart.replace(/\/+/g, '/');
         req.url = queryPart ? `${normalizedPath}?${queryPart}` : normalizedPath;
       }
 
@@ -324,10 +304,7 @@ export class ContentSchedulerClient {
           }
           return creds;
         } catch (error) {
-          console.error(
-            "[ContentSchedulerClient] Failed to get AWS credentials:",
-            error,
-          );
+          console.error('[ContentSchedulerClient] Failed to get AWS credentials:', error);
           return undefined;
         }
       },
@@ -336,7 +313,7 @@ export class ContentSchedulerClient {
     const sigv4Interceptor = aws4Interceptor({
       options: {
         region: inferredRegion,
-        service: "execute-api",
+        service: 'execute-api',
       },
       // Use the adapter to provide credentials to aws4-axios
       credentials: credentialsAdapter,
@@ -345,16 +322,16 @@ export class ContentSchedulerClient {
     // Add debug logging for SigV4 signing
     if (this.debug) {
       console.log(
-        "[ContentSchedulerClient] Configuring SigV4 signing:",
+        '[ContentSchedulerClient] Configuring SigV4 signing:',
         JSON.stringify({
           region: inferredRegion,
-          service: "execute-api",
+          service: 'execute-api',
           baseURL: normalizedBaseURL,
           AWS_REGION: process.env.AWS_REGION,
           AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION,
           // Check if we're running in ECS by looking for task metadata endpoint
           isECS: !!process.env.ECS_CONTAINER_METADATA_URI_V4,
-        }),
+        })
       );
     }
 
@@ -371,9 +348,9 @@ export class ContentSchedulerClient {
         resetTimeout: 30000,
         rollingCountTimeout: 10000,
         rollingCountBuckets: 10,
-        name: "ContentSchedulerClient",
+        name: 'ContentSchedulerClient',
         ...this.config.circuitBreakerOptions,
-      },
+      }
     );
 
     // Circuit breaker event handlers
@@ -384,7 +361,7 @@ export class ContentSchedulerClient {
    * Create a ContentSchedulerClient with automatic service discovery
    */
   static async create(
-    config: Partial<ContentSchedulerConfig> = {},
+    config: Partial<ContentSchedulerConfig> = {}
   ): Promise<ContentSchedulerClient> {
     const finalConfig = { ...config };
 
@@ -392,36 +369,25 @@ export class ContentSchedulerClient {
     if (isCloudMapConfigured() && !finalConfig.baseURL) {
       try {
         const discovery = getServiceDiscovery();
-        const schedulerUrl = await discovery.getServiceUrl(
-          SERVICES.CONTENT_SCHEDULER,
-        );
+        const schedulerUrl = await discovery.getServiceUrl(SERVICES.CONTENT_SCHEDULER);
         finalConfig.baseURL = schedulerUrl;
-        console.log(
-          "✅ Content Scheduler discovered via Cloud Map:",
-          finalConfig.baseURL,
-        );
+        console.log('✅ Content Scheduler discovered via Cloud Map:', finalConfig.baseURL);
       } catch {
         // Fall back to environment variable
-        const fallbackUrl =
-          process.env.SCHEDULER_API_URL || process.env.CONTENT_SCHEDULER_URL;
+        const fallbackUrl = process.env.SCHEDULER_API_URL || process.env.CONTENT_SCHEDULER_URL;
         if (fallbackUrl) {
           finalConfig.baseURL = fallbackUrl;
-          console.warn(
-            "⚠️  Content Scheduler discovery failed, using fallback URL:",
-            fallbackUrl,
-          );
+          console.warn('⚠️  Content Scheduler discovery failed, using fallback URL:', fallbackUrl);
         } else {
-          console.error(
-            "❌ Content Scheduler discovery failed and no fallback URL available",
-          );
-          throw new Error("Unable to discover Content Scheduler service URL");
+          console.error('❌ Content Scheduler discovery failed and no fallback URL available');
+          throw new Error('Unable to discover Content Scheduler service URL');
         }
       }
     }
 
     // Ensure baseURL is provided
     if (!finalConfig.baseURL) {
-      throw new Error("baseURL is required for ContentSchedulerClient");
+      throw new Error('baseURL is required for ContentSchedulerClient');
     }
 
     return new ContentSchedulerClient(finalConfig as ContentSchedulerConfig);
@@ -441,7 +407,7 @@ export class ContentSchedulerClient {
       // absolute (replacing the baseURL path). We need to preserve the API stage (e.g. /dev)
       // contained in baseURL. Using 'schedules' ensures the request becomes `${baseURL}/schedules`.
       const response = await this.retryWithBackoff(() =>
-        this.client.post("schedules", validatedData),
+        this.client.post('schedules', validatedData)
       );
 
       // Validate and return response
@@ -452,10 +418,7 @@ export class ContentSchedulerClient {
   /**
    * Update an existing schedule
    */
-  async updateSchedule(
-    id: string,
-    data: UpdateScheduleInput,
-  ): Promise<Schedule> {
+  async updateSchedule(id: string, data: UpdateScheduleInput): Promise<Schedule> {
     return this.executeWithCircuitBreaker(async () => {
       // Validate input
       const validatedData = UpdateScheduleInputSchema.parse(data);
@@ -463,7 +426,7 @@ export class ContentSchedulerClient {
       // Preserve stage path by omitting leading slash
       // Note: API Gateway only supports PUT for updates, not PATCH
       const response = await this.retryWithBackoff(() =>
-        this.client.put(`schedules/${id}`, validatedData),
+        this.client.put(`schedules/${id}`, validatedData)
       );
 
       // Validate and return response
@@ -492,9 +455,7 @@ export class ContentSchedulerClient {
     }
 
     return this.executeWithCircuitBreaker(async () => {
-      const response = await this.retryWithBackoff(() =>
-        this.client.get(`schedules/${id}`),
-      );
+      const response = await this.retryWithBackoff(() => this.client.get(`schedules/${id}`));
 
       const result = ScheduleSchema.parse(response.data);
       this.setCachedResponse(cacheKey, result, response.headers.etag);
@@ -505,16 +466,14 @@ export class ContentSchedulerClient {
   /**
    * List schedules with filters
    */
-  async listSchedules(
-    params: ListSchedulesParams = { limit: 20 },
-  ): Promise<ScheduleList> {
+  async listSchedules(params: ListSchedulesParams = { limit: 20 }): Promise<ScheduleList> {
     return this.executeWithCircuitBreaker(async () => {
       // Validate parameters
       const validatedParams = ListSchedulesParamsSchema.parse(params);
 
       // Make API call
       const response = await this.retryWithBackoff(() =>
-        this.client.get("schedules", { params: validatedParams }),
+        this.client.get('schedules', { params: validatedParams })
       );
 
       // Validate and return response
@@ -526,7 +485,7 @@ export class ContentSchedulerClient {
    * Cancel a scheduled post
    */
   async cancelSchedule(id: string): Promise<Schedule> {
-    return this.updateSchedule(id, { status: "cancelled" });
+    return this.updateSchedule(id, { status: 'cancelled' });
   }
 
   /**
@@ -541,17 +500,17 @@ export class ContentSchedulerClient {
       contentId: string;
       userId: string; // Required for security validation
       platform?: string;
-    },
+    }
   ): Promise<Schedule> {
     // For reschedule operations, API Gateway requires all fields
     const updateData: UpdateScheduleInput = {
       scheduledAt: newTime.toISOString(),
-      status: "scheduled",
+      status: 'scheduled',
       // Include required fields directly in the typed object
       brandId: requiredFields.brandId,
       contentId: requiredFields.contentId,
       userId: requiredFields.userId, // Always include for ownership validation
-      platform: (requiredFields.platform as Platform) || "instagram",
+      platform: (requiredFields.platform as Platform) || 'instagram',
     };
 
     return this.updateSchedule(id, updateData);
@@ -562,7 +521,7 @@ export class ContentSchedulerClient {
    */
   async getSchedulesByBrand(
     brandId: string,
-    params: Omit<ListSchedulesParams, "brandId"> = { limit: 20 },
+    params: Omit<ListSchedulesParams, 'brandId'> = { limit: 20 }
   ): Promise<ScheduleList> {
     return this.listSchedules({ ...params, brandId });
   }
@@ -570,14 +529,11 @@ export class ContentSchedulerClient {
   /**
    * Get upcoming schedules
    */
-  async getUpcomingSchedules(
-    brandId: string,
-    limit: number = 10,
-  ): Promise<Schedule[]> {
+  async getUpcomingSchedules(brandId: string, limit: number = 10): Promise<Schedule[]> {
     const now = new Date();
     const result = await this.listSchedules({
       brandId,
-      status: "scheduled", // Changed from 'pending' to match Lambda
+      status: 'scheduled', // Changed from 'pending' to match Lambda
       startTime: now.toISOString(),
       limit,
     });
@@ -597,11 +553,11 @@ export class ContentSchedulerClient {
   }> {
     // Fetch counts for each status in parallel
     const statuses: ScheduleStatus[] = [
-      "scheduled",
-      "published",
-      "failed",
-      "cancelled",
-      "processing",
+      'scheduled',
+      'published',
+      'failed',
+      'cancelled',
+      'processing',
     ];
 
     const results = await Promise.all(
@@ -610,8 +566,8 @@ export class ContentSchedulerClient {
           brandId,
           status,
           limit: 1, // We only need the total count
-        }),
-      ),
+        })
+      )
     );
 
     // Build stats object from parallel results
@@ -641,33 +597,27 @@ export class ContentSchedulerClient {
       return (await this.circuitBreaker.fire(fn)) as T;
     } catch (error) {
       // Check if circuit breaker is open
-      if (error && typeof error === "object" && "name" in error) {
+      if (error && typeof error === 'object' && 'name' in error) {
         const errorObj = error as { name?: string };
 
         // Handle circuit breaker specific errors
-        if (errorObj.name === "OpenCircuitError") {
+        if (errorObj.name === 'OpenCircuitError') {
           throw new SchedulerError(
-            "Scheduler service is temporarily unavailable due to repeated failures",
-            "CIRCUIT_BREAKER_OPEN",
+            'Scheduler service is temporarily unavailable due to repeated failures',
+            'CIRCUIT_BREAKER_OPEN',
             503,
             {
-              message:
-                "Circuit breaker is open. Service will retry after cooldown period.",
+              message: 'Circuit breaker is open. Service will retry after cooldown period.',
               stats: this.getCircuitBreakerStats(),
-            },
+            }
           );
         }
 
-        if (errorObj.name === "TimeoutError") {
-          throw new SchedulerError(
-            "Request to scheduler service timed out",
-            "TIMEOUT",
-            504,
-            {
-              timeout: this.config.timeout,
-              message: "The operation took too long to complete",
-            },
-          );
+        if (errorObj.name === 'TimeoutError') {
+          throw new SchedulerError('Request to scheduler service timed out', 'TIMEOUT', 504, {
+            timeout: this.config.timeout,
+            message: 'The operation took too long to complete',
+          });
         }
       }
 
@@ -677,7 +627,7 @@ export class ContentSchedulerClient {
       }
 
       if (error instanceof z.ZodError) {
-        throw new ValidationError("Invalid data format", {
+        throw new ValidationError('Invalid data format', {
           errors: error.errors,
         });
       }
@@ -687,16 +637,16 @@ export class ContentSchedulerClient {
       }
 
       // Log unexpected errors for debugging
-      console.error("Unexpected error in circuit breaker:", error);
+      console.error('Unexpected error in circuit breaker:', error);
 
       throw new SchedulerError(
-        "Unexpected error occurred in scheduler client",
-        "UNKNOWN_ERROR",
+        'Unexpected error occurred in scheduler client',
+        'UNKNOWN_ERROR',
         500,
         {
           originalError: error instanceof Error ? error.message : String(error),
-          circuitBreakerState: this.circuitBreaker.opened ? "open" : "closed",
-        },
+          circuitBreakerState: this.circuitBreaker.opened ? 'open' : 'closed',
+        }
       );
     }
   }
@@ -704,16 +654,13 @@ export class ContentSchedulerClient {
   /**
    * Retry logic with exponential backoff
    */
-  private async retryWithBackoff<T>(
-    fn: () => Promise<T>,
-    attempt: number = 0,
-  ): Promise<T> {
+  private async retryWithBackoff<T>(fn: () => Promise<T>, attempt: number = 0): Promise<T> {
     try {
       return await fn();
     } catch (error) {
       if (attempt >= (this.config.maxRetries || 3)) {
         if (this.debug) {
-          this.log("warn", "scheduler.retry.maxAttemptsReached", {
+          this.log('warn', 'scheduler.retry.maxAttemptsReached', {
             attempts: attempt + 1,
             error: this.summarizeError(error),
           });
@@ -725,7 +672,7 @@ export class ContentSchedulerClient {
       if (this.isRetryableError(error)) {
         const delay = this.calculateBackoffDelay(attempt);
         if (this.debug) {
-          this.log("info", "scheduler.retry.backoff", {
+          this.log('info', 'scheduler.retry.backoff', {
             attempt: attempt + 1,
             delayMs: delay,
             error: this.summarizeError(error),
@@ -736,7 +683,7 @@ export class ContentSchedulerClient {
       }
 
       if (this.debug) {
-        this.log("info", "scheduler.retry.nonRetryable", {
+        this.log('info', 'scheduler.retry.nonRetryable', {
           attempt: attempt + 1,
           error: this.summarizeError(error),
         });
@@ -782,13 +729,13 @@ export class ContentSchedulerClient {
   private handleAxiosError(error: AxiosError): SchedulerError {
     if (!error.response) {
       if (this.debug) {
-        this.log("error", "scheduler.http.networkError", {
+        this.log('error', 'scheduler.http.networkError', {
           message: error.message,
           code: error.code,
           isAxiosError: true,
         });
       }
-      return new NetworkError("Network error occurred", {
+      return new NetworkError('Network error occurred', {
         code: error.code,
         message: error.message,
       });
@@ -797,63 +744,54 @@ export class ContentSchedulerClient {
     const { status, data } = error.response;
 
     if (status === 429) {
-      const retryAfter = error.response.headers["retry-after"];
+      const retryAfter = error.response.headers['retry-after'];
       return new RateLimitError(
-        "Rate limit exceeded",
-        retryAfter ? parseInt(retryAfter) : undefined,
+        'Rate limit exceeded',
+        retryAfter ? parseInt(retryAfter) : undefined
       );
     }
 
     if (status === 400) {
-      return new ValidationError("Invalid request", data as ErrorDetails);
+      return new ValidationError('Invalid request', data as ErrorDetails);
     }
 
     if (status === 401) {
-      return new SchedulerError("Unauthorized", "UNAUTHORIZED", 401);
+      return new SchedulerError('Unauthorized', 'UNAUTHORIZED', 401);
     }
 
     if (status === 403) {
       if (this.debug) {
-        this.log("warn", "scheduler.http.forbidden", {
+        this.log('warn', 'scheduler.http.forbidden', {
           status,
           data,
           baseURL: this.config.baseURL,
-          fullUrl: this.composeFullUrl(
-            this.config.baseURL,
-            error.config?.url || "",
-          ),
+          fullUrl: this.composeFullUrl(this.config.baseURL, error.config?.url || ''),
           region: this.region,
           hint:
             data &&
-            typeof data === "object" &&
-            (data as { message?: string }).message ===
-              "Missing Authentication Token"
-              ? "Check that the request path preserves the API stage (e.g. /dev). Leading slashes on axios request URLs can strip the stage."
+            typeof data === 'object' &&
+            (data as { message?: string }).message === 'Missing Authentication Token'
+              ? 'Check that the request path preserves the API stage (e.g. /dev). Leading slashes on axios request URLs can strip the stage.'
               : undefined,
         });
       }
-      return new SchedulerError("Forbidden", "FORBIDDEN", 403);
+      return new SchedulerError('Forbidden', 'FORBIDDEN', 403);
     }
 
     if (status === 404) {
-      return new SchedulerError("Resource not found", "NOT_FOUND", 404);
+      return new SchedulerError('Resource not found', 'NOT_FOUND', 404);
     }
 
     if (status >= 500) {
       return new SchedulerError(
-        "Server error occurred",
-        "SERVER_ERROR",
+        'Server error occurred',
+        'SERVER_ERROR',
         status,
-        data as ErrorDetails,
+        data as ErrorDetails
       );
     }
 
-    return new SchedulerError(
-      "Request failed",
-      "REQUEST_FAILED",
-      status,
-      data as ErrorDetails,
-    );
+    return new SchedulerError('Request failed', 'REQUEST_FAILED', status, data as ErrorDetails);
   }
 
   /**
@@ -872,51 +810,46 @@ export class ContentSchedulerClient {
         const requestId = meta.id;
 
         // Add request ID for tracing
-        config.headers["X-Request-ID"] = requestId;
+        config.headers['X-Request-ID'] = requestId;
 
         // Add timestamp
-        config.headers["X-Request-Timestamp"] = new Date().toISOString();
+        config.headers['X-Request-Timestamp'] = new Date().toISOString();
 
         // Add distributed tracing headers (AWS X-Ray compatible)
-        config.headers["X-Amzn-Trace-Id"] =
-          `Root=1-${Math.floor(Date.now() / 1000).toString(16)}-${requestId.replace(/-/g, "").substring(0, 24)}`;
+        config.headers['X-Amzn-Trace-Id'] =
+          `Root=1-${Math.floor(Date.now() / 1000).toString(16)}-${requestId.replace(/-/g, '').substring(0, 24)}`;
 
         // Add caller context for better debugging
-        config.headers["X-Caller-Service"] = "postolio-backend";
-        config.headers["X-Caller-Version"] = process.env.APP_VERSION || "1.0.0";
+        config.headers['X-Caller-Service'] = 'postolio-backend';
+        config.headers['X-Caller-Version'] = process.env.APP_VERSION || '1.0.0';
 
         // Add user context if available
         if (this.config.userId) {
-          config.headers["X-User-Context"] = this.config.userId;
+          config.headers['X-User-Context'] = this.config.userId;
         }
 
         if (this.debug) {
           const fullUrl = this.composeFullUrl(
             config.baseURL || this.config.baseURL,
-            config.url || "",
+            config.url || ''
           );
 
           // Log Authorization header to verify SigV4 signing
-          const hasAuth = !!(
-            config.headers["Authorization"] || config.headers["authorization"]
-          );
-          if (
-            !hasAuth &&
-            (config.method || "get").toUpperCase() !== "OPTIONS"
-          ) {
+          const hasAuth = !!(config.headers['Authorization'] || config.headers['authorization']);
+          if (!hasAuth && (config.method || 'get').toUpperCase() !== 'OPTIONS') {
             console.warn(
-              "[ContentSchedulerClient] Warning: No Authorization header present before request",
+              '[ContentSchedulerClient] Warning: No Authorization header present before request',
               JSON.stringify({
                 url: config.url,
                 fullUrl,
                 headers: Object.keys(config.headers || {}),
-              }),
+              })
             );
           }
 
-          this.log("info", "scheduler.http.request", {
+          this.log('info', 'scheduler.http.request', {
             id: requestId,
-            method: (config.method || "get").toUpperCase(),
+            method: (config.method || 'get').toUpperCase(),
             url: config.url,
             baseURL: config.baseURL || this.config.baseURL,
             fullUrl,
@@ -927,7 +860,7 @@ export class ContentSchedulerClient {
         }
         return config;
       },
-      (error) => Promise.reject(error),
+      (error) => Promise.reject(error)
     );
 
     // Response interceptor for logging
@@ -936,9 +869,9 @@ export class ContentSchedulerClient {
         if (this.debug) {
           const meta = (response.config as RequestWithMeta).__meta;
           const duration = meta ? Date.now() - meta.start : undefined;
-          this.log("info", "scheduler.http.response", {
+          this.log('info', 'scheduler.http.response', {
             id: meta?.id,
-            method: (response.config.method || "get").toUpperCase(),
+            method: (response.config.method || 'get').toUpperCase(),
             url: response.config.url,
             status: response.status,
             durationMs: duration,
@@ -956,28 +889,25 @@ export class ContentSchedulerClient {
           // Special handling for authentication errors
           if (
             error.response?.status === 403 &&
-            error.response?.data?.message === "Missing Authentication Token"
+            error.response?.data?.message === 'Missing Authentication Token'
           ) {
             console.error(
-              "[ContentSchedulerClient] Authentication Error - Missing or invalid SigV4 signature:",
+              '[ContentSchedulerClient] Authentication Error - Missing or invalid SigV4 signature:',
               JSON.stringify({
                 url: cfg.url,
                 baseURL: cfg.baseURL,
-                fullURL: this.composeFullUrl(
-                  cfg.baseURL || this.config.baseURL,
-                  cfg.url || "",
-                ),
+                fullURL: this.composeFullUrl(cfg.baseURL || this.config.baseURL, cfg.url || ''),
                 headers: cfg.headers,
                 AWS_REGION: process.env.AWS_REGION,
                 isECS: !!process.env.ECS_CONTAINER_METADATA_URI_V4,
                 errorData: error.response?.data,
-              }),
+              })
             );
           }
 
-          this.log("error", "scheduler.http.error", {
+          this.log('error', 'scheduler.http.error', {
             id: meta?.id,
-            method: (cfg.method || "get").toUpperCase(),
+            method: (cfg.method || 'get').toUpperCase(),
             url: cfg.url,
             status: error.response?.status,
             durationMs: duration,
@@ -986,7 +916,7 @@ export class ContentSchedulerClient {
           });
         }
         return Promise.reject(error);
-      },
+      }
     );
   }
 
@@ -994,73 +924,73 @@ export class ContentSchedulerClient {
    * Setup circuit breaker event handlers
    */
   private setupCircuitBreakerEvents(): void {
-    this.circuitBreaker.on("open", () => {
+    this.circuitBreaker.on('open', () => {
       console.warn(
-        "Circuit breaker opened - requests will fail fast",
+        'Circuit breaker opened - requests will fail fast',
         JSON.stringify({
           baseURL: this.config.baseURL,
           timestamp: new Date().toISOString(),
           stats: this.circuitBreaker.stats,
-        }),
+        })
       );
     });
 
-    this.circuitBreaker.on("halfOpen", () => {
+    this.circuitBreaker.on('halfOpen', () => {
       console.info(
-        "Circuit breaker half-open - testing service availability",
+        'Circuit breaker half-open - testing service availability',
         JSON.stringify({
           baseURL: this.config.baseURL,
           timestamp: new Date().toISOString(),
           stats: this.circuitBreaker.stats,
-        }),
+        })
       );
     });
 
-    this.circuitBreaker.on("close", () => {
+    this.circuitBreaker.on('close', () => {
       console.info(
-        "Circuit breaker closed - service recovered",
+        'Circuit breaker closed - service recovered',
         JSON.stringify({
           baseURL: this.config.baseURL,
           timestamp: new Date().toISOString(),
           stats: this.circuitBreaker.stats,
-        }),
+        })
       );
     });
 
-    this.circuitBreaker.on("timeout", () => {
+    this.circuitBreaker.on('timeout', () => {
       console.error(
-        "Circuit breaker timeout",
+        'Circuit breaker timeout',
         JSON.stringify({
           baseURL: this.config.baseURL,
           timeout: this.config.timeout,
           timestamp: new Date().toISOString(),
           stats: this.circuitBreaker.stats,
-        }),
+        })
       );
     });
 
-    this.circuitBreaker.on("failure", (error: Error) => {
+    this.circuitBreaker.on('failure', (error: Error) => {
       console.error(
-        "Circuit breaker failure detected",
+        'Circuit breaker failure detected',
         JSON.stringify({
           baseURL: this.config.baseURL,
           error: error.message,
           timestamp: new Date().toISOString(),
           stats: this.circuitBreaker.stats,
-        }),
+        })
       );
     });
 
-    this.circuitBreaker.on("success", () => {
+    this.circuitBreaker.on('success', () => {
       // Only log on debug level to avoid spam
-      if (process.env.NODE_ENV === "development") {
+      if (process.env.NODE_ENV === 'development') {
         console.debug(
-          "Circuit breaker success",
+          'Circuit breaker success',
           JSON.stringify({
             baseURL: this.config.baseURL,
             timestamp: new Date().toISOString(),
             stats: this.circuitBreaker.stats,
-          }),
+          })
         );
       }
     });
@@ -1075,9 +1005,9 @@ export class ContentSchedulerClient {
 
   /** Log helper */
   private log(
-    level: "info" | "warn" | "error" | "debug",
+    level: 'info' | 'warn' | 'error' | 'debug',
     event: string,
-    details: ErrorDetails,
+    details: ErrorDetails
   ): void {
     // Simple structured logger; could later integrate with pino
     const payload = {
@@ -1086,17 +1016,17 @@ export class ContentSchedulerClient {
       event,
       ...details,
     };
-    if (level === "error") console.error(JSON.stringify(payload));
-    else if (level === "warn") console.warn(JSON.stringify(payload));
-    else if (level === "debug") console.debug(JSON.stringify(payload));
+    if (level === 'error') console.error(JSON.stringify(payload));
+    else if (level === 'warn') console.warn(JSON.stringify(payload));
+    else if (level === 'debug') console.debug(JSON.stringify(payload));
     else console.log(JSON.stringify(payload));
   }
 
   private summarizeError(err: unknown): Record<string, unknown> {
-    if (!err) return { type: "unknown" };
+    if (!err) return { type: 'unknown' };
     if (axios.isAxiosError(err)) {
       return {
-        type: "AxiosError",
+        type: 'AxiosError',
         message: err.message,
         code: err.code,
         status: err.response?.status,
@@ -1111,16 +1041,15 @@ export class ContentSchedulerClient {
   }
 
   private composeFullUrl(base: string, path: string): string {
-    if (!base.endsWith("/") && !path.startsWith("/")) return base + "/" + path;
-    if (base.endsWith("/") && path.startsWith("/"))
-      return base + path.substring(1);
+    if (!base.endsWith('/') && !path.startsWith('/')) return base + '/' + path;
+    if (base.endsWith('/') && path.startsWith('/')) return base + path.substring(1);
     return base + path;
   }
 
   private safeSize(data: unknown): number {
     try {
       if (data == null) return 0;
-      if (typeof data === "string") return data.length;
+      if (typeof data === 'string') return data.length;
       return JSON.stringify(data).length;
     } catch {
       return 0;
@@ -1141,7 +1070,7 @@ export class ContentSchedulerClient {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await this.client.get("health", {
+      const response = await this.client.get('health', {
         timeout: 5000,
       });
       return response.status === 200;
@@ -1177,11 +1106,7 @@ export class ContentSchedulerClient {
   /**
    * Set cached response
    */
-  private setCachedResponse(
-    key: string,
-    data: CacheValue,
-    etag?: string,
-  ): void {
+  private setCachedResponse(key: string, data: CacheValue, etag?: string): void {
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
@@ -1209,9 +1134,7 @@ export class ContentSchedulerClient {
 /**
  * Create a new ContentSchedulerClient instance
  */
-export function createSchedulerClient(
-  config: ContentSchedulerConfig,
-): ContentSchedulerClient {
+export function createSchedulerClient(config: ContentSchedulerConfig): ContentSchedulerClient {
   return new ContentSchedulerClient(config);
 }
 

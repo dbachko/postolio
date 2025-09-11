@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from 'react';
 
 interface SDKLoadState {
   isLoading: boolean;
@@ -24,8 +24,8 @@ export function useGoogleSDK(clientId: string | undefined) {
       return;
     }
 
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
     script.defer = true;
 
@@ -37,7 +37,7 @@ export function useGoogleSDK(clientId: string | undefined) {
       setState({
         isLoading: false,
         isLoaded: false,
-        error: "Failed to load Google Sign-In SDK",
+        error: 'Failed to load Google Sign-In SDK',
       });
     };
 
@@ -76,7 +76,7 @@ export function useFacebookSDK(appId: string | undefined) {
           appId,
           cookie: true,
           xfbml: false,
-          version: "v18.0",
+          version: 'v18.0',
           autoLogAppEvents: false,
         });
         setState({ isLoading: false, isLoaded: true, error: null });
@@ -84,30 +84,28 @@ export function useFacebookSDK(appId: string | undefined) {
         setState({
           isLoading: false,
           isLoaded: false,
-          error: "Failed to initialize Facebook SDK",
+          error: 'Failed to initialize Facebook SDK',
         });
       }
     };
 
     // Check if script already exists
-    const existingScript = document.querySelector(
-      'script[src*="facebook.net/en_US/sdk.js"]',
-    );
+    const existingScript = document.querySelector('script[src*="facebook.net/en_US/sdk.js"]');
     if (existingScript) {
       return;
     }
 
-    const script = document.createElement("script");
-    script.src = "https://connect.facebook.net/en_US/sdk.js";
+    const script = document.createElement('script');
+    script.src = 'https://connect.facebook.net/en_US/sdk.js';
     script.async = true;
     script.defer = true;
-    script.id = "facebook-jssdk";
+    script.id = 'facebook-jssdk';
 
     script.onerror = () => {
       setState({
         isLoading: false,
         isLoaded: false,
-        error: "Failed to load Facebook SDK",
+        error: 'Failed to load Facebook SDK',
       });
     };
 

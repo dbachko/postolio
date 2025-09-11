@@ -100,8 +100,8 @@ class ContentSchedulerClient {
         secretAccessKey: this.config.secretAccessKey,
         sessionToken: this.config.sessionToken,
       }),
-      region: "us-east-1",
-      service: "execute-api",
+      region: 'us-east-1',
+      service: 'execute-api',
       sha256: Sha256,
     });
 
@@ -115,11 +115,11 @@ class ContentSchedulerClient {
 
 ```typescript
 // Current: Plain text in environment
-SCHEDULER_API_KEY = "plain-text-key";
+SCHEDULER_API_KEY = 'plain-text-key';
 
 // Required: AWS Secrets Manager
 const secret = await secretsManager.getSecretValue({
-  SecretId: "prod/scheduler/api-credentials",
+  SecretId: 'prod/scheduler/api-credentials',
 });
 ```
 
@@ -224,7 +224,7 @@ const publisherLambda = new NodejsFunction(this, 'Publisher', {
    // src/services/scheduler-v2.ts
    const client = new ContentSchedulerClient({
      baseURL: process.env.SCHEDULER_API_URL,
-     authMethod: "iam",
+     authMethod: 'iam',
      // credentials will be sourced from environment
    });
    ```
@@ -242,7 +242,7 @@ const publisherLambda = new NodejsFunction(this, 'Publisher', {
          contentId: content.id,
          userId: user.id,
          brandId: content.brandId,
-         platform: "instagram", // Default for now
+         platform: 'instagram', // Default for now
          scheduledTime: content.scheduledAt,
          content: {
            caption: content.caption,
@@ -304,8 +304,8 @@ const publisherLambda = new NodejsFunction(this, 'Publisher', {
 
    ```typescript
    // aws-infrastructure/lib/scheduler/autopilot-rule.ts
-   new events.Rule(this, "AutopilotRule", {
-     schedule: events.Schedule.cron({ hour: "2", minute: "0" }),
+   new events.Rule(this, 'AutopilotRule', {
+     schedule: events.Schedule.cron({ hour: '2', minute: '0' }),
      targets: [new targets.LambdaFunction(autopilotLambda)],
    });
    ```
@@ -365,28 +365,28 @@ describe('ContentSchedulerClient', () => {
 
 ```typescript
 // test/integration/scheduler-integration.test.ts
-describe("Scheduler Integration", () => {
+describe('Scheduler Integration', () => {
   let app: FastifyInstance;
   let schedulerClient: ContentSchedulerClient;
 
   beforeAll(async () => {
     // Use localstack for AWS services
-    process.env.AWS_ENDPOINT = "http://localhost:4566";
+    process.env.AWS_ENDPOINT = 'http://localhost:4566';
     app = await buildApp();
     schedulerClient = new ContentSchedulerClient({
-      baseURL: "http://localhost:4566/scheduler",
+      baseURL: 'http://localhost:4566/scheduler',
     });
   });
 
-  it("should schedule content end-to-end", async () => {
+  it('should schedule content end-to-end', async () => {
     // Create content
     const content = await createTestContent();
 
     // Schedule via API
     const response = await app.inject({
-      method: "POST",
+      method: 'POST',
       url: `/api/content/schedule/${content.id}`,
-      headers: { authorization: "Bearer test-token" },
+      headers: { authorization: 'Bearer test-token' },
     });
 
     expect(response.statusCode).toBe(200);
@@ -394,13 +394,13 @@ describe("Scheduler Integration", () => {
 
     // Verify in AWS
     const schedule = await schedulerClient.getSchedule(scheduleId);
-    expect(schedule.status).toBe("pending");
+    expect(schedule.status).toBe('pending');
 
     // Verify in database
     const dbContent = await prisma.content.findUnique({
       where: { id: content.id },
     });
-    expect(dbContent.status).toBe("scheduled");
+    expect(dbContent.status).toBe('scheduled');
     expect(dbContent.externalScheduleId).toBe(scheduleId);
   });
 });
@@ -410,21 +410,21 @@ describe("Scheduler Integration", () => {
 
 ```typescript
 // test/load/scheduler-load.test.ts
-import autocannon from "autocannon";
+import autocannon from 'autocannon';
 
-describe("Scheduler Load Tests", () => {
-  it("should handle 1000 concurrent requests", async () => {
+describe('Scheduler Load Tests', () => {
+  it('should handle 1000 concurrent requests', async () => {
     const result = await autocannon({
-      url: "http://localhost:3000/api/content/schedule",
+      url: 'http://localhost:3000/api/content/schedule',
       connections: 100,
       duration: 30,
       pipelining: 10,
       headers: {
-        "content-type": "application/json",
-        authorization: "Bearer test-token",
+        'content-type': 'application/json',
+        authorization: 'Bearer test-token',
       },
       body: JSON.stringify({
-        contentId: "test-content",
+        contentId: 'test-content',
         scheduledTime: new Date().toISOString(),
       }),
     });

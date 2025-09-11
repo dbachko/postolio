@@ -1,35 +1,31 @@
-import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import fastifyPlugin from "fastify-plugin";
-import fastifyWebsocket from "@fastify/websocket";
-import { WebSocket } from "ws";
-import jwt from "jsonwebtoken";
+import { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import fastifyPlugin from 'fastify-plugin';
+import fastifyWebsocket from '@fastify/websocket';
+import { WebSocket } from 'ws';
+import jwt from 'jsonwebtoken';
 
 interface BaseMessage<T extends string> {
   type: T;
 }
-interface AuthMessage extends BaseMessage<"auth"> {
+interface AuthMessage extends BaseMessage<'auth'> {
   token?: string;
   brandId?: string;
 }
-type PingMessage = BaseMessage<"ping">;
-interface SubscribeMessage extends BaseMessage<"subscribe"> {
+type PingMessage = BaseMessage<'ping'>;
+interface SubscribeMessage extends BaseMessage<'subscribe'> {
   brandId: string;
 }
-type UnsubscribeMessage = BaseMessage<"unsubscribe">;
+type UnsubscribeMessage = BaseMessage<'unsubscribe'>;
 
-type WebSocketMessage =
-  | AuthMessage
-  | PingMessage
-  | SubscribeMessage
-  | UnsubscribeMessage;
+type WebSocketMessage = AuthMessage | PingMessage | SubscribeMessage | UnsubscribeMessage;
 
 type OutboundPayload =
-  | { type: "error"; message: string }
-  | { type: "connected"; brandId: string; userId: string; timestamp: string }
-  | { type: "authenticated"; userId: string; timestamp: string }
-  | { type: "subscribed"; brandId: string; timestamp: string }
-  | { type: "unsubscribed"; timestamp: string }
-  | { type: "pong" };
+  | { type: 'error'; message: string }
+  | { type: 'connected'; brandId: string; userId: string; timestamp: string }
+  | { type: 'authenticated'; userId: string; timestamp: string }
+  | { type: 'subscribed'; brandId: string; timestamp: string }
+  | { type: 'unsubscribed'; timestamp: string }
+  | { type: 'pong' };
 
 interface AuthenticatedSocket extends WebSocket {
   userId?: string;
@@ -43,9 +39,7 @@ const connections = new Map<string, Set<AuthenticatedSocket>>();
 // Heartbeat interval
 let heartbeatInterval: NodeJS.Timeout | null = null;
 
-const websocketPlugin: FastifyPluginAsync = async (
-  fastify: FastifyInstance,
-) => {
+const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // Register the base WebSocket plugin
   await fastify.register(fastifyWebsocket, {
     options: {
@@ -56,7 +50,7 @@ const websocketPlugin: FastifyPluginAsync = async (
 
   // Add broadcast decorator to fastify instance with batched sending for performance
   fastify.decorate(
-    "broadcastToRoom",
+    'broadcastToRoom',
     (room: string, message: OutboundPayload | Record<string, unknown>) => {
       const sockets = connections.get(room);
       if (!sockets || sockets.size === 0) return;
@@ -73,10 +67,7 @@ const websocketPlugin: FastifyPluginAsync = async (
             try {
               sock.send(data);
             } catch (err) {
-              fastify.log.error(
-                { err, room },
-                "Failed to send message to socket",
-              );
+              fastify.log.error({ err, room }, 'Failed to send message to socket');
             }
           }
         });
@@ -89,13 +80,13 @@ const websocketPlugin: FastifyPluginAsync = async (
       }
 
       sendBatch();
-    },
+    }
   );
 
   // WebSocket route handler
   // In production with postolio.example subdomain, this handles root path
   // In development, this handles /ws path (Vite proxy configuration)
-  const wsPath = process.env.WS_DOMAIN ? "/" : "/ws";
+  const wsPath = process.env.WS_DOMAIN ? '/' : '/ws';
   fastify.get(wsPath, { websocket: true }, (connection) => {
     const socket = connection as AuthenticatedSocket;
     socket.isAlive = true;
@@ -107,42 +98,34 @@ const websocketPlugin: FastifyPluginAsync = async (
     // Set a timeout for authentication (10 seconds)
     authTimeout = setTimeout(() => {
       if (!isAuthenticated) {
-        fastify.log.info(
-          "WebSocket connection closed due to authentication timeout",
-        );
-        socket.send(
-          JSON.stringify({ type: "error", message: "Authentication required" }),
-        );
-        socket.close(1008, "Authentication timeout");
+        fastify.log.info('WebSocket connection closed due to authentication timeout');
+        socket.send(JSON.stringify({ type: 'error', message: 'Authentication required' }));
+        socket.close(1008, 'Authentication timeout');
       }
     }, 10000);
 
     // Handle pong responses for heartbeat
-    socket.on("pong", () => {
+    socket.on('pong', () => {
       socket.isAlive = true;
     });
 
-    socket.on("message", async (data: Buffer) => {
+    socket.on('message', async (data: Buffer) => {
       try {
         const message: WebSocketMessage = JSON.parse(data.toString());
 
         // Only allow auth and ping messages before authentication
-        if (
-          !isAuthenticated &&
-          message.type !== "auth" &&
-          message.type !== "ping"
-        ) {
+        if (!isAuthenticated && message.type !== 'auth' && message.type !== 'ping') {
           socket.send(
             JSON.stringify({
-              type: "error",
-              message: "Authentication required",
-            }),
+              type: 'error',
+              message: 'Authentication required',
+            })
           );
           return;
         }
 
         switch (message.type) {
-          case "auth": {
+          case 'auth': {
             const authResult = await handleAuth(socket, message, fastify);
             if (authResult) {
               isAuthenticated = true;
@@ -153,35 +136,33 @@ const websocketPlugin: FastifyPluginAsync = async (
             }
             break;
           }
-          case "ping":
-            socket.send(JSON.stringify({ type: "pong" }));
+          case 'ping':
+            socket.send(JSON.stringify({ type: 'pong' }));
             break;
 
-          case "subscribe":
-            if (message.type === "subscribe") handleSubscribe(socket, message);
+          case 'subscribe':
+            if (message.type === 'subscribe') handleSubscribe(socket, message);
             break;
 
-          case "unsubscribe":
+          case 'unsubscribe':
             handleUnsubscribe(socket);
             break;
 
           default:
             socket.send(
               JSON.stringify({
-                type: "error",
-                message: "Unknown message type",
-              }),
+                type: 'error',
+                message: 'Unknown message type',
+              })
             );
         }
       } catch (error) {
-        fastify.log.error({ error }, "WebSocket message error");
-        socket.send(
-          JSON.stringify({ type: "error", message: "Invalid message format" }),
-        );
+        fastify.log.error({ error }, 'WebSocket message error');
+        socket.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
       }
     });
 
-    socket.on("close", () => {
+    socket.on('close', () => {
       if (authTimeout) {
         clearTimeout(authTimeout);
         authTimeout = null;
@@ -189,8 +170,8 @@ const websocketPlugin: FastifyPluginAsync = async (
       cleanupSocket(socket);
     });
 
-    socket.on("error", (error) => {
-      fastify.log.error({ error }, "WebSocket error");
+    socket.on('error', (error) => {
+      fastify.log.error({ error }, 'WebSocket error');
       if (authTimeout) {
         clearTimeout(authTimeout);
         authTimeout = null;
@@ -216,7 +197,7 @@ const websocketPlugin: FastifyPluginAsync = async (
   }
 
   // Cleanup on server close
-  fastify.addHook("onClose", async () => {
+  fastify.addHook('onClose', async () => {
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
       heartbeatInterval = null;
@@ -225,7 +206,7 @@ const websocketPlugin: FastifyPluginAsync = async (
     // Close all connections
     connections.forEach((sockets) => {
       sockets.forEach((socket) => {
-        socket.close(1001, "Server shutting down");
+        socket.close(1001, 'Server shutting down');
       });
     });
     connections.clear();
@@ -235,30 +216,30 @@ const websocketPlugin: FastifyPluginAsync = async (
 async function handleAuth(
   socket: AuthenticatedSocket,
   message: AuthMessage,
-  fastify: FastifyInstance,
+  fastify: FastifyInstance
 ): Promise<boolean> {
   if (!message.token) {
     socket.send(
       JSON.stringify({
-        type: "error",
-        message: "Token required for authentication",
-      }),
+        type: 'error',
+        message: 'Token required for authentication',
+      })
     );
-    socket.close(1008, "Authentication failed");
+    socket.close(1008, 'Authentication failed');
     return false;
   }
 
   // Validate JWT_SECRET is configured
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
-    fastify.log.error("JWT_SECRET environment variable is not configured");
+    fastify.log.error('JWT_SECRET environment variable is not configured');
     socket.send(
       JSON.stringify({
-        type: "error",
-        message: "Server configuration error",
-      }),
+        type: 'error',
+        message: 'Server configuration error',
+      })
     );
-    socket.close(1011, "Server configuration error");
+    socket.close(1011, 'Server configuration error');
     return false;
   }
 
@@ -279,50 +260,47 @@ async function handleAuth(
 
       socket.send(
         JSON.stringify({
-          type: "connected",
+          type: 'connected',
           brandId: message.brandId,
           userId: decoded.userId,
           timestamp: new Date().toISOString(),
-        }),
+        })
       );
 
       fastify.log.info(
         { userId: decoded.userId, brandId: message.brandId },
-        "WebSocket authenticated",
+        'WebSocket authenticated'
       );
     } else {
       socket.send(
         JSON.stringify({
-          type: "authenticated",
+          type: 'authenticated',
           userId: decoded.userId,
           timestamp: new Date().toISOString(),
-        }),
+        })
       );
     }
     return true;
   } catch (error) {
-    fastify.log.error({ error }, "WebSocket authentication failed");
+    fastify.log.error({ error }, 'WebSocket authentication failed');
     socket.send(
       JSON.stringify({
-        type: "error",
-        message: "Authentication failed",
-      }),
+        type: 'error',
+        message: 'Authentication failed',
+      })
     );
-    socket.close(1008, "Authentication failed");
+    socket.close(1008, 'Authentication failed');
     return false;
   }
 }
 
-function handleSubscribe(
-  socket: AuthenticatedSocket,
-  message: SubscribeMessage,
-) {
+function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage) {
   if (!socket.userId) {
     socket.send(
       JSON.stringify({
-        type: "error",
-        message: "Not authenticated",
-      }),
+        type: 'error',
+        message: 'Not authenticated',
+      })
     );
     return;
   }
@@ -330,9 +308,9 @@ function handleSubscribe(
   if (!message.brandId) {
     socket.send(
       JSON.stringify({
-        type: "error",
-        message: "Brand ID required",
-      }),
+        type: 'error',
+        message: 'Brand ID required',
+      })
     );
     return;
   }
@@ -354,10 +332,10 @@ function handleSubscribe(
 
   socket.send(
     JSON.stringify({
-      type: "subscribed",
+      type: 'subscribed',
       brandId: message.brandId,
       timestamp: new Date().toISOString(),
-    }),
+    })
   );
 }
 
@@ -369,9 +347,9 @@ function handleUnsubscribe(socket: AuthenticatedSocket) {
 
     socket.send(
       JSON.stringify({
-        type: "unsubscribed",
+        type: 'unsubscribed',
         timestamp: new Date().toISOString(),
-      }),
+      })
     );
   }
 }
@@ -396,16 +374,13 @@ function cleanupSocket(socket: AuthenticatedSocket) {
 
 // Export the plugin wrapped with fastify-plugin
 export default fastifyPlugin(websocketPlugin, {
-  name: "websocket",
-  fastify: "5.x",
+  name: 'websocket',
+  fastify: '5.x',
 });
 
 // Type augmentation for Fastify
-declare module "fastify" {
+declare module 'fastify' {
   interface FastifyInstance {
-    broadcastToRoom: (
-      room: string,
-      message: OutboundPayload | Record<string, unknown>,
-    ) => void;
+    broadcastToRoom: (room: string, message: OutboundPayload | Record<string, unknown>) => void;
   }
 }

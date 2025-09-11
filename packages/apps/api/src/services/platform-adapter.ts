@@ -3,14 +3,14 @@
  * Provides a unified interface for publishing to multiple social media platforms
  */
 
-import { FastifyInstance } from "fastify";
+import { FastifyInstance } from 'fastify';
 
 export interface PlatformContent {
   caption: string;
   hashtags: string[];
   mediaUrl?: string;
   imageUrl?: string; // Add support for legacy imageUrl field
-  mediaType?: "image" | "video" | "carousel";
+  mediaType?: 'image' | 'video' | 'carousel';
   metadata?: Record<string, unknown>;
 }
 
@@ -51,26 +51,17 @@ export interface PlatformAdapter {
   /**
    * Publish content to the platform
    */
-  publish(
-    content: PlatformContent,
-    credentials: PlatformCredentials,
-  ): Promise<PublishResult>;
+  publish(content: PlatformContent, credentials: PlatformCredentials): Promise<PublishResult>;
 
   /**
    * Get post insights/analytics
    */
-  getInsights?(
-    postId: string,
-    credentials: PlatformCredentials,
-  ): Promise<unknown>;
+  getInsights?(postId: string, credentials: PlatformCredentials): Promise<unknown>;
 
   /**
    * Delete a post from the platform
    */
-  deletePost?(
-    postId: string,
-    credentials: PlatformCredentials,
-  ): Promise<boolean>;
+  deletePost?(postId: string, credentials: PlatformCredentials): Promise<boolean>;
 
   /**
    * Get platform-specific rate limits
@@ -100,7 +91,7 @@ export interface RateLimits {
  * Instagram Adapter Implementation
  */
 export class InstagramAdapter implements PlatformAdapter {
-  platform = "instagram";
+  platform = 'instagram';
 
   validateContent(content: PlatformContent): ValidationResult {
     const errors: string[] = [];
@@ -108,26 +99,24 @@ export class InstagramAdapter implements PlatformAdapter {
 
     // Instagram validation rules
     if (!content.mediaUrl && !content.imageUrl) {
-      errors.push("Instagram requires at least one image or video");
+      errors.push('Instagram requires at least one image or video');
     }
 
     if (content.caption.length > 2200) {
-      errors.push("Caption exceeds Instagram limit of 2,200 characters");
+      errors.push('Caption exceeds Instagram limit of 2,200 characters');
     }
 
     if (content.hashtags.length > 30) {
-      warnings.push(
-        "Instagram allows maximum 30 hashtags, excess will be truncated",
-      );
+      warnings.push('Instagram allows maximum 30 hashtags, excess will be truncated');
     }
 
     // Check for banned hashtags (simplified list)
-    const bannedHashtags = ["spam", "follow4follow"];
+    const bannedHashtags = ['spam', 'follow4follow'];
     const hasBanned = content.hashtags.some((tag) =>
-      bannedHashtags.includes(tag.toLowerCase().replace("#", "")),
+      bannedHashtags.includes(tag.toLowerCase().replace('#', ''))
     );
     if (hasBanned) {
-      warnings.push("Content contains potentially banned hashtags");
+      warnings.push('Content contains potentially banned hashtags');
     }
 
     return {
@@ -141,16 +130,14 @@ export class InstagramAdapter implements PlatformAdapter {
     // Format hashtags
     const formattedHashtags = content.hashtags
       .slice(0, 30) // Limit to 30
-      .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
+      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
 
     // Combine caption and hashtags
-    const fullCaption = `${content.caption}\n\n${formattedHashtags.join(" ")}`;
+    const fullCaption = `${content.caption}\n\n${formattedHashtags.join(' ')}`;
 
     // Truncate if needed
     const finalCaption =
-      fullCaption.length > 2200
-        ? fullCaption.substring(0, 2197) + "..."
-        : fullCaption;
+      fullCaption.length > 2200 ? fullCaption.substring(0, 2197) + '...' : fullCaption;
 
     return {
       ...content,
@@ -161,43 +148,38 @@ export class InstagramAdapter implements PlatformAdapter {
 
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
     // Instagram Graph API Implementation
     try {
-      const instagramBusinessAccountId =
-        credentials.metadata?.instagramBusinessAccountId;
+      const instagramBusinessAccountId = credentials.metadata?.instagramBusinessAccountId;
       if (!instagramBusinessAccountId) {
-        throw new Error(
-          "Instagram Business Account ID not found in credentials",
-        );
+        throw new Error('Instagram Business Account ID not found in credentials');
       }
 
       // Step 1: Upload media to Instagram
       const mediaUploadResponse = await fetch(
         `https://graph.facebook.com/v18.0/${instagramBusinessAccountId}/media`,
         {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             image_url: content.imageUrl || content.mediaUrl,
             caption: content.caption,
             access_token: credentials.accessToken,
           }),
-        },
+        }
       );
 
       if (!mediaUploadResponse.ok) {
         const errorJson: unknown = await mediaUploadResponse.json();
         const errMsg =
-          errorJson && typeof errorJson === "object" && "error" in errorJson
+          errorJson && typeof errorJson === 'object' && 'error' in errorJson
             ? (errorJson as { error?: { message?: string } }).error?.message
             : undefined;
-        throw new Error(
-          `Instagram media upload failed: ${errMsg || "Unknown error"}`,
-        );
+        throw new Error(`Instagram media upload failed: ${errMsg || 'Unknown error'}`);
       }
 
       const mediaData = (await mediaUploadResponse.json()) as { id: string };
@@ -207,33 +189,31 @@ export class InstagramAdapter implements PlatformAdapter {
       const publishResponse = await fetch(
         `https://graph.facebook.com/v18.0/${instagramBusinessAccountId}/media_publish`,
         {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             creation_id: creationId,
             access_token: credentials.accessToken,
           }),
-        },
+        }
       );
 
       if (!publishResponse.ok) {
         const errorJson: unknown = await publishResponse.json();
         const errMsg =
-          errorJson && typeof errorJson === "object" && "error" in errorJson
+          errorJson && typeof errorJson === 'object' && 'error' in errorJson
             ? (errorJson as { error?: { message?: string } }).error?.message
             : undefined;
-        throw new Error(
-          `Instagram publish failed: ${errMsg || "Unknown error"}`,
-        );
+        throw new Error(`Instagram publish failed: ${errMsg || 'Unknown error'}`);
       }
 
       const publishData = (await publishResponse.json()) as { id: string };
 
       // Step 3: Get the permalink
       const permalinkResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${publishData.id}?fields=permalink&access_token=${credentials.accessToken}`,
+        `https://graph.facebook.com/v18.0/${publishData.id}?fields=permalink&access_token=${credentials.accessToken}`
       );
 
       const permalinkData = (await permalinkResponse.json()) as {
@@ -241,17 +221,17 @@ export class InstagramAdapter implements PlatformAdapter {
       };
 
       return {
-        platform: "instagram",
+        platform: 'instagram',
         postId: publishData.id,
         permalink: permalinkData.permalink,
         publishedAt: new Date().toISOString(),
         metadata: {
-          mediaType: "IMAGE",
+          mediaType: 'IMAGE',
           businessAccountId: instagramBusinessAccountId,
         },
       };
     } catch (error) {
-      console.error("Instagram publish error:", error);
+      console.error('Instagram publish error:', error);
       throw error;
     }
   }
@@ -269,7 +249,7 @@ export class InstagramAdapter implements PlatformAdapter {
  * LinkedIn Adapter Implementation
  */
 export class LinkedInAdapter implements PlatformAdapter {
-  platform = "linkedin";
+  platform = 'linkedin';
 
   validateContent(content: PlatformContent): ValidationResult {
     const errors: string[] = [];
@@ -277,17 +257,15 @@ export class LinkedInAdapter implements PlatformAdapter {
 
     // LinkedIn validation rules
     if (content.caption.length > 3000) {
-      errors.push("Caption exceeds LinkedIn limit of 3,000 characters");
+      errors.push('Caption exceeds LinkedIn limit of 3,000 characters');
     }
 
     if (content.hashtags.length > 30) {
-      warnings.push("LinkedIn performs best with 3-5 hashtags");
+      warnings.push('LinkedIn performs best with 3-5 hashtags');
     }
 
-    if (content.mediaType === "carousel") {
-      warnings.push(
-        "LinkedIn does not support carousel posts, will post as single image",
-      );
+    if (content.mediaType === 'carousel') {
+      warnings.push('LinkedIn does not support carousel posts, will post as single image');
     }
 
     return {
@@ -301,9 +279,9 @@ export class LinkedInAdapter implements PlatformAdapter {
     // LinkedIn prefers hashtags at the end
     const formattedHashtags = content.hashtags
       .slice(0, 10) // LinkedIn best practice
-      .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
+      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
 
-    const fullCaption = `${content.caption}\n\n${formattedHashtags.join(" ")}`;
+    const fullCaption = `${content.caption}\n\n${formattedHashtags.join(' ')}`;
 
     return {
       ...content,
@@ -314,37 +292,35 @@ export class LinkedInAdapter implements PlatformAdapter {
 
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
     // LinkedIn API Implementation
     try {
-      const personUrn =
-        credentials.metadata?.personUrn || credentials.metadata?.userId;
+      const personUrn = credentials.metadata?.personUrn || credentials.metadata?.userId;
       if (!personUrn) {
-        throw new Error("LinkedIn person URN not found in credentials");
+        throw new Error('LinkedIn person URN not found in credentials');
       }
 
       // Create the post payload for LinkedIn API v2
       const postData = {
         author: `urn:li:person:${personUrn}`,
-        lifecycleState: "PUBLISHED",
+        lifecycleState: 'PUBLISHED',
         specificContent: {
-          "com.linkedin.ugc.ShareContent": {
+          'com.linkedin.ugc.ShareContent': {
             shareCommentary: {
               text: content.caption,
             },
-            shareMediaCategory:
-              content.imageUrl || content.mediaUrl ? "IMAGE" : "NONE",
+            shareMediaCategory: content.imageUrl || content.mediaUrl ? 'IMAGE' : 'NONE',
             ...((content.imageUrl || content.mediaUrl) && {
               media: [
                 {
-                  status: "READY",
+                  status: 'READY',
                   description: {
                     text: content.caption.substring(0, 200),
                   },
                   media: content.imageUrl || content.mediaUrl,
                   title: {
-                    text: "Shared via Postolio",
+                    text: 'Shared via Postolio',
                   },
                 },
               ],
@@ -352,17 +328,17 @@ export class LinkedInAdapter implements PlatformAdapter {
           },
         },
         visibility: {
-          "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
+          'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
         },
       };
 
       // Post to LinkedIn API
-      const response = await fetch("https://api.linkedin.com/v2/ugcPosts", {
-        method: "POST",
+      const response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${credentials.accessToken}`,
-          "Content-Type": "application/json",
-          "X-Restli-Protocol-Version": "2.0.0",
+          'Content-Type': 'application/json',
+          'X-Restli-Protocol-Version': '2.0.0',
         },
         body: JSON.stringify(postData),
       });
@@ -370,12 +346,10 @@ export class LinkedInAdapter implements PlatformAdapter {
       if (!response.ok) {
         const errorJson: unknown = await response.json();
         const errMsg =
-          errorJson && typeof errorJson === "object" && "message" in errorJson
+          errorJson && typeof errorJson === 'object' && 'message' in errorJson
             ? (errorJson as { message?: string }).message
             : undefined;
-        throw new Error(
-          `LinkedIn publish failed: ${errMsg || "Unknown error"}`,
-        );
+        throw new Error(`LinkedIn publish failed: ${errMsg || 'Unknown error'}`);
       }
 
       const responseData = (await response.json()) as { id: string };
@@ -385,17 +359,17 @@ export class LinkedInAdapter implements PlatformAdapter {
       const permalink = `https://www.linkedin.com/feed/update/${postId}/`;
 
       return {
-        platform: "linkedin",
+        platform: 'linkedin',
         postId,
         permalink,
         publishedAt: new Date().toISOString(),
         metadata: {
           authorUrn: `urn:li:person:${personUrn}`,
-          shareType: content.imageUrl ? "IMAGE" : "TEXT",
+          shareType: content.imageUrl ? 'IMAGE' : 'TEXT',
         },
       };
     } catch (error) {
-      console.error("LinkedIn publish error:", error);
+      console.error('LinkedIn publish error:', error);
       throw error;
     }
   }
@@ -413,7 +387,7 @@ export class LinkedInAdapter implements PlatformAdapter {
  * Facebook Adapter Implementation
  */
 export class FacebookAdapter implements PlatformAdapter {
-  platform = "facebook";
+  platform = 'facebook';
 
   validateContent(content: PlatformContent): ValidationResult {
     const errors: string[] = [];
@@ -421,13 +395,11 @@ export class FacebookAdapter implements PlatformAdapter {
 
     // Facebook validation rules
     if (content.caption.length > 63206) {
-      errors.push("Caption exceeds Facebook limit of 63,206 characters");
+      errors.push('Caption exceeds Facebook limit of 63,206 characters');
     }
 
     if (content.hashtags.length > 30) {
-      warnings.push(
-        "Facebook hashtags are less effective than on other platforms",
-      );
+      warnings.push('Facebook hashtags are less effective than on other platforms');
     }
 
     return {
@@ -440,12 +412,10 @@ export class FacebookAdapter implements PlatformAdapter {
   formatContent(content: PlatformContent): PlatformContent {
     // Facebook hashtags are optional
     const hashtagString = content.hashtags
-      .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
-      .join(" ");
+      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
+      .join(' ');
 
-    const fullCaption = hashtagString
-      ? `${content.caption}\n\n${hashtagString}`
-      : content.caption;
+    const fullCaption = hashtagString ? `${content.caption}\n\n${hashtagString}` : content.caption;
 
     return {
       ...content,
@@ -456,13 +426,13 @@ export class FacebookAdapter implements PlatformAdapter {
 
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
     // Facebook Graph API Implementation
     try {
       const pageId = credentials.metadata?.pageId;
       if (!pageId) {
-        throw new Error("Facebook Page ID not found in credentials");
+        throw new Error('Facebook Page ID not found in credentials');
       }
 
       // Build the post payload
@@ -482,25 +452,22 @@ export class FacebookAdapter implements PlatformAdapter {
         postData.url = content.imageUrl || content.mediaUrl;
 
         // Post photo to Facebook Page
-        const response = await fetch(
-          `https://graph.facebook.com/v18.0/${pageId}/photos`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(postData),
+        const response = await fetch(`https://graph.facebook.com/v18.0/${pageId}/photos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-        );
+          body: JSON.stringify(postData),
+        });
 
         if (!response.ok) {
           const errorJson: unknown = await response.json();
           const fbErr =
-            errorJson && typeof errorJson === "object" && "error" in errorJson
+            errorJson && typeof errorJson === 'object' && 'error' in errorJson
               ? (errorJson as { error?: { message?: string } })
               : undefined;
           throw new Error(
-            `Facebook photo upload failed: ${fbErr?.error?.message || "Unknown error"}`,
+            `Facebook photo upload failed: ${fbErr?.error?.message || 'Unknown error'}`
           );
         }
 
@@ -512,7 +479,7 @@ export class FacebookAdapter implements PlatformAdapter {
 
         // Get the permalink
         const permalinkResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${postId}?fields=permalink_url&access_token=${credentials.accessToken}`,
+          `https://graph.facebook.com/v18.0/${postId}?fields=permalink_url&access_token=${credentials.accessToken}`
         );
 
         const permalinkData = (await permalinkResponse.json()) as {
@@ -520,38 +487,32 @@ export class FacebookAdapter implements PlatformAdapter {
         };
 
         return {
-          platform: "facebook",
+          platform: 'facebook',
           postId,
-          permalink:
-            permalinkData.permalink_url || `https://facebook.com/${postId}`,
+          permalink: permalinkData.permalink_url || `https://facebook.com/${postId}`,
           publishedAt: new Date().toISOString(),
           metadata: {
             pageId,
-            postType: "photo",
+            postType: 'photo',
           },
         };
       } else {
         // Text-only post
-        const response = await fetch(
-          `https://graph.facebook.com/v18.0/${pageId}/feed`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(postData),
+        const response = await fetch(`https://graph.facebook.com/v18.0/${pageId}/feed`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-        );
+          body: JSON.stringify(postData),
+        });
 
         if (!response.ok) {
           const errorJson: unknown = await response.json();
           const fbErr =
-            errorJson && typeof errorJson === "object" && "error" in errorJson
+            errorJson && typeof errorJson === 'object' && 'error' in errorJson
               ? (errorJson as { error?: { message?: string } })
               : undefined;
-          throw new Error(
-            `Facebook post failed: ${fbErr?.error?.message || "Unknown error"}`,
-          );
+          throw new Error(`Facebook post failed: ${fbErr?.error?.message || 'Unknown error'}`);
         }
 
         const responseData = (await response.json()) as { id: string };
@@ -559,7 +520,7 @@ export class FacebookAdapter implements PlatformAdapter {
 
         // Get the permalink
         const permalinkResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${postId}?fields=permalink_url&access_token=${credentials.accessToken}`,
+          `https://graph.facebook.com/v18.0/${postId}?fields=permalink_url&access_token=${credentials.accessToken}`
         );
 
         const permalinkData = (await permalinkResponse.json()) as {
@@ -567,19 +528,18 @@ export class FacebookAdapter implements PlatformAdapter {
         };
 
         return {
-          platform: "facebook",
+          platform: 'facebook',
           postId,
-          permalink:
-            permalinkData.permalink_url || `https://facebook.com/${postId}`,
+          permalink: permalinkData.permalink_url || `https://facebook.com/${postId}`,
           publishedAt: new Date().toISOString(),
           metadata: {
             pageId,
-            postType: "text",
+            postType: 'text',
           },
         };
       }
     } catch (error) {
-      console.error("Facebook publish error:", error);
+      console.error('Facebook publish error:', error);
       throw error;
     }
   }
@@ -597,23 +557,23 @@ export class FacebookAdapter implements PlatformAdapter {
  * TikTok Adapter Implementation (Beta)
  */
 export class TikTokAdapter implements PlatformAdapter {
-  platform = "tiktok";
+  platform = 'tiktok';
 
   validateContent(content: PlatformContent): ValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
 
     // TikTok validation rules
-    if (content.mediaType !== "video") {
-      errors.push("TikTok requires video content");
+    if (content.mediaType !== 'video') {
+      errors.push('TikTok requires video content');
     }
 
     if (content.caption.length > 2200) {
-      errors.push("Caption exceeds TikTok limit of 2,200 characters");
+      errors.push('Caption exceeds TikTok limit of 2,200 characters');
     }
 
     if (content.hashtags.length > 100) {
-      warnings.push("TikTok allows up to 100 hashtags but 3-5 is recommended");
+      warnings.push('TikTok allows up to 100 hashtags but 3-5 is recommended');
     }
 
     return {
@@ -627,9 +587,9 @@ export class TikTokAdapter implements PlatformAdapter {
     // TikTok hashtags in caption
     const formattedHashtags = content.hashtags
       .slice(0, 10) // Reasonable limit
-      .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
+      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
 
-    const fullCaption = `${content.caption} ${formattedHashtags.join(" ")}`;
+    const fullCaption = `${content.caption} ${formattedHashtags.join(' ')}`;
 
     return {
       ...content,
@@ -640,14 +600,14 @@ export class TikTokAdapter implements PlatformAdapter {
 
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
     // TikTok API is not yet implemented; reference params to avoid unused warnings
     void content;
     void credentials;
     throw new Error(
-      "TikTok publishing is not yet supported. " +
-        "TikTok requires video content and OAuth 2.0 integration which is currently under development.",
+      'TikTok publishing is not yet supported. ' +
+        'TikTok requires video content and OAuth 2.0 integration which is currently under development.'
     );
   }
 
@@ -692,7 +652,7 @@ export class PlatformAdapterFactory {
 
   static validateAllPlatforms(
     content: PlatformContent,
-    platforms: string[],
+    platforms: string[]
   ): Map<string, ValidationResult> {
     const results = new Map<string, ValidationResult>();
 
@@ -723,20 +683,20 @@ export class PlatformService {
    */
   async publishToMultiplePlatforms(
     content: PlatformContent,
-    platforms: Array<{ platform: string; credentials: PlatformCredentials }>,
+    platforms: Array<{ platform: string; credentials: PlatformCredentials }>
   ): Promise<Map<string, PublishResult | Error>> {
     const results = new Map<string, PublishResult | Error>();
 
     // Validate content for all platforms first
     const validations = PlatformAdapterFactory.validateAllPlatforms(
       content,
-      platforms.map((p) => p.platform),
+      platforms.map((p) => p.platform)
     );
 
     // Check for validation errors
     for (const [platform, validation] of validations.entries()) {
       if (!validation.valid) {
-        results.set(platform, new Error(validation.errors?.join(", ")));
+        results.set(platform, new Error(validation.errors?.join(', ')));
       }
     }
 

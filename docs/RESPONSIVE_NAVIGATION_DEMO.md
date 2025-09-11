@@ -136,10 +136,10 @@ To switch back to the old layout, simply change the import in `App.tsx`:
 
 ```typescript
 // Old layout (no mobile support)
-import { Layout } from "./components/Layout";
+import { Layout } from './components/Layout';
 
 // New responsive layout
-import { ResponsiveLayout as Layout } from "./components/ResponsiveLayout";
+import { ResponsiveLayout as Layout } from './components/ResponsiveLayout';
 ```
 
 ## 🌟 Best Practices Applied
