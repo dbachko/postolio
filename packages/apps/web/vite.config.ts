@@ -16,6 +16,11 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     https: (() => {
+      // Skip HTTPS in CI environment
+      if (process.env.CI) {
+        return undefined;
+      }
+      
       try {
         // Look for SSL certificates
         const certPath = '/home/developer/project/certs/ai.localhost+1.pem';
@@ -36,7 +41,7 @@ export default defineConfig({
       // Proxy API routes to backend - keeps /api prefix as backend expects it
       // Frontend: /api/auth/login → Backend: /api/auth/login
       '/api': {
-        target: 'https://localhost:3000',
+        target: process.env.CI ? 'http://localhost:3000' : 'https://localhost:3000',
         changeOrigin: true,
         secure: false, // Allow self-signed certificates
         configure: (proxy) => {
@@ -49,7 +54,7 @@ export default defineConfig({
       },
       // Proxy legal routes to backend for privacy policy and terms
       '/legal': {
-        target: 'https://localhost:3000',
+        target: process.env.CI ? 'http://localhost:3000' : 'https://localhost:3000',
         changeOrigin: true,
         secure: false, // Allow self-signed certificates
         configure: (proxy) => {
@@ -62,7 +67,7 @@ export default defineConfig({
       },
       // Proxy WebSocket connections
       '/ws': {
-        target: 'wss://localhost:3000',
+        target: process.env.CI ? 'ws://localhost:3000' : 'wss://localhost:3000',
         ws: true,
         changeOrigin: true,
         secure: false,

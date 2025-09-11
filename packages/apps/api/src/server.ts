@@ -52,7 +52,8 @@ export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
   let httpsOptions = {};
 
-  if (process.env.NODE_ENV === 'development') {
+  // Only use HTTPS in development if not in CI
+  if (process.env.NODE_ENV === 'development' && !process.env.CI) {
     try {
       // Look for local SSL certificates
       const certPath =

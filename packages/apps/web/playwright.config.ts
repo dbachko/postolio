@@ -12,7 +12,7 @@ export default defineConfig({
   reporter: 'html',
 
   use: {
-    baseURL: 'https://localhost:5173',
+    baseURL: process.env.CI ? 'http://localhost:5173' : 'https://localhost:5173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -48,18 +48,32 @@ export default defineConfig({
     },
   ],
 
-  webServer: [
-    {
-      command: 'cd .. && npm run dev',
-      port: 3000,
-      reuseExistingServer: !process.env.CI,
-      timeout: 120 * 1000,
-    },
-    {
-      command: 'npm run dev',
-      port: 5173,
-      reuseExistingServer: !process.env.CI,
-      timeout: 120 * 1000,
-    },
-  ],
+  webServer: process.env.CI
+    ? {
+        // In CI, run both services from root using pnpm workspace commands
+        command: 'cd ../../../ && pnpm dev --filter=@postolio/api --filter=@postolio/web',
+        port: 5173,
+        reuseExistingServer: false,
+        timeout: 120 * 1000,
+        env: {
+          ...process.env,
+          CI: 'true',
+          NODE_ENV: 'development',
+        },
+      }
+    : [
+        // Local development - run services separately
+        {
+          command: 'cd .. && npm run dev',
+          port: 3000,
+          reuseExistingServer: true,
+          timeout: 120 * 1000,
+        },
+        {
+          command: 'npm run dev',
+          port: 5173,
+          reuseExistingServer: true,
+          timeout: 120 * 1000,
+        },
+      ],
 });
