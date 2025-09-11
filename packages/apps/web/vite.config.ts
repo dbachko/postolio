@@ -41,33 +41,33 @@ export default defineConfig({
       // Proxy API routes to backend - keeps /api prefix as backend expects it
       // Frontend: /api/auth/login → Backend: /api/auth/login
       '/api': {
-        target: process.env.CI ? 'http://localhost:3000' : 'https://localhost:3000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false, // Allow self-signed certificates
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
             console.log(
-              `🔄 Proxying: ${req.method} ${req.url} → https://localhost:3000${proxyReq.path}`
+              `🔄 Proxying: ${req.method} ${req.url} → http://localhost:3000${proxyReq.path}`
             );
           });
         },
       },
       // Proxy legal routes to backend for privacy policy and terms
       '/legal': {
-        target: process.env.CI ? 'http://localhost:3000' : 'https://localhost:3000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false, // Allow self-signed certificates
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
             console.log(
-              `📜 Proxying legal: ${req.method} ${req.url} → https://localhost:3000${proxyReq.path}`
+              `📜 Proxying legal: ${req.method} ${req.url} → http://localhost:3000${proxyReq.path}`
             );
           });
         },
       },
       // Proxy WebSocket connections
       '/ws': {
-        target: process.env.CI ? 'ws://localhost:3000' : 'wss://localhost:3000',
+        target: 'ws://localhost:3000',
         ws: true,
         changeOrigin: true,
         secure: false,
