@@ -213,7 +213,7 @@ export class EmailService {
 
     try {
       const result = await sesCircuitBreaker.fire(command);
-      console.log(`Email sent successfully via SES: ${result.$metadata?.requestId}`);
+      console.log(`Email sent successfully via SES: ${(result as any)?.$metadata?.requestId}`);
     } catch (error) {
       console.error("Failed to send email via SES:", error);
       throw error;
