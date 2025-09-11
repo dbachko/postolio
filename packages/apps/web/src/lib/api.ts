@@ -140,11 +140,11 @@ class ApiClient {
 
   private getCSRFTokenFromCookie(): string | null {
     // Parse cookies to find CSRF token
-    const cookies = document.cookie.split(';');
+    const cookies = document.cookie.split(";");
     for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split('=');
+      const [name, value] = cookie.trim().split("=");
       // @fastify/csrf-protection uses _csrf cookie by default
-      if (name === '_csrf') {
+      if (name === "_csrf") {
         return decodeURIComponent(value);
       }
     }
@@ -154,61 +154,66 @@ class ApiClient {
   async ensureCSRFToken(): Promise<string | null> {
     // First check if we already have a CSRF token in cookies
     let csrfToken = this.getCSRFTokenFromCookie();
-    
+
     if (!csrfToken) {
       // Fetch a new CSRF token with retry logic
       const maxRetries = 3;
       let retryCount = 0;
-      
+
       while (retryCount < maxRetries && !csrfToken) {
         try {
           const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
             credentials: "include",
             signal: AbortSignal.timeout(5000), // 5 second timeout
           });
-          
+
           if (response.ok) {
             const data = await response.json();
             // The token is now set as a cookie by the server
             // Also available in response for immediate use
             csrfToken = data.token || this.getCSRFTokenFromCookie();
-            
+
             // Store token expiry for proactive refresh
             if (data.expiresIn) {
-              const expiryTime = Date.now() + (data.expiresIn * 1000);
-              sessionStorage.setItem('csrf_token_expiry', String(expiryTime));
+              const expiryTime = Date.now() + data.expiresIn * 1000;
+              sessionStorage.setItem("csrf_token_expiry", String(expiryTime));
             }
           } else if (response.status === 429) {
             // Rate limited - wait before retry
-            const retryAfter = response.headers.get('Retry-After');
+            const retryAfter = response.headers.get("Retry-After");
             const delay = retryAfter ? parseInt(retryAfter) * 1000 : 1000;
-            await new Promise(resolve => setTimeout(resolve, delay));
+            await new Promise((resolve) => setTimeout(resolve, delay));
           }
         } catch (error) {
-          console.warn(`Failed to fetch CSRF token (attempt ${retryCount + 1}):`, error);
+          console.warn(
+            `Failed to fetch CSRF token (attempt ${retryCount + 1}):`,
+            error,
+          );
           // Exponential backoff
           if (retryCount < maxRetries - 1) {
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+            await new Promise((resolve) =>
+              setTimeout(resolve, Math.pow(2, retryCount) * 1000),
+            );
           }
         }
         retryCount++;
       }
     } else {
       // Check if token needs refresh (proactive)
-      const expiryTime = sessionStorage.getItem('csrf_token_expiry');
+      const expiryTime = sessionStorage.getItem("csrf_token_expiry");
       if (expiryTime) {
         const timeUntilExpiry = parseInt(expiryTime) - Date.now();
         // Refresh if less than 1 minute remaining
         if (timeUntilExpiry < 60000) {
           // Clear old token to force refresh
           document.cookie = `_csrf=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
-          sessionStorage.removeItem('csrf_token_expiry');
+          sessionStorage.removeItem("csrf_token_expiry");
           // Recursive call to get new token
           return this.ensureCSRFToken();
         }
       }
     }
-    
+
     return csrfToken;
   }
 
@@ -252,7 +257,10 @@ class ApiClient {
     }
 
     // Include CSRF token for state-changing requests
-    if (options.method && ["POST", "PUT", "DELETE", "PATCH"].includes(options.method)) {
+    if (
+      options.method &&
+      ["POST", "PUT", "DELETE", "PATCH"].includes(options.method)
+    ) {
       const csrfToken = await this.ensureCSRFToken();
       if (csrfToken) {
         // @fastify/csrf-protection accepts token in header as csrf-token
@@ -275,16 +283,22 @@ class ApiClient {
         const errorText = await response.text();
         try {
           const errorData = JSON.parse(errorText);
-          if (errorData.code === "CSRF_TOKEN_MISSING" || errorData.code === "CSRF_TOKEN_INVALID") {
+          if (
+            errorData.code === "CSRF_TOKEN_MISSING" ||
+            errorData.code === "CSRF_TOKEN_INVALID"
+          ) {
             // Clear cookies by fetching a new CSRF token
-            const refreshResponse = await fetch(`${API_BASE_URL}/api/csrf-token`, {
-              credentials: "include",
-            });
-            
+            const refreshResponse = await fetch(
+              `${API_BASE_URL}/api/csrf-token`,
+              {
+                credentials: "include",
+              },
+            );
+
             if (refreshResponse.ok) {
               // Get the new token from cookie
               const newCsrfToken = this.getCSRFTokenFromCookie();
-              
+
               // Retry the request once with new token
               if (newCsrfToken) {
                 headers["csrf-token"] = newCsrfToken;
@@ -293,7 +307,7 @@ class ApiClient {
                   headers,
                   credentials: "include",
                 });
-                
+
                 if (retryResponse.ok) {
                   return retryResponse.json();
                 }

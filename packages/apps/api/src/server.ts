@@ -145,7 +145,7 @@ export function buildFastify(): FastifyInstance {
   });
   app.register(monitoringPlugin as FastifyPluginAsync);
   app.register(authPlugin as FastifyPluginAsync);
-  
+
   // Register CSRF protection with secure cookie configuration
   app.register(csrfProtection, {
     cookieOpts: {
@@ -157,10 +157,10 @@ export function buildFastify(): FastifyInstance {
     },
     cookieKey: "_csrf",
   });
-  
+
   // Auto-protect all state-changing routes with CSRF
   app.register(csrfAutoProtect as FastifyPluginAsync);
-  
+
   app.register(websocketPlugin as FastifyPluginAsync);
 
   // Apply rate limiting middleware

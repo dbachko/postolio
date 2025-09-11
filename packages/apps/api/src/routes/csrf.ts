@@ -1,6 +1,6 @@
 /**
  * CSRF Token Management Routes
- * 
+ *
  * Provides endpoints for CSRF token generation and validation.
  */
 
@@ -13,7 +13,7 @@ const csrfRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get("/csrf-token", async (request, reply) => {
     const token = reply.generateCsrf();
-    
+
     return {
       token,
       expiresIn: 3600, // 1 hour (this is informational, actual expiry is managed by the plugin)

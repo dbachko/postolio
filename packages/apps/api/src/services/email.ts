@@ -213,7 +213,7 @@ export class EmailService {
 
     try {
       const result = await sesCircuitBreaker.fire(command);
-      console.log('Email sent successfully via SES', result);
+      console.log("Email sent successfully via SES", result);
     } catch (error) {
       console.error("Failed to send email via SES:", error);
       throw error;
@@ -258,7 +258,9 @@ export class EmailService {
       headers["Importance"] = "Normal";
 
       // Use AWS SES in production, SMTP in development
-      console.log(`Email service configured to use: ${this.useAWSSES ? 'AWS SES' : 'SMTP'}`);
+      console.log(
+        `Email service configured to use: ${this.useAWSSES ? "AWS SES" : "SMTP"}`,
+      );
       if (this.useAWSSES) {
         await this.sendViaSES(options);
       } else {
