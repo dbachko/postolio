@@ -117,9 +117,12 @@ const csrfPlugin: FastifyPluginAsync<CSRFOptions> = async (
     const skipPaths = [
       "/api/auth/register",
       "/api/auth/login",
+      "/api/auth/google/verify",
       "/api/auth/google/callback",
       "/api/auth/facebook/callback",
+      "/api/auth/facebook/verify",
       "/api/auth/magic-link/request",
+      "/api/auth/magic-link/send",
       "/api/auth/magic-link/verify",
       "/api/csrf-token",
     ];
