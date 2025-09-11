@@ -760,9 +760,9 @@ export class PostolioStack extends cdk.Stack {
       path: "/health",
       healthyHttpCodes: "200",
       interval: cdk.Duration.seconds(20), // Check more frequently for faster failure detection
-      timeout: cdk.Duration.seconds(5),   // Faster timeout for quicker response
-      healthyThresholdCount: 2,           // Reduced from 5 to speed up healthy status
-      unhealthyThresholdCount: 2,         // Fail faster (reduced from 3)
+      timeout: cdk.Duration.seconds(5), // Faster timeout for quicker response
+      healthyThresholdCount: 2, // Reduced from 5 to speed up healthy status
+      unhealthyThresholdCount: 2, // Fail faster (reduced from 3)
     });
 
     // Enable WebSocket support on target group
@@ -776,8 +776,8 @@ export class PostolioStack extends cdk.Stack {
       maximumPercent: 200,
       minimumHealthyPercent: 100, // Ensure zero-downtime deployments
       deploymentCircuitBreaker: {
-        rollback: true,  // Automatically rollback on failure
-        enable: true,    // Enable circuit breaker
+        rollback: true, // Automatically rollback on failure
+        enable: true, // Enable circuit breaker
       },
     };
 

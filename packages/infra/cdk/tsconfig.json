@@ -20,5 +20,11 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true
   },
-  "exclude": ["cdk.out", "lib/lambda/**/*", "test/**/*", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": [
+    "cdk.out",
+    "lib/lambda/**/*",
+    "test/**/*",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
 }

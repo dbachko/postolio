@@ -19,8 +19,8 @@ module.exports = [
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",
-        { "argsIgnorePattern": "^_" }
-      ]
+        { argsIgnorePattern: "^_" },
+      ],
     },
   },
   // Configuration for test files
@@ -29,18 +29,16 @@ module.exports = [
     languageOptions: {
       globals: {
         ...globals.jest, // vitest uses jest globals
-        "vi": "readonly",
-        "describe": "readonly",
-        "it": "readonly",
-        "expect": "readonly",
-        "beforeEach": "readonly",
-        "afterEach": "readonly",
-        "beforeAll": "readonly",
-        "afterAll": "readonly",
-        "test": "readonly"
-      }
-    }
-  }
+        vi: "readonly",
+        describe: "readonly",
+        it: "readonly",
+        expect: "readonly",
+        beforeEach: "readonly",
+        afterEach: "readonly",
+        beforeAll: "readonly",
+        afterAll: "readonly",
+        test: "readonly",
+      },
+    },
+  },
 ];
-
-
