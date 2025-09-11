@@ -882,18 +882,11 @@ export class PostolioStack extends cdk.Stack {
       enableLogging: true,
       logBucket: accessLogsBucket,
       logFilePrefix: "cloudfront-logs/",
-      // IMPORTANT: Selective error response configuration
-      // Only handle 403 errors (S3 access denied for non-existent objects)
-      // This enables SPA routing while preserving API error responses
-      errorResponses: [
-        {
-          httpStatus: 403,
-          responseHttpStatus: 200,
-          responsePagePath: "/index.html",
-          ttl: cdk.Duration.minutes(5),
-        },
-      ],
-      // Note: We explicitly DO NOT handle 404, 500, or other status codes
+      // IMPORTANT: No error response configuration for 403/404
+      // This ensures API errors pass through with their original JSON responses
+      // SPA routing is handled by S3 static website hosting configuration
+      errorResponses: [],
+      // Note: We explicitly DO NOT handle any error status codes
       // to ensure API errors pass through with their original response bodies
     };
 
