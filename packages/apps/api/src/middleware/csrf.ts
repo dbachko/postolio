@@ -108,26 +108,48 @@ const csrfPlugin: FastifyPluginAsync<CSRFOptions> = async (
 
   // Add CSRF validation hook
   fastify.addHook("preHandler", async (request, reply) => {
+    // Optionally disable CSRF in development for easier testing
+    if (process.env.DISABLE_CSRF === "true" && process.env.NODE_ENV !== "production") {
+      return;
+    }
+
     // Skip CSRF check for ignored methods
     if (ignoreMethods.includes(request.method)) {
       return;
     }
 
-    // Skip CSRF check for auth endpoints that don't have sessions yet
+    // Skip CSRF check for:
+    // 1. Auth endpoints that don't have sessions yet
+    // 2. OAuth callbacks (they come from external providers)
+    // 3. Webhook endpoints (external services)
+    // 4. Health check endpoints
     const skipPaths = [
       "/api/auth/register",
       "/api/auth/login",
+      "/api/auth/logout",
+      "/api/auth/refresh",
       "/api/auth/google/verify",
       "/api/auth/google/callback",
       "/api/auth/facebook/callback",
       "/api/auth/facebook/verify",
+      "/api/auth/instagram/callback",
       "/api/auth/magic-link/request",
       "/api/auth/magic-link/send",
       "/api/auth/magic-link/verify",
+      "/api/auth/verify-email",
+      "/api/auth/password-reset",
       "/api/csrf-token",
+      "/api/health",
+      "/api/monitoring",
+      "/api/webhooks",
     ];
 
     if (skipPaths.some((path) => request.url.startsWith(path))) {
+      return;
+    }
+
+    // Skip CSRF for OAuth state validation callbacks
+    if (request.url.includes("/callback") || request.url.includes("/oauth")) {
       return;
     }
 
