@@ -836,7 +836,7 @@ export class PostolioStack extends cdk.Stack {
       },
       // Additional behaviors for API routing and image serving
       additionalBehaviors: {
-        "/api*": {
+        "api/*": {
           origin: new origins.LoadBalancerV2Origin(
             fargateService.loadBalancer,
             {
