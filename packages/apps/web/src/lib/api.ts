@@ -155,18 +155,56 @@ class ApiClient {
     let csrfToken = this.getCSRFTokenFromCookie();
     
     if (!csrfToken) {
-      // Fetch a new CSRF token
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
-          credentials: "include",
-        });
-        if (response.ok) {
-          // The token is now set as a cookie by the server
-          // Read it from the cookie
-          csrfToken = this.getCSRFTokenFromCookie();
+      // Fetch a new CSRF token with retry logic
+      const maxRetries = 3;
+      let retryCount = 0;
+      
+      while (retryCount < maxRetries && !csrfToken) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
+            credentials: "include",
+            signal: AbortSignal.timeout(5000), // 5 second timeout
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            // The token is now set as a cookie by the server
+            // Also available in response for immediate use
+            csrfToken = data.token || this.getCSRFTokenFromCookie();
+            
+            // Store token expiry for proactive refresh
+            if (data.expiresIn) {
+              const expiryTime = Date.now() + (data.expiresIn * 1000);
+              sessionStorage.setItem('csrf_token_expiry', String(expiryTime));
+            }
+          } else if (response.status === 429) {
+            // Rate limited - wait before retry
+            const retryAfter = response.headers.get('Retry-After');
+            const delay = retryAfter ? parseInt(retryAfter) * 1000 : 1000;
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch CSRF token (attempt ${retryCount + 1}):`, error);
+          // Exponential backoff
+          if (retryCount < maxRetries - 1) {
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+          }
         }
-      } catch (error) {
-        console.warn("Failed to fetch CSRF token:", error);
+        retryCount++;
+      }
+    } else {
+      // Check if token needs refresh (proactive)
+      const expiryTime = sessionStorage.getItem('csrf_token_expiry');
+      if (expiryTime) {
+        const timeUntilExpiry = parseInt(expiryTime) - Date.now();
+        // Refresh if less than 1 minute remaining
+        if (timeUntilExpiry < 60000) {
+          // Clear old token to force refresh
+          document.cookie = `csrf-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
+          sessionStorage.removeItem('csrf_token_expiry');
+          // Recursive call to get new token
+          return this.ensureCSRFToken();
+        }
       }
     }
     
