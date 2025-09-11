@@ -143,7 +143,8 @@ class ApiClient {
     const cookies = document.cookie.split(';');
     for (const cookie of cookies) {
       const [name, value] = cookie.trim().split('=');
-      if (name === 'csrf-token') {
+      // @fastify/csrf-protection uses _csrf cookie by default
+      if (name === '_csrf') {
         return decodeURIComponent(value);
       }
     }
@@ -200,7 +201,7 @@ class ApiClient {
         // Refresh if less than 1 minute remaining
         if (timeUntilExpiry < 60000) {
           // Clear old token to force refresh
-          document.cookie = `csrf-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
+          document.cookie = `_csrf=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
           sessionStorage.removeItem('csrf_token_expiry');
           // Recursive call to get new token
           return this.ensureCSRFToken();
@@ -254,7 +255,8 @@ class ApiClient {
     if (options.method && ["POST", "PUT", "DELETE", "PATCH"].includes(options.method)) {
       const csrfToken = await this.ensureCSRFToken();
       if (csrfToken) {
-        headers["X-CSRF-Token"] = csrfToken;
+        // @fastify/csrf-protection accepts token in header as csrf-token
+        headers["csrf-token"] = csrfToken;
       }
     }
 
@@ -285,7 +287,7 @@ class ApiClient {
               
               // Retry the request once with new token
               if (newCsrfToken) {
-                headers["X-CSRF-Token"] = newCsrfToken;
+                headers["csrf-token"] = newCsrfToken;
                 const retryResponse = await fetch(url, {
                   ...options,
                   headers,

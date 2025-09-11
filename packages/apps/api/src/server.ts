@@ -7,10 +7,12 @@ import helmet from "@fastify/helmet";
 import fs from "fs";
 import path from "path";
 import authPlugin from "./plugins/auth.js";
-import csrfPlugin from "./middleware/csrf.js";
+import csrfProtection from "@fastify/csrf-protection";
+import csrfAutoProtect from "./plugins/csrf-auto-protect.js";
 import monitoringPlugin from "./plugins/monitoring.js";
 import websocketPlugin from "./plugins/websocket.js";
 import authRoutes from "./routes/auth.js";
+import csrfRoutes from "./routes/csrf.js";
 import googleOAuthRoutes from "./routes/google-oauth.js";
 import facebookOAuthRoutes from "./routes/facebook-oauth.js";
 import magicLinkRoutes from "./routes/magic-link.js";
@@ -143,7 +145,22 @@ export function buildFastify(): FastifyInstance {
   });
   app.register(monitoringPlugin as FastifyPluginAsync);
   app.register(authPlugin as FastifyPluginAsync);
-  app.register(csrfPlugin as FastifyPluginAsync);
+  
+  // Register CSRF protection with secure cookie configuration
+  app.register(csrfProtection, {
+    cookieOpts: {
+      signed: true,
+      httpOnly: false, // Frontend needs to read the token
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+    },
+    cookieKey: "_csrf",
+  });
+  
+  // Auto-protect all state-changing routes with CSRF
+  app.register(csrfAutoProtect as FastifyPluginAsync);
+  
   app.register(websocketPlugin as FastifyPluginAsync);
 
   // Apply rate limiting middleware
@@ -177,6 +194,7 @@ export function buildFastify(): FastifyInstance {
   // Register routes WITH /api prefix - CloudFront forwards full paths to backend
   app.register(monitoringRoutes, { prefix: "/api/monitoring" });
   app.register(authRoutes, { prefix: "/api/auth" });
+  app.register(csrfRoutes, { prefix: "/api" });
   app.register(googleOAuthRoutes, { prefix: "/api/auth" });
   app.register(facebookOAuthRoutes, { prefix: "/api/auth" });
   app.register(magicLinkRoutes, { prefix: "/api/auth" });
