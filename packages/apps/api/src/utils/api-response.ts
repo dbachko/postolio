@@ -25,8 +25,7 @@ export interface ApiErrorResponse {
   };
 }
 
-export interface ApiPaginatedResponse<T = unknown>
-  extends ApiSuccessResponse<T[]> {
+export interface ApiPaginatedResponse<T = unknown> extends ApiSuccessResponse<T[]> {
   pagination: {
     page: number;
     limit: number;
@@ -42,10 +41,7 @@ export type ApiResponse<T = unknown> = ApiSuccessResponse<T> | ApiErrorResponse;
 /**
  * Create a successful API response
  */
-export function successResponse<T>(
-  data: T,
-  meta?: Record<string, unknown>,
-): ApiSuccessResponse<T> {
+export function successResponse<T>(data: T, meta?: Record<string, unknown>): ApiSuccessResponse<T> {
   return {
     success: true,
     data,
@@ -64,7 +60,7 @@ export function paginatedResponse<T>(
   page: number,
   limit: number,
   total: number,
-  meta?: Record<string, unknown>,
+  meta?: Record<string, unknown>
 ): ApiPaginatedResponse<T> {
   const pages = Math.ceil(total / limit);
   return {
@@ -92,7 +88,7 @@ export function errorResponse(
   error: string,
   code?: string,
   details?: string[] | Record<string, unknown>,
-  meta?: Record<string, unknown>,
+  meta?: Record<string, unknown>
 ): ApiErrorResponse {
   const response: ApiErrorResponse = {
     success: false,
@@ -118,41 +114,31 @@ export function errorResponse(
  * Common HTTP error responses
  */
 export const ErrorResponses = {
-  badRequest: (
-    message = "Bad request",
-    details?: string[] | Record<string, unknown>,
-  ) => errorResponse(message, "BAD_REQUEST", details),
+  badRequest: (message = 'Bad request', details?: string[] | Record<string, unknown>) =>
+    errorResponse(message, 'BAD_REQUEST', details),
 
-  unauthorized: (message = "Unauthorized") =>
-    errorResponse(message, "UNAUTHORIZED"),
+  unauthorized: (message = 'Unauthorized') => errorResponse(message, 'UNAUTHORIZED'),
 
-  forbidden: (message = "Forbidden") => errorResponse(message, "FORBIDDEN"),
+  forbidden: (message = 'Forbidden') => errorResponse(message, 'FORBIDDEN'),
 
-  notFound: (resource = "Resource") =>
-    errorResponse(`${resource} not found`, "NOT_FOUND"),
+  notFound: (resource = 'Resource') => errorResponse(`${resource} not found`, 'NOT_FOUND'),
 
-  conflict: (
-    message = "Resource conflict",
-    details?: string[] | Record<string, unknown>,
-  ) => errorResponse(message, "CONFLICT", details),
+  conflict: (message = 'Resource conflict', details?: string[] | Record<string, unknown>) =>
+    errorResponse(message, 'CONFLICT', details),
 
-  unprocessable: (
-    message = "Unprocessable entity",
-    details?: string[] | Record<string, unknown>,
-  ) => errorResponse(message, "UNPROCESSABLE_ENTITY", details),
+  unprocessable: (message = 'Unprocessable entity', details?: string[] | Record<string, unknown>) =>
+    errorResponse(message, 'UNPROCESSABLE_ENTITY', details),
 
   tooManyRequests: (retryAfter?: number) =>
-    errorResponse("Too many requests", "TOO_MANY_REQUESTS", undefined, {
+    errorResponse('Too many requests', 'TOO_MANY_REQUESTS', undefined, {
       retryAfter,
     }),
 
-  internalError: (message = "Internal server error", requestId?: string) =>
-    errorResponse(message, "INTERNAL_ERROR", undefined, { requestId }),
+  internalError: (message = 'Internal server error', requestId?: string) =>
+    errorResponse(message, 'INTERNAL_ERROR', undefined, { requestId }),
 
-  serviceUnavailable: (
-    message = "Service temporarily unavailable",
-    retryAfter?: number,
-  ) => errorResponse(message, "SERVICE_UNAVAILABLE", undefined, { retryAfter }),
+  serviceUnavailable: (message = 'Service temporarily unavailable', retryAfter?: number) =>
+    errorResponse(message, 'SERVICE_UNAVAILABLE', undefined, { retryAfter }),
 };
 
 /**
@@ -162,24 +148,24 @@ export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  if (typeof error === "string") {
+  if (typeof error === 'string') {
     return error;
   }
-  if (error && typeof error === "object" && "message" in error) {
+  if (error && typeof error === 'object' && 'message' in error) {
     return String(error.message);
   }
-  return "An unknown error occurred";
+  return 'An unknown error occurred';
 }
 
 /**
  * Convert validation errors to standardized format
  */
 export function formatValidationErrors(
-  errors: Array<{ path?: string[]; message: string }>,
+  errors: Array<{ path?: string[]; message: string }>
 ): string[] {
   return errors.map((error) => {
     if (error.path && error.path.length > 0) {
-      return `${error.path.join(".")}: ${error.message}`;
+      return `${error.path.join('.')}: ${error.message}`;
     }
     return error.message;
   });

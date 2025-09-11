@@ -1,11 +1,11 @@
-import { nanoid } from "nanoid";
-import { randomBytes } from "crypto";
-import bcrypt from "bcrypt";
-import { getDatabaseClient } from "../config/database.js";
-import { signJWT } from "./jwt.js";
-import { EmailService } from "./email.js";
-import Redis from "ioredis";
-import { getRedisUrl } from "../utils/redis-url.js";
+import { nanoid } from 'nanoid';
+import { randomBytes } from 'crypto';
+import bcrypt from 'bcrypt';
+import { getDatabaseClient } from '../config/database.js';
+import { signJWT } from './jwt.js';
+import { EmailService } from './email.js';
+import Redis from 'ioredis';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
@@ -27,7 +27,7 @@ export class MagicLinkService {
    */
   static async sendMagicLink(
     email: string,
-    isSignUp = false,
+    isSignUp = false
   ): Promise<{ success: boolean; message: string }> {
     try {
       // Normalize email
@@ -44,7 +44,7 @@ export class MagicLinkService {
       if (attempts > this.MAX_ATTEMPTS) {
         return {
           success: false,
-          message: "Too many attempts. Please try again later.",
+          message: 'Too many attempts. Please try again later.',
         };
       }
 
@@ -58,8 +58,7 @@ export class MagicLinkService {
           // Don't reveal if email exists or not for security
           return {
             success: true,
-            message:
-              "If an account exists with this email, a magic link has been sent.",
+            message: 'If an account exists with this email, a magic link has been sent.',
           };
         }
       }
@@ -76,32 +75,24 @@ export class MagicLinkService {
         isSignUp,
       };
 
-      await redis.setex(
-        magicLinkKey,
-        this.TOKEN_EXPIRY,
-        JSON.stringify(magicLinkData),
-      );
+      await redis.setex(magicLinkKey, this.TOKEN_EXPIRY, JSON.stringify(magicLinkData));
 
       // Send magic link email using centralized email service
-      const emailResult = await EmailService.sendMagicLink(
-        email,
-        token,
-        isSignUp,
-      );
+      const emailResult = await EmailService.sendMagicLink(email, token, isSignUp);
 
       if (!emailResult.success) {
-        throw new Error(emailResult.error || "Failed to send email");
+        throw new Error(emailResult.error || 'Failed to send email');
       }
 
       return {
         success: true,
-        message: "Magic link sent! Check your email to continue.",
+        message: 'Magic link sent! Check your email to continue.',
       };
     } catch (error) {
-      console.error("Magic link error:", error);
+      console.error('Magic link error:', error);
       return {
         success: false,
-        message: "Failed to send magic link. Please try again.",
+        message: 'Failed to send magic link. Please try again.',
       };
     }
   }
@@ -128,7 +119,7 @@ export class MagicLinkService {
       if (!data) {
         return {
           success: false,
-          message: "Invalid or expired magic link",
+          message: 'Invalid or expired magic link',
         };
       }
 
@@ -151,7 +142,7 @@ export class MagicLinkService {
 
       if (!user && magicLinkData.isSignUp) {
         // Create new user with cryptographically secure random password
-        const secureRandomPassword = randomBytes(32).toString("hex");
+        const secureRandomPassword = randomBytes(32).toString('hex');
         const hashedPassword = await bcrypt.hash(secureRandomPassword, 10);
 
         user = await prisma.user.create({
@@ -159,7 +150,7 @@ export class MagicLinkService {
             email: magicLinkData.email,
             password: hashedPassword, // Properly hashed password
             emailVerified: true, // Email is verified through magic link
-            subscriptionTier: "free",
+            subscriptionTier: 'free',
           },
           select: {
             id: true,
@@ -172,7 +163,7 @@ export class MagicLinkService {
       } else if (!user) {
         return {
           success: false,
-          message: "No account found with this email",
+          message: 'No account found with this email',
         };
       } else {
         // Update email verification status
@@ -197,10 +188,10 @@ export class MagicLinkService {
         token: jwtToken,
       };
     } catch (error) {
-      console.error("Magic link verification error:", error);
+      console.error('Magic link verification error:', error);
       return {
         success: false,
-        message: "Failed to verify magic link",
+        message: 'Failed to verify magic link',
       };
     }
   }

@@ -41,11 +41,11 @@ Gap: No cross-region infrastructure exists
 
 ```typescript
 // In CDK stack
-const table = new dynamodb.Table(this, "SchedulesTable", {
-  tableName: "content-scheduler-schedules",
-  partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
-  sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
-  replicationRegions: ["us-west-2"], // Enable global table
+const table = new dynamodb.Table(this, 'SchedulesTable', {
+  tableName: 'content-scheduler-schedules',
+  partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+  sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+  replicationRegions: ['us-west-2'], // Enable global table
   stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
 });
 ```
@@ -53,20 +53,18 @@ const table = new dynamodb.Table(this, "SchedulesTable", {
 ##### Route 53 Health Checks
 
 ```typescript
-const healthCheck = new route53.HealthCheck(this, "PrimaryHealthCheck", {
+const healthCheck = new route53.HealthCheck(this, 'PrimaryHealthCheck', {
   type: route53.HealthCheckType.HTTPS,
-  resourcePath: "/health",
-  fullQualifiedDomainName: "api.postolio.example",
+  resourcePath: '/health',
+  fullQualifiedDomainName: 'api.postolio.example',
   failureThreshold: 3,
 });
 
-const recordSet = new route53.RecordSet(this, "ApiRecord", {
+const recordSet = new route53.RecordSet(this, 'ApiRecord', {
   recordType: route53.RecordType.A,
-  target: route53.RecordTarget.fromAlias(
-    new targets.ApiGatewayDomain(primaryApi),
-  ),
-  setIdentifier: "Primary",
-  region: "us-east-1",
+  target: route53.RecordTarget.fromAlias(new targets.ApiGatewayDomain(primaryApi)),
+  setIdentifier: 'Primary',
+  region: 'us-east-1',
   healthCheckId: healthCheck.healthCheckId,
 });
 ```
@@ -74,18 +72,18 @@ const recordSet = new route53.RecordSet(this, "ApiRecord", {
 ##### S3 Cross-Region Replication
 
 ```typescript
-const bucket = new s3.Bucket(this, "ContentBucket", {
+const bucket = new s3.Bucket(this, 'ContentBucket', {
   versioned: true,
   replicationConfiguration: {
     role: replicationRole.roleArn,
     rules: [
       {
-        id: "ReplicateAll",
-        status: "Enabled",
+        id: 'ReplicateAll',
+        status: 'Enabled',
         destination: {
           bucket: `arn:aws:s3:::${bucketName}-us-west-2`,
-          replicationTime: { status: "Enabled", time: 15 },
-          metrics: { status: "Enabled", eventThreshold: 15 },
+          replicationTime: { status: 'Enabled', time: 15 },
+          metrics: { status: 'Enabled', eventThreshold: 15 },
         },
       },
     ],

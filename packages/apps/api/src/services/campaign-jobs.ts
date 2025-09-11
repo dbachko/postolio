@@ -1,11 +1,11 @@
-import { PrismaClient } from "@postolio/database";
+import { PrismaClient } from '@postolio/database';
 import {
   generateInstagramContent,
   type ContentGenerationRequest,
   type GeneratedContent,
-} from "./content-generator.js";
-import type { StyleProfile } from "./ai.js";
-import { analyzeBrandStyle } from "./ai.js";
+} from './content-generator.js';
+import type { StyleProfile } from './ai.js';
+import { analyzeBrandStyle } from './ai.js';
 
 const prisma = new PrismaClient();
 
@@ -20,14 +20,9 @@ class CampaignJobService {
   /**
    * Start async campaign preview generation
    */
-  async startCampaignPreviewGeneration(
-    campaignId: string,
-    userId: string,
-  ): Promise<void> {
+  async startCampaignPreviewGeneration(campaignId: string, userId: string): Promise<void> {
     if (this.runningJobs.has(campaignId)) {
-      console.log(
-        `Campaign preview generation already running for ${campaignId}`,
-      );
+      console.log(`Campaign preview generation already running for ${campaignId}`);
       return;
     }
 
@@ -36,10 +31,7 @@ class CampaignJobService {
     // Start the background job
     this.generateCampaignPreviewAsync(campaignId, userId)
       .catch((error) => {
-        console.error(
-          `Campaign preview generation failed for ${campaignId}:`,
-          error,
-        );
+        console.error(`Campaign preview generation failed for ${campaignId}:`, error);
       })
       .finally(() => {
         this.runningJobs.delete(campaignId);
@@ -49,20 +41,15 @@ class CampaignJobService {
   /**
    * Background async campaign preview generation
    */
-  private async generateCampaignPreviewAsync(
-    campaignId: string,
-    userId: string,
-  ): Promise<void> {
+  private async generateCampaignPreviewAsync(campaignId: string, userId: string): Promise<void> {
     try {
-      console.log(
-        `Starting async campaign preview generation for ${campaignId}`,
-      );
+      console.log(`Starting async campaign preview generation for ${campaignId}`);
 
       // Update status to show progress
       await prisma.campaign.update({
         where: { id: campaignId },
         data: {
-          status: "creating",
+          status: 'creating',
           progress: 10,
           errorMessage: null,
         },
@@ -88,21 +75,19 @@ class CampaignJobService {
       });
 
       if (!campaign) {
-        throw new Error("Campaign not found or access denied");
+        throw new Error('Campaign not found or access denied');
       }
 
       const configRaw = campaign.config as unknown;
       const config =
-        configRaw && typeof configRaw === "object"
+        configRaw && typeof configRaw === 'object'
           ? (configRaw as { themes: string[]; style?: string })
           : { themes: [] as string[], style: undefined };
       let styleProfile = campaign.brand.styleProfile as unknown as StyleProfile;
 
       if (!styleProfile) {
         // Generate style profile if missing (similar to autopilot service)
-        console.log(
-          `Generating style profile for brand: ${campaign.brand.name}`,
-        );
+        console.log(`Generating style profile for brand: ${campaign.brand.name}`);
         const analysisResult = await analyzeBrandStyle([], campaign.brand.name);
         styleProfile = analysisResult.styleProfile;
 
@@ -118,14 +103,12 @@ class CampaignJobService {
       });
 
       // Generate preview content using themes from campaign config
-      const contentRequests: ContentGenerationRequest[] = config.themes.map(
-        (theme: string) => ({
-          brandId: campaign.brandId,
-          count: 1,
-          theme,
-          style: config.style,
-        }),
-      );
+      const contentRequests: ContentGenerationRequest[] = config.themes.map((theme: string) => ({
+        brandId: campaign.brandId,
+        count: 1,
+        theme,
+        style: config.style,
+      }));
 
       // Generate preview posts (3 posts)
       const exampleCount = 3;
@@ -146,7 +129,7 @@ class CampaignJobService {
           const content = await generateInstagramContent(
             styleProfile,
             campaign.brand.name,
-            request,
+            request
           );
           examplePosts.push(...content);
         }
@@ -162,7 +145,7 @@ class CampaignJobService {
             count: 1,
             theme: config.themes[0],
             style: config.style,
-          },
+          }
         );
         examplePosts.push(...additionalContent);
       }
@@ -197,15 +180,14 @@ class CampaignJobService {
       // Save new preview posts to database
       for (const post of examplePosts) {
         console.log(
-          "Saving post to database:",
+          'Saving post to database:',
           JSON.stringify({
-            caption: post.caption?.substring(0, 50) + "...",
+            caption: post.caption?.substring(0, 50) + '...',
             hashtags: post.hashtags?.length || 0,
-            s3ImageKey: post.s3ImageKey || "NOT SET",
-            cdnImageUrl:
-              post.cdnImageUrl?.substring(0, 80) + "..." || "NOT SET",
+            s3ImageKey: post.s3ImageKey || 'NOT SET',
+            cdnImageUrl: post.cdnImageUrl?.substring(0, 80) + '...' || 'NOT SET',
             hasS3Fields: !!(post.s3ImageKey && post.cdnImageUrl),
-          }),
+          })
         );
 
         await prisma.content.create({
@@ -218,9 +200,9 @@ class CampaignJobService {
             retentionExpiresAt: post.retentionExpiresAt ?? null,
             brandId: campaign.brandId,
             campaignId: campaign.id,
-            status: "draft", // Preview posts start as draft
+            status: 'draft', // Preview posts start as draft
             generationParams: {
-              theme: config.themes?.[0] || "preview",
+              theme: config.themes?.[0] || 'preview',
               style: config.style,
               campaignGenerated: true,
               isPreview: true,
@@ -233,7 +215,7 @@ class CampaignJobService {
       await prisma.campaign.update({
         where: { id: campaignId },
         data: {
-          status: "preview",
+          status: 'preview',
           progress: 100,
           previewGenerated: true,
           errorMessage: null,
@@ -242,17 +224,13 @@ class CampaignJobService {
 
       console.log(`Campaign preview generation completed for ${campaignId}`);
     } catch (error) {
-      console.error(
-        `Campaign preview generation failed for ${campaignId}:`,
-        error,
-      );
+      console.error(`Campaign preview generation failed for ${campaignId}:`, error);
 
       await prisma.campaign.update({
         where: { id: campaignId },
         data: {
-          status: "failed",
-          errorMessage:
-            error instanceof Error ? error.message : "Unknown error occurred",
+          status: 'failed',
+          errorMessage: error instanceof Error ? error.message : 'Unknown error occurred',
           progress: 0,
         },
       });
@@ -288,7 +266,7 @@ class CampaignJobService {
     });
 
     if (!campaign) {
-      throw new Error("Campaign not found");
+      throw new Error('Campaign not found');
     }
     return {
       id: campaign.id,

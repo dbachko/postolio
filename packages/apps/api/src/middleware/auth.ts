@@ -1,5 +1,5 @@
-import { FastifyRequest, FastifyReply } from "fastify";
-import jwt from "jsonwebtoken";
+import { FastifyRequest, FastifyReply } from 'fastify';
+import jwt from 'jsonwebtoken';
 
 interface UserPayload {
   id: string;
@@ -12,7 +12,7 @@ interface UserPayload {
  */
 export async function authenticateRequest(
   request: FastifyRequest,
-  reply: FastifyReply,
+  reply: FastifyReply
 ): Promise<void> {
   try {
     // Try to get token from cookie first (more secure)
@@ -22,10 +22,10 @@ export async function authenticateRequest(
     if (!token) {
       const authHeader = request.headers.authorization;
 
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return reply.code(401).send({
           success: false,
-          error: "Authentication required",
+          error: 'Authentication required',
         });
       }
 
@@ -33,10 +33,10 @@ export async function authenticateRequest(
     }
 
     if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET not configured");
+      console.error('JWT_SECRET not configured');
       return reply.code(500).send({
         success: false,
-        error: "Server configuration error",
+        error: 'Server configuration error',
       });
     }
 
@@ -46,20 +46,20 @@ export async function authenticateRequest(
     if (error instanceof jwt.TokenExpiredError) {
       return reply.code(401).send({
         success: false,
-        error: "Token expired",
+        error: 'Token expired',
       });
     }
 
     if (error instanceof jwt.JsonWebTokenError) {
       return reply.code(401).send({
         success: false,
-        error: "Invalid token",
+        error: 'Invalid token',
       });
     }
 
     return reply.code(500).send({
       success: false,
-      error: "Authentication failed",
+      error: 'Authentication failed',
     });
   }
 }
@@ -72,14 +72,14 @@ export async function optionalAuth(request: FastifyRequest): Promise<void> {
   try {
     const authHeader = request.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return;
     }
 
     const token = authHeader.slice(7);
 
     if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET not configured");
+      console.error('JWT_SECRET not configured');
       return;
     }
 
@@ -87,6 +87,6 @@ export async function optionalAuth(request: FastifyRequest): Promise<void> {
     request.user = decoded;
   } catch (error) {
     // Silently fail for optional auth
-    console.debug("Optional auth failed:", error);
+    console.debug('Optional auth failed:', error);
   }
 }

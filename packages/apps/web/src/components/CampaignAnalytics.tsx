@@ -1,17 +1,11 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { apiClient } from "../lib/api";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { apiClient } from '../lib/api';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import {
   BarChart,
   TrendingUp,
@@ -24,36 +18,33 @@ import {
   Lightbulb,
   AlertCircle,
   Loader2,
-} from "lucide-react";
+} from 'lucide-react';
 
 interface CampaignAnalyticsProps {
   campaignId: string;
   campaignName: string;
 }
 
-export function CampaignAnalytics({
-  campaignId,
-  campaignName,
-}: CampaignAnalyticsProps) {
-  const [selectedTab, setSelectedTab] = useState("overview");
+export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalyticsProps) {
+  const [selectedTab, setSelectedTab] = useState('overview');
 
   // Fetch campaign metrics
   const metricsQuery = useQuery({
-    queryKey: ["campaign-metrics", campaignId],
+    queryKey: ['campaign-metrics', campaignId],
     queryFn: () => apiClient.getCampaignMetrics(campaignId),
     enabled: !!campaignId,
   });
 
   // Fetch optimization recommendations
   const recommendationsQuery = useQuery({
-    queryKey: ["campaign-recommendations", campaignId],
+    queryKey: ['campaign-recommendations', campaignId],
     queryFn: () => apiClient.getCampaignRecommendations(campaignId),
     enabled: !!campaignId,
   });
 
   // Fetch ROI data
   const roiQuery = useQuery({
-    queryKey: ["campaign-roi", campaignId],
+    queryKey: ['campaign-roi', campaignId],
     queryFn: () => apiClient.getCampaignROI(campaignId),
     enabled: !!campaignId,
   });
@@ -62,7 +53,7 @@ export function CampaignAnalytics({
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          <Loader2 className="mr-2 h-6 w-6 animate-spin" />
           Loading analytics...
         </CardContent>
       </Card>
@@ -74,7 +65,7 @@ export function CampaignAnalytics({
       <Card>
         <CardContent className="py-8">
           <div className="flex items-center justify-center text-red-600">
-            <AlertCircle className="w-5 h-5 mr-2" />
+            <AlertCircle className="mr-2 h-5 w-5" />
             Failed to load analytics data
           </div>
         </CardContent>
@@ -90,9 +81,7 @@ export function CampaignAnalytics({
     return (
       <Card>
         <CardContent className="py-8">
-          <div className="text-center text-gray-600">
-            No analytics data available yet
-          </div>
+          <div className="text-center text-gray-600">No analytics data available yet</div>
         </CardContent>
       </Card>
     );
@@ -105,29 +94,25 @@ export function CampaignAnalytics({
   };
 
   const getPerformanceColor = (rate: number) => {
-    if (rate >= 3) return "text-green-600";
-    if (rate >= 1.5) return "text-yellow-600";
-    return "text-red-600";
+    if (rate >= 3) return 'text-green-600';
+    if (rate >= 1.5) return 'text-yellow-600';
+    return 'text-red-600';
   };
 
   const getPerformanceIcon = (rate: number) => {
-    return rate >= 2 ? (
-      <TrendingUp className="w-4 h-4" />
-    ) : (
-      <TrendingDown className="w-4 h-4" />
-    );
+    return rate >= 2 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />;
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "high":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "low":
-        return "bg-green-100 text-green-800 border-green-200";
+      case 'high':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low':
+        return 'bg-green-100 text-green-800 border-green-200';
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -136,12 +121,10 @@ export function CampaignAnalytics({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <BarChart className="w-5 h-5" />
+            <BarChart className="h-5 w-5" />
             {campaignName} Analytics
           </CardTitle>
-          <CardDescription>
-            Performance metrics and insights for your campaign
-          </CardDescription>
+          <CardDescription>Performance metrics and insights for your campaign</CardDescription>
         </CardHeader>
       </Card>
 
@@ -155,14 +138,14 @@ export function CampaignAnalytics({
 
         <TabsContent value="overview" className="space-y-6">
           {/* Key Metrics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <Card>
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <BarChart className="w-5 h-5 text-blue-600" />
+                <div className="rounded-lg bg-blue-100 p-2">
+                  <BarChart className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Posts</p>
+                  <p className="text-muted-foreground text-sm">Total Posts</p>
                   <p className="text-2xl font-bold">{metrics.totalPosts}</p>
                 </div>
               </CardContent>
@@ -170,94 +153,74 @@ export function CampaignAnalytics({
 
             <Card>
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Eye className="w-5 h-5 text-purple-600" />
+                <div className="rounded-lg bg-purple-100 p-2">
+                  <Eye className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Impressions</p>
-                  <p className="text-2xl font-bold">
-                    {formatNumber(metrics.totalImpressions)}
-                  </p>
+                  <p className="text-muted-foreground text-sm">Impressions</p>
+                  <p className="text-2xl font-bold">{formatNumber(metrics.totalImpressions)}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Heart className="w-5 h-5 text-green-600" />
+                <div className="rounded-lg bg-green-100 p-2">
+                  <Heart className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Engagement</p>
-                  <p className="text-2xl font-bold">
-                    {formatNumber(metrics.totalEngagement)}
-                  </p>
+                  <p className="text-muted-foreground text-sm">Engagement</p>
+                  <p className="text-2xl font-bold">{formatNumber(metrics.totalEngagement)}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <Users className="w-5 h-5 text-orange-600" />
+                <div className="rounded-lg bg-orange-100 p-2">
+                  <Users className="h-5 w-5 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Reach</p>
-                  <p className="text-2xl font-bold">
-                    {formatNumber(metrics.reach)}
-                  </p>
+                  <p className="text-muted-foreground text-sm">Reach</p>
+                  <p className="text-2xl font-bold">{formatNumber(metrics.reach)}</p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           {/* Campaign Stats */}
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Campaign Progress</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Posts Scheduled:
-                  </span>
+                  <span className="text-muted-foreground text-sm">Posts Scheduled:</span>
                   <span className="font-medium">{metrics.postsScheduled}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Posts Posted:
-                  </span>
+                  <span className="text-muted-foreground text-sm">Posts Posted:</span>
                   <span className="font-medium">{metrics.postsPosted}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Posts Approved:
-                  </span>
+                  <span className="text-muted-foreground text-sm">Posts Approved:</span>
                   <span className="font-medium">{metrics.postsApproved}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Campaign Duration:
-                  </span>
-                  <span className="font-medium">
-                    {metrics.campaignDuration} days
-                  </span>
+                  <span className="text-muted-foreground text-sm">Campaign Duration:</span>
+                  <span className="font-medium">{metrics.campaignDuration} days</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Posting Frequency:
-                  </span>
-                  <span className="font-medium">
-                    {metrics.postingFrequency.toFixed(1)}/day
-                  </span>
+                  <span className="text-muted-foreground text-sm">Posting Frequency:</span>
+                  <span className="font-medium">{metrics.postingFrequency.toFixed(1)}/day</span>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg">
                   <div
                     className={`flex items-center gap-1 ${getPerformanceColor(metrics.averageEngagementRate)}`}
                   >
@@ -273,16 +236,14 @@ export function CampaignAnalytics({
                   >
                     {metrics.averageEngagementRate.toFixed(2)}%
                   </div>
-                  <p className="text-sm text-muted-foreground mt-2">
+                  <p className="text-muted-foreground mt-2 text-sm">
                     {metrics.averageEngagementRate >= 3
-                      ? "Excellent"
+                      ? 'Excellent'
                       : metrics.averageEngagementRate >= 1.5
-                        ? "Good"
-                        : "Needs Improvement"}
+                        ? 'Good'
+                        : 'Needs Improvement'}
                   </p>
-                  <div className="mt-4 text-xs text-muted-foreground">
-                    Industry average: 1.5-3%
-                  </div>
+                  <div className="text-muted-foreground mt-4 text-xs">Industry average: 1.5-3%</div>
                 </div>
               </CardContent>
             </Card>
@@ -294,36 +255,29 @@ export function CampaignAnalytics({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Hash className="w-5 h-5" />
+                <Hash className="h-5 w-5" />
                 Top Performing Hashtags
               </CardTitle>
-              <CardDescription>
-                Best hashtags by average engagement
-              </CardDescription>
+              <CardDescription>Best hashtags by average engagement</CardDescription>
             </CardHeader>
             <CardContent>
               {metrics.topHashtags.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">
+                <p className="text-muted-foreground py-4 text-center">
                   No hashtag data available yet
                 </p>
               ) : (
                 <div className="space-y-3">
                   {metrics.topHashtags.slice(0, 10).map((hashtag, index) => (
-                    <div
-                      key={hashtag.tag}
-                      className="flex items-center justify-between"
-                    >
+                    <div key={hashtag.tag} className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Badge variant="outline">#{index + 1}</Badge>
                         <span className="font-medium">#{hashtag.tag}</span>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium">
-                          {formatNumber(hashtag.avgEngagement)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="font-medium">{formatNumber(hashtag.avgEngagement)}</div>
+                        <div className="text-muted-foreground text-xs">
                           Used {hashtag.count} time
-                          {hashtag.count !== 1 ? "s" : ""}
+                          {hashtag.count !== 1 ? 's' : ''}
                         </div>
                       </div>
                     </div>
@@ -341,19 +295,14 @@ export function CampaignAnalytics({
             </CardHeader>
             <CardContent>
               {metrics.performanceByDate.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">
+                <p className="text-muted-foreground py-4 text-center">
                   No performance timeline data available yet
                 </p>
               ) : (
                 <div className="space-y-3">
                   {metrics.performanceByDate.slice(-7).map((day) => (
-                    <div
-                      key={day.date}
-                      className="flex items-center justify-between"
-                    >
-                      <span className="text-sm">
-                        {format(new Date(day.date), "MMM d, yyyy")}
-                      </span>
+                    <div key={day.date} className="flex items-center justify-between">
+                      <span className="text-sm">{format(new Date(day.date), 'MMM d, yyyy')}</span>
                       <div className="flex gap-4 text-sm">
                         <span>{formatNumber(day.impressions)} impressions</span>
                         <span>{formatNumber(day.engagement)} engagement</span>
@@ -370,7 +319,7 @@ export function CampaignAnalytics({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Lightbulb className="w-5 h-5" />
+                <Lightbulb className="h-5 w-5" />
                 Optimization Recommendations
               </CardTitle>
               <CardDescription>
@@ -380,18 +329,15 @@ export function CampaignAnalytics({
             <CardContent>
               {recommendationsQuery.isLoading ? (
                 <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Loading recommendations...
                 </div>
               ) : recommendations.length === 0 ? (
-                <div className="text-center py-8">
-                  <Lightbulb className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="font-medium text-gray-900 mb-2">
-                    No recommendations yet
-                  </h3>
+                <div className="py-8 text-center">
+                  <Lightbulb className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                  <h3 className="mb-2 font-medium text-gray-900">No recommendations yet</h3>
                   <p className="text-gray-600">
-                    We'll provide optimization insights once your campaign has
-                    more data.
+                    We'll provide optimization insights once your campaign has more data.
                   </p>
                 </div>
               ) : (
@@ -399,7 +345,7 @@ export function CampaignAnalytics({
                   {recommendations.map((rec, index) => (
                     <Card key={index} className="border-l-4 border-l-blue-500">
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between mb-2">
+                        <div className="mb-2 flex items-start justify-between">
                           <div className="flex items-center gap-2">
                             <Badge className={getPriorityColor(rec.priority)}>
                               {rec.priority} priority
@@ -407,10 +353,8 @@ export function CampaignAnalytics({
                             <Badge variant="outline">{rec.type}</Badge>
                           </div>
                         </div>
-                        <p className="text-sm font-medium mb-2">
-                          {rec.message}
-                        </p>
-                        <p className="text-xs text-muted-foreground mb-3">
+                        <p className="mb-2 text-sm font-medium">{rec.message}</p>
+                        <p className="text-muted-foreground mb-3 text-xs">
                           Expected impact: {rec.impact}
                         </p>
                         {rec.actionable && (
@@ -431,44 +375,34 @@ export function CampaignAnalytics({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5" />
+                <DollarSign className="h-5 w-5" />
                 Return on Investment
               </CardTitle>
-              <CardDescription>
-                Estimated value generated by your campaign
-              </CardDescription>
+              <CardDescription>Estimated value generated by your campaign</CardDescription>
             </CardHeader>
             <CardContent>
               {roiQuery.isLoading ? (
                 <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Calculating ROI...
                 </div>
               ) : !roi ? (
-                <p className="text-center text-muted-foreground py-4">
-                  ROI data not available
-                </p>
+                <p className="text-muted-foreground py-4 text-center">ROI data not available</p>
               ) : (
                 <div className="space-y-6">
                   <div className="text-center">
                     <div className="text-4xl font-bold text-green-600">
                       ${roi.estimatedValue.toFixed(2)}
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Estimated campaign value
-                    </p>
+                    <p className="text-muted-foreground text-sm">Estimated campaign value</p>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid gap-4 md:grid-cols-2">
                     <Card>
                       <CardContent className="p-4">
                         <div className="text-center">
-                          <p className="text-sm text-muted-foreground">
-                            Engagement Value
-                          </p>
-                          <p className="text-2xl font-bold">
-                            ${roi.engagementValue.toFixed(2)}
-                          </p>
+                          <p className="text-muted-foreground text-sm">Engagement Value</p>
+                          <p className="text-2xl font-bold">${roi.engagementValue.toFixed(2)}</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -476,12 +410,8 @@ export function CampaignAnalytics({
                     <Card>
                       <CardContent className="p-4">
                         <div className="text-center">
-                          <p className="text-sm text-muted-foreground">
-                            Reach Value
-                          </p>
-                          <p className="text-2xl font-bold">
-                            ${roi.reachValue.toFixed(2)}
-                          </p>
+                          <p className="text-muted-foreground text-sm">Reach Value</p>
+                          <p className="text-2xl font-bold">${roi.reachValue.toFixed(2)}</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -503,7 +433,7 @@ export function CampaignAnalytics({
                     </div>
                   </div>
 
-                  <div className="text-xs text-muted-foreground bg-gray-50 p-3 rounded">
+                  <div className="text-muted-foreground rounded bg-gray-50 p-3 text-xs">
                     <strong>Methodology:</strong> {roi.methodology}
                   </div>
                 </div>

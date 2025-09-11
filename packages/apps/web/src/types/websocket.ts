@@ -1,16 +1,7 @@
 // WebSocket-related type definitions
-export type ContentStatus =
-  | "draft"
-  | "scheduled"
-  | "published"
-  | "failed"
-  | "skipped";
+export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
 
-export type ConnectionStatus =
-  | "connecting"
-  | "connected"
-  | "disconnected"
-  | "error";
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 // ReadyState enum following react-use-websocket pattern
 export enum ReadyState {
@@ -23,15 +14,15 @@ export enum ReadyState {
 
 // Connection status mapping for better UX
 export const CONNECTION_STATUS_MAP = {
-  [ReadyState.CONNECTING]: "connecting",
-  [ReadyState.OPEN]: "connected",
-  [ReadyState.CLOSING]: "disconnected",
-  [ReadyState.CLOSED]: "disconnected",
-  [ReadyState.UNINSTANTIATED]: "disconnected",
+  [ReadyState.CONNECTING]: 'connecting',
+  [ReadyState.OPEN]: 'connected',
+  [ReadyState.CLOSING]: 'disconnected',
+  [ReadyState.CLOSED]: 'disconnected',
+  [ReadyState.UNINSTANTIATED]: 'disconnected',
 } as const;
 
 export interface StatusUpdateEvent {
-  type: "status_update" | "batch_status_update";
+  type: 'status_update' | 'batch_status_update';
   data: StatusUpdateData | StatusUpdateData[];
 }
 
@@ -45,15 +36,15 @@ export interface StatusUpdateData {
 
 export interface WebSocketMessage {
   type:
-    | "auth"
-    | "subscribe"
-    | "ping"
-    | "pong"
-    | "auth_success"
-    | "auth_error"
-    | "subscribed"
-    | "status_update"
-    | "batch_status_update";
+    | 'auth'
+    | 'subscribe'
+    | 'ping'
+    | 'pong'
+    | 'auth_success'
+    | 'auth_error'
+    | 'subscribed'
+    | 'status_update'
+    | 'batch_status_update';
   token?: string;
   room?: string;
   error?: string;
@@ -79,7 +70,7 @@ export interface UseSchedulingWebSocketOptions {
 
 export interface QueuedAction {
   id: string;
-  type: "schedule" | "reschedule" | "cancel";
+  type: 'schedule' | 'reschedule' | 'cancel';
   payload: Record<string, unknown>;
   timestamp: number;
   retries: number;
@@ -100,13 +91,9 @@ export class WebSocketError extends Error {
   public readonly timestamp: number;
   public readonly context?: Record<string, unknown>;
 
-  constructor(
-    message: string,
-    code: string,
-    context?: Record<string, unknown>,
-  ) {
+  constructor(message: string, code: string, context?: Record<string, unknown>) {
     super(message);
-    this.name = "WebSocketError";
+    this.name = 'WebSocketError';
     this.code = code;
     this.timestamp = Date.now();
     this.context = context;
@@ -120,31 +107,31 @@ export class WebSocketError extends Error {
 
 export class ConnectionError extends WebSocketError {
   constructor(message: string, context?: Record<string, unknown>) {
-    super(message, "CONNECTION_ERROR", context);
+    super(message, 'CONNECTION_ERROR', context);
   }
 }
 
 export class AuthenticationError extends WebSocketError {
   constructor(message: string, context?: Record<string, unknown>) {
-    super(message, "AUTHENTICATION_ERROR", context);
+    super(message, 'AUTHENTICATION_ERROR', context);
   }
 }
 
 export class TimeoutError extends WebSocketError {
   constructor(message: string, timeout: number) {
-    super(message, "TIMEOUT_ERROR", { timeout });
+    super(message, 'TIMEOUT_ERROR', { timeout });
   }
 }
 
 export class NetworkError extends WebSocketError {
   constructor(message: string, context?: Record<string, unknown>) {
-    super(message, "NETWORK_ERROR", context);
+    super(message, 'NETWORK_ERROR', context);
   }
 }
 
 // Utility function to check if error is retryable
 export function isRetryableError(error: WebSocketError): boolean {
-  const retryableCodes = ["CONNECTION_ERROR", "TIMEOUT_ERROR", "NETWORK_ERROR"];
+  const retryableCodes = ['CONNECTION_ERROR', 'TIMEOUT_ERROR', 'NETWORK_ERROR'];
   return retryableCodes.includes(error.code);
 }
 
@@ -156,12 +143,12 @@ export function isOperationalError(error: Error): boolean {
 // Utility function to get friendly connection status message
 export function getConnectionStatusMessage(status: ConnectionStatus): string {
   const messages = {
-    connecting: "Connecting to server...",
-    connected: "Connected",
-    disconnected: "Disconnected",
-    error: "Connection error",
+    connecting: 'Connecting to server...',
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+    error: 'Connection error',
   };
-  return messages[status] || "Unknown status";
+  return messages[status] || 'Unknown status';
 }
 
 // Utility function to check if WebSocket should reconnect based on close event

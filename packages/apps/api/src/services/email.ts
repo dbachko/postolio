@@ -1,12 +1,8 @@
-import nodemailer from "nodemailer";
-import type { Transporter } from "nodemailer";
-import type Mail from "nodemailer/lib/mailer";
-import {
-  SESClient,
-  SendEmailCommand,
-  SESClientConfig,
-} from "@aws-sdk/client-ses";
-import CircuitBreaker from "opossum";
+import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
+import type Mail from 'nodemailer/lib/mailer';
+import { SESClient, SendEmailCommand, SESClientConfig } from '@aws-sdk/client-ses';
+import CircuitBreaker from 'opossum';
 
 /**
  * Centralized email service with AWS SES for production
@@ -16,7 +12,7 @@ export class EmailService {
   private static transporter: Transporter | null = null;
   private static sesClient: SESClient | null = null;
   private static useAWSSES: boolean =
-    process.env.USE_AWS_SES === "true" || process.env.NODE_ENV === "production";
+    process.env.USE_AWS_SES === 'true' || process.env.NODE_ENV === 'production';
   private static sesCircuitBreaker: CircuitBreaker | null = null;
   private static smtpCircuitBreaker: CircuitBreaker | null = null;
 
@@ -34,28 +30,26 @@ export class EmailService {
         timeout: 30000, // 30 seconds
         errorThresholdPercentage: 50,
         resetTimeout: 60000, // 1 minute
-        name: "AWS-SES",
+        name: 'AWS-SES',
         rollingCountTimeout: 10000,
         rollingCountBuckets: 10,
       });
 
       // Event listeners for monitoring
-      this.sesCircuitBreaker.on("open", () => {
-        console.warn(
-          "⚠️ AWS SES circuit breaker opened - falling back to SMTP",
-        );
+      this.sesCircuitBreaker.on('open', () => {
+        console.warn('⚠️ AWS SES circuit breaker opened - falling back to SMTP');
       });
 
-      this.sesCircuitBreaker.on("halfOpen", () => {
-        console.info("🔄 AWS SES circuit breaker half-open - testing service");
+      this.sesCircuitBreaker.on('halfOpen', () => {
+        console.info('🔄 AWS SES circuit breaker half-open - testing service');
       });
 
-      this.sesCircuitBreaker.on("close", () => {
-        console.info("✅ AWS SES circuit breaker closed - service restored");
+      this.sesCircuitBreaker.on('close', () => {
+        console.info('✅ AWS SES circuit breaker closed - service restored');
       });
 
-      this.sesCircuitBreaker.on("fallback", () => {
-        console.warn("🔄 AWS SES fallback triggered");
+      this.sesCircuitBreaker.on('fallback', () => {
+        console.warn('🔄 AWS SES fallback triggered');
       });
     }
     return this.sesCircuitBreaker;
@@ -75,20 +69,18 @@ export class EmailService {
         timeout: 30000, // 30 seconds
         errorThresholdPercentage: 50,
         resetTimeout: 60000, // 1 minute
-        name: "SMTP",
+        name: 'SMTP',
         rollingCountTimeout: 10000,
         rollingCountBuckets: 10,
       });
 
       // Event listeners for monitoring
-      this.smtpCircuitBreaker.on("open", () => {
-        console.error(
-          "❌ SMTP circuit breaker opened - email service unavailable",
-        );
+      this.smtpCircuitBreaker.on('open', () => {
+        console.error('❌ SMTP circuit breaker opened - email service unavailable');
       });
 
-      this.smtpCircuitBreaker.on("close", () => {
-        console.info("✅ SMTP circuit breaker closed - email service restored");
+      this.smtpCircuitBreaker.on('close', () => {
+        console.info('✅ SMTP circuit breaker closed - email service restored');
       });
     }
     return this.smtpCircuitBreaker;
@@ -100,7 +92,7 @@ export class EmailService {
   private static getSESClient(): SESClient {
     if (!this.sesClient) {
       const config: SESClientConfig = {
-        region: process.env.AWS_REGION || "us-east-1",
+        region: process.env.AWS_REGION || 'us-east-1',
       };
 
       // Only add credentials if they exist
@@ -122,9 +114,9 @@ export class EmailService {
   private static getTransporter(): Transporter {
     if (!this.transporter) {
       this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || "smtp.gmail.com",
-        port: parseInt(process.env.SMTP_PORT || "587"),
-        secure: process.env.SMTP_SECURE === "true",
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: process.env.SMTP_SECURE === 'true',
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
@@ -140,16 +132,10 @@ export class EmailService {
   static isConfigured(): boolean {
     if (this.useAWSSES) {
       // SES just needs AWS region (credentials come from IAM role in production)
-      return !!(
-        process.env.AWS_REGION || process.env.NODE_ENV === "production"
-      );
+      return !!(process.env.AWS_REGION || process.env.NODE_ENV === 'production');
     }
     // SMTP needs explicit configuration
-    return !!(
-      process.env.SMTP_HOST &&
-      process.env.SMTP_USER &&
-      process.env.SMTP_PASS
-    );
+    return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
   }
 
   /**
@@ -158,19 +144,15 @@ export class EmailService {
   private static async sendViaSES(options: Mail.Options): Promise<void> {
     // Convert nodemailer options to SES format
     const from =
-      typeof options.from === "string"
+      typeof options.from === 'string'
         ? options.from
-        : options.from?.address ||
-          process.env.SES_FROM_EMAIL ||
-          "noreply@postolio.example";
+        : options.from?.address || process.env.SES_FROM_EMAIL || 'noreply@postolio.example';
 
     const to = Array.isArray(options.to)
-      ? options.to.map((addr) =>
-          typeof addr === "string" ? addr : addr.address,
-        )
-      : [typeof options.to === "string" ? options.to : options.to?.address];
+      ? options.to.map((addr) => (typeof addr === 'string' ? addr : addr.address))
+      : [typeof options.to === 'string' ? options.to : options.to?.address];
 
-    console.log(`Sending email via SES from ${from} to ${to.join(", ")}`);
+    console.log(`Sending email via SES from ${from} to ${to.join(', ')}`);
 
     const command = new SendEmailCommand({
       Source: from,
@@ -179,20 +161,20 @@ export class EmailService {
       },
       Message: {
         Subject: {
-          Data: options.subject || "Postolio Notification",
-          Charset: "UTF-8",
+          Data: options.subject || 'Postolio Notification',
+          Charset: 'UTF-8',
         },
         Body: {
           Html: options.html
             ? {
-                Data: typeof options.html === "string" ? options.html : "",
-                Charset: "UTF-8",
+                Data: typeof options.html === 'string' ? options.html : '',
+                Charset: 'UTF-8',
               }
             : undefined,
           Text: options.text
             ? {
-                Data: typeof options.text === "string" ? options.text : "",
-                Charset: "UTF-8",
+                Data: typeof options.text === 'string' ? options.text : '',
+                Charset: 'UTF-8',
               }
             : undefined,
         },
@@ -204,18 +186,18 @@ export class EmailService {
 
     // Set up fallback to SMTP if SES fails
     sesCircuitBreaker.fallback(async () => {
-      console.warn("SES circuit breaker triggered, falling back to SMTP");
+      console.warn('SES circuit breaker triggered, falling back to SMTP');
       if (this.isConfigured()) {
         return await this.sendViaSMTP(options);
       }
-      throw new Error("Both SES and SMTP are unavailable");
+      throw new Error('Both SES and SMTP are unavailable');
     });
 
     try {
       const result = await sesCircuitBreaker.fire(command);
-      console.log(`Email sent successfully via SES: ${(result as any)?.$metadata?.requestId}`);
+      console.log('Email sent successfully via SES', result);
     } catch (error) {
-      console.error("Failed to send email via SES:", error);
+      console.error('Failed to send email via SES:', error);
       throw error;
     }
   }
@@ -231,19 +213,17 @@ export class EmailService {
   /**
    * Send an email with the specified options
    */
-  static async sendEmail(
-    options: Mail.Options,
-  ): Promise<{ success: boolean; error?: string }> {
+  static async sendEmail(options: Mail.Options): Promise<{ success: boolean; error?: string }> {
     try {
       if (!this.isConfigured()) {
-        console.warn("Email service not configured");
-        return { success: false, error: "Email service not configured" };
+        console.warn('Email service not configured');
+        return { success: false, error: 'Email service not configured' };
       }
 
       // Set default from address if not provided
       if (!options.from) {
         options.from = this.useAWSSES
-          ? process.env.SES_FROM_EMAIL || "noreply@postolio.example"
+          ? process.env.SES_FROM_EMAIL || 'noreply@postolio.example'
           : process.env.SMTP_FROM || '"Postolio" <noreply@postolio.example>';
       }
 
@@ -253,9 +233,9 @@ export class EmailService {
       }
       // Use type assertion for custom headers
       const headers = options.headers as Record<string, string>;
-      headers["List-Unsubscribe"] = "<mailto:unsubscribe@postolio.example>";
-      headers["X-Priority"] = "3"; // Normal priority
-      headers["Importance"] = "Normal";
+      headers['List-Unsubscribe'] = '<mailto:unsubscribe@postolio.example>';
+      headers['X-Priority'] = '3'; // Normal priority
+      headers['Importance'] = 'Normal';
 
       // Use AWS SES in production, SMTP in development
       console.log(`Email service configured to use: ${this.useAWSSES ? 'AWS SES' : 'SMTP'}`);
@@ -267,20 +247,19 @@ export class EmailService {
 
       return { success: true };
     } catch (error) {
-      console.error("Email send error:", error);
+      console.error('Email send error:', error);
 
       // Provide more specific error messages for SES
-      if (error instanceof Error && error.name === "MessageRejected") {
+      if (error instanceof Error && error.name === 'MessageRejected') {
         return {
           success: false,
-          error:
-            "Email address not verified in AWS SES. Please verify sender email.",
+          error: 'Email address not verified in AWS SES. Please verify sender email.',
         };
       }
 
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to send email",
+        error: error instanceof Error ? error.message : 'Failed to send email',
       };
     }
   }
@@ -346,7 +325,7 @@ export class EmailService {
             <h1>${params.title}</h1>
           </div>
           
-          ${params.greeting ? `<p>${params.greeting}</p>` : ""}
+          ${params.greeting ? `<p>${params.greeting}</p>` : ''}
           
           <div>${params.content}</div>
           
@@ -360,7 +339,7 @@ export class EmailService {
             <p>Or copy and paste this link into your browser:</p>
             <div class="code-block">${params.buttonUrl}</div>
           `
-              : ""
+              : ''
           }
           
           ${
@@ -370,7 +349,7 @@ export class EmailService {
               ${params.warning}
             </div>
           `
-              : ""
+              : ''
           }
           
           <div class="footer">
@@ -390,23 +369,23 @@ export class EmailService {
     const text = `
 ${params.title}
 
-${params.greeting || ""}
+${params.greeting || ''}
 
-${params.content.replace(/<[^>]*>/g, "")}
+${params.content.replace(/<[^>]*>/g, '')}
 
 ${
   params.buttonText && params.buttonUrl
     ? `
 ${params.buttonText}: ${params.buttonUrl}
 `
-    : ""
+    : ''
 }
 
-${params.warning ? params.warning.replace(/<[^>]*>/g, "") : ""}
+${params.warning ? params.warning.replace(/<[^>]*>/g, '') : ''}
 
 ${
   params.footer
-    ? params.footer.replace(/<[^>]*>/g, "")
+    ? params.footer.replace(/<[^>]*>/g, '')
     : `
 If you didn't request this email, you can safely ignore it.
 
@@ -424,35 +403,29 @@ If you didn't request this email, you can safely ignore it.
   static async sendMagicLink(
     email: string,
     token: string,
-    isSignUp = false,
+    isSignUp = false
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${token}`;
 
     const { html, text } = this.generateEmailTemplate({
-      title: isSignUp
-        ? "Complete Your Registration"
-        : "Your Secure Sign-In Link",
-      greeting: "Hello,",
+      title: isSignUp ? 'Complete Your Registration' : 'Your Secure Sign-In Link',
+      greeting: 'Hello,',
       content: isSignUp
-        ? "Thank you for signing up for Postolio. Please click the button below to verify your email and complete your registration:"
-        : "We received a request to sign in to your Postolio account. Click the button below to continue:",
-      buttonText: isSignUp
-        ? "Verify Email & Complete Registration"
-        : "Sign In to Postolio",
+        ? 'Thank you for signing up for Postolio. Please click the button below to verify your email and complete your registration:'
+        : 'We received a request to sign in to your Postolio account. Click the button below to continue:',
+      buttonText: isSignUp ? 'Verify Email & Complete Registration' : 'Sign In to Postolio',
       buttonUrl: magicLinkUrl,
       warning:
-        "<strong>Security Notice:</strong> This link will expire in 15 minutes and can only be used once. If you did not request this link, please ignore this email.",
+        '<strong>Security Notice:</strong> This link will expire in 15 minutes and can only be used once. If you did not request this link, please ignore this email.',
     });
 
     return this.sendEmail({
       to: email,
-      subject: isSignUp
-        ? "Verify your email for Postolio"
-        : "Your Postolio sign-in link",
+      subject: isSignUp ? 'Verify your email for Postolio' : 'Your Postolio sign-in link',
       html,
       text,
-      replyTo: "support@postolio.example", // Add reply-to address
+      replyTo: 'support@postolio.example', // Add reply-to address
     });
   }
 
@@ -461,25 +434,24 @@ If you didn't request this email, you can safely ignore it.
    */
   static async sendVerificationEmail(
     email: string,
-    token: string,
+    token: string
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const verificationUrl = `${baseUrl}/verify-email?token=${token}`;
 
     const { html, text } = this.generateEmailTemplate({
-      title: "Verify Your Email",
-      greeting: "Hi there,",
-      content:
-        "Please verify your email address to unlock all features of your Postolio account.",
-      buttonText: "Verify Email Address",
+      title: 'Verify Your Email',
+      greeting: 'Hi there,',
+      content: 'Please verify your email address to unlock all features of your Postolio account.',
+      buttonText: 'Verify Email Address',
       buttonUrl: verificationUrl,
       warning:
-        "<strong>This verification link expires in 24 hours</strong><br>You can request a new verification email from your account settings.",
+        '<strong>This verification link expires in 24 hours</strong><br>You can request a new verification email from your account settings.',
     });
 
     return this.sendEmail({
       to: email,
-      subject: "Verify your Postolio email address",
+      subject: 'Verify your Postolio email address',
       html,
       text,
     });
@@ -490,17 +462,17 @@ If you didn't request this email, you can safely ignore it.
    */
   static async sendPasswordResetEmail(
     email: string,
-    token: string,
+    token: string
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const resetUrl = `${baseUrl}/reset-password?token=${token}`;
 
     const { html, text } = this.generateEmailTemplate({
-      title: "Reset Your Password",
-      greeting: "Hi there,",
+      title: 'Reset Your Password',
+      greeting: 'Hi there,',
       content:
-        "We received a request to reset your password. Click the button below to set a new password:",
-      buttonText: "Reset Password",
+        'We received a request to reset your password. Click the button below to set a new password:',
+      buttonText: 'Reset Password',
       buttonUrl: resetUrl,
       warning:
         "<strong>This link expires in 1 hour</strong><br>If you didn't request a password reset, please ignore this email and your password will remain unchanged.",
@@ -508,7 +480,7 @@ If you didn't request this email, you can safely ignore it.
 
     return this.sendEmail({
       to: email,
-      subject: "Reset your Postolio password",
+      subject: 'Reset your Postolio password',
       html,
       text,
     });
@@ -519,17 +491,17 @@ If you didn't request this email, you can safely ignore it.
    */
   static async sendTwoFactorCode(
     email: string,
-    code: string,
+    code: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const { emailQueue } = await import("./email-queue.js");
-      await emailQueue.addTwoFactorEmail(email, code, { priority: "critical" });
+      const { emailQueue } = await import('./email-queue.js');
+      await emailQueue.addTwoFactorEmail(email, code, { priority: 'critical' });
       return { success: true };
     } catch (error) {
-      console.error("Failed to queue 2FA email:", error);
+      console.error('Failed to queue 2FA email:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -539,10 +511,10 @@ If you didn't request this email, you can safely ignore it.
    */
   static async sendTwoFactorCodeImmediate(
     email: string,
-    code: string,
+    code: string
   ): Promise<{ success: boolean; error?: string }> {
     const { html, text } = this.generateEmailTemplate({
-      title: "Two-Factor Authentication Code",
+      title: 'Two-Factor Authentication Code',
       content: `
         <p>Your verification code for Postolio is:</p>
         <div style="background-color: #f3f4f6; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 6px;">
@@ -550,13 +522,12 @@ If you didn't request this email, you can safely ignore it.
         </div>
         <p>This code will expire in 5 minutes.</p>
       `,
-      warning:
-        "If you didn't request this code, please secure your account immediately.",
+      warning: "If you didn't request this code, please secure your account immediately.",
     });
 
     return this.sendEmail({
       to: email,
-      subject: "Your Postolio Verification Code",
+      subject: 'Your Postolio Verification Code',
       html,
       text,
     });
@@ -567,17 +538,17 @@ If you didn't request this email, you can safely ignore it.
    */
   static async sendWelcomeEmail(
     email: string,
-    name?: string,
+    name?: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const { emailQueue } = await import("./email-queue.js");
+      const { emailQueue } = await import('./email-queue.js');
       await emailQueue.addWelcomeEmail(email, name);
       return { success: true };
     } catch (error) {
-      console.error("Failed to queue welcome email:", error);
+      console.error('Failed to queue welcome email:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -587,13 +558,13 @@ If you didn't request this email, you can safely ignore it.
    */
   static async sendWelcomeEmailImmediate(
     email: string,
-    name?: string,
+    name?: string
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
     const { html, text } = this.generateEmailTemplate({
-      title: "Welcome to Postolio! 🎉",
-      greeting: `Hi${name ? " " + name : ""},`,
+      title: 'Welcome to Postolio! 🎉',
+      greeting: `Hi${name ? ' ' + name : ''},`,
       content: `
         <p>Welcome to Postolio - your AI-powered Instagram content management platform!</p>
         
@@ -607,13 +578,13 @@ If you didn't request this email, you can safely ignore it.
         
         <p>Ready to get started? Create your first brand and let's grow your Instagram presence together!</p>
       `,
-      buttonText: "Go to Dashboard",
+      buttonText: 'Go to Dashboard',
       buttonUrl: `${baseUrl}/dashboard`,
     });
 
     return this.sendEmail({
       to: email,
-      subject: "Welcome to Postolio! 🎉",
+      subject: 'Welcome to Postolio! 🎉',
       html,
       text,
     });
@@ -624,26 +595,26 @@ If you didn't request this email, you can safely ignore it.
    */
   static async sendDeletionConfirmation(
     email: string,
-    scheduledDeletionDate: Date,
+    scheduledDeletionDate: Date
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-    const formattedDate = scheduledDeletionDate.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const formattedDate = scheduledDeletionDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     });
 
     const { html, text } = this.generateEmailTemplate({
-      title: "Account Deletion Scheduled",
-      greeting: "Your account has been scheduled for deletion",
+      title: 'Account Deletion Scheduled',
+      greeting: 'Your account has been scheduled for deletion',
       content: `Your Postolio account has been scheduled for permanent deletion on ${formattedDate}. You have 30 days to recover your account if you change your mind. After this date, all your data will be permanently deleted and cannot be recovered.`,
-      buttonText: "Recover Account",
+      buttonText: 'Recover Account',
       buttonUrl: `${baseUrl}/account/recover`,
     });
 
     return this.sendEmail({
       to: email,
-      subject: "Postolio Account Deletion Scheduled",
+      subject: 'Postolio Account Deletion Scheduled',
       html,
       text,
     });
@@ -654,26 +625,26 @@ If you didn't request this email, you can safely ignore it.
    */
   static async sendDeletionConfirmationImmediate(
     email: string,
-    scheduledDeletionDate: Date,
+    scheduledDeletionDate: Date
   ): Promise<{ success: boolean; error?: string }> {
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-    const formattedDate = scheduledDeletionDate.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const formattedDate = scheduledDeletionDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     });
 
     const { html, text } = this.generateEmailTemplate({
-      title: "Account Deletion Scheduled",
-      greeting: "Your account has been scheduled for deletion",
+      title: 'Account Deletion Scheduled',
+      greeting: 'Your account has been scheduled for deletion',
       content: `Your Postolio account has been scheduled for permanent deletion on ${formattedDate}. You have 30 days to recover your account if you change your mind. After this date, all your data will be permanently deleted and cannot be recovered.`,
-      buttonText: "Recover Account",
+      buttonText: 'Recover Account',
       buttonUrl: `${baseUrl}/account/recover`,
     });
 
     return this.sendEmail({
       to: email,
-      subject: "Postolio Account Deletion Scheduled",
+      subject: 'Postolio Account Deletion Scheduled',
       html,
       text,
     });
@@ -694,13 +665,13 @@ If you didn't request this email, you can safely ignore it.
         const { $metadata } = await ses
           .send(
             new SendEmailCommand({
-              Source: process.env.SES_FROM_EMAIL || "noreply@postolio.example",
-              Destination: { ToAddresses: ["test@example.com"] },
+              Source: process.env.SES_FROM_EMAIL || 'noreply@postolio.example',
+              Destination: { ToAddresses: ['test@example.com'] },
               Message: {
-                Subject: { Data: "Test" },
-                Body: { Text: { Data: "Test" } },
+                Subject: { Data: 'Test' },
+                Body: { Text: { Data: 'Test' } },
               },
-            }),
+            })
           )
           .catch((err) => ({
             $metadata: { httpStatusCode: err.$metadata?.httpStatusCode || 0 },
@@ -708,9 +679,7 @@ If you didn't request this email, you can safely ignore it.
 
         // If we get a 400 error, it means SES is configured but email not verified
         // If we get 200 or 400, SES is working
-        return (
-          $metadata.httpStatusCode === 200 || $metadata.httpStatusCode === 400
-        );
+        return $metadata.httpStatusCode === 200 || $metadata.httpStatusCode === 400;
       } else {
         // Verify SMTP connection
         const transporter = this.getTransporter();
@@ -718,7 +687,7 @@ If you didn't request this email, you can safely ignore it.
         return true;
       }
     } catch (error) {
-      console.error("Email service verification failed:", error);
+      console.error('Email service verification failed:', error);
       return false;
     }
   }

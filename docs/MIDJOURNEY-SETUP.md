@@ -63,22 +63,18 @@ The system automatically uses Midjourney for content generation:
 
 ```typescript
 // This will try Midjourney first, fallback to DALL-E
-const content = await generateInstagramContent(
-  styleProfile,
-  brandName,
-  request,
-);
+const content = await generateInstagramContent(styleProfile, brandName, request);
 ```
 
 ### Manual Usage
 
 ```typescript
-import { generateMidjourneyImage } from "./src/services/midjourney.js";
+import { generateMidjourneyImage } from './src/services/midjourney.js';
 
 const imageUrl = await generateMidjourneyImage(
-  "A beautiful sunset over the ocean",
+  'A beautiful sunset over the ocean',
   styleProfile,
-  brandName,
+  brandName
 );
 ```
 
@@ -116,12 +112,12 @@ The system provides graceful fallbacks:
 Check service status:
 
 ```typescript
-import { midjourneyService } from "./src/services/midjourney.js";
+import { midjourneyService } from './src/services/midjourney.js';
 
 const status = midjourneyService.getStatus();
-console.log("Configured:", status.configured);
-console.log("Initialized:", status.initialized);
-console.log("Fallback Mode:", status.fallbackMode);
+console.log('Configured:', status.configured);
+console.log('Initialized:', status.initialized);
+console.log('Fallback Mode:', status.fallbackMode);
 ```
 
 ## Troubleshooting
@@ -191,7 +187,7 @@ class MidjourneyService {
   async generateBrandImage(
     prompt: string,
     styleProfile: StyleProfile,
-    brandName: string,
+    brandName: string
   ): Promise<MidjourneyImageResult>;
 
   // Generate multiple variations
@@ -199,7 +195,7 @@ class MidjourneyService {
     prompt: string,
     styleProfile: StyleProfile,
     brandName: string,
-    count: number,
+    count: number
   ): Promise<MidjourneyImageResult[]>;
 
   // Get service status
@@ -221,7 +217,7 @@ class MidjourneyService {
 async function generateMidjourneyImage(
   prompt: string,
   styleProfile: StyleProfile,
-  brandName: string,
+  brandName: string
 ): Promise<string>;
 
 // Multiple image variations
@@ -229,6 +225,6 @@ async function generateImageVariations(
   prompt: string,
   styleProfile: StyleProfile,
   brandName: string,
-  count: number,
+  count: number
 ): Promise<string[]>;
 ```

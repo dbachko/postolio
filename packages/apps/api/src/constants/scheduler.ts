@@ -49,15 +49,13 @@ export function hoursToMs(hours: number): number {
 /**
  * Get interval in milliseconds based on posting frequency
  */
-export function getPostingIntervalMs(
-  frequency: "daily" | "every-other-day" | "weekly",
-): number {
+export function getPostingIntervalMs(frequency: 'daily' | 'every-other-day' | 'weekly'): number {
   switch (frequency) {
-    case "daily":
+    case 'daily':
       return SCHEDULER_TIME_INTERVALS.DAILY_INTERVAL_MS;
-    case "every-other-day":
+    case 'every-other-day':
       return SCHEDULER_TIME_INTERVALS.EVERY_OTHER_DAY_INTERVAL_MS;
-    case "weekly":
+    case 'weekly':
       return SCHEDULER_TIME_INTERVALS.WEEKLY_INTERVAL_MS;
     default:
       return SCHEDULER_TIME_INTERVALS.DAILY_INTERVAL_MS;
@@ -68,9 +66,7 @@ export function getPostingIntervalMs(
  * Format a date for EventBridge Scheduler at() expression
  * EventBridge expects format: yyyy-MM-dd'T'HH:mm:ss (no milliseconds, no timezone)
  */
-export function formatEventBridgeScheduleTime(
-  dateInput: string | Date,
-): string {
+export function formatEventBridgeScheduleTime(dateInput: string | Date): string {
   const date = new Date(dateInput);
   if (isNaN(date.getTime())) {
     throw new Error(`Invalid date input: ${dateInput}`);
@@ -78,7 +74,7 @@ export function formatEventBridgeScheduleTime(
 
   // Convert to ISO string and remove milliseconds and timezone
   const isoString = date.toISOString();
-  const dateTimePart = isoString.split(".")[0];
+  const dateTimePart = isoString.split('.')[0];
 
   if (!dateTimePart) {
     throw new Error(`Failed to format date: ${isoString}`);

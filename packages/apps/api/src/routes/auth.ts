@@ -1,20 +1,20 @@
-import { FastifyPluginAsync } from "fastify";
-import bcrypt from "bcrypt";
-import { verifyJWT } from "../services/jwt.js";
-import { getDatabaseClient } from "../config/database.js";
-import { enhancedRateLimiters } from "../services/enhanced-rate-limiter.js";
-import { validateAndSanitize } from "../middleware/validation.js";
+import { FastifyPluginAsync } from 'fastify';
+import bcrypt from 'bcrypt';
+import { verifyJWT } from '../services/jwt.js';
+import { getDatabaseClient } from '../config/database.js';
+import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
+import { validateAndSanitize } from '../middleware/validation.js';
 import {
   registerSchema,
   loginSchema,
   type RegisterInput,
   type LoginInput,
-} from "../schemas/auth.js";
-import { AuditLogger, AuditEventType } from "../services/audit-logger.js";
-import { RefreshTokenService } from "../services/refresh-token.js";
-import { TimezoneService } from "../services/timezone.js";
-import Redis from "ioredis";
-import { getRedisUrl } from "../utils/redis-url.js";
+} from '../schemas/auth.js';
+import { AuditLogger, AuditEventType } from '../services/audit-logger.js';
+import { RefreshTokenService } from '../services/refresh-token.js';
+import { TimezoneService } from '../services/timezone.js';
+import Redis from 'ioredis';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
@@ -22,12 +22,9 @@ const redis = new Redis(getRedisUrl());
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // User registration with rate limiting and validation
   fastify.post<{ Body: RegisterInput }>(
-    "/register",
+    '/register',
     {
-      preHandler: [
-        validateAndSanitize(registerSchema),
-        enhancedRateLimiters.register(),
-      ],
+      preHandler: [validateAndSanitize(registerSchema), enhancedRateLimiters.register()],
     },
     async (request, reply) => {
       const { email, password, name, timezone } = request.body;
@@ -38,7 +35,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (existingUser) {
-        return reply.code(409).send({ error: "User already exists" });
+        return reply.code(409).send({ error: 'User already exists' });
       }
 
       // Hash password
@@ -50,7 +47,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           email,
           password: hashedPassword,
           name: name || null,
-          timezone: timezone || "UTC", // Use detected timezone or UTC fallback
+          timezone: timezone || 'UTC', // Use detected timezone or UTC fallback
           timezoneAutoDetected: true, // Mark as auto-detected during registration
         },
         select: {
@@ -64,64 +61,50 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Generate tokens with refresh token rotation
-      const { refreshToken, accessToken } =
-        await RefreshTokenService.generateRefreshToken(
-          user.id,
-          request.ip,
-          request.headers["user-agent"],
-        );
+      const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+        user.id,
+        request.ip,
+        request.headers['user-agent']
+      );
 
       // Set access token in HTTP-only cookie
-      reply.setCookie("auth_token", accessToken, {
+      reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
         maxAge: 15 * 60, // 15 minutes for access token
       });
 
       // Set refresh token in separate HTTP-only cookie
-      reply.setCookie("refresh_token", refreshToken, {
+      reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/api/auth/refresh", // Only sent to refresh endpoint
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/api/auth/refresh', // Only sent to refresh endpoint
         maxAge: 7 * 24 * 60 * 60, // 7 days for new users
       });
 
       // Log successful registration
-      await AuditLogger.logAuth(
-        AuditEventType.USER_REGISTER,
-        user.id,
-        user.email,
-        request,
-        { name: user.name },
-      );
+      await AuditLogger.logAuth(AuditEventType.USER_REGISTER, user.id, user.email, request, {
+        name: user.name,
+      });
 
       // Send welcome and verification emails (non-blocking)
-      if (
-        process.env.SMTP_HOST &&
-        process.env.SMTP_USER &&
-        process.env.SMTP_PASS
-      ) {
+      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
         Promise.all([
-          import("../services/email.js"),
-          import("../services/email-verification.js"),
+          import('../services/email.js'),
+          import('../services/email-verification.js'),
         ]).then(([{ EmailService }, { EmailVerificationService }]) => {
           // Send welcome email
-          EmailService.sendWelcomeEmail(
-            user.email,
-            user.name || undefined,
-          ).catch((error) => {
-            console.error("Failed to send welcome email:", error);
+          EmailService.sendWelcomeEmail(user.email, user.name || undefined).catch((error) => {
+            console.error('Failed to send welcome email:', error);
           });
 
           // Send verification email
-          EmailVerificationService.sendVerificationEmail(user.id).catch(
-            (error) => {
-              console.error("Failed to send verification email:", error);
-            },
-          );
+          EmailVerificationService.sendVerificationEmail(user.id).catch((error) => {
+            console.error('Failed to send verification email:', error);
+          });
         });
       }
 
@@ -129,17 +112,14 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         token: accessToken,
         user,
       });
-    },
+    }
   );
 
   // User login with rate limiting and validation
   fastify.post<{ Body: LoginInput }>(
-    "/login",
+    '/login',
     {
-      preHandler: [
-        validateAndSanitize(loginSchema),
-        enhancedRateLimiters.login(),
-      ],
+      preHandler: [validateAndSanitize(loginSchema), enhancedRateLimiters.login()],
     },
     async (request, reply) => {
       const { email, password, rememberMe } = request.body;
@@ -158,8 +138,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Always perform password comparison to prevent timing attacks
       // Use a dummy hash if user doesn't exist
-      const dummyHash =
-        "$2b$10$dqyYw5XovLjpmkYNiRDEWuwKaRAvLaG45fnXE5b3KTccKZcRPka2m"; // Hash of 'dummy'
+      const dummyHash = '$2b$10$dqyYw5XovLjpmkYNiRDEWuwKaRAvLaG45fnXE5b3KTccKZcRPka2m'; // Hash of 'dummy'
       const passwordToCheck = user?.password || dummyHash;
       const validPassword = await bcrypt.compare(password, passwordToCheck);
 
@@ -170,7 +149,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           AuditEventType.USER_LOGIN_FAILED,
           email,
           request,
-          !user ? "User not found" : "Invalid password",
+          !user ? 'User not found' : 'Invalid password'
         );
 
         // Check for account lockout
@@ -178,11 +157,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         if (shouldLock) {
           return reply.code(423).send({
             error:
-              "Account temporarily locked due to multiple failed login attempts. Please try again later.",
+              'Account temporarily locked due to multiple failed login attempts. Please try again later.',
           });
         }
 
-        return reply.code(401).send({ error: "Invalid credentials" });
+        return reply.code(401).send({ error: 'Invalid credentials' });
       }
 
       // Auto-detect and save timezone if user doesn't have one set
@@ -193,14 +172,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (
         !userTimezone?.timezone ||
-        userTimezone.timezone === "UTC" ||
+        userTimezone.timezone === 'UTC' ||
         userTimezone.timezoneAutoDetected
       ) {
-        const detectedTimezone = await TimezoneService.detectTimezone(
-          request,
-          user.id,
-        );
-        if (detectedTimezone !== "UTC") {
+        const detectedTimezone = await TimezoneService.detectTimezone(request, user.id);
+        if (detectedTimezone !== 'UTC') {
           await prisma.user.update({
             where: { id: user.id },
             data: {
@@ -209,7 +185,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
             },
           });
           console.log(
-            `Auto-detected and saved timezone ${detectedTimezone} for user ${user.id} during login`,
+            `Auto-detected and saved timezone ${detectedTimezone} for user ${user.id} during login`
           );
         }
       }
@@ -227,11 +203,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         // Check for trusted device token
         const trustedDeviceToken = request.cookies?.trusted_device;
         if (trustedDeviceToken) {
-          const { TwoFactorService } = await import(
-            "../services/two-factor.js"
-          );
-          const trustedUserId =
-            await TwoFactorService.isTrustedDevice(trustedDeviceToken);
+          const { TwoFactorService } = await import('../services/two-factor.js');
+          const trustedUserId = await TwoFactorService.isTrustedDevice(trustedDeviceToken);
 
           if (trustedUserId === user.id) {
             // Trusted device, proceed with login
@@ -242,17 +215,15 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
             await redis.setex(pendingKey, 300, user.id); // 5 minutes to complete 2FA
 
             // Send 2FA code if using email method
-            if (userWithTwoFactor.twoFactorMethod === "email") {
-              const { TwoFactorService } = await import(
-                "../services/two-factor.js"
-              );
+            if (userWithTwoFactor.twoFactorMethod === 'email') {
+              const { TwoFactorService } = await import('../services/two-factor.js');
               await TwoFactorService.sendEmailCode(user.id);
             }
 
             return reply.code(200).send({
               requiresTwoFactor: true,
               method: userWithTwoFactor.twoFactorMethod,
-              message: "Two-factor authentication required",
+              message: 'Two-factor authentication required',
             });
           }
         } else {
@@ -261,56 +232,48 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           await redis.setex(pendingKey, 300, user.id); // 5 minutes to complete 2FA
 
           // Send 2FA code if using email method
-          if (userWithTwoFactor.twoFactorMethod === "email") {
-            const { TwoFactorService } = await import(
-              "../services/two-factor.js"
-            );
+          if (userWithTwoFactor.twoFactorMethod === 'email') {
+            const { TwoFactorService } = await import('../services/two-factor.js');
             await TwoFactorService.sendEmailCode(user.id);
           }
 
           return reply.code(200).send({
             requiresTwoFactor: true,
             method: userWithTwoFactor.twoFactorMethod,
-            message: "Two-factor authentication required",
+            message: 'Two-factor authentication required',
           });
         }
       }
 
       // Generate tokens with refresh token rotation
-      const { refreshToken, accessToken } =
-        await RefreshTokenService.generateRefreshToken(
-          user.id,
-          request.ip,
-          request.headers["user-agent"],
-        );
+      const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+        user.id,
+        request.ip,
+        request.headers['user-agent']
+      );
 
       // Set access token in HTTP-only cookie
-      reply.setCookie("auth_token", accessToken, {
+      reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
         maxAge: 15 * 60, // 15 minutes for access token
       });
 
       // Set refresh token in separate HTTP-only cookie
-      reply.setCookie("refresh_token", refreshToken, {
+      reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/api/auth/refresh", // Only sent to refresh endpoint
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/api/auth/refresh', // Only sent to refresh endpoint
         maxAge: rememberMe
           ? 30 * 24 * 60 * 60 // 30 days if remember me
           : 7 * 24 * 60 * 60, // 7 days otherwise
       });
 
       // Log successful login
-      await AuditLogger.logAuth(
-        AuditEventType.USER_LOGIN,
-        user.id,
-        user.email,
-        request,
-      );
+      await AuditLogger.logAuth(AuditEventType.USER_LOGIN, user.id, user.email, request);
 
       // Return user without password
       const { password: _password, ...userWithoutPassword } = user;
@@ -320,67 +283,63 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         token: accessToken,
         user: userWithoutPassword,
       });
-    },
+    }
   );
 
   // Refresh token endpoint with rotation
-  fastify.post("/refresh", async (request, reply) => {
+  fastify.post('/refresh', async (request, reply) => {
     const refreshToken = request.cookies?.refresh_token;
 
     if (!refreshToken) {
-      return reply.code(401).send({ error: "Refresh token required" });
+      return reply.code(401).send({ error: 'Refresh token required' });
     }
 
     // Rotate refresh token
     const result = await RefreshTokenService.rotateRefreshToken(
       refreshToken,
       request.ip,
-      request.headers["user-agent"],
+      request.headers['user-agent']
     );
 
     if (!result) {
       // Invalid or expired refresh token
-      reply.clearCookie("refresh_token", { path: "/api/auth/refresh" });
-      reply.clearCookie("auth_token", { path: "/" });
-      return reply
-        .code(401)
-        .send({ error: "Invalid or expired refresh token" });
+      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
+      reply.clearCookie('auth_token', { path: '/' });
+      return reply.code(401).send({ error: 'Invalid or expired refresh token' });
     }
 
     // Set new access token
-    reply.setCookie("auth_token", result.accessToken, {
+    reply.setCookie('auth_token', result.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
       maxAge: 15 * 60, // 15 minutes
     });
 
     // Set new refresh token
-    reply.setCookie("refresh_token", result.refreshToken, {
+    reply.setCookie('refresh_token', result.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/api/auth/refresh",
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/api/auth/refresh',
       maxAge: 30 * 24 * 60 * 60, // 30 days
     });
 
     return reply.send({
       token: result.accessToken,
-      message: "Token refreshed successfully",
+      message: 'Token refreshed successfully',
     });
   });
 
   // Logout endpoint
-  fastify.post("/logout", async (request, reply) => {
+  fastify.post('/logout', async (request, reply) => {
     // Try to get user info for audit log
     let userId: string | undefined;
     let email: string | undefined;
 
     try {
-      const token =
-        request.cookies?.auth_token ||
-        request.headers.authorization?.substring(7);
+      const token = request.cookies?.auth_token || request.headers.authorization?.substring(7);
       if (token) {
         const decoded = verifyJWT(token);
         userId = decoded.id;
@@ -397,35 +356,30 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // Clear both cookies
-    reply.clearCookie("auth_token", {
-      path: "/",
+    reply.clearCookie('auth_token', {
+      path: '/',
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
     });
 
-    reply.clearCookie("refresh_token", {
-      path: "/api/auth/refresh",
+    reply.clearCookie('refresh_token', {
+      path: '/api/auth/refresh',
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
     });
 
     // Log logout event if we have user info
     if (userId && email) {
-      await AuditLogger.logAuth(
-        AuditEventType.USER_LOGOUT,
-        userId,
-        email,
-        request,
-      );
+      await AuditLogger.logAuth(AuditEventType.USER_LOGOUT, userId, email, request);
     }
 
-    return reply.send({ success: true, message: "Logged out successfully" });
+    return reply.send({ success: true, message: 'Logged out successfully' });
   });
 
   // Get current user profile
-  fastify.get("/me", async (request, reply) => {
+  fastify.get('/me', async (request, reply) => {
     try {
       // Try to get token from cookie first (more secure)
       let token = request.cookies?.auth_token;
@@ -433,8 +387,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Fallback to Authorization header for backward compatibility
       if (!token) {
         const authHeader = request.headers.authorization;
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-          return reply.code(401).send({ error: "Authentication required" });
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return reply.code(401).send({ error: 'Authentication required' });
         }
         token = authHeader.substring(7);
       }
@@ -457,21 +411,21 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!user) {
-        return reply.code(404).send({ error: "User not found" });
+        return reply.code(404).send({ error: 'User not found' });
       }
 
       return { user };
     } catch (err) {
       // Log the specific error for debugging
       if (err instanceof Error) {
-        console.error("Auth verification failed:", err.message);
-        if (err.name === "TokenExpiredError") {
-          return reply.code(401).send({ error: "Token expired" });
-        } else if (err.name === "JsonWebTokenError") {
-          return reply.code(401).send({ error: "Invalid token" });
+        console.error('Auth verification failed:', err.message);
+        if (err.name === 'TokenExpiredError') {
+          return reply.code(401).send({ error: 'Token expired' });
+        } else if (err.name === 'JsonWebTokenError') {
+          return reply.code(401).send({ error: 'Invalid token' });
         }
       }
-      return reply.code(401).send({ error: "Authentication required" });
+      return reply.code(401).send({ error: 'Authentication required' });
     }
   });
 };

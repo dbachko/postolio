@@ -1,7 +1,7 @@
-import { Logger } from "@aws-lambda-powertools/logger";
-import { Tracer } from "@aws-lambda-powertools/tracer";
-import { Metrics, MetricUnit } from "@aws-lambda-powertools/metrics";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { Logger } from '@aws-lambda-powertools/logger';
+import { Tracer } from '@aws-lambda-powertools/tracer';
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   ScanCommand,
@@ -9,19 +9,19 @@ import {
   UpdateCommand,
   DeleteCommand,
   BatchWriteCommand,
-} from "@aws-sdk/lib-dynamodb";
+} from '@aws-sdk/lib-dynamodb';
 import {
   SchedulerClient,
   DeleteScheduleCommand,
   ListSchedulesCommand,
-} from "@aws-sdk/client-scheduler";
+} from '@aws-sdk/client-scheduler';
 
 // Initialize Powertools
-const logger = new Logger({ serviceName: "schedule-cleanup" });
-const tracer = new Tracer({ serviceName: "schedule-cleanup" });
+const logger = new Logger({ serviceName: 'schedule-cleanup' });
+const tracer = new Tracer({ serviceName: 'schedule-cleanup' });
 const metrics = new Metrics({
-  namespace: "ContentScheduler",
-  serviceName: "schedule-cleanup",
+  namespace: 'ContentScheduler',
+  serviceName: 'schedule-cleanup',
 });
 
 interface CleanupResult {
@@ -32,7 +32,7 @@ interface CleanupResult {
 }
 
 export const handler = async (): Promise<CleanupResult> => {
-  logger.info("Starting schedule cleanup job");
+  logger.info('Starting schedule cleanup job');
 
   // Initialize AWS SDK clients inside handler for better Lambda performance
   const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
@@ -59,28 +59,20 @@ export const handler = async (): Promise<CleanupResult> => {
     // 4. Validate consistency of scheduled items
     await validateScheduledItems(result, docClient, schedulerClient);
 
-    logger.info("Schedule cleanup completed", { result });
+    logger.info('Schedule cleanup completed', { result });
 
     // Publish metrics
+    metrics.addMetric('OrphanedSchedulesCleaned', MetricUnit.Count, result.orphanedSchedules);
     metrics.addMetric(
-      "OrphanedSchedulesCleaned",
+      'OrphanedEventBridgeRulesCleaned',
       MetricUnit.Count,
-      result.orphanedSchedules,
+      result.orphanedEventBridgeRules
     );
-    metrics.addMetric(
-      "OrphanedEventBridgeRulesCleaned",
-      MetricUnit.Count,
-      result.orphanedEventBridgeRules,
-    );
-    metrics.addMetric(
-      "FailedSchedulesCleaned",
-      MetricUnit.Count,
-      result.failedSchedules,
-    );
+    metrics.addMetric('FailedSchedulesCleaned', MetricUnit.Count, result.failedSchedules);
   } catch (error) {
-    logger.error("Schedule cleanup job failed", error as Error);
+    logger.error('Schedule cleanup job failed', error as Error);
     result.errors.push((error as Error).message);
-    metrics.addMetric("CleanupJobFailed", MetricUnit.Count, 1);
+    metrics.addMetric('CleanupJobFailed', MetricUnit.Count, 1);
   } finally {
     metrics.publishStoredMetrics();
   }
@@ -90,33 +82,31 @@ export const handler = async (): Promise<CleanupResult> => {
 
 async function cleanupOrphanedDynamoDBEntries(
   result: CleanupResult,
-  docClient: DynamoDBDocumentClient,
+  docClient: DynamoDBDocumentClient
 ): Promise<void> {
-  logger.info("Cleaning up orphaned DynamoDB entries");
+  logger.info('Cleaning up orphaned DynamoDB entries');
 
   try {
     // Scan for failed schedules without brandId
     const scanResult = await docClient.send(
       new ScanCommand({
         TableName: process.env.SCHEDULES_TABLE!,
-        FilterExpression: "#status = :failed AND attribute_not_exists(brandId)",
+        FilterExpression: '#status = :failed AND attribute_not_exists(brandId)',
         ExpressionAttributeNames: {
-          "#status": "status",
+          '#status': 'status',
         },
         ExpressionAttributeValues: {
-          ":failed": "failed",
+          ':failed': 'failed',
         },
-      }),
+      })
     );
 
     if (!scanResult.Items || scanResult.Items.length === 0) {
-      logger.info("No orphaned DynamoDB entries found");
+      logger.info('No orphaned DynamoDB entries found');
       return;
     }
 
-    logger.info(
-      `Found ${scanResult.Items.length} orphaned entries to clean up`,
-    );
+    logger.info(`Found ${scanResult.Items.length} orphaned entries to clean up`);
 
     // Delete orphaned entries in batches
     const deleteRequests = scanResult.Items.map((item) => ({
@@ -137,14 +127,14 @@ async function cleanupOrphanedDynamoDBEntries(
           RequestItems: {
             [process.env.SCHEDULES_TABLE!]: batch,
           },
-        }),
+        })
       );
 
       result.orphanedSchedules += batch.length;
       logger.info(`Deleted batch of ${batch.length} orphaned entries`);
     }
   } catch (error) {
-    logger.error("Failed to cleanup orphaned DynamoDB entries", error as Error);
+    logger.error('Failed to cleanup orphaned DynamoDB entries', error as Error);
     result.errors.push(`DynamoDB cleanup: ${(error as Error).message}`);
   }
 }
@@ -152,9 +142,9 @@ async function cleanupOrphanedDynamoDBEntries(
 async function cleanupOrphanedEventBridgeRules(
   result: CleanupResult,
   docClient: DynamoDBDocumentClient,
-  schedulerClient: SchedulerClient,
+  schedulerClient: SchedulerClient
 ): Promise<void> {
-  logger.info("Cleaning up orphaned EventBridge rules");
+  logger.info('Cleaning up orphaned EventBridge rules');
 
   try {
     // List all schedules from EventBridge
@@ -162,11 +152,11 @@ async function cleanupOrphanedEventBridgeRules(
       new ListSchedulesCommand({
         GroupName: process.env.SCHEDULER_GROUP_NAME,
         MaxResults: 100, // Process in batches
-      }),
+      })
     );
 
     if (!listResult.Schedules || listResult.Schedules.length === 0) {
-      logger.info("No EventBridge schedules found");
+      logger.info('No EventBridge schedules found');
       return;
     }
 
@@ -175,20 +165,19 @@ async function cleanupOrphanedEventBridgeRules(
       if (!schedule.Name) continue;
 
       // Extract schedule ID from the name (format: schedule-SCH_xxx)
-      const scheduleId = schedule.Name.replace("schedule-", "");
+      const scheduleId = schedule.Name.replace('schedule-', '');
 
       // Check if corresponding DynamoDB entry exists using Query on GSI
       const dynamoResult = await docClient.send(
         new QueryCommand({
           TableName: process.env.SCHEDULES_TABLE!,
-          IndexName:
-            process.env.SCHEDULES_TABLE_SCHEDULE_INDEX || "GSI-ScheduleId",
-          KeyConditionExpression: "scheduleId = :scheduleId",
+          IndexName: process.env.SCHEDULES_TABLE_SCHEDULE_INDEX || 'GSI-ScheduleId',
+          KeyConditionExpression: 'scheduleId = :scheduleId',
           ExpressionAttributeValues: {
-            ":scheduleId": scheduleId,
+            ':scheduleId': scheduleId,
           },
           Limit: 1,
-        }),
+        })
       );
 
       // If no DynamoDB entry exists, delete the EventBridge rule
@@ -200,7 +189,7 @@ async function cleanupOrphanedEventBridgeRules(
             new DeleteScheduleCommand({
               Name: schedule.Name,
               GroupName: process.env.SCHEDULER_GROUP_NAME,
-            }),
+            })
           );
 
           result.orphanedEventBridgeRules++;
@@ -212,19 +201,16 @@ async function cleanupOrphanedEventBridgeRules(
       }
     }
   } catch (error) {
-    logger.error(
-      "Failed to cleanup orphaned EventBridge rules",
-      error as Error,
-    );
+    logger.error('Failed to cleanup orphaned EventBridge rules', error as Error);
     result.errors.push(`EventBridge cleanup: ${(error as Error).message}`);
   }
 }
 
 async function cleanupOldFailedSchedules(
   result: CleanupResult,
-  docClient: DynamoDBDocumentClient,
+  docClient: DynamoDBDocumentClient
 ): Promise<void> {
-  logger.info("Cleaning up old failed schedules");
+  logger.info('Cleaning up old failed schedules');
 
   try {
     // Calculate cutoff date (30 days ago)
@@ -236,25 +222,23 @@ async function cleanupOldFailedSchedules(
     const scanResult = await docClient.send(
       new ScanCommand({
         TableName: process.env.SCHEDULES_TABLE!,
-        FilterExpression: "#status = :failed AND createdAt < :cutoff",
+        FilterExpression: '#status = :failed AND createdAt < :cutoff',
         ExpressionAttributeNames: {
-          "#status": "status",
+          '#status': 'status',
         },
         ExpressionAttributeValues: {
-          ":failed": "failed",
-          ":cutoff": cutoffTimestamp,
+          ':failed': 'failed',
+          ':cutoff': cutoffTimestamp,
         },
-      }),
+      })
     );
 
     if (!scanResult.Items || scanResult.Items.length === 0) {
-      logger.info("No old failed schedules found");
+      logger.info('No old failed schedules found');
       return;
     }
 
-    logger.info(
-      `Found ${scanResult.Items.length} old failed schedules to clean up`,
-    );
+    logger.info(`Found ${scanResult.Items.length} old failed schedules to clean up`);
 
     // Delete old failed schedules
     for (const item of scanResult.Items) {
@@ -265,13 +249,13 @@ async function cleanupOldFailedSchedules(
             pk: item.pk,
             sk: item.sk,
           },
-        }),
+        })
       );
 
       result.failedSchedules++;
     }
   } catch (error) {
-    logger.error("Failed to cleanup old failed schedules", error as Error);
+    logger.error('Failed to cleanup old failed schedules', error as Error);
     result.errors.push(`Failed schedule cleanup: ${(error as Error).message}`);
   }
 }
@@ -279,27 +263,27 @@ async function cleanupOldFailedSchedules(
 async function validateScheduledItems(
   result: CleanupResult,
   docClient: DynamoDBDocumentClient,
-  schedulerClient: SchedulerClient,
+  schedulerClient: SchedulerClient
 ): Promise<void> {
-  logger.info("Validating scheduled items consistency");
+  logger.info('Validating scheduled items consistency');
 
   try {
     // Scan for scheduled items
     const scanResult = await docClient.send(
       new ScanCommand({
         TableName: process.env.SCHEDULES_TABLE!,
-        FilterExpression: "#status = :scheduled",
+        FilterExpression: '#status = :scheduled',
         ExpressionAttributeNames: {
-          "#status": "status",
+          '#status': 'status',
         },
         ExpressionAttributeValues: {
-          ":scheduled": "scheduled",
+          ':scheduled': 'scheduled',
         },
-      }),
+      })
     );
 
     if (!scanResult.Items || scanResult.Items.length === 0) {
-      logger.info("No scheduled items to validate");
+      logger.info('No scheduled items to validate');
       return;
     }
 
@@ -307,7 +291,7 @@ async function validateScheduledItems(
     for (const item of scanResult.Items) {
       // Check if required fields are present
       if (!item.brandId || !item.userId || !item.contentId) {
-        logger.warn("Found scheduled item with missing required fields", {
+        logger.warn('Found scheduled item with missing required fields', {
           scheduleId: item.scheduleId,
           missingBrandId: !item.brandId,
           missingUserId: !item.userId,
@@ -322,17 +306,16 @@ async function validateScheduledItems(
               pk: item.pk,
               sk: item.sk,
             },
-            UpdateExpression:
-              "SET #status = :failed, schedulingError = :error, updatedAt = :now",
+            UpdateExpression: 'SET #status = :failed, schedulingError = :error, updatedAt = :now',
             ExpressionAttributeNames: {
-              "#status": "status",
+              '#status': 'status',
             },
             ExpressionAttributeValues: {
-              ":failed": "failed",
-              ":error": "Missing required fields detected during cleanup",
-              ":now": new Date().toISOString(),
+              ':failed': 'failed',
+              ':error': 'Missing required fields detected during cleanup',
+              ':now': new Date().toISOString(),
             },
-          }),
+          })
         );
 
         // Try to clean up associated EventBridge rule if it exists
@@ -342,22 +325,18 @@ async function validateScheduledItems(
               new DeleteScheduleCommand({
                 Name: `schedule-${item.scheduleId}`,
                 GroupName: process.env.SCHEDULER_GROUP_NAME,
-              }),
+              })
             );
-            logger.info(
-              `Deleted EventBridge rule for invalid schedule: ${item.scheduleId}`,
-            );
+            logger.info(`Deleted EventBridge rule for invalid schedule: ${item.scheduleId}`);
           } catch {
             // Rule might not exist, which is fine
-            logger.debug(
-              `EventBridge rule might not exist for: ${item.scheduleId}`,
-            );
+            logger.debug(`EventBridge rule might not exist for: ${item.scheduleId}`);
           }
         }
       }
     }
   } catch (error) {
-    logger.error("Failed to validate scheduled items", error as Error);
+    logger.error('Failed to validate scheduled items', error as Error);
     result.errors.push(`Validation: ${(error as Error).message}`);
   }
 }

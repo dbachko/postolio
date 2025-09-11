@@ -1,5 +1,5 @@
-import { create } from "zustand";
-import { subscribeWithSelector } from "zustand/middleware";
+import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
 
 interface SchedulerState {
   // Track scheduled times for different content IDs
@@ -24,7 +24,7 @@ export const usePostSchedulerStore = create<SchedulerState>()(
   subscribeWithSelector((set, get) => ({
     scheduledTimes: new Map(),
     editingContentId: null,
-    localValue: "",
+    localValue: '',
 
     setScheduledTime: (contentId: string, time: string) => {
       set((state) => {
@@ -49,7 +49,7 @@ export const usePostSchedulerStore = create<SchedulerState>()(
       const state = get();
       if (state.editingContentId === contentId) {
         // Only update if value actually changed
-        const currentValue = state.scheduledTimes.get(contentId) || "";
+        const currentValue = state.scheduledTimes.get(contentId) || '';
         if (state.localValue !== currentValue) {
           set((state) => {
             const newTimes = new Map(state.scheduledTimes);
@@ -72,7 +72,7 @@ export const usePostSchedulerStore = create<SchedulerState>()(
         newTimes.delete(contentId);
         return {
           scheduledTimes: newTimes,
-          localValue: "",
+          localValue: '',
           editingContentId: null,
         };
       });
@@ -82,8 +82,8 @@ export const usePostSchedulerStore = create<SchedulerState>()(
       set({
         scheduledTimes: new Map(),
         editingContentId: null,
-        localValue: "",
+        localValue: '',
       });
     },
-  })),
+  }))
 );

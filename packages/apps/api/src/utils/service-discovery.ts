@@ -8,9 +8,7 @@
  * @returns true if Cloud Map namespace ID and name are both configured
  */
 export function isCloudMapConfigured(): boolean {
-  return !!(
-    process.env.CLOUDMAP_NAMESPACE_ID && process.env.CLOUDMAP_NAMESPACE_NAME
-  );
+  return !!(process.env.CLOUDMAP_NAMESPACE_ID && process.env.CLOUDMAP_NAMESPACE_NAME);
 }
 
 /**
@@ -29,10 +27,7 @@ export function isLocalUrl(url: string): boolean {
  * @param explicitUrl - Whether an explicit URL was provided in configuration
  * @returns true if service discovery should be attempted
  */
-export function shouldUseServiceDiscovery(
-  currentUrl: string,
-  explicitUrl?: string,
-): boolean {
+export function shouldUseServiceDiscovery(currentUrl: string, explicitUrl?: string): boolean {
   // Use service discovery if:
   // 1. Cloud Map is configured AND
   // 2. Either no explicit URL was provided OR the URL is a local default

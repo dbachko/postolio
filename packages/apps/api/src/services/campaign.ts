@@ -1,19 +1,19 @@
-import { PrismaClient, CampaignStatus } from "@postolio/database";
+import { PrismaClient, CampaignStatus } from '@postolio/database';
 import {
   generateInstagramContent,
   type ContentGenerationRequest,
   type GeneratedContent,
-} from "./content-generator.js";
-import { campaignJobService } from "./campaign-jobs.js";
+} from './content-generator.js';
+import { campaignJobService } from './campaign-jobs.js';
 import {
   campaignCoordinationService,
   type CampaignConfigWithPriority,
-} from "./campaign-coordination.js";
-import type { StyleProfile } from "./ai.js";
-import { analyzeBrandStyle } from "./ai.js";
-import { TimezoneService } from "./timezone.js";
-import { DEFAULT_TIMEZONE } from "../constants/timezone.js";
-import { schedulerService } from "./scheduler.js";
+} from './campaign-coordination.js';
+import type { StyleProfile } from './ai.js';
+import { analyzeBrandStyle } from './ai.js';
+import { TimezoneService } from './timezone.js';
+import { DEFAULT_TIMEZONE } from '../constants/timezone.js';
+import { schedulerService } from './scheduler.js';
 
 const prisma = new PrismaClient();
 
@@ -53,7 +53,7 @@ export interface CampaignStartResult {
 }
 
 // Detailed campaign type including selected relations used within this service
-import type { Prisma } from "@postolio/database";
+import type { Prisma } from '@postolio/database';
 // Use broad record types to avoid deep structural coupling while removing explicit any usage
 type CampaignWithBrand = Record<string, unknown>;
 type CampaignWithContent = Record<string, unknown>;
@@ -90,7 +90,7 @@ class CampaignService {
   async configureCampaign(
     config: CampaignConfig,
     userId: string,
-    overrideTimezone?: string,
+    overrideTimezone?: string
   ): Promise<CampaignWithBrand> {
     try {
       // Validate brand ownership
@@ -102,18 +102,17 @@ class CampaignService {
       });
 
       if (!brand) {
-        throw new Error("Brand not found or access denied");
+        throw new Error('Brand not found or access denied');
       }
 
       // Validate dates
       if (config.duration.start >= config.duration.end) {
-        throw new Error("Campaign start date must be before end date");
+        throw new Error('Campaign start date must be before end date');
       }
 
       // Get brand's timezone for proper date comparison
       const brandTimezone =
-        overrideTimezone ||
-        (await TimezoneService.getBrandTimezone(config.brandId));
+        overrideTimezone || (await TimezoneService.getBrandTimezone(config.brandId));
 
       // Get today's date in the brand's timezone (start of day)
       const nowUTC = new Date();
@@ -121,15 +120,12 @@ class CampaignService {
       todayInBrandTz.setHours(0, 0, 0, 0);
 
       // Convert the input start date to the same timezone for comparison
-      const startDateInBrandTz = TimezoneService.toLocal(
-        config.duration.start,
-        brandTimezone,
-      );
+      const startDateInBrandTz = TimezoneService.toLocal(config.duration.start, brandTimezone);
       startDateInBrandTz.setHours(0, 0, 0, 0);
 
       // Compare dates in the same timezone context
       if (startDateInBrandTz < todayInBrandTz) {
-        throw new Error("Campaign start date cannot be in the past");
+        throw new Error('Campaign start date cannot be in the past');
       }
 
       // Check for scheduling conflicts with other campaigns
@@ -148,11 +144,10 @@ class CampaignService {
         priority: config.priority || 5,
       };
 
-      const conflicts =
-        await campaignCoordinationService.detectSchedulingConflicts(
-          coordinationConfig,
-          userId,
-        );
+      const conflicts = await campaignCoordinationService.detectSchedulingConflicts(
+        coordinationConfig,
+        userId
+      );
 
       // Store conflicts for frontend display but allow campaign creation
       const conflictSummary =
@@ -170,19 +165,18 @@ class CampaignService {
 
       // Calculate estimated post count
       const durationDays = Math.ceil(
-        (config.duration.end.getTime() - config.duration.start.getTime()) /
-          (1000 * 60 * 60 * 24),
+        (config.duration.end.getTime() - config.duration.start.getTime()) / (1000 * 60 * 60 * 24)
       );
 
       let postsPerWeek = 1;
       switch (config.frequency) {
-        case "daily":
+        case 'daily':
           postsPerWeek = 7;
           break;
-        case "every2days":
+        case 'every2days':
           postsPerWeek = 3.5; // Every 2 days = 3.5 posts per week
           break;
-        case "3weekly":
+        case '3weekly':
           postsPerWeek = 3;
           break;
         default:
@@ -196,7 +190,7 @@ class CampaignService {
         data: {
           name: config.name,
           brandId: config.brandId,
-          status: "creating",
+          status: 'creating',
           priority: config.priority || 5,
           progress: 0,
           previewGenerated: false,
@@ -230,7 +224,7 @@ class CampaignService {
 
       return campaign;
     } catch (error) {
-      console.error("Campaign configuration error:", error);
+      console.error('Campaign configuration error:', error);
       throw error;
     }
   }
@@ -241,7 +235,7 @@ class CampaignService {
   async generateCampaignPreview(
     campaignId: string,
     userId: string,
-    exampleCount = 3,
+    exampleCount = 3
   ): Promise<CampaignPreview> {
     try {
       // Get campaign and validate ownership
@@ -264,7 +258,7 @@ class CampaignService {
       });
 
       if (!campaign) {
-        throw new Error("Campaign not found or access denied");
+        throw new Error('Campaign not found or access denied');
       }
 
       const config = (campaign.config ?? {}) as {
@@ -281,9 +275,7 @@ class CampaignService {
 
       if (!styleProfile) {
         // Generate style profile if missing (similar to autopilot service)
-        console.log(
-          `Generating style profile for brand: ${campaign.brand.name}`,
-        );
+        console.log(`Generating style profile for brand: ${campaign.brand.name}`);
         const analysisResult = await analyzeBrandStyle([], campaign.brand.name);
         styleProfile = analysisResult.styleProfile;
 
@@ -296,14 +288,14 @@ class CampaignService {
       }
 
       // Generate example content using themes from campaign config
-      const contentRequests: ContentGenerationRequest[] = (
-        config.themes || []
-      ).map((theme: string) => ({
-        brandId: campaign.brandId,
-        count: 1,
-        theme,
-        style: config.style,
-      }));
+      const contentRequests: ContentGenerationRequest[] = (config.themes || []).map(
+        (theme: string) => ({
+          brandId: campaign.brandId,
+          count: 1,
+          theme,
+          style: config.style,
+        })
+      );
 
       // Take first N themes for preview
       const previewRequests = contentRequests.slice(0, exampleCount);
@@ -311,19 +303,12 @@ class CampaignService {
       let examplePosts: GeneratedContent[] = [];
 
       for (const request of previewRequests) {
-        const content = await generateInstagramContent(
-          styleProfile,
-          campaign.brand.name,
-          request,
-        );
+        const content = await generateInstagramContent(styleProfile, campaign.brand.name, request);
         examplePosts.push(...content);
       }
 
       // If we have fewer posts than requested, generate more with the first theme
-      while (
-        examplePosts.length < exampleCount &&
-        (config.themes?.length || 0) > 0
-      ) {
+      while (examplePosts.length < exampleCount && (config.themes?.length || 0) > 0) {
         const additionalContent = await generateInstagramContent(
           styleProfile,
           campaign.brand.name,
@@ -332,7 +317,7 @@ class CampaignService {
             count: 1,
             theme: (config.themes || [])[0],
             style: config.style,
-          },
+          }
         );
         examplePosts.push(...additionalContent);
       }
@@ -365,15 +350,12 @@ class CampaignService {
       for (const post of examplePosts) {
         // Validate post data before saving
         if (!post.caption || post.caption.trim().length === 0) {
-          console.error("Attempting to save content with empty caption:", post);
-          throw new Error("Cannot save content with empty caption");
+          console.error('Attempting to save content with empty caption:', post);
+          throw new Error('Cannot save content with empty caption');
         }
         if (!post.hashtags || !Array.isArray(post.hashtags)) {
-          console.error(
-            "Attempting to save content with invalid hashtags:",
-            post,
-          );
-          throw new Error("Cannot save content with invalid hashtags");
+          console.error('Attempting to save content with invalid hashtags:', post);
+          throw new Error('Cannot save content with invalid hashtags');
         }
 
         const savedPost = await prisma.content.create({
@@ -386,9 +368,9 @@ class CampaignService {
             retentionExpiresAt: post.retentionExpiresAt ?? null,
             brandId: campaign.brandId,
             campaignId: campaignId,
-            status: "draft", // Preview posts start as draft
+            status: 'draft', // Preview posts start as draft
             generationParams: {
-              theme: config.themes?.[0] || "preview",
+              theme: config.themes?.[0] || 'preview',
               style: config.style,
               campaignGenerated: true,
               isPreview: true,
@@ -408,13 +390,13 @@ class CampaignService {
         examplePosts: savedPosts,
         estimatedPostCount: config.estimatedPosts ?? 0,
         schedule: {
-          frequency: config.frequency ?? "",
+          frequency: config.frequency ?? '',
           duration: config.durationDays ?? 0,
           totalPosts: config.estimatedPosts ?? 0,
         },
       };
     } catch (error) {
-      console.error("Campaign preview error:", error);
+      console.error('Campaign preview error:', error);
       throw error;
     }
   }
@@ -422,10 +404,7 @@ class CampaignService {
   /**
    * Start campaign - generate all content and schedule posts
    */
-  async startCampaign(
-    campaignId: string,
-    userId: string,
-  ): Promise<CampaignStartResult> {
+  async startCampaign(campaignId: string, userId: string): Promise<CampaignStartResult> {
     try {
       // Get campaign and validate
       const campaign = await prisma.campaign.findFirst({
@@ -434,7 +413,7 @@ class CampaignService {
           brand: {
             userId,
           },
-          status: "preview",
+          status: 'preview',
         },
         include: {
           brand: {
@@ -450,13 +429,13 @@ class CampaignService {
       if (!campaign) {
         return {
           success: false,
-          error: "Campaign not found, access denied, or not ready for launch",
+          error: 'Campaign not found, access denied, or not ready for launch',
         };
       }
 
       const rawCfg = (campaign.config ?? {}) as unknown;
       const config =
-        rawCfg && typeof rawCfg === "object"
+        rawCfg && typeof rawCfg === 'object'
           ? (rawCfg as {
               duration?: { start?: string; end?: string };
               frequency?: string;
@@ -465,19 +444,17 @@ class CampaignService {
               style?: string;
             })
           : {};
-      const styleProfile = campaign.brand
-        .styleProfile as unknown as StyleProfile;
+      const styleProfile = campaign.brand.styleProfile as unknown as StyleProfile;
 
       if (!styleProfile) {
         // Style profile should have been generated during preview creation
         // Don't generate it here as it's too slow for the critical campaign start path
         console.error(
-          `Brand ${campaign.brand.name} missing style profile - should have been generated during preview`,
+          `Brand ${campaign.brand.name} missing style profile - should have been generated during preview`
         );
         return {
           success: false,
-          error:
-            "Brand style profile missing. Please regenerate campaign preview first.",
+          error: 'Brand style profile missing. Please regenerate campaign preview first.',
         };
       }
 
@@ -490,7 +467,7 @@ class CampaignService {
       ) {
         return {
           success: false,
-          error: "Campaign configuration incomplete. Regenerate preview.",
+          error: 'Campaign configuration incomplete. Regenerate preview.',
         };
       }
       const postDates = await this.generatePostingSchedule(
@@ -498,7 +475,7 @@ class CampaignService {
         new Date(config.duration.end),
         config.frequency,
         config.postingTime,
-        campaign.brandId,
+        campaign.brandId
       );
 
       // Get existing preview posts for this campaign
@@ -508,7 +485,7 @@ class CampaignService {
           scheduledAt: null, // Preview posts don't have scheduled dates yet
         },
         orderBy: {
-          createdAt: "asc",
+          createdAt: 'asc',
         },
       });
 
@@ -518,26 +495,21 @@ class CampaignService {
       if (existingPreviews.length === 0) {
         return {
           success: false,
-          error:
-            "No preview posts found. Please generate campaign preview first.",
+          error: 'No preview posts found. Please generate campaign preview first.',
         };
       }
 
       console.log(
-        `Scheduling ${existingPreviews.length} preview posts for campaign: ${campaign.name}`,
+        `Scheduling ${existingPreviews.length} preview posts for campaign: ${campaign.name}`
       );
 
       // Log scheduling details for debugging
       console.log(
-        `Scheduling for brand ${campaign.brandId} in timezone: ${await TimezoneService.getBrandTimezone(campaign.brandId)}`,
+        `Scheduling for brand ${campaign.brandId} in timezone: ${await TimezoneService.getBrandTimezone(campaign.brandId)}`
       );
 
       // Schedule existing preview posts only
-      for (
-        let i = 0;
-        i < Math.min(existingPreviews.length, postDates.length);
-        i++
-      ) {
+      for (let i = 0; i < Math.min(existingPreviews.length, postDates.length); i++) {
         const scheduledDate = postDates[i];
         const existingPost = existingPreviews[i];
 
@@ -545,17 +517,15 @@ class CampaignService {
 
         // Update existing preview post to scheduled status
         // Only set to 'scheduled' if we have a valid scheduledAt date (allows past dates for makeup posts)
-        const hasValidScheduledDate =
-          scheduledDate !== null && scheduledDate !== undefined;
+        const hasValidScheduledDate = scheduledDate !== null && scheduledDate !== undefined;
 
         const content = await prisma.content.update({
           where: { id: existingPost.id },
           data: {
-            status: hasValidScheduledDate ? "scheduled" : "draft", // Only 'scheduled' with valid date
+            status: hasValidScheduledDate ? 'scheduled' : 'draft', // Only 'scheduled' with valid date
             scheduledAt: scheduledDate ?? null,
             generationParams: {
-              ...((existingPost?.generationParams as Record<string, unknown>) ||
-                {}),
+              ...((existingPost?.generationParams as Record<string, unknown>) || {}),
               campaignGenerated: true,
               isPreview: false, // No longer a preview
               scheduledAt: scheduledDate?.toISOString(),
@@ -567,26 +537,19 @@ class CampaignService {
         if (hasValidScheduledDate && scheduledDate) {
           try {
             // Don't pass customTime - scheduler-adapter will read from DB (UTC)
-            const scheduleResult = await schedulerService.scheduleContent(
-              existingPost.id,
-            );
+            const scheduleResult = await schedulerService.scheduleContent(existingPost.id);
 
             if (!scheduleResult.success) {
               console.error(
                 `Failed to create AWS schedule for content ${existingPost.id}:`,
-                scheduleResult.error,
+                scheduleResult.error
               );
               // Continue with local scheduling - don't fail the entire campaign
             } else {
-              console.log(
-                `Content ${existingPost.id} scheduled successfully in AWS`,
-              );
+              console.log(`Content ${existingPost.id} scheduled successfully in AWS`);
             }
           } catch (scheduleError) {
-            console.error(
-              `Error scheduling content ${existingPost.id}:`,
-              scheduleError,
-            );
+            console.error(`Error scheduling content ${existingPost.id}:`, scheduleError);
             // Continue with local scheduling
           }
         }
@@ -596,12 +559,12 @@ class CampaignService {
 
       // Log successful scheduling
       console.log(
-        `Successfully scheduled ${createdContent.length} posts for campaign: ${campaign.name}`,
+        `Successfully scheduled ${createdContent.length} posts for campaign: ${campaign.name}`
       );
 
       if (existingPreviews.length < postDates.length) {
         console.warn(
-          `Campaign has ${postDates.length} planned posts but only ${existingPreviews.length} preview posts available. Rolling generation will create additional content as needed.`,
+          `Campaign has ${postDates.length} planned posts but only ${existingPreviews.length} preview posts available. Rolling generation will create additional content as needed.`
         );
       }
 
@@ -609,7 +572,7 @@ class CampaignService {
       const updatedCampaign = await prisma.campaign.update({
         where: { id: campaignId },
         data: {
-          status: "active",
+          status: 'active',
           startedAt: new Date(),
         },
       });
@@ -620,11 +583,10 @@ class CampaignService {
         scheduledPosts: createdContent.length,
       };
     } catch (error) {
-      console.error("Campaign start error:", error);
+      console.error('Campaign start error:', error);
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to start campaign",
+        error: error instanceof Error ? error.message : 'Failed to start campaign',
       };
     }
   }
@@ -632,10 +594,7 @@ class CampaignService {
   /**
    * Get campaign details
    */
-  async getCampaign(
-    campaignId: string,
-    userId: string,
-  ): Promise<CampaignWithContent | null> {
+  async getCampaign(campaignId: string, userId: string): Promise<CampaignWithContent | null> {
     try {
       const campaign = await prisma.campaign.findFirst({
         where: {
@@ -666,7 +625,7 @@ class CampaignService {
               createdAt: true,
             },
             orderBy: {
-              scheduledAt: "asc",
+              scheduledAt: 'asc',
             },
           },
           _count: {
@@ -678,12 +637,12 @@ class CampaignService {
       });
 
       if (!campaign) {
-        throw new Error("Campaign not found or access denied");
+        throw new Error('Campaign not found or access denied');
       }
 
       return campaign;
     } catch (error) {
-      console.error("Get campaign error:", error);
+      console.error('Get campaign error:', error);
       throw error;
     }
   }
@@ -697,34 +656,28 @@ class CampaignService {
     endDate: Date,
     frequency: string,
     postingTime: string,
-    brandId?: string,
+    brandId?: string
   ): Promise<Date[]> {
     const schedule: Date[] = [];
-    const [hours, minutes] = postingTime.split(":").map(Number);
+    const [hours, minutes] = postingTime.split(':').map(Number);
 
     // Get the appropriate timezone for this brand
-    const timezone = brandId
-      ? await TimezoneService.getBrandTimezone(brandId)
-      : DEFAULT_TIMEZONE;
+    const timezone = brandId ? await TimezoneService.getBrandTimezone(brandId) : DEFAULT_TIMEZONE;
 
     const current = new Date(startDate);
     const now = new Date();
 
     while (current <= endDate) {
-      const dateString = new Date(
-        current.getFullYear(),
-        current.getMonth(),
-        current.getDate(),
-      )
+      const dateString = new Date(current.getFullYear(), current.getMonth(), current.getDate())
         .toISOString()
-        .split("T")[0]!;
+        .split('T')[0]!;
 
       // Create the scheduled time in the brand's timezone
       // Use TimezoneService.createDateInBrandTimezone to properly handle timezone
       const scheduledTime = TimezoneService.createDateInBrandTimezone(
         dateString,
-        `${String(hours ?? 10).padStart(2, "0")}:${String(minutes ?? 0).padStart(2, "0")}`,
-        timezone,
+        `${String(hours ?? 10).padStart(2, '0')}:${String(minutes ?? 0).padStart(2, '0')}`,
+        timezone
       );
 
       // Skip times that are in the past (with a 5-minute buffer for processing time)
@@ -733,19 +686,19 @@ class CampaignService {
         schedule.push(scheduledTime);
       } else {
         console.log(
-          `Skipping past/too-soon scheduling time: ${scheduledTime.toISOString()} (current time + buffer: ${bufferTime.toISOString()})`,
+          `Skipping past/too-soon scheduling time: ${scheduledTime.toISOString()} (current time + buffer: ${bufferTime.toISOString()})`
         );
       }
 
       // Increment based on frequency
       switch (frequency) {
-        case "daily":
+        case 'daily':
           current.setDate(current.getDate() + 1);
           break;
-        case "every2days":
+        case 'every2days':
           current.setDate(current.getDate() + 2);
           break;
-        case "3weekly": {
+        case '3weekly': {
           // Post every 2-3 days (Monday, Wednesday, Friday pattern)
           const dayOfWeek = current.getDay();
           if (dayOfWeek === 1) {
@@ -783,7 +736,7 @@ class CampaignService {
       startDate?: string;
       endDate?: string;
       status?: string;
-    },
+    }
   ): Promise<{
     success: boolean;
     message?: string;
@@ -809,43 +762,39 @@ class CampaignService {
       });
 
       if (!campaign) {
-        throw new Error("Campaign not found or access denied");
+        throw new Error('Campaign not found or access denied');
       }
 
       // Special handling for status transitions
       if (updates.status) {
         // Handle pause operation
-        if (updates.status === "paused") {
+        if (updates.status === 'paused') {
           const pausedCampaign = await this.pauseCampaign(campaignId, userId);
           return {
             success: true,
             campaign: pausedCampaign,
-            message: "Campaign paused",
+            message: 'Campaign paused',
           };
         }
 
         // Handle resume operation
-        if (updates.status === "active") {
+        if (updates.status === 'active') {
           const resumedCampaign = await this.resumeCampaign(campaignId, userId);
           return {
             success: true,
             campaign: resumedCampaign,
-            message: "Campaign resumed",
+            message: 'Campaign resumed',
           };
         }
 
         // Handle other status changes (completion, failure, etc.)
-        return await this.updateCampaignStatus(
-          campaignId,
-          userId,
-          updates.status,
-        );
+        return await this.updateCampaignStatus(campaignId, userId, updates.status);
       }
 
       // Block non-status updates for active campaigns
-      if (campaign.status === "active") {
+      if (campaign.status === 'active') {
         throw new Error(
-          "Active campaigns can only be paused. Please pause the campaign first to make other changes.",
+          'Active campaigns can only be paused. Please pause the campaign first to make other changes.'
         );
       }
 
@@ -864,13 +813,13 @@ class CampaignService {
       // Update basic fields
       if (updates.name !== undefined) {
         if (!updates.name.trim()) {
-          throw new Error("Campaign name cannot be empty");
+          throw new Error('Campaign name cannot be empty');
         }
       }
 
       if (updates.themes !== undefined) {
         if (!Array.isArray(updates.themes) || updates.themes.length === 0) {
-          throw new Error("At least one theme is required");
+          throw new Error('At least one theme is required');
         }
         updatedConfig.themes = updates.themes;
       }
@@ -880,17 +829,15 @@ class CampaignService {
       }
 
       if (updates.frequency !== undefined) {
-        if (!["daily", "every2days", "3weekly"].includes(updates.frequency)) {
-          throw new Error(
-            "Invalid frequency. Must be daily, every2days, or 3weekly",
-          );
+        if (!['daily', 'every2days', '3weekly'].includes(updates.frequency)) {
+          throw new Error('Invalid frequency. Must be daily, every2days, or 3weekly');
         }
         updatedConfig.frequency = updates.frequency;
       }
 
       if (updates.postingTime !== undefined) {
         if (!/^\d{2}:\d{2}$/.test(updates.postingTime)) {
-          throw new Error("Posting time must be in HH:MM format");
+          throw new Error('Posting time must be in HH:MM format');
         }
         updatedConfig.postingTime = updates.postingTime;
       }
@@ -903,22 +850,16 @@ class CampaignService {
         const existingEnd = currentConfig.duration?.end
           ? new Date(currentConfig.duration.end)
           : new Date(Date.now() + 86400000);
-        const startDate = updates.startDate
-          ? new Date(updates.startDate)
-          : existingStart;
-        const endDate = updates.endDate
-          ? new Date(updates.endDate)
-          : existingEnd;
+        const startDate = updates.startDate ? new Date(updates.startDate) : existingStart;
+        const endDate = updates.endDate ? new Date(updates.endDate) : existingEnd;
 
         // Validate dates
         if (endDate <= startDate) {
-          throw new Error("End date must be after start date");
+          throw new Error('End date must be after start date');
         }
 
         // Get brand's timezone for proper date comparison
-        const brandTimezone = await TimezoneService.getBrandTimezone(
-          campaign.brandId,
-        );
+        const brandTimezone = await TimezoneService.getBrandTimezone(campaign.brandId);
 
         // Get today's date in the brand's timezone (start of day)
         const nowUTC = new Date();
@@ -926,18 +867,12 @@ class CampaignService {
         todayInBrandTz.setHours(0, 0, 0, 0);
 
         // Convert the start date to the brand's timezone for comparison
-        const startDateInBrandTz = TimezoneService.toLocal(
-          startDate,
-          brandTimezone,
-        );
+        const startDateInBrandTz = TimezoneService.toLocal(startDate, brandTimezone);
         startDateInBrandTz.setHours(0, 0, 0, 0);
 
         // Only validate if campaign is not active (active campaigns can keep their past dates)
-        if (
-          (campaign.status as string) !== "active" &&
-          startDateInBrandTz < todayInBrandTz
-        ) {
-          throw new Error("Start date cannot be in the past");
+        if ((campaign.status as string) !== 'active' && startDateInBrandTz < todayInBrandTz) {
+          throw new Error('Start date cannot be in the past');
         }
 
         updatedConfig.duration = {
@@ -947,23 +882,21 @@ class CampaignService {
 
         // Recalculate estimated posts
         const durationDays = Math.ceil(
-          (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+          (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
         );
         let postsPerWeek = 1;
         switch (updatedConfig.frequency) {
-          case "daily":
+          case 'daily':
             postsPerWeek = 7;
             break;
-          case "every2days":
+          case 'every2days':
             postsPerWeek = 3.5;
             break;
-          case "3weekly":
+          case '3weekly':
             postsPerWeek = 3;
             break;
         }
-        updatedConfig.estimatedPosts = Math.ceil(
-          (durationDays / 7) * postsPerWeek,
-        );
+        updatedConfig.estimatedPosts = Math.ceil((durationDays / 7) * postsPerWeek);
         updatedConfig.durationDays = durationDays;
       }
 
@@ -997,7 +930,7 @@ class CampaignService {
               createdAt: true,
             },
             orderBy: {
-              scheduledAt: "asc",
+              scheduledAt: 'asc',
             },
           },
           _count: {
@@ -1012,18 +945,15 @@ class CampaignService {
       return {
         success: true,
         campaign: updatedCampaign as unknown as CampaignWithContent,
-        message: "Campaign updated successfully",
+        message: 'Campaign updated successfully',
       };
     } catch (error) {
-      console.error("Update campaign error:", error);
+      console.error('Update campaign error:', error);
       throw error;
     }
   }
 
-  async pauseCampaign(
-    campaignId: string,
-    userId: string,
-  ): Promise<CampaignWithContent> {
+  async pauseCampaign(campaignId: string, userId: string): Promise<CampaignWithContent> {
     try {
       const result = await prisma.$transaction(async (tx) => {
         // Verify ownership and get current status inside transaction
@@ -1035,48 +965,46 @@ class CampaignService {
         });
 
         if (!campaign) {
-          throw new Error("Campaign not found or access denied");
+          throw new Error('Campaign not found or access denied');
         }
 
         // Validate status transition inside transaction
         const validTransitions = this.getValidStatusTransitions();
         const allowedTransitions = validTransitions[campaign.status] || [];
 
-        if (!allowedTransitions.includes("paused")) {
+        if (!allowedTransitions.includes('paused')) {
           throw new Error(
-            `Invalid status transition: ${campaign.status} → paused. Allowed transitions: ${allowedTransitions.join(", ")}`,
+            `Invalid status transition: ${campaign.status} → paused. Allowed transitions: ${allowedTransitions.join(', ')}`
           );
         }
 
         // Update campaign status to paused
         const updatedCampaign = await tx.campaign.update({
           where: { id: campaignId },
-          data: { status: "paused" },
+          data: { status: 'paused' },
         });
 
         // Mark all future scheduled content as skipped (preserving scheduledAt for resume)
         const skippedContent = await tx.content.updateMany({
           where: {
             campaignId,
-            status: "scheduled", // Content currently scheduled
+            status: 'scheduled', // Content currently scheduled
             scheduledAt: {
               gte: new Date(), // In the future
             },
           },
           data: {
-            status: "skipped", // Mark as skipped (NOT draft!)
+            status: 'skipped', // Mark as skipped (NOT draft!)
             // Keep scheduledAt intact so we can restore it on resume
-            schedulingError: "Skipped: Campaign was paused",
+            schedulingError: 'Skipped: Campaign was paused',
           },
         });
 
         console.log(
-          `Campaign ${campaignId} paused. ${skippedContent.count} scheduled posts marked as skipped.`,
+          `Campaign ${campaignId} paused. ${skippedContent.count} scheduled posts marked as skipped.`
         );
         if (skippedContent.count > 0) {
-          console.log(
-            `  - Marked ${skippedContent.count} future posts as skipped`,
-          );
+          console.log(`  - Marked ${skippedContent.count} future posts as skipped`);
           console.log(`  - Status changed: scheduled → skipped`);
           console.log(`  - scheduledAt preserved for potential resume`);
         }
@@ -1084,22 +1012,18 @@ class CampaignService {
         return {
           campaign: updatedCampaign,
           cancelledCount: skippedContent.count,
-          message:
-            "Campaign paused. No content will be published until resumed.",
+          message: 'Campaign paused. No content will be published until resumed.',
         };
       });
 
       return result;
     } catch (error) {
-      console.error("Pause campaign error:", error);
+      console.error('Pause campaign error:', error);
       throw error;
     }
   }
 
-  async resumeCampaign(
-    campaignId: string,
-    userId: string,
-  ): Promise<CampaignWithContent> {
+  async resumeCampaign(campaignId: string, userId: string): Promise<CampaignWithContent> {
     try {
       const result = await prisma.$transaction(async (tx) => {
         // Verify ownership and get current status inside transaction
@@ -1111,23 +1035,23 @@ class CampaignService {
         });
 
         if (!campaign) {
-          throw new Error("Campaign not found or access denied");
+          throw new Error('Campaign not found or access denied');
         }
 
         // Validate status transition inside transaction
         const validTransitions = this.getValidStatusTransitions();
         const allowedTransitions = validTransitions[campaign.status] || [];
 
-        if (!allowedTransitions.includes("active")) {
+        if (!allowedTransitions.includes('active')) {
           throw new Error(
-            `Invalid status transition: ${campaign.status} → active. Allowed transitions: ${allowedTransitions.join(", ")}`,
+            `Invalid status transition: ${campaign.status} → active. Allowed transitions: ${allowedTransitions.join(', ')}`
           );
         }
 
         const now = new Date();
         const rawConfig = campaign.config as unknown;
         const config =
-          rawConfig && typeof rawConfig === "object"
+          rawConfig && typeof rawConfig === 'object'
             ? (rawConfig as { duration?: { end?: string | Date } })
             : {};
         const campaignEndDate = new Date(config.duration?.end || now);
@@ -1137,7 +1061,7 @@ class CampaignService {
           const completedCampaign = await tx.campaign.update({
             where: { id: campaignId },
             data: {
-              status: "completed",
+              status: 'completed',
               completedAt: now,
             },
           });
@@ -1145,7 +1069,7 @@ class CampaignService {
           return {
             campaign: completedCampaign,
             skippedCount: 0,
-            message: "Campaign auto-completed (end date has passed)",
+            message: 'Campaign auto-completed (end date has passed)',
           };
         }
 
@@ -1153,13 +1077,13 @@ class CampaignService {
         const restoredContent = await tx.content.updateMany({
           where: {
             campaignId,
-            status: "skipped", // Content that was skipped during pause
+            status: 'skipped', // Content that was skipped during pause
             scheduledAt: {
               gte: now, // Still in the future - can be rescheduled
             },
           },
           data: {
-            status: "scheduled", // Restore to scheduled status
+            status: 'scheduled', // Restore to scheduled status
             schedulingError: null, // Clear the error message
           },
         });
@@ -1168,21 +1092,20 @@ class CampaignService {
         const permanentlySkipped = await tx.content.updateMany({
           where: {
             campaignId,
-            status: "skipped", // Content that was skipped
+            status: 'skipped', // Content that was skipped
             scheduledAt: {
               lt: now, // In the past - permanently missed
             },
           },
           data: {
-            schedulingError:
-              "Permanently skipped: Scheduled time passed during pause",
+            schedulingError: 'Permanently skipped: Scheduled time passed during pause',
           },
         });
 
         // Resume campaign
         const updatedCampaign = await tx.campaign.update({
           where: { id: campaignId },
-          data: { status: "active" },
+          data: { status: 'active' },
         });
 
         console.log(`Campaign ${campaignId} resumed.`);
@@ -1192,7 +1115,7 @@ class CampaignService {
         }
         if (permanentlySkipped.count > 0) {
           console.log(
-            `  - ${permanentlySkipped.count} posts permanently skipped (past scheduled time)`,
+            `  - ${permanentlySkipped.count} posts permanently skipped (past scheduled time)`
           );
         }
 
@@ -1202,16 +1125,16 @@ class CampaignService {
           permanentlySkippedCount: permanentlySkipped.count,
           message:
             restoredContent.count > 0
-              ? `Campaign resumed. ${restoredContent.count} posts restored to schedule.${permanentlySkipped.count > 0 ? ` ${permanentlySkipped.count} posts permanently skipped.` : ""}`
+              ? `Campaign resumed. ${restoredContent.count} posts restored to schedule.${permanentlySkipped.count > 0 ? ` ${permanentlySkipped.count} posts permanently skipped.` : ''}`
               : permanentlySkipped.count > 0
                 ? `Campaign resumed. ${permanentlySkipped.count} posts were permanently skipped.`
-                : "Campaign resumed successfully!",
+                : 'Campaign resumed successfully!',
         };
       });
 
       return result;
     } catch (error) {
-      console.error("Resume campaign error:", error);
+      console.error('Resume campaign error:', error);
       throw error;
     }
   }
@@ -1221,13 +1144,13 @@ class CampaignService {
    */
   private getValidStatusTransitions(): Record<string, string[]> {
     return {
-      creating: ["preview", "failed"],
-      preview: ["active", "failed"],
-      active: ["paused", "completed", "failed"],
-      paused: ["active", "completed", "failed"],
+      creating: ['preview', 'failed'],
+      preview: ['active', 'failed'],
+      active: ['paused', 'completed', 'failed'],
+      paused: ['active', 'completed', 'failed'],
       completed: [], // Terminal state
-      failed: ["preview"], // Can retry from preview
-      processing: ["active", "failed"], // Background processing state
+      failed: ['preview'], // Can retry from preview
+      processing: ['active', 'failed'], // Background processing state
     };
   }
 
@@ -1237,7 +1160,7 @@ class CampaignService {
   async updateCampaignStatus(
     campaignId: string,
     userId: string,
-    newStatus: string,
+    newStatus: string
   ): Promise<{
     success: boolean;
     campaign: CampaignWithContent | null;
@@ -1254,7 +1177,7 @@ class CampaignService {
         });
 
         if (!campaign) {
-          throw new Error("Campaign not found or access denied");
+          throw new Error('Campaign not found or access denied');
         }
 
         // Validate status transition inside transaction
@@ -1263,7 +1186,7 @@ class CampaignService {
 
         if (!allowedTransitions.includes(newStatus)) {
           throw new Error(
-            `Invalid status transition: ${campaign.status} → ${newStatus}. Allowed transitions: ${allowedTransitions.join(", ")}`,
+            `Invalid status transition: ${campaign.status} → ${newStatus}. Allowed transitions: ${allowedTransitions.join(', ')}`
           );
         }
 
@@ -1272,13 +1195,11 @@ class CampaignService {
           where: { id: campaignId },
           data: {
             status: newStatus as CampaignStatus,
-            ...(newStatus === "completed" ? { completedAt: new Date() } : {}),
+            ...(newStatus === 'completed' ? { completedAt: new Date() } : {}),
           },
         });
 
-        console.log(
-          `Campaign ${campaignId} status updated: ${campaign.status} → ${newStatus}`,
-        );
+        console.log(`Campaign ${campaignId} status updated: ${campaign.status} → ${newStatus}`);
 
         return {
           success: true,
@@ -1289,7 +1210,7 @@ class CampaignService {
 
       return result;
     } catch (error) {
-      console.error("Update campaign status error:", error);
+      console.error('Update campaign status error:', error);
       throw error;
     }
   }
@@ -1300,7 +1221,7 @@ class CampaignService {
   async updateCampaignPriority(
     campaignId: string,
     newPriority: number,
-    userId: string,
+    userId: string
   ): Promise<{
     success: boolean;
     campaign: CampaignWithContent | null;
@@ -1317,7 +1238,7 @@ class CampaignService {
       });
 
       if (!campaign) {
-        throw new Error("Campaign not found or access denied");
+        throw new Error('Campaign not found or access denied');
       }
 
       // Update priority
@@ -1333,11 +1254,9 @@ class CampaignService {
       // Re-check conflicts with new priority
       const rawConfig = campaign.config as unknown;
       const config =
-        rawConfig && typeof rawConfig === "object"
-          ? (rawConfig as Record<string, unknown>)
-          : {};
+        rawConfig && typeof rawConfig === 'object' ? (rawConfig as Record<string, unknown>) : {};
       const durationObj =
-        config.duration && typeof config.duration === "object"
+        config.duration && typeof config.duration === 'object'
           ? (config.duration as { start?: string; end?: string })
           : { start: undefined, end: undefined };
       const coordinationConfig: CampaignConfigWithPriority = {
@@ -1346,27 +1265,19 @@ class CampaignService {
         config: {
           duration: {
             start: durationObj.start || new Date().toISOString(),
-            end:
-              durationObj.end || new Date(Date.now() + 86400000).toISOString(),
+            end: durationObj.end || new Date(Date.now() + 86400000).toISOString(),
           },
-          frequency:
-            typeof config.frequency === "string" ? config.frequency : "daily",
-          postingTime:
-            typeof config.postingTime === "string"
-              ? config.postingTime
-              : "09:00",
-          themes: Array.isArray(config.themes)
-            ? (config.themes as string[])
-            : [],
+          frequency: typeof config.frequency === 'string' ? config.frequency : 'daily',
+          postingTime: typeof config.postingTime === 'string' ? config.postingTime : '09:00',
+          themes: Array.isArray(config.themes) ? (config.themes as string[]) : [],
         },
         priority: newPriority,
       };
 
-      const conflicts =
-        await campaignCoordinationService.detectSchedulingConflicts(
-          coordinationConfig,
-          userId,
-        );
+      const conflicts = await campaignCoordinationService.detectSchedulingConflicts(
+        coordinationConfig,
+        userId
+      );
 
       // Update campaign config with new conflict information
       await prisma.campaign.update({
@@ -1396,7 +1307,7 @@ class CampaignService {
         conflicts: conflicts.length,
       };
     } catch (error) {
-      console.error("Update campaign priority error:", error);
+      console.error('Update campaign priority error:', error);
       throw error;
     }
   }
@@ -1412,17 +1323,16 @@ class CampaignService {
   }> {
     try {
       // Get resource allocation
-      const allocation =
-        await campaignCoordinationService.allocateGenerationResources(userId);
+      const allocation = await campaignCoordinationService.allocateGenerationResources(userId);
 
       // Get active campaigns with priorities
       const activeCampaigns = await prisma.campaign.findMany({
         where: {
           brand: { userId },
-          status: { in: ["active", "preview"] },
+          status: { in: ['active', 'preview'] },
         },
         include: { brand: true },
-        orderBy: { priority: "asc" },
+        orderBy: { priority: 'asc' },
       });
 
       return {
@@ -1434,19 +1344,19 @@ class CampaignService {
             acc[priority] = (acc[priority] || 0) + 1;
             return acc;
           },
-          {} as Record<number, number>,
+          {} as Record<number, number>
         ),
         conflicts: activeCampaigns.reduce((total, campaign) => {
           const rawCfg = campaign.config as unknown;
           const cfg =
-            rawCfg && typeof rawCfg === "object"
+            rawCfg && typeof rawCfg === 'object'
               ? (rawCfg as { conflicts?: { conflictCount?: number } })
               : {};
           return total + (cfg.conflicts?.conflictCount || 0);
         }, 0),
       };
     } catch (error) {
-      console.error("Get campaign coordination error:", error);
+      console.error('Get campaign coordination error:', error);
       throw error;
     }
   }
@@ -1458,23 +1368,23 @@ class CampaignService {
     const errors: string[] = [];
 
     if (!config.name || config.name.trim().length === 0) {
-      errors.push("Campaign name is required");
+      errors.push('Campaign name is required');
     }
 
     if (config.name && config.name.length > 100) {
-      errors.push("Campaign name must be less than 100 characters");
+      errors.push('Campaign name must be less than 100 characters');
     }
 
     if (!config.brandId) {
-      errors.push("Brand ID is required");
+      errors.push('Brand ID is required');
     }
 
     if (!config.duration.start || !config.duration.end) {
-      errors.push("Campaign start and end dates are required");
+      errors.push('Campaign start and end dates are required');
     }
 
     if (config.duration.start >= config.duration.end) {
-      errors.push("Campaign start date must be before end date");
+      errors.push('Campaign start date must be before end date');
     }
 
     // Date validation has been moved to the async configureCampaign method
@@ -1482,16 +1392,16 @@ class CampaignService {
     // method cannot access timezone data, date validation is performed later
     // where we can properly interpret dates in the user's timezone context.
 
-    if (!["daily", "every2days", "3weekly"].includes(config.frequency)) {
-      errors.push("Invalid frequency. Must be daily, every2days, or 3weekly");
+    if (!['daily', 'every2days', '3weekly'].includes(config.frequency)) {
+      errors.push('Invalid frequency. Must be daily, every2days, or 3weekly');
     }
 
     if (!config.themes || config.themes.length === 0) {
-      errors.push("At least one theme is required");
+      errors.push('At least one theme is required');
     }
 
     if (!config.postingTime || !/^\d{2}:\d{2}$/.test(config.postingTime)) {
-      errors.push("Posting time must be in HH:MM format");
+      errors.push('Posting time must be in HH:MM format');
     }
 
     return errors;
@@ -1503,7 +1413,7 @@ class CampaignService {
   async validateFieldEditability(
     campaignId: string,
     fieldsToUpdate: EditableCampaignFields,
-    userId: string,
+    userId: string
   ): Promise<{ valid: boolean; errors: { field: string; message: string }[] }> {
     try {
       // Get campaign with ownership validation
@@ -1520,8 +1430,8 @@ class CampaignService {
           valid: false,
           errors: [
             {
-              field: "campaign",
-              message: "Campaign not found or access denied",
+              field: 'campaign',
+              message: 'Campaign not found or access denied',
             },
           ],
         };
@@ -1534,76 +1444,75 @@ class CampaignService {
         // Completed campaigns are read-only
         completed: {
           allowedFields: [] as string[],
-          message: "Completed campaigns are read-only",
+          message: 'Completed campaigns are read-only',
         },
         // Active campaigns allow limited edits
         active: {
-          allowedFields: ["name", "priority"] as string[],
-          message: "Active campaigns only allow editing name and priority",
+          allowedFields: ['name', 'priority'] as string[],
+          message: 'Active campaigns only allow editing name and priority',
         },
         // Paused campaigns allow same as active
         paused: {
-          allowedFields: ["name", "priority"] as string[],
-          message: "Paused campaigns only allow editing name and priority",
+          allowedFields: ['name', 'priority'] as string[],
+          message: 'Paused campaigns only allow editing name and priority',
         },
         // Failed campaigns allow all edits to recover
         failed: {
           allowedFields: [
-            "name",
-            "priority",
-            "config",
-            "themes",
-            "style",
-            "frequency",
-            "postingTime",
-            "startDate",
-            "endDate",
+            'name',
+            'priority',
+            'config',
+            'themes',
+            'style',
+            'frequency',
+            'postingTime',
+            'startDate',
+            'endDate',
           ] as string[],
-          message: "Failed campaigns allow most edits for recovery",
+          message: 'Failed campaigns allow most edits for recovery',
         },
         // Creating and preview allow all edits
         creating: {
           allowedFields: [
-            "name",
-            "priority",
-            "config",
-            "themes",
-            "style",
-            "frequency",
-            "postingTime",
-            "startDate",
-            "endDate",
+            'name',
+            'priority',
+            'config',
+            'themes',
+            'style',
+            'frequency',
+            'postingTime',
+            'startDate',
+            'endDate',
           ] as string[],
-          message: "All fields can be edited for campaigns in creation",
+          message: 'All fields can be edited for campaigns in creation',
         },
         preview: {
           allowedFields: [
-            "name",
-            "priority",
-            "config",
-            "themes",
-            "style",
-            "frequency",
-            "postingTime",
-            "startDate",
-            "endDate",
+            'name',
+            'priority',
+            'config',
+            'themes',
+            'style',
+            'frequency',
+            'postingTime',
+            'startDate',
+            'endDate',
           ] as string[],
-          message: "All fields can be edited for preview campaigns",
+          message: 'All fields can be edited for preview campaigns',
         },
         processing: {
-          allowedFields: ["name", "priority"] as string[],
-          message: "Processing campaigns only allow editing name and priority",
+          allowedFields: ['name', 'priority'] as string[],
+          message: 'Processing campaigns only allow editing name and priority',
         },
       };
 
-      const rule =
-        editabilityRules[campaign.status as keyof typeof editabilityRules];
+      const rule = editabilityRules[campaign.status as keyof typeof editabilityRules];
       if (!rule) {
         return {
           valid: false,
           errors: [
             {
-              field: "status",
+              field: 'status',
               message: `Unknown campaign status: ${campaign.status}`,
             },
           ],
@@ -1611,9 +1520,9 @@ class CampaignService {
       }
 
       // Special handling for completed campaigns - completely read-only
-      if (campaign.status === "completed") {
+      if (campaign.status === 'completed') {
         if (Object.keys(fieldsToUpdate).length > 0) {
-          errors.push({ field: "campaign", message: rule.message });
+          errors.push({ field: 'campaign', message: rule.message });
         }
         return { valid: errors.length === 0, errors };
       }
@@ -1621,24 +1530,18 @@ class CampaignService {
       // Check each field being updated
       Object.keys(fieldsToUpdate).forEach((field) => {
         // Handle nested config fields (themes, style are inside config)
-        if (field === "config" && fieldsToUpdate.config) {
+        if (field === 'config' && fieldsToUpdate.config) {
           const configFields = Object.keys(fieldsToUpdate.config);
           configFields.forEach((configField) => {
-            if (
-              configField === "themes" &&
-              !rule.allowedFields.includes("themes")
-            ) {
+            if (configField === 'themes' && !rule.allowedFields.includes('themes')) {
               errors.push({
-                field: "themes",
+                field: 'themes',
                 message: `Cannot edit themes: ${rule.message}`,
               });
             }
-            if (
-              configField === "style" &&
-              !rule.allowedFields.includes("style")
-            ) {
+            if (configField === 'style' && !rule.allowedFields.includes('style')) {
               errors.push({
-                field: "style",
+                field: 'style',
                 message: `Cannot edit style: ${rule.message}`,
               });
             }
@@ -1653,12 +1556,10 @@ class CampaignService {
 
       return { valid: errors.length === 0, errors };
     } catch (error) {
-      console.error("Validate field editability error:", error);
+      console.error('Validate field editability error:', error);
       return {
         valid: false,
-        errors: [
-          { field: "system", message: "Failed to validate field editability" },
-        ],
+        errors: [{ field: 'system', message: 'Failed to validate field editability' }],
       };
     }
   }
@@ -1669,7 +1570,7 @@ class CampaignService {
   async updateCampaignWithRegeneration(
     campaignId: string,
     updateData: CampaignUpdateData,
-    userId: string,
+    userId: string
   ): Promise<{
     campaign: CampaignWithContent;
     regenerationTriggered: boolean;
@@ -1678,14 +1579,10 @@ class CampaignService {
   }> {
     try {
       // First validate field editability
-      const editabilityCheck = await this.validateFieldEditability(
-        campaignId,
-        updateData,
-        userId,
-      );
+      const editabilityCheck = await this.validateFieldEditability(campaignId, updateData, userId);
       if (!editabilityCheck.valid) {
         throw new Error(
-          `Validation failed: ${editabilityCheck.errors.map((e) => e.message).join(", ")}`,
+          `Validation failed: ${editabilityCheck.errors.map((e) => e.message).join(', ')}`
         );
       }
 
@@ -1699,12 +1596,12 @@ class CampaignService {
       });
 
       if (!currentCampaign) {
-        throw new Error("Campaign not found or access denied");
+        throw new Error('Campaign not found or access denied');
       }
 
       // Check if regeneration is needed
       let regenerationTriggered = false;
-      let regenerationReason = "";
+      let regenerationReason = '';
 
       const currentConfig = (currentCampaign.config ?? {}) as {
         themes?: string[];
@@ -1717,12 +1614,9 @@ class CampaignService {
 
       // Check for theme changes (either in config object or as direct field)
       if (updateData.themes) {
-        if (
-          JSON.stringify(currentConfig?.themes) !==
-          JSON.stringify(updateData.themes)
-        ) {
+        if (JSON.stringify(currentConfig?.themes) !== JSON.stringify(updateData.themes)) {
           regenerationTriggered = true;
-          regenerationReason = "themes changed";
+          regenerationReason = 'themes changed';
         }
       }
 
@@ -1732,7 +1626,7 @@ class CampaignService {
           regenerationTriggered = true;
           regenerationReason = regenerationReason
             ? `${regenerationReason}, style changed`
-            : "style changed";
+            : 'style changed';
         }
       }
 
@@ -1743,11 +1637,10 @@ class CampaignService {
         // Check for theme changes in config
         if (
           newConfig.themes &&
-          JSON.stringify(currentConfig?.themes) !==
-            JSON.stringify(newConfig.themes)
+          JSON.stringify(currentConfig?.themes) !== JSON.stringify(newConfig.themes)
         ) {
           regenerationTriggered = true;
-          regenerationReason = "themes changed";
+          regenerationReason = 'themes changed';
         }
 
         // Check for style changes in config
@@ -1755,7 +1648,7 @@ class CampaignService {
           regenerationTriggered = true;
           regenerationReason = regenerationReason
             ? `${regenerationReason}, style changed`
-            : "style changed";
+            : 'style changed';
         }
       }
 
@@ -1783,10 +1676,7 @@ class CampaignService {
       if (updateData.postingTime !== undefined) {
         configUpdates.postingTime = updateData.postingTime;
       }
-      if (
-        updateData.startDate !== undefined ||
-        updateData.endDate !== undefined
-      ) {
+      if (updateData.startDate !== undefined || updateData.endDate !== undefined) {
         configUpdates.duration = {
           ...(currentConfig?.duration || {}),
           ...(updateData.startDate ? { start: updateData.startDate } : {}),
@@ -1800,7 +1690,7 @@ class CampaignService {
           JSON.stringify({
             ...(currentConfig || {}),
             ...configUpdates,
-          }),
+          })
         ) as Prisma.InputJsonValue;
       }
 
@@ -1852,8 +1742,8 @@ class CampaignService {
         campaign: updatedCampaign,
         regenerationTriggered,
         message: regenerationTriggered
-          ? "Campaign updated. Content regeneration started."
-          : "Campaign updated successfully.",
+          ? 'Campaign updated. Content regeneration started.'
+          : 'Campaign updated successfully.',
       };
 
       if (regenerationTriggered) {
@@ -1863,15 +1753,13 @@ class CampaignService {
       return {
         campaign: updatedCampaign,
         regenerationTriggered,
-        regenerationReason: regenerationTriggered
-          ? regenerationReason
-          : undefined,
+        regenerationReason: regenerationTriggered ? regenerationReason : undefined,
         message: regenerationTriggered
-          ? "Campaign updated. Content regeneration started."
-          : "Campaign updated successfully.",
+          ? 'Campaign updated. Content regeneration started.'
+          : 'Campaign updated successfully.',
       };
     } catch (error) {
-      console.error("Update campaign with regeneration error:", error);
+      console.error('Update campaign with regeneration error:', error);
       throw error;
     }
   }
@@ -1882,7 +1770,7 @@ class CampaignService {
   async startEditSession(
     campaignId: string,
     userId: string,
-    customStartTime?: Date,
+    customStartTime?: Date
   ): Promise<void> {
     const startTime = customStartTime || new Date();
     editSessions.set(campaignId, { userId, startedAt: startTime });
@@ -1893,7 +1781,7 @@ class CampaignService {
    */
   async checkConcurrentEdit(
     campaignId: string,
-    userId: string,
+    userId: string
   ): Promise<{
     hasConflict: boolean;
     conflictUser?: string;
@@ -1918,7 +1806,7 @@ class CampaignService {
         hasConflict: true,
         conflictUser: session.userId,
         warningMessage:
-          "This campaign is currently being edited by another user. Please wait or refresh to see latest changes.",
+          'This campaign is currently being edited by another user. Please wait or refresh to see latest changes.',
       };
     }
 

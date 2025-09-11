@@ -1,22 +1,18 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { toast } from "sonner";
-import { useAuthStore } from "@/stores/authStore";
-import { useNavigate } from "react-router-dom";
-import { CheckCircle, AlertCircle } from "lucide-react";
-import { TIMEOUTS } from "@/constants/timeouts";
-import type { GoogleCredentialResponse } from "@/types/oauth";
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { toast } from 'sonner';
+import { useAuthStore } from '@/stores/authStore';
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle, AlertCircle } from 'lucide-react';
+import { TIMEOUTS } from '@/constants/timeouts';
+import type { GoogleCredentialResponse } from '@/types/oauth';
 
 interface GoogleSignInIsolatedProps {
-  mode: "signin" | "signup" | "link";
+  mode: 'signin' | 'signup' | 'link';
   onSuccess?: () => void;
   onError?: (error: string) => void;
 }
 
-export function GoogleSignInIsolated({
-  mode,
-  onSuccess,
-  onError,
-}: GoogleSignInIsolatedProps) {
+export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInIsolatedProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const { setUser, setToken } = useAuthStore();
@@ -25,15 +21,14 @@ export function GoogleSignInIsolated({
 
   // Check if Google OAuth is configured
   const isConfigured =
-    import.meta.env.VITE_GOOGLE_CLIENT_ID &&
-    import.meta.env.VITE_GOOGLE_CLIENT_ID !== "";
+    import.meta.env.VITE_GOOGLE_CLIENT_ID && import.meta.env.VITE_GOOGLE_CLIENT_ID !== '';
 
   const handleGoogleResponse = useCallback(
     async (response: GoogleCredentialResponse) => {
       if (!response.credential) {
-        const errorMsg = "No credential received from Google";
+        const errorMsg = 'No credential received from Google';
         onError?.(errorMsg);
-        toast.error("Google sign-in failed", {
+        toast.error('Google sign-in failed', {
           description: errorMsg,
           icon: <AlertCircle className="text-red-500" />,
         });
@@ -43,18 +38,17 @@ export function GoogleSignInIsolated({
       setIsLoading(true);
 
       try {
-        const endpoint =
-          mode === "link" ? "/api/auth/google/link" : "/api/auth/google/verify";
+        const endpoint = mode === 'link' ? '/api/auth/google/link' : '/api/auth/google/verify';
 
         const apiResponse = await fetch(endpoint, {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
-            ...(mode === "link" && localStorage.getItem("token")
-              ? { Authorization: `Bearer ${localStorage.getItem("token")}` }
+            'Content-Type': 'application/json',
+            ...(mode === 'link' && localStorage.getItem('token')
+              ? { Authorization: `Bearer ${localStorage.getItem('token')}` }
               : {}),
           },
-          credentials: "include",
+          credentials: 'include',
           body: JSON.stringify({
             credential: response.credential,
           }),
@@ -63,39 +57,36 @@ export function GoogleSignInIsolated({
         const data = await apiResponse.json();
 
         if (!apiResponse.ok) {
-          throw new Error(data.error || "Google authentication failed");
+          throw new Error(data.error || 'Google authentication failed');
         }
 
-        if (mode !== "link") {
+        if (mode !== 'link') {
           setToken(data.token);
           setUser(data.user);
-          localStorage.setItem("token", data.token);
+          localStorage.setItem('token', data.token);
 
-          const actionText = data.isNewUser ? "Account created" : "Signed in";
+          const actionText = data.isNewUser ? 'Account created' : 'Signed in';
           toast.success(`${actionText} successfully!`, {
-            description: "Welcome to Postolio! Redirecting...",
+            description: 'Welcome to Postolio! Redirecting...',
             icon: <CheckCircle className="text-green-500" />,
             duration: TIMEOUTS.TOAST_DURATION,
           });
 
           setTimeout(() => {
-            navigate("/dashboard");
+            navigate('/dashboard');
           }, TIMEOUTS.SUCCESS_REDIRECT);
         } else {
-          toast.success("Google account linked!", {
-            description: "You can now sign in with Google",
+          toast.success('Google account linked!', {
+            description: 'You can now sign in with Google',
             icon: <CheckCircle className="text-green-500" />,
           });
         }
 
         onSuccess?.();
       } catch (error) {
-        const errorMsg =
-          error instanceof Error
-            ? error.message
-            : "Google authentication failed";
+        const errorMsg = error instanceof Error ? error.message : 'Google authentication failed';
         onError?.(errorMsg);
-        toast.error("Authentication failed", {
+        toast.error('Authentication failed', {
           description: errorMsg,
           icon: <AlertCircle className="text-red-500" />,
         });
@@ -103,7 +94,7 @@ export function GoogleSignInIsolated({
         setIsLoading(false);
       }
     },
-    [mode, navigate, onError, onSuccess, setToken, setUser],
+    [mode, navigate, onError, onSuccess, setToken, setUser]
   );
 
   useEffect(() => {
@@ -113,8 +104,8 @@ export function GoogleSignInIsolated({
     window.handleGoogleCallback = handleGoogleResponse;
 
     // Load Google Identity Services library
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
     script.defer = true;
     script.onload = () => {
@@ -130,23 +121,23 @@ export function GoogleSignInIsolated({
 
           // Render the button
           window.google.accounts.id.renderButton(buttonRef.current, {
-            type: "standard",
-            theme: "outline",
-            size: "large",
+            type: 'standard',
+            theme: 'outline',
+            size: 'large',
             text:
-              mode === "signin"
-                ? "signin_with"
-                : mode === "signup"
-                  ? "signup_with"
-                  : "continue_with",
+              mode === 'signin'
+                ? 'signin_with'
+                : mode === 'signup'
+                  ? 'signup_with'
+                  : 'continue_with',
             width: buttonRef.current.offsetWidth || 400,
-            locale: "en",
+            locale: 'en',
           });
 
           setIsInitialized(true);
         } catch (error) {
-          console.error("Failed to initialize Google Sign-In:", error);
-          onError?.("Failed to initialize Google Sign-In");
+          console.error('Failed to initialize Google Sign-In:', error);
+          onError?.('Failed to initialize Google Sign-In');
         }
       }
     };
@@ -162,11 +153,9 @@ export function GoogleSignInIsolated({
 
   if (!isConfigured) {
     return (
-      <div className="w-full p-3 text-center border rounded-md bg-muted/50">
-        <p className="text-sm text-muted-foreground">
-          Google Sign-In not configured
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
+      <div className="bg-muted/50 w-full rounded-md border p-3 text-center">
+        <p className="text-muted-foreground text-sm">Google Sign-In not configured</p>
+        <p className="text-muted-foreground mt-1 text-xs">
           See GOOGLE_OAUTH_SETUP.md for instructions
         </p>
       </div>
@@ -175,22 +164,18 @@ export function GoogleSignInIsolated({
 
   if (isLoading) {
     return (
-      <div className="w-full h-10 flex items-center justify-center border rounded-md">
-        <span className="text-sm text-muted-foreground">
-          Connecting to Google...
-        </span>
+      <div className="flex h-10 w-full items-center justify-center rounded-md border">
+        <span className="text-muted-foreground text-sm">Connecting to Google...</span>
       </div>
     );
   }
 
   return (
     <div className="w-full">
-      <div ref={buttonRef} className="w-full" style={{ minHeight: "40px" }} />
+      <div ref={buttonRef} className="w-full" style={{ minHeight: '40px' }} />
       {!isInitialized && (
-        <div className="w-full h-10 flex items-center justify-center border rounded-md">
-          <span className="text-sm text-muted-foreground">
-            Loading Google Sign-In...
-          </span>
+        <div className="flex h-10 w-full items-center justify-center rounded-md border">
+          <span className="text-muted-foreground text-sm">Loading Google Sign-In...</span>
         </div>
       )}
     </div>

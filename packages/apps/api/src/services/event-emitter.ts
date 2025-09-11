@@ -3,7 +3,7 @@
  * Emits events to AWS EventBridge for microservices communication
  */
 
-import { EventBridge } from "@aws-sdk/client-eventbridge";
+import { EventBridge } from '@aws-sdk/client-eventbridge';
 
 export class EventEmitter {
   private eventBridge: EventBridge;
@@ -13,7 +13,7 @@ export class EventEmitter {
     // Initialize EventBridge client
     // Will use default credentials from environment or IAM role
     this.eventBridge = new EventBridge({
-      region: process.env.AWS_REGION || "us-east-1",
+      region: process.env.AWS_REGION || 'us-east-1',
     });
   }
 
@@ -39,14 +39,14 @@ export class EventEmitter {
       hashtags?: string[];
       imageUrl?: string;
     },
-    version: number = 1,
+    version: number = 1
   ): Promise<void> {
     try {
       const result = await this.eventBridge.putEvents({
         Entries: [
           {
-            Source: "postolio.content",
-            DetailType: "content.updated",
+            Source: 'postolio.content',
+            DetailType: 'content.updated',
             Detail: JSON.stringify({
               contentId,
               brandId,
@@ -60,13 +60,13 @@ export class EventEmitter {
       });
 
       if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error("Failed to emit content updated event:", result.Entries);
+        console.error('Failed to emit content updated event:', result.Entries);
       } else {
         console.log(`Content updated event emitted for content ${contentId}`);
       }
     } catch (error) {
       // Log error but don't fail the request
-      console.error("Error emitting content updated event:", error);
+      console.error('Error emitting content updated event:', error);
     }
   }
 
@@ -78,14 +78,14 @@ export class EventEmitter {
     brandId: string,
     platform: string,
     platformPostId: string,
-    platformUrl: string,
+    platformUrl: string
   ): Promise<void> {
     try {
       const result = await this.eventBridge.putEvents({
         Entries: [
           {
-            Source: "postolio.content",
-            DetailType: "content.published",
+            Source: 'postolio.content',
+            DetailType: 'content.published',
             Detail: JSON.stringify({
               contentId,
               brandId,
@@ -99,15 +99,12 @@ export class EventEmitter {
       });
 
       if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error(
-          "Failed to emit content published event:",
-          result.Entries,
-        );
+        console.error('Failed to emit content published event:', result.Entries);
       } else {
         console.log(`Content published event emitted for content ${contentId}`);
       }
     } catch (error) {
-      console.error("Error emitting content published event:", error);
+      console.error('Error emitting content published event:', error);
     }
   }
 
@@ -118,14 +115,14 @@ export class EventEmitter {
     contentId: string,
     brandId: string,
     scheduleId: string,
-    scheduledAt: string,
+    scheduledAt: string
   ): Promise<void> {
     try {
       const result = await this.eventBridge.putEvents({
         Entries: [
           {
-            Source: "postolio.content",
-            DetailType: "content.scheduled",
+            Source: 'postolio.content',
+            DetailType: 'content.scheduled',
             Detail: JSON.stringify({
               contentId,
               brandId,
@@ -138,15 +135,12 @@ export class EventEmitter {
       });
 
       if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error(
-          "Failed to emit content scheduled event:",
-          result.Entries,
-        );
+        console.error('Failed to emit content scheduled event:', result.Entries);
       } else {
         console.log(`Content scheduled event emitted for content ${contentId}`);
       }
     } catch (error) {
-      console.error("Error emitting content scheduled event:", error);
+      console.error('Error emitting content scheduled event:', error);
     }
   }
 
@@ -156,14 +150,14 @@ export class EventEmitter {
   async emitContentSchedulingFailed(
     contentId: string,
     brandId: string,
-    error: string,
+    error: string
   ): Promise<void> {
     try {
       const result = await this.eventBridge.putEvents({
         Entries: [
           {
-            Source: "postolio.content",
-            DetailType: "content.scheduling.failed",
+            Source: 'postolio.content',
+            DetailType: 'content.scheduling.failed',
             Detail: JSON.stringify({
               contentId,
               brandId,
@@ -175,13 +169,10 @@ export class EventEmitter {
       });
 
       if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error(
-          "Failed to emit content scheduling failed event:",
-          result.Entries,
-        );
+        console.error('Failed to emit content scheduling failed event:', result.Entries);
       }
     } catch (error) {
-      console.error("Error emitting content scheduling failed event:", error);
+      console.error('Error emitting content scheduling failed event:', error);
     }
   }
 }

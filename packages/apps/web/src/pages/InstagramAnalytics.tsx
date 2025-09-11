@@ -1,23 +1,17 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useAuthStore } from "../stores/authStore";
-import { useBrandStore } from "../stores/brandStore";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
-import { Button } from "../components/ui/button";
-import { Badge } from "../components/ui/badge";
-import { Loader2, Eye, Heart, Users, Instagram } from "lucide-react";
-import { MetricsCard } from "../components/analytics/MetricsCard";
-import { EngagementChart } from "../components/analytics/EngagementChart";
-import { RefreshControls } from "../components/analytics/RefreshControls";
-import { TimeRangeSelector } from "../components/analytics/TimeRangeSelector";
-import { apiClient } from "../lib/api";
-import { formatDistanceToNow } from "date-fns";
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useAuthStore } from '../stores/authStore';
+import { useBrandStore } from '../stores/brandStore';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { Loader2, Eye, Heart, Users, Instagram } from 'lucide-react';
+import { MetricsCard } from '../components/analytics/MetricsCard';
+import { EngagementChart } from '../components/analytics/EngagementChart';
+import { RefreshControls } from '../components/analytics/RefreshControls';
+import { TimeRangeSelector } from '../components/analytics/TimeRangeSelector';
+import { apiClient } from '../lib/api';
+import { formatDistanceToNow } from 'date-fns';
 
 interface AnalyticsOverview {
   data: {
@@ -53,7 +47,7 @@ interface CacheStatus {
 export default function InstagramAnalytics() {
   const { getToken } = useAuthStore();
   const { selectedBrand } = useBrandStore();
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("7d");
+  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('7d');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch analytics overview
@@ -62,16 +56,15 @@ export default function InstagramAnalytics() {
     isLoading: overviewLoading,
     refetch: refetchOverview,
   } = useQuery<AnalyticsOverview>({
-    queryKey: ["instagram-analytics", "overview", selectedBrand?.id, timeRange],
+    queryKey: ['instagram-analytics', 'overview', selectedBrand?.id, timeRange],
     queryFn: async () => {
       const token = getToken();
-      if (!selectedBrand?.id || !token)
-        throw new Error("Missing brand or auth");
+      if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth');
       return apiClient.get(
         `/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=${timeRange}`,
         {
           headers: { Authorization: `Bearer ${token}` },
-        },
+        }
       );
     },
     enabled: !!selectedBrand?.id && !!getToken(),
@@ -84,17 +77,13 @@ export default function InstagramAnalytics() {
     isLoading: postsLoading,
     refetch: refetchPosts,
   } = useQuery<PostPerformance>({
-    queryKey: ["instagram-analytics", "posts", selectedBrand?.id],
+    queryKey: ['instagram-analytics', 'posts', selectedBrand?.id],
     queryFn: async () => {
       const token = getToken();
-      if (!selectedBrand?.id || !token)
-        throw new Error("Missing brand or auth");
-      return apiClient.get(
-        `/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth');
+      return apiClient.get(`/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
     },
     enabled: !!selectedBrand?.id && !!getToken(),
     refetchInterval: 10 * 60 * 1000, // Refetch every 10 minutes
@@ -102,17 +91,13 @@ export default function InstagramAnalytics() {
 
   // Fetch cache status
   const { data: status, refetch: refetchStatus } = useQuery<CacheStatus>({
-    queryKey: ["instagram-analytics", "status", selectedBrand?.id],
+    queryKey: ['instagram-analytics', 'status', selectedBrand?.id],
     queryFn: async () => {
       const token = getToken();
-      if (!selectedBrand?.id || !token)
-        throw new Error("Missing brand or auth");
-      return apiClient.get(
-        `/api/instagram-analytics/status/${selectedBrand.id}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth');
+      return apiClient.get(`/api/instagram-analytics/status/${selectedBrand.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
     },
     enabled: !!selectedBrand?.id && !!getToken(),
     refetchInterval: 2 * 60 * 1000, // Refetch every 2 minutes
@@ -129,13 +114,13 @@ export default function InstagramAnalytics() {
         {},
         {
           headers: { Authorization: `Bearer ${token}` },
-        },
+        }
       );
 
       // Refetch all data after refresh
       await Promise.all([refetchOverview(), refetchPosts(), refetchStatus()]);
     } catch (error) {
-      console.error("Refresh failed:", error);
+      console.error('Refresh failed:', error);
     } finally {
       setIsRefreshing(false);
     }
@@ -145,11 +130,9 @@ export default function InstagramAnalytics() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
-          <Instagram className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h1 className="text-2xl font-bold mb-4">Instagram Analytics</h1>
-          <p className="text-muted-foreground">
-            Please select a brand to view analytics.
-          </p>
+          <Instagram className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+          <h1 className="mb-4 text-2xl font-bold">Instagram Analytics</h1>
+          <p className="text-muted-foreground">Please select a brand to view analytics.</p>
         </div>
       </div>
     );
@@ -159,17 +142,16 @@ export default function InstagramAnalytics() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
-          <Instagram className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h1 className="text-2xl font-bold mb-4">Instagram Analytics</h1>
-          <Card className="max-w-md mx-auto">
+          <Instagram className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+          <h1 className="mb-4 text-2xl font-bold">Instagram Analytics</h1>
+          <Card className="mx-auto max-w-md">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Instagram className="h-5 w-5" />
                 Instagram Not Connected
               </CardTitle>
               <CardDescription>
-                Connect your Instagram account to view analytics data for{" "}
-                {selectedBrand.name}.
+                Connect your Instagram account to view analytics data for {selectedBrand.name}.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -184,17 +166,15 @@ export default function InstagramAnalytics() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8">
+    <div className="container mx-auto space-y-8 px-4 py-8">
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-2xl font-bold md:text-3xl">
             <Instagram className="h-6 w-6 md:h-8 md:w-8" />
             Instagram Analytics
           </h1>
-          <p className="text-muted-foreground">
-            Insights for {selectedBrand.name}
-          </p>
+          <p className="text-muted-foreground">Insights for {selectedBrand.name}</p>
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -210,25 +190,20 @@ export default function InstagramAnalytics() {
 
       {/* Status Bar */}
       {status && (
-        <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+        <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs sm:text-sm">
           <span className="whitespace-nowrap">
-            Last updated:{" "}
+            Last updated:{' '}
             {status.lastUpdated
               ? formatDistanceToNow(new Date(status.lastUpdated), {
                   addSuffix: true,
                 })
-              : "Never"}
+              : 'Never'}
           </span>
-          <Badge
-            variant={overview?.fromCache ? "secondary" : "default"}
-            className="text-xs"
-          >
-            {overview?.fromCache ? "Cached" : "Fresh"}
+          <Badge variant={overview?.fromCache ? 'secondary' : 'default'} className="text-xs">
+            {overview?.fromCache ? 'Cached' : 'Fresh'}
           </Badge>
           <span className="hidden sm:inline">•</span>
-          <span className="whitespace-nowrap">
-            Rate limit: {status.rateLimitRemaining}/200
-          </span>
+          <span className="whitespace-nowrap">Rate limit: {status.rateLimitRemaining}/200</span>
         </div>
       )}
 
@@ -240,9 +215,7 @@ export default function InstagramAnalytics() {
               <CardContent className="p-6">
                 <div className="flex items-center space-x-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-muted-foreground">
-                    Loading...
-                  </span>
+                  <span className="text-muted-foreground text-sm">Loading...</span>
                 </div>
               </CardContent>
             </Card>
@@ -261,21 +234,21 @@ export default function InstagramAnalytics() {
             value={overview.data.impressions}
             icon={<Eye className="h-4 w-4" />}
             trend={0}
-            description={`Past ${timeRange === "7d" ? "7 days" : timeRange === "30d" ? "30 days" : "90 days"}`}
+            description={`Past ${timeRange === '7d' ? '7 days' : timeRange === '30d' ? '30 days' : '90 days'}`}
           />
           <MetricsCard
             title="Reach"
             value={overview.data.reach}
             icon={<Heart className="h-4 w-4" />}
             trend={0}
-            description={`Past ${timeRange === "7d" ? "7 days" : timeRange === "30d" ? "30 days" : "90 days"}`}
+            description={`Past ${timeRange === '7d' ? '7 days' : timeRange === '30d' ? '30 days' : '90 days'}`}
           />
           <MetricsCard
             title="Profile Views"
             value={overview.data.profile_views || 0}
             icon={<Eye className="h-4 w-4" />}
             trend={0}
-            description={`Past ${timeRange === "7d" ? "7 days" : timeRange === "30d" ? "30 days" : "90 days"}`}
+            description={`Past ${timeRange === '7d' ? '7 days' : timeRange === '30d' ? '30 days' : '90 days'}`}
           />
         </div>
       ) : null}
@@ -301,9 +274,7 @@ export default function InstagramAnalytics() {
           <CardContent className="p-6">
             <div className="flex items-center space-x-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm text-muted-foreground">
-                Loading posts...
-              </span>
+              <span className="text-muted-foreground text-sm">Loading posts...</span>
             </div>
           </CardContent>
         </Card>
@@ -311,25 +282,19 @@ export default function InstagramAnalytics() {
         <Card>
           <CardHeader>
             <CardTitle>Top Performing Posts</CardTitle>
-            <CardDescription>
-              Your recent posts with engagement metrics
-            </CardDescription>
+            <CardDescription>Your recent posts with engagement metrics</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {posts.posts.slice(0, 6).map((post) => (
                 <Card key={post.id} className="overflow-hidden">
                   {post.media_url && (
-                    <div className="aspect-square relative">
-                      <img
-                        src={post.media_url}
-                        alt="Post"
-                        className="object-cover w-full h-full"
-                      />
+                    <div className="relative aspect-square">
+                      <img src={post.media_url} alt="Post" className="h-full w-full object-cover" />
                     </div>
                   )}
                   <CardContent className="p-4">
-                    <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                    <p className="text-muted-foreground mb-2 line-clamp-2 text-sm">
                       {post.caption}
                     </p>
                     <div className="flex items-center justify-between text-xs">
@@ -358,10 +323,8 @@ export default function InstagramAnalytics() {
       ) : (
         <Card>
           <CardContent className="p-6 text-center">
-            <Instagram className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">
-              No posts data available
-            </h3>
+            <Instagram className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+            <h3 className="mb-2 text-lg font-medium">No posts data available</h3>
             <p className="text-muted-foreground mb-4">
               Start posting content on Instagram to see analytics data.
             </p>

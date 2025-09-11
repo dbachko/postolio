@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { apiClient, type Brand } from "../lib/api";
-import EngagementSettings from "../components/EngagementSettings";
+import { useState, useEffect } from 'react';
+import { apiClient, type Brand } from '../lib/api';
+import EngagementSettings from '../components/EngagementSettings';
 
 interface EngagementStatus {
   configured: boolean;
@@ -20,12 +20,12 @@ interface EngagementStats {
 }
 
 export default function Engagement() {
-  const [selectedBrandId, setSelectedBrandId] = useState<string>("");
+  const [selectedBrandId, setSelectedBrandId] = useState<string>('');
   const [brands, setBrands] = useState<Brand[]>([]);
   const [status, setStatus] = useState<EngagementStatus | null>(null);
   const [stats, setStats] = useState<EngagementStats | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function Engagement() {
         setSelectedBrandId(response.brands[0].id);
       }
     } catch {
-      setError("Failed to load brands");
+      setError('Failed to load brands');
     }
   };
 
@@ -54,22 +54,20 @@ export default function Engagement() {
     if (!selectedBrandId) return;
 
     setLoading(true);
-    setError("");
+    setError('');
 
     try {
       const [statusResponse, statsResponse] = await Promise.all([
-        apiClient.get<{ status: EngagementStatus }>(
-          `/api/engagement/status/${selectedBrandId}`,
-        ),
+        apiClient.get<{ status: EngagementStatus }>(`/api/engagement/status/${selectedBrandId}`),
         apiClient.get<{ stats: EngagementStats }>(
-          `/api/engagement/stats/${selectedBrandId}?days=7`,
+          `/api/engagement/stats/${selectedBrandId}?days=7`
         ),
       ]);
 
       setStatus(statusResponse.status);
       setStats(statsResponse.stats);
     } catch {
-      setError("Failed to load engagement data");
+      setError('Failed to load engagement data');
     } finally {
       setLoading(false);
     }
@@ -79,15 +77,13 @@ export default function Engagement() {
     if (!selectedBrandId) return;
 
     setActionLoading(true);
-    setError("");
+    setError('');
 
     try {
       await apiClient.post(`/api/engagement/start/${selectedBrandId}`);
       await loadEngagementData(); // Refresh status
     } catch (err: unknown) {
-      setError(
-        (err as Error).message || "Failed to start engagement automation",
-      );
+      setError((err as Error).message || 'Failed to start engagement automation');
     } finally {
       setActionLoading(false);
     }
@@ -97,15 +93,13 @@ export default function Engagement() {
     if (!selectedBrandId) return;
 
     setActionLoading(true);
-    setError("");
+    setError('');
 
     try {
       await apiClient.post(`/api/engagement/stop/${selectedBrandId}`);
       await loadEngagementData(); // Refresh status
     } catch (err: unknown) {
-      setError(
-        (err as Error).message || "Failed to stop engagement automation",
-      );
+      setError((err as Error).message || 'Failed to stop engagement automation');
     } finally {
       setActionLoading(false);
     }
@@ -113,18 +107,16 @@ export default function Engagement() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-6xl mx-auto">
+      <div className="mx-auto max-w-6xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Engagement Automation
-          </h1>
+          <h1 className="mb-2 text-3xl font-bold text-gray-900">Engagement Automation</h1>
           <p className="text-gray-600">
             Automate likes, comments, and follows with smart safety controls
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+          <div className="mb-6 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700">
             {error}
           </div>
         )}
@@ -133,7 +125,7 @@ export default function Engagement() {
           <select
             value={selectedBrandId}
             onChange={(e) => setSelectedBrandId(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Select a brand</option>
             {brands.map((brand) => (
@@ -147,45 +139,41 @@ export default function Engagement() {
         {selectedBrandId && (
           <>
             {/* Status and Control Panel */}
-            <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-              <h3 className="text-lg font-semibold mb-4">Automation Status</h3>
+            <div className="mb-8 rounded-lg bg-white p-6 shadow-md">
+              <h3 className="mb-4 text-lg font-semibold">Automation Status</h3>
 
               {loading ? (
                 <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-blue-600"></div>
                   <span className="ml-2">Loading status...</span>
                 </div>
               ) : status ? (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="flex items-center space-x-3">
                       <div
-                        className={`w-3 h-3 rounded-full ${status.configured ? "bg-green-500" : "bg-red-500"}`}
+                        className={`h-3 w-3 rounded-full ${status.configured ? 'bg-green-500' : 'bg-red-500'}`}
                       ></div>
                       <span className="text-sm">
-                        Rules{" "}
-                        {status.configured ? "Configured" : "Not Configured"}
+                        Rules {status.configured ? 'Configured' : 'Not Configured'}
                       </span>
                     </div>
 
                     <div className="flex items-center space-x-3">
                       <div
-                        className={`w-3 h-3 rounded-full ${status.instagramConnected ? "bg-green-500" : "bg-red-500"}`}
+                        className={`h-3 w-3 rounded-full ${status.instagramConnected ? 'bg-green-500' : 'bg-red-500'}`}
                       ></div>
                       <span className="text-sm">
-                        Instagram{" "}
-                        {status.instagramConnected
-                          ? "Connected"
-                          : "Not Connected"}
+                        Instagram {status.instagramConnected ? 'Connected' : 'Not Connected'}
                       </span>
                     </div>
 
                     <div className="flex items-center space-x-3">
                       <div
-                        className={`w-3 h-3 rounded-full ${status.active ? "bg-green-500" : "bg-gray-400"}`}
+                        className={`h-3 w-3 rounded-full ${status.active ? 'bg-green-500' : 'bg-gray-400'}`}
                       ></div>
                       <span className="text-sm">
-                        Automation {status.active ? "Active" : "Inactive"}
+                        Automation {status.active ? 'Active' : 'Inactive'}
                       </span>
                     </div>
                   </div>
@@ -195,9 +183,9 @@ export default function Engagement() {
                       <button
                         onClick={handleStartEngagement}
                         disabled={actionLoading}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                        className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
                       >
-                        {actionLoading ? "Starting..." : "Start Automation"}
+                        {actionLoading ? 'Starting...' : 'Start Automation'}
                       </button>
                     )}
 
@@ -205,28 +193,27 @@ export default function Engagement() {
                       <button
                         onClick={handleStopEngagement}
                         disabled={actionLoading}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                        className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
                       >
-                        {actionLoading ? "Stopping..." : "Stop Automation"}
+                        {actionLoading ? 'Stopping...' : 'Stop Automation'}
                       </button>
                     )}
                   </div>
 
                   {!status.instagramConnected && (
-                    <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+                    <div className="rounded border border-yellow-400 bg-yellow-100 px-4 py-3 text-yellow-700">
                       <p className="text-sm">
-                        Connect your Instagram account to enable engagement
-                        automation.
+                        Connect your Instagram account to enable engagement automation.
                         <a href="/analytics" className="ml-1 underline">
                           Go to Analytics
-                        </a>{" "}
+                        </a>{' '}
                         to connect.
                       </p>
                     </div>
                   )}
 
                   {!status.configured && status.instagramConnected && (
-                    <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+                    <div className="rounded border border-blue-400 bg-blue-100 px-4 py-3 text-blue-700">
                       <p className="text-sm">
                         Configure your engagement rules below to get started.
                       </p>
@@ -238,43 +225,33 @@ export default function Engagement() {
 
             {/* Statistics */}
             {stats && (
-              <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-                <h3 className="text-lg font-semibold mb-4">
-                  Engagement Statistics (Last 7 Days)
-                </h3>
+              <div className="mb-8 rounded-lg bg-white p-6 shadow-md">
+                <h3 className="mb-4 text-lg font-semibold">Engagement Statistics (Last 7 Days)</h3>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {stats.totalActions}
-                    </div>
+                    <div className="text-2xl font-bold text-blue-600">{stats.totalActions}</div>
                     <div className="text-sm text-gray-600">Total Actions</div>
                   </div>
 
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {stats.likes}
-                    </div>
+                    <div className="text-2xl font-bold text-green-600">{stats.likes}</div>
                     <div className="text-sm text-gray-600">Likes</div>
                   </div>
 
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600">
-                      {stats.comments}
-                    </div>
+                    <div className="text-2xl font-bold text-purple-600">{stats.comments}</div>
                     <div className="text-sm text-gray-600">Comments</div>
                   </div>
 
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-orange-600">
-                      {stats.follows}
-                    </div>
+                    <div className="text-2xl font-bold text-orange-600">{stats.follows}</div>
                     <div className="text-sm text-gray-600">Follows</div>
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="mt-6 border-t border-gray-200 pt-6">
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div className="text-center">
                       <div className="text-xl font-semibold text-gray-900">
                         {stats.successRate.toFixed(1)}%
@@ -286,9 +263,7 @@ export default function Engagement() {
                       <div className="text-xl font-semibold text-gray-900">
                         {stats.averageActionsPerDay.toFixed(1)}
                       </div>
-                      <div className="text-sm text-gray-600">
-                        Avg. Actions/Day
-                      </div>
+                      <div className="text-sm text-gray-600">Avg. Actions/Day</div>
                     </div>
                   </div>
                 </div>
@@ -301,8 +276,8 @@ export default function Engagement() {
         )}
 
         {!selectedBrandId && brands.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-gray-400 mb-4">
+          <div className="py-12 text-center">
+            <div className="mb-4 text-gray-400">
               <svg
                 className="mx-auto h-12 w-12"
                 fill="none"
@@ -317,15 +292,13 @@ export default function Engagement() {
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No brands found
-            </h3>
+            <h3 className="mb-2 text-lg font-medium text-gray-900">No brands found</h3>
             <p className="text-gray-500">
               Create a brand first to configure engagement automation.
             </p>
             <a
               href="/brands"
-              className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="mt-4 inline-block rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
             >
               Create Brand
             </a>

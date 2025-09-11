@@ -8,14 +8,14 @@ export function convertFileToBase64(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result;
-      if (typeof result === "string") {
+      if (typeof result === 'string') {
         resolve(result);
       } else {
-        reject(new Error("Failed to convert file to base64"));
+        reject(new Error('Failed to convert file to base64'));
       }
     };
     reader.onerror = () => {
-      reject(new Error("Failed to read file"));
+      reject(new Error('Failed to read file'));
     };
     reader.readAsDataURL(file);
   });
@@ -29,9 +29,7 @@ export function convertFileToBase64(file: File): Promise<string> {
  */
 export function estimateBase64Size(base64String: string): number {
   // Remove data URL prefix if present
-  const base64Data = base64String.includes(",")
-    ? base64String.split(",")[1]
-    : base64String;
+  const base64Data = base64String.includes(',') ? base64String.split(',')[1] : base64String;
 
   // Base64 uses 4 characters to encode 3 bytes
   return Math.ceil((base64Data.length * 3) / 4);
@@ -43,14 +41,11 @@ export function estimateBase64Size(base64String: string): number {
  * @param maxSizeMB Maximum file size in megabytes
  * @returns Error message if invalid, undefined if valid
  */
-export function validateImageFile(
-  file: File,
-  maxSizeMB: number = 10,
-): string | undefined {
-  const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+export function validateImageFile(file: File, maxSizeMB: number = 10): string | undefined {
+  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
   if (!validTypes.includes(file.type)) {
-    return "Please upload a valid image file (JPEG, PNG, GIF, or WebP)";
+    return 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)';
   }
 
   const maxSize = maxSizeMB * 1024 * 1024;

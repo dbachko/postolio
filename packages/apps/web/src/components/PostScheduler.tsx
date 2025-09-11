@@ -1,8 +1,8 @@
-import { useRef, useCallback } from "react";
-import { format } from "date-fns";
-import { Label } from "./ui/label";
-import { Input } from "./ui/input";
-import { usePostSchedulerStore } from "../stores/postSchedulerStore";
+import { useRef, useCallback } from 'react';
+import { format } from 'date-fns';
+import { Label } from './ui/label';
+import { Input } from './ui/input';
+import { usePostSchedulerStore } from '../stores/postSchedulerStore';
 
 interface PostSchedulerProps {
   contentId?: string; // Optional content ID for store-based management
@@ -43,7 +43,7 @@ export function PostScheduler({
     if (contentId) {
       clearScheduledTime(contentId);
     }
-    onChange("");
+    onChange('');
   }, [contentId, onChange, clearScheduledTime]);
 
   const handleChange = useCallback(
@@ -62,7 +62,7 @@ export function PostScheduler({
         onChange(newValue);
       }
     },
-    [contentId, isEditing, startEditing, setLocalValue, onChange],
+    [contentId, isEditing, startEditing, setLocalValue, onChange]
   );
 
   const handleBlur = useCallback(() => {
@@ -78,7 +78,7 @@ export function PostScheduler({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") {
+      if (e.key === 'Enter') {
         e.preventDefault();
         if (contentId && isEditing) {
           const hasChanged = commitChanges(contentId);
@@ -88,7 +88,7 @@ export function PostScheduler({
         }
       }
     },
-    [contentId, isEditing, commitChanges, localValue, onChange],
+    [contentId, isEditing, commitChanges, localValue, onChange]
   );
 
   const handleFocus = useCallback(() => {
@@ -125,8 +125,7 @@ export function PostScheduler({
       />
       {showFormattedDate && displayValue && (
         <div className="text-xs text-gray-500">
-          Scheduled for:{" "}
-          {format(new Date(displayValue), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+          Scheduled for: {format(new Date(displayValue), "EEEE, MMMM d, yyyy 'at' h:mm a")}
         </div>
       )}
     </div>

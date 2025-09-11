@@ -1,0 +1,26 @@
+# Dependencies
+node_modules
+
+# Build outputs
+dist
+build
+out
+.next
+
+# Package managers
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Generated
+coverage
+reports
+.prisma
+**/.turbo
+**/.cache
+**/*.snap
+**/*.min.*
+
+# Env and misc
+.env*
+.DS_Store

@@ -93,7 +93,7 @@ frontend/src/types/
 
 ```typescript
 // Google token verification
-import { OAuth2Client } from "google-auth-library";
+import { OAuth2Client } from 'google-auth-library';
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 const ticket = await client.verifyIdToken({
   idToken: credential,
@@ -107,10 +107,7 @@ const ticket = await client.verifyIdToken({
 **Recommendation**: Implement retry logic for network failures
 
 ```typescript
-const retryWithExponentialBackoff = async (
-  fn: () => Promise<any>,
-  maxRetries = 3,
-) => {
+const retryWithExponentialBackoff = async (fn: () => Promise<any>, maxRetries = 3) => {
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
@@ -130,9 +127,9 @@ const retryWithExponentialBackoff = async (
 ```typescript
 // Preload in App.tsx for critical paths
 const preloadOAuthSDKs = () => {
-  if (window.location.pathname.includes("login")) {
-    import("@/components/auth/GoogleSignInIsolated");
-    import("@/components/auth/FacebookSignInIsolated");
+  if (window.location.pathname.includes('login')) {
+    import('@/components/auth/GoogleSignInIsolated');
+    import('@/components/auth/FacebookSignInIsolated');
   }
 };
 ```
@@ -178,31 +175,31 @@ interface OAuthStore {
 ### Unit Tests
 
 ```typescript
-describe("GoogleSignInIsolated", () => {
-  it("should handle missing configuration gracefully");
-  it("should cleanup SDK on unmount");
-  it("should handle authentication errors");
+describe('GoogleSignInIsolated', () => {
+  it('should handle missing configuration gracefully');
+  it('should cleanup SDK on unmount');
+  it('should handle authentication errors');
 });
 ```
 
 ### Integration Tests
 
 ```typescript
-describe("OAuth Flow", () => {
-  it("should complete Google sign-in flow");
-  it("should handle Facebook sign-in cancellation");
-  it("should link OAuth to existing account");
+describe('OAuth Flow', () => {
+  it('should complete Google sign-in flow');
+  it('should handle Facebook sign-in cancellation');
+  it('should link OAuth to existing account');
 });
 ```
 
 ### E2E Tests
 
 ```typescript
-test("OAuth login flow", async ({ page }) => {
-  await page.goto("/login");
+test('OAuth login flow', async ({ page }) => {
+  await page.goto('/login');
   await page.click('[data-testid="google-signin"]');
   // Handle OAuth popup
-  await expect(page).toHaveURL("/dashboard");
+  await expect(page).toHaveURL('/dashboard');
 });
 ```
 

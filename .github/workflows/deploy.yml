@@ -60,7 +60,7 @@ jobs:
       libs-changed: ${{ steps.changes.outputs.libs }}
       any-service-changed: ${{ steps.changes.outputs.any-service }}
       matrix: ${{ steps.matrix.outputs.matrix }}
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -137,7 +137,7 @@ jobs:
         run: |
           SERVICES=()
           ALL_SERVICES=("token-service" "publisher" "retry-handler" "dlq-processor" "schedule-management" "schedule-cleanup" "status-sync")
-          
+
           # Check if manual deployment with specific services
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.services }}" != "all" ]]; then
             IFS=',' read -ra REQUESTED_SERVICES <<< "${{ github.event.inputs.services }}"
@@ -159,14 +159,14 @@ jobs:
             [[ "${{ steps.changes.outputs.status-sync }}" == "true" ]] && SERVICES+=("\"status-sync\"")
             fi
           fi
-          
+
           if [ ${#SERVICES[@]} -eq 0 ]; then
             echo "matrix=[]" >> $GITHUB_OUTPUT
           else
             MATRIX=$(IFS=,; echo "[${SERVICES[*]}]")
             echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
           fi
-          
+
           echo "Services to deploy: $MATRIX"
 
   # ============================================
@@ -177,13 +177,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: detect-changes
     if: github.event_name == 'pull_request'
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Fetch git references
         run: |
           git fetch origin ${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}
@@ -271,7 +271,7 @@ jobs:
             path: packages/apps/web
             context: .
             changed: ${{ needs.detect-changes.outputs.web-changed }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -318,14 +318,14 @@ jobs:
         run: |
           LATEST_TAG="${{ matrix.service.name }}-$ENV-latest"
           NEW_TAG="${{ matrix.service.name }}-$ENV-$SHA"
-          
+
           # Get manifest from latest
           MANIFEST=$(aws ecr batch-get-image \
             --repository-name $REPO_NAME \
             --image-ids imageTag=$LATEST_TAG \
             --query 'images[].imageManifest' \
             --output text)
-          
+
           if [ -n "$MANIFEST" ]; then
             # Put the manifest with new tag
             aws ecr put-image \
@@ -352,7 +352,6 @@ jobs:
       needs.infra-bootstrap-check.outputs.needs-deploy == 'true' || 
       github.event_name == 'workflow_dispatch'
     environment: ${{ needs.detect-changes.outputs.environment }}
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -432,7 +431,7 @@ jobs:
       matrix:
         service: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
       max-parallel: 3
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -546,7 +545,6 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
     environment: ${{ needs.detect-changes.outputs.environment }}
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -611,7 +609,6 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
     environment: ${{ needs.detect-changes.outputs.environment }}
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -659,7 +656,7 @@ jobs:
             echo "Error: Frontend bucket not found"
             exit 1
           fi
-          
+
           # Sync static assets with cache
           aws s3 sync dist/ s3://$BUCKET_NAME/ \
             --delete \
@@ -694,7 +691,7 @@ jobs:
     needs: [deploy-frontend]
     if: needs.detect-changes.outputs.environment != 'prod'
     environment: ${{ needs.detect-changes.outputs.environment }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -730,7 +727,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, deploy-frontend, deploy-microservices]
     if: always()
-    
+
     steps:
       - name: Generate deployment report
         run: |
@@ -766,18 +763,18 @@ jobs:
             if ('${{ needs.detect-changes.outputs.web-changed }}' === 'true') changes.push('- Web Frontend');
             if ('${{ needs.detect-changes.outputs.token-service-changed }}' === 'true') changes.push('- Token Service');
             if ('${{ needs.detect-changes.outputs.publisher-changed }}' === 'true') changes.push('- Publisher Service');
-            
+
             const summary = `
             ## 🚀 Production Deployment Complete
-            
+
             **Environment:** ${{ needs.detect-changes.outputs.environment }}
             **Commit:** ${{ github.sha }}
             **Deployed by:** ${{ github.actor }}
-            
+
             ### Changed Services:
             ${changes.join('\n')}
             `;
-            
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,

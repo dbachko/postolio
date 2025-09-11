@@ -23,7 +23,10 @@ export class EcrRegistryStack extends cdk.Stack {
         // Keep a reasonable number of images overall (tagged or untagged)
         { maxImageCount: 100, tagStatus: ecr.TagStatus.ANY },
         // Cleanup untagged images quickly to save space
-        { tagStatus: ecr.TagStatus.UNTAGGED, maxImageAge: cdk.Duration.days(7) },
+        {
+          tagStatus: ecr.TagStatus.UNTAGGED,
+          maxImageAge: cdk.Duration.days(7),
+        },
       ],
     });
 
@@ -34,4 +37,3 @@ export class EcrRegistryStack extends cdk.Stack {
     });
   }
 }
-

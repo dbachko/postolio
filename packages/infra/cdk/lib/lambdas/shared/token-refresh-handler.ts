@@ -1,14 +1,7 @@
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-} from "@aws-sdk/lib-dynamodb";
-import { KMSClient, DecryptCommand, EncryptCommand } from "@aws-sdk/client-kms";
-import {
-  EventBridgeClient,
-  PutEventsCommand,
-} from "@aws-sdk/client-eventbridge";
-import axios from "axios";
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { KMSClient, DecryptCommand, EncryptCommand } from '@aws-sdk/client-kms';
+import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+import axios from 'axios';
 
 /**
  * Configuration options for TokenRefreshHandler
@@ -79,11 +72,7 @@ export class TokenRefreshHandler {
    * }
    * ```
    */
-  async getToken(
-    userId: string,
-    brandId: string,
-    platform: string,
-  ): Promise<Token | null> {
+  async getToken(userId: string, brandId: string, platform: string): Promise<Token | null> {
     try {
       const result = await this.options.docClient.send(
         new GetCommand({
@@ -92,7 +81,7 @@ export class TokenRefreshHandler {
             pk: `${userId}#${platform}`,
             sk: brandId,
           },
-        }),
+        })
       );
 
       if (!result.Item) {
@@ -100,9 +89,7 @@ export class TokenRefreshHandler {
       }
 
       // Decrypt tokens
-      const accessToken = await this.decryptData(
-        result.Item.encryptedAccessToken,
-      );
+      const accessToken = await this.decryptData(result.Item.encryptedAccessToken);
       const refreshToken = result.Item.encryptedRefreshToken
         ? await this.decryptData(result.Item.encryptedRefreshToken)
         : undefined;
@@ -117,7 +104,7 @@ export class TokenRefreshHandler {
         needsRefresh,
       };
     } catch (error) {
-      console.error("Failed to get token", {
+      console.error('Failed to get token', {
         userId,
         brandId,
         platform,
@@ -156,7 +143,7 @@ export class TokenRefreshHandler {
       accessToken: string;
       refreshToken?: string;
       expiresIn: number;
-    },
+    }
   ): Promise<void> {
     const encryptedAccessToken = await this.encryptData(token.accessToken);
     const encryptedRefreshToken = token.refreshToken
@@ -179,7 +166,7 @@ export class TokenRefreshHandler {
           lastRefreshed: new Date().toISOString(),
           ttl,
         },
-      }),
+      })
     );
   }
 
@@ -215,7 +202,7 @@ export class TokenRefreshHandler {
     userId: string,
     brandId: string,
     platform: string,
-    refreshFunction: (refreshToken: string) => Promise<any>,
+    refreshFunction: (refreshToken: string) => Promise<any>
   ): Promise<Token | null> {
     const token = await this.getToken(userId, brandId, platform);
     if (!token || !token.refreshToken) {
@@ -236,8 +223,8 @@ export class TokenRefreshHandler {
         new PutEventsCommand({
           Entries: [
             {
-              Source: "postolio.token",
-              DetailType: "token.refreshed",
+              Source: 'postolio.token',
+              DetailType: 'token.refreshed',
               Detail: JSON.stringify({
                 userId,
                 brandId,
@@ -247,7 +234,7 @@ export class TokenRefreshHandler {
               EventBusName: this.options.eventBusName,
             },
           ],
-        }),
+        })
       );
 
       return {
@@ -257,7 +244,7 @@ export class TokenRefreshHandler {
         needsRefresh: false,
       };
     } catch (error) {
-      console.error("Token refresh failed", {
+      console.error('Token refresh failed', {
         userId,
         brandId,
         platform,
@@ -269,19 +256,19 @@ export class TokenRefreshHandler {
         new PutEventsCommand({
           Entries: [
             {
-              Source: "postolio.token",
-              DetailType: "token.refresh.failed",
+              Source: 'postolio.token',
+              DetailType: 'token.refresh.failed',
               Detail: JSON.stringify({
                 userId,
                 brandId,
                 platform,
-                error: error instanceof Error ? error.message : "Unknown error",
+                error: error instanceof Error ? error.message : 'Unknown error',
                 failedAt: new Date().toISOString(),
               }),
               EventBusName: this.options.eventBusName,
             },
           ],
-        }),
+        })
       );
 
       return null;
@@ -300,9 +287,9 @@ export class TokenRefreshHandler {
       new EncryptCommand({
         KeyId: this.options.kmsKeyId,
         Plaintext: Buffer.from(data),
-      }),
+      })
     );
-    return Buffer.from(result.CiphertextBlob!).toString("base64");
+    return Buffer.from(result.CiphertextBlob!).toString('base64');
   }
 
   /**
@@ -315,9 +302,9 @@ export class TokenRefreshHandler {
   private async decryptData(encryptedData: string): Promise<string> {
     const result = await this.options.kmsClient.send(
       new DecryptCommand({
-        CiphertextBlob: Buffer.from(encryptedData, "base64"),
-      }),
+        CiphertextBlob: Buffer.from(encryptedData, 'base64'),
+      })
     );
-    return Buffer.from(result.Plaintext!).toString("utf-8");
+    return Buffer.from(result.Plaintext!).toString('utf-8');
   }
 }

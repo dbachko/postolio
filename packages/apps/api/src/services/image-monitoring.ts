@@ -2,13 +2,13 @@ import {
   CloudWatchClient,
   PutMetricDataCommand,
   type MetricDatum,
-} from "@aws-sdk/client-cloudwatch";
-import { FastifyInstance } from "fastify";
+} from '@aws-sdk/client-cloudwatch';
+import { FastifyInstance } from 'fastify';
 
 export class ImageMonitoringService {
   private cloudWatchClient: CloudWatchClient;
   private app: FastifyInstance;
-  private namespace: string = "Postolio/Images";
+  private namespace: string = 'Postolio/Images';
   private metricsBuffer: MetricDatum[] = [];
   private flushInterval: NodeJS.Timeout | null = null;
 
@@ -23,7 +23,7 @@ export class ImageMonitoringService {
       : undefined;
 
     this.cloudWatchClient = new CloudWatchClient({
-      region: process.env.AWS_REGION || "us-east-1",
+      region: process.env.AWS_REGION || 'us-east-1',
       ...(credentials && { credentials }),
     });
 
@@ -47,33 +47,33 @@ export class ImageMonitoringService {
   async trackImageUpload(
     sizeBytes: number,
     processingTimeMs: number,
-    source: "dalle3" | "midjourney",
+    source: 'dalle3' | 'midjourney'
   ) {
     this.metricsBuffer.push(
       {
-        MetricName: "ImageUploads",
+        MetricName: 'ImageUploads',
         Value: 1,
-        Unit: "Count",
+        Unit: 'Count',
         Timestamp: new Date(),
         Dimensions: [
-          { Name: "Source", Value: source },
-          { Name: "Environment", Value: process.env.NODE_ENV || "development" },
+          { Name: 'Source', Value: source },
+          { Name: 'Environment', Value: process.env.NODE_ENV || 'development' },
         ],
       },
       {
-        MetricName: "ImageSizeBytes",
+        MetricName: 'ImageSizeBytes',
         Value: sizeBytes,
-        Unit: "Bytes",
+        Unit: 'Bytes',
         Timestamp: new Date(),
-        Dimensions: [{ Name: "Source", Value: source }],
+        Dimensions: [{ Name: 'Source', Value: source }],
       },
       {
-        MetricName: "ProcessingTimeMs",
+        MetricName: 'ProcessingTimeMs',
         Value: processingTimeMs,
-        Unit: "Milliseconds",
+        Unit: 'Milliseconds',
         Timestamp: new Date(),
-        Dimensions: [{ Name: "Operation", Value: "Upload" }],
-      },
+        Dimensions: [{ Name: 'Operation', Value: 'Upload' }],
+      }
     );
 
     // Flush if buffer is getting large
@@ -85,15 +85,15 @@ export class ImageMonitoringService {
   /**
    * Track image deletion
    */
-  async trackImageDeletion(reason: "user" | "retention" | "gdpr") {
+  async trackImageDeletion(reason: 'user' | 'retention' | 'gdpr') {
     this.metricsBuffer.push({
-      MetricName: "ImageDeletions",
+      MetricName: 'ImageDeletions',
       Value: 1,
-      Unit: "Count",
+      Unit: 'Count',
       Timestamp: new Date(),
       Dimensions: [
-        { Name: "Reason", Value: reason },
-        { Name: "Environment", Value: process.env.NODE_ENV || "development" },
+        { Name: 'Reason', Value: reason },
+        { Name: 'Environment', Value: process.env.NODE_ENV || 'development' },
       ],
     });
   }
@@ -104,17 +104,17 @@ export class ImageMonitoringService {
   async trackCDNPerformance(hitRate: number, responseTimeMs: number) {
     this.metricsBuffer.push(
       {
-        MetricName: "CDNCacheHitRate",
+        MetricName: 'CDNCacheHitRate',
         Value: hitRate,
-        Unit: "Percent",
+        Unit: 'Percent',
         Timestamp: new Date(),
       },
       {
-        MetricName: "CDNResponseTime",
+        MetricName: 'CDNResponseTime',
         Value: responseTimeMs,
-        Unit: "Milliseconds",
+        Unit: 'Milliseconds',
         Timestamp: new Date(),
-      },
+      }
     );
   }
 
@@ -124,18 +124,18 @@ export class ImageMonitoringService {
   async trackStorageCosts(totalSizeGB: number, estimatedMonthlyCost: number) {
     this.metricsBuffer.push(
       {
-        MetricName: "TotalStorageGB",
+        MetricName: 'TotalStorageGB',
         Value: totalSizeGB,
-        Unit: "Gigabytes",
+        Unit: 'Gigabytes',
         Timestamp: new Date(),
       },
       {
-        MetricName: "EstimatedMonthlyCost",
+        MetricName: 'EstimatedMonthlyCost',
         Value: estimatedMonthlyCost,
-        Unit: "None", // USD
+        Unit: 'None', // USD
         Timestamp: new Date(),
-        Dimensions: [{ Name: "CostType", Value: "Storage" }],
-      },
+        Dimensions: [{ Name: 'CostType', Value: 'Storage' }],
+      }
     );
   }
 
@@ -144,13 +144,13 @@ export class ImageMonitoringService {
    */
   async trackError(operation: string, errorType: string) {
     this.metricsBuffer.push({
-      MetricName: "ImageOperationErrors",
+      MetricName: 'ImageOperationErrors',
       Value: 1,
-      Unit: "Count",
+      Unit: 'Count',
       Timestamp: new Date(),
       Dimensions: [
-        { Name: "Operation", Value: operation },
-        { Name: "ErrorType", Value: errorType },
+        { Name: 'Operation', Value: operation },
+        { Name: 'ErrorType', Value: errorType },
       ],
     });
   }
@@ -162,13 +162,8 @@ export class ImageMonitoringService {
     if (this.metricsBuffer.length === 0) return;
 
     // Don't send metrics in development unless explicitly enabled
-    if (
-      process.env.NODE_ENV !== "production" &&
-      process.env.ENABLE_CLOUDWATCH !== "true"
-    ) {
-      this.app.log.debug(
-        `Would send ${this.metricsBuffer.length} metrics to CloudWatch`,
-      );
+    if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_CLOUDWATCH !== 'true') {
+      this.app.log.debug(`Would send ${this.metricsBuffer.length} metrics to CloudWatch`);
       this.metricsBuffer = [];
       return;
     }
@@ -188,17 +183,11 @@ export class ImageMonitoringService {
         await this.cloudWatchClient.send(command);
       }
 
-      this.app.log.info(
-        `Sent ${this.metricsBuffer.length} metrics to CloudWatch`,
-      );
+      this.app.log.info(`Sent ${this.metricsBuffer.length} metrics to CloudWatch`);
       this.metricsBuffer = [];
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      this.app.log.error(
-        { error: message },
-        "Failed to send metrics to CloudWatch",
-      );
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      this.app.log.error({ error: message }, 'Failed to send metrics to CloudWatch');
       // Keep metrics in buffer for retry
       if (this.metricsBuffer.length > 100) {
         // Prevent memory issues by clearing old metrics
@@ -211,7 +200,7 @@ export class ImageMonitoringService {
    * Get image storage statistics from database
    */
   async getStorageStats() {
-    const { PrismaClient } = await import("@postolio/database");
+    const { PrismaClient } = await import('@postolio/database');
     const prisma = new PrismaClient();
 
     try {
@@ -223,9 +212,7 @@ export class ImageMonitoringService {
         },
       });
 
-      const imagesBySource = await prisma.$queryRaw<
-        Array<{ source: string; count: bigint }>
-      >`
+      const imagesBySource = await prisma.$queryRaw<Array<{ source: string; count: bigint }>>`
         SELECT 
           CASE 
             WHEN image_url LIKE '%dalle%' THEN 'dalle3'
@@ -239,7 +226,7 @@ export class ImageMonitoringService {
       `;
 
       const imagesByRegion = await prisma.content.groupBy({
-        by: ["imageRegion"],
+        by: ['imageRegion'],
         where: {
           s3ImageKey: {
             not: null,
@@ -292,41 +279,39 @@ export class ImageMonitoringService {
     const dashboardBody = {
       widgets: [
         {
-          type: "metric",
+          type: 'metric',
           properties: {
             metrics: [
-              ["Postolio/Images", "ImageUploads", { stat: "Sum" }],
-              [".", "ImageDeletions", { stat: "Sum" }],
+              ['Postolio/Images', 'ImageUploads', { stat: 'Sum' }],
+              ['.', 'ImageDeletions', { stat: 'Sum' }],
             ],
             period: 300,
-            stat: "Sum",
-            region: process.env.AWS_REGION || "us-east-1",
-            title: "Image Operations",
+            stat: 'Sum',
+            region: process.env.AWS_REGION || 'us-east-1',
+            title: 'Image Operations',
           },
         },
         {
-          type: "metric",
+          type: 'metric',
           properties: {
-            metrics: [
-              ["Postolio/Images", "ProcessingTimeMs", { stat: "Average" }],
-            ],
+            metrics: [['Postolio/Images', 'ProcessingTimeMs', { stat: 'Average' }]],
             period: 300,
-            stat: "Average",
-            region: process.env.AWS_REGION || "us-east-1",
-            title: "Processing Performance",
+            stat: 'Average',
+            region: process.env.AWS_REGION || 'us-east-1',
+            title: 'Processing Performance',
           },
         },
         {
-          type: "metric",
+          type: 'metric',
           properties: {
             metrics: [
-              ["Postolio/Images", "TotalStorageGB"],
-              [".", "EstimatedMonthlyCost"],
+              ['Postolio/Images', 'TotalStorageGB'],
+              ['.', 'EstimatedMonthlyCost'],
             ],
             period: 3600,
-            stat: "Average",
-            region: process.env.AWS_REGION || "us-east-1",
-            title: "Storage & Costs",
+            stat: 'Average',
+            region: process.env.AWS_REGION || 'us-east-1',
+            title: 'Storage & Costs',
           },
         },
       ],
@@ -334,7 +319,7 @@ export class ImageMonitoringService {
 
     this.app.log.info(
       { dashboardBody: JSON.stringify(dashboardBody, null, 2) },
-      "CloudWatch Dashboard JSON:",
+      'CloudWatch Dashboard JSON:'
     );
     return dashboardBody;
   }
@@ -353,9 +338,7 @@ export class ImageMonitoringService {
 // Singleton instance
 let imageMonitoring: ImageMonitoringService | null = null;
 
-export function getImageMonitoring(
-  app: FastifyInstance,
-): ImageMonitoringService {
+export function getImageMonitoring(app: FastifyInstance): ImageMonitoringService {
   if (!imageMonitoring) {
     imageMonitoring = new ImageMonitoringService(app);
   }

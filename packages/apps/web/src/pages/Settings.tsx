@@ -1,12 +1,6 @@
-import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -15,21 +9,17 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { toast } from "sonner";
-import { useTimezone } from "../contexts/TimezoneContext";
-import {
-  COMMON_TIMEZONES,
-  getUserTimezone,
-  getTimezoneAbbr,
-} from "../lib/timezone";
-import { Globe, Clock, Info, Save, RefreshCw } from "lucide-react";
-import { useBrandStore } from "../stores/brandStore";
-import { apiClient } from "../lib/api";
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { toast } from 'sonner';
+import { useTimezone } from '../contexts/TimezoneContext';
+import { COMMON_TIMEZONES, getUserTimezone, getTimezoneAbbr } from '../lib/timezone';
+import { Globe, Clock, Info, Save, RefreshCw } from 'lucide-react';
+import { useBrandStore } from '../stores/brandStore';
+import { apiClient } from '../lib/api';
 
 export function Settings() {
   const { timezone, isAutoDetected, setTimezone } = useTimezone();
@@ -49,7 +39,7 @@ export function Settings() {
           const response = await apiClient.getBrandTimezone(selectedBrand.id);
           setBrandTimezone(response.timezone || null);
         } catch (error) {
-          console.error("Failed to fetch brand timezone:", error);
+          console.error('Failed to fetch brand timezone:', error);
         }
       };
       fetchBrandTimezone();
@@ -57,7 +47,7 @@ export function Settings() {
   }, [selectedBrand]);
 
   const handleTimezoneChange = (value: string) => {
-    if (value === "auto") {
+    if (value === 'auto') {
       setAutoDetect(true);
       setLocalTimezone(detectedTimezone);
     } else {
@@ -76,16 +66,12 @@ export function Settings() {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
-      await setTimezone(
-        autoDetect ? detectedTimezone : localTimezone,
-        autoDetect,
-      );
-      toast.success("Timezone settings saved successfully");
+      await setTimezone(autoDetect ? detectedTimezone : localTimezone, autoDetect);
+      toast.success('Timezone settings saved successfully');
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to save settings";
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save settings';
       toast.error(errorMessage);
-      console.error("Error saving settings:", error);
+      console.error('Error saving settings:', error);
     } finally {
       setIsSaving(false);
     }
@@ -97,10 +83,10 @@ export function Settings() {
     setIsSaving(true);
     try {
       await apiClient.updateBrandTimezone(selectedBrand.id, brandTimezone);
-      toast.success("Brand timezone settings saved successfully");
+      toast.success('Brand timezone settings saved successfully');
     } catch (error) {
-      toast.error("Failed to save brand timezone");
-      console.error("Error saving brand timezone:", error);
+      toast.error('Failed to save brand timezone');
+      console.error('Error saving brand timezone:', error);
     } finally {
       setIsSaving(false);
     }
@@ -113,12 +99,10 @@ export function Settings() {
   };
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl">
+    <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-gray-600 mt-2">
-          Manage your account and application preferences
-        </p>
+        <p className="mt-2 text-gray-600">Manage your account and application preferences</p>
       </div>
 
       <Tabs defaultValue="timezone" className="space-y-6">
@@ -133,12 +117,11 @@ export function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Globe className="w-5 h-5" />
+                <Globe className="h-5 w-5" />
                 Timezone Settings
               </CardTitle>
               <CardDescription>
-                Configure how dates and times are displayed across the
-                application
+                Configure how dates and times are displayed across the application
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -147,18 +130,18 @@ export function Settings() {
                 <Info className="h-4 w-4" />
                 <AlertTitle>Current Timezone</AlertTitle>
                 <AlertDescription>
-                  <div className="space-y-1 mt-2">
+                  <div className="mt-2 space-y-1">
                     <div>
-                      <span className="font-medium">Display timezone:</span>{" "}
-                      {timezone} ({getTimezoneAbbr(timezone)})
+                      <span className="font-medium">Display timezone:</span> {timezone} (
+                      {getTimezoneAbbr(timezone)})
                     </div>
                     <div>
-                      <span className="font-medium">Browser detected:</span>{" "}
-                      {detectedTimezone} ({getTimezoneAbbr(detectedTimezone)})
+                      <span className="font-medium">Browser detected:</span> {detectedTimezone} (
+                      {getTimezoneAbbr(detectedTimezone)})
                     </div>
                     <div>
-                      <span className="font-medium">Current time:</span>{" "}
-                      {new Date().toLocaleString("en-US", {
+                      <span className="font-medium">Current time:</span>{' '}
+                      {new Date().toLocaleString('en-US', {
                         timeZone: timezone,
                       })}
                     </div>
@@ -172,9 +155,7 @@ export function Settings() {
                   <Label htmlFor="auto-detect" className="text-base">
                     Auto-detect timezone
                   </Label>
-                  <p className="text-sm text-gray-500">
-                    Automatically use your browser's timezone
-                  </p>
+                  <p className="text-sm text-gray-500">Automatically use your browser's timezone</p>
                 </div>
                 <Switch
                   id="auto-detect"
@@ -187,17 +168,13 @@ export function Settings() {
               {!autoDetect && (
                 <div className="space-y-2">
                   <Label htmlFor="timezone-select">Select timezone</Label>
-                  <Select
-                    value={localTimezone}
-                    onValueChange={handleTimezoneChange}
-                  >
+                  <Select value={localTimezone} onValueChange={handleTimezoneChange}>
                     <SelectTrigger id="timezone-select" className="w-full">
                       <SelectValue>
                         <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          {COMMON_TIMEZONES.find(
-                            (tz) => tz.value === localTimezone,
-                          )?.label || localTimezone}
+                          <Clock className="h-4 w-4" />
+                          {COMMON_TIMEZONES.find((tz) => tz.value === localTimezone)?.label ||
+                            localTimezone}
                         </div>
                       </SelectValue>
                     </SelectTrigger>
@@ -205,13 +182,13 @@ export function Settings() {
                       {Object.entries(
                         COMMON_TIMEZONES.reduce(
                           (groups, tz) => {
-                            const group = tz.group || "Other";
+                            const group = tz.group || 'Other';
                             if (!groups[group]) groups[group] = [];
                             groups[group].push(tz);
                             return groups;
                           },
-                          {} as Record<string, typeof COMMON_TIMEZONES>,
-                        ),
+                          {} as Record<string, typeof COMMON_TIMEZONES>
+                        )
                       ).map(([group, timezones]) => (
                         <SelectGroup key={group}>
                           <SelectLabel>{group}</SelectLabel>
@@ -234,15 +211,15 @@ export function Settings() {
                   disabled={isSaving}
                   className="flex items-center gap-2"
                 >
-                  <Save className="w-4 h-4" />
-                  {isSaving ? "Saving..." : "Save Settings"}
+                  <Save className="h-4 w-4" />
+                  {isSaving ? 'Saving...' : 'Save Settings'}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={handleResetToDefault}
                   className="flex items-center gap-2"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className="h-4 w-4" />
                   Reset to Default
                 </Button>
               </div>
@@ -254,11 +231,11 @@ export function Settings() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5" />
+                  <Clock className="h-5 w-5" />
                   Brand Posting Timezone
                 </CardTitle>
                 <CardDescription>
-                  Override timezone for posting content for{" "}
+                  Override timezone for posting content for{' '}
                   <span className="font-medium">{selectedBrand.name}</span>
                 </CardDescription>
               </CardHeader>
@@ -266,49 +243,42 @@ export function Settings() {
                 <Alert>
                   <Info className="h-4 w-4" />
                   <AlertDescription>
-                    Set a specific timezone for this brand's posting schedule.
-                    Leave empty to use your account timezone.
+                    Set a specific timezone for this brand's posting schedule. Leave empty to use
+                    your account timezone.
                   </AlertDescription>
                 </Alert>
 
                 <div className="space-y-2">
-                  <Label htmlFor="brand-timezone">
-                    Brand timezone (optional)
-                  </Label>
+                  <Label htmlFor="brand-timezone">Brand timezone (optional)</Label>
                   <Select
-                    value={brandTimezone || "default"}
-                    onValueChange={(value) =>
-                      setBrandTimezone(value === "default" ? null : value)
-                    }
+                    value={brandTimezone || 'default'}
+                    onValueChange={(value) => setBrandTimezone(value === 'default' ? null : value)}
                   >
                     <SelectTrigger id="brand-timezone" className="w-full">
                       <SelectValue>
                         {brandTimezone
-                          ? COMMON_TIMEZONES.find(
-                              (tz) => tz.value === brandTimezone,
-                            )?.label || brandTimezone
-                          : "Use account timezone"}
+                          ? COMMON_TIMEZONES.find((tz) => tz.value === brandTimezone)?.label ||
+                            brandTimezone
+                          : 'Use account timezone'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="default">
-                        Use account timezone
-                      </SelectItem>
+                      <SelectItem value="default">Use account timezone</SelectItem>
                       {Object.entries(
                         COMMON_TIMEZONES.reduce(
                           (groups, tz) => {
-                            const group = tz.group || "Other";
+                            const group = tz.group || 'Other';
                             if (!groups[group]) groups[group] = [];
                             groups[group].push(tz);
                             return groups;
                           },
-                          {} as Record<string, typeof COMMON_TIMEZONES>,
-                        ),
+                          {} as Record<string, typeof COMMON_TIMEZONES>
+                        )
                       ).map(([group, timezones]) => (
                         <SelectGroup key={group}>
                           <SelectLabel>{group}</SelectLabel>
                           {timezones
-                            .filter((tz) => tz.value !== "auto")
+                            .filter((tz) => tz.value !== 'auto')
                             .map((tz) => (
                               <SelectItem key={tz.value} value={tz.value}>
                                 {tz.label}
@@ -325,8 +295,8 @@ export function Settings() {
                   disabled={isSaving}
                   className="flex items-center gap-2"
                 >
-                  <Save className="w-4 h-4" />
-                  {isSaving ? "Saving..." : "Save Brand Settings"}
+                  <Save className="h-4 w-4" />
+                  {isSaving ? 'Saving...' : 'Save Brand Settings'}
                 </Button>
               </CardContent>
             </Card>
@@ -337,9 +307,7 @@ export function Settings() {
           <Card>
             <CardHeader>
               <CardTitle>Account Settings</CardTitle>
-              <CardDescription>
-                Manage your account information and preferences
-              </CardDescription>
+              <CardDescription>Manage your account information and preferences</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-gray-500">Account settings coming soon...</p>
@@ -351,14 +319,10 @@ export function Settings() {
           <Card>
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>
-                Configure how you receive notifications
-              </CardDescription>
+              <CardDescription>Configure how you receive notifications</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-500">
-                Notification settings coming soon...
-              </p>
+              <p className="text-gray-500">Notification settings coming soon...</p>
             </CardContent>
           </Card>
         </TabsContent>

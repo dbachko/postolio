@@ -1,9 +1,9 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { OAuth2Client } from "google-auth-library";
-import { signJWT } from "../services/jwt.js";
-import { getDatabaseClient } from "../config/database.js";
-import bcrypt from "bcrypt";
-import { randomBytes } from "crypto";
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { OAuth2Client } from 'google-auth-library';
+import { signJWT } from '../services/jwt.js';
+import { getDatabaseClient } from '../config/database.js';
+import bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 
 const prisma = getDatabaseClient();
 
@@ -11,8 +11,7 @@ const prisma = getDatabaseClient();
 const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI ||
-    "http://localhost:3000/api/auth/google/callback",
+  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback'
 );
 
 interface GoogleTokenBody {
@@ -29,10 +28,10 @@ interface GoogleUserInfo {
 
 function ensureAuth(
   request: FastifyRequest,
-  reply: FastifyReply,
+  reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string; email?: string } } {
   if (!request.user) {
-    reply.code(401).send({ error: "Unauthorized" });
+    reply.code(401).send({ error: 'Unauthorized' });
     return false;
   }
   return true;
@@ -40,86 +39,57 @@ function ensureAuth(
 
 const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
   // Google OAuth callback - handles the ID token from frontend
-  fastify.post<{ Body: GoogleTokenBody }>(
-    "/google/verify",
-    async (request, reply) => {
-      try {
-        const { credential } = request.body;
+  fastify.post<{ Body: GoogleTokenBody }>('/google/verify', async (request, reply) => {
+    try {
+      const { credential } = request.body;
 
-        if (!credential) {
-          return reply.code(400).send({ error: "No credential provided" });
-        }
+      if (!credential) {
+        return reply.code(400).send({ error: 'No credential provided' });
+      }
 
-        // Verify the Google ID token
-        const ticket = await googleClient.verifyIdToken({
-          idToken: credential,
-          audience: process.env.GOOGLE_CLIENT_ID || "",
-        });
+      // Verify the Google ID token
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID || '',
+      });
 
-        const payload = ticket.getPayload();
-        if (!payload) {
-          return reply.code(401).send({ error: "Invalid Google token" });
-        }
+      const payload = ticket.getPayload();
+      if (!payload) {
+        return reply.code(401).send({ error: 'Invalid Google token' });
+      }
 
-        const googleUserInfo: GoogleUserInfo = {
-          id: payload.sub || "",
-          email: payload.email!,
-          name: payload.name || payload.email?.split("@")[0] || "User",
-          picture: payload.picture,
-          email_verified: payload.email_verified,
-        };
+      const googleUserInfo: GoogleUserInfo = {
+        id: payload.sub || '',
+        email: payload.email!,
+        name: payload.name || payload.email?.split('@')[0] || 'User',
+        picture: payload.picture,
+        email_verified: payload.email_verified,
+      };
 
-        // Check if user exists with this email
-        let user = await prisma.user.findUnique({
-          where: { email: googleUserInfo.email },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            googleId: true,
-            subscriptionTier: true,
-            emailVerified: true,
-          },
-        });
+      // Check if user exists with this email
+      let user = await prisma.user.findUnique({
+        where: { email: googleUserInfo.email },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          googleId: true,
+          subscriptionTier: true,
+          emailVerified: true,
+        },
+      });
 
-        let isNewUser = false;
+      let isNewUser = false;
 
-        if (user) {
-          // User exists - update Google ID if not set
-          if (!user.googleId) {
-            user = await prisma.user.update({
-              where: { id: user.id },
-              data: {
-                googleId: googleUserInfo.id,
-                // Google OAuth emails are always verified (Google has already verified them)
-                emailVerified: true,
-              },
-              select: {
-                id: true,
-                email: true,
-                name: true,
-                googleId: true,
-                subscriptionTier: true,
-                emailVerified: true,
-              },
-            });
-          }
-        } else {
-          // Create new user with Google OAuth
-          // Generate a cryptographically secure random password for OAuth users
-          const secureRandomPassword = randomBytes(32).toString("hex");
-          const hashedPassword = await bcrypt.hash(secureRandomPassword, 10);
-
-          user = await prisma.user.create({
+      if (user) {
+        // User exists - update Google ID if not set
+        if (!user.googleId) {
+          user = await prisma.user.update({
+            where: { id: user.id },
             data: {
-              email: googleUserInfo.email,
-              password: hashedPassword,
-              name: googleUserInfo.name,
               googleId: googleUserInfo.id,
-              profilePicture: googleUserInfo.picture || null,
               // Google OAuth emails are always verified (Google has already verified them)
               emailVerified: true,
-              subscriptionTier: "free",
             },
             select: {
               id: true,
@@ -130,38 +100,64 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
               emailVerified: true,
             },
           });
-          isNewUser = true;
         }
+      } else {
+        // Create new user with Google OAuth
+        // Generate a cryptographically secure random password for OAuth users
+        const secureRandomPassword = randomBytes(32).toString('hex');
+        const hashedPassword = await bcrypt.hash(secureRandomPassword, 10);
 
-        // Generate JWT token
-        const token = signJWT({
-          id: user.id,
-          email: user.email,
+        user = await prisma.user.create({
+          data: {
+            email: googleUserInfo.email,
+            password: hashedPassword,
+            name: googleUserInfo.name,
+            googleId: googleUserInfo.id,
+            profilePicture: googleUserInfo.picture || null,
+            // Google OAuth emails are always verified (Google has already verified them)
+            emailVerified: true,
+            subscriptionTier: 'free',
+          },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            googleId: true,
+            subscriptionTier: true,
+            emailVerified: true,
+          },
         });
-
-        // Set HTTP-only cookie for enhanced security
-        reply.setCookie("auth_token", token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          path: "/",
-          maxAge: 7 * 24 * 60 * 60, // 7 days
-        });
-
-        return reply.send({ token, user, isNewUser });
-      } catch (error) {
-        console.error("Google OAuth error:", error);
-        return reply.code(500).send({
-          error: "Authentication failed",
-          details: error instanceof Error ? error.message : "Unknown error",
-        });
+        isNewUser = true;
       }
-    },
-  );
+
+      // Generate JWT token
+      const token = signJWT({
+        id: user.id,
+        email: user.email,
+      });
+
+      // Set HTTP-only cookie for enhanced security
+      reply.setCookie('auth_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+      });
+
+      return reply.send({ token, user, isNewUser });
+    } catch (error) {
+      console.error('Google OAuth error:', error);
+      return reply.code(500).send({
+        error: 'Authentication failed',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 
   // Link existing account with Google
   fastify.post<{ Body: GoogleTokenBody }>(
-    "/google/link",
+    '/google/link',
     {
       preHandler: fastify.authenticate,
     },
@@ -174,12 +170,12 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         // Verify the Google ID token
         const ticket = await googleClient.verifyIdToken({
           idToken: credential,
-          audience: process.env.GOOGLE_CLIENT_ID || "",
+          audience: process.env.GOOGLE_CLIENT_ID || '',
         });
 
         const payload = ticket.getPayload();
         if (!payload) {
-          return reply.code(401).send({ error: "Invalid Google token" });
+          return reply.code(401).send({ error: 'Invalid Google token' });
         }
 
         // Check if this Google account is already linked to another user
@@ -192,7 +188,7 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (existingGoogleUser) {
           return reply.code(409).send({
-            error: "This Google account is already linked to another user",
+            error: 'This Google account is already linked to another user',
           });
         }
 
@@ -200,7 +196,7 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         const updatedUser = await prisma.user.update({
           where: { id: userId },
           data: {
-            googleId: payload.sub || "",
+            googleId: payload.sub || '',
             // When linking Google account, mark email as verified (Google has verified it)
             emailVerified: true,
             profilePicture: payload.picture || null,
@@ -217,21 +213,21 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
         return reply.send({
           user: updatedUser,
-          message: "Google account linked successfully",
+          message: 'Google account linked successfully',
         });
       } catch (error) {
-        console.error("Google link error:", error);
+        console.error('Google link error:', error);
         return reply.code(500).send({
-          error: "Failed to link Google account",
-          details: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to link Google account',
+          details: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   // Unlink Google account
   fastify.delete(
-    "/google/unlink",
+    '/google/unlink',
     {
       preHandler: fastify.authenticate,
     },
@@ -247,7 +243,7 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (!user?.googleId) {
-          return reply.code(400).send({ error: "No Google account linked" });
+          return reply.code(400).send({ error: 'No Google account linked' });
         }
 
         // For security, we should check if they have another auth method
@@ -269,16 +265,16 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
         return reply.send({
           user: updatedUser,
-          message: "Google account unlinked successfully",
+          message: 'Google account unlinked successfully',
         });
       } catch (error) {
-        console.error("Google unlink error:", error);
+        console.error('Google unlink error:', error);
         return reply.code(500).send({
-          error: "Failed to unlink Google account",
-          details: error instanceof Error ? error.message : "Unknown error",
+          error: 'Failed to unlink Google account',
+          details: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 };
 

@@ -1,21 +1,12 @@
-import { create } from "zustand";
-import { apiClient, type User } from "../lib/api";
+import { create } from 'zustand';
+import { apiClient, type User } from '../lib/api';
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (
-    email: string,
-    password: string,
-    rememberMe?: boolean,
-  ) => Promise<void>;
-  register: (
-    email: string,
-    password: string,
-    name?: string,
-    timezone?: string,
-  ) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  register: (email: string, password: string, name?: string, timezone?: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   getToken: () => string | null;
@@ -34,17 +25,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       apiClient.setToken(response.token);
       set({ user: response.user, isAuthenticated: true });
     } catch (error) {
-      console.error("Login failed:", error);
+      console.error('Login failed:', error);
       throw error;
     }
   },
 
-  register: async (
-    email: string,
-    password: string,
-    name?: string,
-    timezone?: string,
-  ) => {
+  register: async (email: string, password: string, name?: string, timezone?: string) => {
     try {
       const response = await apiClient.register({
         email,
@@ -55,7 +41,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       apiClient.setToken(response.token);
       set({ user: response.user, isAuthenticated: true });
     } catch (error) {
-      console.error("Registration failed:", error);
+      console.error('Registration failed:', error);
       throw error;
     }
   },
@@ -64,7 +50,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await apiClient.logout();
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error('Logout error:', error);
     } finally {
       apiClient.removeToken();
       set({ user: null, isAuthenticated: false });
@@ -73,7 +59,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   checkAuth: async () => {
     // Skip auth check if no token exists
-    const token = localStorage.getItem("auth_token");
+    const token = localStorage.getItem('auth_token');
     if (!token) {
       set({ user: null, isAuthenticated: false, isLoading: false });
       return;
@@ -89,7 +75,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   getToken: () => {
-    return localStorage.getItem("auth_token");
+    return localStorage.getItem('auth_token');
   },
 
   setUser: (user: User) => {
@@ -98,6 +84,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setToken: (token: string) => {
     apiClient.setToken(token);
-    localStorage.setItem("auth_token", token);
+    localStorage.setItem('auth_token', token);
   },
 }));

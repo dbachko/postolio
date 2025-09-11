@@ -1,7 +1,7 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { instagramService } from "../services/instagram.js";
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { instagramService } from '../services/instagram.js';
 
-import { getDatabaseClient } from "../config/database.js";
+import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
 
@@ -11,10 +11,10 @@ interface AnalyticsParams {
 
 function ensureAuth(
   request: FastifyRequest,
-  reply: FastifyReply,
+  reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string } } {
   if (!request.user || !request.user.id) {
-    reply.code(401).send({ error: "Authentication required" });
+    reply.code(401).send({ error: 'Authentication required' });
     return false;
   }
   return true;
@@ -27,75 +27,60 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
    */
   fastify.get<{
     Params: AnalyticsParams;
-    Querystring: { timeRange?: "7d" | "30d" | "90d" };
-  }>(
-    "/overview/:brandId",
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+    Querystring: { timeRange?: '7d' | '30d' | '90d' };
+  }>('/overview/:brandId', { preHandler: fastify.authenticate }, async (request, reply) => {
+    if (!ensureAuth(request, reply)) return;
 
-      const { brandId } = request.params;
-      const { timeRange = "7d" } = request.query;
-      const userId = request.user.id;
+    const { brandId } = request.params;
+    const { timeRange = '7d' } = request.query;
+    const userId = request.user.id;
 
-      try {
-        // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId: userId,
-          },
-        });
+    try {
+      // Verify brand ownership
+      const brand = await prisma.brand.findFirst({
+        where: {
+          id: brandId,
+          userId: userId,
+        },
+      });
 
-        if (!brand) {
-          return reply
-            .status(404)
-            .send({ error: "Brand not found or unauthorized" });
-        }
+      if (!brand) {
+        return reply.status(404).send({ error: 'Brand not found or unauthorized' });
+      }
 
-        // Check if Instagram is configured
-        if (!instagramService.isConfigured(brand)) {
-          return reply.status(400).send({
-            error: "Instagram not configured for this brand",
-            configured: false,
-          });
-        }
-
-        const overview = await instagramService.getAccountInsights(
-          brand,
-          timeRange,
-        );
-        return reply.send(overview);
-      } catch (error) {
-        console.error("Instagram analytics overview error:", error);
-
-        if (
-          error instanceof Error &&
-          error.message.includes("Rate limit exceeded")
-        ) {
-          return reply.status(429).send({
-            error: "Rate limit exceeded. Please try again later.",
-            retryAfter: 3600, // 1 hour in seconds
-          });
-        }
-
-        if (
-          error instanceof Error &&
-          error.message.includes("Instagram not configured")
-        ) {
-          return reply.status(400).send({
-            error: "Instagram not configured for this brand",
-            configured: false,
-          });
-        }
-
-        return reply.status(500).send({
-          error: "Failed to fetch Instagram analytics overview",
-          details: error instanceof Error ? error.message : "Unknown error",
+      // Check if Instagram is configured
+      if (!instagramService.isConfigured(brand)) {
+        return reply.status(400).send({
+          error: 'Instagram not configured for this brand',
+          configured: false,
         });
       }
-    },
-  );
+
+      const overview = await instagramService.getAccountInsights(brand, timeRange);
+      return reply.send(overview);
+    } catch (error) {
+      console.error('Instagram analytics overview error:', error);
+
+      if (error instanceof Error && error.message.includes('Rate limit exceeded')) {
+        return reply.status(429).send({
+          error: 'Rate limit exceeded. Please try again later.',
+          retryAfter: 3600, // 1 hour in seconds
+        });
+      }
+
+      if (error instanceof Error && error.message.includes('Instagram not configured')) {
+        return reply.status(400).send({
+          error: 'Instagram not configured for this brand',
+          configured: false,
+        });
+      }
+
+      return reply.status(500).send({
+        error: 'Failed to fetch Instagram analytics overview',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 
   /**
    * GET /instagram-analytics/posts/:brandId (accessed via CloudFront /api/instagram-analytics/posts/:brandId)
@@ -104,74 +89,62 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
   fastify.get<{
     Params: AnalyticsParams;
     Querystring: { limit?: number };
-  }>(
-    "/posts/:brandId",
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+  }>('/posts/:brandId', { preHandler: fastify.authenticate }, async (request, reply) => {
+    if (!ensureAuth(request, reply)) return;
 
-      const { brandId } = request.params;
-      const { limit = 10 } = request.query;
-      const userId = request.user.id;
+    const { brandId } = request.params;
+    const { limit = 10 } = request.query;
+    const userId = request.user.id;
 
-      try {
-        // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId: userId,
-          },
-        });
+    try {
+      // Verify brand ownership
+      const brand = await prisma.brand.findFirst({
+        where: {
+          id: brandId,
+          userId: userId,
+        },
+      });
 
-        if (!brand) {
-          return reply
-            .status(404)
-            .send({ error: "Brand not found or unauthorized" });
-        }
+      if (!brand) {
+        return reply.status(404).send({ error: 'Brand not found or unauthorized' });
+      }
 
-        // Check if Instagram is configured
-        if (!instagramService.isConfigured(brand)) {
-          return reply.status(400).send({
-            error: "Instagram not configured for this brand",
-            configured: false,
-          });
-        }
-
-        const performance = await instagramService.getRecentPostsPerformance(
-          brand,
-          Math.min(limit, 25),
-        );
-        return reply.send(performance);
-      } catch (error) {
-        console.error("Instagram posts performance error:", error);
-
-        if (
-          error instanceof Error &&
-          error.message.includes("Rate limit exceeded")
-        ) {
-          return reply.status(429).send({
-            error: "Rate limit exceeded. Please try again later.",
-            retryAfter: 3600,
-          });
-        }
-
-        if (
-          error instanceof Error &&
-          error.message.includes("Instagram not configured")
-        ) {
-          return reply.status(400).send({
-            error: "Instagram not configured for this brand",
-            configured: false,
-          });
-        }
-
-        return reply.status(500).send({
-          error: "Failed to fetch Instagram posts performance",
-          details: error instanceof Error ? error.message : "Unknown error",
+      // Check if Instagram is configured
+      if (!instagramService.isConfigured(brand)) {
+        return reply.status(400).send({
+          error: 'Instagram not configured for this brand',
+          configured: false,
         });
       }
-    },
-  );
+
+      const performance = await instagramService.getRecentPostsPerformance(
+        brand,
+        Math.min(limit, 25)
+      );
+      return reply.send(performance);
+    } catch (error) {
+      console.error('Instagram posts performance error:', error);
+
+      if (error instanceof Error && error.message.includes('Rate limit exceeded')) {
+        return reply.status(429).send({
+          error: 'Rate limit exceeded. Please try again later.',
+          retryAfter: 3600,
+        });
+      }
+
+      if (error instanceof Error && error.message.includes('Instagram not configured')) {
+        return reply.status(400).send({
+          error: 'Instagram not configured for this brand',
+          configured: false,
+        });
+      }
+
+      return reply.status(500).send({
+        error: 'Failed to fetch Instagram posts performance',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 
   /**
    * POST /instagram-analytics/refresh/:brandId (accessed via CloudFront /api/instagram-analytics/refresh/:brandId)
@@ -179,70 +152,60 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
    */
   fastify.post<{
     Params: AnalyticsParams;
-  }>(
-    "/refresh/:brandId",
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+  }>('/refresh/:brandId', { preHandler: fastify.authenticate }, async (request, reply) => {
+    if (!ensureAuth(request, reply)) return;
 
-      const { brandId } = request.params;
-      const userId = request.user.id;
+    const { brandId } = request.params;
+    const userId = request.user.id;
 
-      try {
-        // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId: userId,
-          },
-        });
+    try {
+      // Verify brand ownership
+      const brand = await prisma.brand.findFirst({
+        where: {
+          id: brandId,
+          userId: userId,
+        },
+      });
 
-        if (!brand) {
-          return reply
-            .status(404)
-            .send({ error: "Brand not found or unauthorized" });
-        }
+      if (!brand) {
+        return reply.status(404).send({ error: 'Brand not found or unauthorized' });
+      }
 
-        // Check if Instagram is configured
-        if (!instagramService.isConfigured(brand)) {
-          return reply.status(400).send({
-            error: "Instagram not configured for this brand",
-            configured: false,
-          });
-        }
-
-        const refreshResult =
-          await instagramService.refreshAnalyticsData(brand);
-
-        if (!refreshResult.success) {
-          return reply.status(429).send({
-            error: refreshResult.message,
-            nextRefreshAllowed: refreshResult.nextRefreshAllowed,
-            success: false,
-          });
-        }
-
-        return reply.send(refreshResult);
-      } catch (error) {
-        console.error("Instagram analytics refresh error:", error);
-
-        if (
-          error instanceof Error &&
-          error.message.includes("Instagram not configured")
-        ) {
-          return reply.status(400).send({
-            error: "Instagram not configured for this brand",
-            configured: false,
-          });
-        }
-
-        return reply.status(500).send({
-          error: "Failed to refresh Instagram analytics data",
-          details: error instanceof Error ? error.message : "Unknown error",
+      // Check if Instagram is configured
+      if (!instagramService.isConfigured(brand)) {
+        return reply.status(400).send({
+          error: 'Instagram not configured for this brand',
+          configured: false,
         });
       }
-    },
-  );
+
+      const refreshResult = await instagramService.refreshAnalyticsData(brand);
+
+      if (!refreshResult.success) {
+        return reply.status(429).send({
+          error: refreshResult.message,
+          nextRefreshAllowed: refreshResult.nextRefreshAllowed,
+          success: false,
+        });
+      }
+
+      return reply.send(refreshResult);
+    } catch (error) {
+      console.error('Instagram analytics refresh error:', error);
+
+      if (error instanceof Error && error.message.includes('Instagram not configured')) {
+        return reply.status(400).send({
+          error: 'Instagram not configured for this brand',
+          configured: false,
+        });
+      }
+
+      return reply.status(500).send({
+        error: 'Failed to refresh Instagram analytics data',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 
   /**
    * GET /instagram-analytics/status/:brandId (accessed via CloudFront /api/instagram-analytics/status/:brandId)
@@ -250,69 +213,60 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
    */
   fastify.get<{
     Params: AnalyticsParams;
-  }>(
-    "/status/:brandId",
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      if (!ensureAuth(request, reply)) return;
+  }>('/status/:brandId', { preHandler: fastify.authenticate }, async (request, reply) => {
+    if (!ensureAuth(request, reply)) return;
 
-      const { brandId } = request.params;
-      const userId = request.user.id;
+    const { brandId } = request.params;
+    const userId = request.user.id;
 
-      try {
-        // Verify brand ownership
-        const brand = await prisma.brand.findFirst({
-          where: {
-            id: brandId,
-            userId: userId,
-          },
-        });
+    try {
+      // Verify brand ownership
+      const brand = await prisma.brand.findFirst({
+        where: {
+          id: brandId,
+          userId: userId,
+        },
+      });
 
-        if (!brand) {
-          return reply
-            .status(404)
-            .send({ error: "Brand not found or unauthorized" });
-        }
+      if (!brand) {
+        return reply.status(404).send({ error: 'Brand not found or unauthorized' });
+      }
 
-        // Check if Instagram is configured
-        if (!instagramService.isConfigured(brand)) {
-          return reply.status(400).send({
-            error: "Instagram not configured for this brand",
-            configured: false,
-            lastUpdated: null,
-            cacheAge: 0,
-            rateLimitRemaining: 200,
-          });
-        }
-
-        const status = await instagramService.getAnalyticsCacheStatus(brand);
-        return reply.send({
-          ...status,
-          configured: true,
-        });
-      } catch (error) {
-        console.error("Instagram analytics status error:", error);
-
-        if (
-          error instanceof Error &&
-          error.message.includes("Instagram not configured")
-        ) {
-          return reply.status(400).send({
-            error: "Instagram not configured for this brand",
-            configured: false,
-            lastUpdated: null,
-            cacheAge: 0,
-            rateLimitRemaining: 200,
-          });
-        }
-
-        return reply.status(500).send({
-          error: "Failed to get Instagram analytics status",
-          details: error instanceof Error ? error.message : "Unknown error",
+      // Check if Instagram is configured
+      if (!instagramService.isConfigured(brand)) {
+        return reply.status(400).send({
+          error: 'Instagram not configured for this brand',
+          configured: false,
+          lastUpdated: null,
+          cacheAge: 0,
+          rateLimitRemaining: 200,
         });
       }
-    },
-  );
+
+      const status = await instagramService.getAnalyticsCacheStatus(brand);
+      return reply.send({
+        ...status,
+        configured: true,
+      });
+    } catch (error) {
+      console.error('Instagram analytics status error:', error);
+
+      if (error instanceof Error && error.message.includes('Instagram not configured')) {
+        return reply.status(400).send({
+          error: 'Instagram not configured for this brand',
+          configured: false,
+          lastUpdated: null,
+          cacheAge: 0,
+          rateLimitRemaining: 200,
+        });
+      }
+
+      return reply.status(500).send({
+        error: 'Failed to get Instagram analytics status',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 };
 
 export default instagramAnalyticsRoutes;

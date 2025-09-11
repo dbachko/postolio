@@ -106,7 +106,7 @@ const request: StoreTokenRequest = JSON.parse(event.body); // VULNERABLE
 const StoreTokenRequestSchema = z.object({
   userId: z.string().min(1).max(100),
   brandId: z.string().min(1).max(100),
-  platform: z.enum(["instagram", "facebook", "linkedin", "tiktok", "twitter"]),
+  platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'twitter']),
   accessToken: z.string().min(10).max(10000),
   // ... complete validation
 });
@@ -154,7 +154,7 @@ const dynamoClient = new DynamoDBClient({});
 ```typescript
 const dynamoClient = new DynamoDBClient({
   maxAttempts: 3,
-  retryMode: "adaptive", // Automatic exponential backoff
+  retryMode: 'adaptive', // Automatic exponential backoff
 });
 
 const docClient = DynamoDBDocumentClient.from(dynamoClient, {
@@ -173,7 +173,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
 1. **Add Point-in-Time Recovery to DynamoDB Tables**
 
 ```typescript
-new dynamodb.Table(this, "TokenTable", {
+new dynamodb.Table(this, 'TokenTable', {
   // ... existing config
   pointInTimeRecovery: true, // ADD THIS
 });
@@ -188,7 +188,7 @@ new dynamodb.Table(this, "TokenTable", {
 3. **Add CDK Nag to Stack**
 
 ```typescript
-import { AwsSolutionsChecks } from "cdk-nag";
+import { AwsSolutionsChecks } from 'cdk-nag';
 
 AwsSolutionsChecks.check(app, {
   verbose: true,
@@ -210,8 +210,8 @@ class DistributedLock {
 2. **Add Lambda Provisioned Concurrency**
 
 ```typescript
-const tokenServiceAlias = new lambda.Alias(this, "TokenServiceAlias", {
-  aliasName: "prod",
+const tokenServiceAlias = new lambda.Alias(this, 'TokenServiceAlias', {
+  aliasName: 'prod',
   version: tokenService.currentVersion,
   provisionedConcurrentExecutions: 5, // For critical functions
 });

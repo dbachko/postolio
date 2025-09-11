@@ -1,20 +1,20 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   PutCommand,
   GetCommand,
   DeleteCommand,
-} from "@aws-sdk/lib-dynamodb";
-import { KMSClient, EncryptCommand, DecryptCommand } from "@aws-sdk/client-kms";
-import { createHash } from "crypto";
-import { z } from "zod";
-import { RateLimiter } from "../../services/rate-limiter";
+} from '@aws-sdk/lib-dynamodb';
+import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
+import { createHash } from 'crypto';
+import { z } from 'zod';
+import { RateLimiter } from '../../services/rate-limiter';
 
 // Initialize clients outside handler for connection reuse across invocations
 const dynamoClient = new DynamoDBClient({
   maxAttempts: 3,
-  retryMode: "adaptive", // Adaptive retry with automatic backoff
+  retryMode: 'adaptive', // Adaptive retry with automatic backoff
 });
 
 const docClient = DynamoDBDocumentClient.from(dynamoClient, {
@@ -27,7 +27,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
 
 const kmsClient = new KMSClient({
   maxAttempts: 3,
-  retryMode: "adaptive",
+  retryMode: 'adaptive',
 });
 
 const rateLimiter = RateLimiter.getInstance();
@@ -59,7 +59,7 @@ interface StoreTokenRequest {
 const StoreTokenRequestSchema = z.object({
   userId: z.string().min(1).max(100),
   brandId: z.string().min(1).max(100),
-  platform: z.enum(["instagram", "facebook", "linkedin", "tiktok", "twitter"]),
+  platform: z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'twitter']),
   accessToken: z.string().min(10).max(10000),
   refreshToken: z.string().min(10).max(10000).optional(),
   expiresAt: z.number().positive().int(),
@@ -67,18 +67,18 @@ const StoreTokenRequestSchema = z.object({
 });
 
 // Helper function to get safe headers for logging (allowlist approach)
-function getSafeHeadersForLogging(headers: {
+function getSafeHeadersForLogging(headers: { [key: string]: string | undefined }): {
   [key: string]: string | undefined;
-}): { [key: string]: string | undefined } {
+} {
   // Only include explicitly safe headers in logs
   const SAFE_HEADERS = [
-    "content-type",
-    "accept",
-    "user-agent",
-    "x-correlation-id",
-    "x-request-id",
-    "cloudfront-viewer-country",
-    "cloudfront-is-mobile-viewer",
+    'content-type',
+    'accept',
+    'user-agent',
+    'x-correlation-id',
+    'x-request-id',
+    'cloudfront-viewer-country',
+    'cloudfront-is-mobile-viewer',
   ];
 
   const safeHeaders: { [key: string]: string | undefined } = {};
@@ -93,10 +93,8 @@ function getSafeHeadersForLogging(headers: {
   return safeHeaders;
 }
 
-export const handler = async (
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> => {
-  console.log("Token Service Lambda invoked", {
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  console.log('Token Service Lambda invoked', {
     method: event.httpMethod,
     path: event.path,
     headers: getSafeHeadersForLogging(event.headers),
@@ -105,15 +103,12 @@ export const handler = async (
   // IAM Authentication validation
   // This Lambda should be invoked via API Gateway with IAM authorization
   // or directly via Lambda with proper IAM roles
-  if (
-    !event.requestContext?.identity?.userArn &&
-    !event.requestContext?.authorizer
-  ) {
-    console.error("Unauthorized request - missing IAM authentication");
+  if (!event.requestContext?.identity?.userArn && !event.requestContext?.authorizer) {
+    console.error('Unauthorized request - missing IAM authentication');
     return {
       statusCode: 401,
       body: JSON.stringify({
-        error: "Unauthorized - IAM authentication required",
+        error: 'Unauthorized - IAM authentication required',
       }),
     };
   }
@@ -122,26 +117,20 @@ export const handler = async (
   const callerIdentity =
     event.requestContext?.identity?.userArn ||
     event.requestContext?.authorizer?.principalId ||
-    "unknown";
-  console.log("Authenticated caller:", callerIdentity);
+    'unknown';
+  console.log('Authenticated caller:', callerIdentity);
 
   // Extract user information for rate limiting
   const sourceIp =
-    event.requestContext?.identity?.sourceIp ||
-    event.headers["X-Forwarded-For"] ||
-    "unknown";
-  const userId = event.headers["x-user-id"] || callerIdentity;
-  const userTier = event.headers["x-user-tier"] || "default";
+    event.requestContext?.identity?.sourceIp || event.headers['X-Forwarded-For'] || 'unknown';
+  const userId = event.headers['x-user-id'] || callerIdentity;
+  const userTier = event.headers['x-user-tier'] || 'default';
 
   // Apply rate limiting
-  const rateLimitResult = await rateLimiter.checkUserRateLimit(
-    userId,
-    "token-service",
-    userTier,
-  );
+  const rateLimitResult = await rateLimiter.checkUserRateLimit(userId, 'token-service', userTier);
 
   if (!rateLimitResult.allowed) {
-    console.warn("Rate limit exceeded", {
+    console.warn('Rate limit exceeded', {
       userId,
       sourceIp,
       remainingTokens: rateLimitResult.remainingTokens,
@@ -151,14 +140,12 @@ export const handler = async (
     return {
       statusCode: 429,
       headers: {
-        "Retry-After": String(Math.ceil(rateLimitResult.retryAfterMs! / 1000)),
-        "X-RateLimit-Remaining": String(rateLimitResult.remainingTokens),
-        "X-RateLimit-Reset": String(
-          Math.floor(rateLimitResult.nextRefillAt / 1000),
-        ),
+        'Retry-After': String(Math.ceil(rateLimitResult.retryAfterMs! / 1000)),
+        'X-RateLimit-Remaining': String(rateLimitResult.remainingTokens),
+        'X-RateLimit-Reset': String(Math.floor(rateLimitResult.nextRefillAt / 1000)),
       },
       body: JSON.stringify({
-        error: "Rate limit exceeded",
+        error: 'Rate limit exceeded',
         message: rateLimitResult.reason,
         retryAfterSeconds: Math.ceil(rateLimitResult.retryAfterMs! / 1000),
       }),
@@ -166,14 +153,10 @@ export const handler = async (
   }
 
   // Also apply IP-based rate limiting for additional protection
-  const ipRateLimitResult = await rateLimiter.checkIPRateLimit(
-    sourceIp,
-    "token-service",
-    userTier,
-  );
+  const ipRateLimitResult = await rateLimiter.checkIPRateLimit(sourceIp, 'token-service', userTier);
 
   if (!ipRateLimitResult.allowed) {
-    console.warn("IP rate limit exceeded", {
+    console.warn('IP rate limit exceeded', {
       sourceIp,
       remainingTokens: ipRateLimitResult.remainingTokens,
     });
@@ -181,14 +164,12 @@ export const handler = async (
     return {
       statusCode: 429,
       headers: {
-        "Retry-After": String(
-          Math.ceil(ipRateLimitResult.retryAfterMs! / 1000),
-        ),
-        "X-RateLimit-Remaining": String(ipRateLimitResult.remainingTokens),
+        'Retry-After': String(Math.ceil(ipRateLimitResult.retryAfterMs! / 1000)),
+        'X-RateLimit-Remaining': String(ipRateLimitResult.remainingTokens),
       },
       body: JSON.stringify({
-        error: "Rate limit exceeded",
-        message: "Too many requests from this IP address",
+        error: 'Rate limit exceeded',
+        message: 'Too many requests from this IP address',
       }),
     };
   }
@@ -198,40 +179,35 @@ export const handler = async (
     const path = event.path;
 
     // Route handling
-    if (method === "POST" && path === "/tokens") {
+    if (method === 'POST' && path === '/tokens') {
       return await storeToken(event);
-    } else if (method === "GET" && path.match(/^\/tokens\/[^\/]+\/[^\/]+$/)) {
+    } else if (method === 'GET' && path.match(/^\/tokens\/[^\/]+\/[^\/]+$/)) {
       return await getToken(event);
-    } else if (
-      method === "DELETE" &&
-      path.match(/^\/tokens\/[^\/]+\/[^\/]+$/)
-    ) {
+    } else if (method === 'DELETE' && path.match(/^\/tokens\/[^\/]+\/[^\/]+$/)) {
       return await deleteToken(event);
     } else {
       return {
         statusCode: 404,
-        body: JSON.stringify({ error: "Route not found" }),
+        body: JSON.stringify({ error: 'Route not found' }),
       };
     }
   } catch (error) {
-    console.error("Token Service error:", error);
+    console.error('Token Service error:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: "Internal server error",
-        message: error instanceof Error ? error.message : "Unknown error",
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error',
       }),
     };
   }
 };
 
-async function storeToken(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+async function storeToken(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   if (!event.body) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: "Request body is required" }),
+      body: JSON.stringify({ error: 'Request body is required' }),
     };
   }
 
@@ -245,9 +221,9 @@ async function storeToken(
       return {
         statusCode: 400,
         body: JSON.stringify({
-          error: "Invalid request data",
+          error: 'Invalid request data',
           details: error.issues.map((e: any) => ({
-            path: e.path.join("."),
+            path: e.path.join('.'),
             message: e.message,
           })),
         }),
@@ -255,7 +231,7 @@ async function storeToken(
     }
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: "Invalid JSON in request body" }),
+      body: JSON.stringify({ error: 'Invalid JSON in request body' }),
     };
   }
 
@@ -283,33 +259,31 @@ async function storeToken(
       new PutCommand({
         TableName: TOKEN_TABLE_NAME,
         Item: item,
-      }),
+      })
     );
 
     return {
       statusCode: 201,
       body: JSON.stringify({
         success: true,
-        message: "Token stored successfully",
+        message: 'Token stored successfully',
         tokenId: `${request.userId}#${request.platform}#${request.brandId}`,
       }),
     };
   } catch (error) {
-    console.error("Error storing token:", error);
+    console.error('Error storing token:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: "Failed to store token",
-        message: error instanceof Error ? error.message : "Unknown error",
+        error: 'Failed to store token',
+        message: error instanceof Error ? error.message : 'Unknown error',
       }),
     };
   }
 }
 
-async function getToken(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
-  const pathParams = event.path.split("/");
+async function getToken(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const pathParams = event.path.split('/');
   const userId = pathParams[2];
   const platform = pathParams[3];
   const brandId = event.queryStringParameters?.brandId;
@@ -317,7 +291,7 @@ async function getToken(
   if (!brandId) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: "brandId query parameter is required" }),
+      body: JSON.stringify({ error: 'brandId query parameter is required' }),
     };
   }
 
@@ -329,13 +303,13 @@ async function getToken(
           pk: `${userId}#${platform}`,
           sk: brandId,
         },
-      }),
+      })
     );
 
     if (!result.Item) {
       return {
         statusCode: 404,
-        body: JSON.stringify({ error: "Token not found" }),
+        body: JSON.stringify({ error: 'Token not found' }),
       };
     }
 
@@ -363,21 +337,19 @@ async function getToken(
       }),
     };
   } catch (error) {
-    console.error("Error getting token:", error);
+    console.error('Error getting token:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: "Failed to retrieve token",
-        message: error instanceof Error ? error.message : "Unknown error",
+        error: 'Failed to retrieve token',
+        message: error instanceof Error ? error.message : 'Unknown error',
       }),
     };
   }
 }
 
-async function deleteToken(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
-  const pathParams = event.path.split("/");
+async function deleteToken(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const pathParams = event.path.split('/');
   const userId = pathParams[2];
   const platform = pathParams[3];
   const brandId = event.queryStringParameters?.brandId;
@@ -385,7 +357,7 @@ async function deleteToken(
   if (!brandId) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: "brandId query parameter is required" }),
+      body: JSON.stringify({ error: 'brandId query parameter is required' }),
     };
   }
 
@@ -397,23 +369,23 @@ async function deleteToken(
           pk: `${userId}#${platform}`,
           sk: brandId,
         },
-      }),
+      })
     );
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         success: true,
-        message: "Token deleted successfully",
+        message: 'Token deleted successfully',
       }),
     };
   } catch (error) {
-    console.error("Error deleting token:", error);
+    console.error('Error deleting token:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: "Failed to delete token",
-        message: error instanceof Error ? error.message : "Unknown error",
+        error: 'Failed to delete token',
+        message: error instanceof Error ? error.message : 'Unknown error',
       }),
     };
   }
@@ -424,17 +396,17 @@ async function encryptData(data: string): Promise<string> {
     new EncryptCommand({
       KeyId: KMS_KEY_ID,
       Plaintext: Buffer.from(data),
-    }),
+    })
   );
 
-  return Buffer.from(result.CiphertextBlob!).toString("base64");
+  return Buffer.from(result.CiphertextBlob!).toString('base64');
 }
 
 async function decryptData(encryptedData: string): Promise<string> {
   const result = await kmsClient.send(
     new DecryptCommand({
-      CiphertextBlob: Buffer.from(encryptedData, "base64"),
-    }),
+      CiphertextBlob: Buffer.from(encryptedData, 'base64'),
+    })
   );
 
   return Buffer.from(result.Plaintext!).toString();

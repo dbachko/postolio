@@ -34,34 +34,32 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
   const sanitizedData: CampaignUpdateRequest = {};
 
   // Validate request is an object
-  if (!data || typeof data !== "object") {
+  if (!data || typeof data !== 'object') {
     return {
       valid: false,
-      errors: [
-        { field: "root", message: "Request body must be a valid JSON object" },
-      ],
+      errors: [{ field: 'root', message: 'Request body must be a valid JSON object' }],
     };
   }
   const obj = data as Record<string, unknown>;
 
   // Validate name (optional)
   if (obj.name !== undefined) {
-    if (typeof obj.name !== "string") {
+    if (typeof obj.name !== 'string') {
       errors.push({
-        field: "name",
-        message: "Name must be a string",
+        field: 'name',
+        message: 'Name must be a string',
         value: obj.name,
       });
     } else if (obj.name.trim().length === 0) {
       errors.push({
-        field: "name",
-        message: "Name cannot be empty",
+        field: 'name',
+        message: 'Name cannot be empty',
         value: obj.name,
       });
     } else if (obj.name.length > 100) {
       errors.push({
-        field: "name",
-        message: "Name must be less than 100 characters",
+        field: 'name',
+        message: 'Name must be less than 100 characters',
         value: obj.name,
       });
     } else {
@@ -73,31 +71,30 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
   if (obj.themes !== undefined) {
     if (!Array.isArray(obj.themes)) {
       errors.push({
-        field: "themes",
-        message: "Themes must be an array",
+        field: 'themes',
+        message: 'Themes must be an array',
         value: obj.themes,
       });
     } else if (obj.themes.length === 0) {
       errors.push({
-        field: "themes",
-        message: "At least one theme is required",
+        field: 'themes',
+        message: 'At least one theme is required',
         value: obj.themes,
       });
     } else if (obj.themes.length > 10) {
       errors.push({
-        field: "themes",
-        message: "Maximum 10 themes allowed",
+        field: 'themes',
+        message: 'Maximum 10 themes allowed',
         value: obj.themes,
       });
     } else {
       const invalidThemes = obj.themes.filter(
-        (theme): boolean =>
-          typeof theme !== "string" || theme.trim().length === 0,
+        (theme): boolean => typeof theme !== 'string' || theme.trim().length === 0
       );
       if (invalidThemes.length > 0) {
         errors.push({
-          field: "themes",
-          message: "All themes must be non-empty strings",
+          field: 'themes',
+          message: 'All themes must be non-empty strings',
           value: invalidThemes,
         });
       } else {
@@ -108,16 +105,16 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
 
   // Validate style (optional)
   if (obj.style !== undefined) {
-    if (typeof obj.style !== "string") {
+    if (typeof obj.style !== 'string') {
       errors.push({
-        field: "style",
-        message: "Style must be a string",
+        field: 'style',
+        message: 'Style must be a string',
         value: obj.style,
       });
     } else if (obj.style.trim().length === 0) {
       errors.push({
-        field: "style",
-        message: "Style cannot be empty",
+        field: 'style',
+        message: 'Style cannot be empty',
         value: obj.style,
       });
     } else {
@@ -127,17 +124,17 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
 
   // Validate frequency (optional)
   if (obj.frequency !== undefined) {
-    const validFrequencies = ["daily", "every2days", "3weekly"];
-    if (typeof obj.frequency !== "string") {
+    const validFrequencies = ['daily', 'every2days', '3weekly'];
+    if (typeof obj.frequency !== 'string') {
       errors.push({
-        field: "frequency",
-        message: "Frequency must be a string",
+        field: 'frequency',
+        message: 'Frequency must be a string',
         value: obj.frequency,
       });
     } else if (!validFrequencies.includes(obj.frequency)) {
       errors.push({
-        field: "frequency",
-        message: `Frequency must be one of: ${validFrequencies.join(", ")}`,
+        field: 'frequency',
+        message: `Frequency must be one of: ${validFrequencies.join(', ')}`,
         value: obj.frequency,
       });
     } else {
@@ -148,16 +145,16 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
   // Validate postingTime (optional)
   if (obj.postingTime !== undefined) {
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-    if (typeof obj.postingTime !== "string") {
+    if (typeof obj.postingTime !== 'string') {
       errors.push({
-        field: "postingTime",
-        message: "Posting time must be a string",
+        field: 'postingTime',
+        message: 'Posting time must be a string',
         value: obj.postingTime,
       });
     } else if (!timeRegex.test(obj.postingTime)) {
       errors.push({
-        field: "postingTime",
-        message: "Posting time must be in HH:MM format (24-hour)",
+        field: 'postingTime',
+        message: 'Posting time must be in HH:MM format (24-hour)',
         value: obj.postingTime,
       });
     } else {
@@ -167,18 +164,18 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
 
   // Validate startDate (optional)
   if (obj.startDate !== undefined) {
-    if (typeof obj.startDate !== "string") {
+    if (typeof obj.startDate !== 'string') {
       errors.push({
-        field: "startDate",
-        message: "Start date must be a string",
+        field: 'startDate',
+        message: 'Start date must be a string',
         value: obj.startDate,
       });
     } else {
       const startDate = new Date(obj.startDate);
       if (isNaN(startDate.getTime())) {
         errors.push({
-          field: "startDate",
-          message: "Start date must be a valid ISO date string",
+          field: 'startDate',
+          message: 'Start date must be a valid ISO date string',
           value: obj.startDate,
         });
       } else {
@@ -189,18 +186,18 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
 
   // Validate endDate (optional)
   if (obj.endDate !== undefined) {
-    if (typeof obj.endDate !== "string") {
+    if (typeof obj.endDate !== 'string') {
       errors.push({
-        field: "endDate",
-        message: "End date must be a string",
+        field: 'endDate',
+        message: 'End date must be a string',
         value: obj.endDate,
       });
     } else {
       const endDate = new Date(obj.endDate);
       if (isNaN(endDate.getTime())) {
         errors.push({
-          field: "endDate",
-          message: "End date must be a valid ISO date string",
+          field: 'endDate',
+          message: 'End date must be a valid ISO date string',
           value: obj.endDate,
         });
       } else {
@@ -215,8 +212,8 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
     const endDate = new Date(sanitizedData.endDate);
     if (startDate >= endDate) {
       errors.push({
-        field: "endDate",
-        message: "End date must be after start date",
+        field: 'endDate',
+        message: 'End date must be after start date',
         value: {
           startDate: sanitizedData.startDate,
           endDate: sanitizedData.endDate,
@@ -228,24 +225,24 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
   // Validate status (optional)
   if (obj.status !== undefined) {
     const validStatuses = [
-      "creating",
-      "preview",
-      "active",
-      "paused",
-      "completed",
-      "failed",
-      "processing",
+      'creating',
+      'preview',
+      'active',
+      'paused',
+      'completed',
+      'failed',
+      'processing',
     ];
-    if (typeof obj.status !== "string") {
+    if (typeof obj.status !== 'string') {
       errors.push({
-        field: "status",
-        message: "Status must be a string",
+        field: 'status',
+        message: 'Status must be a string',
         value: obj.status,
       });
     } else if (!validStatuses.includes(obj.status)) {
       errors.push({
-        field: "status",
-        message: `Status must be one of: ${validStatuses.join(", ")}`,
+        field: 'status',
+        message: `Status must be one of: ${validStatuses.join(', ')}`,
         value: obj.status,
       });
     } else {
@@ -255,16 +252,16 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
 
   // Validate priority (optional)
   if (obj.priority !== undefined) {
-    if (typeof obj.priority !== "number") {
+    if (typeof obj.priority !== 'number') {
       errors.push({
-        field: "priority",
-        message: "Priority must be a number",
+        field: 'priority',
+        message: 'Priority must be a number',
         value: obj.priority,
       });
     } else if (obj.priority < 1 || obj.priority > 10) {
       errors.push({
-        field: "priority",
-        message: "Priority must be between 1 (highest) and 10 (lowest)",
+        field: 'priority',
+        message: 'Priority must be between 1 (highest) and 10 (lowest)',
         value: obj.priority,
       });
     } else {
@@ -274,23 +271,21 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
 
   // Check for unknown fields
   const knownFields = [
-    "name",
-    "themes",
-    "style",
-    "frequency",
-    "postingTime",
-    "startDate",
-    "endDate",
-    "status",
-    "priority",
+    'name',
+    'themes',
+    'style',
+    'frequency',
+    'postingTime',
+    'startDate',
+    'endDate',
+    'status',
+    'priority',
   ];
-  const unknownFields = Object.keys(obj).filter(
-    (key) => !knownFields.includes(key),
-  );
+  const unknownFields = Object.keys(obj).filter((key) => !knownFields.includes(key));
   if (unknownFields.length > 0) {
     errors.push({
-      field: "root",
-      message: `Unknown fields: ${unknownFields.join(", ")}. Allowed fields: ${knownFields.join(", ")}`,
+      field: 'root',
+      message: `Unknown fields: ${unknownFields.join(', ')}. Allowed fields: ${knownFields.join(', ')}`,
       value: unknownFields,
     });
   }
@@ -298,8 +293,8 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
   // Check if at least one field is provided
   if (Object.keys(sanitizedData).length === 0 && errors.length === 0) {
     errors.push({
-      field: "root",
-      message: "At least one field must be provided for update",
+      field: 'root',
+      message: 'At least one field must be provided for update',
     });
   }
 
@@ -320,26 +315,26 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
  */
 export function validateStatusTransition(
   currentStatus: string,
-  newStatus: string,
+  newStatus: string
 ): ValidationResult {
   const errors: ValidationError[] = [];
 
   const validTransitions: Record<string, string[]> = {
-    creating: ["preview", "failed"],
-    preview: ["active", "failed"],
-    active: ["paused", "completed", "failed"],
-    paused: ["active", "completed", "failed"],
+    creating: ['preview', 'failed'],
+    preview: ['active', 'failed'],
+    active: ['paused', 'completed', 'failed'],
+    paused: ['active', 'completed', 'failed'],
     completed: [], // Terminal state
-    failed: ["preview"], // Can retry from preview
-    processing: ["active", "failed"], // Background processing state
+    failed: ['preview'], // Can retry from preview
+    processing: ['active', 'failed'], // Background processing state
   };
 
   const allowedTransitions = validTransitions[currentStatus] || [];
 
   if (!allowedTransitions.includes(newStatus)) {
     errors.push({
-      field: "status",
-      message: `Invalid status transition: ${currentStatus} → ${newStatus}. Allowed transitions: ${allowedTransitions.join(", ")}`,
+      field: 'status',
+      message: `Invalid status transition: ${currentStatus} → ${newStatus}. Allowed transitions: ${allowedTransitions.join(', ')}`,
       value: { currentStatus, newStatus },
     });
   }

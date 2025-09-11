@@ -3,13 +3,13 @@
  * Enterprise-grade API security for microservices
  */
 
-import * as cdk from "aws-cdk-lib";
-import * as apigateway from "aws-cdk-lib/aws-apigateway";
-import * as iam from "aws-cdk-lib/aws-iam";
-import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as logs from "aws-cdk-lib/aws-logs";
-import * as wafv2 from "aws-cdk-lib/aws-wafv2";
-import { Construct } from "constructs";
+import * as cdk from 'aws-cdk-lib';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
+import { Construct } from 'constructs';
 
 export interface SecuredApiGatewayProps {
   environment: string;
@@ -18,7 +18,7 @@ export interface SecuredApiGatewayProps {
     [path: string]: {
       lambda: lambda.Function;
       methods: string[];
-      authType: "IAM" | "API_KEY" | "NONE";
+      authType: 'IAM' | 'API_KEY' | 'NONE';
       apiKeyRequired?: boolean;
       throttle?: {
         burstLimit: number;
@@ -51,7 +51,7 @@ export class SecuredApiGateway extends Construct {
     } = props;
 
     // ==================== API Gateway ====================
-    this.api = new apigateway.RestApi(this, "Api", {
+    this.api = new apigateway.RestApi(this, 'Api', {
       restApiName: `postolio-${serviceName}-${environment}`,
       description: `Secured API for ${serviceName} microservice`,
       deployOptions: {
@@ -63,11 +63,11 @@ export class SecuredApiGateway extends Construct {
         throttlingBurstLimit: 100,
         throttlingRateLimit: 50,
         accessLogDestination: new apigateway.LogGroupLogDestination(
-          new logs.LogGroup(this, "ApiAccessLogs", {
+          new logs.LogGroup(this, 'ApiAccessLogs', {
             logGroupName: `/aws/api-gateway/postolio-${serviceName}-${environment}`,
             retention: logs.RetentionDays.ONE_MONTH,
             removalPolicy: cdk.RemovalPolicy.DESTROY,
-          }),
+          })
         ),
         accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields({
           caller: false,
@@ -85,14 +85,14 @@ export class SecuredApiGateway extends Construct {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: [
-          "Content-Type",
-          "X-Amz-Date",
-          "Authorization",
-          "X-Api-Key",
-          "X-Amz-Security-Token",
-          "X-User-Id",
-          "X-User-Tier",
-          "X-Correlation-Id",
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+          'X-Amz-Security-Token',
+          'X-User-Id',
+          'X-User-Tier',
+          'X-Correlation-Id',
         ],
         maxAge: cdk.Duration.hours(1),
       },
@@ -103,26 +103,22 @@ export class SecuredApiGateway extends Construct {
     });
 
     // ==================== Request Validator ====================
-    const requestValidator = new apigateway.RequestValidator(
-      this,
-      "RequestValidator",
-      {
-        restApi: this.api,
-        validateRequestBody: true,
-        validateRequestParameters: true,
-      },
-    );
+    const requestValidator = new apigateway.RequestValidator(this, 'RequestValidator', {
+      restApi: this.api,
+      validateRequestBody: true,
+      validateRequestParameters: true,
+    });
 
     // ==================== API Key & Usage Plan ====================
     if (enableApiKey) {
-      this.apiKey = new apigateway.ApiKey(this, "ApiKey", {
+      this.apiKey = new apigateway.ApiKey(this, 'ApiKey', {
         apiKeyName: `postolio-${serviceName}-${environment}-key`,
         description: `API key for ${serviceName} service`,
         enabled: true,
       });
 
       if (enableUsagePlan) {
-        this.usagePlan = new apigateway.UsagePlan(this, "UsagePlan", {
+        this.usagePlan = new apigateway.UsagePlan(this, 'UsagePlan', {
           name: `postolio-${serviceName}-${environment}-usage`,
           description: `Usage plan for ${serviceName} service`,
           apiStages: [
@@ -147,32 +143,32 @@ export class SecuredApiGateway extends Construct {
 
     // ==================== WAF Integration ====================
     if (enableWaf) {
-      this.webAcl = new wafv2.CfnWebACL(this, "WebAcl", {
-        scope: "REGIONAL",
+      this.webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
+        scope: 'REGIONAL',
         name: `postolio-${serviceName}-${environment}-waf`,
         description: `WAF rules for ${serviceName} API`,
         defaultAction: { allow: {} },
         rules: [
           // Rate limiting rule
           {
-            name: "RateLimitRule",
+            name: 'RateLimitRule',
             priority: 1,
             statement: {
               rateBasedStatement: {
                 limit: 2000, // 2000 requests per 5 minutes
-                aggregateKeyType: "IP",
+                aggregateKeyType: 'IP',
               },
             },
             action: { block: {} },
             visibilityConfig: {
               sampledRequestsEnabled: true,
               cloudWatchMetricsEnabled: true,
-              metricName: "RateLimitRule",
+              metricName: 'RateLimitRule',
             },
           },
           // SQL injection protection
           {
-            name: "SqlInjectionRule",
+            name: 'SqlInjectionRule',
             priority: 2,
             statement: {
               sqliMatchStatement: {
@@ -180,11 +176,11 @@ export class SecuredApiGateway extends Construct {
                 textTransformations: [
                   {
                     priority: 0,
-                    type: "URL_DECODE",
+                    type: 'URL_DECODE',
                   },
                   {
                     priority: 1,
-                    type: "HTML_ENTITY_DECODE",
+                    type: 'HTML_ENTITY_DECODE',
                   },
                 ],
               },
@@ -193,12 +189,12 @@ export class SecuredApiGateway extends Construct {
             visibilityConfig: {
               sampledRequestsEnabled: true,
               cloudWatchMetricsEnabled: true,
-              metricName: "SqlInjectionRule",
+              metricName: 'SqlInjectionRule',
             },
           },
           // XSS protection
           {
-            name: "XssRule",
+            name: 'XssRule',
             priority: 3,
             statement: {
               xssMatchStatement: {
@@ -206,11 +202,11 @@ export class SecuredApiGateway extends Construct {
                 textTransformations: [
                   {
                     priority: 0,
-                    type: "URL_DECODE",
+                    type: 'URL_DECODE',
                   },
                   {
                     priority: 1,
-                    type: "HTML_ENTITY_DECODE",
+                    type: 'HTML_ENTITY_DECODE',
                   },
                 ],
               },
@@ -219,7 +215,7 @@ export class SecuredApiGateway extends Construct {
             visibilityConfig: {
               sampledRequestsEnabled: true,
               cloudWatchMetricsEnabled: true,
-              metricName: "XssRule",
+              metricName: 'XssRule',
             },
           },
         ],
@@ -231,7 +227,7 @@ export class SecuredApiGateway extends Construct {
       });
 
       // Associate WAF with API Gateway
-      new wafv2.CfnWebACLAssociation(this, "WebAclAssociation", {
+      new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
         resourceArn: `arn:aws:apigateway:${cdk.Stack.of(this).region}::/restapis/${this.api.restApiId}/stages/${environment}`,
         webAclArn: this.webAcl.attrArn,
       });
@@ -239,7 +235,7 @@ export class SecuredApiGateway extends Construct {
 
     // ==================== API Resources & Methods ====================
     Object.entries(lambdaIntegrations).forEach(([path, config]) => {
-      const pathParts = path.split("/").filter((p) => p);
+      const pathParts = path.split('/').filter((p) => p);
       let resource = this.api.root;
 
       // Build resource path
@@ -257,19 +253,18 @@ export class SecuredApiGateway extends Construct {
         // Build methodOptions object with all properties at creation time
         let authorizationType = apigateway.AuthorizationType.NONE;
         let apiKeyRequired = false;
-        let methodResponses: apigateway.MethodResponse[] | undefined =
-          undefined;
+        let methodResponses: apigateway.MethodResponse[] | undefined = undefined;
 
         // Configure authorization based on authType
         switch (config.authType) {
-          case "IAM":
+          case 'IAM':
             authorizationType = apigateway.AuthorizationType.IAM;
             break;
-          case "API_KEY":
+          case 'API_KEY':
             authorizationType = apigateway.AuthorizationType.NONE;
             apiKeyRequired = true;
             break;
-          case "NONE":
+          case 'NONE':
             authorizationType = apigateway.AuthorizationType.NONE;
             break;
         }
@@ -282,10 +277,10 @@ export class SecuredApiGateway extends Construct {
         if (config.throttle) {
           methodResponses = [
             {
-              statusCode: "200",
+              statusCode: '200',
             },
             {
-              statusCode: "429",
+              statusCode: '429',
             },
           ];
         }
@@ -303,11 +298,11 @@ export class SecuredApiGateway extends Construct {
           proxy: true,
           integrationResponses: [
             {
-              statusCode: "200",
+              statusCode: '200',
             },
             {
-              statusCode: "429",
-              selectionPattern: ".*Rate limit exceeded.*",
+              statusCode: '429',
+              selectionPattern: '.*Rate limit exceeded.*',
             },
           ],
         });
@@ -317,16 +312,16 @@ export class SecuredApiGateway extends Construct {
     });
 
     // ==================== API Documentation ====================
-    new apigateway.CfnDocumentationPart(this, "ApiDocumentation", {
+    new apigateway.CfnDocumentationPart(this, 'ApiDocumentation', {
       location: {
-        type: "API",
+        type: 'API',
       },
       properties: JSON.stringify({
         description: `Secured API Gateway for ${serviceName} microservice`,
-        version: "1.0.0",
+        version: '1.0.0',
         contact: {
-          name: "Postolio Team",
-          email: "support@postolio.example",
+          name: 'Postolio Team',
+          email: 'support@postolio.example',
         },
       }),
       restApiId: this.api.restApiId,
@@ -335,13 +330,13 @@ export class SecuredApiGateway extends Construct {
     // ==================== IAM Policies ====================
 
     // Create IAM policy for API access
-    const apiAccessPolicy = new iam.ManagedPolicy(this, "ApiAccessPolicy", {
+    const apiAccessPolicy = new iam.ManagedPolicy(this, 'ApiAccessPolicy', {
       managedPolicyName: `postolio-${serviceName}-${environment}-api-access`,
       description: `Policy for accessing ${serviceName} API`,
       statements: [
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
-          actions: ["execute-api:Invoke"],
+          actions: ['execute-api:Invoke'],
           resources: [
             `arn:aws:execute-api:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:${this.api.restApiId}/*/*/*`,
           ],
@@ -350,35 +345,35 @@ export class SecuredApiGateway extends Construct {
     });
 
     // Create IAM role for service-to-service communication
-    const serviceRole = new iam.Role(this, "ServiceRole", {
+    const serviceRole = new iam.Role(this, 'ServiceRole', {
       roleName: `postolio-${serviceName}-${environment}-service-role`,
       assumedBy: new iam.CompositePrincipal(
-        new iam.ServicePrincipal("lambda.amazonaws.com"),
-        new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+        new iam.ServicePrincipal('lambda.amazonaws.com'),
+        new iam.ServicePrincipal('ecs-tasks.amazonaws.com')
       ),
       managedPolicies: [apiAccessPolicy],
       description: `Service role for ${serviceName} microservice`,
     });
 
     // ==================== Outputs ====================
-    new cdk.CfnOutput(this, "ApiUrl", {
+    new cdk.CfnOutput(this, 'ApiUrl', {
       value: this.api.url,
       description: `API Gateway URL for ${serviceName}`,
     });
 
-    new cdk.CfnOutput(this, "ApiId", {
+    new cdk.CfnOutput(this, 'ApiId', {
       value: this.api.restApiId,
       description: `API Gateway ID for ${serviceName}`,
     });
 
     if (this.apiKey) {
-      new cdk.CfnOutput(this, "ApiKeyId", {
+      new cdk.CfnOutput(this, 'ApiKeyId', {
         value: this.apiKey.keyId,
         description: `API Key ID for ${serviceName}`,
       });
     }
 
-    new cdk.CfnOutput(this, "ServiceRoleArn", {
+    new cdk.CfnOutput(this, 'ServiceRoleArn', {
       value: serviceRole.roleArn,
       description: `Service role ARN for ${serviceName}`,
     });

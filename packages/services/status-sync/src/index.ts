@@ -4,12 +4,9 @@
  * Handles: post.published, post.failed, schedule.created, schedule.updated, schedule.canceled
  */
 
-import { PrismaClient, ContentStatus } from "@prisma/client";
-import type { EventBridgeEvent } from "aws-lambda";
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-} from "@aws-sdk/client-secrets-manager";
+import { PrismaClient, ContentStatus } from '@prisma/client';
+import type { EventBridgeEvent } from 'aws-lambda';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
 interface BaseDetailData {
   contentId?: string;
@@ -46,8 +43,8 @@ async function getDatabaseUrl(): Promise<string> {
 
   // Build from pieces: either from env values, or from a secret for username/password
   const host = process.env.DB_HOST;
-  const port = process.env.DB_PORT || "5432";
-  const name = process.env.DB_NAME || "postolio";
+  const port = process.env.DB_PORT || '5432';
+  const name = process.env.DB_NAME || 'postolio';
 
   let username = process.env.DB_USERNAME;
   let password = process.env.DB_PASSWORD;
@@ -55,9 +52,7 @@ async function getDatabaseUrl(): Promise<string> {
   try {
     const secretId = process.env.DB_SECRET_ARN || process.env.DB_SECRET_NAME;
     if ((!username || !password) && secretId) {
-      const res = await secrets.send(
-        new GetSecretValueCommand({ SecretId: secretId }),
-      );
+      const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
       if (res.SecretString) {
         const obj = JSON.parse(res.SecretString);
         username = username || obj.username;
@@ -65,12 +60,12 @@ async function getDatabaseUrl(): Promise<string> {
       }
     }
   } catch {
-    console.warn("Failed to read DB secret, falling back to env vars");
+    console.warn('Failed to read DB secret, falling back to env vars');
   }
 
   if (!host || !username || !password) {
     throw new Error(
-      "Database configuration missing: set DATABASE_URL or DB_HOST, DB_USERNAME, DB_PASSWORD",
+      'Database configuration missing: set DATABASE_URL or DB_HOST, DB_USERNAME, DB_PASSWORD'
     );
   }
 
@@ -97,7 +92,7 @@ async function handlePostPublished(detail: PlatformEventDetail) {
   await client.content.update({
     where: { id: contentId },
     data: {
-      status: "published" as ContentStatus,
+      status: 'published' as ContentStatus,
       postedAt: publishedAt ? new Date(publishedAt) : new Date(),
       instagramPostId: platformPostId ?? undefined,
       instagramPermalink: permalink ?? undefined,
@@ -109,14 +104,13 @@ async function handlePostPublished(detail: PlatformEventDetail) {
 async function handlePostFailed(detail: PlatformEventDetail) {
   const { contentId, error } = detail.data;
   if (!contentId) return;
-  const message: string | undefined =
-    typeof error === "string" ? error : error?.message;
+  const message: string | undefined = typeof error === 'string' ? error : error?.message;
   const client = await getClient();
   await client.content.update({
     where: { id: contentId },
     data: {
-      status: "failed" as ContentStatus,
-      schedulingError: message?.slice(0, 500) || "Unknown error",
+      status: 'failed' as ContentStatus,
+      schedulingError: message?.slice(0, 500) || 'Unknown error',
     },
   });
 }
@@ -128,7 +122,7 @@ async function handleScheduleCreated(detail: PlatformEventDetail) {
   await client.content.update({
     where: { id: contentId },
     data: {
-      status: "scheduled" as ContentStatus,
+      status: 'scheduled' as ContentStatus,
       scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
     },
   });
@@ -140,9 +134,7 @@ async function handleScheduleUpdated(detail: PlatformEventDetail) {
   if (!contentId && !scheduleId) return;
   const client = await getClient();
   await client.content.updateMany({
-    where: contentId
-      ? { id: contentId }
-      : { /* fallback: no-op without contentId */ id: "" },
+    where: contentId ? { id: contentId } : { /* fallback: no-op without contentId */ id: '' },
     data: scheduledAt ? { scheduledAt: new Date(scheduledAt) } : {},
   });
 }
@@ -154,46 +146,44 @@ async function handleScheduleCanceled(detail: PlatformEventDetail) {
   await client.content.update({
     where: { id: contentId },
     data: {
-      status: "draft" as ContentStatus,
+      status: 'draft' as ContentStatus,
       scheduledAt: null,
     },
   });
 }
 
-export async function handler(
-  event: EventBridgeEvent<string, PlatformEventDetail>,
-) {
+export async function handler(event: EventBridgeEvent<string, PlatformEventDetail>) {
   console.log(
-    "StatusSync received event",
+    'StatusSync received event',
     JSON.stringify({
       id: event.id,
       source: event.source,
-      "detail-type": event["detail-type"],
+      'detail-type': event['detail-type'],
       time: event.time,
-    }),
+    })
   );
 
   const detail = event.detail;
   if (!detail || !detail.type) {
-    console.warn("Missing detail/type in EventBridge event");
+    console.warn('Missing detail/type in EventBridge event');
     return { statusCode: 400 };
   }
 
   try {
     switch (detail.type) {
-      case "post.published":
+      case 'post.published':
         await handlePostPublished(detail);
         break;
-      case "post.failed":
+      case 'post.failed':
         await handlePostFailed(detail);
         break;
-      case "schedule.created":
+      case 'schedule.created':
         await handleScheduleCreated(detail);
         break;
-      case "schedule.updated":
+      case 'schedule.updated':
         await handleScheduleUpdated(detail);
         break;
-      case "schedule.canceled":
+      case 'schedule.canceled':
         await handleScheduleCanceled(detail);
         break;
       default:
@@ -201,7 +191,7 @@ export async function handler(
     }
     return { statusCode: 200 };
   } catch (error) {
-    console.error("StatusSync processing error", { error });
+    console.error('StatusSync processing error', { error });
     // Let EventBridge retries/DLQ handle transient issues
     throw error;
   }

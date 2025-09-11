@@ -1,17 +1,10 @@
-import { ScheduledEvent, Context } from "aws-lambda";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import {
-  DynamoDBDocumentClient,
-  ScanCommand,
-  UpdateCommand,
-} from "@aws-sdk/lib-dynamodb";
-import { KMSClient, EncryptCommand, DecryptCommand } from "@aws-sdk/client-kms";
-import {
-  EventBridgeClient,
-  PutEventsCommand,
-} from "@aws-sdk/client-eventbridge";
-import axios from "axios";
-import { getSecretManager } from "../shared/secrets-manager";
+import { ScheduledEvent, Context } from 'aws-lambda';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
+import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+import axios from 'axios';
+import { getSecretManager } from '../shared/secrets-manager';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -40,11 +33,8 @@ interface RefreshResult {
   expiresIn: number;
 }
 
-export const handler = async (
-  event: ScheduledEvent,
-  context: Context,
-): Promise<void> => {
-  console.log("Token Rotation Lambda invoked", {
+export const handler = async (event: ScheduledEvent, context: Context): Promise<void> => {
+  console.log('Token Rotation Lambda invoked', {
     time: event.time,
     requestId: context.awsRequestId,
   });
@@ -70,38 +60,38 @@ export const handler = async (
           results.skipped++;
         }
       } catch (error) {
-        console.error("Failed to refresh token:", {
+        console.error('Failed to refresh token:', {
           pk: token.pk,
           sk: token.sk,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
         results.failed++;
 
         // Send failure event
-        await sendEvent("postolio.token-rotation", "token.refresh.failed", {
-          userId: token.pk.split("#")[0],
+        await sendEvent('postolio.token-rotation', 'token.refresh.failed', {
+          userId: token.pk.split('#')[0],
           platform: token.platform,
           brandId: token.sk,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: error instanceof Error ? error.message : 'Unknown error',
           timestamp: new Date().toISOString(),
         });
       }
     }
 
-    console.log("Token rotation completed:", results);
+    console.log('Token rotation completed:', results);
 
     // Send summary event
-    await sendEvent("postolio.token-rotation", "rotation.completed", {
+    await sendEvent('postolio.token-rotation', 'rotation.completed', {
       ...results,
       totalProcessed: expiringTokens.length,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Token rotation error:", error);
+    console.error('Token rotation error:', error);
 
     // Send error event
-    await sendEvent("postolio.token-rotation", "rotation.error", {
-      error: error instanceof Error ? error.message : "Unknown error",
+    await sendEvent('postolio.token-rotation', 'rotation.error', {
+      error: error instanceof Error ? error.message : 'Unknown error',
       timestamp: new Date().toISOString(),
     });
 
@@ -121,13 +111,13 @@ async function getExpiringTokens(): Promise<TokenRecord[]> {
     const result = await docClient.send(
       new ScanCommand({
         TableName: TOKEN_TABLE_NAME,
-        FilterExpression: "expiresAt < :threshold AND expiresAt > :now",
+        FilterExpression: 'expiresAt < :threshold AND expiresAt > :now',
         ExpressionAttributeValues: {
-          ":threshold": sevenDaysFromNow,
-          ":now": Date.now(),
+          ':threshold': sevenDaysFromNow,
+          ':now': Date.now(),
         },
         ExclusiveStartKey: lastEvaluatedKey,
-      }),
+      })
     );
 
     if (result.Items) {
@@ -143,7 +133,7 @@ async function getExpiringTokens(): Promise<TokenRecord[]> {
 async function refreshToken(token: TokenRecord): Promise<boolean> {
   // Skip if no refresh token
   if (!token.encryptedRefreshToken) {
-    console.log("No refresh token available, skipping:", {
+    console.log('No refresh token available, skipping:', {
       pk: token.pk,
       platform: token.platform,
     });
@@ -160,20 +150,20 @@ async function refreshToken(token: TokenRecord): Promise<boolean> {
   let refreshResult: RefreshResult | null = null;
 
   switch (token.platform) {
-    case "instagram":
+    case 'instagram':
       refreshResult = await refreshInstagramToken(refreshToken);
       break;
-    case "facebook":
+    case 'facebook':
       refreshResult = await refreshFacebookToken(refreshToken, metadata);
       break;
-    case "linkedin":
+    case 'linkedin':
       refreshResult = await refreshLinkedInToken(refreshToken, metadata);
       break;
-    case "tiktok":
+    case 'tiktok':
       refreshResult = await refreshTikTokToken(refreshToken, metadata);
       break;
     default:
-      console.warn("Unknown platform for token refresh:", token.platform);
+      console.warn('Unknown platform for token refresh:', token.platform);
       return false;
   }
 
@@ -199,19 +189,19 @@ async function refreshToken(token: TokenRecord): Promise<boolean> {
         sk: token.sk,
       },
       UpdateExpression:
-        "SET encryptedAccessToken = :accessToken, encryptedRefreshToken = :refreshToken, expiresAt = :expiresAt, lastRefreshed = :lastRefreshed",
+        'SET encryptedAccessToken = :accessToken, encryptedRefreshToken = :refreshToken, expiresAt = :expiresAt, lastRefreshed = :lastRefreshed',
       ExpressionAttributeValues: {
-        ":accessToken": encryptedAccessToken,
-        ":refreshToken": encryptedRefreshToken,
-        ":expiresAt": newExpiresAt,
-        ":lastRefreshed": new Date().toISOString(),
+        ':accessToken': encryptedAccessToken,
+        ':refreshToken': encryptedRefreshToken,
+        ':expiresAt': newExpiresAt,
+        ':lastRefreshed': new Date().toISOString(),
       },
-    }),
+    })
   );
 
   // Send success event
-  await sendEvent("postolio.token-rotation", "token.refreshed", {
-    userId: token.pk.split("#")[0],
+  await sendEvent('postolio.token-rotation', 'token.refreshed', {
+    userId: token.pk.split('#')[0],
     platform: token.platform,
     brandId: token.sk,
     newExpiresAt,
@@ -221,34 +211,29 @@ async function refreshToken(token: TokenRecord): Promise<boolean> {
   return true;
 }
 
-async function refreshInstagramToken(
-  accessToken: string,
-): Promise<RefreshResult> {
+async function refreshInstagramToken(accessToken: string): Promise<RefreshResult> {
   // Instagram uses long-lived tokens that need to be refreshed every 60 days
   try {
-    const response = await axios.get(
-      "https://graph.instagram.com/refresh_access_token",
-      {
-        params: {
-          grant_type: "ig_refresh_token",
-          access_token: accessToken,
-        },
+    const response = await axios.get('https://graph.instagram.com/refresh_access_token', {
+      params: {
+        grant_type: 'ig_refresh_token',
+        access_token: accessToken,
       },
-    );
+    });
 
     return {
       accessToken: response.data.access_token,
       expiresIn: response.data.expires_in || 5184000, // 60 days default
     };
   } catch (error) {
-    console.error("Instagram token refresh failed:", error);
-    throw new Error("Failed to refresh Instagram token");
+    console.error('Instagram token refresh failed:', error);
+    throw new Error('Failed to refresh Instagram token');
   }
 }
 
 async function refreshFacebookToken(
   currentToken: string,
-  metadata: Record<string, any>,
+  metadata: Record<string, any>
 ): Promise<RefreshResult> {
   try {
     // Get app ID from environment variable and secret from Secrets Manager
@@ -258,35 +243,32 @@ async function refreshFacebookToken(
     const appSecret = secrets.FACEBOOK_APP_SECRET;
 
     if (!appId || !appSecret) {
-      throw new Error("Facebook app credentials not available");
+      throw new Error('Facebook app credentials not available');
     }
 
     // Exchange for long-lived token
-    const response = await axios.get(
-      "https://graph.facebook.com/v18.0/oauth/access_token",
-      {
-        params: {
-          grant_type: "fb_exchange_token",
-          client_id: appId,
-          client_secret: appSecret,
-          fb_exchange_token: currentToken,
-        },
+    const response = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
+      params: {
+        grant_type: 'fb_exchange_token',
+        client_id: appId,
+        client_secret: appSecret,
+        fb_exchange_token: currentToken,
       },
-    );
+    });
 
     return {
       accessToken: response.data.access_token,
       expiresIn: response.data.expires_in || 5184000, // 60 days default
     };
   } catch (error) {
-    console.error("Facebook token refresh failed:", error);
-    throw new Error("Failed to refresh Facebook token");
+    console.error('Facebook token refresh failed:', error);
+    throw new Error('Failed to refresh Facebook token');
   }
 }
 
 async function refreshLinkedInToken(
   refreshToken: string,
-  metadata: Record<string, any>,
+  metadata: Record<string, any>
 ): Promise<RefreshResult> {
   try {
     // Get client ID from environment variable and secret from Secrets Manager
@@ -296,24 +278,20 @@ async function refreshLinkedInToken(
     const clientSecret = secrets.LINKEDIN_CLIENT_SECRET;
 
     if (!clientId || !clientSecret) {
-      throw new Error("LinkedIn client credentials not available");
+      throw new Error('LinkedIn client credentials not available');
     }
 
-    const response = await axios.post(
-      "https://www.linkedin.com/oauth/v2/accessToken",
-      null,
-      {
-        params: {
-          grant_type: "refresh_token",
-          refresh_token: refreshToken,
-          client_id: clientId,
-          client_secret: clientSecret,
-        },
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
+    const response = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', null, {
+      params: {
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret,
       },
-    );
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
 
     return {
       accessToken: response.data.access_token,
@@ -321,14 +299,14 @@ async function refreshLinkedInToken(
       expiresIn: response.data.expires_in || 5184000, // 60 days default
     };
   } catch (error) {
-    console.error("LinkedIn token refresh failed:", error);
-    throw new Error("Failed to refresh LinkedIn token");
+    console.error('LinkedIn token refresh failed:', error);
+    throw new Error('Failed to refresh LinkedIn token');
   }
 }
 
 async function refreshTikTokToken(
   refreshToken: string,
-  metadata: Record<string, any>,
+  metadata: Record<string, any>
 ): Promise<RefreshResult> {
   try {
     // Get client key from environment variable and secret from Secrets Manager
@@ -338,23 +316,23 @@ async function refreshTikTokToken(
     const clientSecret = secrets.TIKTOK_CLIENT_SECRET;
 
     if (!clientKey || !clientSecret) {
-      throw new Error("TikTok client credentials not available");
+      throw new Error('TikTok client credentials not available');
     }
 
     const response = await axios.post(
-      "https://open.tiktokapis.com/v2/oauth/token/",
+      'https://open.tiktokapis.com/v2/oauth/token/',
       {
         client_key: clientKey,
         client_secret: clientSecret,
-        grant_type: "refresh_token",
+        grant_type: 'refresh_token',
         refresh_token: refreshToken,
       },
       {
         headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
         },
-      },
+      }
     );
 
     return {
@@ -363,8 +341,8 @@ async function refreshTikTokToken(
       expiresIn: response.data.expires_in || 86400, // 1 day default for TikTok
     };
   } catch (error) {
-    console.error("TikTok token refresh failed:", error);
-    throw new Error("Failed to refresh TikTok token");
+    console.error('TikTok token refresh failed:', error);
+    throw new Error('Failed to refresh TikTok token');
   }
 }
 
@@ -373,27 +351,23 @@ async function encryptData(data: string): Promise<string> {
     new EncryptCommand({
       KeyId: KMS_KEY_ID,
       Plaintext: Buffer.from(data),
-    }),
+    })
   );
 
-  return Buffer.from(result.CiphertextBlob!).toString("base64");
+  return Buffer.from(result.CiphertextBlob!).toString('base64');
 }
 
 async function decryptData(encryptedData: string): Promise<string> {
   const result = await kmsClient.send(
     new DecryptCommand({
-      CiphertextBlob: Buffer.from(encryptedData, "base64"),
-    }),
+      CiphertextBlob: Buffer.from(encryptedData, 'base64'),
+    })
   );
 
   return Buffer.from(result.Plaintext!).toString();
 }
 
-async function sendEvent(
-  source: string,
-  detailType: string,
-  detail: any,
-): Promise<void> {
+async function sendEvent(source: string, detailType: string, detail: any): Promise<void> {
   await eventBridgeClient.send(
     new PutEventsCommand({
       Entries: [
@@ -404,6 +378,6 @@ async function sendEvent(
           EventBusName: EVENT_BUS_NAME,
         },
       ],
-    }),
+    })
   );
 }

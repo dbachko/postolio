@@ -3,7 +3,7 @@
  * Centralizes OAuth credential mapping across CDK stacks
  */
 
-import * as cdk from "aws-cdk-lib";
+import * as cdk from 'aws-cdk-lib';
 
 export interface OAuthConfig {
   // Public OAuth Client IDs (from GitHub Environment Variables)
@@ -27,30 +27,20 @@ export interface OAuthConfig {
 export function getOAuthConfig(app: cdk.App): OAuthConfig {
   return {
     // Public OAuth Client IDs (from GitHub Environment Variables via CDK context)
-    facebookAppId:
-      app.node.tryGetContext("facebookAppId") || process.env.FACEBOOK_APP_ID,
-    instagramAppId:
-      app.node.tryGetContext("instagramAppId") || process.env.INSTAGRAM_APP_ID,
-    linkedinClientId:
-      app.node.tryGetContext("linkedinClientId") ||
-      process.env.LINKEDIN_CLIENT_ID,
-    tiktokClientKey:
-      app.node.tryGetContext("tiktokClientKey") ||
-      process.env.TIKTOK_CLIENT_KEY,
+    facebookAppId: app.node.tryGetContext('facebookAppId') || process.env.FACEBOOK_APP_ID,
+    instagramAppId: app.node.tryGetContext('instagramAppId') || process.env.INSTAGRAM_APP_ID,
+    linkedinClientId: app.node.tryGetContext('linkedinClientId') || process.env.LINKEDIN_CLIENT_ID,
+    tiktokClientKey: app.node.tryGetContext('tiktokClientKey') || process.env.TIKTOK_CLIENT_KEY,
 
     // OAuth Secrets (from GitHub Secrets via CDK context)
     facebookAppSecret:
-      app.node.tryGetContext("facebookAppSecret") ||
-      process.env.FACEBOOK_APP_SECRET,
+      app.node.tryGetContext('facebookAppSecret') || process.env.FACEBOOK_APP_SECRET,
     instagramAppSecret:
-      app.node.tryGetContext("instagramAppSecret") ||
-      process.env.INSTAGRAM_APP_SECRET,
+      app.node.tryGetContext('instagramAppSecret') || process.env.INSTAGRAM_APP_SECRET,
     linkedinClientSecret:
-      app.node.tryGetContext("linkedinClientSecret") ||
-      process.env.LINKEDIN_CLIENT_SECRET,
+      app.node.tryGetContext('linkedinClientSecret') || process.env.LINKEDIN_CLIENT_SECRET,
     tiktokClientSecret:
-      app.node.tryGetContext("tiktokClientSecret") ||
-      process.env.TIKTOK_CLIENT_SECRET,
+      app.node.tryGetContext('tiktokClientSecret') || process.env.TIKTOK_CLIENT_SECRET,
   };
 }
 
@@ -59,15 +49,13 @@ export function getOAuthConfig(app: cdk.App): OAuthConfig {
  * @param config OAuth configuration
  * @returns Environment variables object for Lambda/ECS
  */
-export function getOAuthEnvironmentVariables(
-  config: OAuthConfig,
-): Record<string, string> {
+export function getOAuthEnvironmentVariables(config: OAuthConfig): Record<string, string> {
   return {
     // Public OAuth Client IDs
-    FACEBOOK_APP_ID: config.facebookAppId || "",
-    INSTAGRAM_APP_ID: config.instagramAppId || "",
-    LINKEDIN_CLIENT_ID: config.linkedinClientId || "",
-    TIKTOK_CLIENT_KEY: config.tiktokClientKey || "",
+    FACEBOOK_APP_ID: config.facebookAppId || '',
+    INSTAGRAM_APP_ID: config.instagramAppId || '',
+    LINKEDIN_CLIENT_ID: config.linkedinClientId || '',
+    TIKTOK_CLIENT_KEY: config.tiktokClientKey || '',
 
     // OAuth Secrets (only if provided)
     ...(config.facebookAppSecret && {

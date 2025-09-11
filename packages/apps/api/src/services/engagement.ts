@@ -1,5 +1,5 @@
-import { PrismaClient, Prisma } from "@postolio/database";
-import { instagramService } from "./instagram.js";
+import { PrismaClient, Prisma } from '@postolio/database';
+import { instagramService } from './instagram.js';
 
 const prisma = new PrismaClient();
 
@@ -39,10 +39,10 @@ export interface EngagementRules {
 export interface EngagementAction {
   id: string;
   brandId: string;
-  type: "like" | "comment" | "follow" | "unfollow";
+  type: 'like' | 'comment' | 'follow' | 'unfollow';
   targetId: string;
-  targetType: "post" | "user";
-  status: "pending" | "completed" | "failed";
+  targetType: 'post' | 'user';
+  status: 'pending' | 'completed' | 'failed';
   scheduledAt: Date;
   executedAt?: Date;
   metadata?: Record<string, unknown>;
@@ -65,9 +65,7 @@ class EngagementService {
       const brand = await prisma.brand.update({
         where: { id: rules.brandId },
         data: {
-          engagementRules: JSON.parse(
-            JSON.stringify(rules),
-          ) as Prisma.InputJsonValue,
+          engagementRules: JSON.parse(JSON.stringify(rules)) as Prisma.InputJsonValue,
         },
       });
 
@@ -76,7 +74,7 @@ class EngagementService {
         ...rules,
       };
     } catch (error) {
-      console.error("Failed to set engagement rules:", error);
+      console.error('Failed to set engagement rules:', error);
       throw error;
     }
   }
@@ -97,12 +95,10 @@ class EngagementService {
       const stored = brand.engagementRules as unknown;
       return {
         id: brand.id,
-        ...(stored && typeof stored === "object"
-          ? (stored as Record<string, unknown>)
-          : {}),
+        ...(stored && typeof stored === 'object' ? (stored as Record<string, unknown>) : {}),
       } as EngagementRules;
     } catch (error) {
-      console.error("Failed to get engagement rules:", error);
+      console.error('Failed to get engagement rules:', error);
       return null;
     }
   }
@@ -123,15 +119,11 @@ class EngagementService {
     }
 
     if (rules.autoComment.maxCommentsPerHour > MAX_COMMENTS_PER_HOUR) {
-      throw new Error(
-        `Max comments per hour cannot exceed ${MAX_COMMENTS_PER_HOUR}`,
-      );
+      throw new Error(`Max comments per hour cannot exceed ${MAX_COMMENTS_PER_HOUR}`);
     }
 
     if (rules.autoFollow.maxFollowsPerHour > MAX_FOLLOWS_PER_HOUR) {
-      throw new Error(
-        `Max follows per hour cannot exceed ${MAX_FOLLOWS_PER_HOUR}`,
-      );
+      throw new Error(`Max follows per hour cannot exceed ${MAX_FOLLOWS_PER_HOUR}`);
     }
 
     const totalActions =
@@ -140,27 +132,23 @@ class EngagementService {
       rules.autoFollow.maxFollowsPerHour;
 
     if (totalActions > MAX_TOTAL_ACTIONS_PER_HOUR) {
-      throw new Error(
-        `Total actions per hour cannot exceed ${MAX_TOTAL_ACTIONS_PER_HOUR}`,
-      );
+      throw new Error(`Total actions per hour cannot exceed ${MAX_TOTAL_ACTIONS_PER_HOUR}`);
     }
 
     if (rules.safetyLimits.minDelayBetweenActions < MIN_DELAY_SECONDS) {
       throw new Error(
-        `Minimum delay between actions must be at least ${MIN_DELAY_SECONDS} seconds`,
+        `Minimum delay between actions must be at least ${MIN_DELAY_SECONDS} seconds`
       );
     }
 
     // Validate comment templates
     if (rules.autoComment.enabled && rules.autoComment.templates.length === 0) {
-      throw new Error(
-        "Comment templates are required when auto-comment is enabled",
-      );
+      throw new Error('Comment templates are required when auto-comment is enabled');
     }
 
     // Validate hashtags
     if (rules.autoLike.enabled && rules.autoLike.targetHashtags.length === 0) {
-      throw new Error("Target hashtags are required when auto-like is enabled");
+      throw new Error('Target hashtags are required when auto-like is enabled');
     }
   }
 
@@ -169,19 +157,19 @@ class EngagementService {
    */
   start(): void {
     if (this.isRunning) {
-      console.log("Engagement automation is already running");
+      console.log('Engagement automation is already running');
       return;
     }
 
     this.isRunning = true;
-    console.log("Starting engagement automation service...");
+    console.log('Starting engagement automation service...');
 
     // Check for engagement actions every 2 minutes
     this.intervalId = setInterval(
       () => {
         this.processEngagementActions();
       },
-      2 * 60 * 1000,
+      2 * 60 * 1000
     );
 
     // Also run immediately
@@ -201,7 +189,7 @@ class EngagementService {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
-    console.log("Engagement automation service stopped");
+    console.log('Engagement automation service stopped');
   }
 
   /**
@@ -221,7 +209,7 @@ class EngagementService {
         await this.processBrandEngagement(brand);
       }
     } catch (error) {
-      console.error("Error processing engagement actions:", error);
+      console.error('Error processing engagement actions:', error);
     }
   }
 
@@ -270,10 +258,7 @@ class EngagementService {
         await this.processAutoFollows(brand, rules, recentActions.length);
       }
     } catch (error) {
-      console.error(
-        `Error processing engagement for brand ${brand.id}:`,
-        error,
-      );
+      console.error(`Error processing engagement for brand ${brand.id}:`, error);
     }
   }
 
@@ -283,7 +268,7 @@ class EngagementService {
   private async processAutoLikes(
     brand: { id: string },
     rules: EngagementRules,
-    currentActionCount: number,
+    currentActionCount: number
   ): Promise<void> {
     const likesThisHour = currentActionCount; // Simplified for this implementation
     const remainingLikes = rules.autoLike.maxLikesPerHour - likesThisHour;
@@ -296,7 +281,7 @@ class EngagementService {
       // For now, we'll simulate finding posts
       const postsToLike = await this.findPostsByHashtags(
         rules.autoLike.targetHashtags,
-        Math.min(remainingLikes, 5),
+        Math.min(remainingLikes, 5)
       );
 
       for (const post of postsToLike) {
@@ -307,15 +292,15 @@ class EngagementService {
         // Schedule like action
         await this.scheduleEngagementAction({
           brandId: brand.id,
-          type: "like",
+          type: 'like',
           targetId: post.id,
-          targetType: "post",
+          targetType: 'post',
           scheduledAt: new Date(),
           metadata: { hashtags: post.hashtags },
         });
       }
     } catch (error) {
-      console.error("Error processing auto likes:", error);
+      console.error('Error processing auto likes:', error);
     }
   }
 
@@ -325,18 +310,15 @@ class EngagementService {
   private async processAutoComments(
     brand: { id: string },
     rules: EngagementRules,
-    currentActionCount: number,
+    currentActionCount: number
   ): Promise<void> {
     const commentsThisHour = currentActionCount; // Simplified
-    const remainingComments =
-      rules.autoComment.maxCommentsPerHour - commentsThisHour;
+    const remainingComments = rules.autoComment.maxCommentsPerHour - commentsThisHour;
 
     if (remainingComments <= 0) return;
 
     try {
-      const postsToComment = await this.findPostsForComments(
-        Math.min(remainingComments, 3),
-      );
+      const postsToComment = await this.findPostsForComments(Math.min(remainingComments, 3));
 
       for (const post of postsToComment) {
         const probability = rules.autoComment.commentProbability || 0.1;
@@ -350,15 +332,15 @@ class EngagementService {
 
         await this.scheduleEngagementAction({
           brandId: brand.id,
-          type: "comment",
+          type: 'comment',
           targetId: post.id,
-          targetType: "post",
+          targetType: 'post',
           scheduledAt: new Date(),
           metadata: { comment: template },
         });
       }
     } catch (error) {
-      console.error("Error processing auto comments:", error);
+      console.error('Error processing auto comments:', error);
     }
   }
 
@@ -368,18 +350,17 @@ class EngagementService {
   private async processAutoFollows(
     brand: { id: string },
     rules: EngagementRules,
-    currentActionCount: number,
+    currentActionCount: number
   ): Promise<void> {
     const followsThisHour = currentActionCount; // Simplified
-    const remainingFollows =
-      rules.autoFollow.maxFollowsPerHour - followsThisHour;
+    const remainingFollows = rules.autoFollow.maxFollowsPerHour - followsThisHour;
 
     if (remainingFollows <= 0) return;
 
     try {
       const usersToFollow = await this.findUsersToFollow(
         rules.autoFollow.targetAccounts || [],
-        Math.min(remainingFollows, 2),
+        Math.min(remainingFollows, 2)
       );
 
       for (const user of usersToFollow) {
@@ -388,15 +369,15 @@ class EngagementService {
 
         await this.scheduleEngagementAction({
           brandId: brand.id,
-          type: "follow",
+          type: 'follow',
           targetId: user.id,
-          targetType: "user",
+          targetType: 'user',
           scheduledAt: new Date(),
           metadata: { username: user.username },
         });
       }
     } catch (error) {
-      console.error("Error processing auto follows:", error);
+      console.error('Error processing auto follows:', error);
     }
   }
 
@@ -404,7 +385,7 @@ class EngagementService {
    * Schedule an engagement action
    */
   private async scheduleEngagementAction(
-    action: Omit<EngagementAction, "id" | "status">,
+    action: Omit<EngagementAction, 'id' | 'status'>
   ): Promise<void> {
     // Store in database (simplified - you'd want a proper engagement_actions table)
     console.log(`Scheduled ${action.type} action for brand ${action.brandId}`);
@@ -413,16 +394,14 @@ class EngagementService {
     await this.executeEngagementAction({
       ...action,
       id: `action_${Date.now()}`,
-      status: "pending",
+      status: 'pending',
     });
   }
 
   /**
    * Execute an engagement action
    */
-  private async executeEngagementAction(
-    action: EngagementAction,
-  ): Promise<void> {
+  private async executeEngagementAction(action: EngagementAction): Promise<void> {
     try {
       console.log(`Executing ${action.type} action: ${action.id}`);
 
@@ -440,10 +419,7 @@ class EngagementService {
   /**
    * Get recent actions for rate limiting
    */
-  private async getRecentActions(
-    _brandId: string,
-    _since: Date,
-  ): Promise<EngagementAction[]> {
+  private async getRecentActions(_brandId: string, _since: Date): Promise<EngagementAction[]> {
     void _brandId;
     void _since;
     // In a real implementation, query engagement_actions table
@@ -466,7 +442,7 @@ class EngagementService {
    */
   private async findPostsByHashtags(
     hashtags: string[],
-    limit: number,
+    limit: number
   ): Promise<Array<{ id: string; hashtags: string[] }>> {
     // Mock implementation - in reality, you'd search Instagram
     return Array.from({ length: Math.min(limit, 3) }, (_, i) => ({
@@ -478,9 +454,7 @@ class EngagementService {
   /**
    * Find posts for commenting (mock implementation)
    */
-  private async findPostsForComments(
-    limit: number,
-  ): Promise<Array<{ id: string }>> {
+  private async findPostsForComments(limit: number): Promise<Array<{ id: string }>> {
     return Array.from({ length: Math.min(limit, 2) }, (_, i) => ({
       id: `post_comment_${Date.now()}_${i}`,
     }));
@@ -491,7 +465,7 @@ class EngagementService {
    */
   private async findUsersToFollow(
     targetAccounts: string[],
-    limit: number,
+    limit: number
   ): Promise<Array<{ id: string; username: string }>> {
     return Array.from({ length: Math.min(limit, 1) }, (_, i) => ({
       id: `user_${Date.now()}_${i}`,
@@ -504,7 +478,7 @@ class EngagementService {
    */
   async getEngagementStats(
     brandId: string,
-    days: number = 7,
+    days: number = 7
   ): Promise<{
     totalActions: number;
     likes: number;

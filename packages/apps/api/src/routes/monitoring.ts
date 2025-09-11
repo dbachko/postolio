@@ -1,12 +1,12 @@
-import { FastifyPluginAsync } from "fastify";
-import { monitoringService } from "../services/monitoring.js";
-import { checkDatabaseHealth, getDatabaseMetrics } from "../config/database.js";
-import { serviceClients } from "../services/service-clients.js";
-import { isCloudMapConfigured } from "../utils/service-discovery.js";
+import { FastifyPluginAsync } from 'fastify';
+import { monitoringService } from '../services/monitoring.js';
+import { checkDatabaseHealth, getDatabaseMetrics } from '../config/database.js';
+import { serviceClients } from '../services/service-clients.js';
+import { isCloudMapConfigured } from '../utils/service-discovery.js';
 
 const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   // Get system metrics
-  fastify.get("/metrics", async function () {
+  fastify.get('/metrics', async function () {
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
@@ -17,7 +17,7 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
 
     return {
       timestamp: now.toISOString(),
-      period: "1h",
+      period: '1h',
       metrics: {
         totalRequests,
         errorCount,
@@ -29,17 +29,14 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   });
 
   // Get endpoint-specific metrics
-  fastify.get("/metrics/:endpoint", async function (request) {
+  fastify.get('/metrics/:endpoint', async function (request) {
     const { endpoint } = request.params as { endpoint: string };
     const decodedEndpoint = decodeURIComponent(endpoint);
 
     const errorRate = monitoringService.getErrorRate(decodedEndpoint);
-    const avgResponseTime =
-      monitoringService.getAverageResponseTime(decodedEndpoint);
+    const avgResponseTime = monitoringService.getAverageResponseTime(decodedEndpoint);
     const allMetrics = monitoringService.getMetrics();
-    const endpointMetrics = allMetrics.filter(
-      (m) => m.endpoint === decodedEndpoint,
-    );
+    const endpointMetrics = allMetrics.filter((m) => m.endpoint === decodedEndpoint);
 
     return {
       endpoint: decodedEndpoint,
@@ -51,7 +48,7 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   });
 
   // Get recent errors
-  fastify.get("/errors", async function () {
+  fastify.get('/errors', async function () {
     const errors = monitoringService.getErrors();
     const recent = errors.slice(-50); // Last 50 errors
 
@@ -68,7 +65,7 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   });
 
   // Enhanced health check with all services
-  fastify.get("/health", async function () {
+  fastify.get('/health', async function () {
     const metrics = monitoringService.getMetrics();
     const errors = monitoringService.getErrors();
     const now = new Date();
@@ -82,7 +79,7 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
 
     // Check email queue health
     interface EmailQueueHealthBase {
-      status: "unknown" | "healthy" | "unhealthy";
+      status: 'unknown' | 'healthy' | 'unhealthy';
       error?: string;
     }
     type EmailQueueHealth = EmailQueueHealthBase & {
@@ -93,31 +90,31 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
       delayed?: number;
       paused?: boolean;
     };
-    let emailQueueHealth: EmailQueueHealth = { status: "unknown" };
+    let emailQueueHealth: EmailQueueHealth = { status: 'unknown' };
     try {
-      const { emailQueue } = await import("../services/email-queue.js");
+      const { emailQueue } = await import('../services/email-queue.js');
       const queueStats = await emailQueue.getQueueStats();
       emailQueueHealth = {
-        status: "healthy",
+        status: 'healthy',
         ...queueStats,
       };
     } catch (error) {
       emailQueueHealth = {
-        status: "unhealthy",
-        error: error instanceof Error ? error.message : "Unknown error",
+        status: 'unhealthy',
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
 
     // Check service discovery health
     interface ServiceDiscoveryHealth {
-      status: "unknown" | "healthy" | "unhealthy" | string;
+      status: 'unknown' | 'healthy' | 'unhealthy' | string;
       error?: string;
       services?: {
         tokenService?: string | { status?: string; latencyMs?: number };
         schedulerService?: string | { status?: string; latencyMs?: number };
       };
     }
-    let serviceDiscoveryHealth: ServiceDiscoveryHealth = { status: "unknown" };
+    let serviceDiscoveryHealth: ServiceDiscoveryHealth = { status: 'unknown' };
     try {
       const serviceHealth = await serviceClients.healthCheck();
       serviceDiscoveryHealth = {
@@ -129,26 +126,21 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
       };
     } catch (error) {
       serviceDiscoveryHealth = {
-        status: "unhealthy",
-        error:
-          error instanceof Error
-            ? error.message
-            : "Service discovery unavailable",
+        status: 'unhealthy',
+        error: error instanceof Error ? error.message : 'Service discovery unavailable',
       };
     }
 
     return {
       status:
-        isHealthy &&
-        dbHealth.status === "healthy" &&
-        serviceDiscoveryHealth.status !== "unhealthy"
-          ? "healthy"
-          : "degraded",
+        isHealthy && dbHealth.status === 'healthy' && serviceDiscoveryHealth.status !== 'unhealthy'
+          ? 'healthy'
+          : 'degraded',
       timestamp: now.toISOString(),
       uptime: process.uptime(),
       services: {
         api: {
-          status: isHealthy ? "healthy" : "degraded",
+          status: isHealthy ? 'healthy' : 'degraded',
           totalRequests: metrics.length,
           recentErrors: recentErrors.length,
         },
@@ -164,7 +156,7 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   });
 
   // Database-specific metrics
-  fastify.get("/metrics/database", async function () {
+  fastify.get('/metrics/database', async function () {
     const health = await checkDatabaseHealth();
     const metrics = await getDatabaseMetrics();
 
@@ -176,9 +168,9 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   });
 
   // Email queue metrics
-  fastify.get("/metrics/email-queue", async function () {
+  fastify.get('/metrics/email-queue', async function () {
     try {
-      const { emailQueue } = await import("../services/email-queue.js");
+      const { emailQueue } = await import('../services/email-queue.js');
       const stats = await emailQueue.getQueueStats();
       const failedJobs = await emailQueue.getFailedJobs(5);
 
@@ -197,38 +189,38 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
     } catch (error) {
       return {
         timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : "Unknown error",
-        status: "unavailable",
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 'unavailable',
       };
     }
   });
 
   // Circuit breaker status
-  fastify.get("/metrics/circuit-breakers", async function () {
+  fastify.get('/metrics/circuit-breakers', async function () {
     try {
       // Import but don't use directly - just checking it's available
-      await import("../services/email.js");
+      await import('../services/email.js');
 
       // Get circuit breaker stats if available
       return {
         timestamp: new Date().toISOString(),
         circuitBreakers: {
           email: {
-            status: "monitored",
-            note: "Circuit breaker status available in email service logs",
+            status: 'monitored',
+            note: 'Circuit breaker status available in email service logs',
           },
         },
       };
     } catch (error) {
       return {
         timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   });
 
   // Service discovery health check
-  fastify.get("/health/service-discovery", async function () {
+  fastify.get('/health/service-discovery', async function () {
     try {
       const serviceHealth = await serviceClients.healthCheck();
 
@@ -238,50 +230,43 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
         services: serviceHealth,
         environment: {
           cloudMapConfigured: isCloudMapConfigured(),
-          cloudMapNamespaceId:
-            process.env.CLOUDMAP_NAMESPACE_ID || "not configured",
-          cloudMapNamespaceName:
-            process.env.CLOUDMAP_NAMESPACE_NAME || "not configured",
+          cloudMapNamespaceId: process.env.CLOUDMAP_NAMESPACE_ID || 'not configured',
+          cloudMapNamespaceName: process.env.CLOUDMAP_NAMESPACE_NAME || 'not configured',
         },
         fallbackUrls: {
-          tokenService: process.env.TOKEN_SERVICE_URL || "not configured",
+          tokenService: process.env.TOKEN_SERVICE_URL || 'not configured',
           contentScheduler:
-            process.env.CONTENT_SCHEDULER_URL ||
-            process.env.SCHEDULER_API_URL ||
-            "not configured",
+            process.env.CONTENT_SCHEDULER_URL || process.env.SCHEDULER_API_URL || 'not configured',
         },
       };
     } catch (error) {
       return {
         timestamp: new Date().toISOString(),
-        status: "error",
-        error: error instanceof Error ? error.message : "Unknown error",
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
         environment: {
-          serviceDiscoveryEnabled:
-            process.env.SERVICE_DISCOVERY_ENABLED === "true",
-          cloudMapNamespaceId:
-            process.env.CLOUDMAP_NAMESPACE_ID || "not configured",
-          cloudMapNamespaceName:
-            process.env.CLOUDMAP_NAMESPACE_NAME || "not configured",
+          serviceDiscoveryEnabled: process.env.SERVICE_DISCOVERY_ENABLED === 'true',
+          cloudMapNamespaceId: process.env.CLOUDMAP_NAMESPACE_ID || 'not configured',
+          cloudMapNamespaceName: process.env.CLOUDMAP_NAMESPACE_NAME || 'not configured',
         },
       };
     }
   });
 
   // Refresh service discovery
-  fastify.post("/service-discovery/refresh", async function () {
+  fastify.post('/service-discovery/refresh', async function () {
     try {
       await serviceClients.refreshServiceDiscovery();
       return {
         timestamp: new Date().toISOString(),
-        status: "success",
-        message: "Service discovery refreshed successfully",
+        status: 'success',
+        message: 'Service discovery refreshed successfully',
       };
     } catch (error) {
       return {
         timestamp: new Date().toISOString(),
-        status: "error",
-        error: error instanceof Error ? error.message : "Unknown error",
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   });

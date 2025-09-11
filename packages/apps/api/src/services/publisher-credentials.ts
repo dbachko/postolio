@@ -4,9 +4,9 @@
  * This ensures credentials are always up-to-date even if user reconnects their account
  */
 
-import { getDatabaseClient } from "../config/database.js";
-import { getRedisClient } from "../services/redis.js";
-import { getTokenService } from "./service-clients.js";
+import { getDatabaseClient } from '../config/database.js';
+import { getRedisClient } from '../services/redis.js';
+import { getTokenService } from './service-clients.js';
 
 const prisma = getDatabaseClient();
 
@@ -27,9 +27,7 @@ export class PublisherCredentialsService {
    * This should be called by the publisher Lambda at publish time
    * to ensure we always have the latest valid credentials
    */
-  static async getCredentialsForBrand(
-    brandId: string,
-  ): Promise<PublisherCredentials | null> {
+  static async getCredentialsForBrand(brandId: string): Promise<PublisherCredentials | null> {
     try {
       // Try cache first
       const redis = getRedisClient();
@@ -43,10 +41,7 @@ export class PublisherCredentialsService {
             return JSON.parse(cached);
           }
         } catch (cacheError) {
-          console.warn(
-            "Redis cache read failed, falling back to Token Service:",
-            cacheError,
-          );
+          console.warn('Redis cache read failed, falling back to Token Service:', cacheError);
         }
       }
 
@@ -69,11 +64,7 @@ export class PublisherCredentialsService {
 
       // Fetch token from Token Service (using service discovery)
       const tokenServiceClient = await getTokenService();
-      const tokenData = await tokenServiceClient.getToken(
-        brand.userId,
-        brand.id,
-        "instagram",
-      );
+      const tokenData = await tokenServiceClient.getToken(brand.userId, brand.id, 'instagram');
 
       if (!tokenData) {
         console.error(`No Instagram token found for brand: ${brandId}`);
@@ -91,28 +82,22 @@ export class PublisherCredentialsService {
         accountId: tokenData.metadata?.accountId || brand.instagramAccountId,
         pageId: tokenData.metadata?.pageId || brand.instagramPageId,
         brandName: brand.name,
-        platform: "instagram",
+        platform: 'instagram',
       };
 
       // Cache the result
       if (redis) {
         try {
-          await redis.setex(
-            cacheKey,
-            CACHE_TTL_SECONDS,
-            JSON.stringify(credentials),
-          );
-          console.log(
-            `Cached credentials for brand ${brandId} (TTL: ${CACHE_TTL_SECONDS}s)`,
-          );
+          await redis.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(credentials));
+          console.log(`Cached credentials for brand ${brandId} (TTL: ${CACHE_TTL_SECONDS}s)`);
         } catch (cacheError) {
-          console.warn("Redis cache write failed:", cacheError);
+          console.warn('Redis cache write failed:', cacheError);
         }
       }
 
       return credentials;
     } catch (error) {
-      console.error("Error fetching publisher credentials:", error);
+      console.error('Error fetching publisher credentials:', error);
       return null;
     }
   }
@@ -120,9 +105,7 @@ export class PublisherCredentialsService {
   /**
    * Validate that credentials are still valid
    */
-  static async validateCredentials(
-    credentials: PublisherCredentials,
-  ): Promise<boolean> {
+  static async validateCredentials(credentials: PublisherCredentials): Promise<boolean> {
     if (!credentials.accessToken) {
       return false;
     }
@@ -136,9 +119,7 @@ export class PublisherCredentialsService {
    * Get credentials for publishing
    * This is the main method the publisher Lambda should call
    */
-  static async getPublishingCredentials(
-    brandId: string,
-  ): Promise<PublisherCredentials | null> {
+  static async getPublishingCredentials(brandId: string): Promise<PublisherCredentials | null> {
     const credentials = await this.getCredentialsForBrand(brandId);
 
     if (!credentials) {
@@ -168,7 +149,7 @@ export class PublisherCredentialsService {
       await redis.del(cacheKey);
       console.log(`Invalidated credential cache for brand ${brandId}`);
     } catch (error) {
-      console.error("Failed to invalidate cache:", error);
+      console.error('Failed to invalidate cache:', error);
     }
   }
 }

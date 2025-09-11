@@ -3,22 +3,19 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
-} from "@aws-sdk/client-s3";
-import {
-  CloudFrontClient,
-  CreateInvalidationCommand,
-} from "@aws-sdk/client-cloudfront";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import sharp from "sharp";
-import { createHash } from "crypto";
+} from '@aws-sdk/client-s3';
+import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import sharp from 'sharp';
+import { createHash } from 'crypto';
 
 // Initialize AWS clients
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || "us-east-1",
+  region: process.env.AWS_REGION || 'us-east-1',
 });
 
 const cloudfrontClient = new CloudFrontClient({
-  region: process.env.AWS_REGION || "us-east-1",
+  region: process.env.AWS_REGION || 'us-east-1',
 });
 
 // Configuration
@@ -27,16 +24,16 @@ const cloudfrontClient = new CloudFrontClient({
 // CLOUDFRONT_DISTRIBUTION_ID: CloudFront distribution ID for cache invalidation
 // CLOUDFRONT_DOMAIN: CloudFront domain for CDN URLs
 // AWS_REGION: AWS region (defaults to us-east-1)
-const BUCKET_NAME = process.env.S3_IMAGES_BUCKET || "postolio-ai-images";
-const CLOUDFRONT_DISTRIBUTION_ID = process.env.CLOUDFRONT_DISTRIBUTION_ID || "";
-const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN || "";
+const BUCKET_NAME = process.env.S3_IMAGES_BUCKET || 'postolio-ai-images';
+const CLOUDFRONT_DISTRIBUTION_ID = process.env.CLOUDFRONT_DISTRIBUTION_ID || '';
+const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN || '';
 
 export interface ImageMetadata {
   contentId: string;
   brandId: string;
   campaignId?: string | undefined;
   generatedAt: Date;
-  source: "dalle3" | "midjourney";
+  source: 'dalle3' | 'midjourney';
   originalPrompt: string;
   userRegion?: string;
 }
@@ -63,7 +60,7 @@ function getRetentionDays(region: string): number {
     return days;
   }
   // Fallback to default value
-  const defaultDays = REGIONAL_RETENTION_POLICIES["DEFAULT"];
+  const defaultDays = REGIONAL_RETENTION_POLICIES['DEFAULT'];
   return defaultDays !== undefined ? defaultDays : 365;
 }
 
@@ -74,22 +71,19 @@ async function getUserRegion(_brandId: string): Promise<string> {
   void _brandId;
   // TODO: Implement actual region detection based on user/brand data
   // For now, default to US
-  return "US";
+  return 'US';
 }
 
 /**
  * Generate S3 key for image storage
  */
-function generateS3Key(
-  metadata: ImageMetadata,
-  extension: string = "jpg",
-): string {
+function generateS3Key(metadata: ImageMetadata, extension: string = 'jpg'): string {
   const timestamp = Date.now();
-  const hash = createHash("md5")
+  const hash = createHash('md5')
     .update(`${metadata.contentId}-${timestamp}`)
-    .digest("hex")
+    .digest('hex')
     .substring(0, 8);
-  const dateFolder = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const dateFolder = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
   return `images/${dateFolder}/${metadata.brandId}/${metadata.contentId}-${hash}.${extension}`;
 }
@@ -102,25 +96,25 @@ async function downloadImage(url: string): Promise<Buffer> {
   try {
     const urlObj = new URL(url);
     // Only allow HTTPS and HTTP protocols
-    if (!["https:", "http:"].includes(urlObj.protocol)) {
+    if (!['https:', 'http:'].includes(urlObj.protocol)) {
       throw new Error(`Unsupported protocol: ${urlObj.protocol}`);
     }
     // Prevent SSRF by blocking private IP ranges
     const hostname = urlObj.hostname;
     if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname.startsWith("10.") ||
-      hostname.startsWith("192.168.") ||
-      hostname.startsWith("172.")
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('172.')
     ) {
-      throw new Error("Cannot download from private/local addresses");
+      throw new Error('Cannot download from private/local addresses');
     }
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Invalid URL: ${error.message}`);
     }
-    throw new Error("Invalid URL provided");
+    throw new Error('Invalid URL provided');
   }
 
   // Add timeout and size limits
@@ -131,47 +125,45 @@ async function downloadImage(url: string): Promise<Buffer> {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "Postolio-ImageDownloader/1.0",
+        'User-Agent': 'Postolio-ImageDownloader/1.0',
       },
     });
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(
-        `Failed to download image: ${response.status} ${response.statusText}`,
-      );
+      throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
     }
 
     // Check content type
-    const contentType = response.headers.get("content-type");
-    if (!contentType || !contentType.startsWith("image/")) {
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.startsWith('image/')) {
       throw new Error(`Invalid content type: ${contentType}`);
     }
 
     // Check content length (max 50MB)
-    const contentLength = response.headers.get("content-length");
+    const contentLength = response.headers.get('content-length');
     if (contentLength && parseInt(contentLength, 10) > 50 * 1024 * 1024) {
-      throw new Error("Image file too large (max 50MB)");
+      throw new Error('Image file too large (max 50MB)');
     }
 
     const arrayBuffer = await response.arrayBuffer();
 
     // Double check size after download
     if (arrayBuffer.byteLength > 50 * 1024 * 1024) {
-      throw new Error("Downloaded image exceeds size limit");
+      throw new Error('Downloaded image exceeds size limit');
     }
 
     return Buffer.from(arrayBuffer);
   } catch (error) {
     clearTimeout(timeoutId);
     if (error instanceof Error) {
-      if (error.name === "AbortError") {
-        throw new Error("Image download timed out");
+      if (error.name === 'AbortError') {
+        throw new Error('Image download timed out');
       }
       throw error;
     }
-    throw new Error("Unknown error during image download");
+    throw new Error('Unknown error during image download');
   }
 }
 
@@ -189,8 +181,8 @@ async function optimizeImage(buffer: Buffer): Promise<Buffer> {
     // This prevents cropping of important parts of the image but may add white padding
     // If you need to revert to cropping behavior, change 'contain' back to 'cover'
     const processedImage = image.resize(1080, 1080, {
-      fit: "contain", // Shows full image with padding instead of cropping
-      position: "center",
+      fit: 'contain', // Shows full image with padding instead of cropping
+      position: 'center',
       background: { r: 255, g: 255, b: 255, alpha: 1 }, // White background for padding
     });
 
@@ -201,7 +193,7 @@ async function optimizeImage(buffer: Buffer): Promise<Buffer> {
 
     return processedImage.jpeg({ quality: 85, progressive: true }).toBuffer();
   } catch (error) {
-    console.error("Error optimizing image:", error);
+    console.error('Error optimizing image:', error);
     // If optimization fails, return the original buffer
     return buffer;
   }
@@ -212,23 +204,23 @@ async function optimizeImage(buffer: Buffer): Promise<Buffer> {
  */
 export async function uploadImageToS3(
   imageUrl: string,
-  metadata: ImageMetadata,
+  metadata: ImageMetadata
 ): Promise<S3UploadResult> {
   // Input validation
-  if (!imageUrl || typeof imageUrl !== "string") {
-    throw new Error("Invalid image URL provided");
+  if (!imageUrl || typeof imageUrl !== 'string') {
+    throw new Error('Invalid image URL provided');
   }
 
-  if (!metadata.contentId || typeof metadata.contentId !== "string") {
-    throw new Error("Invalid content ID in metadata");
+  if (!metadata.contentId || typeof metadata.contentId !== 'string') {
+    throw new Error('Invalid content ID in metadata');
   }
 
-  if (!metadata.brandId || typeof metadata.brandId !== "string") {
-    throw new Error("Invalid brand ID in metadata");
+  if (!metadata.brandId || typeof metadata.brandId !== 'string') {
+    throw new Error('Invalid brand ID in metadata');
   }
 
   if (!BUCKET_NAME) {
-    throw new Error("S3_IMAGES_BUCKET environment variable not configured");
+    throw new Error('S3_IMAGES_BUCKET environment variable not configured');
   }
 
   try {
@@ -237,7 +229,7 @@ export async function uploadImageToS3(
     const imageBuffer = await downloadImage(imageUrl);
 
     // Optimize image
-    console.log("Optimizing image for web delivery...");
+    console.log('Optimizing image for web delivery...');
     const optimizedBuffer = await optimizeImage(imageBuffer);
 
     // Determine user region for compliance
@@ -247,13 +239,13 @@ export async function uploadImageToS3(
     retentionExpiresAt.setDate(retentionExpiresAt.getDate() + retentionDays);
 
     // Generate S3 key
-    const jpegKey = generateS3Key(metadata, "jpg");
+    const jpegKey = generateS3Key(metadata, 'jpg');
 
     // Prepare S3 metadata
     const s3Metadata = {
       contentId: metadata.contentId,
       brandId: metadata.brandId,
-      campaignId: metadata.campaignId || "",
+      campaignId: metadata.campaignId || '',
       source: metadata.source,
       generatedAt: metadata.generatedAt.toISOString(),
       region: userRegion,
@@ -262,19 +254,19 @@ export async function uploadImageToS3(
     };
 
     // Prepare tags for cost allocation
-    const tags = `Brand=${metadata.brandId}&Campaign=${metadata.campaignId || "none"}&Source=${metadata.source}&Region=${userRegion}`;
+    const tags = `Brand=${metadata.brandId}&Campaign=${metadata.campaignId || 'none'}&Source=${metadata.source}&Region=${userRegion}`;
 
     // Upload JPEG version
     const jpegCommand = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: jpegKey,
       Body: optimizedBuffer,
-      ContentType: "image/jpeg",
+      ContentType: 'image/jpeg',
       Metadata: s3Metadata,
-      StorageClass: "INTELLIGENT_TIERING",
-      ServerSideEncryption: "AES256", // Using SSE-S3 for dev, SSE-KMS for prod
+      StorageClass: 'INTELLIGENT_TIERING',
+      ServerSideEncryption: 'AES256', // Using SSE-S3 for dev, SSE-KMS for prod
       Tagging: tags,
-      CacheControl: "public, max-age=31536000, immutable", // 1 year cache
+      CacheControl: 'public, max-age=31536000, immutable', // 1 year cache
     });
 
     await s3Client.send(jpegCommand);
@@ -292,9 +284,9 @@ export async function uploadImageToS3(
       retentionExpiresAt,
     };
   } catch (error) {
-    console.error("Failed to upload image to S3:", error);
+    console.error('Failed to upload image to S3:', error);
     throw new Error(
-      `S3 upload failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      `S3 upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 }
@@ -330,9 +322,9 @@ export async function deleteImageFromS3(s3Key: string): Promise<void> {
 
     console.log(`Deleted image from S3: ${s3Key}`);
   } catch (error) {
-    console.error("Failed to delete image from S3:", error);
+    console.error('Failed to delete image from S3:', error);
     throw new Error(
-      `S3 deletion failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      `S3 deletion failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 }
@@ -342,28 +334,28 @@ export async function deleteImageFromS3(s3Key: string): Promise<void> {
  */
 export async function uploadImageBufferToS3(
   buffer: Buffer,
-  metadata: ImageMetadata,
+  metadata: ImageMetadata
 ): Promise<S3UploadResult> {
   // Input validation
   if (!buffer || !Buffer.isBuffer(buffer)) {
-    throw new Error("Invalid buffer provided");
+    throw new Error('Invalid buffer provided');
   }
 
-  if (!metadata.contentId || typeof metadata.contentId !== "string") {
-    throw new Error("Invalid content ID in metadata");
+  if (!metadata.contentId || typeof metadata.contentId !== 'string') {
+    throw new Error('Invalid content ID in metadata');
   }
 
-  if (!metadata.brandId || typeof metadata.brandId !== "string") {
-    throw new Error("Invalid brand ID in metadata");
+  if (!metadata.brandId || typeof metadata.brandId !== 'string') {
+    throw new Error('Invalid brand ID in metadata');
   }
 
   if (!BUCKET_NAME) {
-    throw new Error("S3_IMAGES_BUCKET environment variable not configured");
+    throw new Error('S3_IMAGES_BUCKET environment variable not configured');
   }
 
   try {
     // Optimize image
-    console.log("Optimizing image for web delivery...");
+    console.log('Optimizing image for web delivery...');
     const optimizedBuffer = await optimizeImage(buffer);
 
     // Determine user region for compliance
@@ -373,13 +365,13 @@ export async function uploadImageBufferToS3(
     retentionExpiresAt.setDate(retentionExpiresAt.getDate() + retentionDays);
 
     // Generate S3 key
-    const jpegKey = generateS3Key(metadata, "jpg");
+    const jpegKey = generateS3Key(metadata, 'jpg');
 
     // Prepare S3 metadata
     const s3Metadata = {
       contentId: metadata.contentId,
       brandId: metadata.brandId,
-      campaignId: metadata.campaignId || "",
+      campaignId: metadata.campaignId || '',
       source: metadata.source,
       generatedAt: metadata.generatedAt.toISOString(),
       region: userRegion,
@@ -388,19 +380,19 @@ export async function uploadImageBufferToS3(
     };
 
     // Prepare tags for cost allocation
-    const tags = `Brand=${metadata.brandId}&Campaign=${metadata.campaignId || "none"}&Source=${metadata.source}&Region=${userRegion}`;
+    const tags = `Brand=${metadata.brandId}&Campaign=${metadata.campaignId || 'none'}&Source=${metadata.source}&Region=${userRegion}`;
 
     // Upload JPEG version
     const jpegCommand = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: jpegKey,
       Body: optimizedBuffer,
-      ContentType: "image/jpeg",
+      ContentType: 'image/jpeg',
       Metadata: s3Metadata,
-      StorageClass: "INTELLIGENT_TIERING",
-      ServerSideEncryption: "AES256",
+      StorageClass: 'INTELLIGENT_TIERING',
+      ServerSideEncryption: 'AES256',
       Tagging: tags,
-      CacheControl: "public, max-age=31536000, immutable",
+      CacheControl: 'public, max-age=31536000, immutable',
     });
 
     await s3Client.send(jpegCommand);
@@ -418,9 +410,9 @@ export async function uploadImageBufferToS3(
       retentionExpiresAt,
     };
   } catch (error) {
-    console.error("Failed to upload image buffer to S3:", error);
+    console.error('Failed to upload image buffer to S3:', error);
     throw new Error(
-      `S3 upload failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      `S3 upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 }
@@ -430,7 +422,7 @@ export async function uploadImageBufferToS3(
  */
 export async function generatePresignedUrl(
   s3Key: string,
-  expiresIn: number = 3600,
+  expiresIn: number = 3600
 ): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: BUCKET_NAME,
@@ -447,15 +439,15 @@ export async function migrateImageToS3(
   externalUrl: string,
   contentId: string,
   brandId: string,
-  campaignId?: string,
+  campaignId?: string
 ): Promise<S3UploadResult> {
   const metadata: ImageMetadata = {
     contentId,
     brandId,
     campaignId: campaignId as string | undefined,
     generatedAt: new Date(),
-    source: externalUrl.includes("dalle") ? "dalle3" : "midjourney",
-    originalPrompt: "Migrated from external URL",
+    source: externalUrl.includes('dalle') ? 'dalle3' : 'midjourney',
+    originalPrompt: 'Migrated from external URL',
   };
 
   return uploadImageToS3(externalUrl, metadata);
@@ -464,9 +456,7 @@ export async function migrateImageToS3(
 /**
  * Check if image retention has expired and should be deleted
  */
-export async function checkRetentionExpiry(
-  retentionExpiresAt: Date,
-): Promise<boolean> {
+export async function checkRetentionExpiry(retentionExpiresAt: Date): Promise<boolean> {
   return new Date() > retentionExpiresAt;
 }
 

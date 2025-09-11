@@ -1,10 +1,7 @@
-import { PrismaClient } from "@postolio/database";
-import { deleteExpiredImages } from "./s3-image.js";
-import fastify, { FastifyInstance } from "fastify";
-import type {
-  EventBridgeScheduledEvent,
-  LambdaResponse,
-} from "../types/aws-events.js";
+import { PrismaClient } from '@postolio/database';
+import { deleteExpiredImages } from './s3-image.js';
+import fastify, { FastifyInstance } from 'fastify';
+import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-events.js';
 
 const prisma = new PrismaClient();
 
@@ -21,34 +18,30 @@ export class RetentionManager {
    * Note: Scheduling is now handled by AWS EventBridge instead of node-cron
    */
   async initialize() {
-    this.app.log.info(
-      "Retention Manager initialized - awaiting EventBridge triggers",
-    );
+    this.app.log.info('Retention Manager initialized - awaiting EventBridge triggers');
   }
 
   /**
    * Lambda handler for EventBridge scheduled retention processing
    * This will be triggered by EventBridge rules configured in AWS
    */
-  async handleEventBridgeTrigger(
-    event: EventBridgeScheduledEvent,
-  ): Promise<LambdaResponse> {
+  async handleEventBridgeTrigger(event: EventBridgeScheduledEvent): Promise<LambdaResponse> {
     this.app.log.info(
       {
         id: event.id,
         time: event.time,
-        detailType: event["detail-type"],
+        detailType: event['detail-type'],
         taskType: event.detail?.taskType,
       },
-      "Retention processing triggered by EventBridge",
+      'Retention processing triggered by EventBridge'
     );
 
     try {
-      const taskType = event.detail?.taskType || "retention";
+      const taskType = event.detail?.taskType || 'retention';
 
-      if (taskType === "retention") {
+      if (taskType === 'retention') {
         await this.processExpiredContent();
-      } else if (taskType === "gdpr") {
+      } else if (taskType === 'gdpr') {
         await this.processGDPRDeletions();
       }
 
@@ -61,16 +54,12 @@ export class RetentionManager {
         }),
       };
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      this.app.log.error(
-        { error: message },
-        "Error handling EventBridge trigger",
-      );
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      this.app.log.error({ error: message }, 'Error handling EventBridge trigger');
       return {
         statusCode: 500,
         body: JSON.stringify({
-          error: "Processing failed",
+          error: 'Processing failed',
           message,
         }),
       };
@@ -82,13 +71,13 @@ export class RetentionManager {
    */
   async processExpiredContent() {
     if (this.isRunning) {
-      this.app.log.warn("Retention processing already in progress, skipping");
+      this.app.log.warn('Retention processing already in progress, skipping');
       return;
     }
 
     this.isRunning = true;
     try {
-      this.app.log.info("Starting retention policy processing");
+      this.app.log.info('Starting retention policy processing');
 
       // Find all content with expired retention
       const expiredContent = await prisma.content.findMany({
@@ -109,7 +98,7 @@ export class RetentionManager {
       });
 
       if (expiredContent.length === 0) {
-        this.app.log.info("No expired content found");
+        this.app.log.info('No expired content found');
         return;
       }
 
@@ -121,9 +110,7 @@ export class RetentionManager {
         const batch = expiredContent.slice(i, i + batchSize);
 
         // Delete S3 images
-        const s3Keys = batch
-          .map((c) => c.s3ImageKey)
-          .filter((key): key is string => key !== null);
+        const s3Keys = batch.map((c) => c.s3ImageKey).filter((key): key is string => key !== null);
 
         if (s3Keys.length > 0) {
           await deleteExpiredImages(s3Keys);
@@ -143,20 +130,14 @@ export class RetentionManager {
         });
 
         this.app.log.info(
-          `Processed batch ${i / batchSize + 1} of ${Math.ceil(expiredContent.length / batchSize)}`,
+          `Processed batch ${i / batchSize + 1} of ${Math.ceil(expiredContent.length / batchSize)}`
         );
       }
 
-      this.app.log.info(
-        `Retention processing complete: ${expiredContent.length} items processed`,
-      );
+      this.app.log.info(`Retention processing complete: ${expiredContent.length} items processed`);
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      this.app.log.error(
-        { error: message },
-        "Error during retention processing",
-      );
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      this.app.log.error({ error: message }, 'Error during retention processing');
     } finally {
       this.isRunning = false;
     }
@@ -167,7 +148,7 @@ export class RetentionManager {
    */
   async processGDPRDeletions() {
     try {
-      this.app.log.info("Processing GDPR deletion requests");
+      this.app.log.info('Processing GDPR deletion requests');
 
       // Find users marked for deletion (you would need to add a deletionRequestedAt field)
       // For now, this is a placeholder implementation
@@ -178,14 +159,10 @@ export class RetentionManager {
       // 3. Anonymize or delete user data
       // 4. Log the deletion for compliance
 
-      this.app.log.info("GDPR deletion processing complete");
+      this.app.log.info('GDPR deletion processing complete');
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      this.app.log.error(
-        { error: message },
-        "Error during GDPR deletion processing",
-      );
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      this.app.log.error({ error: message }, 'Error during GDPR deletion processing');
     }
   }
 
@@ -198,7 +175,7 @@ export class RetentionManager {
     deletedBrands: number;
   }> {
     try {
-      this.app.log.info({ userId }, "Processing user data deletion request");
+      this.app.log.info({ userId }, 'Processing user data deletion request');
 
       // Get all user's brands
       const brands = await prisma.brand.findMany({
@@ -270,7 +247,7 @@ export class RetentionManager {
           deletedImages,
           deletedBrands: deleteBrandsResult.count,
         },
-        "User data deletion complete",
+        'User data deletion complete'
       );
 
       return {
@@ -279,13 +256,9 @@ export class RetentionManager {
         deletedBrands: deleteBrandsResult.count,
       };
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      this.app.log.error(
-        { error: message, userId },
-        "Failed to delete user data",
-      );
-      throw new Error("Failed to process user data deletion");
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      this.app.log.error({ error: message, userId }, 'Failed to delete user data');
+      throw new Error('Failed to process user data deletion');
     }
   }
 
@@ -338,7 +311,7 @@ export class RetentionManager {
           deletedContent: deleteContentResult.count,
           deletedImages,
         },
-        "Brand data deletion complete",
+        'Brand data deletion complete'
       );
 
       return {
@@ -346,13 +319,9 @@ export class RetentionManager {
         deletedImages,
       };
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      this.app.log.error(
-        { error: message, brandId },
-        "Failed to delete brand data",
-      );
-      throw new Error("Failed to process brand data deletion");
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      this.app.log.error({ error: message, brandId }, 'Failed to delete brand data');
+      throw new Error('Failed to process brand data deletion');
     }
   }
 
@@ -399,7 +368,7 @@ export class RetentionManager {
     });
 
     const contentByRegion = await prisma.content.groupBy({
-      by: ["imageRegion"],
+      by: ['imageRegion'],
       where: {
         s3ImageKey: {
           not: null,
@@ -413,7 +382,7 @@ export class RetentionManager {
       expiringWithin30Days,
       expiredNotDeleted,
       contentByRegion: contentByRegion.map((r) => ({
-        region: r.imageRegion || "unknown",
+        region: r.imageRegion || 'unknown',
         count: r._count,
       })),
     };
@@ -434,13 +403,11 @@ export function getRetentionManager(app: FastifyInstance): RetentionManager {
  * Lambda handler for EventBridge scheduled events
  * This is the entry point when running as a Lambda function
  */
-export const lambdaHandler = async (
-  event: EventBridgeScheduledEvent,
-): Promise<LambdaResponse> => {
+export const lambdaHandler = async (event: EventBridgeScheduledEvent): Promise<LambdaResponse> => {
   // Initialize minimal Fastify instance for logging
   const app = fastify({
     logger: {
-      level: process.env.LOG_LEVEL || "info",
+      level: process.env.LOG_LEVEL || 'info',
       serializers: {
         req: (req: { method: string; url: string; hostname?: string }) => ({
           method: req.method,

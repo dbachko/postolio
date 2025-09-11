@@ -3,7 +3,7 @@
 /**
  * Script to generate favicon files from SVG
  * Run with: node scripts/generate-favicons.js
- * 
+ *
  * Note: This requires sharp package to be installed:
  * npm install --save-dev sharp
  */
@@ -22,11 +22,11 @@ try {
 } catch (e) {
   console.log('⚠️  Sharp not installed. Install with: npm install --save-dev sharp');
   console.log('📝 Creating placeholder favicon.ico instead...');
-  
+
   // Create a simple placeholder favicon.ico
   const svgContent = fs.readFileSync(path.join(__dirname, '../public/postolio-icon.svg'), 'utf8');
   const icoPath = path.join(__dirname, '../public/favicon.ico');
-  
+
   // For now, just copy the SVG as a placeholder
   console.log('✅ Using SVG as favicon (browsers will handle it)');
   process.exit(0);
@@ -35,10 +35,10 @@ try {
 async function generateFavicons() {
   const publicDir = path.join(__dirname, '../public');
   const svgPath = path.join(publicDir, 'postolio-icon.svg');
-  
+
   // Read SVG
   const svgBuffer = fs.readFileSync(svgPath);
-  
+
   // Sizes to generate
   const sizes = [
     { size: 16, name: 'favicon-16x16.png' },
@@ -48,21 +48,18 @@ async function generateFavicons() {
     { size: 192, name: 'icon-192x192.png' },
     { size: 512, name: 'icon-512x512.png' },
   ];
-  
+
   console.log('🎨 Generating favicon PNG files from SVG...');
-  
+
   for (const { size, name } of sizes) {
     try {
-      await sharp(svgBuffer)
-        .resize(size, size)
-        .png()
-        .toFile(path.join(publicDir, name));
+      await sharp(svgBuffer).resize(size, size).png().toFile(path.join(publicDir, name));
       console.log(`✅ Generated ${name} (${size}x${size})`);
     } catch (error) {
       console.error(`❌ Failed to generate ${name}:`, error.message);
     }
   }
-  
+
   console.log('🎉 Favicon generation complete!');
 }
 

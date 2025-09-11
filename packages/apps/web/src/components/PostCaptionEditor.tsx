@@ -1,5 +1,5 @@
-import { Label } from "./ui/label";
-import { Textarea } from "./ui/textarea";
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
 
 interface PostCaptionEditorProps {
   value: string;
@@ -13,8 +13,8 @@ interface PostCaptionEditorProps {
 export function PostCaptionEditor({
   value,
   onChange,
-  placeholder = "Write your caption...",
-  minHeight = "min-h-32",
+  placeholder = 'Write your caption...',
+  minHeight = 'min-h-32',
   showCharacterCount = true,
   disabled = false,
 }: PostCaptionEditorProps) {
@@ -30,9 +30,7 @@ export function PostCaptionEditor({
         disabled={disabled}
       />
       {showCharacterCount && (
-        <div className="text-xs text-gray-500 text-right">
-          {value.length} characters
-        </div>
+        <div className="text-right text-xs text-gray-500">{value.length} characters</div>
       )}
     </div>
   );

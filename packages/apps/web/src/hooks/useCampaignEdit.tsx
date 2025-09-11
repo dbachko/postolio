@@ -1,10 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../lib/api";
-import RegenerationDialog from "../components/RegenerationDialog";
-import RegenerationProgress from "../components/RegenerationProgress";
-import ConcurrentEditWarning from "../components/ConcurrentEditWarning";
-import type { Campaign } from "../lib/api";
+import { useState, useCallback, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '../lib/api';
+import RegenerationDialog from '../components/RegenerationDialog';
+import RegenerationProgress from '../components/RegenerationProgress';
+import ConcurrentEditWarning from '../components/ConcurrentEditWarning';
+import type { Campaign } from '../lib/api';
 
 interface UseCampaignEditProps {
   campaignId: string;
@@ -35,9 +35,7 @@ export function useCampaignEdit({
   const [showConcurrentWarning, setShowConcurrentWarning] = useState(false);
 
   // Regeneration state
-  const [regenerationJobId, setRegenerationJobId] = useState<string | null>(
-    null,
-  );
+  const [regenerationJobId, setRegenerationJobId] = useState<string | null>(null);
   const [changedFields, setChangedFields] = useState<{
     themes?: string[];
     style?: string;
@@ -51,7 +49,7 @@ export function useCampaignEdit({
 
       if (
         lastModified > fiveMinutesAgo &&
-        existingCampaign.lastModifiedBy !== localStorage.getItem("userId")
+        existingCampaign.lastModifiedBy !== localStorage.getItem('userId')
       ) {
         setShowConcurrentWarning(true);
       }
@@ -67,15 +65,10 @@ export function useCampaignEdit({
       // Check if regeneration is needed based on what fields changed
       const themesChanged =
         variables.themes &&
-        JSON.stringify(variables.themes) !==
-          JSON.stringify(existingCampaign?.config?.themes);
-      const styleChanged =
-        variables.style && variables.style !== existingCampaign?.config?.style;
+        JSON.stringify(variables.themes) !== JSON.stringify(existingCampaign?.config?.themes);
+      const styleChanged = variables.style && variables.style !== existingCampaign?.config?.style;
 
-      if (
-        (themesChanged || styleChanged) &&
-        (existingCampaign?.content?.length || 0) > 0
-      ) {
+      if ((themesChanged || styleChanged) && (existingCampaign?.content?.length || 0) > 0) {
         setChangedFields({
           themes: themesChanged ? variables.themes : undefined,
           style: styleChanged ? variables.style : undefined,
@@ -83,8 +76,8 @@ export function useCampaignEdit({
         setShowRegenerationDialog(true);
       } else {
         // No regeneration needed, just update cache and complete
-        queryClient.invalidateQueries({ queryKey: ["campaigns"] });
-        queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+        queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+        queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
         onEditComplete?.();
       }
     },
@@ -112,7 +105,7 @@ export function useCampaignEdit({
       // Always update the campaign - the mutation will handle regeneration check
       updateCampaignMutation.mutate(editData);
     },
-    [updateCampaignMutation],
+    [updateCampaignMutation]
   );
 
   // Handle regeneration confirmation
@@ -122,8 +115,8 @@ export function useCampaignEdit({
 
   // Handle regeneration complete
   const handleRegenerationComplete = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["campaigns"] });
-    queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+    queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
     setTimeout(() => {
       setShowProgressDialog(false);
       onEditComplete?.();
@@ -168,9 +161,7 @@ export function useCampaignEdit({
           onConfirm={handleRegenerationConfirm}
           isConfirming={startRegenerationMutation.isPending}
           contentCount={existingCampaign?.content?.length || 0}
-          estimatedTime={Math.ceil(
-            (existingCampaign?.content?.length || 0) * 7.5,
-          )}
+          estimatedTime={Math.ceil((existingCampaign?.content?.length || 0) * 7.5)}
           changedFields={changedFields}
         />
 

@@ -10,15 +10,15 @@
  * - Configuring service discovery for ECS/Lambda services
  */
 
-import * as cdk from "aws-cdk-lib";
-import * as servicediscovery from "aws-cdk-lib/aws-servicediscovery";
-import * as ec2 from "aws-cdk-lib/aws-ec2";
-import { Construct } from "constructs";
+import * as cdk from 'aws-cdk-lib';
+import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { Construct } from 'constructs';
 
 export interface ServiceDiscoveryConfig {
   vpc?: ec2.IVpc;
   namespace?: string;
-  environment: "dev" | "staging" | "prod";
+  environment: 'dev' | 'staging' | 'prod';
   existingNamespaceId?: string; // Import existing namespace instead of creating new
 }
 
@@ -37,41 +37,35 @@ export class ServiceDiscoveryManager extends Construct {
     if (config.existingNamespaceId) {
       // Import existing namespace from shared service discovery stack
       const namespaceArn = cdk.Fn.importValue(
-        `ServiceDiscovery-${config.environment}-NamespaceArn`,
+        `ServiceDiscovery-${config.environment}-NamespaceArn`
       );
       const namespaceName = cdk.Fn.importValue(
-        `ServiceDiscovery-${config.environment}-NamespaceName`,
+        `ServiceDiscovery-${config.environment}-NamespaceName`
       );
 
-      this.namespace =
-        servicediscovery.HttpNamespace.fromHttpNamespaceAttributes(
-          this,
-          "ImportedNamespace",
-          {
-            namespaceId: config.existingNamespaceId,
-            namespaceName: namespaceName,
-            namespaceArn: namespaceArn,
-          },
-        );
+      this.namespace = servicediscovery.HttpNamespace.fromHttpNamespaceAttributes(
+        this,
+        'ImportedNamespace',
+        {
+          namespaceId: config.existingNamespaceId,
+          namespaceName: namespaceName,
+          namespaceArn: namespaceArn,
+        }
+      );
     } else {
       // Create new namespace (for shared service discovery stack only)
-      const namespaceName =
-        config.namespace || `postolio-${config.environment}.local`;
+      const namespaceName = config.namespace || `postolio-${config.environment}.local`;
 
       if (config.vpc) {
         // Private namespace for VPC-based services
-        this.namespace = new servicediscovery.PrivateDnsNamespace(
-          this,
-          "Namespace",
-          {
-            name: namespaceName,
-            vpc: config.vpc,
-            description: `Service discovery namespace for Postolio ${config.environment}`,
-          },
-        );
+        this.namespace = new servicediscovery.PrivateDnsNamespace(this, 'Namespace', {
+          name: namespaceName,
+          vpc: config.vpc,
+          description: `Service discovery namespace for Postolio ${config.environment}`,
+        });
       } else {
         // HTTP namespace for Lambda and public services
-        this.namespace = new servicediscovery.HttpNamespace(this, "Namespace", {
+        this.namespace = new servicediscovery.HttpNamespace(this, 'Namespace', {
           name: namespaceName,
           description: `Service discovery namespace for Postolio ${config.environment}`,
         });
@@ -79,15 +73,15 @@ export class ServiceDiscoveryManager extends Construct {
     }
 
     // Output namespace details
-    new cdk.CfnOutput(this, "NamespaceId", {
+    new cdk.CfnOutput(this, 'NamespaceId', {
       value: this.namespace.namespaceId,
-      description: "Cloud Map Namespace ID",
+      description: 'Cloud Map Namespace ID',
       exportName: `${cdk.Stack.of(this).stackName}-NamespaceId`,
     });
 
-    new cdk.CfnOutput(this, "NamespaceName", {
+    new cdk.CfnOutput(this, 'NamespaceName', {
       value: this.namespace.namespaceName,
-      description: "Cloud Map Namespace Name",
+      description: 'Cloud Map Namespace Name',
       exportName: `${cdk.Stack.of(this).stackName}-NamespaceName`,
     });
   }
@@ -102,7 +96,7 @@ export class ServiceDiscoveryManager extends Construct {
       dnsRecordTtl?: cdk.Duration;
       healthCheck?: servicediscovery.HealthCheckConfig;
       customAttributes?: { [key: string]: string };
-    },
+    }
   ): servicediscovery.Service {
     if (this.services.has(serviceName)) {
       return this.services.get(serviceName)!;
@@ -134,11 +128,7 @@ export class ServiceDiscoveryManager extends Construct {
               : undefined,
           };
 
-    const service = new servicediscovery.Service(
-      this,
-      `${serviceName}Service`,
-      serviceProps,
-    );
+    const service = new servicediscovery.Service(this, `${serviceName}Service`, serviceProps);
 
     this.services.set(serviceName, service);
     return service;
@@ -176,14 +166,14 @@ export function registerLambdaService(
   serviceDiscovery: ServiceDiscoveryManager,
   serviceName: string,
   functionUrl: string,
-  environment: string,
+  environment: string
 ): servicediscovery.Service {
   // For HTTP namespaces, don't specify DNS record type
   const service = serviceDiscovery.registerService(serviceName, {
     // Don't specify dnsRecordType for HTTP namespace
     customAttributes: {
       url: functionUrl,
-      type: "lambda",
+      type: 'lambda',
       environment,
     },
   });
@@ -194,7 +184,7 @@ export function registerLambdaService(
     serviceId: service.serviceId,
     instanceAttributes: {
       url: functionUrl,
-      type: "lambda",
+      type: 'lambda',
       environment,
     },
   });
@@ -209,13 +199,13 @@ export function registerEcsService(
   serviceDiscovery: ServiceDiscoveryManager,
   serviceName: string,
   ecsService: any, // Type would be ecs.IService
-  port: number = 3000,
+  port: number = 3000
 ): servicediscovery.Service {
   const service = serviceDiscovery.registerService(serviceName, {
     dnsRecordType: servicediscovery.DnsRecordType.A,
     healthCheck: {
       type: servicediscovery.HealthCheckType.HTTP,
-      resourcePath: "/health",
+      resourcePath: '/health',
       failureThreshold: 2,
     },
   });
@@ -227,9 +217,9 @@ export function registerEcsService(
 /**
  * Get service discovery environment variables for Lambda/ECS
  */
-export function getServiceDiscoveryEnvVars(
-  config: ServiceDiscoveryClientConfig,
-): { [key: string]: string } {
+export function getServiceDiscoveryEnvVars(config: ServiceDiscoveryClientConfig): {
+  [key: string]: string;
+} {
   return {
     CLOUDMAP_NAMESPACE_ID: config.namespaceId,
     CLOUDMAP_NAMESPACE_NAME: config.namespaceName,

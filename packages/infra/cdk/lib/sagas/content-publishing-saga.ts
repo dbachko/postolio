@@ -3,24 +3,24 @@
  * Manages the distributed transaction for publishing content across platforms
  */
 
-import { SagaOrchestrator, SagaContext } from "../patterns/saga-orchestrator";
-import { EventBusService } from "../services/event-bus-service";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import axios from "axios";
-import { discoverService } from "@postolio/aws";
+import { SagaOrchestrator, SagaContext } from '../patterns/saga-orchestrator';
+import { EventBusService } from '../services/event-bus-service';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import axios from 'axios';
+import { discoverService } from '@postolio/aws';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const eventBus = EventBusService.getInstance();
 
-const SCHEDULE_TABLE = process.env.SCHEDULE_TABLE_NAME || "schedules";
-const MAIN_APP_URL = process.env.MAIN_APP_URL || "http://localhost:3000";
+const SCHEDULE_TABLE = process.env.SCHEDULE_TABLE_NAME || 'schedules';
+const MAIN_APP_URL = process.env.MAIN_APP_URL || 'http://localhost:3000';
 
 export interface ContentPublishingContext extends SagaContext {
   contentId: string;
   scheduleId: string;
-  platform: "instagram" | "facebook" | "linkedin" | "tiktok";
+  platform: 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
   content: {
     caption: string;
     hashtags: string[];
@@ -34,30 +34,28 @@ export class ContentPublishingSaga {
   private saga: SagaOrchestrator<ContentPublishingContext>;
 
   constructor() {
-    this.saga = new SagaOrchestrator<ContentPublishingContext>(
-      "content-publishing",
-    );
+    this.saga = new SagaOrchestrator<ContentPublishingContext>('content-publishing');
     this.configureSaga();
   }
 
   private configureSaga() {
     // Step 1: Update content status to processing
     this.saga.addStep({
-      name: "updateContentStatus",
-      service: "content-service",
+      name: 'updateContentStatus',
+      service: 'content-service',
       forward: async (ctx) => {
         console.log(`Updating content ${ctx.contentId} status to processing`);
 
         // Update in main app via API
         const response = await axios.patch(
           `${MAIN_APP_URL}/api/content/${ctx.contentId}/status`,
-          { status: "processing" },
+          { status: 'processing' },
           {
             headers: {
-              "x-correlation-id": ctx.correlationId,
-              "x-user-id": ctx.userId,
+              'x-correlation-id': ctx.correlationId,
+              'x-user-id': ctx.userId,
             },
-          },
+          }
         );
 
         return response.data;
@@ -67,13 +65,13 @@ export class ContentPublishingSaga {
 
         await axios.patch(
           `${MAIN_APP_URL}/api/content/${ctx.contentId}/status`,
-          { status: "scheduled" },
+          { status: 'scheduled' },
           {
             headers: {
-              "x-correlation-id": ctx.correlationId,
-              "x-user-id": ctx.userId,
+              'x-correlation-id': ctx.correlationId,
+              'x-user-id': ctx.userId,
             },
-          },
+          }
         );
       },
       retryable: true,
@@ -83,24 +81,22 @@ export class ContentPublishingSaga {
 
     // Step 2: Get fresh token from token service
     this.saga.addStep({
-      name: "getToken",
-      service: "token-service",
+      name: 'getToken',
+      service: 'token-service',
       forward: async (ctx) => {
-        console.log(
-          `Getting token for brand ${ctx.brandId} on ${ctx.platform}`,
-        );
+        console.log(`Getting token for brand ${ctx.brandId} on ${ctx.platform}`);
 
         // Discover token service endpoint
-        const tokenServiceUrl = await discoverService("token-service");
+        const tokenServiceUrl = await discoverService('token-service');
 
         // Fetch token from token service (Lambda or API)
         const response = await axios.get(
           `${tokenServiceUrl}/tokens/${ctx.userId}/${ctx.brandId}/${ctx.platform}`,
           {
             headers: {
-              "x-correlation-id": ctx.correlationId,
+              'x-correlation-id': ctx.correlationId,
             },
-          },
+          }
         );
 
         if (!response.data.token) {
@@ -119,12 +115,12 @@ export class ContentPublishingSaga {
 
     // Step 3: Publish to platform
     this.saga.addStep({
-      name: "publishToPlatform",
-      service: "publisher-service",
+      name: 'publishToPlatform',
+      service: 'publisher-service',
       forward: async (ctx) => {
         console.log(`Publishing to ${ctx.platform}`);
 
-        const token = ctx["getTokenResult"];
+        const token = ctx['getTokenResult'];
 
         // Call platform-specific publisher Lambda
         const publisherUrl = `${process.env.PUBLISHER_SERVICE_URL}/${ctx.platform}/publish`;
@@ -137,9 +133,9 @@ export class ContentPublishingSaga {
           },
           {
             headers: {
-              "x-correlation-id": ctx.correlationId,
+              'x-correlation-id': ctx.correlationId,
             },
-          },
+          }
         );
 
         // Store platform post ID for potential rollback
@@ -157,12 +153,12 @@ export class ContentPublishingSaga {
               `${process.env.PUBLISHER_SERVICE_URL}/${ctx.platform}/posts/${result.postId}`,
               {
                 headers: {
-                  "x-correlation-id": ctx.correlationId,
+                  'x-correlation-id': ctx.correlationId,
                 },
-              },
+              }
             );
           } catch (error) {
-            console.error("Failed to delete post from platform", error);
+            console.error('Failed to delete post from platform', error);
             // Continue with compensation even if deletion fails
           }
         }
@@ -174,8 +170,8 @@ export class ContentPublishingSaga {
 
     // Step 4: Update schedule status
     this.saga.addStep({
-      name: "updateScheduleStatus",
-      service: "scheduler-service",
+      name: 'updateScheduleStatus',
+      service: 'scheduler-service',
       forward: async (ctx) => {
         console.log(`Updating schedule ${ctx.scheduleId} to published`);
 
@@ -184,20 +180,20 @@ export class ContentPublishingSaga {
             TableName: SCHEDULE_TABLE,
             Key: { scheduleId: ctx.scheduleId },
             UpdateExpression:
-              "SET #status = :status, publishedAt = :publishedAt, platformPostId = :postId, permalink = :permalink",
+              'SET #status = :status, publishedAt = :publishedAt, platformPostId = :postId, permalink = :permalink',
             ExpressionAttributeNames: {
-              "#status": "status",
+              '#status': 'status',
             },
             ExpressionAttributeValues: {
-              ":status": "published",
-              ":publishedAt": new Date().toISOString(),
-              ":postId": ctx.platformPostId,
-              ":permalink": ctx.permalink,
+              ':status': 'published',
+              ':publishedAt': new Date().toISOString(),
+              ':postId': ctx.platformPostId,
+              ':permalink': ctx.permalink,
             },
-          }),
+          })
         );
 
-        return { status: "published" };
+        return { status: 'published' };
       },
       compensate: async (ctx) => {
         console.log(`Reverting schedule ${ctx.scheduleId} to scheduled`);
@@ -207,14 +203,14 @@ export class ContentPublishingSaga {
             TableName: SCHEDULE_TABLE,
             Key: { scheduleId: ctx.scheduleId },
             UpdateExpression:
-              "SET #status = :status, REMOVE publishedAt, platformPostId, permalink",
+              'SET #status = :status, REMOVE publishedAt, platformPostId, permalink',
             ExpressionAttributeNames: {
-              "#status": "status",
+              '#status': 'status',
             },
             ExpressionAttributeValues: {
-              ":status": "scheduled",
+              ':status': 'scheduled',
             },
-          }),
+          })
         );
       },
       retryable: true,
@@ -223,25 +219,25 @@ export class ContentPublishingSaga {
 
     // Step 5: Update content with platform data
     this.saga.addStep({
-      name: "updateContentWithPlatformData",
-      service: "content-service",
+      name: 'updateContentWithPlatformData',
+      service: 'content-service',
       forward: async (ctx) => {
         console.log(`Updating content ${ctx.contentId} with platform data`);
 
         await axios.patch(
           `${MAIN_APP_URL}/api/content/${ctx.contentId}`,
           {
-            status: "published",
+            status: 'published',
             platformPostId: ctx.platformPostId,
             permalink: ctx.permalink,
             publishedAt: new Date().toISOString(),
           },
           {
             headers: {
-              "x-correlation-id": ctx.correlationId,
-              "x-user-id": ctx.userId,
+              'x-correlation-id': ctx.correlationId,
+              'x-user-id': ctx.userId,
             },
-          },
+          }
         );
 
         return { updated: true };
@@ -252,17 +248,17 @@ export class ContentPublishingSaga {
         await axios.patch(
           `${MAIN_APP_URL}/api/content/${ctx.contentId}`,
           {
-            status: "scheduled",
+            status: 'scheduled',
             platformPostId: null,
             permalink: null,
             publishedAt: null,
           },
           {
             headers: {
-              "x-correlation-id": ctx.correlationId,
-              "x-user-id": ctx.userId,
+              'x-correlation-id': ctx.correlationId,
+              'x-user-id': ctx.userId,
             },
-          },
+          }
         );
       },
       retryable: true,
@@ -271,13 +267,13 @@ export class ContentPublishingSaga {
 
     // Step 6: Publish success event
     this.saga.addStep({
-      name: "publishSuccessEvent",
-      service: "event-bus",
+      name: 'publishSuccessEvent',
+      service: 'event-bus',
       forward: async (ctx) => {
         console.log(`Publishing post.published event`);
 
         await eventBus.publish(
-          "post.published",
+          'post.published',
           {
             scheduleId: ctx.scheduleId,
             contentId: ctx.contentId,
@@ -291,7 +287,7 @@ export class ContentPublishingSaga {
             correlationId: ctx.correlationId,
             userId: ctx.userId,
             brandId: ctx.brandId,
-          },
+          }
         );
 
         return { eventPublished: true };
@@ -299,19 +295,19 @@ export class ContentPublishingSaga {
       compensate: async (ctx) => {
         // Publish failure event
         await eventBus.publish(
-          "post.unpublished",
+          'post.unpublished',
           {
             scheduleId: ctx.scheduleId,
             contentId: ctx.contentId,
             brandId: ctx.brandId,
             platform: ctx.platform,
-            reason: "Saga compensation",
+            reason: 'Saga compensation',
           },
           {
             correlationId: ctx.correlationId,
             userId: ctx.userId,
             brandId: ctx.brandId,
-          },
+          }
         );
       },
       retryable: true,
@@ -322,12 +318,8 @@ export class ContentPublishingSaga {
   /**
    * Execute the content publishing saga
    */
-  async execute(
-    context: ContentPublishingContext,
-  ): Promise<ContentPublishingContext> {
-    console.log(
-      `Starting content publishing saga for content ${context.contentId}`,
-    );
+  async execute(context: ContentPublishingContext): Promise<ContentPublishingContext> {
+    console.log(`Starting content publishing saga for content ${context.contentId}`);
 
     try {
       const result = await this.saga.execute(context);
@@ -344,15 +336,15 @@ export class ContentPublishingSaga {
 
       // Publish failure event
       await eventBus.publish(
-        "post.failed",
+        'post.failed',
         {
           scheduleId: context.scheduleId,
           contentId: context.contentId,
           brandId: context.brandId,
           platform: context.platform,
           error: {
-            code: "SAGA_FAILED",
-            message: error instanceof Error ? error.message : "Unknown error",
+            code: 'SAGA_FAILED',
+            message: error instanceof Error ? error.message : 'Unknown error',
             retryable: false,
           },
           attemptNumber: 1,
@@ -361,7 +353,7 @@ export class ContentPublishingSaga {
           correlationId: context.correlationId,
           userId: context.userId,
           brandId: context.brandId,
-        },
+        }
       );
 
       throw error;

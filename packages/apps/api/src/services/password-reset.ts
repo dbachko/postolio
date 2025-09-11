@@ -1,11 +1,11 @@
-import { nanoid } from "nanoid";
-import bcrypt from "bcrypt";
-import { getDatabaseClient } from "../config/database.js";
-import { EmailService } from "./email.js";
-import { AuditLogger, AuditEventType } from "./audit-logger.js";
-import { RefreshTokenService } from "./refresh-token.js";
-import Redis from "ioredis";
-import { getRedisUrl } from "../utils/redis-url.js";
+import { nanoid } from 'nanoid';
+import bcrypt from 'bcrypt';
+import { getDatabaseClient } from '../config/database.js';
+import { EmailService } from './email.js';
+import { AuditLogger, AuditEventType } from './audit-logger.js';
+import { RefreshTokenService } from './refresh-token.js';
+import Redis from 'ioredis';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
@@ -26,7 +26,7 @@ export class PasswordResetService {
    */
   static async requestReset(
     email: string,
-    ipAddress?: string,
+    ipAddress?: string
   ): Promise<{ success: boolean; message: string }> {
     try {
       // Normalize email
@@ -43,7 +43,7 @@ export class PasswordResetService {
       if (attempts > this.MAX_ATTEMPTS) {
         return {
           success: false,
-          message: "Too many password reset attempts. Please try again later.",
+          message: 'Too many password reset attempts. Please try again later.',
         };
       }
 
@@ -55,13 +55,10 @@ export class PasswordResetService {
 
       // Always return success for security (don't reveal if email exists)
       if (!user) {
-        console.log(
-          `Password reset requested for non-existent email: ${email}`,
-        );
+        console.log(`Password reset requested for non-existent email: ${email}`);
         return {
           success: true,
-          message:
-            "If an account exists with this email, a password reset link has been sent.",
+          message: 'If an account exists with this email, a password reset link has been sent.',
         };
       }
 
@@ -74,8 +71,7 @@ export class PasswordResetService {
         console.log(`Password reset token already exists for user: ${user.id}`);
         return {
           success: true,
-          message:
-            "A password reset link has already been sent. Please check your email.",
+          message: 'A password reset link has already been sent. Please check your email.',
         };
       }
 
@@ -98,15 +94,12 @@ export class PasswordResetService {
       ]);
 
       // Send reset email
-      const emailResult = await EmailService.sendPasswordResetEmail(
-        user.email,
-        token,
-      );
+      const emailResult = await EmailService.sendPasswordResetEmail(user.email, token);
 
       if (!emailResult.success) {
         // Clean up tokens if email fails
         await Promise.all([redis.del(resetKey), redis.del(userKey)]);
-        throw new Error(emailResult.error || "Failed to send email");
+        throw new Error(emailResult.error || 'Failed to send email');
       }
 
       // Log password reset request
@@ -120,13 +113,13 @@ export class PasswordResetService {
 
       return {
         success: true,
-        message: "Password reset link sent! Check your email to continue.",
+        message: 'Password reset link sent! Check your email to continue.',
       };
     } catch (error) {
-      console.error("Password reset request error:", error);
+      console.error('Password reset request error:', error);
       return {
         success: false,
-        message: "Failed to process password reset request. Please try again.",
+        message: 'Failed to process password reset request. Please try again.',
       };
     }
   }
@@ -137,7 +130,7 @@ export class PasswordResetService {
   static async resetPassword(
     token: string,
     newPassword: string,
-    ipAddress?: string,
+    ipAddress?: string
   ): Promise<{
     success: boolean;
     message: string;
@@ -150,7 +143,7 @@ export class PasswordResetService {
       if (!data) {
         return {
           success: false,
-          message: "Invalid or expired password reset link",
+          message: 'Invalid or expired password reset link',
         };
       }
 
@@ -191,23 +184,23 @@ export class PasswordResetService {
 
       return {
         success: true,
-        message: "Password has been reset successfully!",
+        message: 'Password has been reset successfully!',
         userId: resetData.userId,
       };
     } catch (error) {
-      console.error("Password reset error:", error);
+      console.error('Password reset error:', error);
 
       // Log failed password reset attempt
       await AuditLogger.log({
         eventType: AuditEventType.PASSWORD_RESET_COMPLETED,
-        metadata: { token: token.substring(0, 8) + "...", ipAddress },
+        metadata: { token: token.substring(0, 8) + '...', ipAddress },
         success: false,
-        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
       });
 
       return {
         success: false,
-        message: "Failed to reset password. Please try again.",
+        message: 'Failed to reset password. Please try again.',
       };
     }
   }
@@ -233,7 +226,7 @@ export class PasswordResetService {
         email: resetData.email,
       };
     } catch (error) {
-      console.error("Token validation error:", error);
+      console.error('Token validation error:', error);
       return { valid: false };
     }
   }
@@ -251,7 +244,7 @@ export class PasswordResetService {
         await Promise.all([redis.del(resetKey), redis.del(userKey)]);
       }
     } catch (error) {
-      console.error("Cancel reset error:", error);
+      console.error('Cancel reset error:', error);
     }
   }
 

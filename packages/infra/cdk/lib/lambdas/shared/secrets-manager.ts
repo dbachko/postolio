@@ -3,13 +3,10 @@
  * Provides secure access to platform credentials
  */
 
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-} from "@aws-sdk/client-secrets-manager";
-import { Logger } from "@aws-lambda-powertools/logger";
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { Logger } from '@aws-lambda-powertools/logger';
 
-const logger = new Logger({ serviceName: "secrets-manager" });
+const logger = new Logger({ serviceName: 'secrets-manager' });
 
 export interface PlatformSecrets {
   // Only actual secrets (not public client IDs)
@@ -27,7 +24,7 @@ export class SecretManager {
   private cache: Map<string, { value: any; expiry: number }>;
   private environment: string;
 
-  constructor(environment: string = process.env.ENVIRONMENT || "dev") {
+  constructor(environment: string = process.env.ENVIRONMENT || 'dev') {
     this.client = new SecretsManagerClient({});
     this.cache = new Map();
     this.environment = environment;
@@ -58,16 +55,14 @@ export class SecretManager {
     // Check cache first
     const cached = this.cache.get(secretName);
     if (cached && cached.expiry > Date.now()) {
-      logger.debug("Returning cached secret", { secretName });
+      logger.debug('Returning cached secret', { secretName });
       return cached.value;
     }
 
     try {
-      logger.debug("Fetching secret from Secrets Manager", { secretName });
+      logger.debug('Fetching secret from Secrets Manager', { secretName });
 
-      const response = await this.client.send(
-        new GetSecretValueCommand({ SecretId: secretName }),
-      );
+      const response = await this.client.send(new GetSecretValueCommand({ SecretId: secretName }));
 
       if (!response.SecretString) {
         throw new Error(`Secret ${secretName} has no string value`);
@@ -81,12 +76,12 @@ export class SecretManager {
         expiry: Date.now() + 5 * 60 * 1000,
       });
 
-      logger.debug("Secret fetched and cached", { secretName });
+      logger.debug('Secret fetched and cached', { secretName });
       return value;
     } catch (error) {
-      logger.error("Failed to fetch secret", {
+      logger.error('Failed to fetch secret', {
         secretName,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
       throw new Error(`Failed to fetch secret ${secretName}: ${error}`);
     }
@@ -97,7 +92,7 @@ export class SecretManager {
    */
   clearCache(): void {
     this.cache.clear();
-    logger.debug("Secret cache cleared");
+    logger.debug('Secret cache cleared');
   }
 
   /**
@@ -106,22 +101,22 @@ export class SecretManager {
    */
   async getPlatformCredential(
     platform: string,
-    credentialType: "id" | "secret",
+    credentialType: 'id' | 'secret'
   ): Promise<string | undefined> {
     // Public IDs from environment variables
-    if (credentialType === "id") {
-      if (platform === "facebook") return process.env.FACEBOOK_APP_ID;
-      if (platform === "instagram") return process.env.INSTAGRAM_APP_ID;
-      if (platform === "linkedin") return process.env.LINKEDIN_CLIENT_ID;
-      if (platform === "tiktok") return process.env.TIKTOK_CLIENT_KEY;
+    if (credentialType === 'id') {
+      if (platform === 'facebook') return process.env.FACEBOOK_APP_ID;
+      if (platform === 'instagram') return process.env.INSTAGRAM_APP_ID;
+      if (platform === 'linkedin') return process.env.LINKEDIN_CLIENT_ID;
+      if (platform === 'tiktok') return process.env.TIKTOK_CLIENT_KEY;
       return undefined;
     }
 
     // Secrets also from environment variables now (passed from GitHub Secrets)
-    if (platform === "facebook") return process.env.FACEBOOK_APP_SECRET;
-    if (platform === "instagram") return process.env.INSTAGRAM_APP_SECRET;
-    if (platform === "linkedin") return process.env.LINKEDIN_CLIENT_SECRET;
-    if (platform === "tiktok") return process.env.TIKTOK_CLIENT_SECRET;
+    if (platform === 'facebook') return process.env.FACEBOOK_APP_SECRET;
+    if (platform === 'instagram') return process.env.INSTAGRAM_APP_SECRET;
+    if (platform === 'linkedin') return process.env.LINKEDIN_CLIENT_SECRET;
+    if (platform === 'tiktok') return process.env.TIKTOK_CLIENT_SECRET;
 
     return undefined;
   }

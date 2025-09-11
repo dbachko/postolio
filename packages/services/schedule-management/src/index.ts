@@ -1,7 +1,7 @@
-import { Logger } from "@aws-lambda-powertools/logger";
-import { Tracer } from "@aws-lambda-powertools/tracer";
-import { Metrics, MetricUnit } from "@aws-lambda-powertools/metrics";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { Logger } from '@aws-lambda-powertools/logger';
+import { Tracer } from '@aws-lambda-powertools/tracer';
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   PutCommand,
@@ -9,19 +9,15 @@ import {
   DeleteCommand,
   QueryCommand,
   ScanCommand,
-} from "@aws-sdk/lib-dynamodb";
+} from '@aws-sdk/lib-dynamodb';
 import {
   SchedulerClient,
   CreateScheduleCommand,
   DeleteScheduleCommand,
-} from "@aws-sdk/client-scheduler";
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { randomUUID } from "crypto";
-import {
-  getDynamoDBConfig,
-  SCHEDULE_STATUS,
-  formatEventBridgeScheduleTime,
-} from "./config";
+} from '@aws-sdk/client-scheduler';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { randomUUID } from 'crypto';
+import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from './config';
 
 /**
  * Schedule Management Lambda
@@ -33,11 +29,11 @@ import {
  */
 
 // Initialize Powertools
-const logger = new Logger({ serviceName: "schedule-management" });
-const tracer = new Tracer({ serviceName: "schedule-management" });
+const logger = new Logger({ serviceName: 'schedule-management' });
+const tracer = new Tracer({ serviceName: 'schedule-management' });
 const metrics = new Metrics({
-  namespace: "ContentScheduler",
-  serviceName: "schedule-management",
+  namespace: 'ContentScheduler',
+  serviceName: 'schedule-management',
 });
 
 // Initialize AWS SDK clients
@@ -54,9 +50,9 @@ const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 interface ScheduleRequest {
   brandId: string;
   contentId: string;
-  platform: "instagram" | "facebook" | "twitter" | "linkedin" | "youtube";
+  platform: 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
   scheduledAt: string;
-  contentType?: "image" | "video" | "carousel" | "reel" | "story";
+  contentType?: 'image' | 'video' | 'carousel' | 'reel' | 'story';
   videoUrl?: string;
   caption?: string;
   hashtags?: string[];
@@ -68,7 +64,7 @@ interface ScheduleRequest {
 interface ScheduleItem extends ScheduleRequest {
   scheduleId: string;
   pk: string;
-  sk: "METADATA";
+  sk: 'METADATA';
   status: string;
   gsi1pk?: string;
   gsi1sk?: string;
@@ -94,55 +90,45 @@ function validateScheduleRequest(data: unknown): {
   const errors: string[] = [];
 
   // Required fields
-  if (!d.brandId) errors.push("brandId is required");
-  if (!d.contentId) errors.push("contentId is required");
-  if (!d.platform) errors.push("platform is required");
-  if (!d.scheduledAt) errors.push("scheduledAt is required");
+  if (!d.brandId) errors.push('brandId is required');
+  if (!d.contentId) errors.push('contentId is required');
+  if (!d.platform) errors.push('platform is required');
+  if (!d.scheduledAt) errors.push('scheduledAt is required');
 
   // Platform validation
-  const validPlatforms = [
-    "instagram",
-    "facebook",
-    "twitter",
-    "linkedin",
-    "youtube",
-  ];
-  if (
-    d.platform &&
-    typeof d.platform === "string" &&
-    !validPlatforms.includes(d.platform)
-  ) {
-    errors.push(`platform must be one of: ${validPlatforms.join(", ")}`);
+  const validPlatforms = ['instagram', 'facebook', 'twitter', 'linkedin', 'youtube'];
+  if (d.platform && typeof d.platform === 'string' && !validPlatforms.includes(d.platform)) {
+    errors.push(`platform must be one of: ${validPlatforms.join(', ')}`);
   }
 
   // Date validation
-  if (d.scheduledAt && typeof d.scheduledAt === "string") {
+  if (d.scheduledAt && typeof d.scheduledAt === 'string') {
     const scheduledDate = new Date(d.scheduledAt);
     const now = new Date();
     if (isNaN(scheduledDate.getTime())) {
-      errors.push("scheduledAt must be a valid ISO 8601 date string");
+      errors.push('scheduledAt must be a valid ISO 8601 date string');
     } else if (scheduledDate <= now) {
-      errors.push("scheduledAt must be in the future");
+      errors.push('scheduledAt must be in the future');
     }
   }
 
   // Content type validation
-  const validContentTypes = ["image", "video", "carousel", "reel", "story"];
+  const validContentTypes = ['image', 'video', 'carousel', 'reel', 'story'];
   if (
     d.contentType &&
-    typeof d.contentType === "string" &&
+    typeof d.contentType === 'string' &&
     !validContentTypes.includes(d.contentType)
   ) {
-    errors.push(`contentType must be one of: ${validContentTypes.join(", ")}`);
+    errors.push(`contentType must be one of: ${validContentTypes.join(', ')}`);
   }
 
   // Video URL required for video content types
-  if (["video", "reel"].includes(d.contentType as string) && !d.videoUrl) {
-    errors.push("videoUrl is required for video content");
+  if (['video', 'reel'].includes(d.contentType as string) && !d.videoUrl) {
+    errors.push('videoUrl is required for video content');
   }
 
   // Caption length validation (platform-specific)
-  if (d.caption && typeof d.caption === "string") {
+  if (d.caption && typeof d.caption === 'string') {
     const maxLengths: Record<string, number> = {
       instagram: 2200,
       facebook: 63206,
@@ -152,18 +138,16 @@ function validateScheduleRequest(data: unknown): {
     };
     const maxLength = maxLengths[d.platform as string] || 2200;
     if (d.caption.length > maxLength) {
-      errors.push(
-        `caption exceeds maximum length of ${maxLength} characters for ${d.platform}`,
-      );
+      errors.push(`caption exceeds maximum length of ${maxLength} characters for ${d.platform}`);
     }
   }
 
   // Hashtag validation
   if (d.hashtags) {
     if (!Array.isArray(d.hashtags)) {
-      errors.push("hashtags must be an array");
+      errors.push('hashtags must be an array');
     } else if (d.hashtags.length > 30) {
-      errors.push("maximum 30 hashtags allowed");
+      errors.push('maximum 30 hashtags allowed');
     }
   }
 
@@ -173,24 +157,20 @@ function validateScheduleRequest(data: unknown): {
 }
 
 // CORS headers helper
-function addCorsHeaders(
-  response: APIGatewayProxyResult,
-): APIGatewayProxyResult {
+function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult {
   return {
     ...response,
     headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       ...response.headers,
     },
   };
 }
 
-export const handler = async (
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> => {
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Add context to logs
   logger.addPersistentLogAttributes({
     requestId: event.requestContext.requestId,
@@ -198,7 +178,7 @@ export const handler = async (
     path: event.path,
   });
 
-  logger.info("Processing request", { event });
+  logger.info('Processing request', { event });
 
   try {
     const { httpMethod, body, pathParameters } = event;
@@ -207,39 +187,39 @@ export const handler = async (
     let result: APIGatewayProxyResult;
 
     // Handle CORS preflight
-    if (httpMethod === "OPTIONS") {
+    if (httpMethod === 'OPTIONS') {
       return addCorsHeaders({
         statusCode: 200,
-        body: "",
+        body: '',
       });
     }
 
     switch (httpMethod) {
-      case "POST":
-        result = await createSchedule(JSON.parse(body || "{}"));
-        metrics.addMetric("ScheduleCreated", MetricUnit.Count, 1);
+      case 'POST':
+        result = await createSchedule(JSON.parse(body || '{}'));
+        metrics.addMetric('ScheduleCreated', MetricUnit.Count, 1);
         break;
-      case "GET":
+      case 'GET':
         if (scheduleId) {
           result = await getSchedule(scheduleId);
-          metrics.addMetric("ScheduleRetrieved", MetricUnit.Count, 1);
+          metrics.addMetric('ScheduleRetrieved', MetricUnit.Count, 1);
         } else {
           result = await listSchedules(event.queryStringParameters);
-          metrics.addMetric("SchedulesListed", MetricUnit.Count, 1);
+          metrics.addMetric('SchedulesListed', MetricUnit.Count, 1);
         }
         break;
-      case "PUT":
-        result = await updateSchedule(scheduleId!, JSON.parse(body || "{}"));
-        metrics.addMetric("ScheduleUpdated", MetricUnit.Count, 1);
+      case 'PUT':
+        result = await updateSchedule(scheduleId!, JSON.parse(body || '{}'));
+        metrics.addMetric('ScheduleUpdated', MetricUnit.Count, 1);
         break;
-      case "DELETE":
+      case 'DELETE':
         result = await deleteSchedule(scheduleId!);
-        metrics.addMetric("ScheduleDeleted", MetricUnit.Count, 1);
+        metrics.addMetric('ScheduleDeleted', MetricUnit.Count, 1);
         break;
       default:
         result = {
           statusCode: 405,
-          body: JSON.stringify({ error: "Method not allowed" }),
+          body: JSON.stringify({ error: 'Method not allowed' }),
         };
     }
 
@@ -248,15 +228,15 @@ export const handler = async (
 
     return addCorsHeaders(result);
   } catch (error) {
-    logger.error("Error processing request", error as Error);
-    metrics.addMetric("ScheduleError", MetricUnit.Count, 1);
+    logger.error('Error processing request', error as Error);
+    metrics.addMetric('ScheduleError', MetricUnit.Count, 1);
     metrics.publishStoredMetrics();
 
     return addCorsHeaders({
       statusCode: 500,
       body: JSON.stringify({
-        error: "Internal server error",
-        message: error instanceof Error ? error.message : "Unknown error",
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error',
       }),
     });
   }
@@ -269,7 +249,7 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
     return {
       statusCode: 400,
       body: JSON.stringify({
-        error: "Validation failed",
+        error: 'Validation failed',
         errors: validation.errors,
       }),
     };
@@ -287,37 +267,27 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
       IndexName: dbConfig.indexes.content.name,
       KeyConditionExpression: `${dbConfig.indexes.content.partitionKey} = :contentId`,
       ExpressionAttributeValues: {
-        ":contentId": validatedData.contentId,
+        ':contentId': validatedData.contentId,
       },
       Limit: 1, // We only need to know if one exists
-    }),
+    })
   );
 
   if (existingSchedules.Items && existingSchedules.Items.length > 0) {
     const existingSchedule = existingSchedules.Items[0];
-    logger.info(
-      "Found existing schedule for contentId, updating instead of creating new",
-      {
-        existingScheduleId: existingSchedule.scheduleId,
-        existingStatus: existingSchedule.status,
-        contentId: validatedData.contentId,
-      },
-    );
+    logger.info('Found existing schedule for contentId, updating instead of creating new', {
+      existingScheduleId: existingSchedule.scheduleId,
+      existingStatus: existingSchedule.status,
+      contentId: validatedData.contentId,
+    });
 
     // Update the existing schedule instead of creating a new one
-    return updateSchedule(
-      existingSchedule.scheduleId,
-      data as Record<string, unknown>,
-    );
+    return updateSchedule(existingSchedule.scheduleId, data as Record<string, unknown>);
   }
 
   // Validate required fields before any operations
-  if (
-    !validatedData.brandId ||
-    !validatedData.userId ||
-    !validatedData.contentId
-  ) {
-    logger.error("Missing required fields for schedule creation", {
+  if (!validatedData.brandId || !validatedData.userId || !validatedData.contentId) {
+    logger.error('Missing required fields for schedule creation', {
       brandId: validatedData.brandId,
       userId: validatedData.userId,
       contentId: validatedData.contentId,
@@ -325,7 +295,7 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
     return {
       statusCode: 400,
       body: JSON.stringify({
-        error: "Missing required fields",
+        error: 'Missing required fields',
         missing: {
           brandId: !validatedData.brandId,
           userId: !validatedData.userId,
@@ -339,11 +309,9 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
   const scheduledAt = new Date(validatedData.scheduledAt).toISOString();
 
   // Format date for EventBridge Scheduler
-  const eventBridgeScheduleTime = formatEventBridgeScheduleTime(
-    validatedData.scheduledAt,
-  );
+  const eventBridgeScheduleTime = formatEventBridgeScheduleTime(validatedData.scheduledAt);
 
-  logger.info("Creating new schedule (no existing schedule found)", {
+  logger.info('Creating new schedule (no existing schedule found)', {
     scheduleId,
     scheduledAt,
     eventBridgeScheduleTime,
@@ -355,7 +323,7 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
   // Prepare the DynamoDB item with guaranteed non-null values
   const scheduleItem = {
     pk: `SCHEDULE#${scheduleId}`,
-    sk: "METADATA",
+    sk: 'METADATA',
     scheduleId,
     brandId: validatedData.brandId,
     contentId: validatedData.contentId,
@@ -363,10 +331,10 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
     platform: validatedData.platform,
     scheduledAt,
     status: SCHEDULE_STATUS.SCHEDULED,
-    contentType: validatedData.contentType || "image",
-    videoUrl: validatedData.videoUrl || "",
+    contentType: validatedData.contentType || 'image',
+    videoUrl: validatedData.videoUrl || '',
     // Ensure content fields always have values (not undefined)
-    caption: validatedData.caption || "",
+    caption: validatedData.caption || '',
     hashtags: validatedData.hashtags || [],
     mediaUrls: validatedData.mediaUrls || [],
     gsi1pk: `BRAND#${validatedData.brandId}`,
@@ -381,17 +349,12 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
       new PutCommand({
         TableName: process.env.SCHEDULES_TABLE!,
         Item: scheduleItem,
-        ConditionExpression: "attribute_not_exists(pk)", // Ensure schedule doesn't already exist
-      }),
+        ConditionExpression: 'attribute_not_exists(pk)', // Ensure schedule doesn't already exist
+      })
     );
   } catch (error) {
-    if (
-      (error as { name?: string }).name === "ConditionalCheckFailedException"
-    ) {
-      logger.warn(
-        "Schedule already exists with this ID, likely a race condition",
-        { scheduleId },
-      );
+    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') {
+      logger.warn('Schedule already exists with this ID, likely a race condition', { scheduleId });
       // Generate a new ID and retry once
       const newScheduleId = `SCH_${Date.now()}_${randomUUID()}`;
       scheduleItem.pk = `SCHEDULE#${newScheduleId}`;
@@ -401,8 +364,8 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
         new PutCommand({
           TableName: process.env.SCHEDULES_TABLE!,
           Item: scheduleItem,
-          ConditionExpression: "attribute_not_exists(pk)", // Ensure uniqueness on retry
-        }),
+          ConditionExpression: 'attribute_not_exists(pk)', // Ensure uniqueness on retry
+        })
       );
 
       // Update scheduleId for EventBridge creation
@@ -425,27 +388,24 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
           Input: JSON.stringify({ scheduleId }),
         },
         FlexibleTimeWindow: {
-          Mode: "OFF",
+          Mode: 'OFF',
         },
         Description: `Content publishing schedule for ${scheduleId}`,
-      }),
+      })
     );
 
-    logger.info("EventBridge schedule created successfully", {
+    logger.info('EventBridge schedule created successfully', {
       scheduleId,
       scheduleExpression: `at(${eventBridgeScheduleTime})`,
       groupName: process.env.SCHEDULER_GROUP_NAME,
     });
   } catch (error) {
-    logger.error(
-      "Failed to create EventBridge schedule, rolling back DynamoDB entry",
-      {
-        error,
-        scheduleId,
-        scheduleExpression: `at(${eventBridgeScheduleTime})`,
-        groupName: process.env.SCHEDULER_GROUP_NAME,
-      },
-    );
+    logger.error('Failed to create EventBridge schedule, rolling back DynamoDB entry', {
+      error,
+      scheduleId,
+      scheduleExpression: `at(${eventBridgeScheduleTime})`,
+      groupName: process.env.SCHEDULER_GROUP_NAME,
+    });
 
     // Rollback: Delete the DynamoDB entry since EventBridge schedule failed
     try {
@@ -454,13 +414,13 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
           TableName: process.env.SCHEDULES_TABLE!,
           Key: {
             pk: `SCHEDULE#${scheduleId}`,
-            sk: "METADATA",
+            sk: 'METADATA',
           },
-        }),
+        })
       );
-      logger.info("Successfully rolled back DynamoDB entry", { scheduleId });
+      logger.info('Successfully rolled back DynamoDB entry', { scheduleId });
     } catch (rollbackError) {
-      logger.error("Failed to rollback DynamoDB entry", {
+      logger.error('Failed to rollback DynamoDB entry', {
         scheduleId,
         originalError: error,
         rollbackError,
@@ -471,7 +431,7 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
     throw error;
   }
 
-  logger.info("Schedule created successfully", { scheduleId });
+  logger.info('Schedule created successfully', { scheduleId });
 
   // Return complete schedule object that matches client expectations
   const scheduleResponse = {
@@ -481,7 +441,7 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
     userId: validatedData.userId,
     platform: validatedData.platform,
     scheduledAt,
-    contentType: validatedData.contentType || "image",
+    contentType: validatedData.contentType || 'image',
     videoUrl: validatedData.videoUrl,
     caption: validatedData.caption,
     hashtags: validatedData.hashtags,
@@ -504,15 +464,15 @@ async function getSchedule(scheduleId: string): Promise<APIGatewayProxyResult> {
       TableName: process.env.SCHEDULES_TABLE!,
       Key: {
         pk: `SCHEDULE#${scheduleId}`,
-        sk: "METADATA",
+        sk: 'METADATA',
       },
-    }),
+    })
   );
 
   if (!result.Item) {
     return {
       statusCode: 404,
-      body: JSON.stringify({ error: "Schedule not found" }),
+      body: JSON.stringify({ error: 'Schedule not found' }),
     };
   }
 
@@ -523,13 +483,13 @@ async function getSchedule(scheduleId: string): Promise<APIGatewayProxyResult> {
 }
 
 async function listSchedules(
-  queryParams: { [key: string]: string | undefined } | null,
+  queryParams: { [key: string]: string | undefined } | null
 ): Promise<APIGatewayProxyResult> {
   const brandId = queryParams?.brandId;
   const status = queryParams?.status || SCHEDULE_STATUS.SCHEDULED;
-  const limit = parseInt(queryParams?.limit || "50");
+  const limit = parseInt(queryParams?.limit || '50');
 
-  logger.info("Listing schedules", { brandId, status, limit });
+  logger.info('Listing schedules', { brandId, status, limit });
 
   try {
     const dbConfig = getDynamoDBConfig();
@@ -537,7 +497,7 @@ async function listSchedules(
     // Query schedules by brand if brandId provided
     if (brandId) {
       const brandIndex = dbConfig.indexes.brand;
-      logger.info("Using brand index for query", {
+      logger.info('Using brand index for query', {
         indexName: brandIndex.name,
         partitionKey: brandIndex.partitionKey,
         brandId,
@@ -548,16 +508,16 @@ async function listSchedules(
           TableName: dbConfig.tableName,
           IndexName: brandIndex.name,
           KeyConditionExpression: `${brandIndex.partitionKey} = :brandId`,
-          FilterExpression: "#status = :status",
+          FilterExpression: '#status = :status',
           ExpressionAttributeNames: {
-            "#status": "status",
+            '#status': 'status',
           },
           ExpressionAttributeValues: {
-            ":brandId": `BRAND#${brandId}`,
-            ":status": status,
+            ':brandId': `BRAND#${brandId}`,
+            ':status': status,
           },
           Limit: limit,
-        }),
+        })
       );
 
       return {
@@ -573,16 +533,16 @@ async function listSchedules(
     const result = await docClient.send(
       new ScanCommand({
         TableName: process.env.SCHEDULES_TABLE!,
-        FilterExpression: "#status = :status AND sk = :sk",
+        FilterExpression: '#status = :status AND sk = :sk',
         ExpressionAttributeNames: {
-          "#status": "status",
+          '#status': 'status',
         },
         ExpressionAttributeValues: {
-          ":status": status,
-          ":sk": "METADATA",
+          ':status': status,
+          ':sk': 'METADATA',
         },
         Limit: limit,
-      }),
+      })
     );
 
     return {
@@ -593,17 +553,17 @@ async function listSchedules(
       }),
     };
   } catch (error) {
-    logger.error("Error listing schedules", error as Error);
+    logger.error('Error listing schedules', error as Error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Failed to list schedules" }),
+      body: JSON.stringify({ error: 'Failed to list schedules' }),
     };
   }
 }
 
 async function updateSchedule(
   scheduleId: string,
-  data: Record<string, unknown>,
+  data: Record<string, unknown>
 ): Promise<APIGatewayProxyResult> {
   try {
     // First, get the existing schedule
@@ -612,16 +572,16 @@ async function updateSchedule(
         TableName: process.env.SCHEDULES_TABLE!,
         Key: {
           pk: `SCHEDULE#${scheduleId}`,
-          sk: "METADATA",
+          sk: 'METADATA',
         },
-      }),
+      })
     );
 
     if (!existingSchedule.Item) {
       // Schedule doesn't exist - create it instead (upsert pattern for resilience)
-      logger.warn("Schedule not found during update, creating new schedule", {
+      logger.warn('Schedule not found during update, creating new schedule', {
         scheduleId,
-        reason: "Data inconsistency recovery - schedule missing from DynamoDB",
+        reason: 'Data inconsistency recovery - schedule missing from DynamoDB',
       });
 
       // Validate the data has required fields for creation
@@ -630,7 +590,7 @@ async function updateSchedule(
         return {
           statusCode: 400,
           body: JSON.stringify({
-            error: "Cannot create schedule - missing required fields",
+            error: 'Cannot create schedule - missing required fields',
             validationErrors: validation.errors,
           }),
         };
@@ -646,24 +606,15 @@ async function updateSchedule(
     const updatedItem: ScheduleItem = {
       ...baseItem,
       ...partial,
-      caption:
-        partial.caption !== undefined
-          ? String(partial.caption)
-          : baseItem.caption,
-      hashtags:
-        partial.hashtags !== undefined
-          ? (partial.hashtags as string[])
-          : baseItem.hashtags,
+      caption: partial.caption !== undefined ? String(partial.caption) : baseItem.caption,
+      hashtags: partial.hashtags !== undefined ? (partial.hashtags as string[]) : baseItem.hashtags,
       mediaUrls:
-        partial.mediaUrls !== undefined
-          ? (partial.mediaUrls as string[])
-          : baseItem.mediaUrls,
-      userId:
-        partial.userId !== undefined ? String(partial.userId) : baseItem.userId,
+        partial.mediaUrls !== undefined ? (partial.mediaUrls as string[]) : baseItem.mediaUrls,
+      userId: partial.userId !== undefined ? String(partial.userId) : baseItem.userId,
       updatedAt: new Date().toISOString(),
     };
 
-    logger.info("Updating existing schedule", {
+    logger.info('Updating existing schedule', {
       scheduleId,
       hasContentUpdates: !!(data.caption || data.hashtags || data.mediaUrls),
     });
@@ -672,11 +623,9 @@ async function updateSchedule(
     if (partial.scheduledAt && partial.scheduledAt !== baseItem.scheduledAt) {
       const newScheduledAt = new Date(partial.scheduledAt).toISOString();
       // Format date for EventBridge Scheduler
-      const eventBridgeScheduleTime = formatEventBridgeScheduleTime(
-        partial.scheduledAt,
-      );
+      const eventBridgeScheduleTime = formatEventBridgeScheduleTime(partial.scheduledAt);
 
-      logger.info("Updating schedule time", {
+      logger.info('Updating schedule time', {
         scheduleId,
         oldTime: existingSchedule.Item.scheduledAt,
         newTime: newScheduledAt,
@@ -689,10 +638,10 @@ async function updateSchedule(
           new DeleteScheduleCommand({
             Name: `schedule-${scheduleId}`,
             GroupName: process.env.SCHEDULER_GROUP_NAME,
-          }),
+          })
         );
       } catch {
-        logger.warn("Could not delete old schedule, it may not exist", {
+        logger.warn('Could not delete old schedule, it may not exist', {
           scheduleId,
         });
       }
@@ -709,10 +658,10 @@ async function updateSchedule(
             Input: JSON.stringify({ scheduleId }),
           },
           FlexibleTimeWindow: {
-            Mode: "OFF",
+            Mode: 'OFF',
           },
           Description: `Updated content publishing schedule for ${scheduleId}`,
-        }),
+        })
       );
 
       updatedItem.scheduledAt = newScheduledAt;
@@ -724,10 +673,10 @@ async function updateSchedule(
       new PutCommand({
         TableName: process.env.SCHEDULES_TABLE!,
         Item: updatedItem,
-      }),
+      })
     );
 
-    logger.info("Schedule updated successfully", { scheduleId });
+    logger.info('Schedule updated successfully', { scheduleId });
 
     // Return complete schedule object that matches client expectations
     const scheduleResponse = {
@@ -756,29 +705,27 @@ async function updateSchedule(
       body: JSON.stringify(scheduleResponse),
     };
   } catch (error) {
-    logger.error("Error updating schedule", error as Error);
+    logger.error('Error updating schedule', error as Error);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: "Failed to update schedule",
-        message: error instanceof Error ? error.message : "Unknown error",
+        error: 'Failed to update schedule',
+        message: error instanceof Error ? error.message : 'Unknown error',
       }),
     };
   }
 }
 
-async function deleteSchedule(
-  scheduleId: string,
-): Promise<APIGatewayProxyResult> {
+async function deleteSchedule(scheduleId: string): Promise<APIGatewayProxyResult> {
   // Delete from DynamoDB
   await docClient.send(
     new DeleteCommand({
       TableName: process.env.SCHEDULES_TABLE!,
       Key: {
         pk: `SCHEDULE#${scheduleId}`,
-        sk: "METADATA",
+        sk: 'METADATA',
       },
-    }),
+    })
   );
 
   // Delete EventBridge schedule
@@ -786,13 +733,13 @@ async function deleteSchedule(
     new DeleteScheduleCommand({
       Name: `schedule-${scheduleId}`,
       GroupName: process.env.SCHEDULER_GROUP_NAME,
-    }),
+    })
   );
 
-  logger.info("Schedule deleted successfully", { scheduleId });
+  logger.info('Schedule deleted successfully', { scheduleId });
 
   return {
     statusCode: 204,
-    body: "",
+    body: '',
   };
 }

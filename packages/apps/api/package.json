@@ -22,6 +22,8 @@
     "@aws-sdk/signature-v4": "^3.370.0",
     "@fastify/cookie": "^10.0.1",
     "@fastify/cors": "^10.0.1",
+    "@fastify/csrf": "^8.0.1",
+    "@fastify/csrf-protection": "^7.1.0",
     "@fastify/helmet": "^12.0.1",
     "@fastify/jwt": "^9.0.1",
     "@fastify/oauth2": "^8.1.2",

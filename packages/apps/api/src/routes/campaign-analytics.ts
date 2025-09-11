@@ -1,7 +1,7 @@
-import { FastifyPluginAsync, FastifyRequest } from "fastify";
-import { verifyJWT } from "../services/jwt.js";
-import { campaignAnalyticsService } from "../services/campaign-analytics.js";
-import { getDatabaseClient } from "../config/database.js";
+import { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import { verifyJWT } from '../services/jwt.js';
+import { campaignAnalyticsService } from '../services/campaign-analytics.js';
+import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
 
@@ -9,7 +9,7 @@ interface CampaignMetricsParams {
   campaignId: string;
 }
 interface CampaignMetricsQuery {
-  timeRange?: "7d" | "30d" | "90d";
+  timeRange?: '7d' | '30d' | '90d';
 }
 
 interface CompareCampaignsBody {
@@ -28,8 +28,8 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
   // Helper function to authenticate and get user ID
   const authenticateRequest = async (request: FastifyRequest) => {
     const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      throw new Error("Authentication required");
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new Error('Authentication required');
     }
 
     const token = authHeader.substring(7);
@@ -37,8 +37,8 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       decoded = verifyJWT(token);
     } catch (jwtError) {
-      console.error("JWT verification error:", jwtError);
-      throw new Error("Invalid authentication token");
+      console.error('JWT verification error:', jwtError);
+      throw new Error('Invalid authentication token');
     }
 
     return decoded.id;
@@ -47,15 +47,12 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{
     Params: CampaignMetricsParams;
     Querystring: CampaignMetricsQuery;
-  }>("/campaign/analytics/:campaignId", async (request, reply) => {
+  }>('/campaign/analytics/:campaignId', async (request, reply) => {
     try {
       const userId = await authenticateRequest(request);
       const { campaignId } = request.params;
 
-      const metrics = await campaignAnalyticsService.getCampaignMetrics(
-        campaignId,
-        userId,
-      );
+      const metrics = await campaignAnalyticsService.getCampaignMetrics(campaignId, userId);
 
       reply.send({
         success: true,
@@ -64,20 +61,17 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
         fromCache: false,
       });
     } catch (error) {
-      console.error("Get campaign metrics error:", error);
+      console.error('Get campaign metrics error:', error);
       reply.status(500).send({
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to get campaign metrics",
+        error: error instanceof Error ? error.message : 'Failed to get campaign metrics',
       });
     }
   });
 
   // Compare multiple campaigns
   fastify.post<{ Body: CompareCampaignsBody }>(
-    "/campaign/analytics/compare",
+    '/campaign/analytics/compare',
     async (request, reply) => {
       try {
         const userId = await authenticateRequest(request);
@@ -86,7 +80,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
         if (!Array.isArray(campaignIds) || campaignIds.length === 0) {
           reply.status(400).send({
             success: false,
-            error: "campaignIds array is required and cannot be empty",
+            error: 'campaignIds array is required and cannot be empty',
           });
           return;
         }
@@ -94,15 +88,12 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
         if (campaignIds.length > 10) {
           reply.status(400).send({
             success: false,
-            error: "Cannot compare more than 10 campaigns at once",
+            error: 'Cannot compare more than 10 campaigns at once',
           });
           return;
         }
 
-        const comparison = await campaignAnalyticsService.compareCampaigns(
-          campaignIds,
-          userId,
-        );
+        const comparison = await campaignAnalyticsService.compareCampaigns(campaignIds, userId);
 
         reply.send({
           success: true,
@@ -110,31 +101,27 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           lastUpdated: new Date().toISOString(),
         });
       } catch (error) {
-        console.error("Compare campaigns error:", error);
+        console.error('Compare campaigns error:', error);
         reply.status(500).send({
           success: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : "Failed to compare campaigns",
+          error: error instanceof Error ? error.message : 'Failed to compare campaigns',
         });
       }
-    },
+    }
   );
 
   // Get optimization recommendations
   fastify.get<{ Params: OptimizationParams }>(
-    "/campaign/analytics/:campaignId/recommendations",
+    '/campaign/analytics/:campaignId/recommendations',
     async (request, reply) => {
       try {
         const userId = await authenticateRequest(request);
         const { campaignId } = request.params;
 
-        const recommendations =
-          await campaignAnalyticsService.getOptimizationRecommendations(
-            campaignId,
-            userId,
-          );
+        const recommendations = await campaignAnalyticsService.getOptimizationRecommendations(
+          campaignId,
+          userId
+        );
 
         reply.send({
           success: true,
@@ -143,30 +130,25 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           lastUpdated: new Date().toISOString(),
         });
       } catch (error) {
-        console.error("Get optimization recommendations error:", error);
+        console.error('Get optimization recommendations error:', error);
         reply.status(500).send({
           success: false,
           error:
-            error instanceof Error
-              ? error.message
-              : "Failed to get optimization recommendations",
+            error instanceof Error ? error.message : 'Failed to get optimization recommendations',
         });
       }
-    },
+    }
   );
 
   // Calculate campaign ROI
   fastify.get<{ Params: ROIParams }>(
-    "/campaign/analytics/:campaignId/roi",
+    '/campaign/analytics/:campaignId/roi',
     async (request, reply) => {
       try {
         const userId = await authenticateRequest(request);
         const { campaignId } = request.params;
 
-        const roi = await campaignAnalyticsService.calculateROI(
-          campaignId,
-          userId,
-        );
+        const roi = await campaignAnalyticsService.calculateROI(campaignId, userId);
 
         reply.send({
           success: true,
@@ -174,19 +156,18 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           lastUpdated: new Date().toISOString(),
         });
       } catch (error) {
-        console.error("Calculate ROI error:", error);
+        console.error('Calculate ROI error:', error);
         reply.status(500).send({
           success: false,
-          error:
-            error instanceof Error ? error.message : "Failed to calculate ROI",
+          error: error instanceof Error ? error.message : 'Failed to calculate ROI',
         });
       }
-    },
+    }
   );
 
   // Get analytics summary for all campaigns of a brand
   fastify.get<{ Params: { brandId: string } }>(
-    "/brand/:brandId/analytics/summary",
+    '/brand/:brandId/analytics/summary',
     async (request, reply) => {
       try {
         const userId = await authenticateRequest(request);
@@ -197,7 +178,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           where: {
             brandId,
             brand: { userId },
-            status: { in: ["active", "completed"] },
+            status: { in: ['active', 'completed'] },
           },
           select: { id: true, name: true, status: true },
         });
@@ -226,10 +207,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
         for (const campaign of campaigns) {
           try {
-            const metrics = await campaignAnalyticsService.getCampaignMetrics(
-              campaign.id,
-              userId,
-            );
+            const metrics = await campaignAnalyticsService.getCampaignMetrics(campaign.id, userId);
             campaignMetrics.push({
               campaignId: campaign.id,
               campaignName: campaign.name,
@@ -245,10 +223,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
               };
             }
           } catch (error) {
-            console.warn(
-              `Failed to get metrics for campaign ${campaign.id}:`,
-              error,
-            );
+            console.warn(`Failed to get metrics for campaign ${campaign.id}:`, error);
           }
         }
 
@@ -258,21 +233,18 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
             totalPosts: acc.totalPosts + metrics.totalPosts,
             totalImpressions: acc.totalImpressions + metrics.totalImpressions,
             totalEngagement: acc.totalEngagement + metrics.totalEngagement,
-            averageEngagementRate:
-              acc.averageEngagementRate + metrics.averageEngagementRate,
+            averageEngagementRate: acc.averageEngagementRate + metrics.averageEngagementRate,
           }),
           {
             totalPosts: 0,
             totalImpressions: 0,
             totalEngagement: 0,
             averageEngagementRate: 0,
-          },
+          }
         );
 
         summary.averageEngagementRate =
-          campaignMetrics.length > 0
-            ? summary.averageEngagementRate / campaignMetrics.length
-            : 0;
+          campaignMetrics.length > 0 ? summary.averageEngagementRate / campaignMetrics.length : 0;
 
         reply.send({
           success: true,
@@ -285,16 +257,13 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
           lastUpdated: new Date().toISOString(),
         });
       } catch (error) {
-        console.error("Get brand analytics summary error:", error);
+        console.error('Get brand analytics summary error:', error);
         reply.status(500).send({
           success: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : "Failed to get brand analytics summary",
+          error: error instanceof Error ? error.message : 'Failed to get brand analytics summary',
         });
       }
-    },
+    }
   );
 };
 

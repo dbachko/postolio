@@ -1,7 +1,7 @@
-import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
-import { RefreshCw, Clock, AlertTriangle } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { RefreshCw, Clock, AlertTriangle } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
 interface RefreshControlsProps {
   onRefresh: () => void;
@@ -20,9 +20,9 @@ export function RefreshControls({
   const isLowOnRequests = rateLimitRemaining < 50;
 
   const getStatusColor = () => {
-    if (isRateLimited) return "bg-red-100 text-red-800";
-    if (isLowOnRequests) return "bg-yellow-100 text-yellow-800";
-    return "bg-green-100 text-green-800";
+    if (isRateLimited) return 'bg-red-100 text-red-800';
+    if (isLowOnRequests) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-green-100 text-green-800';
   };
 
   const getStatusIcon = () => {
@@ -40,9 +40,8 @@ export function RefreshControls({
 
       {/* Last Updated */}
       {lastUpdated && (
-        <span className="text-sm text-muted-foreground">
-          Updated{" "}
-          {formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}
+        <span className="text-muted-foreground text-sm">
+          Updated {formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}
         </span>
       )}
 
@@ -53,10 +52,8 @@ export function RefreshControls({
         size="sm"
         variant="outline"
       >
-        <RefreshCw
-          className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
-        />
-        {isRefreshing ? "Refreshing..." : "Refresh"}
+        <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+        {isRefreshing ? 'Refreshing...' : 'Refresh'}
       </Button>
     </div>
   );

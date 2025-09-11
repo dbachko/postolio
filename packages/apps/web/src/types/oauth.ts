@@ -17,19 +17,19 @@ export interface GoogleInitializeConfig {
   callback: (response: GoogleCredentialResponse) => void;
   auto_select?: boolean;
   cancel_on_tap_outside?: boolean;
-  context?: "signin" | "signup" | "use";
-  ux_mode?: "popup" | "redirect";
+  context?: 'signin' | 'signup' | 'use';
+  ux_mode?: 'popup' | 'redirect';
   login_uri?: string;
   native_callback?: (response: GoogleCredentialResponse) => void;
 }
 
 export interface GoogleButtonOptions {
-  type?: "standard" | "icon";
-  theme?: "outline" | "filled_blue" | "filled_black";
-  size?: "large" | "medium" | "small";
-  text?: "signin_with" | "signup_with" | "continue_with" | "signin";
-  shape?: "rectangular" | "pill" | "circle" | "square";
-  logo_alignment?: "left" | "center";
+  type?: 'standard' | 'icon';
+  theme?: 'outline' | 'filled_blue' | 'filled_black';
+  size?: 'large' | 'medium' | 'small';
+  text?: 'signin_with' | 'signup_with' | 'continue_with' | 'signin';
+  shape?: 'rectangular' | 'pill' | 'circle' | 'square';
+  logo_alignment?: 'left' | 'center';
   width?: number | string;
   locale?: string;
 }
@@ -52,7 +52,7 @@ export interface FacebookAuthResponse {
 
 export interface FacebookLoginResponse {
   authResponse?: FacebookAuthResponse;
-  status: "connected" | "not_authorized" | "unknown";
+  status: 'connected' | 'not_authorized' | 'unknown';
 }
 
 export interface FacebookLoginOptions {
@@ -76,18 +76,15 @@ export interface FacebookSDK {
   init: (options: FacebookInitOptions) => void;
   login: (
     callback: (response: FacebookLoginResponse) => void,
-    options?: FacebookLoginOptions,
+    options?: FacebookLoginOptions
   ) => void;
   logout: (callback: (response: unknown) => void) => void;
-  getLoginStatus: (
-    callback: (response: FacebookLoginResponse) => void,
-    force?: boolean,
-  ) => void;
+  getLoginStatus: (callback: (response: FacebookLoginResponse) => void, force?: boolean) => void;
   api: (
     path: string,
     method: string,
     params: Record<string, unknown>,
-    callback: (response: unknown) => void,
+    callback: (response: unknown) => void
   ) => void;
 }
 

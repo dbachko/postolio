@@ -1,7 +1,7 @@
-import Bull from "bull";
-import { getDatabaseClient } from "../config/database.js";
-import Redis from "ioredis";
-import { getRedisUrl } from "../utils/redis-url.js";
+import Bull from 'bull';
+import { getDatabaseClient } from '../config/database.js';
+import Redis from 'ioredis';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 const prisma = getDatabaseClient();
 
@@ -38,56 +38,51 @@ export class DeletionQueueService {
     // Create Bull queue - use same URL for consistency
     const redisConfig = redisUrl;
 
-    this.deletionQueue = new Bull("user-deletion", {
+    this.deletionQueue = new Bull('user-deletion', {
       redis: redisConfig,
       defaultJobOptions: {
         removeOnComplete: true,
         removeOnFail: false,
         attempts: 3,
         backoff: {
-          type: "exponential",
+          type: 'exponential',
           delay: 2000, // Start with 2 seconds
         },
       },
     });
 
     // Process deletion jobs
-    this.deletionQueue.process(
-      "permanent-deletion",
-      5,
-      async (job: Bull.Job<DeletionJob>) => {
-        console.log("Processing deletion job:", job.id);
+    this.deletionQueue.process('permanent-deletion', 5, async (job: Bull.Job<DeletionJob>) => {
+      console.log('Processing deletion job:', job.id);
 
-        try {
-          const { userId, scheduledDeletionDate } = job.data;
+      try {
+        const { userId, scheduledDeletionDate } = job.data;
 
-          // Check if the scheduled deletion date has passed
-          if (new Date() < new Date(scheduledDeletionDate)) {
-            // Not time yet, re-schedule for the scheduled deletion date
-            const delay =
-              new Date(scheduledDeletionDate).getTime() - Date.now();
-            await this.scheduleDeletion(job.data, delay);
-            return {
-              success: false,
-              userId,
-              error: "Not time for deletion yet",
-            } as DeletionJobResult;
-          }
-
-          // Perform permanent deletion
-          await this.permanentlyDeleteUser(userId);
-
+        // Check if the scheduled deletion date has passed
+        if (new Date() < new Date(scheduledDeletionDate)) {
+          // Not time yet, re-schedule for the scheduled deletion date
+          const delay = new Date(scheduledDeletionDate).getTime() - Date.now();
+          await this.scheduleDeletion(job.data, delay);
           return {
-            success: true,
+            success: false,
             userId,
-            deletedAt: new Date(),
+            error: 'Not time for deletion yet',
           } as DeletionJobResult;
-        } catch (error) {
-          console.error("Deletion job failed:", error);
-          throw error; // Will trigger retry
         }
-      },
-    );
+
+        // Perform permanent deletion
+        await this.permanentlyDeleteUser(userId);
+
+        return {
+          success: true,
+          userId,
+          deletedAt: new Date(),
+        } as DeletionJobResult;
+      } catch (error) {
+        console.error('Deletion job failed:', error);
+        throw error; // Will trigger retry
+      }
+    });
 
     // Daily cron job to check for scheduled deletions
     this.setupDailyCron();
@@ -135,36 +130,33 @@ export class DeletionQueueService {
     });
   }
 
-  async scheduleDeletion(
-    data: DeletionJob,
-    delay: number = 0,
-  ): Promise<Bull.Job<DeletionJob>> {
+  async scheduleDeletion(data: DeletionJob, delay: number = 0): Promise<Bull.Job<DeletionJob>> {
     const jobOptions: Bull.JobOptions = {
       delay: delay > 0 ? delay : 0,
       priority: 1, // Low priority
     };
 
-    return this.deletionQueue.add("permanent-deletion", data, jobOptions);
+    return this.deletionQueue.add('permanent-deletion', data, jobOptions);
   }
 
   private setupDailyCron(): void {
     // Run every day at 2 AM to check for scheduled deletions
     this.deletionQueue.add(
-      "check-scheduled-deletions",
+      'check-scheduled-deletions',
       {
-        userId: "",
+        userId: '',
         scheduledDeletionDate: new Date(),
-        email: "",
+        email: '',
       } as DeletionJob,
       {
         repeat: {
-          cron: "0 2 * * *", // 2 AM daily
+          cron: '0 2 * * *', // 2 AM daily
         },
-      },
+      }
     );
 
-    this.deletionQueue.process("check-scheduled-deletions", async () => {
-      console.log("Checking for scheduled deletions...");
+    this.deletionQueue.process('check-scheduled-deletions', async () => {
+      console.log('Checking for scheduled deletions...');
 
       // Find all users scheduled for deletion
       const usersToDelete = await prisma.user.findMany({

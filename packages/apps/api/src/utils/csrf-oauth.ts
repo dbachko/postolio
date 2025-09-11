@@ -1,13 +1,9 @@
-import crypto from "crypto";
-import type { FastifyInstance } from "fastify";
+import crypto from 'crypto';
+import type { FastifyInstance } from 'fastify';
 
 // Use the Redis type from the actual Redis service
 interface RedisClient {
-  setex: (
-    key: string,
-    seconds: number,
-    value: string,
-  ) => Promise<string | null>;
+  setex: (key: string, seconds: number, value: string) => Promise<string | null>;
   get: (key: string) => Promise<string | null>;
   del: (key: string) => Promise<number>;
   keys: (pattern: string) => Promise<string[]>;
@@ -27,7 +23,7 @@ export interface OAuthState {
 }
 
 export class OAuthCSRFProtection {
-  private readonly redisKeyPrefix = "oauth:state:";
+  private readonly redisKeyPrefix = 'oauth:state:';
   private readonly stateExpiry = 600; // 10 minutes in seconds
   private redis: RedisClient | undefined;
 
@@ -40,7 +36,7 @@ export class OAuthCSRFProtection {
    */
   async generateState(userId?: string, redirectUrl?: string): Promise<string> {
     // Generate cryptographically secure random state
-    const state = crypto.randomBytes(32).toString("hex");
+    const state = crypto.randomBytes(32).toString('hex');
 
     // Store state data in Redis with expiry - handle optional properties properly
     const stateData: OAuthState = {
@@ -55,26 +51,19 @@ export class OAuthCSRFProtection {
     try {
       // Store in Redis with expiry
       if (this.redis) {
-        await this.redis.setex(
-          redisKey,
-          this.stateExpiry,
-          JSON.stringify(stateData),
-        );
+        await this.redis.setex(redisKey, this.stateExpiry, JSON.stringify(stateData));
       } else {
         // Fallback to in-memory storage if Redis not available
-        this.fastify.log.warn("Redis not available for OAuth state storage");
+        this.fastify.log.warn('Redis not available for OAuth state storage');
         // In production, this should throw an error
-        if (process.env.NODE_ENV === "production") {
-          throw new Error(
-            "Redis is required for OAuth state management in production",
-          );
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error('Redis is required for OAuth state management in production');
         }
       }
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      this.fastify.log.error({ message }, "Failed to store OAuth state:");
-      throw new Error("Failed to initialize OAuth flow");
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      this.fastify.log.error({ message }, 'Failed to store OAuth state:');
+      throw new Error('Failed to initialize OAuth flow');
     }
 
     return state;
@@ -85,7 +74,7 @@ export class OAuthCSRFProtection {
    */
   async validateState(state: string): Promise<OAuthState | null> {
     if (!state) {
-      this.fastify.log.warn("Missing state parameter in OAuth callback");
+      this.fastify.log.warn('Missing state parameter in OAuth callback');
       return null;
     }
 
@@ -97,7 +86,7 @@ export class OAuthCSRFProtection {
         const stateDataStr = await this.redis.get(redisKey);
 
         if (!stateDataStr) {
-          this.fastify.log.warn({ state }, "Invalid or expired OAuth state:");
+          this.fastify.log.warn({ state }, 'Invalid or expired OAuth state:');
           return null;
         }
 
@@ -109,25 +98,22 @@ export class OAuthCSRFProtection {
         // Check if state has expired (double-check even though Redis has TTL)
         const ageMs = Date.now() - stateData.timestamp;
         if (ageMs > this.stateExpiry * 1000) {
-          this.fastify.log.warn({ state }, "OAuth state expired:");
+          this.fastify.log.warn({ state }, 'OAuth state expired:');
           return null;
         }
 
         return stateData;
       } else {
         // In development without Redis
-        if (process.env.NODE_ENV !== "production") {
-          this.fastify.log.warn(
-            "OAuth state validation skipped - Redis not available",
-          );
+        if (process.env.NODE_ENV !== 'production') {
+          this.fastify.log.warn('OAuth state validation skipped - Redis not available');
           return { state, timestamp: Date.now() };
         }
         return null;
       }
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      this.fastify.log.error({ message }, "Failed to validate OAuth state:");
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      this.fastify.log.error({ message }, 'Failed to validate OAuth state:');
       return null;
     }
   }
@@ -150,12 +136,8 @@ export class OAuthCSRFProtection {
         }
       }
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      this.fastify.log.error(
-        { message },
-        "Failed to cleanup expired OAuth states:",
-      );
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      this.fastify.log.error({ message }, 'Failed to cleanup expired OAuth states:');
     }
   }
 }
@@ -167,16 +149,16 @@ export async function oauthCSRFPlugin(fastify: FastifyInstance): Promise<void> {
   const csrfProtection = new OAuthCSRFProtection(fastify);
 
   // Decorate fastify instance with CSRF protection
-  fastify.decorate("oauthCSRF", csrfProtection);
+  fastify.decorate('oauthCSRF', csrfProtection);
 
   // Register cleanup hook
-  fastify.addHook("onClose", async () => {
+  fastify.addHook('onClose', async () => {
     await csrfProtection.cleanupExpiredStates();
   });
 }
 
 // TypeScript module augmentation
-declare module "fastify" {
+declare module 'fastify' {
   interface FastifyInstance {
     oauthCSRF: OAuthCSRFProtection;
   }

@@ -8,7 +8,7 @@ import {
   DiscoverInstancesCommand,
   RegisterInstanceCommand,
   DeregisterInstanceCommand,
-} from "@aws-sdk/client-servicediscovery";
+} from '@aws-sdk/client-servicediscovery';
 
 export interface ServiceEndpoint {
   url: string;
@@ -19,37 +19,28 @@ export interface ServiceEndpoint {
 
 export class ServiceDiscovery {
   private client: ServiceDiscoveryClient;
-  private cache: Map<
-    string,
-    { endpoints: ServiceEndpoint[]; timestamp: number }
-  > = new Map();
+  private cache: Map<string, { endpoints: ServiceEndpoint[]; timestamp: number }> = new Map();
   private readonly CACHE_TTL = 30000; // 30 seconds
   private readonly namespaceId: string;
   private readonly namespaceName: string;
 
   constructor() {
     this.client = new ServiceDiscoveryClient({
-      region: process.env.AWS_REGION || "us-east-1",
+      region: process.env.AWS_REGION || 'us-east-1',
     });
 
-    this.namespaceId = process.env.CLOUDMAP_NAMESPACE_ID || "";
-    this.namespaceName =
-      process.env.CLOUDMAP_NAMESPACE_NAME || "postolio-dev.local";
+    this.namespaceId = process.env.CLOUDMAP_NAMESPACE_ID || '';
+    this.namespaceName = process.env.CLOUDMAP_NAMESPACE_NAME || 'postolio-dev.local';
 
     if (!this.namespaceId) {
-      console.warn(
-        "Cloud Map namespace ID not configured. Service discovery disabled.",
-      );
+      console.warn('Cloud Map namespace ID not configured. Service discovery disabled.');
     }
   }
 
   /**
    * Discover service endpoints by name
    */
-  async discover(
-    serviceName: string,
-    useCache: boolean = true,
-  ): Promise<ServiceEndpoint[]> {
+  async discover(serviceName: string, useCache: boolean = true): Promise<ServiceEndpoint[]> {
     // Check cache first
     if (useCache) {
       const cached = this.cache.get(serviceName);
@@ -64,20 +55,18 @@ export class ServiceDiscovery {
           NamespaceName: this.namespaceName,
           ServiceName: serviceName,
           MaxResults: 10,
-          HealthStatus: "HEALTHY", // Only return healthy instances
-        }),
+          HealthStatus: 'HEALTHY', // Only return healthy instances
+        })
       );
 
-      const endpoints: ServiceEndpoint[] = (response.Instances || []).map(
-        (instance) => ({
-          url:
-            instance.Attributes?.url ||
-            `http://${instance.Attributes?.AWS_INSTANCE_IPV4}:${instance.Attributes?.AWS_INSTANCE_PORT || "80"}`,
-          instanceId: instance.InstanceId || "",
-          attributes: instance.Attributes || {},
-          healthy: instance.HealthStatus === "HEALTHY",
-        }),
-      );
+      const endpoints: ServiceEndpoint[] = (response.Instances || []).map((instance) => ({
+        url:
+          instance.Attributes?.url ||
+          `http://${instance.Attributes?.AWS_INSTANCE_IPV4}:${instance.Attributes?.AWS_INSTANCE_PORT || '80'}`,
+        instanceId: instance.InstanceId || '',
+        attributes: instance.Attributes || {},
+        healthy: instance.HealthStatus === 'HEALTHY',
+      }));
 
       // Update cache
       this.cache.set(serviceName, {
@@ -108,7 +97,7 @@ export class ServiceDiscovery {
 
     if (endpoints.length === 0) {
       // Fallback to environment variable if service discovery fails
-      const envVarName = `${serviceName.toUpperCase().replace(/-/g, "_")}_URL`;
+      const envVarName = `${serviceName.toUpperCase().replace(/-/g, '_')}_URL`;
       const fallbackUrl = process.env[envVarName];
 
       if (fallbackUrl) {
@@ -117,15 +106,14 @@ export class ServiceDiscovery {
           console.log(`Using fallback URL for ${serviceName}: ${fallbackUrl}`);
           return fallbackUrl;
         } catch (urlError) {
-          const errorDetails =
-            urlError instanceof Error ? urlError.message : "Invalid URL format";
+          const errorDetails = urlError instanceof Error ? urlError.message : 'Invalid URL format';
           console.error(
-            `Invalid fallback URL for ${serviceName}: ${fallbackUrl}. Error: ${errorDetails}`,
+            `Invalid fallback URL for ${serviceName}: ${fallbackUrl}. Error: ${errorDetails}`
           );
           throw new Error(
             `Invalid fallback URL for service '${serviceName}': ${fallbackUrl}. ` +
               `URL validation failed: ${errorDetails}. ` +
-              `Ensure the URL includes protocol (http:// or https://) and is properly formatted.`,
+              `Ensure the URL includes protocol (http:// or https://) and is properly formatted.`
           );
         }
       }
@@ -149,10 +137,10 @@ export class ServiceDiscovery {
   async registerSelf(
     serviceName: string,
     instanceId: string,
-    attributes: Record<string, string>,
+    attributes: Record<string, string>
   ): Promise<void> {
     if (!this.namespaceId) {
-      console.log("Service discovery not configured, skipping registration");
+      console.log('Service discovery not configured, skipping registration');
       return;
     }
 
@@ -162,14 +150,12 @@ export class ServiceDiscovery {
           ServiceId: serviceName,
           InstanceId: instanceId,
           Attributes: attributes,
-        }),
+        })
       );
 
-      console.log(
-        `Registered ${serviceName} instance ${instanceId} with Cloud Map`,
-      );
+      console.log(`Registered ${serviceName} instance ${instanceId} with Cloud Map`);
     } catch (error) {
-      console.error("Failed to register with Cloud Map:", error);
+      console.error('Failed to register with Cloud Map:', error);
       // Don't throw - service can still run without registration
     }
   }
@@ -188,14 +174,12 @@ export class ServiceDiscovery {
         new DeregisterInstanceCommand({
           ServiceId: serviceName,
           InstanceId: instanceId,
-        }),
+        })
       );
 
-      console.log(
-        `Deregistered ${serviceName} instance ${instanceId} from Cloud Map`,
-      );
+      console.log(`Deregistered ${serviceName} instance ${instanceId} from Cloud Map`);
     } catch (error) {
-      console.error("Failed to deregister from Cloud Map:", error);
+      console.error('Failed to deregister from Cloud Map:', error);
     }
   }
 
@@ -230,7 +214,7 @@ export function getServiceDiscovery(): ServiceDiscovery {
 export async function callService(
   serviceName: string,
   path: string,
-  options?: globalThis.RequestInit,
+  options?: globalThis.RequestInit
 ): Promise<Response> {
   const discovery = getServiceDiscovery();
   const serviceUrl = await discovery.getServiceUrl(serviceName);
@@ -241,7 +225,7 @@ export async function callService(
   return fetch(url, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...options?.headers,
     },
   });
@@ -251,10 +235,10 @@ export async function callService(
  * Service names enum for type safety
  */
 export const SERVICES = {
-  TOKEN_SERVICE: "token-service",
-  CONTENT_SCHEDULER: "content-scheduler",
-  MAIN_APP: "main-app",
-  PUBLISHER: "publisher",
+  TOKEN_SERVICE: 'token-service',
+  CONTENT_SCHEDULER: 'content-scheduler',
+  MAIN_APP: 'main-app',
+  PUBLISHER: 'publisher',
 } as const;
 
 export type ServiceName = (typeof SERVICES)[keyof typeof SERVICES];

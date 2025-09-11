@@ -1,27 +1,21 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { useAuthStore } from "../stores/authStore";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
-import { FormField } from "@/components/forms/FormField";
-import { GoogleSignInIsolated } from "@/components/auth/GoogleSignInIsolated";
-import { FacebookSignInIsolated } from "@/components/auth/FacebookSignInIsolated";
-import { MagicLinkForm } from "@/components/auth/MagicLinkForm";
-import { validationRules } from "../utils/validation";
-import { TIMEOUTS } from "../constants/timeouts";
-import { getUserTimezone } from "../lib/timezone";
-import { Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
-import { toast } from "sonner";
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { useAuthStore } from '../stores/authStore';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter';
+import { FormField } from '@/components/forms/FormField';
+import { GoogleSignInIsolated } from '@/components/auth/GoogleSignInIsolated';
+import { FacebookSignInIsolated } from '@/components/auth/FacebookSignInIsolated';
+import { MagicLinkForm } from '@/components/auth/MagicLinkForm';
+import { validationRules } from '../utils/validation';
+import { TIMEOUTS } from '../constants/timeouts';
+import { getUserTimezone } from '../lib/timezone';
+import { Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface RegisterFormData {
   email: string;
@@ -31,7 +25,7 @@ interface RegisterFormData {
 
 export function Register() {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showMagicLink, setShowMagicLink] = useState(false);
 
@@ -44,27 +38,27 @@ export function Register() {
     formState: { errors },
     watch,
   } = useForm<RegisterFormData>({
-    mode: "onChange", // Real-time validation
-    reValidateMode: "onChange",
+    mode: 'onChange', // Real-time validation
+    reValidateMode: 'onChange',
   });
 
-  const password = watch("password", "");
+  const password = watch('password', '');
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
-    setError("");
+    setError('');
 
     try {
       // Auto-detect user timezone
       const timezone = getUserTimezone();
 
       await registerUser(data.email, data.password, data.name, timezone);
-      toast.success("Account created successfully!", {
-        description: "Welcome to Postolio! Redirecting to dashboard...",
+      toast.success('Account created successfully!', {
+        description: 'Welcome to Postolio! Redirecting to dashboard...',
         icon: <CheckCircle className="text-green-500" />,
         duration: TIMEOUTS.TOAST_DURATION,
       });
-      setTimeout(() => navigate("/dashboard"), TIMEOUTS.SUCCESS_REDIRECT);
+      setTimeout(() => navigate('/dashboard'), TIMEOUTS.SUCCESS_REDIRECT);
     } catch (error: unknown) {
       // Type-safe error handling
       const apiError = error as {
@@ -74,9 +68,9 @@ export function Register() {
       const message =
         apiError?.response?.data?.message ||
         apiError?.message ||
-        "Registration failed. Please try again.";
+        'Registration failed. Please try again.';
       setError(message);
-      toast.error("Registration failed", {
+      toast.error('Registration failed', {
         description: message,
         icon: <AlertCircle className="text-red-500" />,
         duration: TIMEOUTS.TOAST_DURATION,
@@ -87,27 +81,22 @@ export function Register() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="bg-background flex min-h-screen flex-col">
       {/* Main content */}
-      <div className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="flex flex-1 items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">
-              Create your account
-            </CardTitle>
+            <CardTitle className="text-center text-2xl">Create your account</CardTitle>
             <CardDescription className="text-center">
-              Or{" "}
-              <Link
-                to="/login"
-                className="font-medium text-primary hover:underline"
-              >
+              Or{' '}
+              <Link to="/login" className="text-primary font-medium hover:underline">
                 sign in to your existing account
               </Link>
             </CardDescription>
           </CardHeader>
           <CardContent>
             {/* OAuth Providers */}
-            <div className="space-y-3 mb-6">
+            <div className="mb-6 space-y-3">
               <GoogleSignInIsolated mode="signup" />
               <FacebookSignInIsolated mode="signup" />
             </div>
@@ -118,20 +107,15 @@ export function Register() {
                 <span className="w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  Or continue with
-                </span>
+                <span className="bg-background text-muted-foreground px-2">Or continue with</span>
               </div>
             </div>
 
             {/* Magic Link Option */}
             {showMagicLink ? (
               <>
-                <MagicLinkForm
-                  mode="signup"
-                  onSuccess={() => navigate("/dashboard")}
-                />
-                <div className="text-center mt-4">
+                <MagicLinkForm mode="signup" onSuccess={() => navigate('/dashboard')} />
+                <div className="mt-4 text-center">
                   <Button
                     type="button"
                     variant="ghost"
@@ -162,7 +146,7 @@ export function Register() {
                     type="text"
                     autoComplete="name"
                     placeholder="Enter your full name"
-                    {...register("name", validationRules.name)}
+                    {...register('name', validationRules.name)}
                     aria-invalid={!!errors.name}
                   />
                 </FormField>
@@ -182,9 +166,9 @@ export function Register() {
                     spellCheck="false"
                     autoCapitalize="off"
                     placeholder="Enter your email"
-                    {...register("email", validationRules.email)}
+                    {...register('email', validationRules.email)}
                     aria-invalid={!!errors.email}
-                    className={errors.email ? "border-red-500" : ""}
+                    className={errors.email ? 'border-red-500' : ''}
                   />
                 </FormField>
 
@@ -198,20 +182,18 @@ export function Register() {
                   <div className="relative">
                     <Input
                       id="password"
-                      type={showPassword ? "text" : "password"}
+                      type={showPassword ? 'text' : 'password'}
                       autoComplete="new-password"
                       placeholder="Enter password or passphrase"
-                      {...register("password", validationRules.password)}
+                      {...register('password', validationRules.password)}
                       aria-invalid={!!errors.password}
-                      className={errors.password ? "border-red-500" : ""}
+                      className={errors.password ? 'border-red-500' : ''}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                      aria-label={
-                        showPassword ? "Hide password" : "Show password"
-                      }
+                      className="absolute right-2 top-1/2 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center p-2 text-gray-500 hover:text-gray-700"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
@@ -220,7 +202,7 @@ export function Register() {
                 </FormField>
 
                 <Button type="submit" disabled={isLoading} className="w-full">
-                  {isLoading ? "Creating account..." : "Create account"}
+                  {isLoading ? 'Creating account...' : 'Create account'}
                 </Button>
 
                 {/* Magic Link Alternative */}
@@ -236,19 +218,13 @@ export function Register() {
                 </div>
 
                 {/* Privacy Policy Notice */}
-                <div className="text-xs text-center text-muted-foreground mt-4">
-                  By creating an account, you agree to our{" "}
-                  <Link
-                    to="/privacy-policy"
-                    className="text-primary hover:underline"
-                  >
+                <div className="text-muted-foreground mt-4 text-center text-xs">
+                  By creating an account, you agree to our{' '}
+                  <Link to="/privacy-policy" className="text-primary hover:underline">
                     Privacy Policy
-                  </Link>{" "}
-                  and{" "}
-                  <Link
-                    to="/terms-of-service"
-                    className="text-primary hover:underline"
-                  >
+                  </Link>{' '}
+                  and{' '}
+                  <Link to="/terms-of-service" className="text-primary hover:underline">
                     Terms of Service
                   </Link>
                 </div>
@@ -259,28 +235,19 @@ export function Register() {
       </div>
 
       {/* Footer */}
-      <footer className="py-6 px-4 border-t">
-        <div className="flex justify-center items-center text-sm text-muted-foreground space-x-4">
+      <footer className="border-t px-4 py-6">
+        <div className="text-muted-foreground flex items-center justify-center space-x-4 text-sm">
           <span>© {new Date().getFullYear()} Postolio</span>
           <span>•</span>
-          <Link
-            to="/privacy-policy"
-            className="hover:text-foreground transition-colors"
-          >
+          <Link to="/privacy-policy" className="hover:text-foreground transition-colors">
             Privacy Policy
           </Link>
           <span>•</span>
-          <Link
-            to="/terms-of-service"
-            className="hover:text-foreground transition-colors"
-          >
+          <Link to="/terms-of-service" className="hover:text-foreground transition-colors">
             Terms of Service
           </Link>
           <span>•</span>
-          <a
-            href="mailto:legal@postolio.example"
-            className="hover:text-foreground transition-colors"
-          >
+          <a href="mailto:legal@postolio.example" className="hover:text-foreground transition-colors">
             Legal
           </a>
         </div>

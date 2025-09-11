@@ -1,11 +1,7 @@
-import { useEffect, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { useCalendarFilterStore } from "../stores/calendarFilterStore";
-import {
-  encodeFiltersToURL,
-  decodeFiltersFromURL,
-  areFiltersEqual,
-} from "../utils/filterUrlUtils";
+import { useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useCalendarFilterStore } from '../stores/calendarFilterStore';
+import { encodeFiltersToURL, decodeFiltersFromURL, areFiltersEqual } from '../utils/filterUrlUtils';
 
 /**
  * Synchronizes calendar filter state between URL and Zustand store
@@ -86,15 +82,10 @@ export function useURLFilterSync() {
       }
 
       if (
-        urlFilters.dateRange.start?.getTime() !==
-          currentFilters.dateRange.start?.getTime() ||
-        urlFilters.dateRange.end?.getTime() !==
-          currentFilters.dateRange.end?.getTime()
+        urlFilters.dateRange.start?.getTime() !== currentFilters.dateRange.start?.getTime() ||
+        urlFilters.dateRange.end?.getTime() !== currentFilters.dateRange.end?.getTime()
       ) {
-        filterStore.setDateRange(
-          urlFilters.dateRange.start,
-          urlFilters.dateRange.end,
-        );
+        filterStore.setDateRange(urlFilters.dateRange.start, urlFilters.dateRange.end);
       }
 
       if (urlFilters.searchQuery !== currentFilters.searchQuery) {
@@ -144,30 +135,27 @@ export function useNavigateWithFilters() {
       contentTypes: string[];
       dateRange: { start: Date | null; end: Date | null };
       searchQuery: string;
-    }>,
+    }>
   ) => {
     const params = new URLSearchParams();
 
     if (filters.campaigns?.length) {
-      params.set("campaigns", filters.campaigns.join(","));
+      params.set('campaigns', filters.campaigns.join(','));
     }
     if (filters.statuses?.length) {
-      params.set("statuses", filters.statuses.join(","));
+      params.set('statuses', filters.statuses.join(','));
     }
     if (filters.contentTypes?.length) {
-      params.set("types", filters.contentTypes.join(","));
+      params.set('types', filters.contentTypes.join(','));
     }
     if (filters.dateRange?.start) {
-      params.set(
-        "dateStart",
-        filters.dateRange.start.toISOString().split("T")[0],
-      );
+      params.set('dateStart', filters.dateRange.start.toISOString().split('T')[0]);
     }
     if (filters.dateRange?.end) {
-      params.set("dateEnd", filters.dateRange.end.toISOString().split("T")[0]);
+      params.set('dateEnd', filters.dateRange.end.toISOString().split('T')[0]);
     }
     if (filters.searchQuery) {
-      params.set("search", filters.searchQuery);
+      params.set('search', filters.searchQuery);
     }
 
     navigate(`/content?${params.toString()}`);

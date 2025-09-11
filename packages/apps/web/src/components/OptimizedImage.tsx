@@ -1,16 +1,15 @@
-import React, { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
-import { supportsWebP } from "@/lib/image-utils";
+import React, { useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
+import { supportsWebP } from '@/lib/image-utils';
 
-interface OptimizedImageProps
-  extends React.ImgHTMLAttributes<HTMLImageElement> {
+interface OptimizedImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src: string;
   alt: string;
   cdnUrl?: string | null; // New CDN URL if available
   fallbackUrl?: string; // Original external URL as fallback
   priority?: boolean;
   onLoadComplete?: () => void;
-  aspectRatio?: "square" | "portrait" | "landscape";
+  aspectRatio?: 'square' | 'portrait' | 'landscape';
 }
 
 export const OptimizedImage: React.FC<OptimizedImageProps> = ({
@@ -21,25 +20,25 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   className,
   priority = false,
   onLoadComplete,
-  aspectRatio = "square",
+  aspectRatio = 'square',
   ...props
 }) => {
-  const [imageSrc, setImageSrc] = useState<string>("");
+  const [imageSrc, setImageSrc] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [format, setFormat] = useState<"jpeg" | "webp">("jpeg");
+  const [format, setFormat] = useState<'jpeg' | 'webp'>('jpeg');
 
   useEffect(() => {
     // Detect browser support for modern formats
     if (supportsWebP()) {
-      setFormat("webp");
+      setFormat('webp');
     }
 
     // Determine which URL to use
     if (cdnUrl) {
       // Use CDN URL with format optimization
-      const cdnBase = cdnUrl.replace(/\.(jpg|jpeg|png|webp)$/i, "");
-      const optimizedUrl = format === "webp" ? `${cdnBase}.webp` : cdnUrl;
+      const cdnBase = cdnUrl.replace(/\.(jpg|jpeg|png|webp)$/i, '');
+      const optimizedUrl = format === 'webp' ? `${cdnBase}.webp` : cdnUrl;
       setImageSrc(optimizedUrl);
     } else if (fallbackUrl) {
       // Use fallback URL if no CDN URL available
@@ -62,45 +61,45 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
 
     // Try fallback URLs in order
     if (imageSrc === cdnUrl && fallbackUrl) {
-      console.warn("CDN image failed to load, trying fallback URL");
+      console.warn('CDN image failed to load, trying fallback URL');
       setImageSrc(fallbackUrl);
       setError(false);
       setLoading(true);
     } else if (imageSrc === fallbackUrl && src !== fallbackUrl) {
-      console.warn("Fallback URL failed, trying original source");
+      console.warn('Fallback URL failed, trying original source');
       setImageSrc(src);
       setError(false);
       setLoading(true);
     } else {
-      console.error("All image sources failed to load");
+      console.error('All image sources failed to load');
     }
   };
 
   const aspectRatioClasses = {
-    square: "aspect-square",
-    portrait: "aspect-[3/4]",
-    landscape: "aspect-[16/9]",
+    square: 'aspect-square',
+    portrait: 'aspect-[3/4]',
+    landscape: 'aspect-[16/9]',
   };
 
   return (
     <div
       className={cn(
-        "relative overflow-hidden bg-gray-100 dark:bg-gray-800",
+        'relative overflow-hidden bg-gray-100 dark:bg-gray-800',
         aspectRatioClasses[aspectRatio],
-        className,
+        className
       )}
     >
       {/* Loading placeholder */}
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="animate-pulse bg-gray-200 dark:bg-gray-700 w-full h-full" />
+          <div className="h-full w-full animate-pulse bg-gray-200 dark:bg-gray-700" />
         </div>
       )}
 
       {/* Error placeholder */}
       {error && !loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
-          <div className="text-center p-4">
+          <div className="p-4 text-center">
             <svg
               className="mx-auto h-12 w-12 text-gray-400"
               fill="none"
@@ -124,15 +123,15 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
         {...props}
         src={imageSrc}
         alt={alt}
-        loading={priority ? "eager" : "lazy"}
+        loading={priority ? 'eager' : 'lazy'}
         onLoad={handleLoad}
         onError={handleError}
         className={cn(
-          "w-full h-full object-cover",
-          loading && "opacity-0",
-          !loading && "opacity-100 transition-opacity duration-300",
-          error && "hidden",
-          className,
+          'h-full w-full object-cover',
+          loading && 'opacity-0',
+          !loading && 'opacity-100 transition-opacity duration-300',
+          error && 'hidden',
+          className
         )}
       />
     </div>

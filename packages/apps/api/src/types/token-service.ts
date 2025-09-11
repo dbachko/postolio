@@ -29,9 +29,4 @@ export interface TokenServiceConfig {
   maxRetries?: number;
 }
 
-export type Platform =
-  | "instagram"
-  | "facebook"
-  | "tiktok"
-  | "youtube"
-  | "linkedin";
+export type Platform = 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';

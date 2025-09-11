@@ -1,24 +1,19 @@
-import Bull from "bull";
-import type Mail from "nodemailer/lib/mailer";
-import { EmailService } from "./email.js";
-import Redis from "ioredis";
-import { getRedisUrl } from "../utils/redis-url.js";
+import Bull from 'bull';
+import type Mail from 'nodemailer/lib/mailer';
+import { EmailService } from './email.js';
+import Redis from 'ioredis';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 // Email job types
 export interface EmailJob {
-  type:
-    | "welcome"
-    | "verification"
-    | "password_reset"
-    | "two_factor"
-    | "generic";
+  type: 'welcome' | 'verification' | 'password_reset' | 'two_factor' | 'generic';
   to: string;
   subject: string;
   html?: string;
   text?: string;
   template?: string;
   templateData?: Record<string, unknown>;
-  priority?: "low" | "normal" | "high" | "critical";
+  priority?: 'low' | 'normal' | 'high' | 'critical';
   delay?: number; // Delay in milliseconds
   attempts?: number;
 }
@@ -49,14 +44,14 @@ export class EmailQueueService {
     // Create Bull queue - use same URL for consistency
     const redisConfig = redisUrl;
 
-    this.emailQueue = new Bull("email processing", {
+    this.emailQueue = new Bull('email processing', {
       redis: redisConfig,
       defaultJobOptions: {
         removeOnComplete: 100, // Keep 100 completed jobs for monitoring
         removeOnFail: 50, // Keep 50 failed jobs for debugging
         attempts: 3,
         backoff: {
-          type: "exponential",
+          type: 'exponential',
           delay: 2000, // Start with 2 seconds, then 4, 8, etc.
         },
       },
@@ -82,72 +77,64 @@ export class EmailQueueService {
    */
   private setupProcessors(): void {
     // Process emails with concurrency of 10
-    this.emailQueue.process(
-      "send-email",
-      10,
-      async (job: Bull.Job<EmailJob>) => {
-        const { type, to, subject, html, text, template, templateData } =
-          job.data;
+    this.emailQueue.process('send-email', 10, async (job: Bull.Job<EmailJob>) => {
+      const { type, to, subject, html, text, template, templateData } = job.data;
 
-        try {
-          console.log(`Processing email job ${job.id}: ${type} to ${to}`);
+      try {
+        console.log(`Processing email job ${job.id}: ${type} to ${to}`);
 
-          // Prepare email options
-          const emailOptions: Mail.Options = {
-            to,
-            subject,
-          };
+        // Prepare email options
+        const emailOptions: Mail.Options = {
+          to,
+          subject,
+        };
 
-          // Use template if provided, otherwise use raw html/text
-          if (template && templateData) {
-            const renderedEmail = await this.renderTemplate(
-              template,
-              templateData,
-            );
-            emailOptions.html = renderedEmail.html;
-            emailOptions.text = renderedEmail.text;
-          } else {
-            emailOptions.html = html;
-            emailOptions.text = text;
-          }
-
-          // Send email
-          const result = await EmailService.sendEmail(emailOptions);
-
-          if (!result.success) {
-            throw new Error(result.error || "Email sending failed");
-          }
-
-          console.log(`Email job ${job.id} completed successfully`);
-
-          return {
-            success: true,
-            sentAt: new Date(),
-          } as EmailJobResult;
-        } catch (error) {
-          console.error(`Email job ${job.id} failed:`, error);
-          throw error; // Re-throw to trigger retry mechanism
+        // Use template if provided, otherwise use raw html/text
+        if (template && templateData) {
+          const renderedEmail = await this.renderTemplate(template, templateData);
+          emailOptions.html = renderedEmail.html;
+          emailOptions.text = renderedEmail.text;
+        } else {
+          emailOptions.html = html;
+          emailOptions.text = text;
         }
-      },
-    );
+
+        // Send email
+        const result = await EmailService.sendEmail(emailOptions);
+
+        if (!result.success) {
+          throw new Error(result.error || 'Email sending failed');
+        }
+
+        console.log(`Email job ${job.id} completed successfully`);
+
+        return {
+          success: true,
+          sentAt: new Date(),
+        } as EmailJobResult;
+      } catch (error) {
+        console.error(`Email job ${job.id} failed:`, error);
+        throw error; // Re-throw to trigger retry mechanism
+      }
+    });
   }
 
   /**
    * Setup event listeners for monitoring
    */
   private setupEventListeners(): void {
-    this.emailQueue.on("completed", (job: Bull.Job, result: EmailJobResult) => {
+    this.emailQueue.on('completed', (job: Bull.Job, result: EmailJobResult) => {
       console.log(
         `✅ Email job ${job.id} completed:`,
         JSON.stringify({
           type: job.data.type,
           to: job.data.to,
           success: result.success,
-        }),
+        })
       );
     });
 
-    this.emailQueue.on("failed", (job: Bull.Job, err: Error) => {
+    this.emailQueue.on('failed', (job: Bull.Job, err: Error) => {
       console.error(
         `❌ Email job ${job.id} failed:`,
         JSON.stringify({
@@ -156,35 +143,35 @@ export class EmailQueueService {
           error: err.message,
           attempts: job.attemptsMade,
           maxAttempts: job.opts.attempts,
-        }),
+        })
       );
     });
 
-    this.emailQueue.on("stalled", (job: Bull.Job) => {
+    this.emailQueue.on('stalled', (job: Bull.Job) => {
       console.warn(
         `⚠️ Email job ${job.id} stalled:`,
         JSON.stringify({
           type: job.data.type,
           to: job.data.to,
-        }),
+        })
       );
     });
 
-    this.emailQueue.on("error", (error: Error) => {
-      console.error("Email queue error:", error);
+    this.emailQueue.on('error', (error: Error) => {
+      console.error('Email queue error:', error);
     });
 
-    this.emailQueue.on("waiting", (jobId: number) => {
+    this.emailQueue.on('waiting', (jobId: number) => {
       console.log(`📝 Email job ${jobId} waiting to be processed`);
     });
 
-    this.emailQueue.on("active", (job: Bull.Job) => {
+    this.emailQueue.on('active', (job: Bull.Job) => {
       console.log(
         `🔄 Email job ${job.id} started processing:`,
         JSON.stringify({
           type: job.data.type,
           to: job.data.to,
-        }),
+        })
       );
     });
   }
@@ -193,32 +180,27 @@ export class EmailQueueService {
    * Add email to queue
    */
   async addEmailJob(emailData: EmailJob): Promise<Bull.Job<EmailJob>> {
-    const {
-      priority = "normal",
-      delay = 0,
-      attempts = 3,
-      ...jobData
-    } = emailData;
+    const { priority = 'normal', delay = 0, attempts = 3, ...jobData } = emailData;
 
     // Set job options based on priority
     const jobOptions: Bull.JobOptions = {
       priority: this.getPriorityValue(priority),
       delay,
       attempts,
-      removeOnComplete: priority === "critical" ? 200 : 100,
-      removeOnFail: priority === "critical" ? 100 : 50,
+      removeOnComplete: priority === 'critical' ? 200 : 100,
+      removeOnFail: priority === 'critical' ? 100 : 50,
     };
 
     // Add retry strategy based on email type
-    if (jobData.type === "verification" || jobData.type === "password_reset") {
+    if (jobData.type === 'verification' || jobData.type === 'password_reset') {
       jobOptions.attempts = 5; // Critical emails get more retries
       jobOptions.backoff = {
-        type: "exponential",
+        type: 'exponential',
         delay: 1000,
       };
     }
 
-    const job = await this.emailQueue.add("send-email", jobData, jobOptions);
+    const job = await this.emailQueue.add('send-email', jobData, jobOptions);
 
     console.log(
       `📧 Email job ${job.id} added to queue:`,
@@ -226,8 +208,8 @@ export class EmailQueueService {
         type: jobData.type,
         to: jobData.to,
         priority,
-        delay: delay > 0 ? `${delay}ms` : "immediate",
-      }),
+        delay: delay > 0 ? `${delay}ms` : 'immediate',
+      })
     );
 
     return job;
@@ -239,15 +221,15 @@ export class EmailQueueService {
   async addWelcomeEmail(
     to: string,
     name?: string,
-    options?: { delay?: number; priority?: EmailJob["priority"] },
+    options?: { delay?: number; priority?: EmailJob['priority'] }
   ): Promise<Bull.Job<EmailJob>> {
     return this.addEmailJob({
-      type: "welcome",
+      type: 'welcome',
       to,
-      subject: "Welcome to Postolio! 🎉",
-      template: "welcome",
-      templateData: { name: name || "there" },
-      priority: options?.priority || "normal",
+      subject: 'Welcome to Postolio! 🎉',
+      template: 'welcome',
+      templateData: { name: name || 'there' },
+      priority: options?.priority || 'normal',
       delay: options?.delay || 0,
     });
   }
@@ -258,15 +240,15 @@ export class EmailQueueService {
   async addVerificationEmail(
     to: string,
     verificationLink: string,
-    options?: { delay?: number; priority?: EmailJob["priority"] },
+    options?: { delay?: number; priority?: EmailJob['priority'] }
   ): Promise<Bull.Job<EmailJob>> {
     return this.addEmailJob({
-      type: "verification",
+      type: 'verification',
       to,
-      subject: "Please verify your email address",
-      template: "verification",
+      subject: 'Please verify your email address',
+      template: 'verification',
       templateData: { verificationLink },
-      priority: options?.priority || "high",
+      priority: options?.priority || 'high',
       delay: options?.delay || 0,
       attempts: 5, // Critical email
     });
@@ -278,15 +260,15 @@ export class EmailQueueService {
   async addPasswordResetEmail(
     to: string,
     resetLink: string,
-    options?: { delay?: number; priority?: EmailJob["priority"] },
+    options?: { delay?: number; priority?: EmailJob['priority'] }
   ): Promise<Bull.Job<EmailJob>> {
     return this.addEmailJob({
-      type: "password_reset",
+      type: 'password_reset',
       to,
-      subject: "Reset your Postolio password",
-      template: "password_reset",
+      subject: 'Reset your Postolio password',
+      template: 'password_reset',
       templateData: { resetLink },
-      priority: options?.priority || "critical",
+      priority: options?.priority || 'critical',
       delay: options?.delay || 0,
       attempts: 5, // Critical email
     });
@@ -298,15 +280,15 @@ export class EmailQueueService {
   async addTwoFactorEmail(
     to: string,
     code: string,
-    options?: { delay?: number; priority?: EmailJob["priority"] },
+    options?: { delay?: number; priority?: EmailJob['priority'] }
   ): Promise<Bull.Job<EmailJob>> {
     return this.addEmailJob({
-      type: "two_factor",
+      type: 'two_factor',
       to,
-      subject: "Your Postolio verification code",
-      template: "two_factor",
+      subject: 'Your Postolio verification code',
+      template: 'two_factor',
       templateData: { code },
-      priority: options?.priority || "critical",
+      priority: options?.priority || 'critical',
       delay: options?.delay || 0,
       attempts: 5, // Critical email
     });
@@ -376,12 +358,12 @@ export class EmailQueueService {
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
 
     await Promise.all([
-      this.emailQueue.clean(oneDayAgo, "completed"),
-      this.emailQueue.clean(oneDayAgo, "failed"),
-      this.emailQueue.clean(oneDayAgo, "active"), // Clean stalled jobs
+      this.emailQueue.clean(oneDayAgo, 'completed'),
+      this.emailQueue.clean(oneDayAgo, 'failed'),
+      this.emailQueue.clean(oneDayAgo, 'active'), // Clean stalled jobs
     ]);
 
-    console.log("Cleaned old email jobs");
+    console.log('Cleaned old email jobs');
   }
 
   /**
@@ -389,7 +371,7 @@ export class EmailQueueService {
    */
   async pauseQueue(): Promise<void> {
     await this.emailQueue.pause();
-    console.log("Email queue paused");
+    console.log('Email queue paused');
   }
 
   /**
@@ -397,7 +379,7 @@ export class EmailQueueService {
    */
   async resumeQueue(): Promise<void> {
     await this.emailQueue.resume();
-    console.log("Email queue resumed");
+    console.log('Email queue resumed');
   }
 
   /**
@@ -406,21 +388,21 @@ export class EmailQueueService {
   async close(): Promise<void> {
     await this.emailQueue.close();
     await this.redis.quit();
-    console.log("Email queue closed");
+    console.log('Email queue closed');
   }
 
   /**
    * Convert priority string to Bull priority value
    */
-  private getPriorityValue(priority: EmailJob["priority"]): number {
+  private getPriorityValue(priority: EmailJob['priority']): number {
     switch (priority) {
-      case "critical":
+      case 'critical':
         return 1; // Highest priority
-      case "high":
+      case 'high':
         return 5;
-      case "normal":
+      case 'normal':
         return 10;
-      case "low":
+      case 'low':
         return 20;
       default:
         return 10;
@@ -432,7 +414,7 @@ export class EmailQueueService {
    */
   private async renderTemplate(
     template: string,
-    data: Record<string, unknown>,
+    data: Record<string, unknown>
   ): Promise<{ html: string; text: string }> {
     // This is a simple template system - in production you might use Handlebars, Mustache, etc.
     const templates = {

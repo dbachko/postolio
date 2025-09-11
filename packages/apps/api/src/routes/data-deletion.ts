@@ -1,27 +1,27 @@
-import { FastifyInstance } from "fastify";
-import { prisma } from "../config/database.js";
-import crypto from "crypto";
-import bcrypt from "bcrypt";
-import { verifyJWT } from "../services/jwt.js";
-import { markdownToHtml } from "../utils/markdown.js";
-import { deletionQueueService } from "../services/deletion-queue.js";
-import { EmailService } from "../services/email.js";
+import { FastifyInstance } from 'fastify';
+import { prisma } from '../config/database.js';
+import crypto from 'crypto';
+import bcrypt from 'bcrypt';
+import { verifyJWT } from '../services/jwt.js';
+import { markdownToHtml } from '../utils/markdown.js';
+import { deletionQueueService } from '../services/deletion-queue.js';
+import { EmailService } from '../services/email.js';
 
 // Deletion reasons for survey
 const DELETION_REASONS = {
   not_using: "I'm not using the service anymore",
   too_expensive: "It's too expensive",
   missing_features: "It's missing features I need",
-  privacy_concerns: "I have privacy concerns",
+  privacy_concerns: 'I have privacy concerns',
   switching_service: "I'm switching to another service",
-  other: "Other reason",
+  other: 'Other reason',
 } as const;
 
 interface DeletionRequest {
   email: string;
   userId?: string;
   reason?: keyof typeof DELETION_REASONS;
-  source: "user" | "meta" | "legal";
+  source: 'user' | 'meta' | 'legal';
   verificationToken?: string;
 }
 
@@ -31,45 +31,37 @@ interface MetaDeletionCallback {
 
 interface DeletionSurvey {
   reason:
-    | "not_using"
-    | "too_expensive"
-    | "missing_features"
-    | "privacy_concerns"
-    | "switching_service"
-    | "other";
+    | 'not_using'
+    | 'too_expensive'
+    | 'missing_features'
+    | 'privacy_concerns'
+    | 'switching_service'
+    | 'other';
   feedback?: string;
 }
 
 export default async function dataDeletionRoutes(fastify: FastifyInstance) {
   // Public data deletion page content
-  fastify.get("/data-deletion", async (request, reply) => {
+  fastify.get('/data-deletion', async (request, reply) => {
     try {
       // Read the data deletion instructions
-      const fs = await import("fs");
-      const path = await import("path");
-      const { fileURLToPath } = await import("url");
+      const fs = await import('fs');
+      const path = await import('path');
+      const { fileURLToPath } = await import('url');
 
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = path.dirname(__filename);
 
-      const deletionPath = path.join(
-        __dirname,
-        "..",
-        "..",
-        "legal/DATA_DELETION.md",
-      );
+      const deletionPath = path.join(__dirname, '..', '..', 'legal/DATA_DELETION.md');
 
-      let content = fs.readFileSync(deletionPath, "utf8");
+      let content = fs.readFileSync(deletionPath, 'utf8');
 
       // Make copyright year dynamic
       const currentYear = new Date().getFullYear();
-      content = content.replace(
-        /© \d{4} Postolio/,
-        `© ${currentYear} Postolio`,
-      );
+      content = content.replace(/© \d{4} Postolio/, `© ${currentYear} Postolio`);
 
       // Check if client accepts HTML
-      const acceptsHtml = request.headers.accept?.includes("text/html");
+      const acceptsHtml = request.headers.accept?.includes('text/html');
 
       if (acceptsHtml) {
         // Return HTML version
@@ -181,39 +173,36 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
 </html>
         `;
 
-        reply.type("text/html").send(htmlContent);
+        reply.type('text/html').send(htmlContent);
       } else {
         // Return markdown content
-        reply.type("text/plain").send(content);
+        reply.type('text/plain').send(content);
       }
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      fastify.log.error({ message }, "Error serving data deletion page:");
-      reply
-        .code(500)
-        .send({ error: "Failed to load data deletion instructions" });
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      fastify.log.error({ message }, 'Error serving data deletion page:');
+      reply.code(500).send({ error: 'Failed to load data deletion instructions' });
     }
   });
 
   // Public deletion request endpoint (for unauthenticated users)
-  fastify.post("/data-deletion-request", async (request, reply) => {
+  fastify.post('/data-deletion-request', async (request, reply) => {
     const body = request.body as DeletionRequest;
 
     // Input validation
-    if (!body.email || typeof body.email !== "string") {
-      return reply.code(400).send({ error: "Valid email address is required" });
+    if (!body.email || typeof body.email !== 'string') {
+      return reply.code(400).send({ error: 'Valid email address is required' });
     }
 
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(body.email)) {
-      return reply.code(400).send({ error: "Invalid email format" });
+      return reply.code(400).send({ error: 'Invalid email format' });
     }
 
     // Validate reason if provided
     if (body.reason && !Object.keys(DELETION_REASONS).includes(body.reason)) {
-      return reply.code(400).send({ error: "Invalid deletion reason" });
+      return reply.code(400).send({ error: 'Invalid deletion reason' });
     }
 
     try {
@@ -223,12 +212,12 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
 
       if (!user) {
         return reply.code(404).send({
-          error: "No account found with this email address",
+          error: 'No account found with this email address',
         });
       }
 
       // Generate verification token
-      const verificationToken = crypto.randomBytes(32).toString("hex");
+      const verificationToken = crypto.randomBytes(32).toString('hex');
       void verificationToken; // placeholder until persistence/email implemented
 
       // TODO: Store verification token in Redis with 24-hour expiration
@@ -240,21 +229,20 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: "Verification email sent. Please check your inbox.",
+        message: 'Verification email sent. Please check your inbox.',
       });
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      fastify.log.error({ message }, "Data deletion request error:");
-      reply.code(500).send({ error: "Failed to process deletion request" });
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      fastify.log.error({ message }, 'Data deletion request error:');
+      reply.code(500).send({ error: 'Failed to process deletion request' });
     }
   });
 
   // Authenticated user account deletion
-  fastify.delete("/account", async (request, reply) => {
+  fastify.delete('/account', async (request, reply) => {
     const authHeader = request.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      return reply.code(401).send({ error: "Authentication required" });
+    if (!authHeader?.startsWith('Bearer ')) {
+      return reply.code(401).send({ error: 'Authentication required' });
     }
 
     const token = authHeader.substring(7);
@@ -277,7 +265,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
         data: {
           deletedAt,
           deletionReason: reason
-            ? `${DELETION_REASONS[reason]}${feedback ? `: ${feedback}` : ""}`
+            ? `${DELETION_REASONS[reason]}${feedback ? `: ${feedback}` : ''}`
             : null,
           scheduledDeletion,
           // Clear sensitive tokens but keep password for recovery
@@ -293,30 +281,26 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
           scheduledDeletionDate: scheduledDeletion,
           email: user.email,
         },
-        scheduledDeletion.getTime() - Date.now(),
+        scheduledDeletion.getTime() - Date.now()
       ); // Delay until scheduled date
 
       // Send deletion confirmation email
-      await EmailService.sendDeletionConfirmation(
-        user.email,
-        scheduledDeletion,
-      );
+      await EmailService.sendDeletionConfirmation(user.email, scheduledDeletion);
 
       return reply.send({
         success: true,
-        message: "Account scheduled for deletion",
+        message: 'Account scheduled for deletion',
         recoveryDeadline: scheduledDeletion.toISOString(),
       });
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      fastify.log.error({ message }, "Account deletion error:");
-      reply.code(500).send({ error: "Failed to delete account" });
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      fastify.log.error({ message }, 'Account deletion error:');
+      reply.code(500).send({ error: 'Failed to delete account' });
     }
   });
 
   // Account recovery endpoint (within 30 days)
-  fastify.post("/account-recovery", async (request, reply) => {
+  fastify.post('/account-recovery', async (request, reply) => {
     const { email, password } = request.body as {
       email: string;
       password: string;
@@ -328,22 +312,21 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
       });
 
       if (!user || !user.deletedAt) {
-        return reply.code(404).send({ error: "No deleted account found" });
+        return reply.code(404).send({ error: 'No deleted account found' });
       }
 
       // Check if within 30-day recovery period
       const now = new Date();
       if (user.scheduledDeletion && now > user.scheduledDeletion) {
         return reply.code(410).send({
-          error:
-            "Recovery period has expired. Account has been permanently deleted.",
+          error: 'Recovery period has expired. Account has been permanently deleted.',
         });
       }
 
       // Verify password before allowing account recovery
       const passwordHash = user.password;
       if (!passwordHash || !(await bcrypt.compare(password, passwordHash))) {
-        return reply.code(401).send({ error: "Invalid password" });
+        return reply.code(401).send({ error: 'Invalid password' });
       }
 
       // Recover the account
@@ -358,25 +341,24 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        message: "Account successfully recovered",
+        message: 'Account successfully recovered',
       });
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      fastify.log.error({ message }, "Account recovery error:");
-      reply.code(500).send({ error: "Failed to recover account" });
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      fastify.log.error({ message }, 'Account recovery error:');
+      reply.code(500).send({ error: 'Failed to recover account' });
     }
   });
 
   // Meta/Instagram deletion callback
-  fastify.post("/meta-deletion-callback", async (request, reply) => {
+  fastify.post('/meta-deletion-callback', async (request, reply) => {
     const body = request.body as MetaDeletionCallback;
 
     try {
       // Parse and verify the signed request from Meta
-      const requestParts = body.signed_request.split(".");
+      const requestParts = body.signed_request.split('.');
       if (requestParts.length !== 2) {
-        return reply.code(400).send({ error: "Invalid signed request format" });
+        return reply.code(400).send({ error: 'Invalid signed request format' });
       }
 
       const encodedSig = requestParts[0]!;
@@ -384,32 +366,32 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
 
       // Verify signature
       if (!process.env.FACEBOOK_APP_SECRET) {
-        fastify.log.error("FACEBOOK_APP_SECRET not configured");
-        return reply.code(400).send({ error: "Invalid request" });
+        fastify.log.error('FACEBOOK_APP_SECRET not configured');
+        return reply.code(400).send({ error: 'Invalid request' });
       }
 
       const expectedSig = crypto
-        .createHmac("sha256", process.env.FACEBOOK_APP_SECRET)
+        .createHmac('sha256', process.env.FACEBOOK_APP_SECRET)
         .update(payload)
-        .digest("base64")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=/g, "");
+        .digest('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
 
       // Use timing-safe comparison to prevent timing attacks
-      const expectedSigBuffer = Buffer.from(expectedSig, "utf8");
-      const receivedSigBuffer = Buffer.from(encodedSig, "utf8");
+      const expectedSigBuffer = Buffer.from(expectedSig, 'utf8');
+      const receivedSigBuffer = Buffer.from(encodedSig, 'utf8');
 
       if (
         expectedSigBuffer.length !== receivedSigBuffer.length ||
         !crypto.timingSafeEqual(expectedSigBuffer, receivedSigBuffer)
       ) {
-        fastify.log.warn("Invalid Meta signature received");
-        return reply.code(401).send({ error: "Invalid signature" });
+        fastify.log.warn('Invalid Meta signature received');
+        return reply.code(401).send({ error: 'Invalid signature' });
       }
 
       // Decode payload
-      const data = JSON.parse(Buffer.from(payload, "base64").toString());
+      const data = JSON.parse(Buffer.from(payload, 'base64').toString());
 
       // Find user by Instagram ID
       if (data.user_id) {
@@ -427,7 +409,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
             where: { id: user.id },
             data: {
               deletedAt,
-              deletionReason: "Instagram data deletion request",
+              deletionReason: 'Instagram data deletion request',
               scheduledDeletion,
               instagramToken: null,
               instagramId: null,
@@ -438,24 +420,21 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
       }
 
       // Return confirmation URL as required by Meta
-      const confirmationUrl = `${process.env.APP_URL || "https://postolio.example"}/legal/data-deletion-confirmation?id=${data.user_id}`;
+      const confirmationUrl = `${process.env.APP_URL || 'https://postolio.example'}/legal/data-deletion-confirmation?id=${data.user_id}`;
 
       return reply.send({
         url: confirmationUrl,
-        confirmation_code: crypto.randomBytes(16).toString("hex"),
+        confirmation_code: crypto.randomBytes(16).toString('hex'),
       });
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "An unknown error occurred";
-      fastify.log.error({ message }, "Meta deletion callback error:");
-      reply
-        .code(500)
-        .send({ error: "Failed to process Meta deletion request" });
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      fastify.log.error({ message }, 'Meta deletion callback error:');
+      reply.code(500).send({ error: 'Failed to process Meta deletion request' });
     }
   });
 
   // Get deletion reasons (for frontend survey)
-  fastify.get("/deletion-reasons", async (request, reply) => {
+  fastify.get('/deletion-reasons', async (request, reply) => {
     return reply.send({
       reasons: Object.entries(DELETION_REASONS).map(([key, value]) => ({
         id: key,

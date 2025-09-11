@@ -1,13 +1,7 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  type ReactNode,
-} from "react";
-import { getUserTimezone } from "../lib/timezone";
-import { useAuthStore } from "../stores/authStore";
-import { apiClient } from "../lib/api";
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { getUserTimezone } from '../lib/timezone';
+import { useAuthStore } from '../stores/authStore';
+import { apiClient } from '../lib/api';
 
 interface TimezoneContextType {
   // Current timezone being used
@@ -22,14 +16,12 @@ interface TimezoneContextType {
   refreshTimezone: () => Promise<void>;
 }
 
-const TimezoneContext = createContext<TimezoneContextType | undefined>(
-  undefined,
-);
+const TimezoneContext = createContext<TimezoneContextType | undefined>(undefined);
 
 export const useTimezone = () => {
   const context = useContext(TimezoneContext);
   if (!context) {
-    throw new Error("useTimezone must be used within a TimezoneProvider");
+    throw new Error('useTimezone must be used within a TimezoneProvider');
   }
   return context;
 };
@@ -38,16 +30,12 @@ interface TimezoneProviderProps {
   children: ReactNode;
 }
 
-export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({
-  children,
-}) => {
+export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) => {
   const { user, getToken } = useAuthStore();
   const token = getToken();
   const [timezone, setTimezoneState] = useState<string>(getUserTimezone());
   const [isAutoDetected, setIsAutoDetected] = useState<boolean>(true);
-  const [brandTimezones, setBrandTimezones] = useState<Map<string, string>>(
-    new Map(),
-  );
+  const [brandTimezones, setBrandTimezones] = useState<Map<string, string>>(new Map());
 
   // Initialize timezone on mount and when user changes
   useEffect(() => {
@@ -64,7 +52,7 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({
       // Send detected timezone to backend via header
       if (token) {
         // This will be included in all API requests via our api client
-        window.localStorage.setItem("userTimezone", detected);
+        window.localStorage.setItem('userTimezone', detected);
       }
     }
   }, [user, token]);
@@ -83,18 +71,18 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({
   const setTimezone = async (newTimezone: string, isAuto: boolean = false) => {
     // Validate timezone before setting
     if (!isAuto && !isValidTimezone(newTimezone)) {
-      throw new Error("Invalid timezone provided");
+      throw new Error('Invalid timezone provided');
     }
 
     // Store previous values for rollback
     const previousTimezone = timezone;
     const previousIsAutoDetected = isAutoDetected;
-    const previousLocalStorage = window.localStorage.getItem("userTimezone");
+    const previousLocalStorage = window.localStorage.getItem('userTimezone');
 
     // Update local state optimistically
     setTimezoneState(newTimezone);
     setIsAutoDetected(isAuto);
-    window.localStorage.setItem("userTimezone", newTimezone);
+    window.localStorage.setItem('userTimezone', newTimezone);
 
     // Update user settings on backend if token is present (sync both auto and manual timezones)
     if (token) {
@@ -108,15 +96,13 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({
         setTimezoneState(previousTimezone);
         setIsAutoDetected(previousIsAutoDetected);
         if (previousLocalStorage) {
-          window.localStorage.setItem("userTimezone", previousLocalStorage);
+          window.localStorage.setItem('userTimezone', previousLocalStorage);
         } else {
-          window.localStorage.removeItem("userTimezone");
+          window.localStorage.removeItem('userTimezone');
         }
 
         // Re-throw error for caller to handle
-        throw error instanceof Error
-          ? error
-          : new Error("Failed to update timezone");
+        throw error instanceof Error ? error : new Error('Failed to update timezone');
       }
     }
   };
@@ -139,10 +125,7 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({
         return brandTz;
       } catch (error) {
         // Log error but don't throw - fallback to user timezone
-        console.warn(
-          `Failed to fetch brand timezone for ${brandId}, using user timezone`,
-          error,
-        );
+        console.warn(`Failed to fetch brand timezone for ${brandId}, using user timezone`, error);
       }
     }
 
@@ -166,7 +149,7 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({
           }
         }
       } catch (error) {
-        console.error("Error refreshing timezone:", error);
+        console.error('Error refreshing timezone:', error);
       }
     }
   };
@@ -184,9 +167,5 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({
     refreshTimezone,
   };
 
-  return (
-    <TimezoneContext.Provider value={value}>
-      {children}
-    </TimezoneContext.Provider>
-  );
+  return <TimezoneContext.Provider value={value}>{children}</TimezoneContext.Provider>;
 };

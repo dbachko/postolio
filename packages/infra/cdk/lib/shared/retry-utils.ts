@@ -3,13 +3,13 @@
  * Implements reliability patterns for the Content Scheduler
  */
 
-import { Logger } from "@aws-lambda-powertools/logger";
-import { Metrics, MetricUnit } from "@aws-lambda-powertools/metrics";
+import { Logger } from '@aws-lambda-powertools/logger';
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 
-const logger = new Logger({ serviceName: "retry-utils" });
+const logger = new Logger({ serviceName: 'retry-utils' });
 const metrics = new Metrics({
-  namespace: "ContentScheduler",
-  serviceName: "retry-utils",
+  namespace: 'ContentScheduler',
+  serviceName: 'retry-utils',
 });
 
 /**
@@ -28,9 +28,7 @@ export interface RetryConfig {
 /**
  * Default retry configuration
  */
-const DEFAULT_RETRY_CONFIG: Required<
-  Omit<RetryConfig, "retryableErrors" | "onRetry">
-> = {
+const DEFAULT_RETRY_CONFIG: Required<Omit<RetryConfig, 'retryableErrors' | 'onRetry'>> = {
   maxRetries: 3,
   baseDelayMs: 1000,
   maxDelayMs: 30000,
@@ -46,31 +44,31 @@ export const PLATFORM_RETRY_CONFIGS: Record<string, RetryConfig> = {
     maxRetries: 3,
     baseDelayMs: 2000,
     maxDelayMs: 60000,
-    retryableErrors: ["ERR_RATE_LIMITED", "ERR_TEMPORARY_FAILURE"],
+    retryableErrors: ['ERR_RATE_LIMITED', 'ERR_TEMPORARY_FAILURE'],
   },
   tiktok: {
     maxRetries: 4,
     baseDelayMs: 1500,
     maxDelayMs: 45000,
-    retryableErrors: ["ECONNRESET", "ETIMEDOUT", "ERR_RATE_LIMITED"],
+    retryableErrors: ['ECONNRESET', 'ETIMEDOUT', 'ERR_RATE_LIMITED'],
   },
   youtube: {
     maxRetries: 5,
     baseDelayMs: 1000,
     maxDelayMs: 30000,
-    retryableErrors: ["quotaExceeded", "rateLimitExceeded", "backendError"],
+    retryableErrors: ['quotaExceeded', 'rateLimitExceeded', 'backendError'],
   },
   facebook: {
     maxRetries: 3,
     baseDelayMs: 2000,
     maxDelayMs: 40000,
-    retryableErrors: ["ERR_RATE_LIMITED", "ERR_TEMPORARY_UNAVAILABLE"],
+    retryableErrors: ['ERR_RATE_LIMITED', 'ERR_TEMPORARY_UNAVAILABLE'],
   },
   linkedin: {
     maxRetries: 3,
     baseDelayMs: 3000,
     maxDelayMs: 60000,
-    retryableErrors: ["ERR_RATE_LIMITED", "ERR_SERVICE_UNAVAILABLE"],
+    retryableErrors: ['ERR_RATE_LIMITED', 'ERR_SERVICE_UNAVAILABLE'],
   },
 };
 
@@ -79,12 +77,7 @@ export const PLATFORM_RETRY_CONFIGS: Record<string, RetryConfig> = {
  */
 function isRetryableError(error: Error, retryableErrors?: string[]): boolean {
   // Always retry on network errors
-  const networkErrors = [
-    "ECONNRESET",
-    "ETIMEDOUT",
-    "ENOTFOUND",
-    "ECONNREFUSED",
-  ];
+  const networkErrors = ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNREFUSED'];
   if (networkErrors.some((code) => error.message.includes(code))) {
     return true;
   }
@@ -113,13 +106,10 @@ function calculateDelay(
   baseDelayMs: number,
   maxDelayMs: number,
   exponentialBase: number,
-  jitter: boolean,
+  jitter: boolean
 ): number {
   // Calculate exponential delay
-  let delay = Math.min(
-    baseDelayMs * Math.pow(exponentialBase, attempt - 1),
-    maxDelayMs,
-  );
+  let delay = Math.min(baseDelayMs * Math.pow(exponentialBase, attempt - 1), maxDelayMs);
 
   // Add jitter to prevent thundering herd
   if (jitter) {
@@ -135,62 +125,46 @@ function calculateDelay(
  */
 export async function retryWithBackoff<T>(
   operation: () => Promise<T>,
-  config?: RetryConfig,
+  config?: RetryConfig
 ): Promise<T> {
   const finalConfig = { ...DEFAULT_RETRY_CONFIG, ...config };
-  const {
-    maxRetries,
-    baseDelayMs,
-    maxDelayMs,
-    exponentialBase,
-    jitter,
-    retryableErrors,
-    onRetry,
-  } = finalConfig;
+  const { maxRetries, baseDelayMs, maxDelayMs, exponentialBase, jitter, retryableErrors, onRetry } =
+    finalConfig;
 
   let lastError: Error | undefined;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      logger.debug("Attempting operation", {
+      logger.debug('Attempting operation', {
         attempt,
         maxRetries: maxRetries + 1,
       });
       const result = await operation();
 
       if (attempt > 1) {
-        logger.info("Operation succeeded after retry", { attempt });
-        metrics.addMetric("RetrySuccess", MetricUnit.Count, 1);
+        logger.info('Operation succeeded after retry', { attempt });
+        metrics.addMetric('RetrySuccess', MetricUnit.Count, 1);
       }
 
       return result;
     } catch (error) {
       lastError = error as Error;
-      logger.error("Operation failed", { error: lastError, attempt });
+      logger.error('Operation failed', { error: lastError, attempt });
 
       // Check if we should retry
-      if (
-        attempt > maxRetries ||
-        !isRetryableError(lastError, retryableErrors)
-      ) {
-        logger.error("Max retries exceeded or non-retryable error", {
+      if (attempt > maxRetries || !isRetryableError(lastError, retryableErrors)) {
+        logger.error('Max retries exceeded or non-retryable error', {
           attempt,
           maxRetries,
           error: lastError.message,
         });
-        metrics.addMetric("RetryExhausted", MetricUnit.Count, 1);
+        metrics.addMetric('RetryExhausted', MetricUnit.Count, 1);
         throw lastError;
       }
 
       // Calculate delay
-      const delay = calculateDelay(
-        attempt,
-        baseDelayMs,
-        maxDelayMs,
-        exponentialBase,
-        jitter,
-      );
-      logger.info("Retrying after delay", { attempt, delayMs: delay });
+      const delay = calculateDelay(attempt, baseDelayMs, maxDelayMs, exponentialBase, jitter);
+      logger.info('Retrying after delay', { attempt, delayMs: delay });
 
       // Call retry callback if provided
       if (onRetry) {
@@ -198,7 +172,7 @@ export async function retryWithBackoff<T>(
       }
 
       // Record retry metric
-      metrics.addMetric("RetryAttempt", MetricUnit.Count, 1);
+      metrics.addMetric('RetryAttempt', MetricUnit.Count, 1);
 
       // Wait before retrying
       await new Promise((resolve) => setTimeout(resolve, delay));
@@ -208,7 +182,7 @@ export async function retryWithBackoff<T>(
   if (lastError) {
     throw lastError;
   } else {
-    throw new Error("No error captured during retries");
+    throw new Error('No error captured during retries');
   }
 }
 
@@ -216,9 +190,9 @@ export async function retryWithBackoff<T>(
  * Circuit breaker state
  */
 enum CircuitState {
-  CLOSED = "CLOSED",
-  OPEN = "OPEN",
-  HALF_OPEN = "HALF_OPEN",
+  CLOSED = 'CLOSED',
+  OPEN = 'OPEN',
+  HALF_OPEN = 'HALF_OPEN',
 }
 
 /**
@@ -240,13 +214,8 @@ export class CircuitBreaker {
   private failures = 0;
   private successes = 0;
   private lastFailureTime = 0;
-  private readonly config: Required<
-    Omit<CircuitBreakerConfig, "onStateChange">
-  >;
-  private readonly onStateChange?: (
-    oldState: CircuitState,
-    newState: CircuitState,
-  ) => void;
+  private readonly config: Required<Omit<CircuitBreakerConfig, 'onStateChange'>>;
+  private readonly onStateChange?: (oldState: CircuitState, newState: CircuitState) => void;
 
   constructor(config?: CircuitBreakerConfig) {
     this.config = {
@@ -265,9 +234,9 @@ export class CircuitBreaker {
     // Check if circuit is open
     if (this.state === CircuitState.OPEN) {
       if (Date.now() - this.lastFailureTime < this.config.timeout) {
-        logger.warn("Circuit breaker is open, rejecting request");
-        metrics.addMetric("CircuitBreakerRejection", MetricUnit.Count, 1);
-        throw new Error("Circuit breaker is open");
+        logger.warn('Circuit breaker is open, rejecting request');
+        metrics.addMetric('CircuitBreakerRejection', MetricUnit.Count, 1);
+        throw new Error('Circuit breaker is open');
       }
       // Transition to half-open
       this.setState(CircuitState.HALF_OPEN);
@@ -297,7 +266,7 @@ export class CircuitBreaker {
       this.failures = 0; // Reset failures on success
     }
 
-    metrics.addMetric("CircuitBreakerSuccess", MetricUnit.Count, 1);
+    metrics.addMetric('CircuitBreakerSuccess', MetricUnit.Count, 1);
   }
 
   /**
@@ -317,7 +286,7 @@ export class CircuitBreaker {
       this.setState(CircuitState.OPEN);
     }
 
-    metrics.addMetric("CircuitBreakerFailure", MetricUnit.Count, 1);
+    metrics.addMetric('CircuitBreakerFailure', MetricUnit.Count, 1);
   }
 
   /**
@@ -327,7 +296,7 @@ export class CircuitBreaker {
     const oldState = this.state;
     this.state = newState;
 
-    logger.info("Circuit breaker state changed", { oldState, newState });
+    logger.info('Circuit breaker state changed', { oldState, newState });
     metrics.addMetric(`CircuitBreakerState${newState}`, MetricUnit.Count, 1);
 
     if (this.onStateChange) {
@@ -341,7 +310,7 @@ export class CircuitBreaker {
   private reset(): void {
     this.failures = 0;
     this.successes = 0;
-    logger.info("Circuit breaker reset");
+    logger.info('Circuit breaker reset');
   }
 
   /**
@@ -374,11 +343,11 @@ const circuitBreakers = new Map<string, CircuitBreaker>();
 export function getPlatformCircuitBreaker(platform: string): CircuitBreaker {
   if (!circuitBreakers.has(platform)) {
     const config: CircuitBreakerConfig = {
-      failureThreshold: platform === "youtube" ? 10 : 5, // YouTube is more tolerant
+      failureThreshold: platform === 'youtube' ? 10 : 5, // YouTube is more tolerant
       successThreshold: 2,
       timeout: 60000,
       onStateChange: (oldState, newState) => {
-        logger.warn("Platform circuit breaker state changed", {
+        logger.warn('Platform circuit breaker state changed', {
           platform,
           oldState,
           newState,
@@ -396,12 +365,12 @@ export function getPlatformCircuitBreaker(platform: string): CircuitBreaker {
 export async function retryWithCircuitBreaker<T>(
   operation: () => Promise<T>,
   platform: string,
-  retryConfig?: RetryConfig,
+  retryConfig?: RetryConfig
 ): Promise<T> {
   const circuitBreaker = getPlatformCircuitBreaker(platform);
 
   return retryWithBackoff(
     () => circuitBreaker.execute(operation),
-    retryConfig || PLATFORM_RETRY_CONFIGS[platform],
+    retryConfig || PLATFORM_RETRY_CONFIGS[platform]
   );
 }

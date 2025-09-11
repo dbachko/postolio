@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Mail, X, CheckCircle, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import { TIMEOUTS } from "@/constants/timeouts";
+import { useState, useEffect } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Mail, X, CheckCircle, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { TIMEOUTS } from '@/constants/timeouts';
 
 interface VerificationStatus {
   verified: boolean;
@@ -23,10 +23,10 @@ export function EmailVerificationBanner() {
 
   const checkVerificationStatus = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch("/api/auth/email/verification-status", {
+      const response = await fetch('/api/auth/email/verification-status', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -44,7 +44,7 @@ export function EmailVerificationBanner() {
         }
       }
     } catch (error) {
-      console.error("Failed to check verification status:", error);
+      console.error('Failed to check verification status:', error);
     } finally {
       setIsLoading(false);
     }
@@ -53,20 +53,20 @@ export function EmailVerificationBanner() {
   const sendVerificationEmail = async () => {
     setIsSending(true);
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("/api/auth/email/send-verification", {
-        method: "POST",
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/auth/email/send-verification', {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        toast.success("Verification email sent!", {
-          description: "Check your inbox for the verification link.",
+        toast.success('Verification email sent!', {
+          description: 'Check your inbox for the verification link.',
           icon: <CheckCircle className="text-green-500" />,
           duration: TIMEOUTS.TOAST_DURATION,
         });
@@ -74,13 +74,13 @@ export function EmailVerificationBanner() {
         // Update status to reflect that email was sent
         setStatus((prev) => (prev ? { ...prev, canResend: false } : null));
       } else {
-        toast.error("Failed to send email", {
-          description: data.error || "Please try again later",
+        toast.error('Failed to send email', {
+          description: data.error || 'Please try again later',
         });
       }
     } catch {
-      toast.error("Network error", {
-        description: "Failed to send verification email",
+      toast.error('Network error', {
+        description: 'Failed to send verification email',
       });
     } finally {
       setIsSending(false);
@@ -92,7 +92,7 @@ export function EmailVerificationBanner() {
     // Remember dismissal in localStorage
     if (status?.email) {
       const dismissedKey = `email-verification-dismissed-${status.email}`;
-      localStorage.setItem(dismissedKey, "true");
+      localStorage.setItem(dismissedKey, 'true');
     }
   };
 
@@ -102,20 +102,19 @@ export function EmailVerificationBanner() {
   }
 
   return (
-    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border-b border-blue-200 dark:border-blue-900">
-      <Alert className="max-w-7xl mx-auto border-blue-200 bg-transparent">
+    <div className="border-b border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+      <Alert className="mx-auto max-w-7xl border-blue-200 bg-transparent">
         <Mail className="h-4 w-4 text-blue-600" />
         <AlertDescription className="flex items-center justify-between">
           <div className="flex-1">
-            <span className="text-blue-800 dark:text-blue-200 font-medium">
+            <span className="font-medium text-blue-800 dark:text-blue-200">
               Verify your email to unlock all features
             </span>
-            <span className="text-blue-700 dark:text-blue-300 ml-2">
-              Check your inbox for {status.email} or request a new verification
-              email.
+            <span className="ml-2 text-blue-700 dark:text-blue-300">
+              Check your inbox for {status.email} or request a new verification email.
             </span>
           </div>
-          <div className="flex items-center gap-2 ml-4">
+          <div className="ml-4 flex items-center gap-2">
             {status.canResend && (
               <Button
                 size="sm"
@@ -146,7 +145,7 @@ export function EmailVerificationBanner() {
               size="sm"
               variant="ghost"
               onClick={handleDismiss}
-              className="hover:bg-blue-100 dark:hover:bg-blue-900/30 p-1"
+              className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30"
             >
               <X className="h-4 w-4" />
             </Button>

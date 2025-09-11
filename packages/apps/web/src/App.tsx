@@ -1,45 +1,37 @@
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Removed GoogleOAuthProvider - using isolated implementation
-import { Toaster } from "@/components/ui/sonner";
-import { useAuthStore } from "./stores/authStore";
-import { TimezoneProvider } from "./contexts/TimezoneContext";
-import { ConnectionStatusProvider } from "./components/ConnectionStatus";
-import {
-  ConnectionIndicator,
-  MobileConnectionBanner,
-} from "./components/ConnectionIndicator";
-import { UltraThinLayout as Layout } from "./components/UltraThinLayout";
-import { Dashboard } from "./pages/Dashboard";
-import { Login } from "./pages/Login";
-import { Register } from "./pages/Register";
-import { Brands } from "./pages/Brands";
-import Analytics from "./pages/Analytics";
-import InstagramAnalytics from "./pages/InstagramAnalytics";
-import Engagement from "./pages/Engagement";
-import { Growth } from "./pages/Growth";
-import { AIFeatures } from "./pages/AIFeatures";
-import { Campaigns } from "./pages/Campaigns";
-import { Content } from "./pages/Content";
-import { Settings } from "./pages/Settings";
-import { PrivacyPolicy } from "./pages/PrivacyPolicy";
-import { TermsOfService } from "./pages/TermsOfService";
-import { DataDeletion } from "./pages/DataDeletion";
-import { MagicLinkVerify } from "./pages/MagicLinkVerify";
-import { EmailVerify } from "./pages/EmailVerify";
-import { PasswordReset } from "./pages/PasswordReset";
-import { useEffect, lazy, Suspense } from "react";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-const PostDetail = lazy(() => import("./pages/PostDetail"));
+import { Toaster } from '@/components/ui/sonner';
+import { useAuthStore } from './stores/authStore';
+import { TimezoneProvider } from './contexts/TimezoneContext';
+import { ConnectionStatusProvider } from './components/ConnectionStatus';
+import { ConnectionIndicator, MobileConnectionBanner } from './components/ConnectionIndicator';
+import { UltraThinLayout as Layout } from './components/UltraThinLayout';
+import { Dashboard } from './pages/Dashboard';
+import { Login } from './pages/Login';
+import { Register } from './pages/Register';
+import { Brands } from './pages/Brands';
+import Analytics from './pages/Analytics';
+import InstagramAnalytics from './pages/InstagramAnalytics';
+import Engagement from './pages/Engagement';
+import { Growth } from './pages/Growth';
+import { AIFeatures } from './pages/AIFeatures';
+import { Campaigns } from './pages/Campaigns';
+import { Content } from './pages/Content';
+import { Settings } from './pages/Settings';
+import { PrivacyPolicy } from './pages/PrivacyPolicy';
+import { TermsOfService } from './pages/TermsOfService';
+import { DataDeletion } from './pages/DataDeletion';
+import { MagicLinkVerify } from './pages/MagicLinkVerify';
+import { EmailVerify } from './pages/EmailVerify';
+import { PasswordReset } from './pages/PasswordReset';
+import { useEffect, lazy, Suspense } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary';
+const PostDetail = lazy(() => import('./pages/PostDetail'));
 const CreatePost = lazy(() =>
-  import("./pages/CreatePost").then((module) => ({
+  import('./pages/CreatePost').then((module) => ({
     default: module.CreatePost,
-  })),
+  }))
 );
 
 const queryClient = new QueryClient();
@@ -49,8 +41,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-32 w-32 animate-spin rounded-full border-b-2 border-gray-900"></div>
       </div>
     );
   }
@@ -218,8 +210,8 @@ function App() {
                         <ErrorBoundary>
                           <Suspense
                             fallback={
-                              <div className="flex items-center justify-center min-h-[400px]">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                              <div className="flex min-h-[400px] items-center justify-center">
+                                <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
                               </div>
                             }
                           >
@@ -238,8 +230,8 @@ function App() {
                         <ErrorBoundary>
                           <Suspense
                             fallback={
-                              <div className="flex items-center justify-center min-h-[400px]">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                              <div className="flex min-h-[400px] items-center justify-center">
+                                <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
                               </div>
                             }
                           >

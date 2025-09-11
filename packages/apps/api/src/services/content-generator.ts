@@ -1,8 +1,8 @@
-import { randomUUID } from "crypto";
-import OpenAI from "openai";
-import type { StyleProfile } from "./ai.js";
-import { generateMidjourneyImage } from "./midjourney.js";
-import { uploadImageToS3, type ImageMetadata } from "./s3-image.js";
+import { randomUUID } from 'crypto';
+import OpenAI from 'openai';
+import type { StyleProfile } from './ai.js';
+import { generateMidjourneyImage } from './midjourney.js';
+import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -10,9 +10,9 @@ const openai = new OpenAI({
 
 // Validate OpenAI API key on startup
 if (!process.env.OPENAI_API_KEY) {
-  console.error("WARNING: OPENAI_API_KEY environment variable is not set");
+  console.error('WARNING: OPENAI_API_KEY environment variable is not set');
 } else {
-  console.log("OpenAI API key is configured");
+  console.log('OpenAI API key is configured');
 }
 
 export interface ContentGenerationRequest {
@@ -53,7 +53,7 @@ export interface ContentBatch {
 export async function generateInstagramContent(
   styleProfile: StyleProfile,
   brandName: string,
-  request: ContentGenerationRequest,
+  request: ContentGenerationRequest
 ): Promise<GeneratedContent[]> {
   const { count, theme, style } = request;
 
@@ -70,8 +70,8 @@ Generate ${count} unique Instagram posts that:
 4. Use hashtags aligned with the refined content themes
 5. Include image generation prompts that reflect the brand's aesthetic preferences
 
-${theme ? `Focus on theme: ${theme}` : ""}
-${style ? `Use style: ${style}` : ""}
+${theme ? `Focus on theme: ${theme}` : ''}
+${style ? `Use style: ${style}` : ''}
 
 Content Guidelines:
 
@@ -80,22 +80,22 @@ Return a JSON array with objects containing:
 Ensure content reflects the AI-learned user preferences and is Instagram-optimized.`;
 
   try {
-    console.log("Making OpenAI API call...");
+    console.log('Making OpenAI API call...');
 
     // Create a timeout promise
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("OpenAI API call timeout")), 30000); // 30 second timeout
+      setTimeout(() => reject(new Error('OpenAI API call timeout')), 30000); // 30 second timeout
     });
 
     const completionPromise = openai.chat.completions.create({
-      model: "gpt-4o",
+      model: 'gpt-4o',
       messages: [
         {
-          role: "system",
+          role: 'system',
           content: systemPrompt,
         },
         {
-          role: "user",
+          role: 'user',
           content: `Generate ${count} Instagram posts for ${brandName}.`,
         },
       ],
@@ -109,17 +109,17 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
       completionPromise,
       timeoutPromise,
     ])) as OpenAIChatCompletion;
-    console.log("OpenAI API call completed successfully");
+    console.log('OpenAI API call completed successfully');
 
     const content = completion.choices[0]?.message?.content;
     if (!content) {
-      throw new Error("No content received from OpenAI");
+      throw new Error('No content received from OpenAI');
     }
 
     // Clean and parse the JSON response (remove markdown code blocks if present)
     let cleanContent = content
-      .replace(/```json\s*/gi, "")
-      .replace(/```\s*$/gi, "")
+      .replace(/```json\s*/gi, '')
+      .replace(/```\s*$/gi, '')
       .trim();
 
     // Try to extract JSON if it's embedded in other text
@@ -128,35 +128,24 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
       cleanContent = jsonMatch[0];
     }
 
-    console.log(
-      "Cleaned content for parsing:",
-      cleanContent.substring(0, 200) + "...",
-    );
+    console.log('Cleaned content for parsing:', cleanContent.substring(0, 200) + '...');
     const generatedContent = JSON.parse(cleanContent) as GeneratedContent[];
 
     // Validate structure
     if (!Array.isArray(generatedContent) || generatedContent.length !== count) {
-      throw new Error("Invalid content structure received");
+      throw new Error('Invalid content structure received');
     }
 
     // Validate that each item has required fields
     for (let i = 0; i < generatedContent.length; i++) {
       const item = generatedContent[i];
-      if (
-        !item?.caption ||
-        typeof item.caption !== "string" ||
-        item.caption.trim().length === 0
-      ) {
+      if (!item?.caption || typeof item.caption !== 'string' || item.caption.trim().length === 0) {
         console.error(`Item ${i} has invalid caption:`, item);
-        throw new Error(
-          `Generated content item ${i + 1} has missing or empty caption`,
-        );
+        throw new Error(`Generated content item ${i + 1} has missing or empty caption`);
       }
       if (!item?.hashtags || !Array.isArray(item.hashtags)) {
         console.error(`Item ${i} has invalid hashtags:`, item);
-        throw new Error(
-          `Generated content item ${i + 1} has missing or invalid hashtags`,
-        );
+        throw new Error(`Generated content item ${i + 1} has missing or invalid hashtags`);
       }
     }
 
@@ -167,17 +156,15 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
           const imageUrl = await generateBrandContentImage(
             item.imagePrompt || item.caption,
             styleProfile,
-            brandName,
+            brandName
           );
           console.log(
-            "Generated image for post:",
+            'Generated image for post:',
             JSON.stringify({
-              prompt:
-                (item.imagePrompt || item.caption)?.substring(0, 50) + "...",
-              imageUrl:
-                imageUrl?.substring(0, 80) + "..." || "Failed to generate",
+              prompt: (item.imagePrompt || item.caption)?.substring(0, 50) + '...',
+              imageUrl: imageUrl?.substring(0, 80) + '...' || 'Failed to generate',
               urlLength: imageUrl?.length || 0,
-            }),
+            })
           );
 
           // Upload to S3 if image was generated successfully
@@ -188,7 +175,7 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
                 brandId: request.brandId,
                 campaignId: undefined as string | undefined, // Will be set when content is saved
                 generatedAt: new Date(),
-                source: imageUrl.includes("dalle") ? "dalle3" : "midjourney",
+                source: imageUrl.includes('dalle') ? 'dalle3' : 'midjourney',
                 originalPrompt: item.imagePrompt || item.caption,
               };
 
@@ -202,10 +189,7 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
                 retentionExpiresAt: s3Result.retentionExpiresAt,
               };
             } catch (s3Error) {
-              console.error(
-                "Failed to upload image to S3, keeping external URL:",
-                s3Error,
-              );
+              console.error('Failed to upload image to S3, keeping external URL:', s3Error);
               // If S3 upload fails, fall back to the original external URL
               return {
                 ...item,
@@ -217,49 +201,43 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
           // No image was generated
           return item;
         } catch (error) {
-          console.error("Brand image generation failed:", error);
+          console.error('Brand image generation failed:', error);
           return item; // Return without image if generation fails
         }
-      }),
+      })
     );
 
     return contentWithImages;
   } catch (error) {
-    console.error("Content generation error:", error);
+    console.error('Content generation error:', error);
 
     // Check for specific OpenAI errors that should fail hard
     if (error instanceof Error) {
-      if (
-        error.message.includes("API key") ||
-        error.message.includes("authentication")
-      ) {
-        console.error(
-          "OpenAI API key error - check OPENAI_API_KEY environment variable",
-        );
-        throw new Error("OpenAI API key configuration error");
+      if (error.message.includes('API key') || error.message.includes('authentication')) {
+        console.error('OpenAI API key error - check OPENAI_API_KEY environment variable');
+        throw new Error('OpenAI API key configuration error');
       }
-      if (error.message.includes("insufficient_quota")) {
-        console.error("OpenAI API quota exceeded");
-        throw new Error("OpenAI API quota exceeded");
+      if (error.message.includes('insufficient_quota')) {
+        console.error('OpenAI API quota exceeded');
+        throw new Error('OpenAI API quota exceeded');
       }
-      if (error.message.includes("rate_limit")) {
-        console.error("OpenAI API rate limit exceeded");
-        throw new Error("OpenAI API rate limit exceeded");
+      if (error.message.includes('rate_limit')) {
+        console.error('OpenAI API rate limit exceeded');
+        throw new Error('OpenAI API rate limit exceeded');
       }
     }
 
     // Return fallback content for other errors
-    console.warn("Falling back to template content due to OpenAI error");
+    console.warn('Falling back to template content due to OpenAI error');
     return Array.from({ length: count }, (_, i) => ({
       caption: `Generated content ${
         i + 1
       } for ${brandName}. This engaging post captures the essence of your brand while connecting with your audience. Share your story and inspire your followers! 🌟`,
-      hashtags: ["inspiration", "lifestyle", "authentic", "community", "brand"],
-      imagePrompt: `A beautiful ${(styleProfile.aestheticStyle || "modern").toLowerCase()} image featuring ${
-        Array.isArray(styleProfile.colorPalette) &&
-        styleProfile.colorPalette.length >= 2
+      hashtags: ['inspiration', 'lifestyle', 'authentic', 'community', 'brand'],
+      imagePrompt: `A beautiful ${(styleProfile.aestheticStyle || 'modern').toLowerCase()} image featuring ${
+        Array.isArray(styleProfile.colorPalette) && styleProfile.colorPalette.length >= 2
           ? `${styleProfile.colorPalette[0]} and ${styleProfile.colorPalette[1]}`
-          : "vibrant"
+          : 'vibrant'
       } colors`,
     }));
   }
@@ -268,46 +246,39 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
 export async function generateContentImage(prompt: string): Promise<string> {
   try {
     const response = await openai.images.generate({
-      model: "dall-e-3",
+      model: 'dall-e-3',
       prompt: `Create a high-quality Instagram-worthy image: ${prompt}. Professional photography style, visually appealing, social media optimized.`,
-      size: "1024x1024",
-      quality: "hd",
+      size: '1024x1024',
+      quality: 'hd',
       n: 1,
     });
 
     const imageUrl = response.data?.[0]?.url;
     if (!imageUrl) {
-      throw new Error("No image URL received from DALL-E");
+      throw new Error('No image URL received from DALL-E');
     }
 
     return imageUrl;
   } catch (error) {
-    console.error("Image generation error:", error);
+    console.error('Image generation error:', error);
     // Return a placeholder or throw error based on requirements
-    throw new Error("Image generation failed");
+    throw new Error('Image generation failed');
   }
 }
 
 export async function generateBrandContentImage(
   prompt: string,
   styleProfile: StyleProfile,
-  brandName: string,
+  brandName: string
 ): Promise<string> {
   try {
     // Try Midjourney first for higher quality, brand-consistent images
-    console.log("Attempting Midjourney generation for brand content...");
-    const imageUrl = await generateMidjourneyImage(
-      prompt,
-      styleProfile,
-      brandName,
-    );
-    console.log("Midjourney generation successful");
+    console.log('Attempting Midjourney generation for brand content...');
+    const imageUrl = await generateMidjourneyImage(prompt, styleProfile, brandName);
+    console.log('Midjourney generation successful');
     return imageUrl;
   } catch (error) {
-    console.error(
-      "Midjourney generation failed, falling back to DALL-E:",
-      error,
-    );
+    console.error('Midjourney generation failed, falling back to DALL-E:', error);
 
     // Fallback to DALL-E with enhanced prompt that includes brand characteristics
     try {
@@ -321,7 +292,7 @@ export async function generateBrandContentImage(
       }
 
       if (colorPalette && colorPalette.length > 0) {
-        const colors = colorPalette.slice(0, 2).join(" and ");
+        const colors = colorPalette.slice(0, 2).join(' and ');
         enhancedPrompt += `, featuring ${colors} colors`;
       }
 
@@ -331,28 +302,28 @@ export async function generateBrandContentImage(
       }
 
       enhancedPrompt +=
-        ". Professional photography style, visually appealing, social media optimized.";
+        '. Professional photography style, visually appealing, social media optimized.';
 
-      console.log("Enhanced DALL-E prompt:", enhancedPrompt);
+      console.log('Enhanced DALL-E prompt:', enhancedPrompt);
 
       const response = await openai.images.generate({
-        model: "dall-e-3",
+        model: 'dall-e-3',
         prompt: enhancedPrompt,
-        size: "1024x1024",
-        quality: "hd",
+        size: '1024x1024',
+        quality: 'hd',
         n: 1,
       });
 
       const imageUrl = response.data?.[0]?.url;
       if (!imageUrl) {
-        throw new Error("No image URL received from DALL-E fallback");
+        throw new Error('No image URL received from DALL-E fallback');
       }
 
-      console.log("DALL-E fallback generation successful");
+      console.log('DALL-E fallback generation successful');
       return imageUrl;
     } catch (dalleError) {
-      console.error("Both Midjourney and DALL-E failed:", dalleError);
-      throw new Error("Image generation failed for both Midjourney and DALL-E");
+      console.error('Both Midjourney and DALL-E failed:', dalleError);
+      throw new Error('Image generation failed for both Midjourney and DALL-E');
     }
   }
 }
@@ -361,15 +332,11 @@ export async function generateContentBatch(
   brandId: string,
   styleProfile: StyleProfile,
   brandName: string,
-  requests: ContentGenerationRequest[],
+  requests: ContentGenerationRequest[]
 ): Promise<ContentBatch[]> {
   const batches = await Promise.all(
     requests.map(async (request) => {
-      const content = await generateInstagramContent(
-        styleProfile,
-        brandName,
-        request,
-      );
+      const content = await generateInstagramContent(styleProfile, brandName, request);
 
       return {
         id: `batch_${Date.now()}_${randomUUID()}`,
@@ -381,12 +348,12 @@ export async function generateContentBatch(
           style: request.style || null,
           generationParams: {
             count: request.count,
-            model: "gpt-4o",
-            imageModel: "dall-e-3",
+            model: 'gpt-4o',
+            imageModel: 'dall-e-3',
           },
         },
       };
-    }),
+    })
   );
 
   return batches;

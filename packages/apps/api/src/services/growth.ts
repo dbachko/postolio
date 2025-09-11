@@ -1,13 +1,13 @@
-import { PrismaClient } from "@postolio/database";
+import { PrismaClient } from '@postolio/database';
 
 const prisma = new PrismaClient();
 
 interface GrowthOpportunity {
-  type: "content" | "engagement" | "hashtags" | "timing" | "collaboration";
+  type: 'content' | 'engagement' | 'hashtags' | 'timing' | 'collaboration';
   title: string;
   description: string;
-  impact: "low" | "medium" | "high";
-  effort: "low" | "medium" | "high";
+  impact: 'low' | 'medium' | 'high';
+  effort: 'low' | 'medium' | 'high';
   priority: number;
 }
 
@@ -46,14 +46,14 @@ export class GrowthService {
       where: { id: brandId },
       include: {
         content: {
-          orderBy: { createdAt: "desc" },
+          orderBy: { createdAt: 'desc' },
           take: 30,
         },
       },
     });
 
     if (!brand) {
-      throw new Error("Brand not found");
+      throw new Error('Brand not found');
     }
 
     // Analyze content performance
@@ -70,91 +70,77 @@ export class GrowthService {
     };
   }
 
-  async generateGrowthStrategies(
-    brandId: string,
-    focus?: string,
-  ): Promise<GrowthStrategy[]> {
+  async generateGrowthStrategies(brandId: string, focus?: string): Promise<GrowthStrategy[]> {
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
     });
 
     if (!brand) {
-      throw new Error("Brand not found");
+      throw new Error('Brand not found');
     }
 
     const strategies: GrowthStrategy[] = [];
 
     // Content-focused strategies
-    if (!focus || focus === "content") {
+    if (!focus || focus === 'content') {
       strategies.push({
-        id: "content-diversification",
-        title: "Content Diversification Strategy",
-        description:
-          "Expand content types to reach new audiences and increase engagement",
-        category: "Content",
+        id: 'content-diversification',
+        title: 'Content Diversification Strategy',
+        description: 'Expand content types to reach new audiences and increase engagement',
+        category: 'Content',
         actions: [
-          "Create video content (Reels, Stories)",
-          "Develop carousel posts with educational content",
-          "Share behind-the-scenes content",
-          "Post user-generated content campaigns",
-          "Create interactive polls and Q&A sessions",
+          'Create video content (Reels, Stories)',
+          'Develop carousel posts with educational content',
+          'Share behind-the-scenes content',
+          'Post user-generated content campaigns',
+          'Create interactive polls and Q&A sessions',
         ],
-        timeframe: "3-6 months",
-        expectedImpact: "25-40% increase in engagement",
-        resources: [
-          "Video editing tools",
-          "Content calendar",
-          "Analytics tracking",
-        ],
+        timeframe: '3-6 months',
+        expectedImpact: '25-40% increase in engagement',
+        resources: ['Video editing tools', 'Content calendar', 'Analytics tracking'],
       });
     }
 
     // Engagement-focused strategies
-    if (!focus || focus === "engagement") {
+    if (!focus || focus === 'engagement') {
       strategies.push({
-        id: "community-building",
-        title: "Community Building & Engagement",
-        description:
-          "Build a loyal community through active engagement and relationship building",
-        category: "Engagement",
+        id: 'community-building',
+        title: 'Community Building & Engagement',
+        description: 'Build a loyal community through active engagement and relationship building',
+        category: 'Engagement',
         actions: [
-          "Respond to all comments within 2 hours",
-          "Create Instagram Stories with polls and questions",
-          "Host live Q&A sessions weekly",
-          "Collaborate with followers for content creation",
-          "Create branded hashtag campaigns",
+          'Respond to all comments within 2 hours',
+          'Create Instagram Stories with polls and questions',
+          'Host live Q&A sessions weekly',
+          'Collaborate with followers for content creation',
+          'Create branded hashtag campaigns',
         ],
-        timeframe: "2-4 months",
-        expectedImpact: "30-50% increase in community engagement",
-        resources: [
-          "Community management tools",
-          "Engagement tracking",
-          "Live streaming setup",
-        ],
+        timeframe: '2-4 months',
+        expectedImpact: '30-50% increase in community engagement',
+        resources: ['Community management tools', 'Engagement tracking', 'Live streaming setup'],
       });
     }
 
     // Growth-focused strategies
-    if (!focus || focus === "growth") {
+    if (!focus || focus === 'growth') {
       strategies.push({
-        id: "strategic-partnerships",
-        title: "Strategic Partnerships & Collaborations",
-        description:
-          "Leverage partnerships to expand reach and tap into new audiences",
-        category: "Growth",
+        id: 'strategic-partnerships',
+        title: 'Strategic Partnerships & Collaborations',
+        description: 'Leverage partnerships to expand reach and tap into new audiences',
+        category: 'Growth',
         actions: [
-          "Identify complementary brands for collaboration",
-          "Partner with micro-influencers in your niche",
-          "Guest post on other accounts",
-          "Cross-promote with industry partners",
-          "Join relevant Instagram pod communities",
+          'Identify complementary brands for collaboration',
+          'Partner with micro-influencers in your niche',
+          'Guest post on other accounts',
+          'Cross-promote with industry partners',
+          'Join relevant Instagram pod communities',
         ],
-        timeframe: "4-8 months",
-        expectedImpact: "50-100% increase in follower growth",
+        timeframe: '4-8 months',
+        expectedImpact: '50-100% increase in follower growth',
         resources: [
-          "Partnership outreach templates",
-          "Influencer database",
-          "Collaboration guidelines",
+          'Partnership outreach templates',
+          'Influencer database',
+          'Collaboration guidelines',
         ],
       });
     }
@@ -162,10 +148,7 @@ export class GrowthService {
     return strategies;
   }
 
-  async getGrowthMetrics(
-    brandId: string,
-    period: number = 30,
-  ): Promise<GrowthMetrics> {
+  async getGrowthMetrics(brandId: string, period: number = 30): Promise<GrowthMetrics> {
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
       include: {
@@ -175,13 +158,13 @@ export class GrowthService {
               gte: new Date(Date.now() - period * 24 * 60 * 60 * 1000),
             },
           },
-          orderBy: { createdAt: "asc" },
+          orderBy: { createdAt: 'asc' },
         },
       },
     });
 
     if (!brand) {
-      throw new Error("Brand not found");
+      throw new Error('Brand not found');
     }
 
     // Calculate growth metrics
@@ -190,9 +173,9 @@ export class GrowthService {
     const engagement = this.calculateEngagementRate();
 
     // Generate trend data
-    const followerTrend = this.generateTrendData(period, "followers");
-    const engagementTrend = this.generateTrendData(period, "engagement");
-    const reachTrend = this.generateTrendData(period, "reach");
+    const followerTrend = this.generateTrendData(period, 'followers');
+    const engagementTrend = this.generateTrendData(period, 'engagement');
+    const reachTrend = this.generateTrendData(period, 'reach');
 
     return {
       growthRate,
@@ -205,51 +188,48 @@ export class GrowthService {
     };
   }
 
-  private identifyOpportunities(brand: {
-    content: unknown[];
-  }): GrowthOpportunity[] {
+  private identifyOpportunities(brand: { content: unknown[] }): GrowthOpportunity[] {
     const opportunities: GrowthOpportunity[] = [];
 
     // Content opportunities
     if (brand.content.length < 10) {
       opportunities.push({
-        type: "content",
-        title: "Increase Content Frequency",
-        description: "Post more consistently to maintain audience engagement",
-        impact: "high",
-        effort: "medium",
+        type: 'content',
+        title: 'Increase Content Frequency',
+        description: 'Post more consistently to maintain audience engagement',
+        impact: 'high',
+        effort: 'medium',
         priority: 90,
       });
     }
 
     // Engagement opportunities
     opportunities.push({
-      type: "engagement",
-      title: "Optimize Posting Times",
-      description:
-        "Analyze audience activity to post when followers are most active",
-      impact: "medium",
-      effort: "low",
+      type: 'engagement',
+      title: 'Optimize Posting Times',
+      description: 'Analyze audience activity to post when followers are most active',
+      impact: 'medium',
+      effort: 'low',
       priority: 75,
     });
 
     // Hashtag opportunities
     opportunities.push({
-      type: "hashtags",
-      title: "Hashtag Strategy Optimization",
-      description: "Research and use trending, niche-specific hashtags",
-      impact: "medium",
-      effort: "low",
+      type: 'hashtags',
+      title: 'Hashtag Strategy Optimization',
+      description: 'Research and use trending, niche-specific hashtags',
+      impact: 'medium',
+      effort: 'low',
       priority: 70,
     });
 
     // Collaboration opportunities
     opportunities.push({
-      type: "collaboration",
-      title: "Influencer Partnerships",
-      description: "Partner with micro-influencers in your industry",
-      impact: "high",
-      effort: "high",
+      type: 'collaboration',
+      title: 'Influencer Partnerships',
+      description: 'Partner with micro-influencers in your industry',
+      impact: 'high',
+      effort: 'high',
       priority: 85,
     });
 
@@ -258,7 +238,7 @@ export class GrowthService {
 
   private calculateGrowthScore(
     brand: { content: unknown[] },
-    opportunities: GrowthOpportunity[],
+    opportunities: GrowthOpportunity[]
   ): number {
     let score = 50; // Base score
 
@@ -267,25 +247,19 @@ export class GrowthService {
     else if (brand.content.length > 10) score += 10;
 
     // Opportunity impact
-    const highImpactOpportunities = opportunities.filter(
-      (o) => o.impact === "high",
-    ).length;
+    const highImpactOpportunities = opportunities.filter((o) => o.impact === 'high').length;
     score += highImpactOpportunities * 5;
 
     return Math.min(100, Math.max(0, score));
   }
 
-  private generateRecommendations(
-    opportunities: GrowthOpportunity[],
-  ): string[] {
-    return opportunities
-      .slice(0, 3)
-      .map((opp) => `${opp.title}: ${opp.description}`);
+  private generateRecommendations(opportunities: GrowthOpportunity[]): string[] {
+    return opportunities.slice(0, 3).map((opp) => `${opp.title}: ${opp.description}`);
   }
 
   private prioritizeActions(opportunities: GrowthOpportunity[]): string[] {
     return opportunities
-      .filter((opp) => opp.effort === "low" || opp.impact === "high")
+      .filter((opp) => opp.effort === 'low' || opp.impact === 'high')
       .slice(0, 5)
       .map((opp) => opp.title);
   }
@@ -310,8 +284,7 @@ export class GrowthService {
 
   private generateTrendData(period: number, type: string): number[] {
     const data: number[] = [];
-    let baseValue =
-      type === "followers" ? 1000 : type === "engagement" ? 3.5 : 2000;
+    let baseValue = type === 'followers' ? 1000 : type === 'engagement' ? 3.5 : 2000;
 
     for (let i = 0; i < Math.min(period, 30); i++) {
       baseValue += (Math.random() - 0.4) * (baseValue * 0.02);

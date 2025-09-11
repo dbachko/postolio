@@ -1,15 +1,9 @@
-import { memo, useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
-import { Button } from "./ui/button";
-import { Progress } from "./ui/progress";
-import { Badge } from "./ui/badge";
-import { CheckCircle, RefreshCw, XCircle, AlertCircle } from "lucide-react";
+import { memo, useEffect, useState } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
+import { Button } from './ui/button';
+import { Progress } from './ui/progress';
+import { Badge } from './ui/badge';
+import { CheckCircle, RefreshCw, XCircle, AlertCircle } from 'lucide-react';
 
 interface RegenerationProgressProps {
   isOpen: boolean;
@@ -20,7 +14,7 @@ interface RegenerationProgressProps {
 }
 
 interface ProgressData {
-  status: "pending" | "processing" | "completed" | "failed";
+  status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
   total: number;
   completed: number;
@@ -29,13 +23,7 @@ interface ProgressData {
 }
 
 const RegenerationProgress = memo(
-  ({
-    isOpen,
-    onClose,
-    jobId,
-    totalContent,
-    onComplete,
-  }: RegenerationProgressProps) => {
+  ({ isOpen, onClose, jobId, totalContent, onComplete }: RegenerationProgressProps) => {
     const [progressData, setProgressData] = useState<ProgressData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isPolling, setIsPolling] = useState(false);
@@ -50,36 +38,30 @@ const RegenerationProgress = memo(
       setIsPolling(true);
       const pollProgress = async () => {
         try {
-          const response = await fetch(
-            `/api/campaigns/regeneration-jobs/${jobId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
-              },
+          const response = await fetch(`/api/campaigns/regeneration-jobs/${jobId}`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
             },
-          );
+          });
 
           if (!response.ok) {
-            throw new Error("Failed to fetch progress");
+            throw new Error('Failed to fetch progress');
           }
 
           const result = await response.json();
           setProgressData(result.data);
 
           // Stop polling if completed or failed
-          if (
-            result.data.status === "completed" ||
-            result.data.status === "failed"
-          ) {
+          if (result.data.status === 'completed' || result.data.status === 'failed') {
             setIsPolling(false);
-            if (result.data.status === "completed" && onComplete) {
+            if (result.data.status === 'completed' && onComplete) {
               // Delay callback to show completion state
               setTimeout(onComplete, 2000);
             }
           }
         } catch (err) {
-          console.error("Progress polling error:", err);
-          setError(err instanceof Error ? err.message : "Unknown error");
+          console.error('Progress polling error:', err);
+          setError(err instanceof Error ? err.message : 'Unknown error');
           setIsPolling(false);
         }
       };
@@ -97,55 +79,54 @@ const RegenerationProgress = memo(
     }, [isOpen, jobId, onComplete]);
 
     const getStatusIcon = () => {
-      if (!progressData)
-        return <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />;
+      if (!progressData) return <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />;
 
       switch (progressData.status) {
-        case "completed":
-          return <CheckCircle className="w-5 h-5 text-green-600" />;
-        case "failed":
-          return <XCircle className="w-5 h-5 text-red-600" />;
-        case "processing":
-          return <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />;
+        case 'completed':
+          return <CheckCircle className="h-5 w-5 text-green-600" />;
+        case 'failed':
+          return <XCircle className="h-5 w-5 text-red-600" />;
+        case 'processing':
+          return <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />;
         default:
-          return <AlertCircle className="w-5 h-5 text-yellow-600" />;
+          return <AlertCircle className="h-5 w-5 text-yellow-600" />;
       }
     };
 
     const getStatusText = () => {
-      if (!progressData) return "Initializing...";
+      if (!progressData) return 'Initializing...';
 
       switch (progressData.status) {
-        case "pending":
-          return "Queued for processing...";
-        case "processing":
-          return "Regenerating content...";
-        case "completed":
-          return "Regeneration completed!";
-        case "failed":
-          return "Regeneration failed";
+        case 'pending':
+          return 'Queued for processing...';
+        case 'processing':
+          return 'Regenerating content...';
+        case 'completed':
+          return 'Regeneration completed!';
+        case 'failed':
+          return 'Regeneration failed';
         default:
-          return "Unknown status";
+          return 'Unknown status';
       }
     };
 
     const getStatusColor = () => {
-      if (!progressData) return "bg-blue-50 border-blue-200";
+      if (!progressData) return 'bg-blue-50 border-blue-200';
 
       switch (progressData.status) {
-        case "completed":
-          return "bg-green-50 border-green-200";
-        case "failed":
-          return "bg-red-50 border-red-200";
-        case "processing":
-          return "bg-blue-50 border-blue-200";
+        case 'completed':
+          return 'bg-green-50 border-green-200';
+        case 'failed':
+          return 'bg-red-50 border-red-200';
+        case 'processing':
+          return 'bg-blue-50 border-blue-200';
         default:
-          return "bg-yellow-50 border-yellow-200";
+          return 'bg-yellow-50 border-yellow-200';
       }
     };
 
     const estimatedTimeRemaining = () => {
-      if (!progressData || progressData.status !== "processing") return null;
+      if (!progressData || progressData.status !== 'processing') return null;
 
       const remaining = progressData.total - progressData.completed;
       const avgTimePerItem = 7.5; // seconds
@@ -174,72 +155,59 @@ const RegenerationProgress = memo(
                     : `0/${totalContent}`}
                 </span>
               </div>
-              <Progress
-                value={progressData ? progressData.progress : 0}
-                className="w-full"
-              />
-              <div className="text-xs text-gray-500 text-center">
-                {progressData ? `${Math.round(progressData.progress)}%` : "0%"}{" "}
-                complete
+              <Progress value={progressData ? progressData.progress : 0} className="w-full" />
+              <div className="text-center text-xs text-gray-500">
+                {progressData ? `${Math.round(progressData.progress)}%` : '0%'} complete
               </div>
             </div>
 
             {/* Status Card */}
-            <div className={`rounded-lg p-4 border ${getStatusColor()}`}>
+            <div className={`rounded-lg border p-4 ${getStatusColor()}`}>
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="font-medium">{getStatusText()}</h4>
-                  {progressData?.status === "processing" && (
-                    <p className="text-sm text-gray-600 mt-1">
-                      {progressData.completed} posts completed •{" "}
+                  {progressData?.status === 'processing' && (
+                    <p className="mt-1 text-sm text-gray-600">
+                      {progressData.completed} posts completed •{' '}
                       {progressData.total - progressData.completed} remaining
                       {estimatedTimeRemaining() && (
-                        <span className="block">
-                          ~{estimatedTimeRemaining()} seconds remaining
-                        </span>
+                        <span className="block">~{estimatedTimeRemaining()} seconds remaining</span>
                       )}
                     </p>
                   )}
-                  {progressData?.status === "completed" && (
-                    <p className="text-sm text-green-700 mt-1">
-                      All {progressData.completed} posts have been successfully
-                      regenerated
+                  {progressData?.status === 'completed' && (
+                    <p className="mt-1 text-sm text-green-700">
+                      All {progressData.completed} posts have been successfully regenerated
                     </p>
                   )}
-                  {progressData?.status === "failed" && (
-                    <p className="text-sm text-red-700 mt-1">
+                  {progressData?.status === 'failed' && (
+                    <p className="mt-1 text-sm text-red-700">
                       Regeneration failed. You can try again or contact support.
                     </p>
                   )}
                 </div>
                 <Badge
-                  variant={
-                    progressData?.status === "completed"
-                      ? "default"
-                      : "secondary"
-                  }
+                  variant={progressData?.status === 'completed' ? 'default' : 'secondary'}
                   className={
-                    progressData?.status === "completed"
-                      ? "bg-green-100 text-green-800"
-                      : progressData?.status === "failed"
-                        ? "bg-red-100 text-red-800"
-                        : progressData?.status === "processing"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-yellow-100 text-yellow-800"
+                    progressData?.status === 'completed'
+                      ? 'bg-green-100 text-green-800'
+                      : progressData?.status === 'failed'
+                        ? 'bg-red-100 text-red-800'
+                        : progressData?.status === 'processing'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
                   }
                 >
-                  {progressData?.status || "pending"}
+                  {progressData?.status || 'pending'}
                 </Badge>
               </div>
             </div>
 
             {/* Error Details */}
             {progressData?.errors && progressData.errors.length > 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <h4 className="text-sm font-medium text-red-900 mb-2">
-                  Errors:
-                </h4>
-                <ul className="text-xs text-red-700 space-y-1">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                <h4 className="mb-2 text-sm font-medium text-red-900">Errors:</h4>
+                <ul className="space-y-1 text-xs text-red-700">
                   {progressData.errors.slice(0, 3).map((error, index) => (
                     <li key={index}>• {error}</li>
                   ))}
@@ -252,7 +220,7 @@ const RegenerationProgress = memo(
 
             {/* Generic Error */}
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
                 <p className="text-sm text-red-700">{error}</p>
               </div>
             )}
@@ -260,21 +228,19 @@ const RegenerationProgress = memo(
 
           <div className="flex justify-end">
             <Button
-              variant={
-                progressData?.status === "completed" ? "default" : "outline"
-              }
+              variant={progressData?.status === 'completed' ? 'default' : 'outline'}
               onClick={onClose}
-              disabled={isPolling && progressData?.status === "processing"}
+              disabled={isPolling && progressData?.status === 'processing'}
             >
-              {progressData?.status === "completed" ? "Done" : "Close"}
+              {progressData?.status === 'completed' ? 'Done' : 'Close'}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
     );
-  },
+  }
 );
 
-RegenerationProgress.displayName = "RegenerationProgress";
+RegenerationProgress.displayName = 'RegenerationProgress';
 
 export default RegenerationProgress;

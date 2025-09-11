@@ -1,6 +1,6 @@
-import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { rollingContentService } from "../services/rolling-content.js";
-import { getDatabaseClient } from "../config/database.js";
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { rollingContentService } from '../services/rolling-content.js';
+import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
 
@@ -10,10 +10,10 @@ interface BrandParams {
 
 function ensureAuth(
   request: FastifyRequest,
-  reply: FastifyReply,
+  reply: FastifyReply
 ): request is FastifyRequest & { user: { id: string } } {
   if (!request.user || !request.user.id) {
-    reply.code(401).send({ success: false, error: "Authentication required" });
+    reply.code(401).send({ success: false, error: 'Authentication required' });
     return false;
   }
   return true;
@@ -24,15 +24,15 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
    * Get queue status for a brand
    */
   fastify.get(
-    "/queue-status/:brandId",
+    '/queue-status/:brandId',
     {
       schema: {
         params: {
-          type: "object",
+          type: 'object',
           properties: {
-            brandId: { type: "string" },
+            brandId: { type: 'string' },
           },
-          required: ["brandId"],
+          required: ['brandId'],
         },
       },
       preHandler: fastify.authenticate,
@@ -53,7 +53,7 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
         if (!brand) {
           return reply.code(404).send({
             success: false,
-            error: "Brand not found or access denied",
+            error: 'Brand not found or access denied',
           });
         }
 
@@ -68,33 +68,33 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       } catch (error) {
-        console.error("Get queue status error:", error);
+        console.error('Get queue status error:', error);
         return reply.code(500).send({
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   /**
    * Manually trigger rolling content generation for a brand
    */
   fastify.post(
-    "/generate/:brandId",
+    '/generate/:brandId',
     {
       schema: {
         params: {
-          type: "object",
+          type: 'object',
           properties: {
-            brandId: { type: "string" },
+            brandId: { type: 'string' },
           },
-          required: ["brandId"],
+          required: ['brandId'],
         },
         body: {
-          type: "object",
+          type: 'object',
           properties: {
-            campaignId: { type: "string" },
+            campaignId: { type: 'string' },
           },
         },
       },
@@ -117,14 +117,11 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
         if (!brand) {
           return reply.code(404).send({
             success: false,
-            error: "Brand not found or access denied",
+            error: 'Brand not found or access denied',
           });
         }
 
-        const result = await rollingContentService.triggerManual(
-          brandId,
-          campaignId,
-        );
+        const result = await rollingContentService.triggerManual(brandId, campaignId);
 
         return reply.send({
           success: result.success,
@@ -137,28 +134,28 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
           ...(result.success ? {} : { error: result.message }),
         });
       } catch (error) {
-        console.error("Manual rolling generation error:", error);
+        console.error('Manual rolling generation error:', error);
         return reply.code(500).send({
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   /**
    * Check rolling generation needs for a brand
    */
   fastify.get(
-    "/check/:brandId",
+    '/check/:brandId',
     {
       schema: {
         params: {
-          type: "object",
+          type: 'object',
           properties: {
-            brandId: { type: "string" },
+            brandId: { type: 'string' },
           },
-          required: ["brandId"],
+          required: ['brandId'],
         },
       },
       preHandler: fastify.authenticate,
@@ -179,7 +176,7 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
         if (!brand) {
           return reply.code(404).send({
             success: false,
-            error: "Brand not found or access denied",
+            error: 'Brand not found or access denied',
           });
         }
 
@@ -188,8 +185,7 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
         // Check if this brand should be generating content
         await rollingContentService.checkAndGenerateContent(brandId);
 
-        const updatedQueueStatus =
-          await rollingContentService.getQueueStatus(brandId);
+        const updatedQueueStatus = await rollingContentService.getQueueStatus(brandId);
 
         return reply.send({
           success: true,
@@ -198,97 +194,83 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
             brandName: brand.name,
             before: queueStatus,
             after: updatedQueueStatus,
-            actionTaken: queueStatus.needsGeneration
-              ? "generation_triggered"
-              : "no_action_needed",
+            actionTaken: queueStatus.needsGeneration ? 'generation_triggered' : 'no_action_needed',
           },
         });
       } catch (error) {
-        console.error("Check rolling generation error:", error);
+        console.error('Check rolling generation error:', error);
         return reply.code(500).send({
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    },
+    }
   );
 
   /**
    * Get all brands' queue statuses for monitoring
    */
-  fastify.get(
-    "/overview",
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        if (!ensureAuth(request, reply)) return;
-        const userId = request.user.id;
+  fastify.get('/overview', { preHandler: fastify.authenticate }, async (request, reply) => {
+    try {
+      if (!ensureAuth(request, reply)) return;
+      const userId = request.user.id;
 
-        // Get all user's brands with Instagram integration
-        const brands = await prisma.brand.findMany({
-          where: {
-            userId,
-            instagramPageId: { not: null },
-          },
-        });
+      // Get all user's brands with Instagram integration
+      const brands = await prisma.brand.findMany({
+        where: {
+          userId,
+          instagramPageId: { not: null },
+        },
+      });
 
-        const brandStatuses = await Promise.all(
-          brands.map(async (brand) => {
-            try {
-              const queueStatus = await rollingContentService.getQueueStatus(
-                brand.id,
-              );
-              return {
-                brandId: brand.id,
-                brandName: brand.name,
-                ...queueStatus,
-                lastChecked: new Date().toISOString(),
-              };
-            } catch (error) {
-              return {
-                brandId: brand.id,
-                brandName: brand.name,
-                totalScheduled: 0,
-                daysAhead: 0,
-                needsGeneration: true,
-                minQueueSize: 7,
-                maxQueueSize: 14,
-                error: error instanceof Error ? error.message : "Unknown error",
-                lastChecked: new Date().toISOString(),
-              };
-            }
-          }),
-        );
+      const brandStatuses = await Promise.all(
+        brands.map(async (brand) => {
+          try {
+            const queueStatus = await rollingContentService.getQueueStatus(brand.id);
+            return {
+              brandId: brand.id,
+              brandName: brand.name,
+              ...queueStatus,
+              lastChecked: new Date().toISOString(),
+            };
+          } catch (error) {
+            return {
+              brandId: brand.id,
+              brandName: brand.name,
+              totalScheduled: 0,
+              daysAhead: 0,
+              needsGeneration: true,
+              minQueueSize: 7,
+              maxQueueSize: 14,
+              error: error instanceof Error ? error.message : 'Unknown error',
+              lastChecked: new Date().toISOString(),
+            };
+          }
+        })
+      );
 
-        const summary = {
-          totalBrands: brands.length,
-          brandsNeedingContent: brandStatuses.filter((b) => b.needsGeneration)
-            .length,
-          brandsWithSufficientContent: brandStatuses.filter(
-            (b) => !b.needsGeneration,
-          ).length,
-          totalScheduledPosts: brandStatuses.reduce(
-            (sum, b) => sum + (b.totalScheduled || 0),
-            0,
-          ),
-        };
+      const summary = {
+        totalBrands: brands.length,
+        brandsNeedingContent: brandStatuses.filter((b) => b.needsGeneration).length,
+        brandsWithSufficientContent: brandStatuses.filter((b) => !b.needsGeneration).length,
+        totalScheduledPosts: brandStatuses.reduce((sum, b) => sum + (b.totalScheduled || 0), 0),
+      };
 
-        return reply.send({
-          success: true,
-          data: {
-            summary,
-            brands: brandStatuses,
-          },
-        });
-      } catch (error) {
-        console.error("Get rolling content overview error:", error);
-        return reply.code(500).send({
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    },
-  );
+      return reply.send({
+        success: true,
+        data: {
+          summary,
+          brands: brandStatuses,
+        },
+      });
+    } catch (error) {
+      console.error('Get rolling content overview error:', error);
+      return reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 };
 
 export default rollingContentRoutes;

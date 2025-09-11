@@ -173,14 +173,14 @@ aws ses send-email \
 
 ```javascript
 // The EmailService automatically uses SES in production
-import { EmailService } from "./services/email.js";
+import { EmailService } from './services/email.js';
 
 // Send test email
 const result = await EmailService.sendEmail({
-  to: "user@example.com",
-  subject: "Test Email",
-  html: "<p>Test email from Postolio</p>",
-  text: "Test email from Postolio",
+  to: 'user@example.com',
+  subject: 'Test Email',
+  html: '<p>Test email from Postolio</p>',
+  text: 'Test email from Postolio',
 });
 ```
 

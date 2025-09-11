@@ -1,5 +1,5 @@
-import { Redis } from "ioredis";
-import { getRedisUrl } from "../utils/redis-url.js";
+import { Redis } from 'ioredis';
+import { getRedisUrl } from '../utils/redis-url.js';
 
 // Global Redis client instance
 let redisInstance: Redis | null = null;
@@ -28,22 +28,17 @@ class RedisService {
         maxRetriesPerRequest: 3,
       });
 
-      this.client.on("error", (err) => {
-        console.error("Redis connection error:", err);
+      this.client.on('error', (err) => {
+        console.error('Redis connection error:', err);
       });
 
-      this.client.on("connect", () => {
-        console.log(
-          `Successfully connected to Redis at ${redisUrl.replace(/\/\/.*@/, "//***@")}`,
-        );
+      this.client.on('connect', () => {
+        console.log(`Successfully connected to Redis at ${redisUrl.replace(/\/\/.*@/, '//***@')}`);
       });
 
       redisInstance = this.client;
     } catch (error) {
-      console.warn(
-        "Redis connection failed, falling back to in-memory storage:",
-        error,
-      );
+      console.warn('Redis connection failed, falling back to in-memory storage:', error);
       this.client = null;
       redisInstance = null;
     }
@@ -57,7 +52,7 @@ class RedisService {
     try {
       return await this.client.get(key);
     } catch (error) {
-      console.error("Redis GET error:", error);
+      console.error('Redis GET error:', error);
       return null;
     }
   }
@@ -75,7 +70,7 @@ class RedisService {
       }
       return true;
     } catch (error) {
-      console.error("Redis SET error:", error);
+      console.error('Redis SET error:', error);
       return false;
     }
   }
@@ -89,7 +84,7 @@ class RedisService {
       await this.client.del(key);
       return true;
     } catch (error) {
-      console.error("Redis DEL error:", error);
+      console.error('Redis DEL error:', error);
       return false;
     }
   }
@@ -106,13 +101,13 @@ class RedisService {
       }
       return count;
     } catch (error) {
-      console.error("Redis INCR error:", error);
+      console.error('Redis INCR error:', error);
       return null;
     }
   }
 
   isConnected(): boolean {
-    return this.client?.status === "ready";
+    return this.client?.status === 'ready';
   }
 
   async disconnect(): Promise<void> {
@@ -135,7 +130,7 @@ class RedisService {
       await this.client.setex(key, ttl, value);
       return true;
     } catch (error) {
-      console.error("Redis SETEX error:", error);
+      console.error('Redis SETEX error:', error);
       return false;
     }
   }

@@ -313,19 +313,19 @@ Implement enterprise-grade image storage architecture using AWS S3 + CloudFront 
 ```typescript
 // Image Storage Service Architecture
 interface ImageStorageConfig {
-  bucket: "postolio-ai-images-prod" | "postolio-ai-images-dev";
-  region: "us-east-1"; // CloudFront optimized
-  storageClass: "STANDARD" | "INTELLIGENT_TIERING";
-  encryption: "AES256";
+  bucket: 'postolio-ai-images-prod' | 'postolio-ai-images-dev';
+  region: 'us-east-1'; // CloudFront optimized
+  storageClass: 'STANDARD' | 'INTELLIGENT_TIERING';
+  encryption: 'AES256';
 }
 
 interface ImageMetadata {
   contentId: string;
   brandId: string;
   generatedAt: Date;
-  source: "dalle3" | "midjourney";
+  source: 'dalle3' | 'midjourney';
   originalPrompt: string;
-  retentionPolicy: "content-linked" | "campaign-linked" | "user-linked";
+  retentionPolicy: 'content-linked' | 'campaign-linked' | 'user-linked';
   complianceFlags: {
     gdprApplicable: boolean;
     ccpaApplicable: boolean;
@@ -339,24 +339,24 @@ interface ImageMetadata {
 // CloudFront Distribution Configuration
 interface CDNConfig {
   behaviors: {
-    "/images/*": {
-      origin: "postolio-ai-images.s3.amazonaws.com";
-      caching: "CachingOptimized";
+    '/images/*': {
+      origin: 'postolio-ai-images.s3.amazonaws.com';
+      caching: 'CachingOptimized';
       compression: true;
-      viewerProtocolPolicy: "redirect-to-https";
+      viewerProtocolPolicy: 'redirect-to-https';
     };
   };
   lambdaEdge: {
-    "origin-request": "image-format-optimizer";
-    "origin-response": "cache-control-setter";
+    'origin-request': 'image-format-optimizer';
+    'origin-response': 'cache-control-setter';
   };
 }
 
 // Automatic Format Selection
 const getOptimalFormat = (userAgent: string, acceptHeader: string) => {
-  if (acceptHeader.includes("image/avif")) return "avif";
-  if (acceptHeader.includes("image/webp")) return "webp";
-  return "jpeg";
+  if (acceptHeader.includes('image/avif')) return 'avif';
+  if (acceptHeader.includes('image/webp')) return 'webp';
+  return 'jpeg';
 };
 ```
 
@@ -549,7 +549,7 @@ interface RegionalRetentionPolicy {
 interface S3ObjectTags {
   Brand: string; // Brand ID for cost attribution
   Campaign: string; // Campaign ID for ROI tracking
-  Source: "dalle3" | "midjourney";
+  Source: 'dalle3' | 'midjourney';
   CreatedAt: string; // ISO timestamp
   Region: string; // User's region for compliance
 }
@@ -621,20 +621,15 @@ interface OptimizedImageProps {
   priority?: boolean;
 }
 
-const OptimizedImage: React.FC<OptimizedImageProps> = ({
-  src,
-  alt,
-  sizes,
-  priority,
-}) => {
-  const [format, setFormat] = useState<"avif" | "webp" | "jpeg">("jpeg");
+const OptimizedImage: React.FC<OptimizedImageProps> = ({ src, alt, sizes, priority }) => {
+  const [format, setFormat] = useState<'avif' | 'webp' | 'jpeg'>('jpeg');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Detect browser support for modern formats
     const detectFormat = async () => {
-      if (await supportsAVIF()) setFormat("avif");
-      else if (await supportsWebP()) setFormat("webp");
+      if (await supportsAVIF()) setFormat('avif');
+      else if (await supportsWebP()) setFormat('webp');
     };
     detectFormat();
   }, []);
@@ -645,11 +640,11 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
     <img
       src={optimizedSrc}
       alt={alt}
-      loading={priority ? "eager" : "lazy"}
+      loading={priority ? 'eager' : 'lazy'}
       onLoad={() => setLoading(false)}
       style={{
         opacity: loading ? 0.8 : 1,
-        transition: "opacity 0.3s ease",
+        transition: 'opacity 0.3s ease',
       }}
     />
   );
@@ -889,10 +884,10 @@ Based on stakeholder requirements, users can navigate to ANY historical month wi
 
 ```typescript
 interface HistoricalDataLoading {
-  strategy: "lazy-loading"; // Load months only when accessed
+  strategy: 'lazy-loading'; // Load months only when accessed
   cachePolicy: {
     recentMonths: 6; // Keep 6 months in memory
-    olderMonths: "on-demand"; // Load from API when requested
+    olderMonths: 'on-demand'; // Load from API when requested
   };
   pagination: {
     postsPerMonth: 100; // Initial load limit
@@ -991,9 +986,9 @@ interface DragAndDropBehavior {
   };
 
   visualFeedback: {
-    dragPreview: "ghost"; // Semi-transparent copy follows cursor
-    dropZones: "highlight"; // Valid drop targets glow
-    invalidZones: "dim"; // Invalid targets become dimmed
+    dragPreview: 'ghost'; // Semi-transparent copy follows cursor
+    dropZones: 'highlight'; // Valid drop targets glow
+    invalidZones: 'dim'; // Invalid targets become dimmed
     snapToSlot: true; // Snaps to nearest time slot
   };
 
@@ -1036,14 +1031,9 @@ interface ConflictResolution {
   };
 
   userPrompt: {
-    title: "Time Slot Conflict";
-    message: "This slot already has scheduled content";
-    options: [
-      "Replace existing post",
-      "Swap positions",
-      "Find next available slot",
-      "Cancel",
-    ];
+    title: 'Time Slot Conflict';
+    message: 'This slot already has scheduled content';
+    options: ['Replace existing post', 'Swap positions', 'Find next available slot', 'Cancel'];
   };
 }
 ```
@@ -1085,10 +1075,10 @@ Based on analysis of leading calendar platforms:
 
 ```typescript
 // React DnD Implementation
-import { DndProvider, useDrag, useDrop } from "react-dnd";
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
 
 interface DraggablePost {
-  type: "POST";
+  type: 'POST';
   data: {
     id: string;
     currentDate: Date;

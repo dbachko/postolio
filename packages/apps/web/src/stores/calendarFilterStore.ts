@@ -1,13 +1,8 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-export type ContentStatus =
-  | "draft"
-  | "scheduled"
-  | "published"
-  | "failed"
-  | "skipped";
-export type ContentType = "post" | "placeholder";
+export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
+export type ContentType = 'post' | 'placeholder';
 
 interface DateRange {
   start: Date | null;
@@ -38,9 +33,9 @@ interface CalendarFilterState {
 const initialState = {
   campaigns: [],
   statuses: [],
-  contentTypes: ["post", "placeholder"] as ContentType[],
+  contentTypes: ['post', 'placeholder'] as ContentType[],
   dateRange: { start: null, end: null },
-  searchQuery: "",
+  searchQuery: '',
 };
 
 export const useCalendarFilterStore = create<CalendarFilterState>()(
@@ -97,7 +92,7 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
       },
     }),
     {
-      name: "calendar-filters",
+      name: 'calendar-filters',
       partialize: (state) => ({
         campaigns: state.campaigns,
         statuses: state.statuses,
@@ -120,6 +115,6 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
           },
         };
       },
-    },
-  ),
+    }
+  )
 );

@@ -24,7 +24,7 @@ The migration guide includes **complete, production-ready code** for real API in
 export class RealInstagramAdapter implements PlatformAdapter {
   async publish(
     content: PlatformContent,
-    credentials: PlatformCredentials,
+    credentials: PlatformCredentials
   ): Promise<PublishResult> {
     // Full implementation with:
     // - Instagram Graph API calls
@@ -64,10 +64,7 @@ const appSecret = metadata.appSecret || process.env.FACEBOOK_APP_SECRET;
 
 ```typescript
 // aws-infrastructure/lib/lambdas/shared/secrets-manager.ts
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-} from "@aws-sdk/client-secrets-manager";
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
 export class SecretManager {
   private client = new SecretsManagerClient({});
@@ -81,9 +78,7 @@ export class SecretManager {
     }
 
     // Fetch from Secrets Manager
-    const response = await this.client.send(
-      new GetSecretValueCommand({ SecretId: secretName }),
-    );
+    const response = await this.client.send(new GetSecretValueCommand({ SecretId: secretName }));
 
     const value = JSON.parse(response.SecretString!);
 
@@ -100,11 +95,9 @@ export class SecretManager {
 // Updated token refresh
 async function refreshFacebookToken(
   currentToken: string,
-  metadata: Record<string, any>,
+  metadata: Record<string, any>
 ): Promise<RefreshResult> {
-  const secrets = await secretManager.getSecret(
-    `postolio/${ENVIRONMENT}/platform-credentials`,
-  );
+  const secrets = await secretManager.getSecret(`postolio/${ENVIRONMENT}/platform-credentials`);
   const appId = metadata.appId || secrets.FACEBOOK_APP_ID;
   const appSecret = metadata.appSecret || secrets.FACEBOOK_APP_SECRET;
   // ... rest of implementation
@@ -115,26 +108,26 @@ async function refreshFacebookToken(
 
 ```typescript
 // Create secrets in CDK
-const platformSecrets = new secretsmanager.Secret(this, "PlatformSecrets", {
+const platformSecrets = new secretsmanager.Secret(this, 'PlatformSecrets', {
   secretName: `postolio/${environment}/platform-credentials`,
-  description: "Platform API credentials",
+  description: 'Platform API credentials',
   generateSecretString: {
     secretStringTemplate: JSON.stringify({
-      FACEBOOK_APP_ID: "",
-      FACEBOOK_APP_SECRET: "",
-      LINKEDIN_CLIENT_ID: "",
-      LINKEDIN_CLIENT_SECRET: "",
+      FACEBOOK_APP_ID: '',
+      FACEBOOK_APP_SECRET: '',
+      LINKEDIN_CLIENT_ID: '',
+      LINKEDIN_CLIENT_SECRET: '',
     }),
-    generateStringKey: "random",
+    generateStringKey: 'random',
   },
 });
 
 // Grant Lambda access
 tokenRotationLambda.addToRolePolicy(
   new iam.PolicyStatement({
-    actions: ["secretsmanager:GetSecretValue"],
+    actions: ['secretsmanager:GetSecretValue'],
     resources: [platformSecrets.secretArn],
-  }),
+  })
 );
 ```
 
@@ -147,28 +140,18 @@ tokenRotationLambda.addToRolePolicy(
 ### Current (Placeholder)
 
 ```typescript
-async function storeRefreshedToken(
-  userId: string,
-  brandId: string,
-  token: any,
-): Promise<void> {
-  console.log("Would store refreshed token:", { userId, brandId, token });
+async function storeRefreshedToken(userId: string, brandId: string, token: any): Promise<void> {
+  console.log('Would store refreshed token:', { userId, brandId, token });
 }
 ```
 
 ### Complete Implementation
 
 ```typescript
-async function storeRefreshedToken(
-  userId: string,
-  brandId: string,
-  token: any,
-): Promise<void> {
+async function storeRefreshedToken(userId: string, brandId: string, token: any): Promise<void> {
   // Encrypt tokens
   const encryptedAccessToken = await encryptData(token.accessToken);
-  const encryptedRefreshToken = token.refreshToken
-    ? await encryptData(token.refreshToken)
-    : null;
+  const encryptedRefreshToken = token.refreshToken ? await encryptData(token.refreshToken) : null;
 
   // Calculate expiry
   const expiresAt = Date.now() + token.expiresIn * 1000;
@@ -180,21 +163,21 @@ async function storeRefreshedToken(
       Item: {
         pk: `${userId}#tiktok`,
         sk: brandId,
-        platform: "tiktok",
+        platform: 'tiktok',
         encryptedAccessToken,
         encryptedRefreshToken,
         expiresAt,
         lastRefreshed: new Date().toISOString(),
         ttl: Math.floor(expiresAt / 1000) + 86400, // TTL 1 day after expiry
       },
-    }),
+    })
   );
 
   // Emit event for monitoring
-  await sendEvent("postolio.token", "token.refreshed", {
+  await sendEvent('postolio.token', 'token.refreshed', {
     userId,
     brandId,
-    platform: "tiktok",
+    platform: 'tiktok',
     expiresAt,
   });
 }
@@ -205,10 +188,10 @@ async function encryptData(plainText: string): Promise<string> {
     new EncryptCommand({
       KeyId: KMS_KEY_ID,
       Plaintext: Buffer.from(plainText),
-    }),
+    })
   );
 
-  return Buffer.from(result.CiphertextBlob!).toString("base64");
+  return Buffer.from(result.CiphertextBlob!).toString('base64');
 }
 ```
 
