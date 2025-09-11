@@ -120,14 +120,12 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 class ApiClient {
   private token: string | null = null;
-  private csrfToken: string | null = null;
   private cachedTimezone: string | null = null;
   private timezoneLastUpdated = 0;
   private static TIMEZONE_CACHE_DURATION = 30 * 1000; // 30 seconds
 
   constructor() {
     this.token = localStorage.getItem("auth_token");
-    this.csrfToken = localStorage.getItem("csrf_token");
   }
 
   setToken(token: string) {
@@ -140,21 +138,39 @@ class ApiClient {
     localStorage.removeItem("auth_token");
   }
 
-  async ensureCSRFToken(): Promise<void> {
-    if (!this.csrfToken) {
+  private getCSRFTokenFromCookie(): string | null {
+    // Parse cookies to find CSRF token
+    const cookies = document.cookie.split(';');
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'csrf-token') {
+        return decodeURIComponent(value);
+      }
+    }
+    return null;
+  }
+
+  async ensureCSRFToken(): Promise<string | null> {
+    // First check if we already have a CSRF token in cookies
+    let csrfToken = this.getCSRFTokenFromCookie();
+    
+    if (!csrfToken) {
+      // Fetch a new CSRF token
       try {
         const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
           credentials: "include",
         });
         if (response.ok) {
-          const data = await response.json();
-          this.csrfToken = data.token;
-          localStorage.setItem("csrf_token", data.token);
+          // The token is now set as a cookie by the server
+          // Read it from the cookie
+          csrfToken = this.getCSRFTokenFromCookie();
         }
       } catch (error) {
         console.warn("Failed to fetch CSRF token:", error);
       }
     }
+    
+    return csrfToken;
   }
 
   private getTimezone(): string {
@@ -182,11 +198,6 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {},
   ): Promise<T> {
-    // Ensure CSRF token for non-GET requests
-    if (options.method && ["POST", "PUT", "DELETE", "PATCH"].includes(options.method)) {
-      await this.ensureCSRFToken();
-    }
-
     const url = `${API_BASE_URL}${endpoint}`;
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string>),
@@ -202,8 +213,11 @@ class ApiClient {
     }
 
     // Include CSRF token for state-changing requests
-    if (this.csrfToken && options.method && ["POST", "PUT", "DELETE", "PATCH"].includes(options.method)) {
-      headers["X-CSRF-Token"] = this.csrfToken;
+    if (options.method && ["POST", "PUT", "DELETE", "PATCH"].includes(options.method)) {
+      const csrfToken = await this.ensureCSRFToken();
+      if (csrfToken) {
+        headers["X-CSRF-Token"] = csrfToken;
+      }
     }
 
     // Include timezone header for all requests (cached for performance)
@@ -222,22 +236,27 @@ class ApiClient {
         try {
           const errorData = JSON.parse(errorText);
           if (errorData.code === "CSRF_TOKEN_MISSING" || errorData.code === "CSRF_TOKEN_INVALID") {
-            // Clear and retry with fresh CSRF token
-            this.csrfToken = null;
-            localStorage.removeItem("csrf_token");
-            await this.ensureCSRFToken();
+            // Clear cookies by fetching a new CSRF token
+            const refreshResponse = await fetch(`${API_BASE_URL}/api/csrf-token`, {
+              credentials: "include",
+            });
             
-            // Retry the request once with new token
-            if (this.csrfToken) {
-              headers["X-CSRF-Token"] = this.csrfToken;
-              const retryResponse = await fetch(url, {
-                ...options,
-                headers,
-                credentials: "include",
-              });
+            if (refreshResponse.ok) {
+              // Get the new token from cookie
+              const newCsrfToken = this.getCSRFTokenFromCookie();
               
-              if (retryResponse.ok) {
-                return retryResponse.json();
+              // Retry the request once with new token
+              if (newCsrfToken) {
+                headers["X-CSRF-Token"] = newCsrfToken;
+                const retryResponse = await fetch(url, {
+                  ...options,
+                  headers,
+                  credentials: "include",
+                });
+                
+                if (retryResponse.ok) {
+                  return retryResponse.json();
+                }
               }
             }
           }
