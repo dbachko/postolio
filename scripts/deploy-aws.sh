@@ -350,18 +350,18 @@ build_and_push_image() {
     GOOGLE_CLIENT_ID=$(extract_json_value "$SECRET_JSON" "googleClientId")
     FACEBOOK_APP_ID=$(extract_json_value "$SECRET_JSON" "facebookAppId")
     
-    # Build with OAuth credentials if available
+    # Build with OAuth credentials if available - pass both VITE_ and non-VITE_ versions
     BUILD_ARGS=""
     if [ -n "$GOOGLE_CLIENT_ID" ]; then
         echo -e "${GREEN}✅ Google Client ID found${NC}"
-        BUILD_ARGS="$BUILD_ARGS --build-arg VITE_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID"
+        BUILD_ARGS="$BUILD_ARGS --build-arg VITE_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID --build-arg GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID"
     else
         echo -e "${YELLOW}⚠️  Google Client ID not found${NC}"
     fi
     
     if [ -n "$FACEBOOK_APP_ID" ]; then
         echo -e "${GREEN}✅ Facebook App ID found${NC}"
-        BUILD_ARGS="$BUILD_ARGS --build-arg VITE_FACEBOOK_APP_ID=$FACEBOOK_APP_ID"
+        BUILD_ARGS="$BUILD_ARGS --build-arg VITE_FACEBOOK_APP_ID=$FACEBOOK_APP_ID --build-arg FACEBOOK_APP_ID=$FACEBOOK_APP_ID"
     else
         echo -e "${YELLOW}⚠️  Facebook App ID not found${NC}"
     fi

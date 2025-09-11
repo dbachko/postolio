@@ -170,6 +170,8 @@ export class EmailService {
         )
       : [typeof options.to === "string" ? options.to : options.to?.address];
 
+    console.log(`Sending email via SES from ${from} to ${to.join(", ")}`);
+
     const command = new SendEmailCommand({
       Source: from,
       Destination: {
@@ -209,7 +211,13 @@ export class EmailService {
       throw new Error("Both SES and SMTP are unavailable");
     });
 
-    await sesCircuitBreaker.fire(command);
+    try {
+      const result = await sesCircuitBreaker.fire(command);
+      console.log(`Email sent successfully via SES: ${result.$metadata?.requestId}`);
+    } catch (error) {
+      console.error("Failed to send email via SES:", error);
+      throw error;
+    }
   }
 
   /**
@@ -250,6 +258,7 @@ export class EmailService {
       headers["Importance"] = "Normal";
 
       // Use AWS SES in production, SMTP in development
+      console.log(`Email service configured to use: ${this.useAWSSES ? 'AWS SES' : 'SMTP'}`);
       if (this.useAWSSES) {
         await this.sendViaSES(options);
       } else {

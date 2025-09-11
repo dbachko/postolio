@@ -35,12 +35,16 @@ COPY --from=installer /app/packages ./packages
 COPY --from=installer /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/full/ ./
 
-# Build args for Vite environment
+# Build args for Vite environment - accept both VITE_ and non-VITE_ prefixed vars
 ARG VITE_GOOGLE_CLIENT_ID
+ARG GOOGLE_CLIENT_ID
 ARG VITE_FACEBOOK_APP_ID
+ARG FACEBOOK_APP_ID
 ARG VITE_API_URL
-ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
-ENV VITE_FACEBOOK_APP_ID=$VITE_FACEBOOK_APP_ID
+
+# Use VITE_ prefixed if provided, otherwise fall back to non-prefixed versions
+ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-$GOOGLE_CLIENT_ID}
+ENV VITE_FACEBOOK_APP_ID=${VITE_FACEBOOK_APP_ID:-$FACEBOOK_APP_ID}
 ENV VITE_API_URL=$VITE_API_URL
 
 # Build the web app
