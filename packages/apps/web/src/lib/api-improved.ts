@@ -5,6 +5,107 @@
 
 import { CSRFManager } from './csrf-manager';
 
+// Export types from original API for compatibility
+export interface User {
+  id: string;
+  email: string;
+  name?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Brand {
+  id: string;
+  name: string;
+  description?: string;
+  industry?: string;
+  targetAudience?: string;
+  brandVoice?: string;
+  brandValues?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  instagramHandle?: string;
+  facebookPage?: string;
+  twitterHandle?: string;
+  linkedinPage?: string;
+  websiteUrl?: string;
+  logoUrl?: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Content {
+  id: string;
+  brandId: string;
+  platform: string;
+  type: string;
+  caption: string;
+  hashtags?: string;
+  mediaUrl?: string;
+  scheduledFor?: string;
+  status: string;
+  engagementRate?: number;
+  reach?: number;
+  impressions?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  refreshToken?: string;
+  user: User;
+}
+
+export interface CampaignConfig {
+  brandId: string;
+  name: string;
+  objective: string;
+  contentTypes: string[];
+  frequency: string;
+  duration: number;
+  startDate: string;
+  platforms: string[];
+  themes?: string[];
+  additionalInstructions?: string;
+}
+
+export interface CampaignPreview {
+  posts: Array<{
+    scheduledDate: string;
+    platform: string;
+    type: string;
+    caption: string;
+    hashtags: string;
+    imagePrompt?: string;
+  }>;
+}
+
+export interface Campaign {
+  id: string;
+  brandId: string;
+  name: string;
+  objective: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  contentTypes: string[];
+  frequency: string;
+  platforms: string[];
+  themes?: string[];
+  additionalInstructions?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignStatusResponse {
+  status: string;
+  postsGenerated: number;
+  postsScheduled: number;
+  nextPostDate?: string;
+}
+
 // Request interceptor type
 type RequestInterceptor = (config: RequestConfig) => Promise<RequestConfig> | RequestConfig;
 type ResponseInterceptor = (response: Response) => Promise<Response> | Response;
