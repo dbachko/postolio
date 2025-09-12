@@ -774,12 +774,22 @@ export class PostolioStack extends cdk.Stack {
       enableLogging: true,
       logBucket: accessLogsBucket,
       logFilePrefix: 'cloudfront-logs/',
-      // IMPORTANT: No error response configuration for 403/404
-      // This ensures API errors pass through with their original JSON responses
-      // SPA routing is handled by S3 static website hosting configuration
-      errorResponses: [],
-      // Note: We explicitly DO NOT handle any error status codes
-      // to ensure API errors pass through with their original response bodies
+      // Error responses for SPA routing - return index.html for client-side routing
+      // This allows React Router to handle routes like /terms-of-service, /privacy-policy
+      errorResponses: [
+        {
+          httpStatus: 403,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: cdk.Duration.seconds(0),
+        },
+        {
+          httpStatus: 404,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: cdk.Duration.seconds(0),
+        },
+      ]
     };
 
     const distribution = new cloudfront.Distribution(
