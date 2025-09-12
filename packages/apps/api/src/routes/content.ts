@@ -998,35 +998,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // Get content history for a brand
-  fastify.get<{
-    Params: { brandId: string };
-  }>('/history/:brandId', { preHandler: fastify.authenticate }, async (request, reply) => {
-    try {
-      const userId = request.user!.id;
-      const { brandId } = request.params;
-
-      // Verify brand ownership
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId },
-      });
-
-      if (!brand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
-
-      // Get all content for the brand
-      const content = await prisma.content.findMany({
-        where: { brandId },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      return { content };
-    } catch (error) {
-      console.error('Content history error:', error);
-      return reply.code(500).send({ error: 'Failed to retrieve content history' });
-    }
-  });
 };
 
 export default contentRoutes;
