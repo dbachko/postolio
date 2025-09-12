@@ -538,9 +538,12 @@ jobs:
           aws lambda update-function-configuration \
             --function-name ${{ steps.vars.outputs.function_name }} \
             --environment Variables="{
-              NODE_ENV=${{ needs.detect-changes.outputs.environment }},
+              NODE_ENV=${{ vars.NODE_ENV || 'production' }},
               SERVICE_NAME=${{ matrix.service }},
-              ENVIRONMENT=${{ needs.detect-changes.outputs.environment }}
+              ENVIRONMENT=${{ needs.detect-changes.outputs.environment }},
+              LOG_LEVEL=${{ vars.LOG_LEVEL || 'info' }},
+              AWS_REGION=${{ vars.AWS_REGION || 'us-east-1' }},
+              ENABLE_MONITORING=${{ vars.ENABLE_MONITORING || 'false' }}
             }"
 
       - name: CDK Setup for New Function
@@ -655,13 +658,29 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           FACEBOOK_APP_SECRET: ${{ secrets.FACEBOOK_APP_SECRET }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          FACEBOOK_APP_ID: ${{ vars.FACEBOOK_APP_ID }}
+          INSTAGRAM_APP_ID: ${{ vars.INSTAGRAM_APP_ID }}
+          LINKEDIN_CLIENT_ID: ${{ vars.LINKEDIN_CLIENT_ID }}
+          TIKTOK_CLIENT_KEY: ${{ vars.TIKTOK_CLIENT_KEY }}
+          NODE_ENV: ${{ vars.NODE_ENV }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          ENABLE_MONITORING: ${{ vars.ENABLE_MONITORING }}
         run: |
           pnpm cdk deploy Postolio-${{ needs.detect-changes.outputs.environment }} \
             --require-approval never \
             --context environment=${{ needs.detect-changes.outputs.environment }} \
             --context imageTag=api-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }} \
             --context domainName=${{ vars.DOMAIN_NAME }} \
-            --context corsOrigin=${{ vars.CORS_ORIGIN }}
+            --context corsOrigin=${{ vars.VITE_API_URL }} \
+            --context googleClientId=${{ vars.VITE_GOOGLE_CLIENT_ID }} \
+            --context facebookAppId=${{ vars.FACEBOOK_APP_ID }} \
+            --context instagramAppId=${{ vars.INSTAGRAM_APP_ID }} \
+            --context linkedinClientId=${{ vars.LINKEDIN_CLIENT_ID }} \
+            --context tiktokClientKey=${{ vars.TIKTOK_CLIENT_KEY }} \
+            --context nodeEnv=${{ vars.NODE_ENV }} \
+            --context logLevel=${{ vars.LOG_LEVEL }} \
+            --context enableMonitoring=${{ vars.ENABLE_MONITORING }}
 
       - name: Update ECS Service
         run: |
@@ -772,10 +791,12 @@ jobs:
       - name: Build frontend
         working-directory: packages/apps/web
         env:
-          VITE_API_BASE_URL: ${{ vars.VITE_API_URL }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_FACEBOOK_APP_ID: ${{ vars.VITE_FACEBOOK_APP_ID }}
+          VITE_FEATURE_AI_SUGGESTIONS: ${{ vars.VITE_FEATURE_AI_SUGGESTIONS }}
+          VITE_FEATURE_VIDEO_SUPPORT: ${{ vars.VITE_FEATURE_VIDEO_SUPPORT }}
           VITE_ENVIRONMENT: ${{ needs.detect-changes.outputs.environment }}
         run: pnpm build
 
