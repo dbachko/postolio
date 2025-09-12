@@ -648,7 +648,7 @@ export class PostolioStack extends cdk.Stack {
     fargateService.targetGroup.configureHealthCheck({
       path: '/health',
       healthyHttpCodes: '200',
-      interval: cdk.Duration.seconds(20), // Check more frequently for faster failure detection
+      interval: cdk.Duration.seconds(60), // Check every minute (reduced from 20s to minimize health check traffic)
       timeout: cdk.Duration.seconds(5), // Faster timeout for quicker response
       healthyThresholdCount: 2, // Reduced from 5 to speed up healthy status
       unhealthyThresholdCount: 2, // Fail faster (reduced from 3)
