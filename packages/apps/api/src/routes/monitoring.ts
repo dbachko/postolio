@@ -254,7 +254,10 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   });
 
   // Refresh service discovery
-  fastify.post('/service-discovery/refresh', async function () {
+  fastify.post(
+    '/service-discovery/refresh',
+    { preHandler: fastify.authenticate },
+    async function () {
     try {
       await serviceClients.refreshServiceDiscovery();
       return {
@@ -269,7 +272,8 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
-  });
+    }
+  );
 };
 
 export default monitoringRoutes;

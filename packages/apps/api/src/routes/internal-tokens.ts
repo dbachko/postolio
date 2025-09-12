@@ -36,7 +36,10 @@ const TokenResponseSchema = z.object({
 
 const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
   // Internal token retrieval endpoint (for service-to-service communication)
-  fastify.post('/api/internal/tokens/get', async (request, reply) => {
+  fastify.post(
+    '/api/internal/tokens/get',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
     try {
       // Parse and validate request
       const { brandId, platform, requesterId } = GetTokenSchema.parse(request.body);
@@ -184,7 +187,8 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
         error: 'Internal server error',
       });
     }
-  });
+    }
+  );
 
   // Token encryption endpoint removed - tokens are now stored in Token Service
 };

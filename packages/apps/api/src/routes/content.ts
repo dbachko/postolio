@@ -168,7 +168,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // Create manual content (user-generated, not AI)
-  fastify.post<{ Body: CreateManualContentBody }>('/create', async (request, reply) => {
+  fastify.post<{ Body: CreateManualContentBody }>(
+    '/create',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
     try {
       const userId = request.user!.id;
 
@@ -283,7 +286,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       console.error('Manual content creation error:', error);
       return reply.code(500).send({ error: 'Failed to create content' });
     }
-  });
+    }
+  );
 
   // Get draft content for review
   fastify.get<{ Params: { brandId: string } }>(
@@ -335,7 +339,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // Approve content for posting
-  fastify.post<{ Body: ApproveContentBody }>('/approve', async (request, reply) => {
+  fastify.post<{ Body: ApproveContentBody }>(
+    '/approve',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
     try {
       const userId = request.user!.id;
 
@@ -401,7 +408,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       console.error('Content approval error:', error);
       return reply.code(500).send({ error: 'Failed to approve content' });
     }
-  });
+    }
+  );
 
   // Reject content
   fastify.post<{ Params: { contentId: string } }>(
@@ -450,7 +458,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // Update content
-  fastify.put<{ Body: UpdateContentBody }>('/update', async (request, reply) => {
+  fastify.put<{ Body: UpdateContentBody }>(
+    '/update',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
     try {
       const userId = request.user!.id;
 
@@ -722,7 +733,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       console.error('Content update error:', error);
       return reply.code(500).send({ error: 'Failed to update content' });
     }
-  });
+    }
+  );
 
   // Get content history
   fastify.get<{ Params: { brandId: string } }>(
@@ -786,7 +798,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       imageData: string; // Base64 encoded image data
       mimeType: string;
     };
-  }>('/upload-image', async (request, reply) => {
+  }>(
+    '/upload-image',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
     try {
       const userId = request.user!.id;
 
@@ -915,7 +930,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       console.error('Upload image error:', error);
       return reply.code(500).send({ error: 'Failed to process image upload' });
     }
-  });
+    }
+  );
 
   // Get calendar content with placeholders
   fastify.get<{
