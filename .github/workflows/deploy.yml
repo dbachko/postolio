@@ -564,9 +564,34 @@ jobs:
           fi
 
           if pnpm cdk ls | grep -xq "$STACK_NAME"; then
-            pnpm cdk deploy "$STACK_NAME" \
-              --require-approval never \
-              --context environment=${{ needs.detect-changes.outputs.environment }}
+            # Retry logic for CDK deploy to handle ChangeSet conflicts
+            MAX_RETRIES=3
+            RETRY_COUNT=0
+            RETRY_DELAY=30
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              echo "Deployment attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
+              
+              if pnpm cdk deploy "$STACK_NAME" \
+                --require-approval never \
+                --context environment=${{ needs.detect-changes.outputs.environment }}; then
+                echo "CDK deployment successful"
+                break
+              else
+                EXIT_CODE=$?
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                
+                if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                  echo "CDK deployment failed with exit code $EXIT_CODE. Retrying in $RETRY_DELAY seconds..."
+                  sleep $RETRY_DELAY
+                  # Exponential backoff
+                  RETRY_DELAY=$((RETRY_DELAY * 2))
+                else
+                  echo "CDK deployment failed after $MAX_RETRIES attempts"
+                  exit $EXIT_CODE
+                fi
+              fi
+            done
           else
             echo "Stack $STACK_NAME not found in CDK app; skipping CDK deploy"
           fi
@@ -736,6 +761,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build dependencies
+        run: |
+          # Build shared libraries that frontend depends on
+          pnpm --filter=@postolio/csrf-client build || true
+          pnpm --filter=@postolio/errors build || true
+          pnpm --filter=@postolio/database build || true
 
       - name: Build frontend
         working-directory: packages/apps/web
