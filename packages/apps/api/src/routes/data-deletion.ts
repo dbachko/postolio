@@ -2,7 +2,6 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database.js';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
-import { verifyJWT } from '../services/jwt.js';
 import { markdownToHtml } from '../utils/markdown.js';
 import { deletionQueueService } from '../services/deletion-queue.js';
 import { EmailService } from '../services/email.js';
@@ -239,17 +238,9 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
   });
 
   // Authenticated user account deletion
-  fastify.delete('/account', async (request, reply) => {
-    const authHeader = request.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return reply.code(401).send({ error: 'Authentication required' });
-    }
-
-    const token = authHeader.substring(7);
-
+  fastify.delete('/account', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       // Get deletion survey from body
       const { reason, feedback } = request.body as DeletionSurvey;

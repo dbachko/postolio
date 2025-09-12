@@ -1,5 +1,4 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { signJWT } from '../services/jwt.js';
 import { getDatabaseClient } from '../config/database.js';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
@@ -146,7 +145,7 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Generate JWT token
-      const token = signJWT({
+      const token = fastify.jwt.sign({
         id: user.id,
         email: user.email,
       });

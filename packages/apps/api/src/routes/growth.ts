@@ -1,69 +1,37 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { verifyJWT } from '../services/jwt.js';
+import { FastifyInstance } from 'fastify';
 import growthService from '../services/growth.js';
-
-interface AuthenticatedUser {
-  id: string;
-  [k: string]: unknown;
-}
-
-// Helper function to verify authentication
-function authenticateRequest(
-  request: FastifyRequest,
-  reply: FastifyReply
-): AuthenticatedUser | null {
-  const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    reply.status(401).send({ error: 'Authorization header required' });
-    return null;
-  }
-  const token = authHeader.substring(7);
-  try {
-    const decoded = verifyJWT(token) as unknown as AuthenticatedUser;
-    if (!decoded?.id) {
-      reply.status(401).send({ error: 'Invalid token payload' });
-      return null;
-    }
-    return decoded;
-  } catch (err) {
-    request.log.error({ err }, 'JWT verification failed');
-    reply.status(401).send({ error: 'Invalid token' });
-    return null;
-  }
-}
 
 export default async function growthRoutes(fastify: FastifyInstance) {
   // Analyze growth opportunities
-  fastify.post<{ Body: { brandId: string } }>('/analyze', async function (request, reply) {
-    const user = authenticateRequest(request, reply);
-    if (!user) return;
+  fastify.post<{ Body: { brandId: string } }>(
+    '/analyze',
+    { preHandler: fastify.authenticate },
+    async function (request, reply) {
+      try {
+        const { brandId } = request.body;
 
-    try {
-      const { brandId } = request.body;
+        if (!brandId) {
+          return reply.code(400).send({ error: 'Brand ID is required' });
+        }
 
-      if (!brandId) {
-        return reply.code(400).send({ error: 'Brand ID is required' });
+        const analysis = await growthService.analyzeGrowthOpportunities(brandId);
+
+        reply.send({
+          success: true,
+          analysis,
+        });
+      } catch (error) {
+        console.error('Growth analysis error:', error);
+        reply.code(500).send({ error: 'Failed to analyze growth opportunities' });
       }
-
-      const analysis = await growthService.analyzeGrowthOpportunities(brandId);
-
-      reply.send({
-        success: true,
-        analysis,
-      });
-    } catch (error) {
-      console.error('Growth analysis error:', error);
-      reply.code(500).send({ error: 'Failed to analyze growth opportunities' });
     }
-  });
+  );
 
   // Generate growth strategies
   fastify.post<{ Body: { brandId: string; focus?: string } }>(
     '/strategies',
+    { preHandler: fastify.authenticate },
     async function (request, reply) {
-      const user = authenticateRequest(request, reply);
-      if (!user) return;
-
       try {
         const { brandId, focus } = request.body;
 
@@ -88,10 +56,7 @@ export default async function growthRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: { brandId: string };
     Querystring: { period?: string };
-  }>('/metrics/:brandId', async function (request, reply) {
-    const user = authenticateRequest(request, reply);
-    if (!user) return;
-
+  }>('/metrics/:brandId', { preHandler: fastify.authenticate }, async function (request, reply) {
     try {
       const { brandId } = request.params;
       const period = parseInt(request.query.period ?? '30');

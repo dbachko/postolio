@@ -1,7 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { Prisma } from '@postolio/database';
 
-import { verifyJWT } from '../services/jwt.js';
 import {
   generateInstagramContent,
   type ContentGenerationRequest,
@@ -41,147 +40,137 @@ interface UpdateContentBody {
 
 const contentRoutes: FastifyPluginAsync = async (fastify) => {
   // Generate content for a brand
-  fastify.post<{ Body: GenerateContentBody }>('/generate', async (request, reply) => {
-    try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
+  fastify.post<{ Body: GenerateContentBody }>(
+    '/generate',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
 
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+        const { brandId, count, theme, style } = request.body;
 
-      const { brandId, count, theme, style } = request.body;
-
-      // Verify user owns the brand
-      const brand = await prisma.brand.findFirst({
-        where: {
-          id: brandId,
-          userId,
-        },
-        select: {
-          id: true,
-          name: true,
-          styleProfile: true,
-        },
-      });
-
-      if (!brand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
-
-      if (!brand.styleProfile) {
-        return reply.code(400).send({
-          error: 'Brand must have a style profile to generate content',
+        // Verify user owns the brand
+        const brand = await prisma.brand.findFirst({
+          where: {
+            id: brandId,
+            userId,
+          },
+          select: {
+            id: true,
+            name: true,
+            styleProfile: true,
+          },
         });
-      }
 
-      // Generate content using AI
-      const generatedContent = await generateInstagramContent(
-        brand.styleProfile as unknown as StyleProfile,
-        brand.name,
-        {
-          brandId,
-          count,
-          theme: theme || undefined,
-          style: style || undefined,
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found' });
         }
-      );
 
-      // Save generated content to database
-      const contentRecords = await Promise.all(
-        generatedContent.map(async (content) => {
-          // Validate content before saving
-          if (!content.caption || content.caption.trim().length === 0) {
-            console.error('Generated content has empty caption:', content);
-            throw new Error('Generated content has empty caption');
+        if (!brand.styleProfile) {
+          return reply.code(400).send({
+            error: 'Brand must have a style profile to generate content',
+          });
+        }
+
+        // Generate content using AI
+        const generatedContent = await generateInstagramContent(
+          brand.styleProfile as unknown as StyleProfile,
+          brand.name,
+          {
+            brandId,
+            count,
+            theme: theme || undefined,
+            style: style || undefined,
           }
-          if (!content.hashtags || !Array.isArray(content.hashtags)) {
-            console.error('Generated content has invalid hashtags:', content);
-            throw new Error('Generated content has invalid hashtags');
+        );
+
+        // Save generated content to database
+        const contentRecords = await Promise.all(
+          generatedContent.map(async (content) => {
+            // Validate content before saving
+            if (!content.caption || content.caption.trim().length === 0) {
+              console.error('Generated content has empty caption:', content);
+              throw new Error('Generated content has empty caption');
+            }
+            if (!content.hashtags || !Array.isArray(content.hashtags)) {
+              console.error('Generated content has invalid hashtags:', content);
+              throw new Error('Generated content has invalid hashtags');
+            }
+
+            return prisma.content.create({
+              data: {
+                caption: content.caption,
+                hashtags: content.hashtags,
+                s3ImageKey: content.s3ImageKey || null,
+                cdnImageUrl: content.cdnImageUrl || null,
+                imageRegion: content.imageRegion || null,
+                retentionExpiresAt: content.retentionExpiresAt || null,
+                status: 'draft',
+                brandId,
+                generationParams: JSON.parse(
+                  JSON.stringify({
+                    theme,
+                    style,
+                    imagePrompt: content.imagePrompt,
+                    generatedAt: new Date().toISOString(),
+                  })
+                ),
+              },
+              select: {
+                id: true,
+                caption: true,
+                hashtags: true,
+                s3ImageKey: true,
+                cdnImageUrl: true,
+                imageRegion: true,
+                retentionExpiresAt: true,
+                status: true,
+                createdAt: true,
+              },
+            });
+          })
+        );
+
+        return reply.code(201).send({
+          content: contentRecords,
+          metadata: {
+            brandId,
+            count: contentRecords.length,
+            theme,
+            style,
+          },
+        });
+      } catch (error) {
+        console.error('Content generation error:', error);
+
+        // Handle specific OpenAI errors with appropriate status codes
+        if (error instanceof Error) {
+          if (error.message.includes('OpenAI API key configuration error')) {
+            return reply.code(503).send({
+              error: 'AI service configuration error. Please contact support.',
+            });
           }
-
-          return prisma.content.create({
-            data: {
-              caption: content.caption,
-              hashtags: content.hashtags,
-              s3ImageKey: content.s3ImageKey || null,
-              cdnImageUrl: content.cdnImageUrl || null,
-              imageRegion: content.imageRegion || null,
-              retentionExpiresAt: content.retentionExpiresAt || null,
-              status: 'draft',
-              brandId,
-              generationParams: JSON.parse(
-                JSON.stringify({
-                  theme,
-                  style,
-                  imagePrompt: content.imagePrompt,
-                  generatedAt: new Date().toISOString(),
-                })
-              ),
-            },
-            select: {
-              id: true,
-              caption: true,
-              hashtags: true,
-              s3ImageKey: true,
-              cdnImageUrl: true,
-              imageRegion: true,
-              retentionExpiresAt: true,
-              status: true,
-              createdAt: true,
-            },
-          });
-        })
-      );
-
-      return reply.code(201).send({
-        content: contentRecords,
-        metadata: {
-          brandId,
-          count: contentRecords.length,
-          theme,
-          style,
-        },
-      });
-    } catch (error) {
-      console.error('Content generation error:', error);
-
-      // Handle specific OpenAI errors with appropriate status codes
-      if (error instanceof Error) {
-        if (error.message.includes('OpenAI API key configuration error')) {
-          return reply.code(503).send({
-            error: 'AI service configuration error. Please contact support.',
-          });
+          if (error.message.includes('OpenAI API quota exceeded')) {
+            return reply.code(503).send({
+              error: 'AI service quota exceeded. Please try again later.',
+            });
+          }
+          if (error.message.includes('OpenAI API rate limit exceeded')) {
+            return reply.code(429).send({
+              error: 'AI service rate limit exceeded. Please try again in a moment.',
+            });
+          }
         }
-        if (error.message.includes('OpenAI API quota exceeded')) {
-          return reply.code(503).send({
-            error: 'AI service quota exceeded. Please try again later.',
-          });
-        }
-        if (error.message.includes('OpenAI API rate limit exceeded')) {
-          return reply.code(429).send({
-            error: 'AI service rate limit exceeded. Please try again in a moment.',
-          });
-        }
+
+        return reply.code(500).send({ error: 'Failed to generate content. Please try again.' });
       }
-
-      return reply.code(500).send({ error: 'Failed to generate content. Please try again.' });
     }
-  });
+  );
 
   // Create manual content (user-generated, not AI)
   fastify.post<{ Body: CreateManualContentBody }>('/create', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { brandId, caption, hashtags, imageData } = request.body;
 
@@ -297,68 +286,58 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Get draft content for review
-  fastify.get<{ Params: { brandId: string } }>('/pending/:brandId', async (request, reply) => {
-    try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
+  fastify.get<{ Params: { brandId: string } }>(
+    '/pending/:brandId',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+
+        const { brandId } = request.params;
+
+        // Verify user owns the brand
+        const brand = await prisma.brand.findFirst({
+          where: {
+            id: brandId,
+            userId,
+          },
+        });
+
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found' });
+        }
+
+        const draftContent = await prisma.content.findMany({
+          where: {
+            brandId,
+            status: 'draft',
+          },
+          select: {
+            id: true,
+            caption: true,
+            hashtags: true,
+            s3ImageKey: true,
+            cdnImageUrl: true,
+            imageRegion: true,
+            status: true,
+            createdAt: true,
+            generationParams: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        return { content: draftContent };
+      } catch (error) {
+        console.error('Draft content error:', error);
+        return reply.code(500).send({ error: 'Failed to retrieve draft content' });
       }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
-
-      const { brandId } = request.params;
-
-      // Verify user owns the brand
-      const brand = await prisma.brand.findFirst({
-        where: {
-          id: brandId,
-          userId,
-        },
-      });
-
-      if (!brand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
-
-      const draftContent = await prisma.content.findMany({
-        where: {
-          brandId,
-          status: 'draft',
-        },
-        select: {
-          id: true,
-          caption: true,
-          hashtags: true,
-          s3ImageKey: true,
-          cdnImageUrl: true,
-          imageRegion: true,
-          status: true,
-          createdAt: true,
-          generationParams: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      return { content: draftContent };
-    } catch (error) {
-      console.error('Draft content error:', error);
-      return reply.code(500).send({ error: 'Failed to retrieve draft content' });
     }
-  });
+  );
 
   // Approve content for posting
   fastify.post<{ Body: ApproveContentBody }>('/approve', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { contentId, scheduledAt } = request.body;
 
@@ -425,65 +404,55 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Reject content
-  fastify.post<{ Params: { contentId: string } }>('/reject/:contentId', async (request, reply) => {
-    try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
+  fastify.post<{ Params: { contentId: string } }>(
+    '/reject/:contentId',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
 
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+        const { contentId } = request.params;
 
-      const { contentId } = request.params;
-
-      // Verify user owns the content through brand ownership
-      const content = await prisma.content.findFirst({
-        where: { id: contentId },
-        include: {
-          brand: {
-            select: { userId: true },
+        // Verify user owns the content through brand ownership
+        const content = await prisma.content.findFirst({
+          where: { id: contentId },
+          include: {
+            brand: {
+              select: { userId: true },
+            },
           },
-        },
-      });
+        });
 
-      if (!content || content.brand.userId !== userId) {
-        return reply.code(404).send({ error: 'Content not found' });
+        if (!content || content.brand.userId !== userId) {
+          return reply.code(404).send({ error: 'Content not found' });
+        }
+
+        // Update content status - reject means back to draft
+        const updatedContent = await prisma.content.update({
+          where: { id: contentId },
+          data: {
+            status: 'draft',
+            scheduledAt: null, // Clear any scheduled time
+          },
+          select: {
+            id: true,
+            status: true,
+            updatedAt: true,
+          },
+        });
+
+        return { content: updatedContent };
+      } catch (error) {
+        console.error('Content rejection error:', error);
+        return reply.code(500).send({ error: 'Failed to reject content' });
       }
-
-      // Update content status - reject means back to draft
-      const updatedContent = await prisma.content.update({
-        where: { id: contentId },
-        data: {
-          status: 'draft',
-          scheduledAt: null, // Clear any scheduled time
-        },
-        select: {
-          id: true,
-          status: true,
-          updatedAt: true,
-        },
-      });
-
-      return { content: updatedContent };
-    } catch (error) {
-      console.error('Content rejection error:', error);
-      return reply.code(500).send({ error: 'Failed to reject content' });
     }
-  });
+  );
 
   // Update content
   fastify.put<{ Body: UpdateContentBody }>('/update', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { contentId, caption, hashtags, cdnImageUrl, scheduledAt } = request.body;
 
@@ -755,14 +724,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   // Get content history
   fastify.get<{ Params: { brandId: string } }>('/history/:brandId', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { brandId } = request.params;
 
@@ -819,14 +781,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     };
   }>('/upload-image', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { contentId, imageData, mimeType } = request.body;
 
@@ -960,14 +915,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { brandId: string; month: string };
   }>('/calendar/:brandId/:month', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { brandId, month } = request.params;
 

@@ -2,10 +2,10 @@ import { nanoid } from 'nanoid';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcrypt';
 import { getDatabaseClient } from '../config/database.js';
-import { signJWT } from './jwt.js';
 import { EmailService } from './email.js';
 import Redis from 'ioredis';
 import { getRedisUrl } from '../utils/redis-url.js';
+import { FastifyInstance } from 'fastify';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
@@ -100,7 +100,10 @@ export class MagicLinkService {
   /**
    * Verify a magic link token and sign in the user
    */
-  static async verifyMagicLink(token: string): Promise<{
+  static async verifyMagicLink(
+    fastify: FastifyInstance,
+    token: string
+  ): Promise<{
     success: boolean;
     user?: {
       id: string;
@@ -177,7 +180,7 @@ export class MagicLinkService {
       }
 
       // Generate JWT token
-      const jwtToken = signJWT({
+      const jwtToken = fastify.jwt.sign({
         id: user.id,
         email: user.email,
       });

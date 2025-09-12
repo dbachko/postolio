@@ -199,8 +199,16 @@ export function applyRateLimiting(app: FastifyInstance, redisClient: RedisLikeCl
       await createRateLimiter(redisClient, 'REGISTRATION')(request, reply);
     }
 
+    if (request.url === '/api/auth/refresh') {
+      await createRateLimiter(redisClient, 'AUTH')(request, reply);
+    }
+
     if (request.url === '/api/auth/password-reset') {
       await createRateLimiter(redisClient, 'PASSWORD_RESET')(request, reply);
+    }
+
+    if (request.url === '/api/magic-link/send' || request.url === '/api/magic-link/verify') {
+      await createRateLimiter(redisClient, 'AUTH')(request, reply);
     }
   });
 
