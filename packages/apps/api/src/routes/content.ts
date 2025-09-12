@@ -466,7 +466,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      if (!content || content.brand.userId !== userId) {
+      if (!content || !content.brand || content.brand.userId !== userId) {
         return reply.code(404).send({ error: 'Content not found' });
       }
 
@@ -682,8 +682,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           };
 
           // Analyze the edit and apply learning (async, don't block response)
-          learningService
-            .analyzeUserEdit(content.brand.id, originalContent, editedContent)
+          // Additional safety check for brand (should not be null due to earlier check, but defensive programming)
+          if (content.brand?.id) {
+            learningService
+              .analyzeUserEdit(content.brand.id, originalContent, editedContent)
             .then((editAnalysis) =>
               learningService.applyLearningToStyleProfile(content.brand.id, editAnalysis)
             )
@@ -701,11 +703,12 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
               console.error('Learning application error:', error);
             });
 
-          // Provide immediate feedback about learning
-          learningResults = {
-            learningActive: true,
-            message: 'AI is learning from your edits...',
-          };
+            // Provide immediate feedback about learning
+            learningResults = {
+              learningActive: true,
+              message: 'AI is learning from your edits...',
+            };
+          }
         } catch (error) {
           console.error('Learning analysis error:', error);
         }
