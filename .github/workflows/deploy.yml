@@ -348,9 +348,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, infra-bootstrap-check, build-images]
     if: |
-      needs.detect-changes.outputs.infra-changed == 'true' || 
+      github.event_name != 'pull_request' &&
+      (needs.detect-changes.outputs.infra-changed == 'true' || 
       needs.infra-bootstrap-check.outputs.needs-deploy == 'true' || 
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch')
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:
       - name: Checkout code
@@ -425,7 +426,9 @@ jobs:
     name: Deploy ${{ matrix.service }}
     runs-on: ubuntu-latest
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.matrix != '[]'
+    if: |
+      github.event_name != 'pull_request' &&
+      needs.detect-changes.outputs.matrix != '[]'
     environment: ${{ needs.detect-changes.outputs.environment }}
     strategy:
       matrix:
@@ -576,10 +579,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, build-images, deploy-microservices]
     if: |
-      needs.detect-changes.outputs.api-changed == 'true' || 
+      github.event_name != 'pull_request' &&
+      (needs.detect-changes.outputs.api-changed == 'true' || 
       needs.detect-changes.outputs.infra-changed == 'true' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')))
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:
       - name: Checkout code
@@ -666,10 +670,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes]
     if: |
-      needs.detect-changes.outputs.web-changed == 'true' || 
+      github.event_name != 'pull_request' &&
+      (needs.detect-changes.outputs.web-changed == 'true' || 
       needs.detect-changes.outputs.api-changed == 'true' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')))
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:
       - name: Checkout code
