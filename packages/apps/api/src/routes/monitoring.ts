@@ -258,20 +258,20 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
     '/service-discovery/refresh',
     { preHandler: fastify.authenticate },
     async function () {
-    try {
-      await serviceClients.refreshServiceDiscovery();
-      return {
-        timestamp: new Date().toISOString(),
-        status: 'success',
-        message: 'Service discovery refreshed successfully',
-      };
-    } catch (error) {
-      return {
-        timestamp: new Date().toISOString(),
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+      try {
+        await serviceClients.refreshServiceDiscovery();
+        return {
+          timestamp: new Date().toISOString(),
+          status: 'success',
+          message: 'Service discovery refreshed successfully',
+        };
+      } catch (error) {
+        return {
+          timestamp: new Date().toISOString(),
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
     }
   );
 };

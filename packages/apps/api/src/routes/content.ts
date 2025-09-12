@@ -172,120 +172,120 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     '/create',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
-    try {
-      const userId = request.user!.id;
+      try {
+        const userId = request.user!.id;
 
-      const { brandId, caption, hashtags, imageData } = request.body;
+        const { brandId, caption, hashtags, imageData } = request.body;
 
-      // Validate input
-      if (!caption || caption.trim().length === 0) {
-        return reply.code(400).send({ error: 'Caption is required' });
-      }
-
-      if (caption.length > 2200) {
-        return reply.code(400).send({
-          error: 'Caption exceeds Instagram limit of 2200 characters',
-        });
-      }
-
-      if (!Array.isArray(hashtags)) {
-        return reply.code(400).send({ error: 'Hashtags must be an array' });
-      }
-
-      if (hashtags.length > 30) {
-        return reply.code(400).send({ error: 'Maximum 30 hashtags allowed' });
-      }
-
-      // Verify user owns the brand
-      const brand = await prisma.brand.findFirst({
-        where: {
-          id: brandId,
-          userId,
-        },
-        select: {
-          id: true,
-          name: true,
-        },
-      });
-
-      if (!brand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
-
-      let s3ImageKey: string | null = null;
-      let cdnImageUrl: string | null = null;
-      let imageRegion: string | null = null;
-      let retentionExpiresAt: Date | null = null;
-
-      // Handle image upload if provided
-      if (imageData) {
-        try {
-          // Extract base64 data
-          const base64Match = imageData.match(/^data:([^;]+);base64,(.+)$/);
-          if (!base64Match || !base64Match[2]) {
-            return reply.code(400).send({ error: 'Invalid image data format' });
-          }
-
-          const buffer = Buffer.from(base64Match[2], 'base64');
-
-          // Upload to S3
-          const uploadResult = await uploadImageBufferToS3(buffer, {
-            contentId: `manual-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-            brandId,
-            generatedAt: new Date(),
-            source: 'dalle3' as const, // Use dalle3 as placeholder for manual uploads
-            originalPrompt: '',
-          });
-
-          s3ImageKey = uploadResult.s3Key;
-          cdnImageUrl = uploadResult.cdnUrl;
-          imageRegion = uploadResult.region;
-          retentionExpiresAt = uploadResult.retentionExpiresAt;
-        } catch (uploadError) {
-          console.error('Image upload error:', uploadError);
-          // Continue without image rather than failing entirely
+        // Validate input
+        if (!caption || caption.trim().length === 0) {
+          return reply.code(400).send({ error: 'Caption is required' });
         }
+
+        if (caption.length > 2200) {
+          return reply.code(400).send({
+            error: 'Caption exceeds Instagram limit of 2200 characters',
+          });
+        }
+
+        if (!Array.isArray(hashtags)) {
+          return reply.code(400).send({ error: 'Hashtags must be an array' });
+        }
+
+        if (hashtags.length > 30) {
+          return reply.code(400).send({ error: 'Maximum 30 hashtags allowed' });
+        }
+
+        // Verify user owns the brand
+        const brand = await prisma.brand.findFirst({
+          where: {
+            id: brandId,
+            userId,
+          },
+          select: {
+            id: true,
+            name: true,
+          },
+        });
+
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found' });
+        }
+
+        let s3ImageKey: string | null = null;
+        let cdnImageUrl: string | null = null;
+        let imageRegion: string | null = null;
+        let retentionExpiresAt: Date | null = null;
+
+        // Handle image upload if provided
+        if (imageData) {
+          try {
+            // Extract base64 data
+            const base64Match = imageData.match(/^data:([^;]+);base64,(.+)$/);
+            if (!base64Match || !base64Match[2]) {
+              return reply.code(400).send({ error: 'Invalid image data format' });
+            }
+
+            const buffer = Buffer.from(base64Match[2], 'base64');
+
+            // Upload to S3
+            const uploadResult = await uploadImageBufferToS3(buffer, {
+              contentId: `manual-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+              brandId,
+              generatedAt: new Date(),
+              source: 'dalle3' as const, // Use dalle3 as placeholder for manual uploads
+              originalPrompt: '',
+            });
+
+            s3ImageKey = uploadResult.s3Key;
+            cdnImageUrl = uploadResult.cdnUrl;
+            imageRegion = uploadResult.region;
+            retentionExpiresAt = uploadResult.retentionExpiresAt;
+          } catch (uploadError) {
+            console.error('Image upload error:', uploadError);
+            // Continue without image rather than failing entirely
+          }
+        }
+
+        // Create content record
+        const content = await prisma.content.create({
+          data: {
+            caption,
+            hashtags,
+            s3ImageKey,
+            cdnImageUrl,
+            imageRegion,
+            retentionExpiresAt,
+            status: 'draft',
+            brandId,
+            generationParams: Prisma.JsonNull, // null indicates manual creation
+          },
+          select: {
+            id: true,
+            caption: true,
+            hashtags: true,
+            s3ImageKey: true,
+            cdnImageUrl: true,
+            imageRegion: true,
+            retentionExpiresAt: true,
+            status: true,
+            brandId: true,
+            generationParams: true,
+            createdAt: true,
+          },
+        });
+
+        return reply.code(201).send({
+          content,
+          metadata: {
+            brandId,
+            source: 'manual',
+          },
+        });
+      } catch (error) {
+        console.error('Manual content creation error:', error);
+        return reply.code(500).send({ error: 'Failed to create content' });
       }
-
-      // Create content record
-      const content = await prisma.content.create({
-        data: {
-          caption,
-          hashtags,
-          s3ImageKey,
-          cdnImageUrl,
-          imageRegion,
-          retentionExpiresAt,
-          status: 'draft',
-          brandId,
-          generationParams: Prisma.JsonNull, // null indicates manual creation
-        },
-        select: {
-          id: true,
-          caption: true,
-          hashtags: true,
-          s3ImageKey: true,
-          cdnImageUrl: true,
-          imageRegion: true,
-          retentionExpiresAt: true,
-          status: true,
-          brandId: true,
-          generationParams: true,
-          createdAt: true,
-        },
-      });
-
-      return reply.code(201).send({
-        content,
-        metadata: {
-          brandId,
-          source: 'manual',
-        },
-      });
-    } catch (error) {
-      console.error('Manual content creation error:', error);
-      return reply.code(500).send({ error: 'Failed to create content' });
-    }
     }
   );
 
@@ -343,71 +343,71 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     '/approve',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
-    try {
-      const userId = request.user!.id;
+      try {
+        const userId = request.user!.id;
 
-      const { contentId, scheduledAt } = request.body;
+        const { contentId, scheduledAt } = request.body;
 
-      // Verify user owns the content through brand ownership
-      const content = await prisma.content.findFirst({
-        where: { id: contentId },
-        include: {
-          brand: {
-            select: { userId: true },
+        // Verify user owns the content through brand ownership
+        const content = await prisma.content.findFirst({
+          where: { id: contentId },
+          include: {
+            brand: {
+              select: { userId: true },
+            },
           },
-        },
-      });
+        });
 
-      if (!content || content.brand.userId !== userId) {
-        return reply.code(404).send({ error: 'Content not found' });
-      }
-
-      if (content.status !== 'draft') {
-        return reply.code(400).send({ error: 'Content is not in draft status' });
-      }
-
-      // Update content status - use 'scheduled' if scheduledAt provided
-      const updatedContent = await prisma.content.update({
-        where: { id: contentId },
-        data: {
-          status: scheduledAt ? 'scheduled' : 'draft',
-          scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-        },
-        select: {
-          id: true,
-          caption: true,
-          hashtags: true,
-          status: true,
-          scheduledAt: true,
-          updatedAt: true,
-        },
-      });
-
-      // If scheduledAt is provided, create a schedule in AWS
-      if (scheduledAt) {
-        try {
-          // Don't pass customTime - let scheduler-adapter read scheduledAt from database
-          // This avoids timezone conversion issues since DB stores UTC
-          const scheduleResult = await schedulerService.scheduleContent(contentId);
-
-          if (!scheduleResult.success) {
-            console.error('Failed to create AWS schedule:', scheduleResult.error);
-            // Note: We don't fail the request here as the content is already scheduled locally
-            // The scheduler adapter has fallback logic
-          } else {
-            console.log(`Content ${contentId} scheduled successfully in AWS`);
-          }
-        } catch (scheduleError) {
-          console.error('Error calling scheduler service:', scheduleError);
-          // Continue with local scheduling
+        if (!content || content.brand.userId !== userId) {
+          return reply.code(404).send({ error: 'Content not found' });
         }
-      }
 
-      return { content: updatedContent };
-    } catch (error) {
-      console.error('Content approval error:', error);
-      return reply.code(500).send({ error: 'Failed to approve content' });
-    }
+        if (content.status !== 'draft') {
+          return reply.code(400).send({ error: 'Content is not in draft status' });
+        }
+
+        // Update content status - use 'scheduled' if scheduledAt provided
+        const updatedContent = await prisma.content.update({
+          where: { id: contentId },
+          data: {
+            status: scheduledAt ? 'scheduled' : 'draft',
+            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+          },
+          select: {
+            id: true,
+            caption: true,
+            hashtags: true,
+            status: true,
+            scheduledAt: true,
+            updatedAt: true,
+          },
+        });
+
+        // If scheduledAt is provided, create a schedule in AWS
+        if (scheduledAt) {
+          try {
+            // Don't pass customTime - let scheduler-adapter read scheduledAt from database
+            // This avoids timezone conversion issues since DB stores UTC
+            const scheduleResult = await schedulerService.scheduleContent(contentId);
+
+            if (!scheduleResult.success) {
+              console.error('Failed to create AWS schedule:', scheduleResult.error);
+              // Note: We don't fail the request here as the content is already scheduled locally
+              // The scheduler adapter has fallback logic
+            } else {
+              console.log(`Content ${contentId} scheduled successfully in AWS`);
+            }
+          } catch (scheduleError) {
+            console.error('Error calling scheduler service:', scheduleError);
+            // Continue with local scheduling
+          }
+        }
+
+        return { content: updatedContent };
+      } catch (error) {
+        console.error('Content approval error:', error);
+        return reply.code(500).send({ error: 'Failed to approve content' });
+      }
     }
   );
 
@@ -462,277 +462,281 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     '/update',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
-    try {
-      const userId = request.user!.id;
+      try {
+        const userId = request.user!.id;
 
-      const { contentId, caption, hashtags, cdnImageUrl, scheduledAt } = request.body;
+        const { contentId, caption, hashtags, cdnImageUrl, scheduledAt } = request.body;
 
-      // Verify user owns the content through brand ownership
-      const content = await prisma.content.findFirst({
-        where: { id: contentId },
-        include: {
-          brand: {
-            select: { userId: true, id: true },
+        // Verify user owns the content through brand ownership
+        const content = await prisma.content.findFirst({
+          where: { id: contentId },
+          include: {
+            brand: {
+              select: { userId: true, id: true },
+            },
           },
-        },
-      });
+        });
 
-      if (!content || !content.brand || content.brand.userId !== userId) {
-        return reply.code(404).send({ error: 'Content not found' });
-      }
-
-      // Store original content for learning analysis
-      const originalContent: {
-        caption: string;
-        hashtags: string[];
-        cdnImageUrl?: string | null;
-        scheduledAt?: string;
-      } = {
-        caption: content.caption,
-        hashtags: content.hashtags,
-        ...(content.cdnImageUrl ? { cdnImageUrl: content.cdnImageUrl } : {}),
-        ...(content.scheduledAt ? { scheduledAt: content.scheduledAt.toISOString() } : {}),
-      };
-
-      // Build update data - only include fields that are provided
-      interface MutableContentUpdate {
-        caption?: string;
-        hashtags?: string[];
-        cdnImageUrl?: string | null;
-        s3ImageKey?: string | null;
-        imageRegion?: string | null;
-        retentionExpiresAt?: Date | null;
-        scheduledAt?: Date | null;
-        status?: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
-      }
-      const updateData: MutableContentUpdate = {};
-      if (caption !== undefined) {
-        // Strict validation: caption must be a non-empty string
-        if (!caption || typeof caption !== 'string' || caption.trim().length === 0) {
-          console.error(
-            'CRITICAL: Attempt to update content with invalid caption',
-            JSON.stringify({
-              contentId,
-              caption,
-              captionType: typeof caption,
-              captionLength: caption?.length || 0,
-            })
-          );
-          return reply.code(400).send({ error: 'Caption cannot be empty or invalid' });
+        if (!content || !content.brand || content.brand.userId !== userId) {
+          return reply.code(404).send({ error: 'Content not found' });
         }
-        updateData.caption = caption.trim(); // Ensure we store trimmed caption
-      }
-      if (hashtags !== undefined) updateData.hashtags = hashtags;
-      if (cdnImageUrl !== undefined) {
-        updateData.cdnImageUrl = cdnImageUrl;
-        // If cdnImageUrl is empty, also clear S3-related fields
-        if (cdnImageUrl === '' || cdnImageUrl === null) {
-          updateData.s3ImageKey = null;
-          updateData.cdnImageUrl = null;
-          updateData.imageRegion = null;
-          updateData.retentionExpiresAt = null;
+
+        // Store original content for learning analysis
+        const originalContent: {
+          caption: string;
+          hashtags: string[];
+          cdnImageUrl?: string | null;
+          scheduledAt?: string;
+        } = {
+          caption: content.caption,
+          hashtags: content.hashtags,
+          ...(content.cdnImageUrl ? { cdnImageUrl: content.cdnImageUrl } : {}),
+          ...(content.scheduledAt ? { scheduledAt: content.scheduledAt.toISOString() } : {}),
+        };
+
+        // Build update data - only include fields that are provided
+        interface MutableContentUpdate {
+          caption?: string;
+          hashtags?: string[];
+          cdnImageUrl?: string | null;
+          s3ImageKey?: string | null;
+          imageRegion?: string | null;
+          retentionExpiresAt?: Date | null;
+          scheduledAt?: Date | null;
+          status?: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
         }
-      }
-      if (scheduledAt !== undefined) {
-        updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
-        // When setting a scheduledAt date, ensure proper status
-        // Don't change status if content is already published
-        if (scheduledAt && content.status !== 'published') {
-          // Set to scheduled when adding a scheduled time
-          if (content.status === 'draft') {
-            updateData.status = 'scheduled';
-          } else if (content.status === 'failed' || content.status === 'skipped') {
-            // Don't allow scheduling of failed/skipped content
-            return reply.code(400).send({ error: 'Cannot schedule failed or skipped content' });
+        const updateData: MutableContentUpdate = {};
+        if (caption !== undefined) {
+          // Strict validation: caption must be a non-empty string
+          if (!caption || typeof caption !== 'string' || caption.trim().length === 0) {
+            console.error(
+              'CRITICAL: Attempt to update content with invalid caption',
+              JSON.stringify({
+                contentId,
+                caption,
+                captionType: typeof caption,
+                captionLength: caption?.length || 0,
+              })
+            );
+            return reply.code(400).send({ error: 'Caption cannot be empty or invalid' });
           }
-        } else if (!scheduledAt && content.status === 'scheduled') {
-          // If removing scheduledAt, revert to draft
-          updateData.status = 'draft';
+          updateData.caption = caption.trim(); // Ensure we store trimmed caption
         }
-      }
+        if (hashtags !== undefined) updateData.hashtags = hashtags;
+        if (cdnImageUrl !== undefined) {
+          updateData.cdnImageUrl = cdnImageUrl;
+          // If cdnImageUrl is empty, also clear S3-related fields
+          if (cdnImageUrl === '' || cdnImageUrl === null) {
+            updateData.s3ImageKey = null;
+            updateData.cdnImageUrl = null;
+            updateData.imageRegion = null;
+            updateData.retentionExpiresAt = null;
+          }
+        }
+        if (scheduledAt !== undefined) {
+          updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
+          // When setting a scheduledAt date, ensure proper status
+          // Don't change status if content is already published
+          if (scheduledAt && content.status !== 'published') {
+            // Set to scheduled when adding a scheduled time
+            if (content.status === 'draft') {
+              updateData.status = 'scheduled';
+            } else if (content.status === 'failed' || content.status === 'skipped') {
+              // Don't allow scheduling of failed/skipped content
+              return reply.code(400).send({ error: 'Cannot schedule failed or skipped content' });
+            }
+          } else if (!scheduledAt && content.status === 'scheduled') {
+            // If removing scheduledAt, revert to draft
+            updateData.status = 'draft';
+          }
+        }
 
-      // Log the update for debugging
-      console.log(
-        'Updating content with data:',
-        JSON.stringify({
-          contentId,
-          updateData,
-          originalScheduledAt: content.scheduledAt,
-          originalStatus: content.status,
-        })
-      );
-
-      // Handle AWS scheduling operations FIRST before updating local DB
-      // This prevents race conditions where local DB has new time but AWS doesn't
-      const originalScheduledTime = content.scheduledAt?.toISOString();
-      const newScheduledTime = updateData.scheduledAt?.toISOString();
-
-      // Check if this is a reschedule operation (time changed)
-      if (originalScheduledTime && newScheduledTime && originalScheduledTime !== newScheduledTime) {
-        try {
-          console.log(
-            `Attempting to reschedule content ${contentId} from ${originalScheduledTime} to ${newScheduledTime}`
-          );
-
-          // Call AWS reschedule FIRST - fail fast if this doesn't work
-          const rescheduleResult = await schedulerService.reschedulePost(
+        // Log the update for debugging
+        console.log(
+          'Updating content with data:',
+          JSON.stringify({
             contentId,
-            updateData.scheduledAt!
-          );
+            updateData,
+            originalScheduledAt: content.scheduledAt,
+            originalStatus: content.status,
+          })
+        );
 
-          if (!rescheduleResult.success) {
-            console.error('AWS reschedule failed:', rescheduleResult.error);
+        // Handle AWS scheduling operations FIRST before updating local DB
+        // This prevents race conditions where local DB has new time but AWS doesn't
+        const originalScheduledTime = content.scheduledAt?.toISOString();
+        const newScheduledTime = updateData.scheduledAt?.toISOString();
+
+        // Check if this is a reschedule operation (time changed)
+        if (
+          originalScheduledTime &&
+          newScheduledTime &&
+          originalScheduledTime !== newScheduledTime
+        ) {
+          try {
+            console.log(
+              `Attempting to reschedule content ${contentId} from ${originalScheduledTime} to ${newScheduledTime}`
+            );
+
+            // Call AWS reschedule FIRST - fail fast if this doesn't work
+            const rescheduleResult = await schedulerService.reschedulePost(
+              contentId,
+              updateData.scheduledAt!
+            );
+
+            if (!rescheduleResult.success) {
+              console.error('AWS reschedule failed:', rescheduleResult.error);
+              return reply.code(500).send({
+                success: false,
+                error: `Failed to reschedule: ${rescheduleResult.error}`,
+                data: null,
+              });
+            }
+
+            console.log(`AWS reschedule succeeded for content ${contentId}`);
+          } catch (rescheduleError) {
+            console.error('Error during AWS reschedule:', rescheduleError);
             return reply.code(500).send({
               success: false,
-              error: `Failed to reschedule: ${rescheduleResult.error}`,
+              error: `Reschedule failed: ${rescheduleError instanceof Error ? rescheduleError.message : 'Unknown error'}`,
               data: null,
             });
           }
-
-          console.log(`AWS reschedule succeeded for content ${contentId}`);
-        } catch (rescheduleError) {
-          console.error('Error during AWS reschedule:', rescheduleError);
-          return reply.code(500).send({
-            success: false,
-            error: `Reschedule failed: ${rescheduleError instanceof Error ? rescheduleError.message : 'Unknown error'}`,
-            data: null,
-          });
         }
-      }
 
-      // Only update local DB after AWS operations succeed (or if no AWS operation needed)
-      const updatedContent = await prisma.content.update({
-        where: { id: contentId },
-        data: updateData as unknown as Prisma.ContentUpdateInput,
-        select: {
-          id: true,
-          caption: true,
-          hashtags: true,
-          cdnImageUrl: true,
-          status: true,
-          scheduledAt: true,
-          postedAt: true,
-          createdAt: true,
-          updatedAt: true,
-          brandId: true,
-        },
-      });
+        // Only update local DB after AWS operations succeed (or if no AWS operation needed)
+        const updatedContent = await prisma.content.update({
+          where: { id: contentId },
+          data: updateData as unknown as Prisma.ContentUpdateInput,
+          select: {
+            id: true,
+            caption: true,
+            hashtags: true,
+            cdnImageUrl: true,
+            status: true,
+            scheduledAt: true,
+            postedAt: true,
+            createdAt: true,
+            updatedAt: true,
+            brandId: true,
+          },
+        });
 
-      // Log the result for debugging
-      console.log(
-        'Content update result:',
-        JSON.stringify({
-          contentId: updatedContent.id,
-          newScheduledAt: updatedContent.scheduledAt,
-          newStatus: updatedContent.status,
-          updateSuccessful: true,
-        })
-      );
+        // Log the result for debugging
+        console.log(
+          'Content update result:',
+          JSON.stringify({
+            contentId: updatedContent.id,
+            newScheduledAt: updatedContent.scheduledAt,
+            newStatus: updatedContent.status,
+            updateSuccessful: true,
+          })
+        );
 
-      // Handle scheduling changes with AWS ContentScheduler
-      if (scheduledAt !== undefined) {
-        const originalScheduledTime = content.scheduledAt?.toISOString();
-        const newScheduledTime = updatedContent.scheduledAt?.toISOString();
+        // Handle scheduling changes with AWS ContentScheduler
+        if (scheduledAt !== undefined) {
+          const originalScheduledTime = content.scheduledAt?.toISOString();
+          const newScheduledTime = updatedContent.scheduledAt?.toISOString();
 
-        // Case 1: New schedule (wasn't scheduled before, now is)
-        if (!originalScheduledTime && newScheduledTime) {
-          try {
-            // Don't pass customTime - scheduler-adapter will read from DB (UTC)
-            const scheduleResult = await schedulerService.scheduleContent(contentId);
+          // Case 1: New schedule (wasn't scheduled before, now is)
+          if (!originalScheduledTime && newScheduledTime) {
+            try {
+              // Don't pass customTime - scheduler-adapter will read from DB (UTC)
+              const scheduleResult = await schedulerService.scheduleContent(contentId);
 
-            if (!scheduleResult.success) {
-              console.error('Failed to create AWS schedule:', scheduleResult.error);
-            } else {
-              console.log(`Content ${contentId} scheduled successfully in AWS`);
+              if (!scheduleResult.success) {
+                console.error('Failed to create AWS schedule:', scheduleResult.error);
+              } else {
+                console.log(`Content ${contentId} scheduled successfully in AWS`);
+              }
+            } catch (scheduleError) {
+              console.error('Error creating schedule:', scheduleError);
             }
-          } catch (scheduleError) {
-            console.error('Error creating schedule:', scheduleError);
           }
-        }
-        // Case 2: Cancel schedule (was scheduled, now isn't)
-        else if (originalScheduledTime && !newScheduledTime) {
-          try {
-            const cancelResult = await schedulerService.cancelScheduledPost(contentId);
+          // Case 2: Cancel schedule (was scheduled, now isn't)
+          else if (originalScheduledTime && !newScheduledTime) {
+            try {
+              const cancelResult = await schedulerService.cancelScheduledPost(contentId);
 
-            if (cancelResult) {
-              console.log(`Schedule for content ${contentId} cancelled successfully`);
-            } else {
-              console.error('Failed to cancel AWS schedule for content:', contentId);
+              if (cancelResult) {
+                console.log(`Schedule for content ${contentId} cancelled successfully`);
+              } else {
+                console.error('Failed to cancel AWS schedule for content:', contentId);
+              }
+            } catch (cancelError) {
+              console.error('Error cancelling schedule:', cancelError);
             }
-          } catch (cancelError) {
-            console.error('Error cancelling schedule:', cancelError);
           }
+          // Note: Reschedule logic moved earlier in the flow to prevent race conditions
+          // AWS operations now happen BEFORE local DB updates
         }
-        // Note: Reschedule logic moved earlier in the flow to prevent race conditions
-        // AWS operations now happen BEFORE local DB updates
-      }
 
-      // Apply AI learning if there were changes
-      let learningResults = null;
-      const hasChanges =
-        (caption !== undefined && caption !== originalContent.caption) ||
-        (hashtags !== undefined &&
-          JSON.stringify(hashtags) !== JSON.stringify(originalContent.hashtags)) ||
-        (cdnImageUrl !== undefined && cdnImageUrl !== originalContent.cdnImageUrl) ||
-        (scheduledAt !== undefined && scheduledAt !== originalContent.scheduledAt);
+        // Apply AI learning if there were changes
+        let learningResults = null;
+        const hasChanges =
+          (caption !== undefined && caption !== originalContent.caption) ||
+          (hashtags !== undefined &&
+            JSON.stringify(hashtags) !== JSON.stringify(originalContent.hashtags)) ||
+          (cdnImageUrl !== undefined && cdnImageUrl !== originalContent.cdnImageUrl) ||
+          (scheduledAt !== undefined && scheduledAt !== originalContent.scheduledAt);
 
-      if (hasChanges) {
-        try {
-          const editedContent: {
-            caption: string;
-            hashtags: string[];
-            cdnImageUrl?: string | null;
-            scheduledAt?: string;
-          } = {
-            caption: updatedContent.caption,
-            hashtags: updatedContent.hashtags,
-            ...(updatedContent.cdnImageUrl ? { cdnImageUrl: updatedContent.cdnImageUrl } : {}),
-            ...(updatedContent.scheduledAt
-              ? { scheduledAt: updatedContent.scheduledAt.toISOString() }
-              : {}),
-          };
-
-          // Analyze the edit and apply learning (async, don't block response)
-          // Additional safety check for brand (should not be null due to earlier check, but defensive programming)
-          if (content.brand?.id) {
-            learningService
-              .analyzeUserEdit(content.brand.id, originalContent, editedContent)
-              .then((editAnalysis) =>
-                learningService.applyLearningToStyleProfile(content.brand.id, editAnalysis)
-              )
-              .then((results) => {
-                console.log(
-                  `Learning applied for brand ${content.brand.id}:`,
-                  JSON.stringify({
-                    insights: results.insights.length,
-                    profileUpdates: results.profileUpdates.length,
-                    appliedToFuturePosts: results.appliedToFuturePosts,
-                  })
-                );
-              })
-              .catch((error) => {
-                console.error('Learning application error:', error);
-              });
-
-            // Provide immediate feedback about learning
-            learningResults = {
-              learningActive: true,
-              message: 'AI is learning from your edits...',
+        if (hasChanges) {
+          try {
+            const editedContent: {
+              caption: string;
+              hashtags: string[];
+              cdnImageUrl?: string | null;
+              scheduledAt?: string;
+            } = {
+              caption: updatedContent.caption,
+              hashtags: updatedContent.hashtags,
+              ...(updatedContent.cdnImageUrl ? { cdnImageUrl: updatedContent.cdnImageUrl } : {}),
+              ...(updatedContent.scheduledAt
+                ? { scheduledAt: updatedContent.scheduledAt.toISOString() }
+                : {}),
             };
-          }
-        } catch (error) {
-          console.error('Learning analysis error:', error);
-        }
-      }
 
-      return {
-        content: updatedContent,
-        learning: learningResults,
-      };
-    } catch (error) {
-      console.error('Content update error:', error);
-      return reply.code(500).send({ error: 'Failed to update content' });
-    }
+            // Analyze the edit and apply learning (async, don't block response)
+            // Additional safety check for brand (should not be null due to earlier check, but defensive programming)
+            if (content.brand?.id) {
+              learningService
+                .analyzeUserEdit(content.brand.id, originalContent, editedContent)
+                .then((editAnalysis) =>
+                  learningService.applyLearningToStyleProfile(content.brand.id, editAnalysis)
+                )
+                .then((results) => {
+                  console.log(
+                    `Learning applied for brand ${content.brand.id}:`,
+                    JSON.stringify({
+                      insights: results.insights.length,
+                      profileUpdates: results.profileUpdates.length,
+                      appliedToFuturePosts: results.appliedToFuturePosts,
+                    })
+                  );
+                })
+                .catch((error) => {
+                  console.error('Learning application error:', error);
+                });
+
+              // Provide immediate feedback about learning
+              learningResults = {
+                learningActive: true,
+                message: 'AI is learning from your edits...',
+              };
+            }
+          } catch (error) {
+            console.error('Learning analysis error:', error);
+          }
+        }
+
+        return {
+          content: updatedContent,
+          learning: learningResults,
+        };
+      } catch (error) {
+        console.error('Content update error:', error);
+        return reply.code(500).send({ error: 'Failed to update content' });
+      }
     }
   );
 
@@ -798,10 +802,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       imageData: string; // Base64 encoded image data
       mimeType: string;
     };
-  }>(
-    '/upload-image',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
+  }>('/upload-image', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const userId = request.user!.id;
 
@@ -930,8 +931,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       console.error('Upload image error:', error);
       return reply.code(500).send({ error: 'Failed to process image upload' });
     }
-    }
-  );
+  });
 
   // Get calendar content with placeholders
   fastify.get<{
