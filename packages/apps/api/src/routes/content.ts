@@ -722,7 +722,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Get content history
-  fastify.get<{ Params: { brandId: string } }>('/history/:brandId', async (request, reply) => {
+  fastify.get<{ Params: { brandId: string } }>('/history/:brandId', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const userId = request.user!.id;
 
