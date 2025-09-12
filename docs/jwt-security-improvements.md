@@ -18,13 +18,13 @@ This document outlines the comprehensive JWT security improvements implemented i
 
 Enhanced rate limiting for all authentication endpoints:
 
-| Endpoint | Limit | Window | Purpose |
-|----------|-------|--------|---------|
-| `/api/auth/login` | 5 requests | 1 minute | Prevent brute force |
-| `/api/auth/register` | 2 requests | 15 minutes | Prevent spam accounts |
-| `/api/auth/refresh` | 5 requests | 1 minute | Prevent token abuse |
-| `/api/auth/password-reset` | 3 requests | 15 minutes | Prevent abuse |
-| `/api/magic-link/*` | 5 requests | 1 minute | Prevent magic link spam |
+| Endpoint                   | Limit      | Window     | Purpose                 |
+| -------------------------- | ---------- | ---------- | ----------------------- |
+| `/api/auth/login`          | 5 requests | 1 minute   | Prevent brute force     |
+| `/api/auth/register`       | 2 requests | 15 minutes | Prevent spam accounts   |
+| `/api/auth/refresh`        | 5 requests | 1 minute   | Prevent token abuse     |
+| `/api/auth/password-reset` | 3 requests | 15 minutes | Prevent abuse           |
+| `/api/magic-link/*`        | 5 requests | 1 minute   | Prevent magic link spam |
 
 ### 3. ✅ Removed Dev JWT Fallback
 
@@ -56,6 +56,7 @@ Enhanced rate limiting for all authentication endpoints:
 ### Rate Limiting Headers
 
 All auth endpoints return standard rate limit headers:
+
 - `X-RateLimit-Limit`: Maximum requests allowed
 - `X-RateLimit-Remaining`: Requests remaining
 - `X-RateLimit-Reset`: When the limit resets
@@ -76,11 +77,13 @@ openssl rand -hex 32
 ### 2. Configure Environment
 
 Create `.env` file from example:
+
 ```bash
 cp packages/apps/api/.env.example packages/apps/api/.env
 ```
 
 Update with your generated secret:
+
 ```env
 JWT_SECRET=your-64-character-hex-string-here
 ```
@@ -133,7 +136,7 @@ const { token } = await response.json();
 // POST /api/auth/logout
 await fetch('/api/auth/logout', {
   method: 'POST',
-  headers: { 'Authorization': `Bearer ${accessToken}` },
+  headers: { Authorization: `Bearer ${accessToken}` },
   credentials: 'include',
 });
 // Invalidates refresh token and clears cookies
@@ -204,6 +207,7 @@ KEYS token-family:*
 ### Audit Logs
 
 Check application logs for:
+
 - `REFRESH_TOKEN_GENERATED`
 - `REFRESH_TOKEN_ROTATED`
 - `REFRESH_TOKEN_REUSE_DETECTED`
@@ -214,6 +218,7 @@ Check application logs for:
 ### "JWT_SECRET environment variable is required"
 
 **Solution**: Generate and set JWT secret
+
 ```bash
 pnpm --filter=api generate-secret
 ```
@@ -225,6 +230,7 @@ pnpm --filter=api generate-secret
 ### "Invalid or expired refresh token"
 
 **Causes**:
+
 - Token expired (30 days)
 - Token already rotated
 - Token family invalidated (security breach)

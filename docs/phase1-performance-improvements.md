@@ -12,7 +12,6 @@ Successfully implemented performance optimizations for JWT refresh token managem
   - `tokens:all` - Global set of all tokens (O(1) count operations)
   - `users:tokens:{userId}` - Set of tokens per user
   - `families:tokens:{family}` - Set of tokens per family
-  
 - **Key performance improvements:**
   - Token lookups: O(n) → O(1)
   - User token retrieval: O(n) full scan → O(m) where m = user's tokens only
@@ -58,6 +57,7 @@ Successfully implemented performance optimizations for JWT refresh token managem
 ## Performance Gains
 
 ### Before (KEYS-based approach)
+
 ```javascript
 // O(n) - Scans ALL keys in Redis
 const keys = await redis.keys('refresh-token:*');
@@ -68,6 +68,7 @@ for (const key of keys) {
 ```
 
 ### After (Set-based approach)
+
 ```javascript
 // O(m) - Only processes relevant tokens
 const userTokens = await redis.smembers(`users:tokens:${userId}`);
@@ -76,14 +77,15 @@ const userTokens = await redis.smembers(`users:tokens:${userId}`);
 
 ## Performance Comparison
 
-| Operation | Before (KEYS) | After (Sets) | Improvement |
-|-----------|---------------|--------------|-------------|
-| Get user tokens | O(n) | O(m) | ~95% faster at scale |
-| Invalidate family | O(n) | O(m) | ~95% faster at scale |
-| Count all tokens | O(n) | O(1) | ~99% faster |
-| Token cleanup | Blocking | Async job | No API blocking |
+| Operation         | Before (KEYS) | After (Sets) | Improvement          |
+| ----------------- | ------------- | ------------ | -------------------- |
+| Get user tokens   | O(n)          | O(m)         | ~95% faster at scale |
+| Invalidate family | O(n)          | O(m)         | ~95% faster at scale |
+| Count all tokens  | O(n)          | O(1)         | ~99% faster          |
+| Token cleanup     | Blocking      | Async job    | No API blocking      |
 
 Where:
+
 - n = total tokens in system
 - m = tokens for specific user/family (typically < 10)
 
@@ -97,12 +99,14 @@ Where:
 ## Monitoring
 
 ### Key Metrics to Track
+
 - Job queue statistics (waiting, active, completed, failed)
 - Token cleanup duration
 - Integrity check results
 - Redis memory usage
 
 ### Health Indicators
+
 - All jobs completing successfully
 - No orphaned tokens in integrity checks
 - Consistent token counts between Sets and actual tokens
@@ -141,6 +145,7 @@ Where:
 ## Risk Assessment
 
 **Low Risk** - All changes are backward compatible:
+
 - New code works with existing token format
 - Migration is optional and can be rolled back
 - Background jobs are independent of main API flow
@@ -149,6 +154,7 @@ Where:
 ## Rollback Plan
 
 If issues arise:
+
 1. Remove background job scheduling from server.ts
 2. Revert refresh-token.ts to use original Redis operations
 3. No database changes required - tokens remain in Redis

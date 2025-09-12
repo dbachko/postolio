@@ -23,13 +23,10 @@ const envExamplePath = path.join(__dirname, '..', '.env.example');
 
 if (!fs.existsSync(envPath)) {
   console.log('📝 Creating .env file from .env.example...');
-  
+
   if (fs.existsSync(envExamplePath)) {
     const envContent = fs.readFileSync(envExamplePath, 'utf8');
-    const updatedContent = envContent.replace(
-      /JWT_SECRET=.*/,
-      `JWT_SECRET=${secret}`
-    );
+    const updatedContent = envContent.replace(/JWT_SECRET=.*/, `JWT_SECRET=${secret}`);
     fs.writeFileSync(envPath, updatedContent);
     console.log('✅ .env file created with the generated JWT secret!');
   } else {

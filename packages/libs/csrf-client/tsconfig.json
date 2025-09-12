@@ -9,7 +9,7 @@
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    
+
     /* Type Checking */
     "strict": true,
     "noImplicitAny": true,
@@ -27,7 +27,7 @@
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
     "exactOptionalPropertyTypes": true,
-    
+
     /* Module Resolution */
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -36,13 +36,13 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    
+
     /* Emit */
     "removeComments": false,
     "importsNotUsedAsValues": "remove",
     "preserveConstEnums": true,
     "inlineSources": true,
-    
+
     /* Advanced */
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
