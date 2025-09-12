@@ -722,55 +722,59 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Get content history
-  fastify.get<{ Params: { brandId: string } }>('/history/:brandId', async (request, reply) => {
-    try {
-      const userId = request.user!.id;
+  fastify.get<{ Params: { brandId: string } }>(
+    '/history/:brandId',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
 
-      const { brandId } = request.params;
+        const { brandId } = request.params;
 
-      // Verify user owns the brand
-      const brand = await prisma.brand.findFirst({
-        where: {
-          id: brandId,
-          userId,
-        },
-      });
-
-      if (!brand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
-
-      const contentHistory = await prisma.content.findMany({
-        where: {
-          brandId,
-          status: {
-            in: ['draft', 'scheduled', 'published', 'failed', 'skipped'],
+        // Verify user owns the brand
+        const brand = await prisma.brand.findFirst({
+          where: {
+            id: brandId,
+            userId,
           },
-        },
-        select: {
-          id: true,
-          caption: true,
-          hashtags: true,
-          s3ImageKey: true,
-          cdnImageUrl: true,
-          imageRegion: true,
-          retentionExpiresAt: true,
-          status: true,
-          scheduledAt: true,
-          postedAt: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy: { updatedAt: 'desc' },
-        take: 50, // Limit to last 50 items
-      });
+        });
 
-      return { content: contentHistory };
-    } catch (error) {
-      console.error('Content history error:', error);
-      return reply.code(500).send({ error: 'Failed to retrieve content history' });
+        if (!brand) {
+          return reply.code(404).send({ error: 'Brand not found' });
+        }
+
+        const contentHistory = await prisma.content.findMany({
+          where: {
+            brandId,
+            status: {
+              in: ['draft', 'scheduled', 'published', 'failed', 'skipped'],
+            },
+          },
+          select: {
+            id: true,
+            caption: true,
+            hashtags: true,
+            s3ImageKey: true,
+            cdnImageUrl: true,
+            imageRegion: true,
+            retentionExpiresAt: true,
+            status: true,
+            scheduledAt: true,
+            postedAt: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: 50, // Limit to last 50 items
+        });
+
+        return { content: contentHistory };
+      } catch (error) {
+        console.error('Content history error:', error);
+        return reply.code(500).send({ error: 'Failed to retrieve content history' });
+      }
     }
-  });
+  );
 
   // Upload image for content
   fastify.post<{
@@ -995,36 +999,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       console.error('Calendar content error:', error);
       return reply.code(500).send({ error: 'Failed to retrieve calendar content' });
-    }
-  });
-
-  // Get content history for a brand
-  fastify.get<{
-    Params: { brandId: string };
-  }>('/history/:brandId', { preHandler: fastify.authenticate }, async (request, reply) => {
-    try {
-      const userId = request.user!.id;
-      const { brandId } = request.params;
-
-      // Verify brand ownership
-      const brand = await prisma.brand.findFirst({
-        where: { id: brandId, userId },
-      });
-
-      if (!brand) {
-        return reply.code(404).send({ error: 'Brand not found' });
-      }
-
-      // Get all content for the brand
-      const content = await prisma.content.findMany({
-        where: { brandId },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      return { content };
-    } catch (error) {
-      console.error('Content history error:', error);
-      return reply.code(500).send({ error: 'Failed to retrieve content history' });
     }
   });
 };

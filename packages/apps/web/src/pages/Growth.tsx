@@ -154,7 +154,7 @@ export function Growth() {
           <div className="mb-6">
             <h3 className="mb-3 text-lg font-medium">Growth Opportunities</h3>
             <div className="space-y-3">
-              {analysis.opportunities.map((opportunity: GrowthOpportunity, index: number) => (
+              {analysis.opportunities?.map((opportunity: GrowthOpportunity, index: number) => (
                 <div key={index} className="rounded-lg border p-4">
                   <div className="flex items-start justify-between">
                     <div>
@@ -195,7 +195,7 @@ export function Growth() {
           <div className="mb-6">
             <h3 className="mb-3 text-lg font-medium">Recommendations</h3>
             <ul className="space-y-2">
-              {analysis.recommendations.map((rec: string, index: number) => (
+              {analysis.recommendations?.map((rec: string, index: number) => (
                 <li key={index} className="flex items-start">
                   <span className="mr-2 text-blue-500">•</span>
                   <span className="text-gray-700">{rec}</span>
@@ -208,7 +208,7 @@ export function Growth() {
           <div>
             <h3 className="mb-3 text-lg font-medium">Next Actions</h3>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              {analysis.nextActions.map((action: string, index: number) => (
+              {analysis.nextActions?.map((action: string, index: number) => (
                 <div key={index} className="rounded border-l-4 border-blue-400 bg-blue-50 p-3">
                   <span className="font-medium text-blue-800">{action}</span>
                 </div>
