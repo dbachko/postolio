@@ -22,7 +22,7 @@
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts,.tsx"
+    "lint": "eslint src --ext .ts,.tsx"
   },
   "keywords": [
     "csrf",

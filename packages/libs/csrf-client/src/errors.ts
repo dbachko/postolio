@@ -35,7 +35,7 @@ export enum CSRFErrorCode {
   // Configuration errors
   INVALID_CONFIG = 'INVALID_CONFIG',
   INVALID_ENDPOINT = 'INVALID_ENDPOINT',
-} as const;
+}
 
 /**
  * Severity levels for errors
@@ -45,7 +45,7 @@ export enum CSRFErrorSeverity {
   MEDIUM = 'medium',
   HIGH = 'high',
   CRITICAL = 'critical',
-} as const;
+}
 
 /**
  * Base error class for CSRF token operations
@@ -171,7 +171,7 @@ export class CSRFTokenError extends Error {
         severity = CSRFErrorSeverity.HIGH;
         break;
       
-      case 429:
+      case 429: {
         code = CSRFErrorCode.RATE_LIMITED;
         severity = CSRFErrorSeverity.MEDIUM;
         retryable = true;
@@ -180,6 +180,7 @@ export class CSRFTokenError extends Error {
           retryAfter = parseInt(retryHeader, 10) * 1000;
         }
         break;
+      }
       
       case 500:
       case 502:
