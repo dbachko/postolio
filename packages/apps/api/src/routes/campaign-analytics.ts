@@ -28,27 +28,31 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{
     Params: CampaignMetricsParams;
     Querystring: CampaignMetricsQuery;
-  }>('/campaign/analytics/:campaignId', { preHandler: fastify.authenticate }, async (request, reply) => {
-    try {
-      const userId = request.user!.id;
-      const { campaignId } = request.params;
+  }>(
+    '/campaign/analytics/:campaignId',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { campaignId } = request.params;
 
-      const metrics = await campaignAnalyticsService.getCampaignMetrics(campaignId, userId);
+        const metrics = await campaignAnalyticsService.getCampaignMetrics(campaignId, userId);
 
-      reply.send({
-        success: true,
-        data: metrics,
-        lastUpdated: new Date().toISOString(),
-        fromCache: false,
-      });
-    } catch (error) {
-      console.error('Get campaign metrics error:', error);
-      reply.status(500).send({
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to get campaign metrics',
-      });
+        reply.send({
+          success: true,
+          data: metrics,
+          lastUpdated: new Date().toISOString(),
+          fromCache: false,
+        });
+      } catch (error) {
+        console.error('Get campaign metrics error:', error);
+        reply.status(500).send({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get campaign metrics',
+        });
+      }
     }
-  });
+  );
 
   // Compare multiple campaigns
   fastify.post<{ Body: CompareCampaignsBody }>(

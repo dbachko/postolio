@@ -24,7 +24,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   if (!jwtSecret) {
     throw new Error(
       'JWT_SECRET environment variable is required. ' +
-      'Generate a secure secret using: openssl rand -hex 32'
+        'Generate a secure secret using: openssl rand -hex 32'
     );
   }
 
@@ -32,7 +32,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   if (jwtSecret.length < 32) {
     throw new Error(
       'JWT_SECRET must be at least 32 characters long. ' +
-      'Generate a secure secret using: openssl rand -hex 32'
+        'Generate a secure secret using: openssl rand -hex 32'
     );
   }
 
@@ -81,22 +81,22 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         // Handle specific JWT errors
         const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
         if (errorMessage.includes('expired')) {
-          return reply.code(401).send({ 
+          return reply.code(401).send({
             error: 'Token expired',
-            code: 'TOKEN_EXPIRED' 
+            code: 'TOKEN_EXPIRED',
           });
         }
         if (errorMessage.includes('invalid') || errorMessage.includes('malformed')) {
-          return reply.code(401).send({ 
+          return reply.code(401).send({
             error: 'Invalid token',
-            code: 'INVALID_TOKEN' 
+            code: 'INVALID_TOKEN',
           });
         }
-        
+
         // Generic authentication error
-        return reply.code(401).send({ 
+        return reply.code(401).send({
           error: 'Authentication required',
-          code: 'AUTH_REQUIRED' 
+          code: 'AUTH_REQUIRED',
         });
       }
     }

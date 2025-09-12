@@ -30,7 +30,7 @@ interface CleanupResult {
 export class BackgroundJobQueue {
   private queue: Bull.Queue<JobData>;
   private tokenStore: RedisTokenStore;
-  
+
   constructor() {
     // Initialize Bull queue with Redis connection
     this.queue = new Bull('background-jobs', getRedisUrl(), {
@@ -44,12 +44,12 @@ export class BackgroundJobQueue {
         },
       },
     });
-    
+
     this.tokenStore = new RedisTokenStore();
-    
+
     // Register job processors
     this.registerProcessors();
-    
+
     // Register event handlers
     this.registerEventHandlers();
   }
@@ -61,15 +61,15 @@ export class BackgroundJobQueue {
     this.queue.process(JobType.TOKEN_CLEANUP, async (job) => {
       return await this.processTokenCleanup(job);
     });
-    
+
     this.queue.process(JobType.TOKEN_MIGRATION, async (job) => {
       return await this.processTokenMigration(job);
     });
-    
+
     this.queue.process(JobType.TOKEN_INTEGRITY_CHECK, async (job) => {
       return await this.processTokenIntegrityCheck(job);
     });
-    
+
     this.queue.process(JobType.AUDIT_LOG_CLEANUP, async (job) => {
       return await this.processAuditLogCleanup(job);
     });
@@ -82,11 +82,11 @@ export class BackgroundJobQueue {
     this.queue.on('completed', (job, result) => {
       console.log(`Job ${job.id} (${job.data.type}) completed:`, result);
     });
-    
+
     this.queue.on('failed', (job, err) => {
       console.error(`Job ${job.id} (${job.data.type}) failed:`, err);
     });
-    
+
     this.queue.on('stalled', (job) => {
       console.warn(`Job ${job.id} (${job.data.type}) stalled`);
     });
@@ -97,16 +97,16 @@ export class BackgroundJobQueue {
    */
   private async processTokenCleanup(job: Bull.Job<JobData>): Promise<CleanupResult> {
     const startTime = Date.now();
-    
+
     try {
       // Update job progress
       await job.progress(10);
-      
+
       // Clean up expired tokens using the optimized method
       const deletedCount = await RefreshTokenService.cleanupExpiredTokens();
-      
+
       await job.progress(90);
-      
+
       // Log cleanup result
       await AuditLogger.log({
         userId: 'system',
@@ -118,16 +118,16 @@ export class BackgroundJobQueue {
         },
         success: true,
       });
-      
+
       await job.progress(100);
-      
+
       return {
         deletedCount,
         duration: Date.now() - startTime,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+
       await AuditLogger.log({
         userId: 'system',
         eventType: AuditEventType.SYSTEM_ERROR,
@@ -138,7 +138,7 @@ export class BackgroundJobQueue {
         },
         success: false,
       });
-      
+
       throw error;
     }
   }
@@ -152,15 +152,15 @@ export class BackgroundJobQueue {
     duration: number;
   }> {
     const startTime = Date.now();
-    
+
     try {
       await job.progress(10);
-      
+
       // Run migration
       const result = await this.tokenStore.migrateFromKeysToSets();
-      
+
       await job.progress(90);
-      
+
       // Log migration result
       await AuditLogger.log({
         userId: 'system',
@@ -173,16 +173,16 @@ export class BackgroundJobQueue {
         },
         success: result.errors.length === 0,
       });
-      
+
       await job.progress(100);
-      
+
       return {
         ...result,
         duration: Date.now() - startTime,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+
       await AuditLogger.log({
         userId: 'system',
         eventType: AuditEventType.SYSTEM_ERROR,
@@ -193,7 +193,7 @@ export class BackgroundJobQueue {
         },
         success: false,
       });
-      
+
       throw error;
     }
   }
@@ -208,24 +208,24 @@ export class BackgroundJobQueue {
     duration: number;
   }> {
     const startTime = Date.now();
-    
+
     try {
       await job.progress(10);
-      
+
       // Check integrity
       const result = await this.tokenStore.verifyIntegrity();
-      
+
       await job.progress(70);
-      
+
       // Fix orphaned tokens
       if (result.orphanedTokens.length > 0) {
         for (const tokenId of result.orphanedTokens) {
           await this.tokenStore.deleteToken(tokenId);
         }
       }
-      
+
       await job.progress(90);
-      
+
       // Log integrity check result
       await AuditLogger.log({
         userId: 'system',
@@ -239,16 +239,16 @@ export class BackgroundJobQueue {
         },
         success: true,
       });
-      
+
       await job.progress(100);
-      
+
       return {
         ...result,
         duration: Date.now() - startTime,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+
       await AuditLogger.log({
         userId: 'system',
         eventType: AuditEventType.SYSTEM_ERROR,
@@ -259,7 +259,7 @@ export class BackgroundJobQueue {
         },
         success: false,
       });
-      
+
       throw error;
     }
   }
@@ -272,19 +272,19 @@ export class BackgroundJobQueue {
     duration: number;
   }> {
     const startTime = Date.now();
-    
+
     try {
       await job.progress(10);
-      
+
       // Clean up old audit logs (older than 90 days)
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - 90);
-      
+
       // This would need to be implemented in AuditLogger
       // For now, just log the attempt
-      
+
       await job.progress(90);
-      
+
       await AuditLogger.log({
         userId: 'system',
         eventType: AuditEventType.SYSTEM_CLEANUP,
@@ -295,16 +295,16 @@ export class BackgroundJobQueue {
         },
         success: true,
       });
-      
+
       await job.progress(100);
-      
+
       return {
         cutoffDate: cutoffDate.toISOString(),
         duration: Date.now() - startTime,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+
       await AuditLogger.log({
         userId: 'system',
         eventType: AuditEventType.SYSTEM_ERROR,
@@ -315,7 +315,7 @@ export class BackgroundJobQueue {
         },
         success: false,
       });
-      
+
       throw error;
     }
   }
@@ -328,11 +328,7 @@ export class BackgroundJobQueue {
     metadata?: Record<string, unknown>,
     options?: Bull.JobOptions
   ): Promise<Bull.Job<JobData>> {
-    return await this.queue.add(
-      type,
-      { type, metadata },
-      options
-    );
+    return await this.queue.add(type, { type, metadata }, options);
   }
 
   /**
@@ -349,7 +345,7 @@ export class BackgroundJobQueue {
         },
       }
     );
-    
+
     // Token integrity check - daily at 3 AM
     await this.queue.add(
       JobType.TOKEN_INTEGRITY_CHECK,
@@ -360,7 +356,7 @@ export class BackgroundJobQueue {
         },
       }
     );
-    
+
     // Audit log cleanup - weekly on Sunday at 4 AM
     await this.queue.add(
       JobType.AUDIT_LOG_CLEANUP,
@@ -371,7 +367,7 @@ export class BackgroundJobQueue {
         },
       }
     );
-    
+
     console.log('Recurring background jobs scheduled');
   }
 
@@ -392,7 +388,7 @@ export class BackgroundJobQueue {
       this.queue.getFailedCount(),
       this.queue.getDelayedCount(),
     ]);
-    
+
     return { waiting, active, completed, failed, delayed };
   }
 

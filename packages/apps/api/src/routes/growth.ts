@@ -3,33 +3,35 @@ import growthService from '../services/growth.js';
 
 export default async function growthRoutes(fastify: FastifyInstance) {
   // Analyze growth opportunities
-  fastify.post<{ Body: { brandId: string } }>('/analyze', { preHandler: fastify.authenticate }, async function (request, reply) {
+  fastify.post<{ Body: { brandId: string } }>(
+    '/analyze',
+    { preHandler: fastify.authenticate },
+    async function (request, reply) {
+      try {
+        const { brandId } = request.body;
 
-    try {
-      const { brandId } = request.body;
+        if (!brandId) {
+          return reply.code(400).send({ error: 'Brand ID is required' });
+        }
 
-      if (!brandId) {
-        return reply.code(400).send({ error: 'Brand ID is required' });
+        const analysis = await growthService.analyzeGrowthOpportunities(brandId);
+
+        reply.send({
+          success: true,
+          analysis,
+        });
+      } catch (error) {
+        console.error('Growth analysis error:', error);
+        reply.code(500).send({ error: 'Failed to analyze growth opportunities' });
       }
-
-      const analysis = await growthService.analyzeGrowthOpportunities(brandId);
-
-      reply.send({
-        success: true,
-        analysis,
-      });
-    } catch (error) {
-      console.error('Growth analysis error:', error);
-      reply.code(500).send({ error: 'Failed to analyze growth opportunities' });
     }
-  });
+  );
 
   // Generate growth strategies
   fastify.post<{ Body: { brandId: string; focus?: string } }>(
     '/strategies',
     { preHandler: fastify.authenticate },
     async function (request, reply) {
-
       try {
         const { brandId, focus } = request.body;
 
@@ -55,7 +57,6 @@ export default async function growthRoutes(fastify: FastifyInstance) {
     Params: { brandId: string };
     Querystring: { period?: string };
   }>('/metrics/:brandId', { preHandler: fastify.authenticate }, async function (request, reply) {
-
     try {
       const { brandId } = request.params;
       const period = parseInt(request.query.period ?? '30');

@@ -59,10 +59,7 @@ export class RefreshTokenService {
     };
 
     // Store token with efficient Set tracking
-    await tokenStore.storeToken(
-      tokenData,
-      this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60
-    );
+    await tokenStore.storeToken(tokenData, this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60);
 
     // Track token family for rotation detection
     await tokenStore.storeFamily(
@@ -148,7 +145,6 @@ export class RefreshTokenService {
       return null;
     }
 
-
     // Check for token reuse (generation mismatch)
     if (oldTokenParsed.generation !== family.currentGeneration) {
       // Token reuse detected - invalidate entire family
@@ -195,10 +191,7 @@ export class RefreshTokenService {
     };
 
     // Store new token with efficient Set tracking
-    await tokenStore.storeToken(
-      newTokenData,
-      this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60
-    );
+    await tokenStore.storeToken(newTokenData, this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60);
 
     // Update family generation
     await tokenStore.storeFamily(
@@ -327,11 +320,7 @@ export class RefreshTokenService {
 
     // Update last used timestamp
     parsed.lastUsedAt = new Date();
-    await tokenStore.updateToken(
-      token,
-      parsed,
-      this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60
-    );
+    await tokenStore.updateToken(token, parsed, this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60);
 
     return parsed;
   }

@@ -42,45 +42,49 @@ function validateBrandTimezoneUpdate(body: unknown): { timezone: string | null }
 
 const userRoutes: FastifyPluginAsync = async (fastify) => {
   // Update user timezone preferences
-  fastify.patch('/api/users/timezone', { preHandler: fastify.authenticate }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const userId = request.user!.id;
+  fastify.patch(
+    '/api/users/timezone',
+    { preHandler: fastify.authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user!.id;
 
-    try {
-      // Validate request body
-      const validatedData = validateTimezoneUpdate(request.body);
-      if (!validatedData) {
-        return reply.status(400).send({
-          error:
-            'Invalid request body. Expected { timezone: string, timezoneAutoDetected: boolean }',
+      try {
+        // Validate request body
+        const validatedData = validateTimezoneUpdate(request.body);
+        if (!validatedData) {
+          return reply.status(400).send({
+            error:
+              'Invalid request body. Expected { timezone: string, timezoneAutoDetected: boolean }',
+          });
+        }
+
+        const { timezone, timezoneAutoDetected } = validatedData;
+
+        // Validate timezone if not auto-detected
+        if (!timezoneAutoDetected && !TimezoneService.isValidTimezone(timezone)) {
+          return reply.status(400).send({ error: 'Invalid timezone' });
+        }
+
+        const updatedUser = await prisma.user.update({
+          where: { id: userId },
+          data: {
+            timezone: timezone, // Store the actual timezone value even when auto-detected
+            timezoneAutoDetected,
+          },
+          select: {
+            id: true,
+            timezone: true,
+            timezoneAutoDetected: true,
+          },
         });
+
+        return { success: true, user: updatedUser };
+      } catch (err: unknown) {
+        request.log.error({ err }, 'Failed to update user timezone');
+        return reply.code(500).send({ error: 'Internal server error' });
       }
-
-      const { timezone, timezoneAutoDetected } = validatedData;
-
-      // Validate timezone if not auto-detected
-      if (!timezoneAutoDetected && !TimezoneService.isValidTimezone(timezone)) {
-        return reply.status(400).send({ error: 'Invalid timezone' });
-      }
-
-      const updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: {
-          timezone: timezone, // Store the actual timezone value even when auto-detected
-          timezoneAutoDetected,
-        },
-        select: {
-          id: true,
-          timezone: true,
-          timezoneAutoDetected: true,
-        },
-      });
-
-      return { success: true, user: updatedUser };
-    } catch (err: unknown) {
-      request.log.error({ err }, 'Failed to update user timezone');
-      return reply.code(500).send({ error: 'Internal server error' });
     }
-  });
+  );
 
   // Get brand timezone
   fastify.get(

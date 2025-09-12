@@ -100,7 +100,10 @@ export class MagicLinkService {
   /**
    * Verify a magic link token and sign in the user
    */
-  static async verifyMagicLink(fastify: FastifyInstance, token: string): Promise<{
+  static async verifyMagicLink(
+    fastify: FastifyInstance,
+    token: string
+  ): Promise<{
     success: boolean;
     user?: {
       id: string;

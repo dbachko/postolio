@@ -143,7 +143,7 @@ export function buildFastify(): FastifyInstance {
   });
   app.register(monitoringPlugin as FastifyPluginAsync);
   app.register(authPlugin as FastifyPluginAsync);
-  
+
   // Register CSRF protection with secure cookie configuration
   app.register(csrfProtection, {
     cookieOpts: {
