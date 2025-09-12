@@ -146,7 +146,7 @@ export function buildFastify(): FastifyInstance {
   app.register(csrfProtection, {
     cookieOpts: {
       signed: true,
-      httpOnly: false, // Frontend needs to read the token
+      httpOnly: true, // Secure: Frontend gets token from API, not cookie
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       path: '/',

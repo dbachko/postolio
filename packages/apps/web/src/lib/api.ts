@@ -1,5 +1,6 @@
 // Basic types - avoiding complex type imports for now to resolve build issues
 import { convertFileToBase64 } from './fileUtils';
+import { CSRFTokenManager } from '@postolio/csrf-client';
 
 export interface User {
   id: string;
@@ -111,6 +112,15 @@ export interface CampaignStatusResponse {
 // Full URL for production or explicit configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+// Create singleton instance with modern CSRF client configuration
+const csrfTokenManager = new CSRFTokenManager({
+  apiEndpoint: `${API_BASE_URL}/api/csrf-token`,
+  storage: 'session',
+  bufferMs: 60_000,
+  maxRetries: 3,
+  retryDelayMs: 1_000,
+});
+
 class ApiClient {
   private token: string | null = null;
   private cachedTimezone: string | null = null;
@@ -131,78 +141,9 @@ class ApiClient {
     localStorage.removeItem('auth_token');
   }
 
-  private getCSRFTokenFromCookie(): string | null {
-    // Parse cookies to find CSRF token
-    const cookies = document.cookie.split(';');
-    for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split('=');
-      // @fastify/csrf-protection uses _csrf cookie by default
-      if (name === '_csrf') {
-        return decodeURIComponent(value);
-      }
-    }
-    return null;
-  }
-
   async ensureCSRFToken(): Promise<string | null> {
-    // First check if we already have a CSRF token in cookies
-    let csrfToken = this.getCSRFTokenFromCookie();
-
-    if (!csrfToken) {
-      // Fetch a new CSRF token with retry logic
-      const maxRetries = 3;
-      let retryCount = 0;
-
-      while (retryCount < maxRetries && !csrfToken) {
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
-            credentials: 'include',
-            signal: AbortSignal.timeout(5000), // 5 second timeout
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            // The token is now set as a cookie by the server
-            // Also available in response for immediate use
-            csrfToken = data.token || this.getCSRFTokenFromCookie();
-
-            // Store token expiry for proactive refresh
-            if (data.expiresIn) {
-              const expiryTime = Date.now() + data.expiresIn * 1000;
-              sessionStorage.setItem('csrf_token_expiry', String(expiryTime));
-            }
-          } else if (response.status === 429) {
-            // Rate limited - wait before retry
-            const retryAfter = response.headers.get('Retry-After');
-            const delay = retryAfter ? parseInt(retryAfter) * 1000 : 1000;
-            await new Promise((resolve) => setTimeout(resolve, delay));
-          }
-        } catch (error) {
-          console.warn(`Failed to fetch CSRF token (attempt ${retryCount + 1}):`, error);
-          // Exponential backoff
-          if (retryCount < maxRetries - 1) {
-            await new Promise((resolve) => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
-          }
-        }
-        retryCount++;
-      }
-    } else {
-      // Check if token needs refresh (proactive)
-      const expiryTime = sessionStorage.getItem('csrf_token_expiry');
-      if (expiryTime) {
-        const timeUntilExpiry = parseInt(expiryTime) - Date.now();
-        // Refresh if less than 1 minute remaining
-        if (timeUntilExpiry < 60000) {
-          // Clear old token to force refresh
-          document.cookie = `_csrf=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
-          sessionStorage.removeItem('csrf_token_expiry');
-          // Recursive call to get new token
-          return this.ensureCSRFToken();
-        }
-      }
-    }
-
-    return csrfToken;
+    // Use the modern library's ensureToken method
+    return csrfTokenManager.ensureToken();
   }
 
   private getTimezone(): string {
@@ -255,38 +196,45 @@ class ApiClient {
     });
 
     if (!response.ok) {
+      let errorText = '';
+      let errorData: any = null;
+
+      // Read response body once
+      try {
+        errorText = await response.text();
+        if (errorText) {
+          errorData = JSON.parse(errorText);
+        }
+      } catch {
+        // errorText is not JSON, keep it as is
+      }
+
       // Handle 403 CSRF token errors
       if (response.status === 403) {
-        const errorText = await response.text();
-        try {
-          const errorData = JSON.parse(errorText);
-          if (errorData.code === 'CSRF_TOKEN_MISSING' || errorData.code === 'CSRF_TOKEN_INVALID') {
-            // Clear cookies by fetching a new CSRF token
-            const refreshResponse = await fetch(`${API_BASE_URL}/api/csrf-token`, {
+        if (
+          errorData &&
+          (errorData.code === 'CSRF_TOKEN_MISSING' ||
+            errorData.code === 'CSRF_TOKEN_INVALID' ||
+            errorData.code === 'CSRF_VALIDATION_FAILED')
+        ) {
+          // Clear cached token and fetch a new one
+          csrfTokenManager.clearToken();
+
+          const newToken = await csrfTokenManager.fetchToken();
+
+          // Retry the request once with new token
+          if (newToken) {
+            headers['csrf-token'] = newToken;
+            const retryResponse = await fetch(url, {
+              ...options,
+              headers,
               credentials: 'include',
             });
 
-            if (refreshResponse.ok) {
-              // Get the new token from cookie
-              const newCsrfToken = this.getCSRFTokenFromCookie();
-
-              // Retry the request once with new token
-              if (newCsrfToken) {
-                headers['csrf-token'] = newCsrfToken;
-                const retryResponse = await fetch(url, {
-                  ...options,
-                  headers,
-                  credentials: 'include',
-                });
-
-                if (retryResponse.ok) {
-                  return retryResponse.json();
-                }
-              }
+            if (retryResponse.ok) {
+              return retryResponse.json();
             }
           }
-        } catch {
-          // Not a CSRF error, continue with normal error handling
         }
       }
 
@@ -306,25 +254,19 @@ class ApiClient {
         throw new Error('Image too large. Please optimize your image to be under 10MB.');
       }
 
-      const errorText = await response.text();
-      try {
-        const errorData = JSON.parse(errorText);
+      // Throw appropriate error based on what we have
+      if (errorData) {
         throw new Error(errorData.error || errorData.message || 'Request failed');
-      } catch {
-        // If JSON parsing fails, check for specific status codes
-        if (response.status === 404) {
-          throw new Error('Resource not found');
-        } else if (response.status === 500) {
-          throw new Error('Server error. Please try again later.');
-        } else if (response.status === 403) {
-          throw new Error('You do not have permission to perform this action');
-        } else if (errorText) {
-          // If we have error text but it's not JSON, use it
-          throw new Error(errorText);
-        } else {
-          // Fallback to generic message with status
-          throw new Error(`Request failed with status ${response.status}`);
-        }
+      } else if (response.status === 404) {
+        throw new Error('Resource not found');
+      } else if (response.status === 500) {
+        throw new Error('Server error. Please try again later.');
+      } else if (response.status === 403) {
+        throw new Error('You do not have permission to perform this action');
+      } else if (errorText) {
+        throw new Error(errorText);
+      } else {
+        throw new Error(`Request failed with status ${response.status}`);
       }
     }
 
