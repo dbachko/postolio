@@ -332,21 +332,12 @@ export class PostolioStack extends cdk.Stack {
     // User-provided secrets (OPENAI_API_KEY, etc.) are now passed as environment variables from GitHub Secrets
     const appSecrets = new secretsmanager.Secret(this, 'AppSecrets', {
       description: 'Postolio infrastructure secrets (CDK-generated only)',
-      secretObjectValue: {
-        // Authentication secrets (CDK-generated)
-        jwtSecret: cdk.SecretValue.unsafePlainText(
-          cdk.Fn.select(2, cdk.Fn.split('-', cdk.Fn.select(2, cdk.Fn.split('/', cdk.Aws.STACK_ID))))
-        ),
-
-        // NOTE: Redis endpoint moved to environment variables (AWS best practice)
-        // Non-sensitive internal endpoints should use env vars for automatic updates
-
-        // NOTE: Publisher now uses AWS IAM SigV4 authentication instead of API keys
-        // NOTE: User-provided secrets moved to environment variables:
-        // - openaiApiKey -> OPENAI_API_KEY (from GitHub Secrets)
-        // - googleClientSecret -> GOOGLE_CLIENT_SECRET (from GitHub Secrets)
-        // - facebookAppSecret -> FACEBOOK_APP_SECRET (from GitHub Secrets)
-      },
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({}),
+        generateStringKey: 'jwtSecret',
+        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+        passwordLength: 64
+      }
     });
 
     // ECS Cluster
