@@ -39,6 +39,7 @@ import dataDeletionRoutes from './routes/data-deletion.js';
 import { complianceRoutes } from './routes/compliance.js';
 import postDetailRoutes from './routes/post-detail.js';
 import configRoutes from './routes/config.js';
+import backgroundJobsRoutes from './routes/background-jobs.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import Redis from 'ioredis';
@@ -47,6 +48,7 @@ import { StatusBroadcaster } from './services/status-broadcaster.js';
 import { schedulerAdapter } from './services/scheduler-adapter.js';
 import { applyRateLimiting } from './middleware/rate-limit.js';
 import { getRedisClient } from './services/redis.js';
+import { backgroundJobs } from './services/background-jobs.js';
 
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
@@ -141,7 +143,7 @@ export function buildFastify(): FastifyInstance {
   });
   app.register(monitoringPlugin as FastifyPluginAsync);
   app.register(authPlugin as FastifyPluginAsync);
-
+  
   // Register CSRF protection with secure cookie configuration
   app.register(csrfProtection, {
     cookieOpts: {
@@ -218,6 +220,7 @@ export function buildFastify(): FastifyInstance {
   app.register(complianceRoutes);
   app.register(postDetailRoutes); // Post detail routes don't need prefix, they include /api
   app.register(configRoutes); // Config routes include their own /api prefix
+  app.register(backgroundJobsRoutes); // Background job monitoring routes
 
   // Health check endpoint for both load balancer health checks and API requests
   app.get('/health', async () => {
@@ -241,8 +244,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.on(signal, async () => {
       app.log.warn(`Received ${signal}, starting graceful shutdown...`);
       try {
-        // Background services now managed by EventBridge
-        // No need to stop services here
+        // Shutdown background job queue
+        await backgroundJobs.shutdown();
+        app.log.info('Background job queue shut down');
 
         // Close Redis connection
         if (redis) {
@@ -307,6 +311,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // Initialize retention manager
       const retentionManager = getRetentionManager(app);
       await retentionManager.initialize();
+
+      // Initialize background job queue and schedule recurring jobs
+      await backgroundJobs.scheduleRecurringJobs();
+      app.log.info('✅ Background job queue initialized with recurring jobs');
 
       app.log.info('✅ Database initialized and background services started');
     } catch (dbError: unknown) {

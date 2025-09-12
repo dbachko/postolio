@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "generate-secret": "node scripts/generate-jwt-secret.js"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",

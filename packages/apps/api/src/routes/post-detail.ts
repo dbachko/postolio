@@ -1,6 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
-import { authenticateRequest } from '../middleware/auth.js';
 import { instagramService } from '../services/instagram.js';
 import {
   PostDetailParamsSchema,
@@ -17,7 +16,7 @@ interface PostDetailParams {
 
 const postDetailRoutes: FastifyPluginAsync = async (app) => {
   // Add authentication middleware to all routes
-  app.addHook('preHandler', authenticateRequest);
+  app.addHook('preHandler', app.authenticate);
 
   // Get comprehensive post detail
   app.get<{ Params: PostDetailParams }>('/api/posts/:postId/detail', async (request, reply) => {

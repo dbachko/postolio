@@ -1,6 +1,5 @@
-import { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import { FastifyPluginAsync } from 'fastify';
 
-import { verifyJWT } from '../services/jwt.js';
 import { campaignService, type CampaignConfig } from '../services/campaign.js';
 import { CampaignStatus } from '@postolio/database';
 import { campaignJobService } from '../services/campaign-jobs.js';
@@ -37,34 +36,10 @@ interface StartCampaignBody {
 }
 
 const campaignRoutes: FastifyPluginAsync = async (fastify) => {
-  // Helper function to authenticate and get user ID
-  const authenticateRequest = async (request: FastifyRequest & { user?: { id: string } }) => {
-    const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new Error('Authentication required');
-    }
-
-    const token = authHeader.substring(7);
-    let decoded;
-    try {
-      decoded = verifyJWT(token);
-    } catch (jwtError) {
-      console.error('JWT verification error:', jwtError);
-      throw new Error('Invalid authentication token');
-    }
-
-    // Store user ID for rate limiting
-    // Provide minimal user object including required email if present on decoded token
-    type DecodedToken = { id: string; email?: string };
-    const tokenData = decoded as unknown as DecodedToken;
-    request.user = { id: tokenData.id, email: tokenData.email || '' };
-    return decoded.id;
-  };
-
   // Configure campaign
-  fastify.post<{ Body: ConfigureCampaignBody }>('/configure', async (request, reply) => {
+  fastify.post<{ Body: ConfigureCampaignBody }>('/configure', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const userId = await authenticateRequest(request);
+      const userId = request.user!.id;
       const body = request.body;
 
       // Get brand's timezone for proper date interpretation
@@ -169,9 +144,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Get campaign status (for polling)
-  fastify.get<{ Params: { id: string } }>('/status/:id', async (request, reply) => {
+  fastify.get<{ Params: { id: string } }>('/status/:id', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const userId = await authenticateRequest(request);
+      const userId = request.user!.id;
       const { id } = request.params;
 
       if (!id) {
@@ -226,9 +201,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Generate campaign preview
-  fastify.post<{ Body: PreviewCampaignBody }>('/preview', async (request, reply) => {
+  fastify.post<{ Body: PreviewCampaignBody }>('/preview', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const userId = await authenticateRequest(request);
+      const userId = request.user!.id;
       const { configId, exampleCount = 3 } = request.body;
 
       if (!configId) {
@@ -267,9 +242,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Start campaign
-  fastify.post<{ Body: StartCampaignBody }>('/start', async (request, reply) => {
+  fastify.post<{ Body: StartCampaignBody }>('/start', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const userId = await authenticateRequest(request);
+      const userId = request.user!.id;
       const { campaignId } = request.body;
 
       if (!campaignId) {
@@ -310,9 +285,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Get campaign details
-  fastify.get<{ Params: { id: string } }>('/:id', async (request, reply) => {
+  fastify.get<{ Params: { id: string } }>('/:id', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const userId = await authenticateRequest(request);
+      const userId = request.user!.id;
       const { id } = request.params;
 
       if (!id) {
@@ -355,9 +330,10 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   }
   fastify.put<{ Params: { id: string }; Body: UpdateCampaignBody }>(
     '/:id',
+    { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        const userId = await authenticateRequest(request);
+      const userId = request.user!.id;
         const { id } = request.params;
 
         if (!id) {
@@ -489,9 +465,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // List user's campaigns
-  fastify.get<{ Querystring: { brandId?: string } }>('/list', async (request, reply) => {
+  fastify.get<{ Querystring: { brandId?: string } }>('/list', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const userId = await authenticateRequest(request);
+      const userId = request.user!.id;
       const { brandId } = request.query;
 
       // Build where clause - filter by brandId if provided, otherwise show all user's campaigns
@@ -567,9 +543,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Delete campaign (only if not started)
-  fastify.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
+  fastify.delete<{ Params: { id: string } }>('/:id', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const userId = await authenticateRequest(request);
+      const userId = request.user!.id;
       const { id } = request.params;
 
       if (!id) {
@@ -639,22 +615,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.put<{
     Params: { id: string };
     Body: { priority: number };
-  }>('/:id/priority', async (request, reply) => {
+  }>('/:id/priority', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      let decoded;
-      try {
-        decoded = verifyJWT(token);
-      } catch (jwtError) {
-        console.error('JWT verification error:', jwtError);
-        return reply.code(401).send({ error: 'Invalid authentication token' });
-      }
-
+      const userId = request.user!.id;
       const { id } = request.params;
       const { priority } = request.body;
 
@@ -669,7 +632,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       const updatedCampaign = await campaignService.updateCampaignPriority(
         id,
         priority,
-        decoded.id
+        userId
       );
 
       return reply.send({
@@ -696,23 +659,10 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Get campaign coordination summary
-  fastify.get('/coordination', async (request, reply) => {
+  fastify.get('/coordination', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      let decoded;
-      try {
-        decoded = verifyJWT(token);
-      } catch (jwtError) {
-        console.error('JWT verification error:', jwtError);
-        return reply.code(401).send({ error: 'Invalid authentication token' });
-      }
-
-      const coordination = await campaignService.getCampaignCoordination(decoded.id);
+      const userId = request.user!.id;
+      const coordination = await campaignService.getCampaignCoordination(userId);
 
       return reply.send({
         success: true,
@@ -741,9 +691,10 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   }
   fastify.post<{ Params: { id: string }; Body: RegenerateContentBody }>(
     '/:id/regenerate-content',
+    { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        const userId = await authenticateRequest(request);
+        const userId = request.user!.id;
         const { id: campaignId } = request.params;
         const { themes, style, contentIds } = request.body;
 
@@ -796,9 +747,10 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   // Get regeneration job progress
   fastify.get<{ Params: { jobId: string } }>(
     '/regeneration-jobs/:jobId',
+    { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        const userId = await authenticateRequest(request);
+        const userId = request.user!.id;
         const { jobId } = request.params;
 
         const progress = await regenerationService.getJobProgress(jobId, userId);
@@ -823,9 +775,10 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   // Cancel regeneration job
   fastify.delete<{ Params: { jobId: string } }>(
     '/regeneration-jobs/:jobId',
+    { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        const userId = await authenticateRequest(request);
+        const userId = request.user!.id;
         const { jobId } = request.params;
 
         const cancelled = await regenerationService.cancelJob(jobId, userId);

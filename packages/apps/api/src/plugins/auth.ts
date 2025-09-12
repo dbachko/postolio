@@ -1,5 +1,6 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import jwt from '@fastify/jwt';
+import fp from 'fastify-plugin';
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
@@ -13,43 +14,124 @@ declare module '@fastify/jwt' {
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticateOptional: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
-  // Register JWT plugin
+  // Ensure JWT_SECRET is set - required in all environments
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error(
+      'JWT_SECRET environment variable is required. ' +
+      'Generate a secure secret using: openssl rand -hex 32'
+    );
+  }
+
+  // Validate JWT_SECRET strength
+  if (jwtSecret.length < 32) {
+    throw new Error(
+      'JWT_SECRET must be at least 32 characters long. ' +
+      'Generate a secure secret using: openssl rand -hex 32'
+    );
+  }
+
+  // Register JWT plugin with strict configuration
   await fastify.register(jwt, {
-    secret: process.env.JWT_SECRET || 'fallback-secret-for-development',
+    secret: jwtSecret,
+    sign: {
+      algorithm: 'HS256',
+      expiresIn: '15m', // Short-lived tokens for security
+    },
+    verify: {
+      algorithms: ['HS256'], // Only accept HS256 algorithm
+      clockTolerance: 30, // Allow 30 seconds of clock skew
+    },
+    cookie: {
+      cookieName: 'auth_token',
+      signed: false, // The JWT itself is signed
+    },
   });
 
-  // Cookie plugin is registered elsewhere in the application
-
-  // Authentication decorator
+  // Main authentication decorator
   fastify.decorate(
     'authenticate',
     async function (this: typeof fastify, request: FastifyRequest, reply: FastifyReply) {
       try {
-        // Check for token in Authorization header first
+        // Priority: HttpOnly cookie > Bearer token
+        const cookieToken = request.cookies?.auth_token;
         const authHeader = request.headers.authorization;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
+
+        if (cookieToken) {
+          // Verify cookie token
+          request.user = await fastify.jwt.verify(cookieToken);
+        } else if (authHeader && authHeader.startsWith('Bearer ')) {
+          // Verify bearer token
           const token = authHeader.slice(7);
           request.user = await fastify.jwt.verify(token);
         } else {
-          // Fall back to cookie-based authentication
-          await request.jwtVerify();
-          // The jwtVerify() method sets request.user with the decoded token payload
+          throw new Error('No authentication token provided');
         }
 
-        // Validate that user object has required fields
+        // Validate required claims
         if (!request.user || !request.user.id || !request.user.email) {
-          throw new Error('Invalid user token payload');
+          throw new Error('Invalid token payload: missing required fields');
+        }
+      } catch (err) {
+        // Handle specific JWT errors
+        const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
+        if (errorMessage.includes('expired')) {
+          return reply.code(401).send({ 
+            error: 'Token expired',
+            code: 'TOKEN_EXPIRED' 
+          });
+        }
+        if (errorMessage.includes('invalid') || errorMessage.includes('malformed')) {
+          return reply.code(401).send({ 
+            error: 'Invalid token',
+            code: 'INVALID_TOKEN' 
+          });
+        }
+        
+        // Generic authentication error
+        return reply.code(401).send({ 
+          error: 'Authentication required',
+          code: 'AUTH_REQUIRED' 
+        });
+      }
+    }
+  );
+
+  // Optional authentication decorator (doesn't fail if no token)
+  fastify.decorate(
+    'authenticateOptional',
+    async function (this: typeof fastify, request: FastifyRequest) {
+      try {
+        const cookieToken = request.cookies?.auth_token;
+        const authHeader = request.headers.authorization;
+
+        if (cookieToken) {
+          request.user = await fastify.jwt.verify(cookieToken);
+        } else if (authHeader && authHeader.startsWith('Bearer ')) {
+          const token = authHeader.slice(7);
+          request.user = await fastify.jwt.verify(token);
+        }
+
+        // Validate if user exists
+        if (request.user && (!request.user.id || !request.user.email)) {
+          // Invalid payload, don't set user
+          return;
         }
       } catch {
-        // Send 401 response - Fastify will stop the request chain
-        return reply.code(401).send({ error: 'Authentication required' });
+        // Silently fail for optional auth - don't set user
+        return;
       }
     }
   );
 };
 
-export default authPlugin;
+// Export as a fastify plugin to ensure proper encapsulation
+export default fp(authPlugin, {
+  name: 'auth',
+  dependencies: ['@fastify/cookie'],
+});

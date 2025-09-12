@@ -1,6 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
 import bcrypt from 'bcrypt';
-import { verifyJWT } from '../services/jwt.js';
 import { getDatabaseClient } from '../config/database.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 import { validateAndSanitize } from '../middleware/validation.js';
@@ -62,6 +61,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Generate tokens with refresh token rotation
       const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+        fastify,
         user.id,
         request.ip,
         request.headers['user-agent']
@@ -247,6 +247,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Generate tokens with refresh token rotation
       const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+        fastify,
         user.id,
         request.ip,
         request.headers['user-agent']
@@ -296,6 +297,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Rotate refresh token
     const result = await RefreshTokenService.rotateRefreshToken(
+      fastify,
       refreshToken,
       request.ip,
       request.headers['user-agent']
@@ -341,9 +343,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const token = request.cookies?.auth_token || request.headers.authorization?.substring(7);
       if (token) {
-        const decoded = verifyJWT(token);
-        userId = decoded.id;
-        email = decoded.email;
+        try {
+          const decoded = fastify.jwt.verify(token) as { id: string; email: string };
+          userId = decoded.id;
+          email = decoded.email;
+        } catch {
+          // Invalid token, still allow logout
+        }
       }
     } catch {
       // User might have invalid token, still allow logout
@@ -378,22 +384,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true, message: 'Logged out successfully' });
   });
 
-  // Get current user profile
-  fastify.get('/me', async (request, reply) => {
+  // Get current user profile - using authentication decorator
+  fastify.get('/me', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      // Try to get token from cookie first (more secure)
-      let token = request.cookies?.auth_token;
-
-      // Fallback to Authorization header for backward compatibility
-      if (!token) {
-        const authHeader = request.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          return reply.code(401).send({ error: 'Authentication required' });
-        }
-        token = authHeader.substring(7);
-      }
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      // User is already authenticated via preHandler
+      const userId = request.user!.id;
 
       const user = await prisma.user.findUnique({
         where: { id: userId },

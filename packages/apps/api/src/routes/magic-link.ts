@@ -54,7 +54,7 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'Token is required' });
     }
 
-    const result = await MagicLinkService.verifyMagicLink(token);
+    const result = await MagicLinkService.verifyMagicLink(fastify, token);
 
     if (!result.success) {
       return reply.code(401).send({ error: result.message });

@@ -1,7 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { Prisma } from '@postolio/database';
 
-import { verifyJWT } from '../services/jwt.js';
 import {
   generateInstagramContent,
   type ContentGenerationRequest,
@@ -41,16 +40,9 @@ interface UpdateContentBody {
 
 const contentRoutes: FastifyPluginAsync = async (fastify) => {
   // Generate content for a brand
-  fastify.post<{ Body: GenerateContentBody }>('/generate', async (request, reply) => {
+  fastify.post<{ Body: GenerateContentBody }>('/generate', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { brandId, count, theme, style } = request.body;
 
@@ -174,14 +166,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   // Create manual content (user-generated, not AI)
   fastify.post<{ Body: CreateManualContentBody }>('/create', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { brandId, caption, hashtags, imageData } = request.body;
 
@@ -297,16 +282,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Get draft content for review
-  fastify.get<{ Params: { brandId: string } }>('/pending/:brandId', async (request, reply) => {
+  fastify.get<{ Params: { brandId: string } }>('/pending/:brandId', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { brandId } = request.params;
 
@@ -351,14 +329,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   // Approve content for posting
   fastify.post<{ Body: ApproveContentBody }>('/approve', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { contentId, scheduledAt } = request.body;
 
@@ -425,16 +396,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Reject content
-  fastify.post<{ Params: { contentId: string } }>('/reject/:contentId', async (request, reply) => {
+  fastify.post<{ Params: { contentId: string } }>('/reject/:contentId', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { contentId } = request.params;
 
@@ -476,14 +440,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   // Update content
   fastify.put<{ Body: UpdateContentBody }>('/update', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { contentId, caption, hashtags, cdnImageUrl, scheduledAt } = request.body;
 
@@ -755,14 +712,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
   // Get content history
   fastify.get<{ Params: { brandId: string } }>('/history/:brandId', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { brandId } = request.params;
 
@@ -819,14 +769,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     };
   }>('/upload-image', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { contentId, imageData, mimeType } = request.body;
 
@@ -960,14 +903,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { brandId: string; month: string };
   }>('/calendar/:brandId/:month', async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { brandId, month } = request.params;
 

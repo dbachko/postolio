@@ -1,12 +1,11 @@
 import { randomBytes } from 'crypto';
-import Redis from 'ioredis';
 import { getDatabaseClient } from '../config/database.js';
 import { AuditLogger, AuditEventType } from './audit-logger.js';
-import { signJWT } from './jwt.js';
-import { getRedisUrl } from '../utils/redis-url.js';
+import { RedisTokenStore } from './redis-token-store.js';
+import { FastifyInstance } from 'fastify';
 
 const prisma = getDatabaseClient();
-const redis = new Redis(getRedisUrl());
+const tokenStore = new RedisTokenStore();
 
 interface RefreshToken {
   token: string;
@@ -30,6 +29,7 @@ export class RefreshTokenService {
    * Generate a new refresh token
    */
   static async generateRefreshToken(
+    fastify: FastifyInstance,
     userId: string,
     ipAddress?: string,
     userAgent?: string
@@ -58,21 +58,21 @@ export class RefreshTokenService {
       userAgent,
     };
 
-    await redis.setex(
-      `refresh-token:${token}`,
-      this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
-      JSON.stringify(tokenData)
+    // Store token with efficient Set tracking
+    await tokenStore.storeToken(
+      tokenData,
+      this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60
     );
 
     // Track token family for rotation detection
-    await redis.setex(
-      `token-family:${family}`,
-      this.FAMILY_EXPIRY_DAYS * 24 * 60 * 60,
-      JSON.stringify({
+    await tokenStore.storeFamily(
+      family,
+      {
         userId,
         currentGeneration: 1,
         createdAt: new Date(),
-      })
+      },
+      this.FAMILY_EXPIRY_DAYS * 24 * 60 * 60
     );
 
     // Generate new access token
@@ -85,9 +85,9 @@ export class RefreshTokenService {
       throw new Error('User not found');
     }
 
-    const accessToken = signJWT(
-      { id: user.id, email: user.email },
-      '15m' // Short-lived access token
+    const accessToken = fastify.jwt.sign(
+      { id: user.id, email: user.email }
+      // Token expiry is configured in auth plugin (15m)
     );
 
     // Log token generation
@@ -105,6 +105,7 @@ export class RefreshTokenService {
    * Rotate refresh token (generate new token from old one)
    */
   static async rotateRefreshToken(
+    fastify: FastifyInstance,
     oldToken: string,
     ipAddress?: string,
     userAgent?: string
@@ -114,25 +115,23 @@ export class RefreshTokenService {
     family: string;
   } | null> {
     // Get old token data
-    const oldTokenData = await redis.get(`refresh-token:${oldToken}`);
+    const oldTokenParsed = await tokenStore.getToken(oldToken);
 
-    if (!oldTokenData) {
+    if (!oldTokenParsed) {
       // Token doesn't exist or expired
       return null;
     }
 
-    const oldTokenParsed: RefreshToken = JSON.parse(oldTokenData);
-
     // Check token expiry
     if (new Date(oldTokenParsed.expiresAt) < new Date()) {
-      await redis.del(`refresh-token:${oldToken}`);
+      await tokenStore.deleteToken(oldToken);
       return null;
     }
 
     // Check token family
-    const familyData = await redis.get(`token-family:${oldTokenParsed.family}`);
+    const family = await tokenStore.getFamily(oldTokenParsed.family);
 
-    if (!familyData) {
+    if (!family) {
       // Family expired or doesn't exist - potential security issue
       await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
       await AuditLogger.log({
@@ -149,7 +148,6 @@ export class RefreshTokenService {
       return null;
     }
 
-    const family = JSON.parse(familyData);
 
     // Check for token reuse (generation mismatch)
     if (oldTokenParsed.generation !== family.currentGeneration) {
@@ -174,7 +172,7 @@ export class RefreshTokenService {
     if (oldTokenParsed.generation >= this.MAX_GENERATIONS) {
       // Force new family creation
       await this.invalidateTokenFamily(oldTokenParsed.family, oldTokenParsed.userId);
-      return this.generateRefreshToken(oldTokenParsed.userId, ipAddress, userAgent);
+      return this.generateRefreshToken(fastify, oldTokenParsed.userId, ipAddress, userAgent);
     }
 
     // Generate new token in same family
@@ -196,25 +194,25 @@ export class RefreshTokenService {
       userAgent,
     };
 
-    await redis.setex(
-      `refresh-token:${newToken}`,
-      this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
-      JSON.stringify(newTokenData)
+    // Store new token with efficient Set tracking
+    await tokenStore.storeToken(
+      newTokenData,
+      this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60
     );
 
     // Update family generation
-    await redis.setex(
-      `token-family:${oldTokenParsed.family}`,
-      this.FAMILY_EXPIRY_DAYS * 24 * 60 * 60,
-      JSON.stringify({
+    await tokenStore.storeFamily(
+      oldTokenParsed.family,
+      {
         ...family,
         currentGeneration: newGeneration,
         lastRotatedAt: new Date(),
-      })
+      },
+      this.FAMILY_EXPIRY_DAYS * 24 * 60 * 60
     );
 
     // Invalidate old token
-    await redis.del(`refresh-token:${oldToken}`);
+    await tokenStore.deleteToken(oldToken);
 
     // Generate new access token
     const user = await prisma.user.findUnique({
@@ -226,9 +224,9 @@ export class RefreshTokenService {
       throw new Error('User not found');
     }
 
-    const accessToken = signJWT(
-      { id: user.id, email: user.email },
-      '15m' // Short-lived access token
+    const accessToken = fastify.jwt.sign(
+      { id: user.id, email: user.email }
+      // Token expiry is configured in auth plugin (15m)
     );
 
     // Log rotation
@@ -256,16 +254,14 @@ export class RefreshTokenService {
    * Invalidate a refresh token
    */
   static async invalidateRefreshToken(token: string): Promise<boolean> {
-    const tokenData = await redis.get(`refresh-token:${token}`);
+    const parsed = await tokenStore.getToken(token);
 
-    if (!tokenData) {
+    if (!parsed) {
       return false;
     }
 
-    const parsed: RefreshToken = JSON.parse(tokenData);
-
     // Delete token
-    await redis.del(`refresh-token:${token}`);
+    await tokenStore.deleteToken(token);
 
     // Log invalidation
     await AuditLogger.log({
@@ -285,21 +281,8 @@ export class RefreshTokenService {
    * Invalidate entire token family (security breach response)
    */
   static async invalidateTokenFamily(family: string, userId: string): Promise<void> {
-    // Delete family tracking
-    await redis.del(`token-family:${family}`);
-
-    // Find and delete all tokens in family
-    const keys = await redis.keys(`refresh-token:*`);
-
-    for (const key of keys) {
-      const tokenData = await redis.get(key);
-      if (tokenData) {
-        const parsed: RefreshToken = JSON.parse(tokenData);
-        if (parsed.family === family) {
-          await redis.del(key);
-        }
-      }
-    }
+    // Delete all tokens in family using efficient Set operations
+    await tokenStore.deleteFamilyTokens(family);
 
     // Log family invalidation
     await AuditLogger.log({
@@ -314,17 +297,8 @@ export class RefreshTokenService {
    * Invalidate all refresh tokens for a user (logout from all devices)
    */
   static async invalidateAllUserTokens(userId: string): Promise<void> {
-    const keys = await redis.keys(`refresh-token:*`);
-
-    for (const key of keys) {
-      const tokenData = await redis.get(key);
-      if (tokenData) {
-        const parsed: RefreshToken = JSON.parse(tokenData);
-        if (parsed.userId === userId) {
-          await redis.del(key);
-        }
-      }
-    }
+    // Delete all user tokens using efficient Set operations
+    await tokenStore.deleteUserTokens(userId);
 
     // Log invalidation
     await AuditLogger.log({
@@ -339,26 +313,24 @@ export class RefreshTokenService {
    * Verify refresh token validity
    */
   static async verifyRefreshToken(token: string): Promise<RefreshToken | null> {
-    const tokenData = await redis.get(`refresh-token:${token}`);
+    const parsed = await tokenStore.getToken(token);
 
-    if (!tokenData) {
+    if (!parsed) {
       return null;
     }
 
-    const parsed: RefreshToken = JSON.parse(tokenData);
-
     // Check expiry
     if (new Date(parsed.expiresAt) < new Date()) {
-      await redis.del(`refresh-token:${token}`);
+      await tokenStore.deleteToken(token);
       return null;
     }
 
     // Update last used timestamp
     parsed.lastUsedAt = new Date();
-    await redis.setex(
-      `refresh-token:${token}`,
-      this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
-      JSON.stringify(parsed)
+    await tokenStore.updateToken(
+      token,
+      parsed,
+      this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60
     );
 
     return parsed;
@@ -368,40 +340,15 @@ export class RefreshTokenService {
    * Get all active refresh tokens for a user
    */
   static async getUserTokens(userId: string): Promise<RefreshToken[]> {
-    const keys = await redis.keys(`refresh-token:*`);
-    const tokens: RefreshToken[] = [];
-
-    for (const key of keys) {
-      const tokenData = await redis.get(key);
-      if (tokenData) {
-        const parsed: RefreshToken = JSON.parse(tokenData);
-        if (parsed.userId === userId) {
-          tokens.push(parsed);
-        }
-      }
-    }
-
-    return tokens;
+    // Use efficient Set-based lookup
+    return await tokenStore.getUserTokens(userId);
   }
 
   /**
    * Clean up expired tokens (run periodically)
    */
   static async cleanupExpiredTokens(): Promise<number> {
-    const keys = await redis.keys(`refresh-token:*`);
-    let deletedCount = 0;
-
-    for (const key of keys) {
-      const tokenData = await redis.get(key);
-      if (tokenData) {
-        const parsed: RefreshToken = JSON.parse(tokenData);
-        if (new Date(parsed.expiresAt) < new Date()) {
-          await redis.del(key);
-          deletedCount++;
-        }
-      }
-    }
-
-    return deletedCount;
+    // Use the optimized cleanup method from tokenStore
+    return await tokenStore.cleanupExpiredTokens();
   }
 }

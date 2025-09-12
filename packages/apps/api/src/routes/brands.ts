@@ -1,6 +1,4 @@
 import { FastifyPluginAsync } from 'fastify';
-
-import { verifyJWT } from '../services/jwt.js';
 import { analyzeBrandStyle, type PostAnalysis } from '../services/ai.js';
 
 import { getDatabaseClient } from '../config/database.js';
@@ -24,22 +22,9 @@ interface UpdateBrandBody {
 
 const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   // Create a new brand
-  fastify.post<{ Body: CreateBrandBody }>('/create', async (request, reply) => {
+  fastify.post<{ Body: CreateBrandBody }>('/create', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      let decoded;
-      try {
-        decoded = verifyJWT(token);
-      } catch (jwtError) {
-        console.error('JWT verification error:', jwtError);
-        return reply.code(401).send({ error: 'Invalid authentication token' });
-      }
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { name, description } = request.body;
 
@@ -80,16 +65,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Analyze brand from Instagram posts
-  fastify.post<{ Body: BrandAnalysisBody }>('/analyze', async (request, reply) => {
+  fastify.post<{ Body: BrandAnalysisBody }>('/analyze', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { brandName, posts } = request.body;
 
@@ -132,16 +110,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Get user's brands
-  fastify.get('/list', async (request, reply) => {
+  fastify.get('/list', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const brands = await prisma.brand.findMany({
         where: { userId },
@@ -163,16 +134,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Get specific brand details
-  fastify.get<{ Params: { id: string } }>('/brand/:id', async (request, reply) => {
+  fastify.get<{ Params: { id: string } }>('/brand/:id', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      const decoded = verifyJWT(token);
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { id } = request.params;
 
@@ -206,22 +170,10 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   // Update a brand
   fastify.put<{ Params: { id: string }; Body: UpdateBrandBody }>(
     '/brand/:id',
+    { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
-        const authHeader = request.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          return reply.code(401).send({ error: 'Authentication required' });
-        }
-
-        const token = authHeader.substring(7);
-        let decoded;
-        try {
-          decoded = verifyJWT(token);
-        } catch (jwtError) {
-          console.error('JWT verification error:', jwtError);
-          return reply.code(401).send({ error: 'Invalid authentication token' });
-        }
-        const userId = decoded.id;
+        const userId = request.user!.id;
 
         const { id } = request.params;
         const { name, description } = request.body;
@@ -294,22 +246,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // Delete a brand
-  fastify.delete<{ Params: { id: string } }>('/brand/:id', async (request, reply) => {
+  fastify.delete<{ Params: { id: string } }>('/brand/:id', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return reply.code(401).send({ error: 'Authentication required' });
-      }
-
-      const token = authHeader.substring(7);
-      let decoded;
-      try {
-        decoded = verifyJWT(token);
-      } catch (jwtError) {
-        console.error('JWT verification error:', jwtError);
-        return reply.code(401).send({ error: 'Invalid authentication token' });
-      }
-      const userId = decoded.id;
+      const userId = request.user!.id;
 
       const { id } = request.params;
 
