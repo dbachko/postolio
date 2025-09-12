@@ -348,9 +348,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, infra-bootstrap-check, build-images]
     if: |
-      needs.detect-changes.outputs.infra-changed == 'true' || 
+      github.event_name != 'pull_request' &&
+      (needs.detect-changes.outputs.infra-changed == 'true' || 
       needs.infra-bootstrap-check.outputs.needs-deploy == 'true' || 
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch')
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:
       - name: Checkout code
@@ -424,8 +425,10 @@ jobs:
   deploy-microservices:
     name: Deploy ${{ matrix.service }}
     runs-on: ubuntu-latest
-    needs: [detect-changes, deploy-infrastructure]
-    if: needs.detect-changes.outputs.matrix != '[]'
+    needs: [detect-changes]
+    if: |
+      github.event_name != 'pull_request' &&
+      needs.detect-changes.outputs.matrix != '[]'
     environment: ${{ needs.detect-changes.outputs.environment }}
     strategy:
       matrix:
@@ -453,6 +456,42 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Wait for infrastructure if deploying
+        run: |
+          # Check if infrastructure deployment is running
+          INFRA_STACK="Postolio-${{ needs.detect-changes.outputs.environment }}"
+          
+          # Wait for stack to be ready (max 10 minutes)
+          WAIT_TIME=0
+          MAX_WAIT=600
+          while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+            STATUS=$(aws cloudformation describe-stacks --stack-name "$INFRA_STACK" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+            
+            if [[ "$STATUS" == "CREATE_COMPLETE" || "$STATUS" == "UPDATE_COMPLETE" ]]; then
+              echo "Infrastructure stack is ready: $STATUS"
+              break
+            elif [[ "$STATUS" == "DOES_NOT_EXIST" ]]; then
+              echo "Infrastructure stack does not exist. It may be created by another job."
+              sleep 30
+              WAIT_TIME=$((WAIT_TIME + 30))
+            elif [[ "$STATUS" == *"IN_PROGRESS" ]]; then
+              echo "Infrastructure deployment in progress: $STATUS. Waiting..."
+              sleep 30
+              WAIT_TIME=$((WAIT_TIME + 30))
+            elif [[ "$STATUS" == *"FAILED" || "$STATUS" == "ROLLBACK_COMPLETE" ]]; then
+              echo "Infrastructure stack failed: $STATUS"
+              exit 1
+            else
+              echo "Infrastructure stack status: $STATUS"
+              break
+            fi
+          done
+          
+          if [ $WAIT_TIME -ge $MAX_WAIT ]; then
+            echo "Timeout waiting for infrastructure"
+            exit 1
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -538,12 +577,13 @@ jobs:
   deploy-main-app:
     name: Deploy Main Application
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-images, deploy-infrastructure, deploy-microservices]
+    needs: [detect-changes, build-images, deploy-microservices]
     if: |
-      needs.detect-changes.outputs.api-changed == 'true' || 
+      github.event_name != 'pull_request' &&
+      (needs.detect-changes.outputs.api-changed == 'true' || 
       needs.detect-changes.outputs.infra-changed == 'true' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')))
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:
       - name: Checkout code
@@ -557,6 +597,32 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           pnpm-version: ${{ env.PNPM_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Wait for any ongoing infrastructure deployment
+        run: |
+          # Check if another job is deploying infrastructure
+          INFRA_STACK="Postolio-${{ needs.detect-changes.outputs.environment }}"
+          
+          # Wait for any in-progress deployments to complete
+          WAIT_TIME=0
+          MAX_WAIT=600
+          while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+            STATUS=$(aws cloudformation describe-stacks --stack-name "$INFRA_STACK" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+            
+            if [[ "$STATUS" == *"IN_PROGRESS" ]]; then
+              echo "Another infrastructure deployment in progress: $STATUS. Waiting..."
+              sleep 30
+              WAIT_TIME=$((WAIT_TIME + 30))
+            else
+              echo "Infrastructure stack status: $STATUS. Proceeding with deployment."
+              break
+            fi
+          done
+          
+          if [ $WAIT_TIME -ge $MAX_WAIT ]; then
+            echo "Timeout waiting for other infrastructure deployment"
+            exit 1
+          fi
 
       - name: Deploy Postolio Stack
         working-directory: packages/infra/cdk
@@ -602,12 +668,13 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend
     runs-on: ubuntu-latest
-    needs: [detect-changes, deploy-infrastructure]
+    needs: [detect-changes]
     if: |
-      needs.detect-changes.outputs.web-changed == 'true' || 
+      github.event_name != 'pull_request' &&
+      (needs.detect-changes.outputs.web-changed == 'true' || 
       needs.detect-changes.outputs.api-changed == 'true' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')))
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:
       - name: Checkout code
@@ -630,6 +697,42 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Wait for infrastructure readiness
+        run: |
+          # Check if infrastructure is ready for frontend deployment
+          INFRA_STACK="Postolio-${{ needs.detect-changes.outputs.environment }}"
+          
+          # Wait for stack to be ready (max 10 minutes)
+          WAIT_TIME=0
+          MAX_WAIT=600
+          while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+            STATUS=$(aws cloudformation describe-stacks --stack-name "$INFRA_STACK" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+            
+            if [[ "$STATUS" == "CREATE_COMPLETE" || "$STATUS" == "UPDATE_COMPLETE" ]]; then
+              echo "Infrastructure stack is ready: $STATUS"
+              break
+            elif [[ "$STATUS" == "DOES_NOT_EXIST" ]]; then
+              echo "Infrastructure stack does not exist. Waiting for creation..."
+              sleep 30
+              WAIT_TIME=$((WAIT_TIME + 30))
+            elif [[ "$STATUS" == *"IN_PROGRESS" ]]; then
+              echo "Infrastructure deployment in progress: $STATUS. Waiting..."
+              sleep 30
+              WAIT_TIME=$((WAIT_TIME + 30))
+            elif [[ "$STATUS" == *"FAILED" || "$STATUS" == "ROLLBACK_COMPLETE" ]]; then
+              echo "Infrastructure stack failed: $STATUS"
+              exit 1
+            else
+              echo "Infrastructure stack status: $STATUS"
+              break
+            fi
+          done
+          
+          if [ $WAIT_TIME -ge $MAX_WAIT ]; then
+            echo "Timeout waiting for infrastructure"
+            exit 1
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
