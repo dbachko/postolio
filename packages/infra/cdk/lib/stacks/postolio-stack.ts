@@ -789,7 +789,7 @@ export class PostolioStack extends cdk.Stack {
           responsePagePath: '/index.html',
           ttl: cdk.Duration.seconds(0),
         },
-      ]
+      ],
     };
 
     const distribution = new cloudfront.Distribution(
