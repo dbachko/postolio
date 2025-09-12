@@ -11,27 +11,27 @@ export enum CSRFErrorCode {
   NETWORK_ERROR = 'NETWORK_ERROR',
   TIMEOUT = 'TIMEOUT',
   ABORTED = 'ABORTED',
-  
+
   // Response errors
   INVALID_RESPONSE = 'INVALID_RESPONSE',
   UNAUTHORIZED = 'UNAUTHORIZED',
   RATE_LIMITED = 'RATE_LIMITED',
   SERVER_ERROR = 'SERVER_ERROR',
-  
+
   // Storage errors
   STORAGE_ERROR = 'STORAGE_ERROR',
   STORAGE_QUOTA_EXCEEDED = 'STORAGE_QUOTA_EXCEEDED',
   STORAGE_UNAVAILABLE = 'STORAGE_UNAVAILABLE',
-  
+
   // Token errors
   TOKEN_EXPIRED = 'TOKEN_EXPIRED',
   TOKEN_INVALID = 'TOKEN_INVALID',
   TOKEN_MISSING = 'TOKEN_MISSING',
-  
+
   // Circuit breaker
   CIRCUIT_OPEN = 'CIRCUIT_OPEN',
   MAX_RETRIES_EXCEEDED = 'MAX_RETRIES_EXCEEDED',
-  
+
   // Configuration errors
   INVALID_CONFIG = 'INVALID_CONFIG',
   INVALID_ENDPOINT = 'INVALID_ENDPOINT',
@@ -96,16 +96,16 @@ export class CSRFTokenError extends Error {
       case CSRFErrorCode.TIMEOUT:
       case CSRFErrorCode.RATE_LIMITED:
         return CSRFErrorSeverity.MEDIUM;
-      
+
       case CSRFErrorCode.UNAUTHORIZED:
       case CSRFErrorCode.TOKEN_INVALID:
       case CSRFErrorCode.INVALID_CONFIG:
         return CSRFErrorSeverity.HIGH;
-      
+
       case CSRFErrorCode.SERVER_ERROR:
       case CSRFErrorCode.STORAGE_UNAVAILABLE:
         return CSRFErrorSeverity.CRITICAL;
-      
+
       default:
         return CSRFErrorSeverity.LOW;
     }
@@ -122,14 +122,14 @@ export class CSRFTokenError extends Error {
       case CSRFErrorCode.SERVER_ERROR:
       case CSRFErrorCode.STORAGE_ERROR:
         return true;
-      
+
       case CSRFErrorCode.UNAUTHORIZED:
       case CSRFErrorCode.TOKEN_INVALID:
       case CSRFErrorCode.INVALID_CONFIG:
       case CSRFErrorCode.CIRCUIT_OPEN:
       case CSRFErrorCode.MAX_RETRIES_EXCEEDED:
         return false;
-      
+
       default:
         return false;
     }
@@ -158,7 +158,7 @@ export class CSRFTokenError extends Error {
    */
   static fromResponse(response: Response, message?: string): CSRFTokenError {
     const baseMessage = message ?? `HTTP ${response.status}: ${response.statusText}`;
-    
+
     // Map HTTP status codes to error codes
     let code: CSRFErrorCode;
     let severity: CSRFErrorSeverity;
@@ -170,7 +170,7 @@ export class CSRFTokenError extends Error {
         code = CSRFErrorCode.UNAUTHORIZED;
         severity = CSRFErrorSeverity.HIGH;
         break;
-      
+
       case 429: {
         code = CSRFErrorCode.RATE_LIMITED;
         severity = CSRFErrorSeverity.MEDIUM;
@@ -181,7 +181,7 @@ export class CSRFTokenError extends Error {
         }
         break;
       }
-      
+
       case 500:
       case 502:
       case 503:
@@ -190,7 +190,7 @@ export class CSRFTokenError extends Error {
         severity = CSRFErrorSeverity.CRITICAL;
         retryable = true;
         break;
-      
+
       default:
         code = CSRFErrorCode.INVALID_RESPONSE;
         severity = CSRFErrorSeverity.MEDIUM;
@@ -216,40 +216,28 @@ export class CSRFTokenError extends Error {
   static fromFetchError(error: unknown, url: string): CSRFTokenError {
     if (error instanceof DOMException) {
       if (error.name === 'AbortError') {
-        return new CSRFTokenError(
-          'Request was aborted',
-          CSRFErrorCode.ABORTED,
-          {
-            severity: CSRFErrorSeverity.LOW,
-            retryable: false,
-            cause: error as Error,
-          }
-        );
+        return new CSRFTokenError('Request was aborted', CSRFErrorCode.ABORTED, {
+          severity: CSRFErrorSeverity.LOW,
+          retryable: false,
+          cause: error as Error,
+        });
       }
-      
+
       if (error.name === 'TimeoutError') {
-        return new CSRFTokenError(
-          'Request timed out',
-          CSRFErrorCode.TIMEOUT,
-          {
-            severity: CSRFErrorSeverity.MEDIUM,
-            retryable: true,
-            cause: error as Error,
-          }
-        );
+        return new CSRFTokenError('Request timed out', CSRFErrorCode.TIMEOUT, {
+          severity: CSRFErrorSeverity.MEDIUM,
+          retryable: true,
+          cause: error as Error,
+        });
       }
     }
 
-    return new CSRFTokenError(
-      `Network error while fetching ${url}`,
-      CSRFErrorCode.NETWORK_ERROR,
-      {
-        severity: CSRFErrorSeverity.MEDIUM,
-        retryable: true,
-        details: { url, originalError: error },
-        cause: error as Error,
-      }
-    );
+    return new CSRFTokenError(`Network error while fetching ${url}`, CSRFErrorCode.NETWORK_ERROR, {
+      severity: CSRFErrorSeverity.MEDIUM,
+      retryable: true,
+      details: { url, originalError: error },
+      cause: error as Error,
+    });
   }
 
   /**
@@ -301,18 +289,21 @@ export class CSRFAggregateError extends Error {
       [CSRFErrorSeverity.LOW]: 1,
     };
 
-    return this.errors.reduce((mostSevere, error) => {
-      if (!mostSevere) return error;
-      const currentSeverity = severityOrder[error.severity];
-      const mostSevereSeverity = severityOrder[mostSevere.severity];
-      return currentSeverity > mostSevereSeverity ? error : mostSevere;
-    }, undefined as CSRFTokenError | undefined);
+    return this.errors.reduce(
+      (mostSevere, error) => {
+        if (!mostSevere) return error;
+        const currentSeverity = severityOrder[error.severity];
+        const mostSevereSeverity = severityOrder[mostSevere.severity];
+        return currentSeverity > mostSevereSeverity ? error : mostSevere;
+      },
+      undefined as CSRFTokenError | undefined
+    );
   }
 
   /**
    * Check if any error is retryable
    */
   hasRetryableError(): boolean {
-    return this.errors.some(error => error.retryable);
+    return this.errors.some((error) => error.retryable);
   }
 }

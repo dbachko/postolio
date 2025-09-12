@@ -211,10 +211,15 @@ class ApiClient {
 
       // Handle 403 CSRF token errors
       if (response.status === 403) {
-        if (errorData && (errorData.code === 'CSRF_TOKEN_MISSING' || errorData.code === 'CSRF_TOKEN_INVALID' || errorData.code === 'CSRF_VALIDATION_FAILED')) {
+        if (
+          errorData &&
+          (errorData.code === 'CSRF_TOKEN_MISSING' ||
+            errorData.code === 'CSRF_TOKEN_INVALID' ||
+            errorData.code === 'CSRF_VALIDATION_FAILED')
+        ) {
           // Clear cached token and fetch a new one
           csrfTokenManager.clearToken();
-          
+
           const newToken = await csrfTokenManager.fetchToken();
 
           // Retry the request once with new token

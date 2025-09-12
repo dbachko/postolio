@@ -1,7 +1,7 @@
 /**
  * @postolio/csrf-client
  * Modern CSRF Token Management for Frontend Applications
- * 
+ *
  * Implements the Double Submit Cookie pattern with:
  * - Memory caching for performance
  * - SessionStorage persistence
@@ -52,14 +52,14 @@ export class CSRFTokenManager {
 
   private readonly config: Required<CSRFTokenConfig>;
   private readonly storage: StorageAdapter | null;
-  
+
   // Memory cache with WeakRef for garbage collection optimization
   private memoryToken: string | null = null;
   private memoryExpiry = 0;
-  
+
   // Promise cache for request deduplication
   private fetchPromise: Promise<string | null> | null = null;
-  
+
   // AbortController for cancellable requests
   private abortController: AbortController | null = null;
 
@@ -169,12 +169,12 @@ export class CSRFTokenManager {
    * Store token in both memory and persistent storage
    */
   public setToken(token: string, expiresIn = 3600): void {
-    const expiry = Date.now() + (expiresIn * 1000) - this.config.bufferMs;
-    
+    const expiry = Date.now() + expiresIn * 1000 - this.config.bufferMs;
+
     // Store in memory for fast access
     this.memoryToken = token;
     this.memoryExpiry = expiry;
-    
+
     // Store in persistent storage if available
     if (this.storage) {
       try {
@@ -192,7 +192,7 @@ export class CSRFTokenManager {
   public clearToken(): void {
     this.memoryToken = null;
     this.memoryExpiry = 0;
-    
+
     if (this.storage) {
       try {
         this.storage.removeItem(this.config.tokenKey);
@@ -217,13 +217,13 @@ export class CSRFTokenManager {
     this.abortController = new AbortController();
 
     // Combine signals if provided
-    const combinedSignal = signal 
+    const combinedSignal = signal
       ? AbortSignal.any([signal, this.abortController.signal])
       : this.abortController.signal;
 
     // Start new fetch with deduplication
     this.fetchPromise = this.doFetch(combinedSignal);
-    
+
     try {
       return await this.fetchPromise;
     } finally {
@@ -251,7 +251,7 @@ export class CSRFTokenManager {
         });
 
         if (response.ok) {
-          const data = await response.json() as CSRFTokenResponse;
+          const data = (await response.json()) as CSRFTokenResponse;
           this.setToken(data.token, data.expiresIn);
           return data.token;
         }
@@ -259,10 +259,8 @@ export class CSRFTokenManager {
         if (response.status === 429) {
           // Rate limited - wait before retry
           const retryAfter = response.headers.get('Retry-After');
-          const delay = retryAfter 
-            ? parseInt(retryAfter, 10) * 1000 
-            : this.config.retryDelayMs;
-          
+          const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : this.config.retryDelayMs;
+
           await this.delay(delay, signal);
           continue;
         }
@@ -271,7 +269,7 @@ export class CSRFTokenManager {
         throw new Error(`CSRF token fetch failed: ${response.status}`);
       } catch (error) {
         lastError = error as Error;
-        
+
         if (error instanceof DOMException && error.name === 'AbortError') {
           throw error;
         }
@@ -294,11 +292,15 @@ export class CSRFTokenManager {
   private async delay(ms: number, signal?: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(resolve, ms);
-      
-      signal?.addEventListener('abort', () => {
-        clearTimeout(timeout);
-        reject(new DOMException('Delay aborted', 'AbortError'));
-      }, { once: true });
+
+      signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timeout);
+          reject(new DOMException('Delay aborted', 'AbortError'));
+        },
+        { once: true }
+      );
     });
   }
 
@@ -307,11 +309,11 @@ export class CSRFTokenManager {
    */
   public async ensureToken(signal?: AbortSignal): Promise<string | null> {
     const state = this.getTokenState();
-    
+
     if (state.isValid) {
       return state.token;
     }
-    
+
     return this.fetchToken(signal);
   }
 

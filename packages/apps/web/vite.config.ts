@@ -20,7 +20,7 @@ export default defineConfig({
       if (process.env.CI) {
         return undefined;
       }
-      
+
       try {
         // Look for SSL certificates
         const certPath = '/home/developer/project/certs/ai.localhost+1.pem';
