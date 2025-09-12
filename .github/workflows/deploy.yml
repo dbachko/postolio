@@ -424,7 +424,7 @@ jobs:
   deploy-microservices:
     name: Deploy ${{ matrix.service }}
     runs-on: ubuntu-latest
-    needs: [detect-changes, deploy-infrastructure]
+    needs: [detect-changes]
     if: needs.detect-changes.outputs.matrix != '[]'
     environment: ${{ needs.detect-changes.outputs.environment }}
     strategy:
@@ -538,7 +538,7 @@ jobs:
   deploy-main-app:
     name: Deploy Main Application
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-images, deploy-infrastructure, deploy-microservices]
+    needs: [detect-changes, build-images, deploy-microservices]
     if: |
       needs.detect-changes.outputs.api-changed == 'true' || 
       needs.detect-changes.outputs.infra-changed == 'true' ||
@@ -602,7 +602,7 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend
     runs-on: ubuntu-latest
-    needs: [detect-changes, deploy-infrastructure]
+    needs: [detect-changes]
     if: |
       needs.detect-changes.outputs.web-changed == 'true' || 
       needs.detect-changes.outputs.api-changed == 'true' ||
