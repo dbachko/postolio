@@ -79,6 +79,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
   fastify.patch(
     '/brands/:brandId/config',
     {
+      preHandler: fastify.authenticate,
       schema: {
         params: {
           type: 'object',
@@ -189,6 +190,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/brands/:brandId/config',
     {
+      preHandler: fastify.authenticate,
       schema: {
         params: {
           type: 'object',
@@ -265,7 +267,7 @@ export default async function autopilotRoutes(fastify: FastifyInstance) {
   /**
    * Get content gaps analysis for all user's brands
    */
-  fastify.get('/gaps', async (request, reply) => {
+  fastify.get('/gaps', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const userId = (request.user as { id?: string } | undefined)?.id;
       if (!userId) {

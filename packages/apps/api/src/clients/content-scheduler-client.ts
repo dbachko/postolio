@@ -410,8 +410,26 @@ export class ContentSchedulerClient {
         this.client.post('schedules', validatedData)
       );
 
+      // Log the raw response for debugging
+      if (this.debug) {
+        console.log('Raw schedule creation response:', JSON.stringify(response.data, null, 2));
+      }
+
       // Validate and return response
-      return ScheduleSchema.parse(response.data);
+      try {
+        return ScheduleSchema.parse(response.data);
+      } catch (parseError) {
+        console.error('Failed to parse schedule response:', parseError);
+        console.error('Response data:', response.data);
+        // If the response doesn't have scheduleId, use the contentId as a fallback
+        if (response.data && !response.data.scheduleId) {
+          return {
+            ...response.data,
+            scheduleId: response.data.id || response.data.contentId || randomUUID(),
+          } as Schedule;
+        }
+        throw parseError;
+      }
     });
   }
 

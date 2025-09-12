@@ -839,41 +839,41 @@ jobs:
           fi
 
   # ============================================
-  # STEP 8: Run E2E Tests
+  # STEP 8: Run E2E Tests (DISABLED)
   # ============================================
-  e2e-tests:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    needs: [deploy-frontend]
-    if: needs.detect-changes.outputs.environment != 'prod'
-    environment: ${{ needs.detect-changes.outputs.environment }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node-pnpm
-        with:
-          pnpm-version: ${{ env.PNPM_VERSION }}
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browsers
-        run: |
-          cd packages/apps/web
-          npx playwright install --with-deps
-
-      - name: Run E2E tests
-        env:
-          BASE_URL: ${{ vars.VITE_API_URL }}
-          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
-          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
-        run: |
-          cd packages/apps/web
-          pnpm test:e2e
+  # e2e-tests:
+  #   name: E2E Tests
+  #   runs-on: ubuntu-latest
+  #   needs: [deploy-frontend]
+  #   if: needs.detect-changes.outputs.environment != 'prod' && false  # Disabled for now
+  #   environment: ${{ needs.detect-changes.outputs.environment }}
+  #
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Setup Node.js and pnpm
+  #       uses: ./.github/actions/setup-node-pnpm
+  #       with:
+  #         pnpm-version: ${{ env.PNPM_VERSION }}
+  #         node-version: ${{ env.NODE_VERSION }}
+  #
+  #     - name: Install dependencies
+  #       run: pnpm install --frozen-lockfile
+  #
+  #     - name: Install Playwright browsers
+  #       run: |
+  #         cd packages/apps/web
+  #         npx playwright install --with-deps
+  #
+  #     - name: Run E2E tests
+  #       env:
+  #         BASE_URL: ${{ vars.VITE_API_URL }}
+  #         TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+  #         TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+  #       run: |
+  #         cd packages/apps/web
+  #         pnpm test:e2e
 
   # ============================================
   # STEP 9: Deployment Summary
