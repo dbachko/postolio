@@ -51,7 +51,7 @@ export default defineConfig({
   webServer: process.env.CI
     ? {
         // In CI, run both services from root using pnpm workspace commands
-        command: 'cd ../../../ && pnpm dev --filter=@postolio/api --filter=@postolio/web',
+        command: 'cd ../../../ && pnpm dev --filter=api --filter=@postolio/web',
         port: 5173,
         reuseExistingServer: false,
         timeout: 120 * 1000,
