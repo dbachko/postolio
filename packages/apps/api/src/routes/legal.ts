@@ -13,7 +13,16 @@ export default async function legalRoutes(fastify: FastifyInstance) {
   fastify.get('/privacy-policy', async (request, reply) => {
     try {
       // Read the privacy policy markdown file
-      const privacyPolicyPath = path.join(__dirname, '..', '..', '..', '..', '..', 'legal', 'PRIVACY_POLICY.md');
+      const privacyPolicyPath = path.join(
+        __dirname,
+        '..',
+        '..',
+        '..',
+        '..',
+        '..',
+        'legal',
+        'PRIVACY_POLICY.md'
+      );
       let privacyPolicyContent = fs.readFileSync(privacyPolicyPath, 'utf8');
 
       // Make copyright year dynamic
@@ -140,7 +149,16 @@ export default async function legalRoutes(fastify: FastifyInstance) {
   fastify.get('/terms-of-service', async (request, reply) => {
     try {
       // Read the terms of service markdown file
-      const termsPath = path.join(__dirname, '..', '..', '..', '..', '..', 'legal', 'TERMS_OF_SERVICE.md');
+      const termsPath = path.join(
+        __dirname,
+        '..',
+        '..',
+        '..',
+        '..',
+        '..',
+        'legal',
+        'TERMS_OF_SERVICE.md'
+      );
       let termsContent = fs.readFileSync(termsPath, 'utf8');
 
       // Make copyright year dynamic

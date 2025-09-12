@@ -15,34 +15,34 @@ const CSRF_SKIP_PATHS = [
   '/api/health',
   '/api/metrics',
   '/api/csrf-token',
-  
+
   // Authentication - no session yet
   '/api/auth/register',
   '/api/auth/login',
   '/api/auth/refresh',
-  
+
   // Magic link authentication
   '/api/auth/magic-link/send',
   '/api/auth/magic-link/verify',
-  
+
   // OAuth callbacks & verification
   '/api/auth/google/callback',
   '/api/auth/google/verify',
   '/api/auth/facebook/callback',
   '/api/auth/instagram/authorize',
   '/api/auth/instagram/callback',
-  
+
   // Password reset - no session
   '/api/auth/password/reset-request',
   '/api/auth/password/reset',
   '/api/auth/password/reset-validate',
-  
+
   // Email verification - public endpoint
   '/api/auth/email/verify',
-  
+
   // Two-factor during login - no full session yet
   '/api/auth/2fa/verify',
-  
+
   // Legal pages - public endpoints
   '/api/legal/privacy-policy',
   '/api/legal/terms-of-service',
@@ -50,7 +50,7 @@ const CSRF_SKIP_PATHS = [
   '/api/legal/data-deletion-request',
   '/api/legal/account-recovery',
   '/api/legal/meta-deletion-callback',
-  
+
   // External webhooks
   '/api/webhook',
 ];

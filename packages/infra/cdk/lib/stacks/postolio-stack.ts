@@ -336,8 +336,8 @@ export class PostolioStack extends cdk.Stack {
         secretStringTemplate: JSON.stringify({}),
         generateStringKey: 'jwtSecret',
         excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
-        passwordLength: 64
-      }
+        passwordLength: 64,
+      },
     });
 
     // ECS Cluster
