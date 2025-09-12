@@ -254,22 +254,26 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   });
 
   // Refresh service discovery
-  fastify.post('/service-discovery/refresh', async function () {
-    try {
-      await serviceClients.refreshServiceDiscovery();
-      return {
-        timestamp: new Date().toISOString(),
-        status: 'success',
-        message: 'Service discovery refreshed successfully',
-      };
-    } catch (error) {
-      return {
-        timestamp: new Date().toISOString(),
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
+  fastify.post(
+    '/service-discovery/refresh',
+    { preHandler: fastify.authenticate },
+    async function () {
+      try {
+        await serviceClients.refreshServiceDiscovery();
+        return {
+          timestamp: new Date().toISOString(),
+          status: 'success',
+          message: 'Service discovery refreshed successfully',
+        };
+      } catch (error) {
+        return {
+          timestamp: new Date().toISOString(),
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
     }
-  });
+  );
 };
 
 export default monitoringRoutes;
