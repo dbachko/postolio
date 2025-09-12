@@ -53,17 +53,21 @@ export function validateRequiredEnvironment(): void {
 /**
  * Validates all environment configuration at startup
  */
+import { isCloudMapConfigured } from '../utils/service-discovery.js';
+
 export function validateEnvironment(): void {
   console.log('Validating environment configuration...');
 
   // Check required variables
   validateRequiredEnvironment();
 
-  // Scheduler now uses IAM SigV4 only; presence of SCHEDULER_API_URL is enough
-  if (process.env.SCHEDULER_API_URL) {
-    console.log('Scheduler integration: enabled (SigV4)');
+  // Scheduler uses service discovery (Cloud Map) or fallback to SCHEDULER_API_URL
+  if (isCloudMapConfigured()) {
+    console.log('Scheduler integration: enabled (via Cloud Map service discovery)');
+  } else if (process.env.SCHEDULER_API_URL) {
+    console.log('Scheduler integration: enabled (via SCHEDULER_API_URL)');
   } else {
-    console.log('Scheduler integration: disabled (no SCHEDULER_API_URL)');
+    console.log('Scheduler integration: disabled (no Cloud Map or SCHEDULER_API_URL)');
   }
 
   // Validate format of specific variables
