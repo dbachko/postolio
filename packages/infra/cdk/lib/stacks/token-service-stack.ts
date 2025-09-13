@@ -24,6 +24,7 @@ import {
 } from '../utils/service-discovery-infrastructure';
 import { NagSuppressions } from 'cdk-nag';
 import { OAuthConfig } from '../utils/oauth-config';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 export interface TokenServiceStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod';
@@ -256,6 +257,14 @@ export class TokenServiceStack extends cdk.Stack {
       value: this.apiUrl,
       description: 'Token Service API URL',
       // No export needed - services use Cloud Map for discovery
+    });
+
+    // Store API Gateway ID in SSM Parameter Store for cross-service access
+    new ssm.StringParameter(this, 'TokenServiceApiIdParameter', {
+      parameterName: `/postolio/${environment}/token-service/api-gateway-id`,
+      stringValue: api.restApiId,
+      description: 'Token Service API Gateway ID for cross-service IAM permissions',
+      tier: ssm.ParameterTier.STANDARD,
     });
 
     new cdk.CfnOutput(this, 'TokenServiceTableName', {
