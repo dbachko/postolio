@@ -214,13 +214,60 @@ export class SchedulerAdapter {
         scheduledTimeUTC = TimezoneService.toUTC(defaultTimeLocal, brandTimezone);
       }
 
-      // 4. Create schedule in AWS microservice first (primary system)
+      // 4. Handle concurrency and set processing state
+      const currentParams = (content.generationParams as GenerationParams | null) || {};
+      const operationId = randomUUID();
+
+      // Check if another operation is in progress
+      if (currentParams.processing?.active) {
+        console.log(`Canceling existing operation for content ${contentId}`);
+
+        // Cancel existing AWS schedule if it exists
+        if (currentParams.scheduleId) {
+          try {
+            await (await this.client).cancelSchedule(currentParams.scheduleId);
+            console.log(`Canceled existing AWS schedule ${currentParams.scheduleId}`);
+          } catch (cancelError) {
+            console.warn(`Failed to cancel existing schedule ${currentParams.scheduleId}:`, cancelError);
+            // Continue with new operation anyway
+          }
+        }
+      }
+
+      // Set processing state before AWS call
+      await prisma.content.update({
+        where: { id: contentId },
+        data: {
+          generationParams: JSON.parse(JSON.stringify({
+            ...currentParams,
+            processing: {
+              active: true,
+              operation: 'scheduling',
+              startedAt: new Date().toISOString(),
+              operationId,
+            },
+          })),
+        },
+      });
+
+      // 5. Create schedule in AWS microservice first (primary system)
       let scheduleId: string | undefined;
       let awsScheduleCreated = false;
 
       // Skip AWS scheduling if scheduler is not enabled
       if (!this.schedulerEnabled) {
         console.info('Scheduler is disabled - saving content locally without AWS scheduling');
+        // Clear processing state since we're not actually scheduling
+        await prisma.content.update({
+          where: { id: contentId },
+          data: {
+            generationParams: JSON.parse(JSON.stringify({
+              ...currentParams,
+              processing: null, // Clear processing state
+              awsScheduleCreated: false,
+            })),
+          },
+        });
       } else {
         try {
           const schedule = await (
@@ -270,47 +317,29 @@ export class SchedulerAdapter {
         }
       }
 
-      // 5. Update local database only if AWS succeeded or as a tracked failure
-      try {
-        await prisma.content.update({
-          where: { id: contentId },
-          data: {
-            status: awsScheduleCreated ? ('scheduled' as ContentStatus) : originalStatus,
-            scheduledAt: awsScheduleCreated ? scheduledTimeUTC : originalScheduledAt,
-            schedulingError: awsScheduleCreated
-              ? null
-              : `AWS Scheduler unavailable - content not scheduled`,
-            generationParams: JSON.parse(
-              JSON.stringify({
-                ...((content.generationParams as GenerationParams | null) || {}),
-                scheduleId: scheduleId,
-                scheduledTimezone: brandTimezone,
-                scheduledLocalTime: customTime ? customTime.toISOString() : undefined,
-                awsScheduleCreated, // Track whether AWS schedule was created
-              })
-            ),
-          },
-        });
-      } catch (dbError) {
-        console.error('Failed to update local database:', dbError);
-
-        // If AWS schedule was created but local DB update failed, try to cancel AWS schedule
-        if (awsScheduleCreated && scheduleId) {
-          try {
-            await (await this.client).cancelSchedule(scheduleId);
-            console.log(`Rolled back AWS schedule ${scheduleId} due to DB failure`);
-          } catch (rollbackError: unknown) {
-            console.error('Failed to rollback AWS schedule:', rollbackError);
-            // Log critical inconsistency - AWS has schedule but local DB doesn't
-            await this.logInconsistency(contentId, 'AWS_SCHEDULE_WITHOUT_LOCAL', {
-              scheduleId,
-              error: dbError,
-            });
-          }
+      // 6. Handle processing state based on AWS result
+      if (!awsScheduleCreated) {
+        // AWS scheduling failed - clear processing state and set error
+        try {
+          await prisma.content.update({
+            where: { id: contentId },
+            data: {
+              status: originalStatus, // Keep original status
+              scheduledAt: originalScheduledAt, // Keep original time
+              schedulingError: `AWS Scheduler unavailable - content not scheduled`,
+              generationParams: JSON.parse(JSON.stringify({
+                ...currentParams,
+                processing: null, // Clear processing flag
+                awsScheduleCreated: false,
+              })),
+            },
+          });
+        } catch (dbError) {
+          console.error('Failed to update local database with scheduling error:', dbError);
+          throw dbError;
         }
-
-        throw dbError; // Re-throw to trigger error response
       }
+      // If AWS succeeded, leave processing state active - EventBridge events will clear it
 
       // 6. Broadcast status change (only after both AWS and DB succeed)
       if (awsScheduleCreated && this.broadcaster) {
