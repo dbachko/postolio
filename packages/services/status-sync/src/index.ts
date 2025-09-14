@@ -126,7 +126,7 @@ async function handleScheduleFailed(detail: PlatformEventDetail) {
     select: { generationParams: true },
   });
 
-  const existingParams = (currentContent?.generationParams as Record<string, any>) || {};
+  const existingParams = (currentContent?.generationParams as Record<string, unknown>) || {};
   const message: string | undefined = typeof error === 'string' ? error : error?.message;
 
   await client.content.update({
@@ -154,7 +154,7 @@ async function handleScheduleCreated(detail: PlatformEventDetail) {
     select: { generationParams: true },
   });
 
-  const existingParams = (currentContent?.generationParams as Record<string, any>) || {};
+  const existingParams = (currentContent?.generationParams as Record<string, unknown>) || {};
 
   await client.content.update({
     where: { id: contentId },
@@ -186,7 +186,7 @@ async function handleScheduleUpdated(detail: PlatformEventDetail) {
     select: { generationParams: true },
   });
 
-  const existingParams = (currentContent?.generationParams as Record<string, any>) || {};
+  const existingParams = (currentContent?.generationParams as Record<string, unknown>) || {};
 
   await client.content.update({
     where: { id: contentId },
@@ -214,7 +214,7 @@ async function handleScheduleCanceled(detail: PlatformEventDetail) {
     select: { generationParams: true },
   });
 
-  const existingParams = (currentContent?.generationParams as Record<string, any>) || {};
+  const existingParams = (currentContent?.generationParams as Record<string, unknown>) || {};
 
   await client.content.update({
     where: { id: contentId },
