@@ -239,7 +239,7 @@ export class SchedulerAdapter {
       await prisma.content.update({
         where: { id: contentId },
         data: {
-          generationParams: JSON.parse(JSON.stringify({
+          generationParams: {
             ...currentParams,
             processing: {
               active: true,
@@ -247,7 +247,7 @@ export class SchedulerAdapter {
               startedAt: new Date().toISOString(),
               operationId,
             },
-          })),
+          },
         },
       });
 
@@ -262,11 +262,11 @@ export class SchedulerAdapter {
         await prisma.content.update({
           where: { id: contentId },
           data: {
-            generationParams: JSON.parse(JSON.stringify({
+            generationParams: {
               ...currentParams,
               processing: null, // Clear processing state
               awsScheduleCreated: false,
-            })),
+            },
           },
         });
       } else {
@@ -328,11 +328,11 @@ export class SchedulerAdapter {
               status: originalStatus, // Keep original status
               scheduledAt: originalScheduledAt, // Keep original time
               schedulingError: `AWS Scheduler unavailable - content not scheduled`,
-              generationParams: JSON.parse(JSON.stringify({
+              generationParams: {
                 ...currentParams,
                 processing: null, // Clear processing flag
                 awsScheduleCreated: false,
-              })),
+              },
             },
           });
         } catch (dbError) {

@@ -865,6 +865,9 @@ importers:
       '@aws-sdk/client-dynamodb':
         specifier: ^3.872.0
         version: 3.883.0
+      '@aws-sdk/client-eventbridge':
+        specifier: ^3.872.0
+        version: 3.883.0
       '@aws-sdk/client-scheduler':
         specifier: ^3.864.0
         version: 3.883.0

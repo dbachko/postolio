@@ -133,12 +133,12 @@ async function handleScheduleFailed(detail: PlatformEventDetail) {
     where: { id: contentId },
     data: {
       schedulingError: message?.slice(0, 500) || 'Scheduling failed',
-      generationParams: JSON.parse(JSON.stringify({
+      generationParams: {
         ...existingParams,
         processing: null, // Clear processing state - scheduling failed
         awsScheduleCreated: false,
         failedAt: new Date().toISOString(),
-      })),
+      },
     },
   });
 }
@@ -162,14 +162,14 @@ async function handleScheduleCreated(detail: PlatformEventDetail) {
       status: 'scheduled' as ContentStatus,
       scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
       schedulingError: null, // Clear any previous errors
-      generationParams: JSON.parse(JSON.stringify({
+      generationParams: {
         ...existingParams,
         scheduleId: scheduleId, // Store the AWS schedule ID
         awsScheduleCreated: true, // Mark as properly scheduled
         processing: null, // Clear processing state - scheduling completed
         scheduledAt: scheduledAt, // Store for reference
         scheduledTimestamp: new Date().toISOString(), // When it was scheduled
-      })),
+      },
     },
   });
 }
@@ -192,13 +192,13 @@ async function handleScheduleUpdated(detail: PlatformEventDetail) {
     where: { id: contentId },
     data: {
       scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
-      generationParams: JSON.parse(JSON.stringify({
+      generationParams: {
         ...existingParams,
         scheduleId: scheduleId || existingParams.scheduleId, // Preserve or update schedule ID
         awsScheduleCreated: true,
         processing: null, // Clear processing state - update completed
         lastUpdated: new Date().toISOString(),
-      })),
+      },
     },
   });
 }
@@ -222,13 +222,13 @@ async function handleScheduleCanceled(detail: PlatformEventDetail) {
       status: 'draft' as ContentStatus,
       scheduledAt: null,
       schedulingError: null,
-      generationParams: JSON.parse(JSON.stringify({
+      generationParams: {
         ...existingParams,
         scheduleId: null, // Clear the schedule ID
         awsScheduleCreated: false, // Mark as not scheduled
         processing: null, // Clear processing state - cancellation completed
         canceledAt: new Date().toISOString(),
-      })),
+      },
     },
   });
 }
