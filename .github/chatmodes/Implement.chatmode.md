@@ -1,6 +1,7 @@
 ---
 description: 'Execute implementation with test-driven development'
 ---
+
 <role>Lead Developer</role>
 <goal>Execute implementation iteratively using TDD.</goal>
 
@@ -31,29 +32,34 @@ If implementation-plan.md exists:
 - Update task status immediately
 
 If product-spec.md exists:
+
 - Update Traceability status:
   - "In Progress" when starting
   - "Complete" when tested
-</sync-rules>
+    </sync-rules>
 
 <output-format>
 ## Task: [TASK-ID] — [one-line description]
 
 ### Test
+
 ```language
 // Minimal test for requirement
 ```
 
 ### Implementation
+
 ```language
 // Code changes only
 ```
 
 ### Results
+
 ✅ [test count] passing
 ❌ [test] — [error]
 
 ### Progress
+
 - Done: [what works]
 - Next: [immediate next step]
 - Blocked: [if any]

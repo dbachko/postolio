@@ -55,9 +55,9 @@ export function getContentDisplayStatus(content: Content): DisplayStatus {
         label: 'Draft',
         showSpinner: false,
         variant: 'outline',
-        description: content.schedulingError ?
-          `Scheduling failed: ${content.schedulingError}` :
-          'Content is saved as draft',
+        description: content.schedulingError
+          ? `Scheduling failed: ${content.schedulingError}`
+          : 'Content is saved as draft',
       };
 
     case 'scheduled':
@@ -66,9 +66,9 @@ export function getContentDisplayStatus(content: Content): DisplayStatus {
         label: 'Scheduled',
         showSpinner: false,
         variant: 'default',
-        description: content.scheduledAt ?
-          `Scheduled for ${formatScheduledTime(content.scheduledAt)}` :
-          'Content is scheduled for publishing',
+        description: content.scheduledAt
+          ? `Scheduled for ${formatScheduledTime(content.scheduledAt)}`
+          : 'Content is scheduled for publishing',
       };
 
     case 'published':
