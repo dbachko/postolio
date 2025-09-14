@@ -21,6 +21,7 @@ import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import {
   ServiceDiscoveryManager,
   registerLambdaService,
@@ -291,6 +292,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       AUDIT_LOG_TABLE: auditLogTable.tableName,
       VIDEO_BUCKET: this.videoBucket.bucketName,
       PLATFORM_CREDENTIALS_SECRET: platformCredentials.secretArn,
+      DLQ_URL: deadLetterQueue.queueUrl, // For intelligent retry handling
       // MAIN_APP_API_URL removed - publisher now uses content from DynamoDB
       // TOKEN_SERVICE_URL removed - publisher uses service discovery to find Token Service
       POWERTOOLS_SERVICE_NAME: 'content-scheduler',
@@ -410,11 +412,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       },
       timeout: cdk.Duration.minutes(1),
       memorySize: 512,
-      environment: {
-        ...lambdaEnvironment,
-        PUBLISHER_LAMBDA_ARN: publisherLambda.functionArn,
-        SCHEDULES_TABLE: this.schedulesTable.tableName,
-      },
+      environment: lambdaEnvironment,
       layers: [powertoolsLayer],
       // Using default role to avoid circular dependencies
       tracing: lambda.Tracing.ACTIVE,
@@ -530,6 +528,8 @@ export class ContentSchedulerStack extends cdk.Stack {
     platformCredentials.grantRead(publisherLambda);
     publisherLambda.grantInvoke(retryHandlerLambda);
     deadLetterQueue.grantConsumeMessages(retryHandlerLambda);
+    // Grant publisher permission to send messages to DLQ for intelligent retry handling
+    deadLetterQueue.grantSendMessages(publisherLambda);
 
     // ==================== EventBridge Scheduler (Modern API) ====================
 
@@ -547,6 +547,10 @@ export class ContentSchedulerStack extends cdk.Stack {
     // Add environment variables to Lambda functions here
     scheduleManagementLambda.addEnvironment('PUBLISHER_LAMBDA_ARN', publisherLambda.functionArn);
     scheduleManagementLambda.addEnvironment('SCHEDULER_ROLE_ARN', schedulerRole.roleArn);
+
+    // Add scheduler-specific environment variables to retry handler
+    retryHandlerLambda.addEnvironment('PUBLISHER_LAMBDA_ARN', publisherLambda.functionArn);
+    retryHandlerLambda.addEnvironment('SCHEDULER_ROLE_ARN', schedulerRole.roleArn);
 
     // Grant Lambda permission to create/manage EventBridge schedules
     scheduleManagementLambda.addToRolePolicy(
@@ -578,6 +582,13 @@ export class ContentSchedulerStack extends cdk.Stack {
       })
     );
 
+    // Get Token Service API Gateway ID from SSM Parameter Store
+    // This allows flexible deployment order without cross-stack dependencies
+    const resolvedTokenServiceApiId = ssm.StringParameter.valueFromLookup(
+      this,
+      `/postolio/${environment}/token-service/api-gateway-id`
+    );
+
     // Grant Publisher Lambda permission to invoke Token Service API (IAM-authenticated)
     publisherLambda.addToRolePolicy(
       new iam.PolicyStatement({
@@ -586,9 +597,25 @@ export class ContentSchedulerStack extends cdk.Stack {
         resources: [
           // Publisher Lambda only needs to GET tokens from Token Service
           // GET /tokens/{userId}/{platform}?brandId={brandId}
-          `arn:aws:execute-api:${this.region}:${this.account}:*/*/GET/tokens/*`,
+          `arn:aws:execute-api:${this.region}:${this.account}:${resolvedTokenServiceApiId}/*/GET/tokens/*`,
         ],
       })
+    );
+
+    // cdk-nag: suppress wildcard in API Gateway ARN for token service access
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/PublisherLambda/ServiceRole/DefaultPolicy/Resource`,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'Wildcard required for API Gateway stage (*) and token resource path (*) to allow flexible deployment configurations and user/platform combinations',
+          appliesTo: [
+            `Resource::arn:aws:execute-api:${this.region}:${this.account}:${resolvedTokenServiceApiId}/*/GET/tokens/*`,
+          ],
+        },
+      ]
     );
 
     // Grant Publisher Lambda permission to emit events to EventBridge (default bus)
@@ -615,6 +642,52 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // Grant Lambda permission to pass the scheduler role to EventBridge
     scheduleManagementLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['iam:PassRole'],
+        resources: [schedulerRole.roleArn],
+        conditions: {
+          StringEquals: {
+            'iam:PassedToService': 'scheduler.amazonaws.com',
+          },
+        },
+      })
+    );
+
+    // Grant Retry Handler permission to create EventBridge schedules for delayed retries
+    retryHandlerLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'scheduler:CreateSchedule',
+          'scheduler:UpdateSchedule',
+          'scheduler:GetSchedule',
+          'scheduler:DeleteSchedule',
+        ],
+        resources: [
+          `arn:aws:scheduler:${this.region}:${this.account}:schedule/${prefix}-schedules/retry-*`,
+        ],
+      })
+    );
+
+    // cdk-nag: suppress wildcard in EventBridge Scheduler ARN for retry schedules
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/RetryHandlerLambda/ServiceRole/DefaultPolicy/Resource`,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'Wildcard required for retry schedule names (retry-*) to allow dynamic retry schedule creation with schedule IDs and attempt numbers',
+          appliesTo: [
+            `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/${prefix}-schedules/retry-*`,
+          ],
+        },
+      ]
+    );
+
+    // Grant Retry Handler permission to pass the scheduler role
+    retryHandlerLambda.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['iam:PassRole'],
@@ -1222,7 +1295,9 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::s3:List*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             'Resource::<VideoBucket6ED8E1AF.Arn>/*',
-            `Resource::arn:aws:execute-api:${this.region}:${this.account}:*/*/GET/tokens/*`,
+            'Resource::arn:aws:execute-api:*:*:*/*/GET/tokens/*',
+            'Resource::arn:aws:execute-api:*:*:2wvb4zp8pk/*/GET/tokens/*',
+            'Resource::arn:aws:execute-api:*:*:dummy-value-for-/postolio/*/token-service/api-gateway-id/*/GET/tokens/*',
           ],
         },
       ]

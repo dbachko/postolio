@@ -15,6 +15,7 @@ import { signRequest } from '@postolio/aws';
 import { API_VERSIONS, API_BASE_URLS } from '@postolio/aws';
 import { isLocalUrl, shouldUseServiceDiscovery } from './service-discovery-utils';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
+import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 
 // Platform-specific character limits
 const PLATFORM_LIMITS = {
@@ -44,6 +45,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
 // Secrets Manager client removed (unused)
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 const eventBridge = new EventBridge({});
+const sqsClient = tracer.captureAWSv3Client(new SQSClient({}));
 
 // Event from scheduler (minimal data)
 interface PublishEvent {
@@ -509,7 +511,22 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       logger.warn('Failed to emit post.failed event', { error: emitErr });
     }
 
-    throw error;
+    // 🔥 CRITICAL FIX: Send structured error message to DLQ for intelligent retry handling
+    // Instead of throwing error (which causes immediate AWS retry), manually send to DLQ
+    try {
+      await sendToRetryQueue(event.scheduleId, error as Error, event);
+      logger.info('Sent failed publishing request to retry queue for intelligent handling', {
+        scheduleId: event.scheduleId,
+        error: (error as Error).message,
+      });
+    } catch (dlqError) {
+      logger.error('Failed to send message to retry queue', dlqError as Error);
+      // If we can't send to DLQ, then throw the original error as last resort
+      throw error;
+    }
+
+    // Return successfully to prevent AWS automatic retry (our DLQ message will handle retry logic)
+    return;
   } finally {
     metrics.publishStoredMetrics();
   }
@@ -631,6 +648,63 @@ async function getTokenFromTokenService(
     logger.error('Failed to get token from Token Service', { error });
     throw error;
   }
+}
+
+/**
+ * Send structured error message to retry queue for intelligent retry handling
+ * This replaces AWS automatic DLQ handling with our custom retry strategy
+ */
+async function sendToRetryQueue(
+  scheduleId: string,
+  error: Error,
+  originalEvent: PublishEvent
+): Promise<void> {
+  if (!process.env.DLQ_URL) {
+    logger.warn('DLQ_URL not configured - cannot send to retry queue');
+    return;
+  }
+
+  // Create structured message for retry handler with error context
+  const retryMessage = {
+    scheduleId,
+    originalEvent,
+    originalError: error.message,
+    errorDetails: {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    },
+    timestamp: new Date().toISOString(),
+    source: 'publisher',
+    attempt: 1, // This is the first failure
+  };
+
+  await sqsClient.send(
+    new SendMessageCommand({
+      QueueUrl: process.env.DLQ_URL,
+      MessageBody: JSON.stringify(retryMessage),
+      MessageAttributes: {
+        ErrorType: {
+          DataType: 'String',
+          StringValue: error.name || 'Error',
+        },
+        ScheduleId: {
+          DataType: 'String',
+          StringValue: scheduleId,
+        },
+        Source: {
+          DataType: 'String',
+          StringValue: 'publisher',
+        },
+      },
+    })
+  );
+
+  logger.info('Successfully sent structured error message to retry queue', {
+    scheduleId,
+    errorType: error.name,
+    messageSize: JSON.stringify(retryMessage).length,
+  });
 }
 
 // Publisher Lambda architecture:
