@@ -3,11 +3,13 @@
 ## 🚨 **PROBLEM SOLVED**
 
 ### **Root Cause Identified:**
+
 - **51 failed publisher invocations** despite `MAX_RETRY_ATTEMPTS = 3`
 - **SQS was retrying the retry-handler itself** when it threw errors
 - **Infinite loop**: Publisher fails → DLQ → Retry-handler throws error → SQS retries retry-handler → ♻️
 
 ### **Solution Implemented:**
+
 1. **Smart Error Classification** - Auth errors trigger circuit breaker
 2. **Exponential Backoff with Jitter** - Industry standard (AWS/Google)
 3. **Never throw errors** from retry-handler - Always process messages successfully
@@ -19,11 +21,13 @@
 ## 🔧 **ARCHITECTURE TRANSFORMATION**
 
 ### **Before (Broken):**
+
 ```
 Publisher fails → AWS auto-DLQ → Retry-handler → Invoke publisher immediately → Fails → Retry-handler throws error → SQS retries retry-handler → ♻️ INFINITE LOOP
 ```
 
 ### **After (Fixed):**
+
 ```
 Publisher fails → Manual DLQ with error context → Retry-handler analyzes error →
 ├─ Auth error (403) → Circuit breaker → Mark as failed ✅
@@ -36,6 +40,7 @@ Publisher fails → Manual DLQ with error context → Retry-handler analyzes err
 ## 🧪 **TESTING PLAN**
 
 ### **Test 1: Authentication Error (403) - Circuit Breaker**
+
 ```bash
 # Simulate 403 error from Token Service
 # Expected: Circuit breaker opens immediately, no retries
@@ -52,6 +57,7 @@ aws logs tail --follow /aws/lambda/postolio-scheduler-dev-retry-handler
 ```
 
 ### **Test 2: Rate Limiting (429) - Exponential Backoff**
+
 ```bash
 # Expected: 5 retries with delays: 5s, 10s, 20s, 40s, 60s (max)
 
@@ -62,6 +68,7 @@ aws logs filter-log-events \
 ```
 
 ### **Test 3: Server Error (500) - Standard Exponential Backoff**
+
 ```bash
 # Expected: 5 retries with delays: 1s, 2s, 4s, 8s, 16s
 
@@ -72,6 +79,7 @@ aws scheduler list-schedules \
 ```
 
 ### **Test 4: Verify No Infinite Loops**
+
 ```bash
 # Monitor publisher invocations - should NOT exceed retry limits
 aws cloudwatch get-metric-statistics \
@@ -89,6 +97,7 @@ aws cloudwatch get-metric-statistics \
 ## 📊 **MONITORING METRICS**
 
 ### **Key CloudWatch Metrics:**
+
 ```bash
 # Circuit breaker activations
 aws logs filter-log-events \
@@ -107,6 +116,7 @@ aws logs filter-log-events \
 ```
 
 ### **Expected Log Patterns:**
+
 ```json
 // Circuit breaker for 403 errors
 {
@@ -131,6 +141,7 @@ aws logs filter-log-events \
 ## ✅ **SUCCESS CRITERIA**
 
 ### **Must Verify:**
+
 1. **No infinite loops** - Max 5 retries per schedule ID
 2. **Circuit breaker works** - 403 errors stop immediately
 3. **Exponential backoff** - Delays increase: 1s, 2s, 4s, 8s, 16s
@@ -139,6 +150,7 @@ aws logs filter-log-events \
 6. **EventBridge scheduling** - Delayed retries use scheduler, not immediate invocation
 
 ### **Performance Metrics:**
+
 - **Publisher invocations**: Should match retry limits (≤ 5 per schedule)
 - **DLQ processing**: 100% success rate (no retry-handler errors)
 - **Circuit breaker response**: < 100ms for auth errors
@@ -149,6 +161,7 @@ aws logs filter-log-events \
 ## 🚀 **DEPLOYMENT STEPS**
 
 ### **1. Deploy Infrastructure:**
+
 ```bash
 cd packages/infra/cdk
 pnpm cdk diff ContentScheduler-dev
@@ -156,6 +169,7 @@ pnpm cdk deploy ContentScheduler-dev
 ```
 
 ### **2. Verify Configuration:**
+
 ```bash
 # Check DLQ URL is set
 aws lambda get-function-configuration \
@@ -169,6 +183,7 @@ aws lambda get-function-configuration \
 ```
 
 ### **3. Test Scenarios:**
+
 ```bash
 # Force a 403 error scenario
 # Monitor logs for circuit breaker activation
@@ -184,6 +199,7 @@ aws lambda get-function-configuration \
 ## 🔍 **VERIFICATION COMMANDS**
 
 ### **Check Current State:**
+
 ```bash
 # No stuck schedules
 aws dynamodb scan \

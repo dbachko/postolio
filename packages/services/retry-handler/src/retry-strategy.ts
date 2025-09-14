@@ -25,9 +25,9 @@ const CIRCUIT_BREAKER_TIMEOUT_MS = 300000; // 5 minutes circuit breaker timeout
 
 // Error classification based on industry standards
 export enum ErrorType {
-  TRANSIENT = 'transient',           // Retry with exponential backoff
-  NON_TRANSIENT = 'non_transient',   // Fast fail / circuit breaker
-  RATE_LIMITED = 'rate_limited',     // Longer backoff
+  TRANSIENT = 'transient', // Retry with exponential backoff
+  NON_TRANSIENT = 'non_transient', // Fast fail / circuit breaker
+  RATE_LIMITED = 'rate_limited', // Longer backoff
   AUTHENTICATION = 'authentication', // Circuit breaker immediately
 }
 
@@ -203,9 +203,11 @@ export class RetryStrategy {
     }
 
     // Network/timeout errors (retryable)
-    if (errorMessage.includes('timeout') ||
-        errorMessage.includes('ECONNRESET') ||
-        errorMessage.includes('ENOTFOUND')) {
+    if (
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('ECONNRESET') ||
+      errorMessage.includes('ENOTFOUND')
+    ) {
       return {
         errorType: ErrorType.TRANSIENT,
         isRetryable: true,
@@ -260,11 +262,7 @@ export class RetryStrategy {
    * Determine if a retry should be attempted
    * Main decision logic implementing all patterns
    */
-  shouldRetry(
-    error: Error | unknown,
-    attemptNumber: number,
-    scheduleId: string
-  ): RetryResult {
+  shouldRetry(error: Error | unknown, attemptNumber: number, scheduleId: string): RetryResult {
     const errorAnalysis = this.analyzeError(error);
     const circuitBreaker = this.getCircuitBreaker(scheduleId);
 
@@ -316,10 +314,11 @@ export class RetryStrategy {
     }
 
     // Check retry limits based on error type
-    const maxRetries = errorAnalysis.errorType === ErrorType.TRANSIENT ||
-                      errorAnalysis.errorType === ErrorType.RATE_LIMITED
-                      ? MAX_RETRIES_TRANSIENT
-                      : MAX_RETRIES_NON_TRANSIENT;
+    const maxRetries =
+      errorAnalysis.errorType === ErrorType.TRANSIENT ||
+      errorAnalysis.errorType === ErrorType.RATE_LIMITED
+        ? MAX_RETRIES_TRANSIENT
+        : MAX_RETRIES_NON_TRANSIENT;
 
     if (attemptNumber >= maxRetries) {
       circuitBreaker.recordFailure();

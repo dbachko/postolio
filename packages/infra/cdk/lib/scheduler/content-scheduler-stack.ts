@@ -609,8 +609,11 @@ export class ContentSchedulerStack extends cdk.Stack {
       [
         {
           id: 'AwsSolutions-IAM5',
-          reason: 'Wildcard required for API Gateway stage (*) and token resource path (*) to allow flexible deployment configurations and user/platform combinations',
-          appliesTo: [`Resource::arn:aws:execute-api:${this.region}:${this.account}:${resolvedTokenServiceApiId}/*/GET/tokens/*`],
+          reason:
+            'Wildcard required for API Gateway stage (*) and token resource path (*) to allow flexible deployment configurations and user/platform combinations',
+          appliesTo: [
+            `Resource::arn:aws:execute-api:${this.region}:${this.account}:${resolvedTokenServiceApiId}/*/GET/tokens/*`,
+          ],
         },
       ]
     );
@@ -674,8 +677,11 @@ export class ContentSchedulerStack extends cdk.Stack {
       [
         {
           id: 'AwsSolutions-IAM5',
-          reason: 'Wildcard required for retry schedule names (retry-*) to allow dynamic retry schedule creation with schedule IDs and attempt numbers',
-          appliesTo: [`Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/${prefix}-schedules/retry-*`],
+          reason:
+            'Wildcard required for retry schedule names (retry-*) to allow dynamic retry schedule creation with schedule IDs and attempt numbers',
+          appliesTo: [
+            `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/${prefix}-schedules/retry-*`,
+          ],
         },
       ]
     );

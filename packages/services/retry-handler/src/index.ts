@@ -45,7 +45,10 @@ export const handler = async (event: SQSEvent): Promise<void> => {
       await processRetryMessage(record);
       metrics.addMetric('RetryProcessed', MetricUnit.Count, 1);
     } catch (error) {
-      logger.error('Failed to process retry message - marking as permanently failed', error as Error);
+      logger.error(
+        'Failed to process retry message - marking as permanently failed',
+        error as Error
+      );
       metrics.addMetric('RetryFailed', MetricUnit.Count, 1);
 
       // 🔥 CRITICAL FIX: Never throw errors to prevent SQS from retrying the retry-handler
@@ -205,7 +208,10 @@ async function getRetryInfo(scheduleId: string): Promise<RetryInfo | null> {
     const latest = result.Items && result.Items[0];
     return (latest as RetryInfo) || null;
   } catch (err) {
-    logger.warn('No retry info found or query failed', { scheduleId, error: (err as Error).message });
+    logger.warn('No retry info found or query failed', {
+      scheduleId,
+      error: (err as Error).message,
+    });
     return null;
   }
 }
@@ -295,7 +301,11 @@ async function recordRetryAttempt(
   );
 }
 
-async function markAsFailed(scheduleId: string, reason: string, originalError?: Error | unknown): Promise<void> {
+async function markAsFailed(
+  scheduleId: string,
+  reason: string,
+  originalError?: Error | unknown
+): Promise<void> {
   // Analyze error to get structured information
   const errorAnalysis = retryStrategy.analyzeError(originalError || reason);
 
@@ -306,7 +316,8 @@ async function markAsFailed(scheduleId: string, reason: string, originalError?: 
         pk: `SCHEDULE#${scheduleId}`,
         sk: 'METADATA',
       },
-      UpdateExpression: 'SET #status = :status, #error = :error, #errorType = :errorType, #updatedAt = :updatedAt',
+      UpdateExpression:
+        'SET #status = :status, #error = :error, #errorType = :errorType, #updatedAt = :updatedAt',
       ExpressionAttributeNames: {
         '#status': 'status',
         '#error': 'schedulingError',
