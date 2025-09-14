@@ -3,6 +3,7 @@
  * Bridges the gap between legacy scheduler and new AWS Content Scheduler
  */
 
+import { randomUUID } from 'crypto';
 import { ContentStatus } from '@postolio/database';
 import {
   ContentSchedulerClient,
