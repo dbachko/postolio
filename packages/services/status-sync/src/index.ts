@@ -115,15 +115,61 @@ async function handlePostFailed(detail: PlatformEventDetail) {
   });
 }
 
-async function handleScheduleCreated(detail: PlatformEventDetail) {
-  const { contentId, scheduledAt } = detail.data;
+async function handleScheduleFailed(detail: PlatformEventDetail) {
+  const { contentId, error } = detail.data;
   if (!contentId) return;
   const client = await getClient();
+
+  // Get current generationParams to preserve existing data
+  const currentContent = await client.content.findUnique({
+    where: { id: contentId },
+    select: { generationParams: true },
+  });
+
+  const existingParams = (currentContent?.generationParams as Record<string, any>) || {};
+  const message: string | undefined = typeof error === 'string' ? error : error?.message;
+
+  await client.content.update({
+    where: { id: contentId },
+    data: {
+      schedulingError: message?.slice(0, 500) || 'Scheduling failed',
+      generationParams: JSON.parse(JSON.stringify({
+        ...existingParams,
+        processing: null, // Clear processing state - scheduling failed
+        awsScheduleCreated: false,
+        failedAt: new Date().toISOString(),
+      })),
+    },
+  });
+}
+
+async function handleScheduleCreated(detail: PlatformEventDetail) {
+  const { contentId, scheduledAt, scheduleId } = detail.data;
+  if (!contentId) return;
+  const client = await getClient();
+
+  // Get current generationParams to preserve existing data
+  const currentContent = await client.content.findUnique({
+    where: { id: contentId },
+    select: { generationParams: true },
+  });
+
+  const existingParams = (currentContent?.generationParams as Record<string, any>) || {};
+
   await client.content.update({
     where: { id: contentId },
     data: {
       status: 'scheduled' as ContentStatus,
       scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
+      schedulingError: null, // Clear any previous errors
+      generationParams: JSON.parse(JSON.stringify({
+        ...existingParams,
+        scheduleId: scheduleId, // Store the AWS schedule ID
+        awsScheduleCreated: true, // Mark as properly scheduled
+        processing: null, // Clear processing state - scheduling completed
+        scheduledAt: scheduledAt, // Store for reference
+        scheduledTimestamp: new Date().toISOString(), // When it was scheduled
+      })),
     },
   });
 }
@@ -131,11 +177,29 @@ async function handleScheduleCreated(detail: PlatformEventDetail) {
 async function handleScheduleUpdated(detail: PlatformEventDetail) {
   const { scheduleId, updates, contentId } = detail.data;
   const scheduledAt = updates?.scheduledAt;
-  if (!contentId && !scheduleId) return;
+  if (!contentId) return;
   const client = await getClient();
-  await client.content.updateMany({
-    where: contentId ? { id: contentId } : { /* fallback: no-op without contentId */ id: '' },
-    data: scheduledAt ? { scheduledAt: new Date(scheduledAt) } : {},
+
+  // Get current generationParams to preserve existing data
+  const currentContent = await client.content.findUnique({
+    where: { id: contentId },
+    select: { generationParams: true },
+  });
+
+  const existingParams = (currentContent?.generationParams as Record<string, any>) || {};
+
+  await client.content.update({
+    where: { id: contentId },
+    data: {
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
+      generationParams: JSON.parse(JSON.stringify({
+        ...existingParams,
+        scheduleId: scheduleId || existingParams.scheduleId, // Preserve or update schedule ID
+        awsScheduleCreated: true,
+        processing: null, // Clear processing state - update completed
+        lastUpdated: new Date().toISOString(),
+      })),
+    },
   });
 }
 
@@ -143,11 +207,28 @@ async function handleScheduleCanceled(detail: PlatformEventDetail) {
   const { contentId } = detail.data;
   if (!contentId) return;
   const client = await getClient();
+
+  // Get current generationParams to preserve existing data
+  const currentContent = await client.content.findUnique({
+    where: { id: contentId },
+    select: { generationParams: true },
+  });
+
+  const existingParams = (currentContent?.generationParams as Record<string, any>) || {};
+
   await client.content.update({
     where: { id: contentId },
     data: {
       status: 'draft' as ContentStatus,
       scheduledAt: null,
+      schedulingError: null,
+      generationParams: JSON.parse(JSON.stringify({
+        ...existingParams,
+        scheduleId: null, // Clear the schedule ID
+        awsScheduleCreated: false, // Mark as not scheduled
+        processing: null, // Clear processing state - cancellation completed
+        canceledAt: new Date().toISOString(),
+      })),
     },
   });
 }
@@ -185,6 +266,9 @@ export async function handler(event: EventBridgeEvent<string, PlatformEventDetai
         break;
       case 'schedule.canceled':
         await handleScheduleCanceled(detail);
+        break;
+      case 'schedule.failed':
+        await handleScheduleFailed(detail);
         break;
       default:
         console.log(`Unhandled event type: ${detail.type}`);

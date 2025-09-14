@@ -21,6 +21,17 @@ export interface GenerationParams {
   /** User ID who scheduled the content */
   userId?: string;
 
+  /** Whether AWS schedule was successfully created */
+  awsScheduleCreated?: boolean;
+
+  /** Processing state for async operations */
+  processing?: {
+    active: boolean;
+    operation: 'scheduling';
+    startedAt: string;
+    operationId?: string;
+  };
+
   /** Additional metadata */
   [key: string]: unknown;
 }

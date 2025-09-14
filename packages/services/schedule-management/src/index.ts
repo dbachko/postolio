@@ -15,6 +15,7 @@ import {
   CreateScheduleCommand,
   DeleteScheduleCommand,
 } from '@aws-sdk/client-scheduler';
+import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { randomUUID } from 'crypto';
 import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from './config';
@@ -45,6 +46,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
   },
 });
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
+const eventBridgeClient = tracer.captureAWSv3Client(new EventBridgeClient({}));
 
 // Validation schemas
 interface ScheduleRequest {
@@ -154,6 +156,59 @@ function validateScheduleRequest(data: unknown): {
   return errors.length > 0
     ? { valid: false, errors }
     : { valid: true, data: d as unknown as ScheduleRequest };
+}
+
+// EventBridge event publisher
+async function publishScheduleEvent(
+  eventType: 'schedule.created' | 'schedule.updated' | 'schedule.canceled',
+  scheduleData: {
+    scheduleId: string;
+    contentId: string;
+    brandId?: string;
+    scheduledAt?: string;
+    updates?: { scheduledAt?: string };
+  }
+): Promise<void> {
+  const eventDetail = {
+    id: scheduleData.scheduleId,
+    source: 'schedule-management',
+    type: eventType,
+    timestamp: new Date().toISOString(),
+    data: scheduleData,
+    metadata: {
+      version: '1.0',
+      traceId: logger.getLambdaContext()?.awsRequestId,
+    },
+  };
+
+  const eventBridgeEvent = {
+    Source: process.env.EVENT_SOURCE || 'postolio.scheduler',
+    DetailType: 'Schedule Event',
+    Detail: JSON.stringify(eventDetail),
+    EventBusName: process.env.EVENT_BUS_NAME, // Use custom event bus if configured
+  };
+
+  try {
+    await eventBridgeClient.send(
+      new PutEventsCommand({
+        Entries: [eventBridgeEvent],
+      })
+    );
+
+    logger.info('EventBridge event published', {
+      eventType,
+      scheduleId: scheduleData.scheduleId,
+      contentId: scheduleData.contentId,
+    });
+  } catch (error) {
+    logger.error('Failed to publish EventBridge event', {
+      error,
+      eventType,
+      scheduleData,
+    });
+    // Don't fail the main operation if event publishing fails
+    // Status-sync can be reconciled later
+  }
 }
 
 // CORS headers helper
@@ -433,6 +488,14 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
 
   logger.info('Schedule created successfully', { scheduleId });
 
+  // Publish EventBridge event to notify status-sync Lambda
+  await publishScheduleEvent('schedule.created', {
+    scheduleId,
+    contentId: validatedData.contentId,
+    brandId: validatedData.brandId,
+    scheduledAt,
+  });
+
   // Return complete schedule object that matches client expectations
   const scheduleResponse = {
     scheduleId,
@@ -678,6 +741,15 @@ async function updateSchedule(
 
     logger.info('Schedule updated successfully', { scheduleId });
 
+    // Publish EventBridge event to notify status-sync Lambda
+    await publishScheduleEvent('schedule.updated', {
+      scheduleId,
+      contentId: updatedItem.contentId,
+      brandId: updatedItem.brandId,
+      scheduledAt: updatedItem.scheduledAt,
+      updates: partial.scheduledAt ? { scheduledAt: updatedItem.scheduledAt } : undefined,
+    });
+
     // Return complete schedule object that matches client expectations
     const scheduleResponse = {
       scheduleId: updatedItem.scheduleId,
@@ -717,6 +789,17 @@ async function updateSchedule(
 }
 
 async function deleteSchedule(scheduleId: string): Promise<APIGatewayProxyResult> {
+  // Get the schedule first to extract contentId for the event
+  const existingSchedule = await docClient.send(
+    new GetCommand({
+      TableName: process.env.SCHEDULES_TABLE!,
+      Key: {
+        pk: `SCHEDULE#${scheduleId}`,
+        sk: 'METADATA',
+      },
+    })
+  );
+
   // Delete from DynamoDB
   await docClient.send(
     new DeleteCommand({
@@ -737,6 +820,15 @@ async function deleteSchedule(scheduleId: string): Promise<APIGatewayProxyResult
   );
 
   logger.info('Schedule deleted successfully', { scheduleId });
+
+  // Publish EventBridge event to notify status-sync Lambda
+  if (existingSchedule.Item) {
+    await publishScheduleEvent('schedule.canceled', {
+      scheduleId,
+      contentId: existingSchedule.Item.contentId,
+      brandId: existingSchedule.Item.brandId,
+    });
+  }
 
   return {
     statusCode: 204,
