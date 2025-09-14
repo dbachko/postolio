@@ -6,12 +6,13 @@ import {
   DynamoDBDocumentClient,
   PutCommand,
   GetCommand,
+  QueryCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+// import { LambdaClient } from '@aws-sdk/client-lambda';
 import { SchedulerClient, CreateScheduleCommand } from '@aws-sdk/client-scheduler';
 import { SQSEvent, SQSRecord } from 'aws-lambda';
-import { RetryStrategy, ErrorType } from './retry-strategy';
+import { RetryStrategy } from './retry-strategy';
 
 // Initialize Powertools
 const logger = new Logger({ serviceName: 'retry-handler' });
@@ -24,7 +25,8 @@ const metrics = new Metrics({
 // Initialize AWS SDK clients
 const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
-const lambdaClient = tracer.captureAWSv3Client(new LambdaClient({}));
+// Lambda client currently not used; initialize when needed
+// const lambdaClient = tracer.captureAWSv3Client(new LambdaClient({}));
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 
 // Initialize retry strategy with industry best practices
@@ -187,19 +189,23 @@ interface RetryInfo {
 
 async function getRetryInfo(scheduleId: string): Promise<RetryInfo | null> {
   try {
+    // Query the latest attempt (highest sort key) for this scheduleId
     const result = await docClient.send(
-      new GetCommand({
+      new QueryCommand({
         TableName: process.env.RETRY_QUEUE_TABLE!,
-        Key: {
-          scheduleId,
-          attemptNumber: 0, // Get the latest attempt
+        KeyConditionExpression: 'scheduleId = :sid',
+        ExpressionAttributeValues: {
+          ':sid': scheduleId,
         },
+        ScanIndexForward: false, // descending order by sort key (attemptNumber)
+        Limit: 1,
       })
     );
 
-    return (result.Item as RetryInfo) || null;
-  } catch {
-    logger.warn('No retry info found', { scheduleId });
+    const latest = result.Items && result.Items[0];
+    return (latest as RetryInfo) || null;
+  } catch (err) {
+    logger.warn('No retry info found or query failed', { scheduleId, error: (err as Error).message });
     return null;
   }
 }
