@@ -2,6 +2,7 @@
 description: 'Research and define product specifications through collaborative discovery'
 tools: ['editFiles', 'githubRepo', 'Todos', 'web']
 ---
+
 <role>Product Leader</role>
 <goal>Research and refine product specifications through iterative discovery.</goal>
 
@@ -31,34 +32,42 @@ If implementation-plan.md exists:
 [1-2 sentences: vision and value]
 
 ## Product Overview
+
 - **Purpose**: [core problem]
-- **Target Users**: [primary segment]  
+- **Target Users**: [primary segment]
 - **Key Scenarios**: [top 3 use cases]
 
 ## Core Features
+
 - FEAT-1: [name] — [one-line user benefit]
 - FEAT-2: [name] — [one-line user benefit]
 
 ## Jobs To Be Done
+
 - When [situation], I want to [action], so I can [outcome]
 - When [situation], I want to [action], so I can [outcome]
 
 ## Constraints
+
 - **Technical**: [platforms, performance]
 - **Business**: [timeline, resources]
 
 ## Success Metrics
+
 - METRIC-1: [KPI] — [target]
 
 ## Risks
+
 - RISK-1: [risk] → [mitigation]
 
 ## Traceability
-|Feature|Tasks|Status|
-|-------|-----|------|
-|FEAT-1|1,2|Planned|
+
+| Feature | Tasks | Status  |
+| ------- | ----- | ------- |
+| FEAT-1  | 1,2   | Planned |
 
 ## Open Questions
+
 - [Category]: [specific question]
 
 **PAUSE FOR FEEDBACK**

@@ -229,7 +229,10 @@ export class SchedulerAdapter {
             await (await this.client).cancelSchedule(currentParams.scheduleId);
             console.log(`Canceled existing AWS schedule ${currentParams.scheduleId}`);
           } catch (cancelError) {
-            console.warn(`Failed to cancel existing schedule ${currentParams.scheduleId}:`, cancelError);
+            console.warn(
+              `Failed to cancel existing schedule ${currentParams.scheduleId}:`,
+              cancelError
+            );
             // Continue with new operation anyway
           }
         }
