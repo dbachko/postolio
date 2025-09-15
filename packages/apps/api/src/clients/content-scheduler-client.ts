@@ -11,7 +11,7 @@ import * as https from 'https';
 import CircuitBreaker from 'opossum';
 import type { Options as CircuitBreakerOptions } from 'opossum';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { ParameterManager, getCurrentEnvironment } from '@postolio/service-parameters';
 
 // ==================== Validation Schemas ====================
 
@@ -364,23 +364,14 @@ export class ContentSchedulerClient {
   ): Promise<ContentSchedulerClient> {
     const finalConfig = { ...config };
 
-    // Get URL from SSM Parameter Store if not provided
+    // Get URL from SSM Parameter Store if not provided using centralized parameter manager
     if (!finalConfig.baseURL) {
       try {
-        const ssm = new SSMClient({ region: process.env.AWS_REGION || 'us-east-1' });
-        const environment = process.env.NODE_ENV || 'dev';
-        const parameterName = `/postolio/${environment}/services/content-scheduler/url`;
+        const parameterManager = new ParameterManager(process.env.AWS_REGION || 'us-east-1');
+        const environment = getCurrentEnvironment();
 
-        const response = await ssm.send(new GetParameterCommand({
-          Name: parameterName,
-        }));
-
-        if (response.Parameter?.Value) {
-          finalConfig.baseURL = response.Parameter.Value;
-          console.log('✅ Content Scheduler URL retrieved from SSM Parameter Store:', finalConfig.baseURL);
-        } else {
-          throw new Error('SSM Parameter value is empty');
-        }
+        finalConfig.baseURL = await parameterManager.getServiceUrl('CONTENT_SCHEDULER_URL', environment);
+        console.log('✅ Content Scheduler URL retrieved from SSM Parameter Store via centralized manager:', finalConfig.baseURL);
       } catch (ssmError) {
         console.warn('⚠️  Content Scheduler SSM lookup failed, trying fallback URLs:', ssmError);
 

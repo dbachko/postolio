@@ -7,7 +7,7 @@ import CircuitBreaker from 'opossum';
 import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { ParameterManager, getCurrentEnvironment } from '@postolio/service-parameters';
 import type { StoreTokenParams, TokenData } from '../types/token-service.js';
 import { getRedisClient } from '../services/redis.js';
 import crypto from 'crypto';
@@ -55,7 +55,7 @@ export class TokenServiceClient {
   private circuitBreaker: CircuitBreaker | null = null;
   private baseURL: string;
   private signer: SignatureV4 | undefined;
-  private ssm: SSMClient;
+  private parameterManager: ParameterManager;
   private config: Required<TokenServiceConfig>;
   private cache: Map<string, TokenCacheEntry> = new Map();
   private rateLimitState: Map<string, RateLimitState> = new Map();
@@ -63,6 +63,8 @@ export class TokenServiceClient {
   private correlationId: string;
   private initialized = false;
   private initPromise: Promise<void> | null = null;
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private disposed = false;
 
   constructor(config?: TokenServiceConfig) {
     // Set defaults with proper typing
@@ -85,15 +87,22 @@ export class TokenServiceClient {
     this.baseURL = this.config.apiUrl;
     this.correlationId = this.config.correlationId;
 
-    // Initialize SSM client
-    this.ssm = new SSMClient({ region: process.env.AWS_REGION || 'us-east-1' });
+    // Initialize parameter manager for centralized SSM parameter access
+    this.parameterManager = new ParameterManager(process.env.AWS_REGION || 'us-east-1');
 
     // Initialize asynchronously to handle service URL resolution properly
     this.initPromise = this.initialize();
 
-    // Set up cache cleanup
+    // Set up cache cleanup with proper resource management
     if (this.config.enableCache) {
-      setInterval(() => this.cleanupCache(), 60000); // Clean every minute
+      this.cleanupInterval = setInterval(() => {
+        if (!this.disposed) {
+          this.cleanupCache();
+        }
+      }, 60000); // Clean every minute
+
+      // Unref to not block process exit
+      this.cleanupInterval.unref();
     }
   }
 
@@ -120,25 +129,18 @@ export class TokenServiceClient {
   }
 
   private async initializeServiceUrl(): Promise<void> {
-    // First try SSM Parameter Store
+    // Use centralized parameter manager to get service URL
     try {
-      const environment = process.env.NODE_ENV || 'dev';
-      const parameterName = `/postolio/${environment}/services/token-service/url`;
+      const environment = getCurrentEnvironment();
+      this.baseURL = await this.parameterManager.getServiceUrl('TOKEN_SERVICE_URL', environment);
 
-      const response = await this.ssm.send(new GetParameterCommand({
-        Name: parameterName,
-      }));
-
-      if (response.Parameter?.Value) {
-        this.baseURL = response.Parameter.Value;
-        this.logInfo('Token Service URL retrieved from SSM Parameter Store', {
-          url: this.baseURL,
-          parameterName,
-        });
-        return;
-      }
+      this.logInfo('Token Service URL retrieved from SSM Parameter Store via centralized manager', {
+        url: this.baseURL,
+        environment,
+      });
+      return;
     } catch (error) {
-      this.logWarn('Failed to get Token Service URL from SSM Parameter Store', {
+      this.logWarn('Failed to get Token Service URL from centralized parameter manager', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -206,6 +208,33 @@ export class TokenServiceClient {
     this.circuitBreaker!.on('close', () => {
       this.logInfo('Circuit breaker CLOSED - service healthy');
     });
+  }
+
+  /**
+   * Dispose of resources and clean up intervals to prevent memory leaks
+   */
+  dispose(): void {
+    this.disposed = true;
+
+    // Clean up interval
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+
+    // Dispose parameter manager resources
+    if (this.parameterManager) {
+      this.parameterManager.dispose();
+    }
+
+    // Clear caches to free memory
+    this.cache.clear();
+    this.rateLimitState.clear();
+    this.pendingRequests.clear();
+
+    // Reset state
+    this.initialized = false;
+    this.initPromise = null;
   }
 
   /**

@@ -7,6 +7,24 @@ import {
 } from '@postolio/errors';
 import { logger } from '@postolio/logger';
 
+// Type guards for enhanced error handling
+interface ExtendedAPIError extends APIError {
+  correlationId?: string;
+  statusCode: number;
+  code: string;
+  type: string;
+  details?: Record<string, unknown>;
+  toJSON(): APIErrorResponse;
+}
+
+interface FastifyValidationError extends FastifyError {
+  validation?: FastifyError['validation'];
+}
+
+interface FastifyHTTPError extends FastifyError {
+  statusCode?: number;
+}
+
 interface ErrorContext {
   correlationId: string;
   userId?: string;
@@ -17,10 +35,23 @@ interface ErrorContext {
 }
 
 interface AuthenticatedRequest extends FastifyRequest {
-  user?: {
+  user: {
     id: string;
     email: string;
   };
+}
+
+// Type guards
+function isAPIError(error: unknown): error is ExtendedAPIError {
+  return error instanceof APIError;
+}
+
+function hasValidation(error: FastifyError | Error): error is FastifyValidationError {
+  return 'validation' in error && Array.isArray((error as FastifyValidationError).validation);
+}
+
+function hasStatusCode(error: FastifyError | Error): error is FastifyHTTPError {
+  return 'statusCode' in error && typeof (error as FastifyHTTPError).statusCode === 'number';
 }
 
 export async function errorHandler(
@@ -30,7 +61,7 @@ export async function errorHandler(
 ): Promise<void> {
   const context: ErrorContext = {
     correlationId: request.id,
-    userId: (request as AuthenticatedRequest).user?.id,
+    userId: (request as Partial<AuthenticatedRequest>).user?.id,
     endpoint: request.url,
     method: request.method,
     userAgent: request.headers['user-agent'],
@@ -38,7 +69,7 @@ export async function errorHandler(
   };
 
   // Handle APIError instances (our standardized errors)
-  if (error instanceof APIError) {
+  if (isAPIError(error)) {
     error.correlationId = context.correlationId;
 
     // Log based on error type and severity
@@ -68,10 +99,10 @@ export async function errorHandler(
   }
 
   // Handle Fastify validation errors
-  if (error.validation) {
+  if (hasValidation(error)) {
     const validationError = new ValidationError('Request validation failed', {
       fields: error.validation,
-    });
+    }) as ExtendedAPIError;
     validationError.correlationId = context.correlationId;
 
     logger.warn('Validation Error', {
@@ -83,8 +114,8 @@ export async function errorHandler(
   }
 
   // Handle Fastify HTTP errors (like 404, 405, etc.)
-  if (error.statusCode) {
-    let apiError: APIError;
+  if (hasStatusCode(error)) {
+    let apiError: ExtendedAPIError;
 
     switch (error.statusCode) {
       case 404:
@@ -115,9 +146,9 @@ export async function errorHandler(
         apiError = new APIError(
           error.message,
           'HTTP_ERROR',
-          error.statusCode,
+          error.statusCode || 500,
           'HTTP_ERROR'
-        );
+        ) as ExtendedAPIError;
     }
 
     apiError.correlationId = context.correlationId;
@@ -127,7 +158,7 @@ export async function errorHandler(
       statusCode: error.statusCode,
     });
 
-    return reply.status(error.statusCode).send(apiError.toJSON());
+    return reply.status(error.statusCode || 500).send(apiError.toJSON());
   }
 
   // Handle generic errors (convert to InternalServerError)
@@ -138,7 +169,7 @@ export async function errorHandler(
       stack: error.stack,
       originalMessage: error.message
     }),
-  });
+  }) as ExtendedAPIError;
   internalError.correlationId = context.correlationId;
 
   logger.error(`Unexpected Error: ${error.message}`, {
@@ -152,12 +183,12 @@ export async function errorHandler(
 }
 
 // Helper function to create error responses in route handlers
-export function createErrorResponse(error: APIError): APIErrorResponse {
+export function createErrorResponse(error: ExtendedAPIError): APIErrorResponse {
   return error.toJSON();
 }
 
 // Helper function to send standardized error responses
-export function sendError(reply: FastifyReply, error: APIError): void {
+export function sendError(reply: FastifyReply, error: ExtendedAPIError): void {
   // Add retry-after header for rate limit errors
   if (error.code === 'RATE_LIMIT_EXCEEDED' && error.details?.retryAfter) {
     reply.header('Retry-After', error.details.retryAfter.toString());

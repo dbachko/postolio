@@ -36,10 +36,18 @@ model User {
   twoFactorSecret      String?        @map("twofactorsecret") // Secret for TOTP
   twoFactorBackupCodes Json?          @map("twofactorbackupcodes") // Array of hashed backup codes
   twoFactorPhoneNumber String?        @map("twofactorphonenumber") // Phone number for SMS 2FA
+
+  // Account security fields
+  failedLoginAttempts  Int            @default(0) @map("failedloginattempts") // Count of failed login attempts
+  accountLockedUntil   DateTime?      @map("accountlockeduntil") // Account lock expiration time
   
   brands            Brand[]
   modifiedCampaigns Campaign[]
 
+  @@index([email])
+  @@index([accountLockedUntil])
+  @@index([failedLoginAttempts])
+  @@index([emailVerified])
   @@map("users")
 }
 
@@ -62,6 +70,9 @@ model Brand {
   campaigns            Campaign[]
   content              Content[]
 
+  @@index([userId])
+  @@index([createdAt])
+  @@index([engagementActive])
   @@map("brands")
 }
 

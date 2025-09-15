@@ -1,0 +1,20 @@
+{
+  "name": "@postolio/service-parameters",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --target node18 --out-dir dist --dts",
+    "lint": "eslint src/**/*.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.883.0"
+  },
+  "devDependencies": {
+    "@postolio/tsconfig": "workspace:*",
+    "tsup": "^8.2.3",
+    "typescript": "^5.7.3"
+  }
+}

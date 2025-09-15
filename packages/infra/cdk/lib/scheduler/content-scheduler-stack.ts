@@ -22,6 +22,7 @@ import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import { ParameterNames, type Environment } from '@postolio/service-parameters';
 // Service discovery replaced with Lambda Function URLs + SSM Parameter Store
 
 export interface ContentSchedulerStackProps extends cdk.StackProps {
@@ -1513,7 +1514,7 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // Store Lambda Function URL in SSM Parameter Store for service discovery replacement
     new ssm.StringParameter(this, 'ContentSchedulerFunctionUrlParameter', {
-      parameterName: `/postolio/${environment}/services/content-scheduler/url`,
+      parameterName: ParameterNames.getParameterName('CONTENT_SCHEDULER_URL', environment as Environment),
       stringValue: scheduleManagementFunctionUrl.url,
       description: 'Content Scheduler Lambda Function URL for service-to-service communication',
       tier: ssm.ParameterTier.STANDARD,

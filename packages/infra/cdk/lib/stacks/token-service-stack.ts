@@ -21,6 +21,7 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { NagSuppressions } from 'cdk-nag';
 import { OAuthConfig } from '../utils/oauth-config';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import { ParameterNames, type Environment } from '@postolio/service-parameters';
 
 export interface TokenServiceStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod';
@@ -283,7 +284,7 @@ export class TokenServiceStack extends cdk.Stack {
 
     // Store Lambda Function URL in SSM Parameter Store for service discovery replacement
     new ssm.StringParameter(this, 'TokenServiceFunctionUrlParameter', {
-      parameterName: `/postolio/${environment}/services/token-service/url`,
+      parameterName: ParameterNames.getParameterName('TOKEN_SERVICE_URL', environment as Environment),
       stringValue: functionUrl.url,
       description: 'Token Service Lambda Function URL for service-to-service communication',
       tier: ssm.ParameterTier.STANDARD,
