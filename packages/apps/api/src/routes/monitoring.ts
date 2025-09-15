@@ -2,7 +2,6 @@ import { FastifyPluginAsync } from 'fastify';
 import { monitoringService } from '../services/monitoring.js';
 import { checkDatabaseHealth, getDatabaseMetrics } from '../config/database.js';
 import { serviceClients } from '../services/service-clients.js';
-import { isCloudMapConfigured } from '../utils/service-discovery.js';
 
 const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   // Get system metrics
@@ -219,8 +218,8 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
     }
   });
 
-  // Service discovery health check
-  fastify.get('/health/service-discovery', async function () {
+  // Service connectivity health check
+  fastify.get('/health/services', async function () {
     try {
       const serviceHealth = await serviceClients.healthCheck();
 
@@ -229,9 +228,8 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
         overall: serviceHealth.overall,
         services: serviceHealth,
         environment: {
-          cloudMapConfigured: isCloudMapConfigured(),
-          cloudMapNamespaceId: process.env.CLOUDMAP_NAMESPACE_ID || 'not configured',
-          cloudMapNamespaceName: process.env.CLOUDMAP_NAMESPACE_NAME || 'not configured',
+          serviceDiscoveryMethod: 'SSM Parameter Store',
+          region: process.env.AWS_REGION || 'not configured',
         },
         fallbackUrls: {
           tokenService: process.env.TOKEN_SERVICE_URL || 'not configured',
@@ -253,17 +251,17 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
     }
   });
 
-  // Refresh service discovery
+  // Refresh service URLs from SSM Parameter Store
   fastify.post(
-    '/service-discovery/refresh',
+    '/services/refresh',
     { preHandler: fastify.authenticate },
     async function () {
       try {
-        await serviceClients.refreshServiceDiscovery();
+        await serviceClients.refreshServiceDiscovery(); // Still uses this method but now it reads from SSM
         return {
           timestamp: new Date().toISOString(),
           status: 'success',
-          message: 'Service discovery refreshed successfully',
+          message: 'Service URLs refreshed from SSM Parameter Store successfully',
         };
       } catch (error) {
         return {

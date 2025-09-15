@@ -6,7 +6,7 @@ import { ContentSchedulerStack } from '../lib/scheduler/content-scheduler-stack'
 import { PostolioStack } from '../lib/stacks/postolio-stack';
 import { TokenServiceStack } from '../lib/stacks/token-service-stack';
 import { EcrRegistryStack } from '../lib/stacks/ecr-registry-stack';
-import { ServiceDiscoveryStack } from '../lib/stacks/service-discovery-stack';
+// Service discovery replaced with Lambda Function URLs + SSM Parameter Store
 import { getOAuthConfig } from '../lib/utils/oauth-config';
 
 const app = new cdk.App();
@@ -51,28 +51,16 @@ const ecrRegistry = new EcrRegistryStack(app, `EcrRegistry-${environment}`, {
   },
 });
 
-// 2. Deploy Shared Service Discovery stack (all services will use this)
-const serviceDiscoveryStack = new ServiceDiscoveryStack(app, `ServiceDiscovery-${environment}`, {
-  env: stackEnv,
-  environment: environment as 'dev' | 'staging' | 'prod',
-  description: `Shared Service Discovery - ${environment} environment`,
-  tags: {
-    Environment: environment,
-    Service: 'ServiceDiscovery',
-    ManagedBy: 'CDK',
-    Version: '1.0',
-  },
-});
+// 2. Service Discovery stack removed - using Lambda Function URLs + SSM Parameter Store
 
 // Get OAuth configuration from shared utility
 const oauthConfig = getOAuthConfig(app);
 
-// 3. Deploy Token Service stack (uses shared service discovery)
+// 3. Deploy Token Service stack (uses Lambda Function URLs + SSM Parameter Store)
 const tokenServiceStack = new TokenServiceStack(app, `TokenService-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
-  serviceDiscoveryNamespaceId: serviceDiscoveryStack.namespaceId,
   // OAuth configuration from shared utility
   ...oauthConfig,
   description: `Token Service - OAuth token management - ${environment} environment`,
@@ -84,12 +72,11 @@ const tokenServiceStack = new TokenServiceStack(app, `TokenService-${environment
   },
 });
 
-// 4. Deploy ContentScheduler stack (uses shared service discovery)
+// 4. Deploy ContentScheduler stack (uses Lambda Function URLs + SSM Parameter Store)
 const contentSchedulerStack = new ContentSchedulerStack(app, `ContentScheduler-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
-  serviceDiscoveryNamespaceId: serviceDiscoveryStack.namespaceId,
   description: `Content Scheduler Microservice - ${environment} environment`,
   tags: {
     Environment: environment,
@@ -99,15 +86,14 @@ const contentSchedulerStack = new ContentSchedulerStack(app, `ContentScheduler-$
   },
 });
 
-// 5. Deploy Postolio stack (uses shared service discovery)
+// 5. Deploy Postolio stack (uses Lambda Function URLs + SSM Parameter Store)
 const postolioStack = new PostolioStack(app, `Postolio-${environment}`, {
   env: stackEnv,
   environment,
   domainName,
   hostedZoneId,
   useExternalDns,
-  serviceDiscoveryNamespaceId: serviceDiscoveryStack.namespaceId,
-  // No stack references needed - services use Cloud Map for discovery
+  // No stack references needed - services use Lambda Function URLs for communication
   description: `Postolio Main Application - ${environment} environment`,
   tags: {
     Environment: environment,
@@ -118,7 +104,7 @@ const postolioStack = new PostolioStack(app, `Postolio-${environment}`, {
 });
 
 // No explicit dependencies needed - services can be deployed independently
-// Service discovery handles runtime communication
+// Lambda Function URLs + SSM Parameter Store handles runtime communication
 
 // Apply CDK Nag security checks to all environments
 // This ensures security best practices are followed during development

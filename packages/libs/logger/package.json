@@ -1,0 +1,19 @@
+{
+  "name": "@postolio/logger",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "dependencies": {
+    "pino": "^9.5.0",
+    "pino-pretty": "^10.2.3"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.1",
+    "typescript": "^5.0.0"
+  }
+}

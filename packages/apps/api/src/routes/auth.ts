@@ -124,6 +124,15 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { email, password, rememberMe } = request.body;
 
+      // Check if account is locked before proceeding
+      const isLocked = await AuditLogger.isAccountLocked(email);
+      if (isLocked) {
+        return reply.code(423).send({
+          error: 'Account temporarily locked due to multiple failed login attempts. Please try again later.',
+          code: 'ACCOUNT_LOCKED',
+        });
+      }
+
       // Find user with password for verification
       const user = await prisma.user.findUnique({
         where: { email },
@@ -273,8 +282,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           : 7 * 24 * 60 * 60, // 7 days otherwise
       });
 
-      // Log successful login
+      // Log successful login and reset failed attempts
       await AuditLogger.logAuth(AuditEventType.USER_LOGIN, user.id, user.email, request);
+      await AuditLogger.resetFailedLoginAttempts(user.email);
 
       // Return user without password
       const { password: _password, ...userWithoutPassword } = user;

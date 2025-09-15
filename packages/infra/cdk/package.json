@@ -60,6 +60,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-sns": "^3.873.0",
+    "@aws-sdk/client-ssm": "^3.888.0",
     "@aws-sdk/core": "^3.883.0",
     "@postolio/aws": "workspace:^",
     "@smithy/core": "^3.10.0",

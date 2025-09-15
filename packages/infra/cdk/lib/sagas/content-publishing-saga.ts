@@ -8,10 +8,11 @@ import { EventBusService } from '../services/event-bus-service';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import axios from 'axios';
-import { discoverService } from '@postolio/aws';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const ssmClient = new SSMClient({});
 const eventBus = EventBusService.getInstance();
 
 const SCHEDULE_TABLE = process.env.SCHEDULE_TABLE_NAME || 'schedules';
@@ -86,8 +87,15 @@ export class ContentPublishingSaga {
       forward: async (ctx) => {
         console.log(`Getting token for brand ${ctx.brandId} on ${ctx.platform}`);
 
-        // Discover token service endpoint
-        const tokenServiceUrl = await discoverService('token-service');
+        // Get token service endpoint from SSM Parameter Store
+        const environment = process.env.NODE_ENV || 'dev';
+        const parameterName = `/postolio/${environment}/services/token-service/url`;
+        const parameterResponse = await ssmClient.send(new GetParameterCommand({ Name: parameterName }));
+        const tokenServiceUrl = parameterResponse.Parameter?.Value;
+
+        if (!tokenServiceUrl) {
+          throw new Error(`Token service URL not found in parameter ${parameterName}`);
+        }
 
         // Fetch token from token service (Lambda or API)
         const response = await axios.get(

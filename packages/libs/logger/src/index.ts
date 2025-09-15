@@ -1,0 +1,187 @@
+import pino, { Logger as PinoLogger, LoggerOptions } from 'pino';
+
+export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+
+export interface LogContext {
+  userId?: string;
+  correlationId?: string;
+  brandId?: string;
+  contentId?: string;
+  endpoint?: string;
+  duration?: number;
+  statusCode?: number;
+  [key: string]: unknown;
+}
+
+export interface LoggerConfig {
+  level?: LogLevel;
+  service: string;
+  environment: string;
+  version?: string;
+  enablePrettyPrint?: boolean;
+}
+
+class Logger {
+  private pino: PinoLogger;
+  private service: string;
+
+  constructor(config: LoggerConfig) {
+    this.service = config.service;
+
+    const pinoOptions: LoggerOptions = {
+      name: config.service,
+      level: config.level || this.getDefaultLogLevel(config.environment),
+      base: {
+        service: config.service,
+        environment: config.environment,
+        version: config.version || '1.0.0',
+        pid: process.pid,
+      },
+      timestamp: pino.stdTimeFunctions.isoTime,
+      formatters: {
+        level: (label) => ({ level: label }),
+      },
+    };
+
+    // Enable pretty printing in development
+    if (config.enablePrettyPrint || config.environment === 'development') {
+      pinoOptions.transport = {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:standard',
+          ignore: 'pid,hostname',
+          messageFormat: '[{service}] {msg}',
+        },
+      };
+    }
+
+    this.pino = pino(pinoOptions);
+  }
+
+  private getDefaultLogLevel(environment: string): LogLevel {
+    switch (environment) {
+      case 'development':
+        return 'debug';
+      case 'staging':
+        return 'info';
+      case 'production':
+        return 'warn';
+      default:
+        return 'info';
+    }
+  }
+
+  private formatMessage(message: string, context?: LogContext): any {
+    return {
+      msg: message,
+      ...context,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  trace(message: string, context?: LogContext): void {
+    this.pino.trace(this.formatMessage(message, context));
+  }
+
+  debug(message: string, context?: LogContext): void {
+    this.pino.debug(this.formatMessage(message, context));
+  }
+
+  info(message: string, context?: LogContext): void {
+    this.pino.info(this.formatMessage(message, context));
+  }
+
+  warn(message: string, context?: LogContext): void {
+    this.pino.warn(this.formatMessage(message, context));
+  }
+
+  error(message: string, context?: LogContext): void {
+    this.pino.error(this.formatMessage(message, context));
+  }
+
+  fatal(message: string, context?: LogContext): void {
+    this.pino.fatal(this.formatMessage(message, context));
+  }
+
+  // Convenience methods for common logging scenarios
+
+  request(method: string, path: string, context?: LogContext): void {
+    this.info(`${method} ${path}`, {
+      ...context,
+      type: 'request',
+    });
+  }
+
+  response(method: string, path: string, statusCode: number, duration: number, context?: LogContext): void {
+    const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
+    this[level](`${method} ${path} - ${statusCode}`, {
+      ...context,
+      type: 'response',
+      statusCode,
+      duration,
+    });
+  }
+
+  auth(event: string, context?: LogContext): void {
+    this.info(`Auth: ${event}`, {
+      ...context,
+      type: 'auth',
+    });
+  }
+
+  security(event: string, context?: LogContext): void {
+    this.warn(`Security: ${event}`, {
+      ...context,
+      type: 'security',
+    });
+  }
+
+  performance(metric: string, value: number, context?: LogContext): void {
+    this.info(`Performance: ${metric}`, {
+      ...context,
+      type: 'performance',
+      metric,
+      value,
+    });
+  }
+
+  business(event: string, context?: LogContext): void {
+    this.info(`Business: ${event}`, {
+      ...context,
+      type: 'business',
+    });
+  }
+
+  // Create child logger with additional context
+  child(context: LogContext): Logger {
+    const childLogger = new Logger({
+      service: this.service,
+      environment: process.env.NODE_ENV || 'development',
+      enablePrettyPrint: process.env.NODE_ENV === 'development',
+    });
+
+    // Override the pino instance with a child
+    (childLogger as any).pino = this.pino.child(context);
+    return childLogger;
+  }
+}
+
+// Factory function to create logger instances
+export function createLogger(config: LoggerConfig): Logger {
+  return new Logger(config);
+}
+
+// Default logger for the current service
+const defaultConfig: LoggerConfig = {
+  service: process.env.SERVICE_NAME || 'postolio',
+  environment: process.env.NODE_ENV || 'development',
+  version: process.env.SERVICE_VERSION || '1.0.0',
+  enablePrettyPrint: process.env.NODE_ENV === 'development',
+};
+
+export const logger = createLogger(defaultConfig);
+
+// Re-export types for convenience
+export type { Logger, PinoLogger };
+export default logger;

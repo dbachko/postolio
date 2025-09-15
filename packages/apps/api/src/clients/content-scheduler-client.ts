@@ -11,8 +11,7 @@ import * as https from 'https';
 import CircuitBreaker from 'opossum';
 import type { Options as CircuitBreakerOptions } from 'opossum';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { getServiceDiscovery, SERVICES } from '../utils/service-discovery-client.js';
-import { isCloudMapConfigured } from '../utils/service-discovery.js';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
 // ==================== Validation Schemas ====================
 
@@ -358,29 +357,43 @@ export class ContentSchedulerClient {
   }
 
   /**
-   * Create a ContentSchedulerClient with automatic service discovery
+   * Create a ContentSchedulerClient with automatic URL resolution from SSM Parameter Store
    */
   static async create(
     config: Partial<ContentSchedulerConfig> = {}
   ): Promise<ContentSchedulerClient> {
     const finalConfig = { ...config };
 
-    // Use service discovery if Cloud Map is configured and no baseURL provided
-    if (isCloudMapConfigured() && !finalConfig.baseURL) {
+    // Get URL from SSM Parameter Store if not provided
+    if (!finalConfig.baseURL) {
       try {
-        const discovery = getServiceDiscovery();
-        const schedulerUrl = await discovery.getServiceUrl(SERVICES.CONTENT_SCHEDULER);
-        finalConfig.baseURL = schedulerUrl;
-        console.log('✅ Content Scheduler discovered via Cloud Map:', finalConfig.baseURL);
-      } catch {
+        const ssm = new SSMClient({ region: process.env.AWS_REGION || 'us-east-1' });
+        const environment = process.env.NODE_ENV || 'dev';
+        const parameterName = `/postolio/${environment}/services/content-scheduler/url`;
+
+        const response = await ssm.send(new GetParameterCommand({
+          Name: parameterName,
+        }));
+
+        if (response.Parameter?.Value) {
+          finalConfig.baseURL = response.Parameter.Value;
+          console.log('✅ Content Scheduler URL retrieved from SSM Parameter Store:', finalConfig.baseURL);
+        } else {
+          throw new Error('SSM Parameter value is empty');
+        }
+      } catch (ssmError) {
+        console.warn('⚠️  Content Scheduler SSM lookup failed, trying fallback URLs:', ssmError);
+
         // Fall back to environment variable
-        const fallbackUrl = process.env.SCHEDULER_API_URL || process.env.CONTENT_SCHEDULER_URL;
+        const fallbackUrl = process.env.CONTENT_SCHEDULER_FUNCTION_URL ||
+                           process.env.SCHEDULER_API_URL ||
+                           process.env.CONTENT_SCHEDULER_URL;
         if (fallbackUrl) {
           finalConfig.baseURL = fallbackUrl;
-          console.warn('⚠️  Content Scheduler discovery failed, using fallback URL:', fallbackUrl);
+          console.warn('⚠️  Using Content Scheduler fallback URL:', fallbackUrl);
         } else {
-          console.error('❌ Content Scheduler discovery failed and no fallback URL available');
-          throw new Error('Unable to discover Content Scheduler service URL');
+          console.error('❌ Content Scheduler URL not found in SSM or environment variables');
+          throw new Error('Unable to resolve Content Scheduler service URL');
         }
       }
     }

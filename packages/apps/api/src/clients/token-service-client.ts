@@ -7,8 +7,7 @@ import CircuitBreaker from 'opossum';
 import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { getServiceDiscovery } from '../utils/service-discovery-client.js';
-import { shouldUseServiceDiscovery } from '../utils/service-discovery.js';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import type { StoreTokenParams, TokenData } from '../types/token-service.js';
 import { getRedisClient } from '../services/redis.js';
 import crypto from 'crypto';
@@ -56,6 +55,7 @@ export class TokenServiceClient {
   private circuitBreaker: CircuitBreaker | null = null;
   private baseURL: string;
   private signer: SignatureV4 | undefined;
+  private ssm: SSMClient;
   private config: Required<TokenServiceConfig>;
   private cache: Map<string, TokenCacheEntry> = new Map();
   private rateLimitState: Map<string, RateLimitState> = new Map();
@@ -85,7 +85,10 @@ export class TokenServiceClient {
     this.baseURL = this.config.apiUrl;
     this.correlationId = this.config.correlationId;
 
-    // Initialize asynchronously to handle service discovery properly
+    // Initialize SSM client
+    this.ssm = new SSMClient({ region: process.env.AWS_REGION || 'us-east-1' });
+
+    // Initialize asynchronously to handle service URL resolution properly
     this.initPromise = this.initialize();
 
     // Set up cache cleanup
@@ -95,8 +98,8 @@ export class TokenServiceClient {
   }
 
   private async initialize(): Promise<void> {
-    // Initialize service discovery first (async operation)
-    await this.initializeWithServiceDiscovery();
+    // Initialize service URL from SSM Parameter Store first (async operation)
+    await this.initializeServiceUrl();
 
     // Initialize AWS SigV4 signer for IAM authentication
     this.initializeSigner();
@@ -116,21 +119,45 @@ export class TokenServiceClient {
     throw new Error('TokenServiceClient not properly initialized');
   }
 
-  private async initializeWithServiceDiscovery(): Promise<void> {
-    if (shouldUseServiceDiscovery(this.baseURL, this.config.apiUrl)) {
-      try {
-        const discovery = getServiceDiscovery();
-        const tokenServiceUrl = await discovery.getServiceUrl('token-service');
-        this.baseURL = tokenServiceUrl;
-        this.logInfo('Token Service discovered via Cloud Map', {
-          url: tokenServiceUrl,
+  private async initializeServiceUrl(): Promise<void> {
+    // First try SSM Parameter Store
+    try {
+      const environment = process.env.NODE_ENV || 'dev';
+      const parameterName = `/postolio/${environment}/services/token-service/url`;
+
+      const response = await this.ssm.send(new GetParameterCommand({
+        Name: parameterName,
+      }));
+
+      if (response.Parameter?.Value) {
+        this.baseURL = response.Parameter.Value;
+        this.logInfo('Token Service URL retrieved from SSM Parameter Store', {
+          url: this.baseURL,
+          parameterName,
         });
-      } catch (error) {
-        this.logWarn('Token Service discovery failed, using fallback URL', {
-          fallbackUrl: this.baseURL,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        return;
       }
+    } catch (error) {
+      this.logWarn('Failed to get Token Service URL from SSM Parameter Store', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+
+    // Fallback to environment variable or config
+    if (process.env.TOKEN_SERVICE_FUNCTION_URL) {
+      this.baseURL = process.env.TOKEN_SERVICE_FUNCTION_URL;
+      this.logInfo('Using Token Service URL from environment variable', {
+        url: this.baseURL,
+      });
+    } else if (this.config.apiUrl && !this.config.apiUrl.includes('localhost')) {
+      this.baseURL = this.config.apiUrl;
+      this.logInfo('Using Token Service URL from config', {
+        url: this.baseURL,
+      });
+    } else {
+      this.logWarn('Token Service URL not properly configured - using localhost fallback', {
+        fallbackUrl: this.baseURL,
+      });
     }
   }
 

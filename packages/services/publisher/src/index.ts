@@ -10,10 +10,9 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { discoverService } from '@postolio/aws';
 import { signRequest } from '@postolio/aws';
 import { API_VERSIONS, API_BASE_URLS } from '@postolio/aws';
-import { isLocalUrl, shouldUseServiceDiscovery } from './service-discovery-utils';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 
@@ -42,10 +41,10 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
     removeUndefinedValues: true,
   },
 });
-// Secrets Manager client removed (unused)
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 const eventBridge = new EventBridge({});
 const sqsClient = tracer.captureAWSv3Client(new SQSClient({}));
+const ssmClient = tracer.captureAWSv3Client(new SSMClient({}));
 
 // Event from scheduler (minimal data)
 interface PublishEvent {
@@ -572,26 +571,46 @@ async function getTokenFromTokenService(
   });
 
   try {
-    // Check if we should use service discovery
-    const defaultUrl = process.env.TOKEN_SERVICE_URL || 'http://localhost:4001';
-    let tokenServiceUrl = defaultUrl;
+    let tokenServiceUrl: string;
 
-    // Use service discovery if appropriate
-    if (shouldUseServiceDiscovery(tokenServiceUrl, process.env.TOKEN_SERVICE_URL)) {
-      try {
-        tokenServiceUrl = await discoverService('token-service');
-        logger.info('Token Service discovered via Cloud Map', {
+    // First try SSM Parameter Store
+    try {
+      const environment = process.env.NODE_ENV || 'dev';
+      const parameterName = `/postolio/${environment}/services/token-service/url`;
+
+      const response = await ssmClient.send(new GetParameterCommand({
+        Name: parameterName,
+      }));
+
+      if (response.Parameter?.Value) {
+        tokenServiceUrl = response.Parameter.Value;
+        logger.info('Token Service URL retrieved from SSM Parameter Store', {
           url: tokenServiceUrl,
+          parameterName,
         });
-      } catch (discoveryError) {
-        logger.warn('Service discovery failed', { error: discoveryError });
-        // Don't throw here - we might still have a valid URL from env var
+      } else {
+        throw new Error('SSM Parameter value is empty');
       }
+    } catch (ssmError) {
+      logger.warn('Failed to get Token Service URL from SSM Parameter Store', {
+        error: ssmError,
+      });
+
+      // Fallback to environment variable
+      tokenServiceUrl = process.env.TOKEN_SERVICE_FUNCTION_URL || process.env.TOKEN_SERVICE_URL;
+
+      if (!tokenServiceUrl) {
+        throw new Error('Token Service URL not found in SSM Parameter Store or environment variables');
+      }
+
+      logger.info('Using Token Service URL from environment variable', {
+        url: tokenServiceUrl,
+      });
     }
 
-    // Only throw if we still have localhost URL after discovery attempt
-    if (isLocalUrl(tokenServiceUrl) && tokenServiceUrl === defaultUrl) {
-      throw new Error('Token Service URL not configured and service discovery failed');
+    // Validate we have a proper URL
+    if (tokenServiceUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+      throw new Error('Token Service URL not properly configured for production environment');
     }
 
     // Parse URL for signing
