@@ -74,7 +74,9 @@ export class ParameterNames {
     if (normalizedEnv === 'dev' || normalizedEnv === 'staging' || normalizedEnv === 'prod') {
       return normalizedEnv;
     }
-    throw new Error(`Invalid environment: ${env}. Must be one of: dev, staging, prod (or development/production)`);
+    throw new Error(
+      `Invalid environment: ${env}. Must be one of: dev, staging, prod (or development/production)`
+    );
   }
 }
 
@@ -118,7 +120,7 @@ export class ParameterManager {
 
   constructor(region?: string) {
     this.ssm = new SSMClient({
-      region: region || process.env.AWS_REGION || 'us-east-1'
+      region: region || process.env.AWS_REGION || 'us-east-1',
     });
 
     // Start cleanup interval
@@ -184,9 +186,11 @@ export class ParameterManager {
     this.metrics.cacheMisses++;
 
     try {
-      const response = await this.ssm.send(new GetParameterCommand({
-        Name: parameterName,
-      }));
+      const response = await this.ssm.send(
+        new GetParameterCommand({
+          Name: parameterName,
+        })
+      );
 
       if (!response.Parameter?.Value) {
         this.metrics.retrievalErrors++;
@@ -279,9 +283,10 @@ export class ParameterManager {
    * Get performance metrics
    */
   getMetrics(): ParameterMetrics & { cacheHitRate: number } {
-    const cacheHitRate = this.metrics.totalRequests > 0
-      ? (this.metrics.cacheHits / this.metrics.totalRequests) * 100
-      : 0;
+    const cacheHitRate =
+      this.metrics.totalRequests > 0
+        ? (this.metrics.cacheHits / this.metrics.totalRequests) * 100
+        : 0;
 
     return {
       ...this.metrics,
@@ -311,7 +316,7 @@ export class ParameterManager {
     } else {
       // Simple rolling average
       this.metrics.averageResponseTime =
-        (this.metrics.averageResponseTime * 0.9) + (responseTime * 0.1);
+        this.metrics.averageResponseTime * 0.9 + responseTime * 0.1;
     }
   }
 
@@ -363,7 +368,7 @@ export class ParameterManager {
       }
     }
 
-    keysToDelete.forEach(key => this.cache.delete(key));
+    keysToDelete.forEach((key) => this.cache.delete(key));
 
     // Implement LRU eviction for size management
     const MAX_CACHE_SIZE = 50; // Reduced for better memory management

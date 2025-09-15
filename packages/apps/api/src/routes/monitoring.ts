@@ -252,26 +252,22 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   });
 
   // Refresh service URLs from SSM Parameter Store
-  fastify.post(
-    '/services/refresh',
-    { preHandler: fastify.authenticate },
-    async function () {
-      try {
-        await serviceClients.refreshServiceDiscovery(); // Still uses this method but now it reads from SSM
-        return {
-          timestamp: new Date().toISOString(),
-          status: 'success',
-          message: 'Service URLs refreshed from SSM Parameter Store successfully',
-        };
-      } catch (error) {
-        return {
-          timestamp: new Date().toISOString(),
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        };
-      }
+  fastify.post('/services/refresh', { preHandler: fastify.authenticate }, async function () {
+    try {
+      await serviceClients.refreshServiceDiscovery(); // Still uses this method but now it reads from SSM
+      return {
+        timestamp: new Date().toISOString(),
+        status: 'success',
+        message: 'Service URLs refreshed from SSM Parameter Store successfully',
+      };
+    } catch (error) {
+      return {
+        timestamp: new Date().toISOString(),
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
-  );
+  });
 };
 
 export default monitoringRoutes;

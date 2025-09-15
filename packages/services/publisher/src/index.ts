@@ -578,9 +578,11 @@ async function getTokenFromTokenService(
       const environment = process.env.NODE_ENV || 'dev';
       const parameterName = `/postolio/${environment}/services/token-service/url`;
 
-      const response = await ssmClient.send(new GetParameterCommand({
-        Name: parameterName,
-      }));
+      const response = await ssmClient.send(
+        new GetParameterCommand({
+          Name: parameterName,
+        })
+      );
 
       if (response.Parameter?.Value) {
         tokenServiceUrl = response.Parameter.Value;

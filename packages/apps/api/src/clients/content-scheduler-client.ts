@@ -370,15 +370,22 @@ export class ContentSchedulerClient {
         const parameterManager = new ParameterManager(process.env.AWS_REGION || 'us-east-1');
         const environment = getCurrentEnvironment();
 
-        finalConfig.baseURL = await parameterManager.getServiceUrl('CONTENT_SCHEDULER_URL', environment);
-        console.log('✅ Content Scheduler URL retrieved from SSM Parameter Store via centralized manager:', finalConfig.baseURL);
+        finalConfig.baseURL = await parameterManager.getServiceUrl(
+          'CONTENT_SCHEDULER_URL',
+          environment
+        );
+        console.log(
+          '✅ Content Scheduler URL retrieved from SSM Parameter Store via centralized manager:',
+          finalConfig.baseURL
+        );
       } catch (ssmError) {
         console.warn('⚠️  Content Scheduler SSM lookup failed, trying fallback URLs:', ssmError);
 
         // Fall back to environment variable
-        const fallbackUrl = process.env.CONTENT_SCHEDULER_FUNCTION_URL ||
-                           process.env.SCHEDULER_API_URL ||
-                           process.env.CONTENT_SCHEDULER_URL;
+        const fallbackUrl =
+          process.env.CONTENT_SCHEDULER_FUNCTION_URL ||
+          process.env.SCHEDULER_API_URL ||
+          process.env.CONTENT_SCHEDULER_URL;
         if (fallbackUrl) {
           finalConfig.baseURL = fallbackUrl;
           console.warn('⚠️  Using Content Scheduler fallback URL:', fallbackUrl);

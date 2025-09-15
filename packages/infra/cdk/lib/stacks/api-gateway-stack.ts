@@ -50,11 +50,11 @@ export class ApiGatewayStack extends cdk.Stack {
     const tokenIntegration = new apigateway.LambdaIntegration(tokenServiceFunction, {
       requestTemplates: {
         'application/json': JSON.stringify({
-          userId: '$input.params(\'userId\')',
-          platform: '$input.params(\'platform\')',
-          brandId: '$input.params(\'brandId\')',
+          userId: "$input.params('userId')",
+          platform: "$input.params('platform')",
+          brandId: "$input.params('brandId')",
           httpMethod: '$context.httpMethod',
-          body: '$input.json(\'$\')',
+          body: "$input.json('$')",
         }),
       },
     });
@@ -151,11 +151,15 @@ export class ApiGatewayStack extends cdk.Stack {
 
     // Output environment variables format for easy copy-paste
     new cdk.CfnOutput(this, 'EnvironmentVariables', {
-      value: JSON.stringify({
-        TOKEN_SERVICE_URL: this.tokenServiceUrl,
-        CONTENT_SCHEDULER_URL: this.schedulerServiceUrl,
-        SCHEDULER_API_URL: this.schedulerServiceUrl,
-      }, null, 2),
+      value: JSON.stringify(
+        {
+          TOKEN_SERVICE_URL: this.tokenServiceUrl,
+          CONTENT_SCHEDULER_URL: this.schedulerServiceUrl,
+          SCHEDULER_API_URL: this.schedulerServiceUrl,
+        },
+        null,
+        2
+      ),
       description: 'Environment variables for API Gateway URLs',
     });
 

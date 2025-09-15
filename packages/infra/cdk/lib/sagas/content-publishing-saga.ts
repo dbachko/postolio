@@ -90,7 +90,9 @@ export class ContentPublishingSaga {
         // Get token service endpoint from SSM Parameter Store
         const environment = process.env.NODE_ENV || 'dev';
         const parameterName = `/postolio/${environment}/services/token-service/url`;
-        const parameterResponse = await ssmClient.send(new GetParameterCommand({ Name: parameterName }));
+        const parameterResponse = await ssmClient.send(
+          new GetParameterCommand({ Name: parameterName })
+        );
         const tokenServiceUrl = parameterResponse.Parameter?.Value;
 
         if (!tokenServiceUrl) {

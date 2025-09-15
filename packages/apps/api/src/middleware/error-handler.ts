@@ -1,10 +1,5 @@
 import { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
-import {
-  APIError,
-  APIErrorResponse,
-  InternalServerError,
-  ValidationError
-} from '@postolio/errors';
+import { APIError, APIErrorResponse, InternalServerError, ValidationError } from '@postolio/errors';
 import { logger } from '@postolio/logger';
 
 // Type guards for enhanced error handling
@@ -119,20 +114,10 @@ export async function errorHandler(
 
     switch (error.statusCode) {
       case 404:
-        apiError = new APIError(
-          'Endpoint not found',
-          'ENDPOINT_NOT_FOUND',
-          404,
-          'ROUTING_ERROR'
-        );
+        apiError = new APIError('Endpoint not found', 'ENDPOINT_NOT_FOUND', 404, 'ROUTING_ERROR');
         break;
       case 405:
-        apiError = new APIError(
-          'Method not allowed',
-          'METHOD_NOT_ALLOWED',
-          405,
-          'ROUTING_ERROR'
-        );
+        apiError = new APIError('Method not allowed', 'METHOD_NOT_ALLOWED', 405, 'ROUTING_ERROR');
         break;
       case 413:
         apiError = new APIError(
@@ -167,7 +152,7 @@ export async function errorHandler(
     // Don't leak internal details in production
     ...(process.env.NODE_ENV === 'development' && {
       stack: error.stack,
-      originalMessage: error.message
+      originalMessage: error.message,
     }),
   }) as ExtendedAPIError;
   internalError.correlationId = context.correlationId;

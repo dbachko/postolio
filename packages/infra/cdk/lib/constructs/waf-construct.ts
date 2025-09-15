@@ -26,11 +26,14 @@ export class WAFConstruct extends Construct {
           managedRuleGroupStatement: {
             vendorName: 'AWS',
             name: 'AWSManagedRulesCommonRuleSet',
-            excludedRules: environment === 'dev' ? [
-              { name: 'GenericRFI_BODY' },
-              { name: 'GenericRFI_QUERYARGUMENTS' },
-              { name: 'GenericRFI_URIPATH' },
-            ] : [],
+            excludedRules:
+              environment === 'dev'
+                ? [
+                    { name: 'GenericRFI_BODY' },
+                    { name: 'GenericRFI_QUERYARGUMENTS' },
+                    { name: 'GenericRFI_URIPATH' },
+                  ]
+                : [],
           },
         },
         visibilityConfig: {
@@ -93,7 +96,6 @@ export class WAFConstruct extends Construct {
           metricName: 'AnonymousIPMetric',
         },
       },
-
 
       // Rate limiting rule
       {

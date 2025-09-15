@@ -61,7 +61,10 @@ export class ValidationError extends APIError {
 
 // Rate limiting errors
 export class RateLimitError extends APIError {
-  constructor(public retryAfter: number, message?: string) {
+  constructor(
+    public retryAfter: number,
+    message?: string
+  ) {
     super(
       message || `Rate limit exceeded. Try again in ${retryAfter} seconds.`,
       'RATE_LIMIT_EXCEEDED',
@@ -93,13 +96,16 @@ export class ConflictError extends APIError {
 
 // Token service specific errors
 export class TokenServiceError extends APIError {
-  constructor(
-    message: string,
-    code: string,
-    statusCode?: number,
-    isRetryable?: boolean
-  ) {
-    super(message, code, statusCode || 500, 'TOKEN_SERVICE_ERROR', undefined, undefined, isRetryable);
+  constructor(message: string, code: string, statusCode?: number, isRetryable?: boolean) {
+    super(
+      message,
+      code,
+      statusCode || 500,
+      'TOKEN_SERVICE_ERROR',
+      undefined,
+      undefined,
+      isRetryable
+    );
     this.name = 'TokenServiceError';
   }
 }

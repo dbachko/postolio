@@ -107,23 +107,27 @@ export class TokenServiceStack extends cdk.Stack {
     encryptionKey.grantEncryptDecrypt(tokenServiceLambda);
 
     // Grant SSM Parameter Store read permissions for service discovery replacement
-    tokenServiceLambda.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['ssm:GetParameter', 'ssm:GetParameters'],
-      resources: [
-        `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
-      ],
-    }));
+    tokenServiceLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+        ],
+      })
+    );
 
     // Grant Lambda Function URL invocation permissions for service-to-service calls
-    tokenServiceLambda.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['lambda:InvokeFunctionUrl'],
-      resources: [
-        `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-        `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-      ],
-    }));
+    tokenServiceLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunctionUrl'],
+        resources: [
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+        ],
+      })
+    );
 
     // Add Lambda Function URL for direct service-to-service communication
     const functionUrl = tokenServiceLambda.addFunctionUrl({
@@ -283,7 +287,10 @@ export class TokenServiceStack extends cdk.Stack {
 
     // Store Lambda Function URL in SSM Parameter Store for service discovery replacement
     new ssm.StringParameter(this, 'TokenServiceFunctionUrlParameter', {
-      parameterName: ParameterNames.getParameterName('TOKEN_SERVICE_URL', environment as Environment),
+      parameterName: ParameterNames.getParameterName(
+        'TOKEN_SERVICE_URL',
+        environment as Environment
+      ),
       stringValue: functionUrl.url,
       description: 'Token Service Lambda Function URL for service-to-service communication',
       tier: ssm.ParameterTier.STANDARD,

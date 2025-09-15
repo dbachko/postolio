@@ -1513,7 +1513,10 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // Store Lambda Function URL in SSM Parameter Store for service discovery replacement
     new ssm.StringParameter(this, 'ContentSchedulerFunctionUrlParameter', {
-      parameterName: ParameterNames.getParameterName('CONTENT_SCHEDULER_URL', environment as Environment),
+      parameterName: ParameterNames.getParameterName(
+        'CONTENT_SCHEDULER_URL',
+        environment as Environment
+      ),
       stringValue: scheduleManagementFunctionUrl.url,
       description: 'Content Scheduler Lambda Function URL for service-to-service communication',
       tier: ssm.ParameterTier.STANDARD,

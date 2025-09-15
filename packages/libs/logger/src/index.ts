@@ -113,7 +113,13 @@ class Logger {
     });
   }
 
-  response(method: string, path: string, statusCode: number, duration: number, context?: LogContext): void {
+  response(
+    method: string,
+    path: string,
+    statusCode: number,
+    duration: number,
+    context?: LogContext
+  ): void {
     const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
     this[level](`${method} ${path} - ${statusCode}`, {
       ...context,

@@ -128,7 +128,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const isLocked = await AuditLogger.isAccountLocked(email);
       if (isLocked) {
         return reply.code(423).send({
-          error: 'Account temporarily locked due to multiple failed login attempts. Please try again later.',
+          error:
+            'Account temporarily locked due to multiple failed login attempts. Please try again later.',
           code: 'ACCOUNT_LOCKED',
         });
       }
