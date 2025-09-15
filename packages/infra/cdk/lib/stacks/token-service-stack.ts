@@ -17,7 +17,6 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as path from 'path';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-// Service discovery replaced with Lambda Function URLs + SSM Parameter Store
 import { NagSuppressions } from 'cdk-nag';
 import { OAuthConfig } from '../utils/oauth-config';
 import * as ssm from 'aws-cdk-lib/aws-ssm';

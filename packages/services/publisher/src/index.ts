@@ -573,7 +573,7 @@ async function getTokenFromTokenService(
   try {
     let tokenServiceUrl: string;
 
-    // First try SSM Parameter Store
+    // Get from parameter store
     try {
       const environment = process.env.NODE_ENV || 'dev';
       const parameterName = `/postolio/${environment}/services/token-service/url`;
@@ -584,7 +584,7 @@ async function getTokenFromTokenService(
 
       if (response.Parameter?.Value) {
         tokenServiceUrl = response.Parameter.Value;
-        logger.info('Token Service URL retrieved from SSM Parameter Store', {
+        logger.info('Token Service URL retrieved from parameter store', {
           url: tokenServiceUrl,
           parameterName,
         });
@@ -592,7 +592,7 @@ async function getTokenFromTokenService(
         throw new Error('SSM Parameter value is empty');
       }
     } catch (ssmError) {
-      logger.warn('Failed to get Token Service URL from SSM Parameter Store', {
+      logger.warn('Failed to get Token Service URL from parameter store', {
         error: ssmError,
       });
 
@@ -600,7 +600,7 @@ async function getTokenFromTokenService(
       tokenServiceUrl = process.env.TOKEN_SERVICE_FUNCTION_URL || process.env.TOKEN_SERVICE_URL;
 
       if (!tokenServiceUrl) {
-        throw new Error('Token Service URL not found in SSM Parameter Store or environment variables');
+        throw new Error('Token Service URL not found in parameter store or environment variables');
       }
 
       logger.info('Using Token Service URL from environment variable', {

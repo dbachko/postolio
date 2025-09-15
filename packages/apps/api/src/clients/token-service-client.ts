@@ -1,6 +1,5 @@
 /**
- * Enhanced Token Service Client SDK
- * Addresses architectural, engineering, and security review findings
+ * Token Service Client SDK
  */
 
 import CircuitBreaker from 'opossum';
@@ -17,7 +16,6 @@ import {
   ValidationError,
 } from '../errors/token-service-errors.js';
 
-// Proper type definitions
 interface RequestHeaders extends Record<string, string> {
   'Content-Type': string;
   'X-Request-ID': string;
@@ -107,7 +105,7 @@ export class TokenServiceClient {
   }
 
   private async initialize(): Promise<void> {
-    // Initialize service URL from SSM Parameter Store first (async operation)
+    // Initialize service URL
     await this.initializeServiceUrl();
 
     // Initialize AWS SigV4 signer for IAM authentication
@@ -134,7 +132,7 @@ export class TokenServiceClient {
       const environment = getCurrentEnvironment();
       this.baseURL = await this.parameterManager.getServiceUrl('TOKEN_SERVICE_URL', environment);
 
-      this.logInfo('Token Service URL retrieved from SSM Parameter Store via centralized manager', {
+      this.logInfo('Token Service URL retrieved from parameter store', {
         url: this.baseURL,
         environment,
       });

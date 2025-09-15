@@ -20,7 +20,8 @@
   "packageManager": "pnpm@9.9.0",
   "pnpm": {
     "overrides": {
-      "@smithy/types": "^4.4.0"
+      "@smithy/types": "^4.4.0",
+      "@smithy/core": "^3.11.0"
     }
   }
 }

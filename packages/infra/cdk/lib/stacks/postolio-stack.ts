@@ -19,7 +19,6 @@ import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 import { WAFConstruct } from '../constructs/waf-construct';
-// Service discovery replaced with Lambda Function URLs + SSM Parameter Store
 
 export interface PostolioStackProps extends cdk.StackProps {
   environment: string;
@@ -92,8 +91,6 @@ export class PostolioStack extends cdk.Stack {
         },
       },
     });
-
-    // Service discovery replaced with Lambda Function URLs + SSM Parameter Store
 
     // Security Groups
     const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
@@ -631,8 +628,7 @@ export class PostolioStack extends cdk.Stack {
     // Add WAF protection to the Application Load Balancer
     const wafConstruct = new WAFConstruct(this, 'PostolioWAF', {
       environment: environment as 'dev' | 'staging' | 'prod',
-      allowedCountries: ['US', 'CA', 'GB', 'AU'], // Add more countries as needed
-      rateLimitPerMinute: environment === 'prod' ? 1000 : 2000, // More restrictive in prod
+      rateLimitPerMinute: environment === 'prod' ? 1000 : 2000,
     });
 
     // Associate WAF with the ALB

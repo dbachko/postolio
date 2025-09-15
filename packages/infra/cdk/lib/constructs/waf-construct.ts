@@ -4,7 +4,6 @@ import { Construct } from 'constructs';
 
 export interface WAFConstructProps {
   environment: 'dev' | 'staging' | 'prod';
-  allowedCountries?: string[];
   rateLimitPerMinute?: number;
 }
 
@@ -14,7 +13,7 @@ export class WAFConstruct extends Construct {
   constructor(scope: Construct, id: string, props: WAFConstructProps) {
     super(scope, id);
 
-    const { environment, allowedCountries = ['US', 'CA'], rateLimitPerMinute = 1000 } = props;
+    const { environment, rateLimitPerMinute = 1000 } = props;
 
     // Create WAF rules
     const rules: wafv2.CfnWebACL.RuleProperty[] = [
@@ -28,7 +27,6 @@ export class WAFConstruct extends Construct {
             vendorName: 'AWS',
             name: 'AWSManagedRulesCommonRuleSet',
             excludedRules: environment === 'dev' ? [
-              // Allow more lenient rules in development
               { name: 'GenericRFI_BODY' },
               { name: 'GenericRFI_QUERYARGUMENTS' },
               { name: 'GenericRFI_URIPATH' },
@@ -96,31 +94,11 @@ export class WAFConstruct extends Construct {
         },
       },
 
-      // Geographic restriction (production only)
-      ...(environment === 'prod' ? [{
-        name: 'GeoRestrictionRule',
-        priority: 50,
-        action: { block: {} },
-        statement: {
-          notStatement: {
-            statement: {
-              geoMatchStatement: {
-                countryCodes: allowedCountries,
-              },
-            },
-          },
-        },
-        visibilityConfig: {
-          sampledRequestsEnabled: true,
-          cloudWatchMetricsEnabled: true,
-          metricName: 'GeoRestrictionMetric',
-        },
-      }] : []),
 
       // Rate limiting rule
       {
         name: 'RateLimitRule',
-        priority: 60,
+        priority: 50,
         action: { block: {} },
         statement: {
           rateBasedStatement: {
@@ -138,7 +116,7 @@ export class WAFConstruct extends Construct {
       // Custom rule to block requests with suspicious patterns
       {
         name: 'SuspiciousRequestsRule',
-        priority: 70,
+        priority: 60,
         action: { block: {} },
         statement: {
           orStatement: {

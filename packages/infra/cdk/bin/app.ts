@@ -6,7 +6,6 @@ import { ContentSchedulerStack } from '../lib/scheduler/content-scheduler-stack'
 import { PostolioStack } from '../lib/stacks/postolio-stack';
 import { TokenServiceStack } from '../lib/stacks/token-service-stack';
 import { EcrRegistryStack } from '../lib/stacks/ecr-registry-stack';
-// Service discovery replaced with Lambda Function URLs + SSM Parameter Store
 import { getOAuthConfig } from '../lib/utils/oauth-config';
 
 const app = new cdk.App();

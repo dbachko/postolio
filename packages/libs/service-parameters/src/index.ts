@@ -1,14 +1,5 @@
 /**
  * Centralized Service Parameter Management
- *
- * This package provides type-safe access to SSM Parameter Store paths
- * used for service discovery and configuration across the Postolio platform.
- *
- * Benefits:
- * - Single source of truth for parameter names
- * - Type safety at compile time
- * - Easy refactoring and maintenance
- * - Consistent naming conventions
  */
 
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';

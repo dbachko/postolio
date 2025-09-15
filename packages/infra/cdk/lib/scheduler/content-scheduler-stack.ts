@@ -23,7 +23,6 @@ import { Construct } from 'constructs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { ParameterNames, type Environment } from '@postolio/service-parameters';
-// Service discovery replaced with Lambda Function URLs + SSM Parameter Store
 
 export interface ContentSchedulerStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
