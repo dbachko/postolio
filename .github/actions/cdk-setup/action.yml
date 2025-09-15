@@ -41,7 +41,10 @@ runs:
         aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
         aws-region: ${{ inputs.aws-region }}
 
-    - name: Install CDK dependencies
-      working-directory: packages/infra/cdk
+    - name: Install all workspace dependencies
       run: pnpm install --frozen-lockfile
+      shell: bash
+
+    - name: Build service-parameters dependency
+      run: pnpm --filter=@postolio/service-parameters build
       shell: bash
