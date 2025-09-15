@@ -138,12 +138,12 @@ export class WAFConstruct extends Construct {
               },
               {
                 byteMatchStatement: {
-                  searchString: 'UNION SELECT',
+                  searchString: 'union select',
                   fieldToMatch: { allQueryArguments: {} },
                   textTransformations: [
                     {
                       priority: 0,
-                      type: 'UPPERCASE',
+                      type: 'LOWERCASE',
                     },
                   ],
                   positionalConstraint: 'CONTAINS',
