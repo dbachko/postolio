@@ -970,12 +970,12 @@ importers:
       '@aws-sdk/lib-dynamodb':
         specifier: ^3.872.0
         version: 3.883.0(@aws-sdk/client-dynamodb@3.883.0)
+      '@postolio/database':
+        specifier: workspace:*
+        version: link:../../libs/database
       '@postolio/errors':
         specifier: workspace:*
         version: link:../../libs/errors
-      '@prisma/client':
-        specifier: ^6.2.0
-        version: 6.15.0(prisma@6.15.0(typescript@5.9.2))(typescript@5.9.2)
       zod:
         specifier: ^4.1.3
         version: 4.1.5
