@@ -4,7 +4,7 @@
  * Handles: post.published, post.failed, schedule.created, schedule.updated, schedule.canceled
  */
 
-import { PrismaClient, ContentStatus } from '@prisma/client';
+import { PrismaClient, ContentStatus } from '@postolio/database';
 import type { EventBridgeEvent } from 'aws-lambda';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
