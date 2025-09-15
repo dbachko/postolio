@@ -515,42 +515,77 @@ class CampaignService {
 
         if (!existingPost) continue;
 
-        // Update existing preview post to scheduled status
-        // Only set to 'scheduled' if we have a valid scheduledAt date (allows past dates for makeup posts)
+        // Check if we have a valid scheduled date
         const hasValidScheduledDate = scheduledDate !== null && scheduledDate !== undefined;
+
+        // Always update content with campaign metadata and scheduling info, but keep as draft
+        const operationId = `campaign-start-${campaignId}-${i}`;
 
         const content = await prisma.content.update({
           where: { id: existingPost.id },
           data: {
-            status: hasValidScheduledDate ? 'scheduled' : 'draft', // Only 'scheduled' with valid date
-            scheduledAt: scheduledDate ?? null,
+            status: 'draft', // Keep as draft until AWS sync confirms scheduling
+            scheduledAt: hasValidScheduledDate ? scheduledDate : null,
             generationParams: {
               ...((existingPost?.generationParams as Record<string, unknown>) || {}),
               campaignGenerated: true,
               isPreview: false, // No longer a preview
-              scheduledAt: scheduledDate?.toISOString(),
+              scheduledAt: hasValidScheduledDate ? scheduledDate?.toISOString() : undefined,
+              // Set processing state to indicate scheduling is in progress
+              processing: hasValidScheduledDate
+                ? {
+                    active: true,
+                    operation: 'scheduling',
+                    startedAt: new Date().toISOString(),
+                    operationId: operationId,
+                  }
+                : null,
             },
           },
         });
 
-        // Create schedule in AWS if we have a valid scheduled date
+        // Trigger AWS scheduling in background if we have a valid date
         if (hasValidScheduledDate && scheduledDate) {
           try {
-            // Don't pass customTime - scheduler-adapter will read from DB (UTC)
+            // Fire and forget - let AWS sync handle the status updates
             const scheduleResult = await schedulerService.scheduleContent(existingPost.id);
 
-            if (!scheduleResult.success) {
+            if (scheduleResult.success) {
+              console.log(
+                `Content ${existingPost.id} scheduling initiated in AWS - sync will update status`
+              );
+            } else {
               console.error(
                 `Failed to create AWS schedule for content ${existingPost.id}:`,
                 scheduleResult.error
               );
-              // Continue with local scheduling - don't fail the entire campaign
-            } else {
-              console.log(`Content ${existingPost.id} scheduled successfully in AWS`);
+
+              // Clear processing state and mark error since scheduling failed immediately
+              await prisma.content.update({
+                where: { id: existingPost.id },
+                data: {
+                  generationParams: {
+                    ...((content.generationParams as Record<string, unknown>) || {}),
+                    processing: null, // Clear processing state
+                    schedulingError: `AWS scheduling failed: ${scheduleResult.error}`,
+                  },
+                },
+              });
             }
           } catch (scheduleError) {
             console.error(`Error scheduling content ${existingPost.id}:`, scheduleError);
-            // Continue with local scheduling
+
+            // Clear processing state and mark error since scheduling failed
+            await prisma.content.update({
+              where: { id: existingPost.id },
+              data: {
+                generationParams: {
+                  ...((content.generationParams as Record<string, unknown>) || {}),
+                  processing: null, // Clear processing state
+                  schedulingError: `AWS scheduling error: ${scheduleError instanceof Error ? scheduleError.message : 'Unknown error'}`,
+                },
+              },
+            });
           }
         }
 

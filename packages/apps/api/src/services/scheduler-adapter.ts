@@ -536,12 +536,32 @@ export class SchedulerAdapter {
       if (!scheduleId) {
         // Content should have a schedule ID if it's currently scheduled
         if (content.status === 'scheduled' && content.scheduledAt) {
-          console.error(`Content ${contentId} is marked as scheduled but has no AWS schedule ID`);
-          return {
-            success: false,
-            error:
-              'Content is not properly scheduled in AWS - cannot reschedule. Please cancel and reschedule from scratch.',
-          };
+          console.warn(
+            `Content ${contentId} is marked as scheduled but has no AWS schedule ID - creating new schedule`
+          );
+
+          // Instead of failing, create a new schedule (this handles failed initial scheduling)
+          // Convert back to local time for scheduleContent since it expects local time by default
+          const newTimeLocal = isLocalTime
+            ? newTime
+            : TimezoneService.toLocal(newTimeUTC, brandTimezone);
+          const scheduleResult = await this.scheduleContent(
+            contentId,
+            newTimeLocal,
+            content.brand.userId
+          );
+
+          if (scheduleResult.success) {
+            console.log(
+              `Successfully created new schedule for content ${contentId} at ${newTimeUTC.toISOString()}`
+            );
+            return { success: true };
+          } else {
+            return {
+              success: false,
+              error: `Failed to create new schedule: ${scheduleResult.error}`,
+            };
+          }
         } else {
           // Content is not scheduled, nothing to reschedule
           return {
