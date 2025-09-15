@@ -177,7 +177,7 @@ async function publishScheduleEvent(
     data: scheduleData,
     metadata: {
       version: '1.0',
-      traceId: logger.getLambdaContext()?.awsRequestId,
+      traceId: tracer.getRootXrayTraceId(),
     },
   };
 

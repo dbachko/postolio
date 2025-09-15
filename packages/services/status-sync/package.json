@@ -15,7 +15,7 @@
     "@aws-sdk/client-secrets-manager": "^3.883.0",
     "@aws-sdk/lib-dynamodb": "^3.872.0",
     "@postolio/errors": "workspace:*",
-    "@prisma/client": "^6.2.0",
+    "@postolio/database": "workspace:*",
     "zod": "^4.1.3"
   },
   "devDependencies": {
