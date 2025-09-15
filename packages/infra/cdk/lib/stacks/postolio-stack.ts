@@ -15,30 +15,23 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
-import {
-  ServiceDiscoveryManager,
-  getServiceDiscoveryEnvVars,
-} from '../utils/service-discovery-infrastructure';
+import { WAFConstruct } from '../constructs/waf-construct';
 
 export interface PostolioStackProps extends cdk.StackProps {
   environment: string;
   domainName?: string;
   hostedZoneId?: string;
   useExternalDns?: boolean;
-  serviceDiscoveryNamespaceId?: string; // Use shared namespace
-  // No stack references needed - services use Cloud Map for discovery
 }
 
 export class PostolioStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PostolioStackProps) {
     super(scope, id, props);
 
-    const { environment, domainName, hostedZoneId, useExternalDns, serviceDiscoveryNamespaceId } =
-      props;
-
-    // Services use Cloud Map for discovery - no hardcoded URLs needed
+    const { environment, domainName, hostedZoneId, useExternalDns } = props;
 
     // ECR Repository for backend container images - reference existing repository
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
@@ -97,15 +90,6 @@ export class PostolioStack extends cdk.Stack {
           destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogsGroup, vpcFlowLogsRole),
         },
       },
-    });
-
-    // Use shared Service Discovery namespace
-    const serviceDiscovery = new ServiceDiscoveryManager(this, 'ServiceDiscovery', {
-      vpc, // Note: VPC is provided but we're using HTTP namespace from shared stack
-      environment: environment as 'dev' | 'staging' | 'prod',
-      existingNamespaceId:
-        serviceDiscoveryNamespaceId ||
-        cdk.Fn.importValue(`ServiceDiscovery-${environment}-NamespaceId`),
     });
 
     // Security Groups
@@ -590,9 +574,6 @@ export class PostolioStack extends cdk.Stack {
             SCHEDULER_API_STAGE: environment,
             WS_DOMAIN: 'postolio.example', // WebSocket subdomain
 
-            // Service Discovery Configuration
-            ...getServiceDiscoveryEnvVars(serviceDiscovery.getClientConfig()),
-
             // AWS SES configuration
             USE_AWS_SES: 'true', // Use SES in production
             SES_FROM_EMAIL: 'noreply@postolio.example', // Use consistent sender address
@@ -644,6 +625,18 @@ export class PostolioStack extends cdk.Stack {
       albAccessLogsBucket.bucketName
     );
 
+    // Add WAF protection to the Application Load Balancer
+    const wafConstruct = new WAFConstruct(this, 'PostolioWAF', {
+      environment: environment as 'dev' | 'staging' | 'prod',
+      rateLimitPerMinute: environment === 'prod' ? 1000 : 2000,
+    });
+
+    // Associate WAF with the ALB
+    new wafv2.CfnWebACLAssociation(this, 'WAFAssociation', {
+      resourceArn: fargateService.loadBalancer.loadBalancerArn,
+      webAclArn: wafConstruct.webAcl.attrArn,
+    });
+
     // Health check configuration with proper timeouts
     fargateService.targetGroup.configureHealthCheck({
       path: '/health',
@@ -672,19 +665,7 @@ export class PostolioStack extends cdk.Stack {
     // CRITICAL: Set health check grace period to allow container to start
     cfnServiceConfig.healthCheckGracePeriodSeconds = 300; // 5 minutes grace period
 
-    // Register main app with service discovery
-    const mainAppService = serviceDiscovery.registerService('main-app', {
-      customAttributes: {
-        url: `https://${apiDomainName}/api`,
-        type: 'ecs',
-        environment,
-      },
-    });
-
-    // Associate ECS service with Cloud Map service
-    fargateService.service.associateCloudMapService({
-      service: mainAppService,
-    });
+    // Main app no longer uses Cloud Map service discovery - services use Lambda Function URLs
 
     // Auto Scaling
     const scalableTarget = fargateService.service.autoScaleTaskCount({

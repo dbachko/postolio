@@ -53,7 +53,6 @@ export function validateRequiredEnvironment(): void {
 /**
  * Validates all environment configuration at startup
  */
-import { isCloudMapConfigured } from '../utils/service-discovery.js';
 
 export function validateEnvironment(): void {
   console.log('Validating environment configuration...');
@@ -61,14 +60,8 @@ export function validateEnvironment(): void {
   // Check required variables
   validateRequiredEnvironment();
 
-  // Scheduler uses service discovery (Cloud Map) or fallback to SCHEDULER_API_URL
-  if (isCloudMapConfigured()) {
-    console.log('Scheduler integration: enabled (via Cloud Map service discovery)');
-  } else if (process.env.SCHEDULER_API_URL) {
-    console.log('Scheduler integration: enabled (via SCHEDULER_API_URL)');
-  } else {
-    console.log('Scheduler integration: disabled (no Cloud Map or SCHEDULER_API_URL)');
-  }
+  // Scheduler uses SSM Parameter Store for service discovery
+  console.log('Scheduler integration: enabled (via SSM Parameter Store)');
 
   // Validate format of specific variables
   if (process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('postgresql://')) {

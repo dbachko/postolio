@@ -242,31 +242,119 @@ export class AuditLogger {
   }
 
   /**
-   * Check if account should be locked
+   * Check if account should be locked and lock it if necessary
    */
   static async checkAccountLockout(
     email: string,
     maxAttempts: number = 5,
     windowMinutes: number = 15
   ): Promise<boolean> {
-    const attempts = await this.getFailedLoginAttempts(email, windowMinutes);
-
-    if (attempts >= maxAttempts) {
-      // Log account lockout
-      await this.log({
-        email,
-        eventType: AuditEventType.ACCOUNT_LOCKED,
-        metadata: {
-          failedAttempts: attempts,
-          windowMinutes,
-        },
-        success: true,
-      });
-
+    // First check if account is already locked
+    const isAlreadyLocked = await this.isAccountLocked(email);
+    if (isAlreadyLocked) {
       return true;
     }
 
+    const attempts = await this.getFailedLoginAttempts(email, windowMinutes);
+
+    if (attempts >= maxAttempts) {
+      // Lock the account by updating the user record
+      const lockUntil = new Date(Date.now() + 30 * 60 * 1000); // Lock for 30 minutes
+
+      try {
+        await prisma.user.updateMany({
+          where: { email },
+          data: {
+            accountLockedUntil: lockUntil,
+            failedLoginAttempts: attempts,
+          },
+        });
+
+        // Log account lockout
+        await this.log({
+          email,
+          eventType: AuditEventType.ACCOUNT_LOCKED,
+          metadata: {
+            failedAttempts: attempts,
+            windowMinutes,
+            lockedUntil: lockUntil.toISOString(),
+          },
+          success: true,
+        });
+
+        return true;
+      } catch (error) {
+        console.error('Failed to lock account:', error);
+        return false;
+      }
+    }
+
     return false;
+  }
+
+  /**
+   * Check if account is currently locked
+   */
+  static async isAccountLocked(email: string): Promise<boolean> {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { accountLockedUntil: true },
+    });
+
+    if (!user?.accountLockedUntil) {
+      return false;
+    }
+
+    // Check if lock has expired
+    const now = new Date();
+    if (user.accountLockedUntil <= now) {
+      // Unlock the account automatically
+      await this.unlockAccount(email);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Manually unlock an account
+   */
+  static async unlockAccount(email: string): Promise<void> {
+    try {
+      await prisma.user.updateMany({
+        where: { email },
+        data: {
+          accountLockedUntil: null,
+          failedLoginAttempts: 0,
+        },
+      });
+
+      await this.log({
+        email,
+        eventType: AuditEventType.ACCOUNT_UNLOCKED,
+        metadata: { unlockedAt: new Date().toISOString() },
+        success: true,
+      });
+    } catch (error) {
+      console.error('Failed to unlock account:', error);
+    }
+  }
+
+  /**
+   * Reset failed login attempts (called on successful login)
+   */
+  static async resetFailedLoginAttempts(email: string): Promise<void> {
+    try {
+      await prisma.user.updateMany({
+        where: { email },
+        data: {
+          failedLoginAttempts: 0,
+          accountLockedUntil: null,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to reset failed login attempts:', error);
+    }
   }
 
   /**

@@ -1,14 +1,12 @@
 /**
- * Enhanced Token Service Client SDK
- * Addresses architectural, engineering, and security review findings
+ * Token Service Client SDK
  */
 
 import CircuitBreaker from 'opossum';
 import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { getServiceDiscovery } from '../utils/service-discovery-client.js';
-import { shouldUseServiceDiscovery } from '../utils/service-discovery.js';
+import { ParameterManager, getCurrentEnvironment } from '@postolio/service-parameters';
 import type { StoreTokenParams, TokenData } from '../types/token-service.js';
 import { getRedisClient } from '../services/redis.js';
 import crypto from 'crypto';
@@ -18,7 +16,6 @@ import {
   ValidationError,
 } from '../errors/token-service-errors.js';
 
-// Proper type definitions
 interface RequestHeaders extends Record<string, string> {
   'Content-Type': string;
   'X-Request-ID': string;
@@ -56,6 +53,7 @@ export class TokenServiceClient {
   private circuitBreaker: CircuitBreaker | null = null;
   private baseURL: string;
   private signer: SignatureV4 | undefined;
+  private parameterManager: ParameterManager;
   private config: Required<TokenServiceConfig>;
   private cache: Map<string, TokenCacheEntry> = new Map();
   private rateLimitState: Map<string, RateLimitState> = new Map();
@@ -63,6 +61,8 @@ export class TokenServiceClient {
   private correlationId: string;
   private initialized = false;
   private initPromise: Promise<void> | null = null;
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private disposed = false;
 
   constructor(config?: TokenServiceConfig) {
     // Set defaults with proper typing
@@ -85,18 +85,28 @@ export class TokenServiceClient {
     this.baseURL = this.config.apiUrl;
     this.correlationId = this.config.correlationId;
 
-    // Initialize asynchronously to handle service discovery properly
+    // Initialize parameter manager for centralized SSM parameter access
+    this.parameterManager = new ParameterManager(process.env.AWS_REGION || 'us-east-1');
+
+    // Initialize asynchronously to handle service URL resolution properly
     this.initPromise = this.initialize();
 
-    // Set up cache cleanup
+    // Set up cache cleanup with proper resource management
     if (this.config.enableCache) {
-      setInterval(() => this.cleanupCache(), 60000); // Clean every minute
+      this.cleanupInterval = setInterval(() => {
+        if (!this.disposed) {
+          this.cleanupCache();
+        }
+      }, 60000); // Clean every minute
+
+      // Unref to not block process exit
+      this.cleanupInterval.unref();
     }
   }
 
   private async initialize(): Promise<void> {
-    // Initialize service discovery first (async operation)
-    await this.initializeWithServiceDiscovery();
+    // Initialize service URL
+    await this.initializeServiceUrl();
 
     // Initialize AWS SigV4 signer for IAM authentication
     this.initializeSigner();
@@ -116,21 +126,38 @@ export class TokenServiceClient {
     throw new Error('TokenServiceClient not properly initialized');
   }
 
-  private async initializeWithServiceDiscovery(): Promise<void> {
-    if (shouldUseServiceDiscovery(this.baseURL, this.config.apiUrl)) {
-      try {
-        const discovery = getServiceDiscovery();
-        const tokenServiceUrl = await discovery.getServiceUrl('token-service');
-        this.baseURL = tokenServiceUrl;
-        this.logInfo('Token Service discovered via Cloud Map', {
-          url: tokenServiceUrl,
-        });
-      } catch (error) {
-        this.logWarn('Token Service discovery failed, using fallback URL', {
-          fallbackUrl: this.baseURL,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
+  private async initializeServiceUrl(): Promise<void> {
+    // Use centralized parameter manager to get service URL
+    try {
+      const environment = getCurrentEnvironment();
+      this.baseURL = await this.parameterManager.getServiceUrl('TOKEN_SERVICE_URL', environment);
+
+      this.logInfo('Token Service URL retrieved from parameter store', {
+        url: this.baseURL,
+        environment,
+      });
+      return;
+    } catch (error) {
+      this.logWarn('Failed to get Token Service URL from centralized parameter manager', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+
+    // Fallback to environment variable or config
+    if (process.env.TOKEN_SERVICE_FUNCTION_URL) {
+      this.baseURL = process.env.TOKEN_SERVICE_FUNCTION_URL;
+      this.logInfo('Using Token Service URL from environment variable', {
+        url: this.baseURL,
+      });
+    } else if (this.config.apiUrl && !this.config.apiUrl.includes('localhost')) {
+      this.baseURL = this.config.apiUrl;
+      this.logInfo('Using Token Service URL from config', {
+        url: this.baseURL,
+      });
+    } else {
+      this.logWarn('Token Service URL not properly configured - using localhost fallback', {
+        fallbackUrl: this.baseURL,
+      });
     }
   }
 
@@ -179,6 +206,33 @@ export class TokenServiceClient {
     this.circuitBreaker!.on('close', () => {
       this.logInfo('Circuit breaker CLOSED - service healthy');
     });
+  }
+
+  /**
+   * Dispose of resources and clean up intervals to prevent memory leaks
+   */
+  dispose(): void {
+    this.disposed = true;
+
+    // Clean up interval
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+
+    // Dispose parameter manager resources
+    if (this.parameterManager) {
+      this.parameterManager.dispose();
+    }
+
+    // Clear caches to free memory
+    this.cache.clear();
+    this.rateLimitState.clear();
+    this.pendingRequests.clear();
+
+    // Reset state
+    this.initialized = false;
+    this.initPromise = null;
   }
 
   /**

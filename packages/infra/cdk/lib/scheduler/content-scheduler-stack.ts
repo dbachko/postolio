@@ -22,17 +22,12 @@ import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
-import {
-  ServiceDiscoveryManager,
-  registerLambdaService,
-  getServiceDiscoveryEnvVars,
-} from '../utils/service-discovery-infrastructure';
+import { ParameterNames, type Environment } from '@postolio/service-parameters';
 
 export interface ContentSchedulerStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
   alertEmail?: string;
   mainAppApiUrl?: string;
-  serviceDiscoveryNamespaceId?: string; // Use shared namespace
 }
 
 export class ContentSchedulerStack extends cdk.Stack {
@@ -43,21 +38,13 @@ export class ContentSchedulerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ContentSchedulerStackProps) {
     super(scope, id, props);
 
-    const { environment, alertEmail, mainAppApiUrl, serviceDiscoveryNamespaceId } = props;
+    const { environment, alertEmail, mainAppApiUrl } = props;
     const prefix = `postolio-scheduler-${environment}`;
 
     // All environments use the production URL
     const resolvedMainAppApiUrl = mainAppApiUrl || 'https://postolio.example';
 
     // Publisher Lambda now uses AWS IAM SigV4 authentication instead of API keys
-
-    // Use shared Service Discovery namespace
-    const serviceDiscovery = new ServiceDiscoveryManager(this, 'ServiceDiscovery', {
-      environment,
-      existingNamespaceId:
-        serviceDiscoveryNamespaceId ||
-        cdk.Fn.importValue(`ServiceDiscovery-${environment}-NamespaceId`),
-    });
 
     // ==================== KMS Keys ====================
 
@@ -299,7 +286,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       POWERTOOLS_METRICS_NAMESPACE: 'ContentScheduler',
       LOG_LEVEL: environment === 'prod' ? 'INFO' : 'DEBUG',
       SCHEDULER_GROUP_NAME: `${prefix}-schedules`,
-      ...getServiceDiscoveryEnvVars(serviceDiscovery.getClientConfig()),
     };
 
     // Custom IAM Role for Lambda (Least Privilege)
@@ -325,6 +311,29 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
         resources: ['*'],
+      })
+    );
+
+    // Add SSM Parameter Store read permissions for service discovery replacement
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+        ],
+      })
+    );
+
+    // Add Lambda Function URL invocation permissions for service-to-service calls
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunctionUrl'],
+        resources: [
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+        ],
       })
     );
 
@@ -361,6 +370,17 @@ export class ContentSchedulerStack extends cdk.Stack {
         deadLetterQueue: deadLetterQueue,
       }
     );
+
+    // Add Lambda Function URL for direct service-to-service communication
+    const scheduleManagementFunctionUrl = scheduleManagementLambda.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.AWS_IAM,
+      cors: {
+        allowCredentials: true,
+        allowedMethods: [lambda.HttpMethod.ALL],
+        allowedOrigins: ['*'],
+        allowedHeaders: ['*'],
+      },
+    });
 
     // Publisher Lambda with proper configuration
     const publisherLambda = new lambdaNodejs.NodejsFunction(this, 'PublisherLambda', {
@@ -569,6 +589,29 @@ export class ContentSchedulerStack extends cdk.Stack {
       })
     );
 
+    // Grant SSM Parameter Store read permissions for service discovery replacement
+    scheduleManagementLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+        ],
+      })
+    );
+
+    // Grant Lambda Function URL invocation permissions for service-to-service calls
+    scheduleManagementLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunctionUrl'],
+        resources: [
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+        ],
+      })
+    );
+
     // Grant Publisher Lambda permission to use Service Discovery
     publisherLambda.addToRolePolicy(
       new iam.PolicyStatement({
@@ -579,6 +622,29 @@ export class ContentSchedulerStack extends cdk.Stack {
           'servicediscovery:GetService',
         ],
         resources: ['*'], // Service Discovery requires wildcard for discovery operations
+      })
+    );
+
+    // Grant Publisher Lambda SSM Parameter Store read permissions for service discovery replacement
+    publisherLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+        ],
+      })
+    );
+
+    // Grant Publisher Lambda Function URL invocation permissions for service-to-service calls
+    publisherLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunctionUrl'],
+        resources: [
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+        ],
       })
     );
 
@@ -700,6 +766,29 @@ export class ContentSchedulerStack extends cdk.Stack {
       })
     );
 
+    // Grant Retry Handler SSM Parameter Store read permissions for service discovery replacement
+    retryHandlerLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+        ],
+      })
+    );
+
+    // Grant Retry Handler Lambda Function URL invocation permissions for service-to-service calls
+    retryHandlerLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunctionUrl'],
+        resources: [
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+        ],
+      })
+    );
+
     // Grant Schedule Cleanup Lambda permission to list and delete EventBridge schedules
     scheduleCleanupLambda.addToRolePolicy(
       new iam.PolicyStatement({
@@ -717,6 +806,29 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['scheduler:ListSchedules'],
         resources: ['*'], // ListSchedules requires wildcard when specifying GroupName
+      })
+    );
+
+    // Grant Schedule Cleanup Lambda SSM Parameter Store read permissions for service discovery replacement
+    scheduleCleanupLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+        ],
+      })
+    );
+
+    // Grant Schedule Cleanup Lambda Function URL invocation permissions for service-to-service calls
+    scheduleCleanupLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunctionUrl'],
+        resources: [
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+        ],
       })
     );
 
@@ -1079,10 +1191,13 @@ export class ContentSchedulerStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'Lambda execution role requires wildcard permissions for CloudWatch Logs and X-Ray tracing',
+            'Lambda execution role requires wildcard permissions for CloudWatch Logs, X-Ray tracing, SSM parameter access, and Lambda Function URL invocation',
           appliesTo: [
             'Resource::*',
             `Resource::arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/postolio-scheduler-${environment}-*`,
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
           ],
         },
       ]
@@ -1265,13 +1380,16 @@ export class ContentSchedulerStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'Lambda requires wildcard permissions for X-Ray tracing, DynamoDB GSI access, EventBridge schedules, and KMS operations',
+            'Lambda requires wildcard permissions for X-Ray tracing, DynamoDB GSI access, EventBridge schedules, KMS operations, SSM parameter access, and Lambda Function URL invocation',
           appliesTo: [
             'Resource::*',
             'Action::kms:GenerateDataKey*',
             'Action::kms:ReEncrypt*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-scheduler-${environment}-schedules/*`,
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
           ],
         },
       ]
@@ -1283,7 +1401,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'Publisher Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, S3 operations, KMS, and Token Service API GET access',
+            'Publisher Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, S3 operations, KMS, Token Service API GET access, SSM parameter access, and Lambda Function URL invocation',
           appliesTo: [
             'Resource::*',
             'Action::kms:GenerateDataKey*',
@@ -1298,6 +1416,9 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Resource::arn:aws:execute-api:*:*:*/*/GET/tokens/*',
             'Resource::arn:aws:execute-api:*:*:2wvb4zp8pk/*/GET/tokens/*',
             'Resource::arn:aws:execute-api:*:*:dummy-value-for-/postolio/*/token-service/api-gateway-id/*/GET/tokens/*',
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
           ],
         },
       ]
@@ -1309,7 +1430,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'Retry handler requires wildcard permissions for X-Ray, KMS, DynamoDB GSI access, and Lambda invocation',
+            'Retry handler requires wildcard permissions for X-Ray, KMS, DynamoDB GSI access, Lambda invocation, SSM parameter access, and Lambda Function URL invocation',
           appliesTo: [
             'Resource::*',
             'Action::kms:GenerateDataKey*',
@@ -1317,6 +1438,9 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Resource::<PublisherLambdaB2749827.Arn>:*',
             // Grant for DynamoDB GSIs produced by table grants; limited to this table's indexes
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
           ],
         },
       ]
@@ -1328,13 +1452,16 @@ export class ContentSchedulerStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'Schedule cleanup Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, KMS, and EventBridge Scheduler listing',
+            'Schedule cleanup Lambda requires wildcard permissions for X-Ray, DynamoDB GSI, KMS, EventBridge Scheduler listing, SSM parameter access, and Lambda Function URL invocation',
           appliesTo: [
             'Resource::*',
             'Action::kms:GenerateDataKey*',
             'Action::kms:ReEncrypt*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-scheduler-${environment}-schedules/*`,
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
           ],
         },
       ]
@@ -1368,15 +1495,31 @@ export class ContentSchedulerStack extends cdk.Stack {
       ]
     );
 
-    // Register Content Scheduler with Cloud Map
-    registerLambdaService(serviceDiscovery, 'content-scheduler', this.api.url, environment);
+    // Service registration now handled via SSM Parameter Store
 
     // ==================== Outputs ====================
 
     new cdk.CfnOutput(this, 'ApiEndpoint', {
       value: this.api.url,
-      description: 'Content Scheduler API endpoint',
+      description: 'Content Scheduler API endpoint (legacy API Gateway)',
       // No export needed - services use Cloud Map for discovery
+    });
+
+    new cdk.CfnOutput(this, 'ScheduleManagementFunctionUrl', {
+      value: scheduleManagementFunctionUrl.url,
+      description: 'Content Scheduler Lambda Function URL for direct service-to-service calls',
+      exportName: `${prefix}-function-url`,
+    });
+
+    // Store Lambda Function URL in SSM Parameter Store for service discovery replacement
+    new ssm.StringParameter(this, 'ContentSchedulerFunctionUrlParameter', {
+      parameterName: ParameterNames.getParameterName(
+        'CONTENT_SCHEDULER_URL',
+        environment as Environment
+      ),
+      stringValue: scheduleManagementFunctionUrl.url,
+      description: 'Content Scheduler Lambda Function URL for service-to-service communication',
+      tier: ssm.ParameterTier.STANDARD,
     });
 
     new cdk.CfnOutput(this, 'ApiArn', {

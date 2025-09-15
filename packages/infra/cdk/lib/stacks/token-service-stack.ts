@@ -17,38 +17,26 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as path from 'path';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import {
-  ServiceDiscoveryManager,
-  registerLambdaService,
-  getServiceDiscoveryEnvVars,
-} from '../utils/service-discovery-infrastructure';
 import { NagSuppressions } from 'cdk-nag';
 import { OAuthConfig } from '../utils/oauth-config';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import { ParameterNames, type Environment } from '@postolio/service-parameters';
 
 export interface TokenServiceStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod';
   alertEmail?: string;
-  serviceDiscoveryNamespaceId?: string; // Use shared namespace
 }
 
 export class TokenServiceStack extends cdk.Stack {
   public readonly apiUrl: string;
+  public readonly functionUrl: string;
   public readonly tableName: string;
   public readonly kmsKeyId: string;
 
   constructor(scope: Construct, id: string, props: TokenServiceStackProps) {
     super(scope, id, props);
 
-    const { environment, alertEmail, serviceDiscoveryNamespaceId } = props;
-
-    // Use shared Service Discovery namespace
-    const serviceDiscovery = new ServiceDiscoveryManager(this, 'ServiceDiscovery', {
-      environment,
-      existingNamespaceId:
-        serviceDiscoveryNamespaceId ||
-        cdk.Fn.importValue(`ServiceDiscovery-${environment}-NamespaceId`),
-    });
+    const { environment, alertEmail } = props;
 
     // Create KMS key for token encryption
     const encryptionKey = new kms.Key(this, 'TokenEncryptionKey', {
@@ -108,7 +96,6 @@ export class TokenServiceStack extends cdk.Stack {
         TIKTOK_CLIENT_KEY: props.tiktokClientKey || process.env.TIKTOK_CLIENT_KEY || '',
         // OAuth secrets will be retrieved from Secrets Manager at runtime
         // Not passed as environment variables for security
-        ...getServiceDiscoveryEnvVars(serviceDiscovery.getClientConfig()),
       },
       bundling: {
         nodeModules: ['@prisma/client', 'prisma'],
@@ -118,6 +105,40 @@ export class TokenServiceStack extends cdk.Stack {
     // Grant permissions
     tokensTable.grantReadWriteData(tokenServiceLambda);
     encryptionKey.grantEncryptDecrypt(tokenServiceLambda);
+
+    // Grant SSM Parameter Store read permissions for service discovery replacement
+    tokenServiceLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+        ],
+      })
+    );
+
+    // Grant Lambda Function URL invocation permissions for service-to-service calls
+    tokenServiceLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunctionUrl'],
+        resources: [
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+        ],
+      })
+    );
+
+    // Add Lambda Function URL for direct service-to-service communication
+    const functionUrl = tokenServiceLambda.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.AWS_IAM,
+      cors: {
+        allowCredentials: true,
+        allowedMethods: [lambda.HttpMethod.ALL],
+        allowedOrigins: ['*'],
+        allowedHeaders: ['*'],
+      },
+    });
 
     // Create API Gateway
     const api = new apigateway.RestApi(this, 'TokenServiceApi', {
@@ -215,9 +236,6 @@ export class TokenServiceStack extends cdk.Stack {
     const metrics = api.root.addResource('metrics');
     metrics.addMethod('GET', integration); // Metrics - no auth required
 
-    // Register Token Service with Cloud Map
-    registerLambdaService(serviceDiscovery, 'token-service', api.url, environment);
-
     // CloudWatch Alarms
     const errorAlarm = new cloudwatch.Alarm(this, 'TokenServiceErrors', {
       alarmName: `token-service-errors-${environment}`,
@@ -250,20 +268,39 @@ export class TokenServiceStack extends cdk.Stack {
 
     // Outputs
     this.apiUrl = api.url;
+    this.functionUrl = functionUrl.url;
     this.tableName = tokensTable.tableName;
     this.kmsKeyId = encryptionKey.keyId;
 
     new cdk.CfnOutput(this, 'TokenServiceApiUrl', {
       value: this.apiUrl,
-      description: 'Token Service API URL',
+      description: 'Token Service API URL (legacy API Gateway)',
       // No export needed - services use Cloud Map for discovery
     });
 
-    // Store API Gateway ID in SSM Parameter Store for cross-service access
+    // Output Lambda Function URL for service-to-service communication
+    new cdk.CfnOutput(this, 'TokenServiceFunctionUrl', {
+      value: functionUrl.url,
+      description: 'Token Service Lambda Function URL for direct service-to-service calls',
+      exportName: `${this.stackName}-FunctionUrl`,
+    });
+
+    // Store Lambda Function URL in SSM Parameter Store for service discovery replacement
+    new ssm.StringParameter(this, 'TokenServiceFunctionUrlParameter', {
+      parameterName: ParameterNames.getParameterName(
+        'TOKEN_SERVICE_URL',
+        environment as Environment
+      ),
+      stringValue: functionUrl.url,
+      description: 'Token Service Lambda Function URL for service-to-service communication',
+      tier: ssm.ParameterTier.STANDARD,
+    });
+
+    // Store API Gateway ID in SSM Parameter Store for cross-service access (legacy)
     new ssm.StringParameter(this, 'TokenServiceApiIdParameter', {
       parameterName: `/postolio/${environment}/token-service/api-gateway-id`,
       stringValue: api.restApiId,
-      description: 'Token Service API Gateway ID for cross-service IAM permissions',
+      description: 'Token Service API Gateway ID for cross-service IAM permissions (legacy)',
       tier: ssm.ParameterTier.STANDARD,
     });
 
@@ -279,13 +316,14 @@ export class TokenServiceStack extends cdk.Stack {
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
 
     // Apply CDK Nag suppressions
-    this.applyCdkNagSuppressions(tokensTable, tokenServiceLambda, api);
+    this.applyCdkNagSuppressions(tokensTable, tokenServiceLambda, api, environment);
   }
 
   private applyCdkNagSuppressions(
     tokensTable: dynamodb.Table,
     tokenServiceLambda: NodejsFunction,
-    api: apigateway.RestApi
+    api: apigateway.RestApi,
+    environment: string
   ): void {
     // DynamoDB suppressions
     NagSuppressions.addResourceSuppressions(tokensTable, [
@@ -310,12 +348,15 @@ export class TokenServiceStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'Wildcard permissions are required for DynamoDB index operations and KMS key operations',
+            'Wildcard permissions are required for DynamoDB index operations, KMS key operations, SSM parameter access, and Lambda Function URL invocation',
           appliesTo: [
             'Resource::*',
             'Resource::<TokensTable6C9B5BC6.Arn>/index/*',
             'Action::kms:GenerateDataKey*',
             'Action::kms:ReEncrypt*',
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
           ],
         },
         {
