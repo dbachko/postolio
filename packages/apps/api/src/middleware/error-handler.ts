@@ -16,6 +16,13 @@ interface ErrorContext {
   ip?: string;
 }
 
+interface AuthenticatedRequest extends FastifyRequest {
+  user?: {
+    id: string;
+    email: string;
+  };
+}
+
 export async function errorHandler(
   error: FastifyError | Error,
   request: FastifyRequest,
@@ -23,7 +30,7 @@ export async function errorHandler(
 ): Promise<void> {
   const context: ErrorContext = {
     correlationId: request.id,
-    userId: (request as any).user?.id,
+    userId: (request as AuthenticatedRequest).user?.id,
     endpoint: request.url,
     method: request.method,
     userAgent: request.headers['user-agent'],
