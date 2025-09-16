@@ -138,7 +138,6 @@ export class TokenServiceStack extends cdk.Stack {
       },
     });
 
-
     // CloudWatch Alarms
     const errorAlarm = new cloudwatch.Alarm(this, 'TokenServiceErrors', {
       alarmName: `token-service-errors-${environment}`,
@@ -191,7 +190,6 @@ export class TokenServiceStack extends cdk.Stack {
       description: 'Token Service Lambda Function URL for service-to-service communication',
       tier: ssm.ParameterTier.STANDARD,
     });
-
 
     new cdk.CfnOutput(this, 'TokenServiceTableName', {
       value: this.tableName,
@@ -254,6 +252,5 @@ export class TokenServiceStack extends cdk.Stack {
       ],
       true // Apply to all children
     );
-
   }
 }

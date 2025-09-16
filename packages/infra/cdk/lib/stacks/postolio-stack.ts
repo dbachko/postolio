@@ -384,9 +384,7 @@ export class PostolioStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['ssm:GetParameter', 'ssm:GetParameters'],
-        resources: [
-          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`,
-        ],
+        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`],
       })
     );
 

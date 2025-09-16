@@ -632,8 +632,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       })
     );
 
-
-
     // Grant Publisher Lambda permission to emit events to EventBridge (default bus)
     publisherLambda.addToRolePolicy(
       new iam.PolicyStatement({
@@ -781,9 +779,6 @@ export class ContentSchedulerStack extends cdk.Stack {
         ],
       })
     );
-
-
-
 
     // ==================== CloudWatch Alarms with KMS ====================
 
@@ -951,7 +946,6 @@ export class ContentSchedulerStack extends cdk.Stack {
         },
       ]
     );
-
 
     // Suppress access logs bucket logging requirement
     NagSuppressions.addResourceSuppressionsByPath(
@@ -1125,11 +1119,9 @@ export class ContentSchedulerStack extends cdk.Stack {
       ]
     );
 
-
     // Service registration now handled via SSM Parameter Store
 
     // ==================== Outputs ====================
-
 
     new cdk.CfnOutput(this, 'ScheduleManagementFunctionUrl', {
       value: scheduleManagementFunctionUrl.url,
@@ -1147,7 +1139,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       description: 'Content Scheduler Lambda Function URL for service-to-service communication',
       tier: ssm.ParameterTier.STANDARD,
     });
-
 
     new cdk.CfnOutput(this, 'SchedulesTableName', {
       value: this.schedulesTable.tableName,
