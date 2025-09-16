@@ -2,7 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
@@ -14,7 +13,6 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
-import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
@@ -31,7 +29,6 @@ export interface ContentSchedulerStackProps extends cdk.StackProps {
 }
 
 export class ContentSchedulerStack extends cdk.Stack {
-  public readonly api: apigateway.RestApi;
   public readonly schedulesTable: dynamodb.Table;
   public readonly videoBucket: s3.Bucket;
 
@@ -635,42 +632,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       })
     );
 
-    // Get Token Service API Gateway ID from SSM Parameter Store
-    // This allows flexible deployment order without cross-stack dependencies
-    const resolvedTokenServiceApiId = ssm.StringParameter.valueFromLookup(
-      this,
-      `/postolio/${environment}/token-service/api-gateway-id`
-    );
-
-    // Grant Publisher Lambda permission to invoke Token Service API (IAM-authenticated)
-    publisherLambda.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['execute-api:Invoke'],
-        resources: [
-          // Publisher Lambda only needs to GET tokens from Token Service
-          // GET /tokens/{userId}/{platform}?brandId={brandId}
-          `arn:aws:execute-api:${this.region}:${this.account}:${resolvedTokenServiceApiId}/*/GET/tokens/*`,
-        ],
-      })
-    );
-
-    // cdk-nag: suppress wildcard in API Gateway ARN for token service access
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/PublisherLambda/ServiceRole/DefaultPolicy/Resource`,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'Wildcard required for API Gateway stage (*) and token resource path (*) to allow flexible deployment configurations and user/platform combinations',
-          appliesTo: [
-            `Resource::arn:aws:execute-api:${this.region}:${this.account}:${resolvedTokenServiceApiId}/*/GET/tokens/*`,
-          ],
-        },
-      ]
-    );
-
     // Grant Publisher Lambda permission to emit events to EventBridge (default bus)
     publisherLambda.addToRolePolicy(
       new iam.PolicyStatement({
@@ -818,210 +779,6 @@ export class ContentSchedulerStack extends cdk.Stack {
         ],
       })
     );
-
-    // ==================== API Gateway CloudWatch Logging Role ====================
-
-    // Create IAM role for API Gateway CloudWatch logging (account-level setting)
-    const apiGatewayCloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
-      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
-        ),
-      ],
-      description: 'Role for API Gateway to write logs to CloudWatch',
-    });
-
-    // Configure account-level CloudWatch logging for API Gateway
-    const cfnAccount = new apigateway.CfnAccount(this, 'ApiGatewayAccount', {
-      cloudWatchRoleArn: apiGatewayCloudWatchRole.roleArn,
-    });
-
-    // ==================== API Gateway with Request Validation ====================
-
-    this.api = new apigateway.RestApi(this, 'SchedulerApi', {
-      restApiName: `${prefix}-api`,
-      description: 'Content Scheduler Microservice API',
-      deployOptions: {
-        stageName: environment,
-        tracingEnabled: true,
-        // Enable INFO level execution logging & access logs for 403 diagnostics
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        metricsEnabled: true,
-        accessLogDestination: new apigateway.LogGroupLogDestination(
-          new logs.LogGroup(this, 'SchedulerApiAccessLogs', {
-            logGroupName: `/aws/apigateway/${prefix}-api-access`,
-            retention: logs.RetentionDays.ONE_WEEK,
-            removalPolicy:
-              environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-          })
-        ),
-        accessLogFormat: apigateway.AccessLogFormat.custom(
-          JSON.stringify({
-            requestId: '$context.requestId',
-            ip: '$context.identity.sourceIp',
-            requestTime: '$context.requestTime',
-            httpMethod: '$context.httpMethod',
-            resourcePath: '$context.resourcePath',
-            path: '$context.path',
-            status: '$context.status',
-            protocol: '$context.protocol',
-            integrationStatus: '$context.integrationStatus',
-            errorMessage: '$context.error.message',
-            responseLength: '$context.responseLength',
-            userAgent: '$context.identity.userAgent',
-            caller: '$context.identity.caller',
-            user: '$context.identity.user',
-          })
-        ),
-        throttlingBurstLimit: 1000,
-        throttlingRateLimit: 500,
-      },
-      defaultCorsPreflightOptions: {
-        allowOrigins: environment === 'prod' ? ['https://postolio.example'] : apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization'],
-      },
-    });
-
-    // Ensure API deployment happens after account configuration
-    this.api.node.addDependency(cfnAccount);
-
-    // NO AUTHORIZER NEEDED - Using IAM SigV4 authentication
-    // This provides secure service-to-service authentication using AWS credentials
-
-    // Request Validator
-    const requestValidator = new apigateway.RequestValidator(this, 'RequestValidator', {
-      restApi: this.api,
-      requestValidatorName: 'request-validator',
-      validateRequestBody: true,
-      validateRequestParameters: true,
-    });
-
-    // API Model for request validation
-    const scheduleModel = new apigateway.Model(this, 'ScheduleModel', {
-      restApi: this.api,
-      contentType: 'application/json',
-      modelName: 'ScheduleModel',
-      schema: {
-        schema: apigateway.JsonSchemaVersion.DRAFT4,
-        title: 'Schedule',
-        type: apigateway.JsonSchemaType.OBJECT,
-        required: ['brandId', 'contentId', 'platform', 'scheduledAt'],
-        properties: {
-          brandId: { type: apigateway.JsonSchemaType.STRING },
-          contentId: { type: apigateway.JsonSchemaType.STRING },
-          platform: {
-            type: apigateway.JsonSchemaType.STRING,
-            enum: ['instagram', 'tiktok', 'youtube'],
-          },
-          scheduledAt: {
-            type: apigateway.JsonSchemaType.STRING,
-            format: 'date-time',
-          },
-          contentType: {
-            type: apigateway.JsonSchemaType.STRING,
-            enum: ['image', 'video'],
-          },
-          videoUrl: { type: apigateway.JsonSchemaType.STRING },
-          caption: { type: apigateway.JsonSchemaType.STRING },
-          hashtags: {
-            type: apigateway.JsonSchemaType.ARRAY,
-            items: { type: apigateway.JsonSchemaType.STRING },
-          },
-        },
-      },
-    });
-
-    // API Resources with authorization
-    const schedulesResource = this.api.root.addResource('schedules');
-    const scheduleResource = schedulesResource.addResource('{scheduleId}');
-
-    // API Methods with validation and authorization
-    const lambdaIntegration = new apigateway.LambdaIntegration(scheduleManagementLambda);
-
-    schedulesResource.addMethod('POST', lambdaIntegration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-      requestValidator,
-      requestModels: {
-        'application/json': scheduleModel,
-      },
-    });
-
-    schedulesResource.addMethod('GET', lambdaIntegration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    });
-
-    scheduleResource.addMethod('GET', lambdaIntegration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    });
-
-    scheduleResource.addMethod('PUT', lambdaIntegration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-      requestValidator,
-      requestModels: {
-        'application/json': scheduleModel,
-      },
-    });
-
-    scheduleResource.addMethod('DELETE', lambdaIntegration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    });
-
-    // Environment variables moved to Lambda definition to avoid circular dependencies
-
-    // ==================== WAF for API Protection ====================
-
-    if (environment === 'prod') {
-      const webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
-        scope: 'REGIONAL',
-        defaultAction: { allow: {} },
-        rules: [
-          {
-            name: 'RateLimitRule',
-            priority: 1,
-            statement: {
-              rateBasedStatement: {
-                limit: 2000,
-                aggregateKeyType: 'IP',
-              },
-            },
-            action: { block: {} },
-            visibilityConfig: {
-              sampledRequestsEnabled: true,
-              cloudWatchMetricsEnabled: true,
-              metricName: 'RateLimitRule',
-            },
-          },
-          {
-            name: 'AWSManagedRulesCommonRuleSet',
-            priority: 2,
-            statement: {
-              managedRuleGroupStatement: {
-                vendorName: 'AWS',
-                name: 'AWSManagedRulesCommonRuleSet',
-              },
-            },
-            overrideAction: { none: {} },
-            visibilityConfig: {
-              sampledRequestsEnabled: true,
-              cloudWatchMetricsEnabled: true,
-              metricName: 'CommonRuleSet',
-            },
-          },
-        ],
-        visibilityConfig: {
-          sampledRequestsEnabled: true,
-          cloudWatchMetricsEnabled: true,
-          metricName: 'WebAcl',
-        },
-      });
-
-      new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
-        resourceArn: this.api.deploymentStage.stageArn,
-        webAclArn: webAcl.attrArn,
-      });
-    }
 
     // ==================== CloudWatch Alarms with KMS ====================
 
@@ -1190,108 +947,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       ]
     );
 
-    // Suppress API Gateway logging configuration
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/SchedulerApi/Resource`,
-      [
-        {
-          id: 'AwsSolutions-APIG1',
-          reason:
-            'CloudWatch logging disabled to avoid circular dependency with IAM role. Metrics and tracing are enabled for monitoring.',
-        },
-      ]
-    );
-
-    // Suppress WAF warning for non-production environments
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/SchedulerApi/DeploymentStage.${environment}/Resource`,
-      [
-        {
-          id: 'AwsSolutions-APIG3',
-          reason: `WAF not required for ${environment} environment. Production uses AWS WAF v2 for protection.`,
-        },
-      ]
-    );
-
-    // Suppress API Gateway warnings (using IAM auth instead of Cognito)
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/SchedulerApi/Default/schedules/POST/Resource`,
-      [
-        {
-          id: 'AwsSolutions-APIG4',
-          reason: 'Using IAM SigV4 authentication for service-to-service communication',
-        },
-        {
-          id: 'AwsSolutions-COG4',
-          reason:
-            'Using IAM SigV4 authentication for service-to-service communication instead of Cognito user pools',
-        },
-      ]
-    );
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/SchedulerApi/Default/schedules/GET/Resource`,
-      [
-        {
-          id: 'AwsSolutions-APIG4',
-          reason: 'Using IAM SigV4 authentication for service-to-service communication',
-        },
-        {
-          id: 'AwsSolutions-COG4',
-          reason:
-            'Using IAM SigV4 authentication for service-to-service communication instead of Cognito user pools',
-        },
-      ]
-    );
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/SchedulerApi/Default/schedules/{scheduleId}/GET/Resource`,
-      [
-        {
-          id: 'AwsSolutions-APIG4',
-          reason: 'Using IAM SigV4 authentication for service-to-service communication',
-        },
-        {
-          id: 'AwsSolutions-COG4',
-          reason:
-            'Using IAM SigV4 authentication for service-to-service communication instead of Cognito user pools',
-        },
-      ]
-    );
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/SchedulerApi/Default/schedules/{scheduleId}/PUT/Resource`,
-      [
-        {
-          id: 'AwsSolutions-APIG4',
-          reason: 'Using IAM SigV4 authentication for service-to-service communication',
-        },
-        {
-          id: 'AwsSolutions-COG4',
-          reason:
-            'Using IAM SigV4 authentication for service-to-service communication instead of Cognito user pools',
-        },
-      ]
-    );
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/SchedulerApi/Default/schedules/{scheduleId}/DELETE/Resource`,
-      [
-        {
-          id: 'AwsSolutions-APIG4',
-          reason: 'Using IAM SigV4 authentication for service-to-service communication',
-        },
-        {
-          id: 'AwsSolutions-COG4',
-          reason:
-            'Using IAM SigV4 authentication for service-to-service communication instead of Cognito user pools',
-        },
-      ]
-    );
-
     // Suppress access logs bucket logging requirement
     NagSuppressions.addResourceSuppressionsByPath(
       this,
@@ -1400,9 +1055,6 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::s3:List*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             'Resource::<VideoBucket6ED8E1AF.Arn>/*',
-            'Resource::arn:aws:execute-api:*:*:*/*/GET/tokens/*',
-            'Resource::arn:aws:execute-api:*:*:2wvb4zp8pk/*/GET/tokens/*',
-            'Resource::arn:aws:execute-api:*:*:dummy-value-for-/postolio/*/token-service/api-gateway-id/*/GET/tokens/*',
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
@@ -1467,30 +1119,9 @@ export class ContentSchedulerStack extends cdk.Stack {
       ]
     );
 
-    // Suppress API Gateway CloudWatch Role managed policy
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/ApiGatewayCloudWatchRole/Resource`,
-      [
-        {
-          id: 'AwsSolutions-IAM4',
-          reason: 'API Gateway requires AWS managed policy for CloudWatch logging',
-          appliesTo: [
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs',
-          ],
-        },
-      ]
-    );
-
     // Service registration now handled via SSM Parameter Store
 
     // ==================== Outputs ====================
-
-    new cdk.CfnOutput(this, 'ApiEndpoint', {
-      value: this.api.url,
-      description: 'Content Scheduler API endpoint (legacy API Gateway)',
-      // No export needed - services use Cloud Map for discovery
-    });
 
     new cdk.CfnOutput(this, 'ScheduleManagementFunctionUrl', {
       value: scheduleManagementFunctionUrl.url,
@@ -1507,12 +1138,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       stringValue: scheduleManagementFunctionUrl.url,
       description: 'Content Scheduler Lambda Function URL for service-to-service communication',
       tier: ssm.ParameterTier.STANDARD,
-    });
-
-    new cdk.CfnOutput(this, 'ApiArn', {
-      value: this.api.arnForExecuteApi(),
-      description: 'Content Scheduler API ARN for IAM permissions',
-      // No export needed - services use Cloud Map for discovery
     });
 
     new cdk.CfnOutput(this, 'SchedulesTableName', {

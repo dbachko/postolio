@@ -16,6 +16,7 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { Construct } from 'constructs';
+import { NagSuppressions } from 'cdk-nag';
 import * as path from 'path';
 import { CloudWatchDashboards } from '../constructs/cloudwatch-dashboards';
 import { SecuredApiGateway } from '../constructs/secured-api-gateway';
@@ -344,6 +345,15 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       })
     );
 
+    // Grant SSM parameter read permissions for service discovery
+    schedulerServiceLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`],
+      })
+    );
+
     // Publisher Lambdas
     const createPublisherLambda = (platform: string, queue: sqs.Queue) => {
       const publisherLambda = new lambdaNode.NodejsFunction(this, `${platform}Publisher`, {
@@ -366,6 +376,15 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       idempotencyTable.grantReadWriteData(publisherLambda);
       tokenEncryptionKey.grantDecrypt(publisherLambda);
       this.eventBus.grantPutEventsTo(publisherLambda);
+
+      // Grant SSM parameter read permissions for service discovery
+      publisherLambda.addToRolePolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+          resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`],
+        })
+      );
 
       // SQS trigger
       publisherLambda.addEventSource(
@@ -543,6 +562,15 @@ export class PlatformMicroservicesStack extends cdk.Stack {
     publisherDLQ.grantConsumeMessages(dlqProcessorLambda);
     publisherDLQ.grantSendMessages(dlqProcessorLambda);
     instagramQueue.grantSendMessages(dlqProcessorLambda);
+
+    // Grant SSM parameter read permissions for service discovery
+    dlqProcessorLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`],
+      })
+    );
     facebookQueue.grantSendMessages(dlqProcessorLambda);
     linkedinQueue.grantSendMessages(dlqProcessorLambda);
     tiktokQueue.grantSendMessages(dlqProcessorLambda);
@@ -655,5 +683,76 @@ export class PlatformMicroservicesStack extends cdk.Stack {
       value: this.scheduleTable.tableName,
       description: 'Schedule DynamoDB Table Name',
     });
+
+    // ==================== CDK Nag Suppressions ====================
+
+    // Suppress IAM5 warnings for SSM parameter access
+    NagSuppressions.addResourceSuppressions(schedulerServiceLambda, [
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'Scheduler Lambda requires wildcard permissions for EventBridge scheduler operations and SSM parameter access for service discovery',
+        appliesTo: [
+          'Resource::*',
+          `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`,
+        ],
+      },
+      {
+        id: 'AwsSolutions-IAM4',
+        reason: 'Lambda execution role uses AWS managed policies which are maintained by AWS',
+      },
+    ]);
+
+    // Suppress for publisher lambdas
+    [instagramPublisher, facebookPublisher, linkedinPublisher, tiktokPublisher].forEach(
+      (lambda) => {
+        NagSuppressions.addResourceSuppressions(lambda, [
+          {
+            id: 'AwsSolutions-IAM5',
+            reason: 'Publisher Lambda requires SSM parameter access for service discovery',
+            appliesTo: [
+              `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`,
+            ],
+          },
+          {
+            id: 'AwsSolutions-IAM4',
+            reason: 'Lambda execution role uses AWS managed policies which are maintained by AWS',
+          },
+        ]);
+      }
+    );
+
+    // Suppress for DLQ processor
+    NagSuppressions.addResourceSuppressions(dlqProcessorLambda, [
+      {
+        id: 'AwsSolutions-IAM5',
+        reason: 'DLQ Processor Lambda requires SSM parameter access for service discovery',
+        appliesTo: [`Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`],
+      },
+      {
+        id: 'AwsSolutions-IAM4',
+        reason: 'Lambda execution role uses AWS managed policies which are maintained by AWS',
+      },
+    ]);
+
+    // Suppress for Token Service Lambda if it exists
+    if (tokenServiceLambda) {
+      NagSuppressions.addResourceSuppressions(tokenServiceLambda, [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Token Service Lambda requires KMS operations and SSM parameter access',
+          appliesTo: [
+            'Action::kms:Decrypt',
+            'Action::kms:Encrypt',
+            'Action::kms:GenerateDataKey',
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`,
+          ],
+        },
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'Lambda execution role uses AWS managed policies which are maintained by AWS',
+        },
+      ]);
+    }
   }
 }
