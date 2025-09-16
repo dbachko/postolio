@@ -65,7 +65,7 @@ RUN chmod +x ./start-with-migration.sh
 USER nodejs
 EXPOSE 3000
 ENV PORT=3000
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
