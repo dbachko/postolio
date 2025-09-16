@@ -237,10 +237,6 @@ jobs:
           ENV="${{ needs.detect-changes.outputs.environment }}"
           NEEDS_DEPLOY=false
 
-          if ! aws cloudformation describe-stacks --stack-name "ServiceDiscovery-$ENV" >/dev/null 2>&1; then
-            echo "ServiceDiscovery stack missing for $ENV"
-            NEEDS_DEPLOY=true
-          fi
 
           if ! aws cloudformation describe-stacks --stack-name "Postolio-$ENV" >/dev/null 2>&1; then
             echo "Postolio stack missing for $ENV"
@@ -384,12 +380,6 @@ jobs:
               --context environment=${{ needs.detect-changes.outputs.environment }}
           fi
 
-      - name: Deploy Service Discovery Stack
-        working-directory: packages/infra/cdk
-        run: |
-          pnpm cdk deploy ServiceDiscovery-${{ needs.detect-changes.outputs.environment }} \
-            --require-approval never \
-            --context environment=${{ needs.detect-changes.outputs.environment }}
 
       - name: Deploy Monitoring Stack (if present)
         working-directory: packages/infra/cdk
