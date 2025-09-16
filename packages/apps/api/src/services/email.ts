@@ -12,7 +12,7 @@ export class EmailService {
   private static transporter: Transporter | null = null;
   private static sesClient: SESClient | null = null;
   private static useAWSSES: boolean =
-    process.env.USE_AWS_SES === 'true' || process.env.NODE_ENV === 'production';
+    process.env.USE_AWS_SES === 'true' || process.env.NODE_ENV === 'prod';
   private static sesCircuitBreaker: CircuitBreaker | null = null;
   private static smtpCircuitBreaker: CircuitBreaker | null = null;
 
@@ -132,7 +132,7 @@ export class EmailService {
   static isConfigured(): boolean {
     if (this.useAWSSES) {
       // SES just needs AWS region (credentials come from IAM role in production)
-      return !!(process.env.AWS_REGION || process.env.NODE_ENV === 'production');
+      return !!(process.env.AWS_REGION || process.env.NODE_ENV === 'prod');
     }
     // SMTP needs explicit configuration
     return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);

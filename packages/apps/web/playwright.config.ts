@@ -58,7 +58,7 @@ export default defineConfig({
         env: {
           ...process.env,
           CI: 'true',
-          NODE_ENV: 'development',
+          NODE_ENV: 'dev',
         },
       }
     : [

@@ -9,7 +9,7 @@ set -u  # Exit on undefined variable
 
 # Configuration
 export AWS_REGION="${AWS_REGION:-us-east-1}"
-export ENVIRONMENT="production"
+export ENVIRONMENT="prod"
 export STACK_NAME="Postolio-prod"
 export DEPLOYMENT_ID="prod-$(date +%Y%m%d-%H%M%S)"
 export LOGS_DIR="./logs/deployments/${DEPLOYMENT_ID}"
@@ -186,7 +186,7 @@ build_and_push_images() {
     log_info "Building production Docker image..."
     docker build \
         --platform linux/amd64 \
-        --build-arg NODE_ENV=production \
+        --build-arg NODE_ENV=prod \
         --tag "${ECR_REPO}:${DEPLOYMENT_ID}" \
         --tag "${ECR_REPO}:latest" \
         --file packages/apps/api/Dockerfile \

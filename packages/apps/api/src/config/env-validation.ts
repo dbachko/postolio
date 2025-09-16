@@ -30,7 +30,7 @@ export interface EnvironmentConfig {
   CLOUDFRONT_DOMAIN?: string | undefined;
   REDIS_URL?: string | undefined;
   SCHEDULER_API_URL?: string | undefined;
-  NODE_ENV: 'development' | 'production' | 'test';
+  NODE_ENV: 'dev' | 'prod' | 'test';
   PORT: number;
 }
 
@@ -64,9 +64,9 @@ export function validateEnvironment(): EnvironmentConfig {
   }
 
   // Validate NODE_ENV
-  const nodeEnv = process.env.NODE_ENV || 'development';
-  if (!['development', 'production', 'test'].includes(nodeEnv)) {
-    throw new Error('NODE_ENV must be one of: development, production, test');
+  const nodeEnv = process.env.NODE_ENV || 'dev';
+  if (!['dev', 'prod', 'test'].includes(nodeEnv)) {
+    throw new Error('NODE_ENV must be one of: dev, prod, test');
   }
 
   // Warning for missing optional but important variables
@@ -77,7 +77,7 @@ export function validateEnvironment(): EnvironmentConfig {
     }
   }
 
-  if (missingOptional.length > 0 && nodeEnv === 'production') {
+  if (missingOptional.length > 0 && nodeEnv === 'prod') {
     console.warn(
       `Warning: Missing optional environment variables in production: ${missingOptional.join(', ')}`
     );
@@ -95,7 +95,7 @@ export function validateEnvironment(): EnvironmentConfig {
     CLOUDFRONT_DOMAIN: process.env.CLOUDFRONT_DOMAIN,
     REDIS_URL: process.env.REDIS_URL,
     SCHEDULER_API_URL: process.env.SCHEDULER_API_URL,
-    NODE_ENV: nodeEnv as 'development' | 'production' | 'test',
+    NODE_ENV: nodeEnv as 'dev' | 'prod' | 'test',
     PORT: port,
   };
 }

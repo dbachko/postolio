@@ -33,9 +33,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
       try {
         // Use migrate deploy in production, db push in development
         const migrateCommand =
-          process.env.NODE_ENV === 'production'
-            ? 'npx prisma migrate deploy'
-            : 'npx prisma db push';
+          process.env.NODE_ENV === 'prod' ? 'npx prisma migrate deploy' : 'npx prisma db push';
 
         console.log(`🔧 Running: ${migrateCommand}`);
         execSync(migrateCommand, {
@@ -47,7 +45,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
         console.error('❌ Failed to run database migrations:', migrationError);
         console.error(
           'Migration command:',
-          process.env.NODE_ENV === 'production' ? 'prisma migrate deploy' : 'prisma db push'
+          process.env.NODE_ENV === 'prod' ? 'prisma migrate deploy' : 'prisma db push'
         );
         throw new Error(`Database setup failed: ${migrationError}`);
       }

@@ -160,7 +160,7 @@ export class CircuitBreakerFactory {
         failureThreshold: 5,
         resetTimeout: 60000, // 1 minute
         monitoringPeriod: 60000,
-        persistState: process.env.NODE_ENV === 'production', // Enable persistence in production
+        persistState: process.env.NODE_ENV === 'prod', // Enable persistence in prod
         ...options,
       };
       this.breakers.set(name, new CircuitBreaker(defaultOptions, name));

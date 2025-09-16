@@ -13,6 +13,6 @@ export default defineConfig({
   outDir: 'dist',
   shims: true,
   esbuildOptions(options) {
-    options.drop = process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [];
+    options.drop = process.env.NODE_ENV === 'prod' ? ['console', 'debugger'] : [];
   },
 });

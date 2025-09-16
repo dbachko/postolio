@@ -302,7 +302,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
           build-args: |
-            NODE_ENV=${{ needs.detect-changes.outputs.environment == 'prod' && 'production' || needs.detect-changes.outputs.environment }}
+            NODE_ENV=${{ needs.detect-changes.outputs.environment }}
 
       - name: Copy latest to commit tag if no changes (API only)
         if: matrix.service.name == 'api' && matrix.service.changed != 'true' && github.event_name != 'workflow_dispatch'
@@ -528,7 +528,7 @@ jobs:
           aws lambda update-function-configuration \
             --function-name ${{ steps.vars.outputs.function_name }} \
             --environment Variables="{
-              NODE_ENV=${{ vars.NODE_ENV || 'production' }},
+              NODE_ENV=${{ vars.NODE_ENV || 'dev' }},
               SERVICE_NAME=${{ matrix.service }},
               ENVIRONMENT=${{ needs.detect-changes.outputs.environment }},
               LOG_LEVEL=${{ vars.LOG_LEVEL || 'info' }},

@@ -35,7 +35,7 @@ if (!fs.existsSync(envPath)) {
 JWT_SECRET=${secret}
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postolio
 REDIS_URL=redis://localhost:6379
-NODE_ENV=development
+NODE_ENV=dev
 PORT=3000
 `;
     fs.writeFileSync(envPath, minimalEnv);

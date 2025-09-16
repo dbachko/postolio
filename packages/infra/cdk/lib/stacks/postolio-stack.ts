@@ -579,9 +579,8 @@ export class PostolioStack extends cdk.Stack {
             SES_FROM_EMAIL: 'noreply@postolio.example', // Use consistent sender address
 
             // Environment configuration (from GitHub Environment Variables via context)
-            NODE_ENV:
-              this.node.tryGetContext('nodeEnv') ||
-              (environment === 'prod' ? 'production' : environment),
+            // Standardized to use only 'dev' or 'prod' values
+            NODE_ENV: this.node.tryGetContext('nodeEnv') || environment,
             PORT: this.node.tryGetContext('port') || '3000',
             LOG_LEVEL: this.node.tryGetContext('logLevel') || 'info',
             ENABLE_MONITORING: this.node.tryGetContext('enableMonitoring') || 'false',

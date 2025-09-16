@@ -56,7 +56,7 @@ export class OAuthCSRFProtection {
         // Fallback to in-memory storage if Redis not available
         this.fastify.log.warn('Redis not available for OAuth state storage');
         // In production, this should throw an error
-        if (process.env.NODE_ENV === 'production') {
+        if (process.env.NODE_ENV === 'prod') {
           throw new Error('Redis is required for OAuth state management in production');
         }
       }
@@ -105,7 +105,7 @@ export class OAuthCSRFProtection {
         return stateData;
       } else {
         // In development without Redis
-        if (process.env.NODE_ENV !== 'production') {
+        if (process.env.NODE_ENV !== 'prod') {
           this.fastify.log.warn('OAuth state validation skipped - Redis not available');
           return { state, timestamp: Date.now() };
         }

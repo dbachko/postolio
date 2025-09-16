@@ -150,7 +150,7 @@ export async function errorHandler(
   const internalError = new InternalServerError('An unexpected error occurred', {
     originalError: error.name,
     // Don't leak internal details in production
-    ...(process.env.NODE_ENV === 'development' && {
+    ...(process.env.NODE_ENV === 'dev' && {
       stack: error.stack,
       originalMessage: error.message,
     }),
