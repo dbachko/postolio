@@ -84,7 +84,7 @@ export class RefreshTokenService {
 
     const accessToken = fastify.jwt.sign(
       { id: user.id, email: user.email }
-      // Token expiry is configured in auth plugin (15m)
+      // Token expiry is configured in auth plugin (default 1h)
     );
 
     // Log token generation
@@ -219,7 +219,7 @@ export class RefreshTokenService {
 
     const accessToken = fastify.jwt.sign(
       { id: user.id, email: user.email }
-      // Token expiry is configured in auth plugin (15m)
+      // Token expiry is configured in auth plugin (default 1h)
     );
 
     // Log rotation

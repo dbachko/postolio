@@ -214,16 +214,26 @@ export class ContentSchedulerClient {
     // Normalize and sanitize base URL (remove trailing slashes) to avoid SigV4 canonical path mismatches
     const normalizedBaseURL = this.config.baseURL.replace(/\/+$/, '');
 
-    // Infer AWS region from execute-api hostname if possible (fallback to env or us-east-1)
-    const inferredRegion: string = (() => {
+    // Infer AWS region and service from hostname
+    const { region: inferredRegion, service: inferredService } = (() => {
       try {
         const host = new URL(normalizedBaseURL).hostname;
-        const match = host.match(/execute-api\.([a-z0-9-]+)\.amazonaws\.com$/);
-        if (match && match[1]) return match[1];
+
+        // Check for Lambda Function URL pattern first
+        const lambdaMatch = host.match(/([a-z0-9]+)\.lambda-url\.([a-z0-9-]+)\.on\.aws$/);
+        if (lambdaMatch && lambdaMatch[2]) {
+          return { region: lambdaMatch[2], service: 'lambda' };
+        }
+
+        // Check for API Gateway pattern
+        const apiGatewayMatch = host.match(/execute-api\.([a-z0-9-]+)\.amazonaws\.com$/);
+        if (apiGatewayMatch && apiGatewayMatch[1]) {
+          return { region: apiGatewayMatch[1], service: 'execute-api' };
+        }
       } catch {
         /* ignore parse errors */
       }
-      return process.env.AWS_REGION || 'us-east-1';
+      return { region: process.env.AWS_REGION || 'us-east-1', service: 'execute-api' };
     })();
     this.region = inferredRegion;
     this.debug = this.config.debugLogging ?? true; // default on for now per request for comprehensive logging
@@ -312,7 +322,7 @@ export class ContentSchedulerClient {
     const sigv4Interceptor = aws4Interceptor({
       options: {
         region: inferredRegion,
-        service: 'execute-api',
+        service: inferredService,
       },
       // Use the adapter to provide credentials to aws4-axios
       credentials: credentialsAdapter,
@@ -324,7 +334,7 @@ export class ContentSchedulerClient {
         '[ContentSchedulerClient] Configuring SigV4 signing:',
         JSON.stringify({
           region: inferredRegion,
-          service: 'execute-api',
+          service: inferredService,
           baseURL: normalizedBaseURL,
           AWS_REGION: process.env.AWS_REGION,
           AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION,

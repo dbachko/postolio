@@ -41,7 +41,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     secret: jwtSecret,
     sign: {
       algorithm: 'HS256',
-      expiresIn: '15m', // Short-lived tokens for security
+      expiresIn: process.env.JWT_EXPIRES_IN || '1h', // Configurable expiry, default 1 hour
     },
     verify: {
       algorithms: ['HS256'], // Only accept HS256 algorithm
