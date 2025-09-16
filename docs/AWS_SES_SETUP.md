@@ -130,7 +130,7 @@ SMTP_PASS=your-app-password
 USE_AWS_SES=true
 AWS_REGION=us-east-1
 SES_FROM_EMAIL=noreply@postolio.example
-NODE_ENV=production
+NODE_ENV=prod
 ```
 
 ## IAM Permissions

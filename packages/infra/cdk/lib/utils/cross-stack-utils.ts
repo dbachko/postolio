@@ -348,7 +348,7 @@ export class EnvironmentConfigHelper {
    * Check if environment is production
    */
   isProduction(): boolean {
-    return this.environment === 'prod' || this.environment === 'production';
+    return this.environment === 'prod';
   }
 
   /**

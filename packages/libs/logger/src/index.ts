@@ -163,8 +163,8 @@ class Logger {
   child(context: LogContext): Logger {
     const childLogger = new Logger({
       service: this.service,
-      environment: process.env.NODE_ENV || 'development',
-      enablePrettyPrint: process.env.NODE_ENV === 'development',
+      environment: process.env.NODE_ENV || 'dev',
+      enablePrettyPrint: process.env.NODE_ENV === 'dev',
     });
 
     // Override the pino instance with a child
@@ -181,9 +181,9 @@ export function createLogger(config: LoggerConfig): Logger {
 // Default logger for the current service
 const defaultConfig: LoggerConfig = {
   service: process.env.SERVICE_NAME || 'postolio',
-  environment: process.env.NODE_ENV || 'development',
+  environment: process.env.NODE_ENV || 'dev',
   version: process.env.SERVICE_VERSION || '1.0.0',
-  enablePrettyPrint: process.env.NODE_ENV === 'development',
+  enablePrettyPrint: process.env.NODE_ENV === 'dev',
 };
 
 export const logger = createLogger(defaultConfig);

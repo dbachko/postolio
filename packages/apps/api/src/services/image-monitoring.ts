@@ -57,7 +57,7 @@ export class ImageMonitoringService {
         Timestamp: new Date(),
         Dimensions: [
           { Name: 'Source', Value: source },
-          { Name: 'Environment', Value: process.env.NODE_ENV || 'development' },
+          { Name: 'Environment', Value: process.env.NODE_ENV || 'dev' },
         ],
       },
       {
@@ -93,7 +93,7 @@ export class ImageMonitoringService {
       Timestamp: new Date(),
       Dimensions: [
         { Name: 'Reason', Value: reason },
-        { Name: 'Environment', Value: process.env.NODE_ENV || 'development' },
+        { Name: 'Environment', Value: process.env.NODE_ENV || 'dev' },
       ],
     });
   }
@@ -162,7 +162,7 @@ export class ImageMonitoringService {
     if (this.metricsBuffer.length === 0) return;
 
     // Don't send metrics in development unless explicitly enabled
-    if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_CLOUDWATCH !== 'true') {
+    if (process.env.NODE_ENV !== 'prod' && process.env.ENABLE_CLOUDWATCH !== 'true') {
       this.app.log.debug(`Would send ${this.metricsBuffer.length} metrics to CloudWatch`);
       this.metricsBuffer = [];
       return;

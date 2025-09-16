@@ -67,3 +67,4 @@ coverage/
 
 # Claude
 .claude
+aws-infrastructure/

@@ -93,7 +93,7 @@ setup_environment() {
     set_variable "ENVIRONMENT" "$ENV_NAME"
     set_variable "VITE_API_URL" "$API_URL"
     set_variable "DOMAIN_NAME" "$DOMAIN"
-    set_variable "NODE_ENV" "production"
+    set_variable "NODE_ENV" "prod"
     set_variable "AWS_REGION" "us-east-1"
     
     # OAuth Configuration (prompt for values)

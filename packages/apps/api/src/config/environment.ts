@@ -114,8 +114,8 @@ class EnvironmentService {
   async initialize(): Promise<EnvironmentConfig> {
     if (this.config) return this.config;
 
-    const environment = process.env.ENVIRONMENT || process.env.NODE_ENV || 'development';
-    const isProduction = environment === 'production' || environment === 'prod';
+    const environment = process.env.ENVIRONMENT || process.env.NODE_ENV || 'dev';
+    const isProduction = environment === 'prod';
 
     // Get secrets from AWS Secrets Manager if in production
     let awsSecrets: AwsAppSecrets = {};
@@ -139,7 +139,7 @@ class EnvironmentService {
     // Build configuration with proper precedence
     this.config = {
       // Environment
-      nodeEnv: process.env.NODE_ENV || 'development',
+      nodeEnv: process.env.NODE_ENV || 'dev',
       environment: process.env.ENVIRONMENT || 'dev',
       port: parseInt(process.env.PORT || '3000', 10),
       logLevel: process.env.LOG_LEVEL || 'info',
@@ -201,7 +201,7 @@ class EnvironmentService {
 
     if (missing.length > 0) {
       console.error('Missing required configuration:', missing);
-      if (this.config.nodeEnv === 'production') {
+      if (this.config.nodeEnv === 'prod') {
         throw new Error(`Missing required configuration: ${missing.join(', ')}`);
       }
     }
@@ -230,14 +230,14 @@ class EnvironmentService {
    * Check if running in production
    */
   isProduction(): boolean {
-    return this.config?.nodeEnv === 'production' || this.config?.environment === 'prod';
+    return this.config?.nodeEnv === 'prod' || this.config?.environment === 'prod';
   }
 
   /**
    * Check if running in development
    */
   isDevelopment(): boolean {
-    return this.config?.nodeEnv === 'development' || this.config?.environment === 'dev';
+    return this.config?.nodeEnv === 'dev' || this.config?.environment === 'dev';
   }
 }
 
