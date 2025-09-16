@@ -1,6 +1,6 @@
 /**
  * Service Client Integration Layer
- * Centralized management of all service clients with service discovery
+ * Centralized management of all service clients
  */
 
 import { TokenServiceClient } from '../clients/token-service-client.js';
@@ -27,7 +27,7 @@ export class ServiceClients {
   }
 
   /**
-   * Get Token Service client with automatic service discovery
+   * Get Token Service client
    */
   async getTokenService(): Promise<TokenServiceClient> {
     if (!this._tokenService) {
@@ -46,7 +46,7 @@ export class ServiceClients {
   }
 
   /**
-   * Get Content Scheduler client with automatic service discovery
+   * Get Content Scheduler client
    */
   async getSchedulerService(): Promise<ContentSchedulerClient> {
     if (!this._schedulerService) {
@@ -120,47 +120,6 @@ export class ServiceClients {
     }
 
     return results;
-  }
-
-  /**
-   * Refresh service discovery for all clients
-   */
-  async refreshServiceDiscovery(): Promise<void> {
-    console.log('🔄 Refreshing service discovery for all clients...');
-
-    // Gracefully shutdown existing clients
-    const shutdownPromises: Promise<void>[] = [];
-
-    if (this._tokenService) {
-      shutdownPromises.push(
-        this._tokenService
-          .healthCheck()
-          .then(() => console.log('Token service gracefully stopped'))
-          .catch((error: unknown) =>
-            console.warn('Token service was unhealthy during refresh:', error)
-          )
-      );
-    }
-
-    if (this._schedulerService) {
-      shutdownPromises.push(
-        this._schedulerService
-          .healthCheck()
-          .then(() => console.log('Scheduler service gracefully stopped'))
-          .catch((error: unknown) =>
-            console.warn('Scheduler service was unhealthy during refresh:', error)
-          )
-      );
-    }
-
-    // Wait for graceful shutdown
-    await Promise.allSettled(shutdownPromises);
-
-    // Reset clients to force re-discovery on next access
-    this._tokenService = null;
-    this._schedulerService = null;
-
-    console.log('✅ Service discovery refresh completed');
   }
 }
 

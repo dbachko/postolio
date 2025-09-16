@@ -1,7 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { monitoringService } from '../services/monitoring.js';
 import { checkDatabaseHealth, getDatabaseMetrics } from '../config/database.js';
-import { serviceClients } from '../services/service-clients.js';
 
 const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
   // Get system metrics
@@ -104,37 +103,8 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
       };
     }
 
-    // Check service discovery health
-    interface ServiceDiscoveryHealth {
-      status: 'unknown' | 'healthy' | 'unhealthy' | string;
-      error?: string;
-      services?: {
-        tokenService?: string | { status?: string; latencyMs?: number };
-        schedulerService?: string | { status?: string; latencyMs?: number };
-      };
-    }
-    let serviceDiscoveryHealth: ServiceDiscoveryHealth = { status: 'unknown' };
-    try {
-      const serviceHealth = await serviceClients.healthCheck();
-      serviceDiscoveryHealth = {
-        status: serviceHealth.overall,
-        services: {
-          tokenService: serviceHealth.tokenService,
-          schedulerService: serviceHealth.schedulerService,
-        },
-      };
-    } catch (error) {
-      serviceDiscoveryHealth = {
-        status: 'unhealthy',
-        error: error instanceof Error ? error.message : 'Service discovery unavailable',
-      };
-    }
-
     return {
-      status:
-        isHealthy && dbHealth.status === 'healthy' && serviceDiscoveryHealth.status !== 'unhealthy'
-          ? 'healthy'
-          : 'degraded',
+      status: isHealthy && dbHealth.status === 'healthy' ? 'healthy' : 'degraded',
       timestamp: now.toISOString(),
       uptime: process.uptime(),
       services: {
@@ -145,7 +115,6 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
         },
         database: dbHealth,
         emailQueue: emailQueueHealth,
-        serviceDiscovery: serviceDiscoveryHealth,
       },
       system: {
         memoryUsage: process.memoryUsage(),
@@ -218,56 +187,7 @@ const monitoringRoutes: FastifyPluginAsync = async function (fastify) {
     }
   });
 
-  // Service connectivity health check
-  fastify.get('/health/services', async function () {
-    try {
-      const serviceHealth = await serviceClients.healthCheck();
-
-      return {
-        timestamp: new Date().toISOString(),
-        overall: serviceHealth.overall,
-        services: serviceHealth,
-        environment: {
-          serviceDiscoveryMethod: 'SSM Parameter Store',
-          region: process.env.AWS_REGION || 'not configured',
-        },
-        fallbackUrls: {
-          tokenService: process.env.TOKEN_SERVICE_URL || 'not configured',
-          contentScheduler:
-            process.env.CONTENT_SCHEDULER_URL || process.env.SCHEDULER_API_URL || 'not configured',
-        },
-      };
-    } catch (error) {
-      return {
-        timestamp: new Date().toISOString(),
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        environment: {
-          serviceDiscoveryEnabled: process.env.SERVICE_DISCOVERY_ENABLED === 'true',
-          cloudMapNamespaceId: process.env.CLOUDMAP_NAMESPACE_ID || 'not configured',
-          cloudMapNamespaceName: process.env.CLOUDMAP_NAMESPACE_NAME || 'not configured',
-        },
-      };
-    }
-  });
-
-  // Refresh service URLs from SSM Parameter Store
-  fastify.post('/services/refresh', { preHandler: fastify.authenticate }, async function () {
-    try {
-      await serviceClients.refreshServiceDiscovery(); // Still uses this method but now it reads from SSM
-      return {
-        timestamp: new Date().toISOString(),
-        status: 'success',
-        message: 'Service URLs refreshed from SSM Parameter Store successfully',
-      };
-    } catch (error) {
-      return {
-        timestamp: new Date().toISOString(),
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  });
+  // Service discovery endpoints removed as the service has been deleted
 };
 
 export default monitoringRoutes;

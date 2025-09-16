@@ -42,7 +42,7 @@ graph TB
         EventBridge["🔄 EventBridge<br/>Event Bus<br/>• campaign.created<br/>• schedule.ready<br/>• post.published"]
         SecretsManager["🔐 Secrets Manager<br/>API Keys & Credentials"]
         KMS["🔑 KMS<br/>Encryption Keys"]
-        CloudMap["🌐 Cloud Map<br/>Service Discovery<br/>30s Cache"]
+    %% Cloud Map removed in migration to direct URLs
     end
     
     subgraph Monitoring["📊 Monitoring & Observability"]
@@ -79,7 +79,7 @@ graph TB
     MainApp --> Redis
     MainApp --> S3Images
     MainApp --> EventBridge
-    MainApp --> CloudMap
+    %% MainApp no longer uses Cloud Map
     MainApp --> SecretsManager
     
     %% Service-to-Service Communications
@@ -113,10 +113,7 @@ graph TB
     MainApp --> OpenAI
     MainApp -.-> Google
     
-    %% Service Discovery Registration
-    CloudMap -.-> TokenAPI
-    CloudMap -.-> SchedulerAPI
-    CloudMap -.-> MainApp
+    %% Service Discovery Registration removed
     
     %% Monitoring Connections
     MainApp -.-> CloudWatch
@@ -134,7 +131,7 @@ graph TB
     classDef external fill:#10B981,stroke:#059669,stroke-width:2px,color:#fff
     classDef storage fill:#8B5CF6,stroke:#6D28D9,stroke-width:2px,color:#fff
     
-    class Route53,CloudFront,WAF,ALB,TokenAPI,SchedulerAPI,EventBridge,SecretsManager,KMS,CloudMap,CloudWatch,XRay,SNS,SES awsService
+    class Route53,CloudFront,WAF,ALB,TokenAPI,SchedulerAPI,EventBridge,SecretsManager,KMS,CloudWatch,XRay,SNS,SES awsService
     class TokenLambda,SchedulerLambda,PublisherLambda,GDPRLambda lambda
     class RDS,DynamoTokens,DynamoSchedules,Redis database
     class S3Frontend,S3Images storage

@@ -27,7 +27,7 @@ Establish secure, scalable OAuth token management and standardized inter-service
 - FEAT-TOKEN-2: Service Authentication — Implement IAM-based service-to-service authentication
 - FEAT-TOKEN-3: Event-Driven Communication — Standardize EventBridge patterns for async operations
 - FEAT-TOKEN-4: API Gateway Integration — Consolidate external-facing APIs through single gateway
-- FEAT-TOKEN-5: Service Discovery — Environment-based endpoint resolution with AWS Systems Manager
+- FEAT-TOKEN-5: Direct URLs — Endpoint resolution via environment variables (optionally SSM-backed); Service Discovery removed
 - FEAT-TOKEN-6: Token Lifecycle Management — Automatic refresh, rotation, and expiration handling
 
 ## Current State Analysis
@@ -136,13 +136,13 @@ Establish secure, scalable OAuth token management and standardized inter-service
 
 ### Event Naming Convention
 
-```
+````bash
 postolio.<service>.<entity>.<action>
 Examples:
 - postolio.scheduler.content.scheduled
 - postolio.publisher.post.published
 - postolio.token.refresh.completed
-```
+```bash
 
 ### API Response Format
 
@@ -159,11 +159,11 @@ Examples:
     "timestamp": "ISO8601"
   }
 }
-```
+````
 
 ### Service Health Check Standard
 
-```
+```http
 GET /health
 Response: {
   "status": "healthy|degraded|unhealthy",
@@ -217,4 +217,4 @@ Based on project status (no customers yet), we can implement a clean architectur
 - **Monitoring**: CloudWatch with option to add X-Ray later
 - **Rate Limiting**: Per-service limits (1000/min) initially
 
-**PAUSE FOR FEEDBACK**
+### PAUSE FOR FEEDBACK
