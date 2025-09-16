@@ -33,9 +33,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
       try {
         // Use migrate deploy in production, db push in development
         const migrateCommand =
-          process.env.NODE_ENV === 'prod'
-            ? 'npx prisma migrate deploy'
-            : 'npx prisma db push';
+          process.env.NODE_ENV === 'prod' ? 'npx prisma migrate deploy' : 'npx prisma db push';
 
         console.log(`🔧 Running: ${migrateCommand}`);
         execSync(migrateCommand, {

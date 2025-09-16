@@ -72,9 +72,7 @@ export class ParameterNames {
     if (env === 'dev' || env === 'staging' || env === 'prod') {
       return env;
     }
-    throw new Error(
-      `Invalid environment: ${env}. Must be one of: dev, staging, prod`
-    );
+    throw new Error(`Invalid environment: ${env}. Must be one of: dev, staging, prod`);
   }
 }
 
