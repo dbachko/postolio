@@ -34,7 +34,7 @@ export class MidjourneyService {
       salaiToken: process.env.MIDJOURNEY_SALAI_TOKEN || '',
       serverId: process.env.MIDJOURNEY_SERVER_ID || '',
       channelId: process.env.MIDJOURNEY_CHANNEL_ID || '',
-      debug: process.env.NODE_ENV === 'development',
+      debug: process.env.NODE_ENV === 'dev',
       ws: true,
     };
 

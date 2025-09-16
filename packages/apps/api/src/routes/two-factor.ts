@@ -128,7 +128,7 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       if (result.trustedToken) {
         reply.setCookie('trusted_device', result.trustedToken, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
+          secure: process.env.NODE_ENV === 'prod',
           sameSite: 'lax',
           path: '/',
           maxAge: 30 * 24 * 60 * 60, // 30 days

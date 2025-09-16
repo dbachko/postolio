@@ -63,7 +63,7 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
     // Set HTTP-only cookie for enhanced security
     reply.setCookie('auth_token', result.token!, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'prod',
       sameSite: 'lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60, // 7 days

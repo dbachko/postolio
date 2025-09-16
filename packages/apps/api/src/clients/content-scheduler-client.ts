@@ -1022,7 +1022,7 @@ export class ContentSchedulerClient {
 
     this.circuitBreaker.on('success', () => {
       // Only log on debug level to avoid spam
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === 'dev') {
         console.debug(
           'Circuit breaker success',
           JSON.stringify({

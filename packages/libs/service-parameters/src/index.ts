@@ -66,16 +66,14 @@ export class ParameterNames {
 
   /**
    * Validate environment string and convert to type-safe Environment
+   * Now only accepts standardized values: dev, staging, prod
    */
   public static validateEnvironment(env: string): Environment {
-    // Handle common Node.js environment names
-    const normalizedEnv = env === 'development' ? 'dev' : env === 'production' ? 'prod' : env;
-
-    if (normalizedEnv === 'dev' || normalizedEnv === 'staging' || normalizedEnv === 'prod') {
-      return normalizedEnv;
+    if (env === 'dev' || env === 'staging' || env === 'prod') {
+      return env;
     }
     throw new Error(
-      `Invalid environment: ${env}. Must be one of: dev, staging, prod (or development/production)`
+      `Invalid environment: ${env}. Must be one of: dev, staging, prod`
     );
   }
 }
@@ -391,6 +389,7 @@ export const parameterManager = new ParameterManager();
 
 /**
  * Convenience function to get current environment as type-safe Environment
+ * Expects NODE_ENV to be standardized as dev/staging/prod
  */
 export function getCurrentEnvironment(): Environment {
   const envString = process.env.NODE_ENV || 'dev';

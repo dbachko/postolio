@@ -55,7 +55,7 @@ export function buildFastify(): FastifyInstance {
   let httpsOptions = {};
 
   // Only use HTTPS in development if not in CI
-  if (process.env.NODE_ENV === 'development' && !process.env.CI) {
+  if (process.env.NODE_ENV === 'dev' && !process.env.CI) {
     try {
       // Look for local SSL certificates
       const certPath =
@@ -127,7 +127,7 @@ export function buildFastify(): FastifyInstance {
           'https://www.googleapis.com',
         ],
         objectSrc: ["'none'"],
-        upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+        upgradeInsecureRequests: process.env.NODE_ENV === 'prod' ? [] : null,
       },
     },
     hsts: {
@@ -149,7 +149,7 @@ export function buildFastify(): FastifyInstance {
     cookieOpts: {
       signed: true,
       httpOnly: true, // Secure: Frontend gets token from API, not cookie
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'prod',
       sameSite: 'strict',
       path: '/',
     },

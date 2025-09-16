@@ -142,7 +142,7 @@ const backgroundJobsRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       try {
         // Only allow in development/test environments
-        if (process.env.NODE_ENV === 'production') {
+        if (process.env.NODE_ENV === 'prod') {
           return reply.code(403).send({
             error: 'Job cleanup not allowed in production',
           });

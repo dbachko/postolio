@@ -73,7 +73,7 @@ class EnvironmentService {
   private secretsManager?: SecretsManager;
 
   private constructor() {
-    if (process.env.NODE_ENV === 'production' && process.env.AWS_REGION) {
+    if (process.env.NODE_ENV === 'prod' && process.env.AWS_REGION) {
       this.secretsManager = new SecretsManager({
         region: process.env.AWS_REGION,
       });

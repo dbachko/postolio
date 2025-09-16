@@ -43,7 +43,7 @@ export function getDatabaseClient(): PrismaClient {
     // Enhanced Prisma configuration with connection pooling
     prismaInstance = new PrismaClient({
       log:
-        process.env.NODE_ENV === 'development'
+        process.env.NODE_ENV === 'dev'
           ? ['query', 'info', 'warn', 'error']
           : ['warn', 'error'],
 

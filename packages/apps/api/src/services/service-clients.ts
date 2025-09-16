@@ -53,7 +53,7 @@ export class ServiceClients {
       try {
         // Use the static factory method for service discovery
         this._schedulerService = await ContentSchedulerClient.create({
-          debugLogging: process.env.NODE_ENV === 'development',
+          debugLogging: process.env.NODE_ENV === 'dev',
         });
         console.log('✅ Content Scheduler client initialized');
       } catch (error) {

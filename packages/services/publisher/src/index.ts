@@ -611,8 +611,8 @@ async function getTokenFromTokenService(
     }
 
     // Validate we have a proper URL
-    if (tokenServiceUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
-      throw new Error('Token Service URL not properly configured for production environment');
+    if (tokenServiceUrl.includes('localhost') && process.env.NODE_ENV === 'prod') {
+      throw new Error('Token Service URL not properly configured for prod environment');
     }
 
     // Parse URL for signing
