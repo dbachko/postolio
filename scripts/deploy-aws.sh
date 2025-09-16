@@ -394,20 +394,7 @@ redeploy_with_ecr_image() {
     # Temporary modification: change image source to ECR
     echo -e "${YELLOW}Updating CDK stack to use ECR image with tag: $IMAGE_TAG...${NC}"
     
-    # Deploy Service Discovery stack first (required for all services)
-    echo -e "${YELLOW}Deploying shared Service Discovery stack...${NC}"
-    npx cdk deploy ServiceDiscovery-$ENVIRONMENT \
-        --require-approval never \
-        --region $AWS_REGION
-    
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ Failed to deploy Service Discovery stack${NC}"
-        echo "Service Discovery is required for all other services."
-        return 1
-    fi
-    echo -e "${GREEN}✅ Service Discovery stack deployed successfully${NC}"
-    
-    # Deploy microservices (can be deployed independently after ServiceDiscovery)
+    # Deploy microservices (now use Lambda Function URLs + SSM Parameter Store)
     echo -e "${YELLOW}Deploying microservices...${NC}"
     
     # Token Service
@@ -532,22 +519,7 @@ deploy_infrastructure() {
         fi
     fi
     
-    # Deploy Service Discovery stack first (required for all services)
-    echo -e "${YELLOW}Deploying shared Service Discovery stack...${NC}"
-    npx cdk deploy ServiceDiscovery-$ENVIRONMENT \
-        --context environment=$ENVIRONMENT \
-        --context account=$(aws sts get-caller-identity --query Account --output text) \
-        --context region=$AWS_REGION \
-        --require-approval never
-    
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ Failed to deploy Service Discovery stack${NC}"
-        echo "Service Discovery is required for all other services."
-        exit 1
-    fi
-    echo -e "${GREEN}✅ Service Discovery stack deployed successfully${NC}"
-    
-    # Deploy microservices (can be deployed independently after ServiceDiscovery)
+    # Deploy microservices (now use Lambda Function URLs + SSM Parameter Store)
     echo -e "${YELLOW}Deploying microservices...${NC}"
     
     # Token Service

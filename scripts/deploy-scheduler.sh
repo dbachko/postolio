@@ -75,20 +75,7 @@ else
 fi
 
 # Define stack names
-SERVICE_DISCOVERY_STACK="ServiceDiscovery-$ENVIRONMENT"
 STACK_NAME="ContentScheduler-$ENVIRONMENT"
-
-# Check if Service Discovery stack exists
-echo -e "${YELLOW}Checking Service Discovery stack...${NC}"
-if ! aws cloudformation describe-stacks --stack-name $SERVICE_DISCOVERY_STACK --region $AWS_REGION >/dev/null 2>&1; then
-    echo -e "${YELLOW}Service Discovery stack not found. Deploying...${NC}"
-    npx cdk deploy $SERVICE_DISCOVERY_STACK \
-        -c environment=$ENVIRONMENT \
-        --require-approval never
-    echo -e "${GREEN}✓ Service Discovery stack deployed${NC}"
-else
-    echo -e "${GREEN}✓ Service Discovery stack already exists${NC}"
-fi
 
 # Synthesize the stack
 echo -e "${YELLOW}Synthesizing CloudFormation template...${NC}"
