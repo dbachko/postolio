@@ -612,20 +612,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       })
     );
 
-    // Grant Publisher Lambda permission to use Service Discovery
-    publisherLambda.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'servicediscovery:DiscoverInstances',
-          'servicediscovery:GetNamespace',
-          'servicediscovery:GetService',
-        ],
-        resources: ['*'], // Service Discovery requires wildcard for discovery operations
-      })
-    );
-
-    // Grant Publisher Lambda SSM Parameter Store read permissions for service discovery replacement
+    // Grant Publisher Lambda SSM Parameter Store read permissions
     publisherLambda.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,

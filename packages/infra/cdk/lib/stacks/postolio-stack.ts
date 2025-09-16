@@ -379,15 +379,6 @@ export class PostolioStack extends cdk.Stack {
       })
     );
 
-    // Grant permissions for Service Discovery
-    taskRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['servicediscovery:DiscoverInstances'],
-        resources: ['*'], // Service discovery requires wildcard
-      })
-    );
-
     // Custom task execution role policy
     const taskExecutionRolePolicy = new iam.PolicyDocument({
       statements: [
