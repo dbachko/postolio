@@ -379,6 +379,17 @@ export class PostolioStack extends cdk.Stack {
       })
     );
 
+    // Grant permissions to read SSM parameters for service discovery
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`,
+        ],
+      })
+    );
+
     // Custom task execution role policy
     const taskExecutionRolePolicy = new iam.PolicyDocument({
       statements: [
@@ -970,7 +981,7 @@ export class PostolioStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'ECS task requires S3 operations for image storage, CloudFront/SES wildcard permissions, Service Discovery, and Token Service API invocation',
+            'ECS task requires S3 operations for image storage, CloudFront/SES wildcard permissions, Service Discovery, SSM parameter access, and Token Service API invocation',
           appliesTo: [
             'Action::s3:Abort*',
             'Action::s3:DeleteObject*',
@@ -980,10 +991,12 @@ export class PostolioStack extends cdk.Stack {
             'Resource::<AIImagesBucket56BD98E8.Arn>/*',
             'Resource::*', // For CloudFront invalidations, SES operations, and Service Discovery
             // Token Service API Gateway permissions (wildcards required as API Gateway ID changes with deployments)
-            'Resource::arn:aws:execute-api:us-east-1:000000000000:*/*/POST/tokens',
-            'Resource::arn:aws:execute-api:us-east-1:000000000000:*/*/DELETE/tokens',
-            'Resource::arn:aws:execute-api:us-east-1:000000000000:*/*/POST/tokens/refresh',
-            'Resource::arn:aws:execute-api:us-east-1:000000000000:*/*/GET/health',
+            `Resource::arn:aws:execute-api:${this.region}:${this.account}:*/*/POST/tokens`,
+            `Resource::arn:aws:execute-api:${this.region}:${this.account}:*/*/DELETE/tokens`,
+            `Resource::arn:aws:execute-api:${this.region}:${this.account}:*/*/POST/tokens/refresh`,
+            `Resource::arn:aws:execute-api:${this.region}:${this.account}:*/*/GET/health`,
+            // SSM parameter permissions for service discovery
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`,
           ],
         },
       ]

@@ -8,7 +8,6 @@ import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -28,7 +27,6 @@ export interface TokenServiceStackProps extends cdk.StackProps, OAuthConfig {
 }
 
 export class TokenServiceStack extends cdk.Stack {
-  public readonly apiUrl: string;
   public readonly functionUrl: string;
   public readonly tableName: string;
   public readonly kmsKeyId: string;
@@ -140,101 +138,6 @@ export class TokenServiceStack extends cdk.Stack {
       },
     });
 
-    // Create API Gateway
-    const api = new apigateway.RestApi(this, 'TokenServiceApi', {
-      restApiName: `token-service-${environment}`,
-      description: 'Token Service API for OAuth token management',
-      deployOptions: {
-        stageName: environment,
-        tracingEnabled: true,
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        dataTraceEnabled: environment !== 'prod',
-        metricsEnabled: true,
-        throttlingBurstLimit: 100,
-        throttlingRateLimit: 50,
-      },
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization'],
-      },
-    });
-
-    // Lambda integration
-    const integration = new apigateway.LambdaIntegration(tokenServiceLambda, {
-      requestTemplates: { 'application/json': '{ "statusCode": "200" }' },
-    });
-
-    // API routes with IAM authentication
-    const tokens = api.root.addResource('tokens');
-
-    // Legacy endpoints (for backward compatibility)
-    tokens.addMethod('POST', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Store or get token (deprecated)
-    tokens.addMethod('DELETE', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Delete token (deprecated)
-
-    const refresh = tokens.addResource('refresh');
-    refresh.addMethod('POST', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Refresh token (deprecated)
-
-    // New RESTful endpoints
-    // Support for /tokens/batch
-    const batch = tokens.addResource('batch');
-    batch.addMethod('POST', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Batch get tokens
-
-    // Support for /tokens/{userId}
-    const userId = tokens.addResource('{userId}');
-    userId.addMethod('GET', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // List all user tokens
-
-    // Support for /tokens/{userId}/{platform}
-    const platform = userId.addResource('{platform}');
-    platform.addMethod('GET', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // List platform tokens
-
-    // Support for /tokens/{userId}/{platform}/{brandId}
-    const brandId = platform.addResource('{brandId}');
-    brandId.addMethod('GET', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Get token
-    brandId.addMethod('PUT', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Store/update token
-    brandId.addMethod('DELETE', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Delete token
-
-    // Support for /tokens/{userId}/{platform}/{brandId}/validate
-    const validate = brandId.addResource('validate');
-    validate.addMethod('POST', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Validate token
-
-    // Support for /tokens/{userId}/{platform}/{brandId}/refresh
-    const refreshNew = brandId.addResource('refresh');
-    refreshNew.addMethod('POST', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Refresh token (new endpoint)
-
-    // Support for /tokens/{userId}/{platform}/{brandId}/rotate
-    const rotate = brandId.addResource('rotate');
-    rotate.addMethod('POST', integration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
-    }); // Rotate token
-
-    const health = api.root.addResource('health');
-    health.addMethod('GET', integration); // Health check - no auth required
-
-    const metrics = api.root.addResource('metrics');
-    metrics.addMethod('GET', integration); // Metrics - no auth required
 
     // CloudWatch Alarms
     const errorAlarm = new cloudwatch.Alarm(this, 'TokenServiceErrors', {
@@ -267,16 +170,9 @@ export class TokenServiceStack extends cdk.Stack {
     }
 
     // Outputs
-    this.apiUrl = api.url;
     this.functionUrl = functionUrl.url;
     this.tableName = tokensTable.tableName;
     this.kmsKeyId = encryptionKey.keyId;
-
-    new cdk.CfnOutput(this, 'TokenServiceApiUrl', {
-      value: this.apiUrl,
-      description: 'Token Service API URL (legacy API Gateway)',
-      // No export needed - services use Cloud Map for discovery
-    });
 
     // Output Lambda Function URL for service-to-service communication
     new cdk.CfnOutput(this, 'TokenServiceFunctionUrl', {
@@ -296,13 +192,6 @@ export class TokenServiceStack extends cdk.Stack {
       tier: ssm.ParameterTier.STANDARD,
     });
 
-    // Store API Gateway ID in SSM Parameter Store for cross-service access (legacy)
-    new ssm.StringParameter(this, 'TokenServiceApiIdParameter', {
-      parameterName: `/postolio/${environment}/token-service/api-gateway-id`,
-      stringValue: api.restApiId,
-      description: 'Token Service API Gateway ID for cross-service IAM permissions (legacy)',
-      tier: ssm.ParameterTier.STANDARD,
-    });
 
     new cdk.CfnOutput(this, 'TokenServiceTableName', {
       value: this.tableName,
@@ -316,13 +205,12 @@ export class TokenServiceStack extends cdk.Stack {
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
 
     // Apply CDK Nag suppressions
-    this.applyCdkNagSuppressions(tokensTable, tokenServiceLambda, api, environment);
+    this.applyCdkNagSuppressions(tokensTable, tokenServiceLambda, environment);
   }
 
   private applyCdkNagSuppressions(
     tokensTable: dynamodb.Table,
     tokenServiceLambda: NodejsFunction,
-    api: apigateway.RestApi,
     environment: string
   ): void {
     // DynamoDB suppressions
@@ -367,32 +255,5 @@ export class TokenServiceStack extends cdk.Stack {
       true // Apply to all children
     );
 
-    // API Gateway suppressions
-    NagSuppressions.addResourceSuppressions(
-      api,
-      [
-        {
-          id: 'AwsSolutions-APIG2',
-          reason: 'Request validation handled at Lambda level for flexibility',
-        },
-        {
-          id: 'AwsSolutions-APIG1',
-          reason: 'Access logging configured via deployOptions with CloudWatch integration',
-        },
-        {
-          id: 'AwsSolutions-APIG3',
-          reason: 'WAF not required for internal service-to-service communication in VPC',
-        },
-        {
-          id: 'AwsSolutions-APIG4',
-          reason: 'Service uses API key authentication for service-to-service communication',
-        },
-        {
-          id: 'AwsSolutions-COG4',
-          reason: 'Cognito not applicable for internal service-to-service API',
-        },
-      ],
-      true // Apply to all children
-    );
   }
 }
