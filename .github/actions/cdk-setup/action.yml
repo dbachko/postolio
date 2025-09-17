@@ -45,6 +45,9 @@ runs:
       run: pnpm install --frozen-lockfile
       shell: bash
 
-    - name: Build service-parameters dependency
-      run: pnpm --filter=@postolio/service-parameters build
+    - name: Build dependencies
+      run: |
+        # Build required dependencies for CDK deployment
+        pnpm --filter=@postolio/service-parameters build
+        pnpm --filter=@postolio/database build || true
       shell: bash

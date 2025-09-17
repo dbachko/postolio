@@ -492,23 +492,10 @@ export class ContentSchedulerStack extends cdk.Stack {
           '@aws-lambda-powertools/tracer',
           '@aws-lambda-powertools/metrics',
         ],
-        // Include Prisma packages and force bundling of @postolio/database
+        // Include Prisma packages - CDK will handle bundling automatically
         nodeModules: ['@prisma/client', 'prisma'],
-        commandHooks: {
-          beforeInstall(): string[] {
-            return [];
-          },
-          beforeBundling(inputDir: string, outputDir: string): string[] {
-            return [
-              // Generate Prisma client in the source directory before bundling
-              // Use relative path that works in both local and CI environments
-              'cd ../../../.. && pnpm --filter=@postolio/database build',
-            ];
-          },
-          afterBundling(): string[] {
-            return [];
-          },
-        },
+        // Remove commandHooks to avoid permission issues in CI/CD
+        // Prisma client should be pre-generated via CI build steps
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,

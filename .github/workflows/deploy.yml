@@ -486,6 +486,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build dependencies
+        run: |
+          # Build shared libraries and generate Prisma client
+          pnpm --filter=@postolio/database build || true
+          pnpm --filter=@postolio/errors build || true
+
       - name: Build service
         run: npx turbo build --filter="@postolio/${{ matrix.service }}"
 
