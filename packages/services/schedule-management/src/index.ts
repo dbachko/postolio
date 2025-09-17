@@ -228,8 +228,9 @@ function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult 
 export const handler = async (
   event: APIGatewayProxyEvent | APIGatewayProxyEventV2
 ): Promise<APIGatewayProxyResult> => {
-  // Determine if this is v1 (API Gateway) or v2 (Function URL) event format
-  const isV2Event = 'version' in event && event.version === '2.0';
+  // Determine if this is a Function URL event (API Gateway v2.0 also uses version '2.0', so check for requestContext.http)
+  const isV2Event =
+    'requestContext' in event && typeof (event as any).requestContext?.http === 'object';
 
   // Extract HTTP method from the appropriate event format
   const httpMethod = isV2Event

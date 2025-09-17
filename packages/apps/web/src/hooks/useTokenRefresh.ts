@@ -18,7 +18,12 @@ export function useTokenRefresh() {
       const parts = token.split('.');
       if (parts.length !== 3 || !parts[1]) return true;
 
+      // Validate base64 format before parsing
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(parts[1])) return true;
+
       const payload = JSON.parse(atob(parts[1]));
+      if (!payload || typeof payload.exp !== 'number') return true;
+
       const expiryTime = payload.exp * 1000;
       return Date.now() >= expiryTime;
     } catch (error) {
@@ -34,7 +39,12 @@ export function useTokenRefresh() {
       const parts = token.split('.');
       if (parts.length !== 3 || !parts[1]) return null;
 
+      // Validate base64 format before parsing
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(parts[1])) return null;
+
       const payload = JSON.parse(atob(parts[1]));
+      if (!payload || typeof payload.exp !== 'number') return null;
+
       return payload.exp * 1000;
     } catch (error) {
       console.error('Failed to decode JWT:', error);
