@@ -9,10 +9,14 @@ export async function signRequest(request: {
   headers: Record<string, string>;
   body?: string;
 }): Promise<Record<string, string>> {
+  // Determine service based on URL
+  const isLambdaFunctionUrl = request.url.hostname.includes('.lambda-url.');
+  const service = isLambdaFunctionUrl ? 'lambda' : 'execute-api';
+
   const signer = new SignatureV4({
     credentials: defaultProvider(),
     region: process.env.AWS_REGION || 'us-east-1',
-    service: 'execute-api',
+    service,
     sha256: Sha256,
   });
 
