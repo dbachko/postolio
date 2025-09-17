@@ -604,9 +604,7 @@ export class SchedulerAdapter {
           );
 
           if (scheduleResult.success) {
-            console.log(
-              `Successfully created schedule for inconsistent content ${contentId}`
-            );
+            console.log(`Successfully created schedule for inconsistent content ${contentId}`);
             return { success: true };
           } else {
             return {
@@ -618,7 +616,8 @@ export class SchedulerAdapter {
           // Content is truly not scheduled (draft with no scheduledAt)
           return {
             success: false,
-            error: 'Content is not scheduled. Please use the schedule action instead of reschedule.',
+            error:
+              'Content is not scheduled. Please use the schedule action instead of reschedule.',
           };
         }
       }

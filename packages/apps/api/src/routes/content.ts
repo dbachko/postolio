@@ -590,9 +590,13 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
               // Provide more helpful error messages based on the error type
               let userFriendlyError = rescheduleResult.error;
               if (rescheduleResult.error?.includes('not scheduled')) {
-                userFriendlyError = 'Unable to update schedule. The system will attempt to create a new schedule automatically.';
-              } else if (rescheduleResult.error?.includes('AWS scheduler temporarily unavailable')) {
-                userFriendlyError = 'Scheduling service is temporarily unavailable. Please try again in a few moments.';
+                userFriendlyError =
+                  'Unable to update schedule. The system will attempt to create a new schedule automatically.';
+              } else if (
+                rescheduleResult.error?.includes('AWS scheduler temporarily unavailable')
+              ) {
+                userFriendlyError =
+                  'Scheduling service is temporarily unavailable. Please try again in a few moments.';
               }
 
               return reply.code(500).send({
