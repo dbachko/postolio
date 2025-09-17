@@ -388,6 +388,18 @@ export class PostolioStack extends cdk.Stack {
       })
     );
 
+    // Grant permissions to invoke Lambda Function URLs for microservice communication
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunctionUrl'],
+        resources: [
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+        ],
+      })
+    );
+
     // Custom task execution role policy
     const taskExecutionRolePolicy = new iam.PolicyDocument({
       statements: [
