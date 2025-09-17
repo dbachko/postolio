@@ -501,7 +501,8 @@ export class ContentSchedulerStack extends cdk.Stack {
           beforeBundling(inputDir: string, outputDir: string): string[] {
             return [
               // Generate Prisma client in the source directory before bundling
-              'cd /home/developer/project && pnpm --filter=@postolio/database build',
+              // Use relative path that works in both local and CI environments
+              'cd ../../../.. && pnpm --filter=@postolio/database build',
             ];
           },
           afterBundling(): string[] {
