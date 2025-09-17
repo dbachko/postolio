@@ -18,6 +18,12 @@ import { CampaignForm } from '../components/CampaignForm';
 import type { CampaignFormData, CampaignErrors } from '../types/campaign';
 import { frequencyOptions, styleOptions } from '../constants/campaign';
 import { useCampaignEdit } from '../hooks/useCampaignEdit';
+import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket';
+import type {
+  CampaignStatusUpdateData,
+  CampaignProgressUpdateData,
+  CampaignErrorData,
+} from '../types/websocket';
 import {
   Loader2,
   Edit,
@@ -74,7 +80,6 @@ export function Campaigns() {
   const [selectedPost, setSelectedPost] = useState<Content | null>(null);
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
-  const [pollingCampaigns, setPollingCampaigns] = useState<Set<string>>(new Set());
 
   // Campaign list query
   const campaignsQuery = useQuery<{ success: boolean; campaigns: Campaign[] }>({
@@ -239,93 +244,89 @@ export function Campaigns() {
     }
   }, [urlCampaignId, urlCampaignQuery.data, selectedBrand, brands, setSelectedBrand]);
 
-  // Polling effect for campaigns in "creating" status
-  useEffect(() => {
-    const campaigns = campaignsQuery.data?.campaigns || [];
-    const creatingCampaigns = campaigns.filter(
-      (c: Campaign) => c.status === 'creating' || c.status === 'processing'
-    );
+  // WebSocket handlers for real-time campaign updates
+  const handleCampaignStatusUpdate = useCallback(
+    (data: CampaignStatusUpdateData) => {
+      console.log('Campaign status update:', data);
 
-    // Start polling for campaigns that need it
-    creatingCampaigns.forEach((campaign: Campaign) => {
-      if (!pollingCampaigns.has(campaign.id)) {
-        setPollingCampaigns((prev) => new Set(prev).add(campaign.id));
-      }
-    });
+      // Update the campaigns query data with new status
+      queryClient.setQueryData(
+        ['campaigns', selectedBrand?.id],
+        (oldData: { campaigns: Campaign[] } | undefined) => {
+          if (!oldData) return oldData;
 
-    // Stop polling for campaigns that are done
-    pollingCampaigns.forEach((campaignId) => {
-      const campaign = campaigns.find((c: Campaign) => c.id === campaignId);
-      if (!campaign || (campaign.status !== 'creating' && campaign.status !== 'processing')) {
-        setPollingCampaigns((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(campaignId);
-          return newSet;
-        });
-      }
-    });
-  }, [campaignsQuery.data?.campaigns, pollingCampaigns]);
-
-  // Polling interval
-  useEffect(() => {
-    if (pollingCampaigns.size === 0) return;
-
-    const pollCampaignStatus = async (campaignId: string) => {
-      try {
-        const response = await apiClient.getCampaignStatus(campaignId);
-        if (response.success) {
-          // Check if status changed to completed for notifications
-          const oldData = queryClient.getQueryData(['campaigns', selectedBrand?.id]) as
-            | { campaigns: Campaign[] }
-            | undefined;
-          const oldCampaign = oldData?.campaigns?.find((c: Campaign) => c.id === campaignId);
-          const statusChanged = oldCampaign && oldCampaign.status !== response.status.status;
-
-          // Update the campaigns query data with new status
-          queryClient.setQueryData(
-            ['campaigns', selectedBrand?.id],
-            (oldData: { campaigns: Campaign[] } | undefined) => {
-              if (!oldData) return oldData;
-
-              const updatedCampaigns = oldData.campaigns.map((campaign: Campaign) =>
-                campaign.id === campaignId
-                  ? {
-                      ...campaign,
-                      status: response.status.status,
-                      progress: response.status.progress,
-                      previewGenerated: response.status.previewGenerated,
-                      errorMessage: response.status.errorMessage,
-                    }
-                  : campaign
-              );
-
-              return { ...oldData, campaigns: updatedCampaigns };
-            }
+          const updatedCampaigns = oldData.campaigns.map((campaign: Campaign) =>
+            campaign.id === data.campaignId
+              ? {
+                  ...campaign,
+                  status: data.newStatus,
+                  progress: data.progress,
+                  previewGenerated: data.previewGenerated,
+                  errorMessage: data.errorMessage,
+                }
+              : campaign
           );
 
-          // Show notifications for status changes
-          if (statusChanged) {
-            const campaignName = oldCampaign?.name || 'Campaign';
-            if (response.status.status === 'preview') {
-              toast.success(`${campaignName} is ready to launch!`);
-            } else if (response.status.status === 'failed') {
-              toast.error(`${campaignName} generation failed: ${response.status.errorMessage}`);
-            }
-          }
+          return { ...oldData, campaigns: updatedCampaigns };
         }
-      } catch (error) {
-        console.error(`Failed to poll campaign ${campaignId}:`, error);
+      );
+
+      // Show notifications for important status changes
+      const campaignName =
+        campaignsQuery.data?.campaigns?.find((c) => c.id === data.campaignId)?.name || 'Campaign';
+      if (data.newStatus === 'preview') {
+        toast.success(`${campaignName} is ready to launch!`);
+      } else if (data.newStatus === 'completed') {
+        toast.success(`${campaignName} completed successfully!`);
+      } else if (data.newStatus === 'failed') {
+        toast.error(`${campaignName} generation failed: ${data.errorMessage}`);
       }
-    };
+    },
+    [queryClient, selectedBrand?.id, campaignsQuery.data?.campaigns]
+  );
 
-    const interval = setInterval(() => {
-      pollingCampaigns.forEach((campaignId) => {
-        pollCampaignStatus(campaignId);
+  const handleCampaignProgressUpdate = useCallback(
+    (data: CampaignProgressUpdateData) => {
+      console.log('Campaign progress update:', data);
+
+      // Update progress in campaigns query
+      queryClient.setQueryData(
+        ['campaigns', selectedBrand?.id],
+        (oldData: { campaigns: Campaign[] } | undefined) => {
+          if (!oldData) return oldData;
+
+          const updatedCampaigns = oldData.campaigns.map((campaign: Campaign) =>
+            campaign.id === data.campaignId ? { ...campaign, progress: data.progress } : campaign
+          );
+
+          return { ...oldData, campaigns: updatedCampaigns };
+        }
+      );
+    },
+    [queryClient, selectedBrand?.id]
+  );
+
+  const handleCampaignError = useCallback(
+    (data: CampaignErrorData) => {
+      console.error('Campaign error:', data);
+
+      const campaignName =
+        campaignsQuery.data?.campaigns?.find((c) => c.id === data.campaignId)?.name || 'Campaign';
+      toast.error(`${campaignName} Error`, {
+        description: data.errorMessage,
+        duration: 8000,
       });
-    }, 2000); // Poll every 2 seconds
+    },
+    [campaignsQuery.data?.campaigns]
+  );
 
-    return () => clearInterval(interval);
-  }, [pollingCampaigns, queryClient, selectedBrand?.id]);
+  // Initialize WebSocket connection for real-time updates
+  useSchedulingWebSocket({
+    enabled: !!selectedBrand,
+    onCampaignStatusUpdate: handleCampaignStatusUpdate,
+    onCampaignProgressUpdate: handleCampaignProgressUpdate,
+    onCampaignError: handleCampaignError,
+  });
 
   // Memoized campaigns data to prevent unnecessary re-renders
   const campaigns = useMemo(

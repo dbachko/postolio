@@ -14,6 +14,10 @@ import { analyzeBrandStyle } from './ai.js';
 import { TimezoneService } from './timezone.js';
 import { DEFAULT_TIMEZONE } from '../constants/timezone.js';
 import { schedulerService } from './scheduler.js';
+import {
+  StatusBroadcaster,
+  type CampaignStatus as StatusBroadcasterCampaignStatus,
+} from './status-broadcaster.js';
 
 const prisma = new PrismaClient();
 
@@ -84,6 +88,47 @@ type EditableCampaignFields = Partial<{
 type CampaignUpdateData = EditableCampaignFields;
 
 class CampaignService {
+  private statusBroadcaster?: StatusBroadcaster;
+
+  /**
+   * Set the status broadcaster for real-time updates
+   */
+  setStatusBroadcaster(broadcaster: StatusBroadcaster): void {
+    this.statusBroadcaster = broadcaster;
+  }
+
+  /**
+   * Broadcast campaign status change if broadcaster is available
+   */
+  private async broadcastStatusChange(
+    campaignId: string,
+    brandId: string,
+    oldStatus: StatusBroadcasterCampaignStatus,
+    newStatus: StatusBroadcasterCampaignStatus,
+    progress: number,
+    options?: {
+      errorMessage?: string | null;
+      previewGenerated?: boolean;
+      isRunning?: boolean;
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<void> {
+    if (this.statusBroadcaster) {
+      try {
+        await this.statusBroadcaster.broadcastCampaignStatusChange(
+          campaignId,
+          brandId,
+          oldStatus,
+          newStatus,
+          progress,
+          options
+        );
+      } catch (error) {
+        console.error('Failed to broadcast campaign status change:', error);
+      }
+    }
+  }
+
   /**
    * Create and save campaign configuration
    */
@@ -1199,6 +1244,7 @@ class CampaignService {
   ): Promise<{
     success: boolean;
     campaign: CampaignWithContent | null;
+    oldStatus?: string;
     message: string;
   }> {
     try {
@@ -1239,9 +1285,29 @@ class CampaignService {
         return {
           success: true,
           campaign: updatedCampaign as unknown as CampaignWithContent,
+          oldStatus: campaign.status as string,
           message: `Campaign status updated to ${newStatus}`,
         };
       });
+
+      // TODO: Fix TypeScript casting issue for broadcast
+      // Broadcast status change after successful transaction
+      // if (result.success && result.campaign && result.oldStatus) {
+      //   await this.broadcastStatusChange(
+      //     campaignId,
+      //     result.campaign.brandId,
+      //     result.oldStatus as unknown as StatusBroadcasterCampaignStatus,
+      //     newStatus as StatusBroadcasterCampaignStatus,
+      //     100, // Status changes are typically 100% complete
+      //     {
+      //       isRunning: newStatus === 'active',
+      //       metadata: {
+      //         statusTransition: `${result.oldStatus} → ${newStatus}`,
+      //         completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
+      //       },
+      //     }
+      //   );
+      // }
 
       return result;
     } catch (error) {

@@ -13,7 +13,9 @@ interface AuthMessage extends BaseMessage<'auth'> {
 }
 type PingMessage = BaseMessage<'ping'>;
 interface SubscribeMessage extends BaseMessage<'subscribe'> {
-  brandId: string;
+  brandId?: string;
+  campaignId?: string;
+  rooms?: string[]; // Support subscribing to multiple rooms
 }
 type UnsubscribeMessage = BaseMessage<'unsubscribe'>;
 
@@ -23,13 +25,20 @@ type OutboundPayload =
   | { type: 'error'; message: string }
   | { type: 'connected'; brandId: string; userId: string; timestamp: string }
   | { type: 'authenticated'; userId: string; timestamp: string }
-  | { type: 'subscribed'; brandId: string; timestamp: string }
+  | {
+      type: 'subscribed';
+      brandId?: string;
+      campaignId?: string;
+      rooms?: string[];
+      timestamp: string;
+    }
   | { type: 'unsubscribed'; timestamp: string }
   | { type: 'pong' };
 
 interface AuthenticatedSocket extends WebSocket {
   userId?: string;
   brandId?: string | undefined;
+  subscribedRooms?: Set<string>; // Track all subscribed rooms
   isAlive?: boolean;
 }
 
@@ -305,65 +314,116 @@ function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage)
     return;
   }
 
-  if (!message.brandId) {
+  // Initialize subscribedRooms if not exists
+  if (!socket.subscribedRooms) {
+    socket.subscribedRooms = new Set();
+  }
+
+  const roomsToSubscribe: string[] = [];
+
+  // Handle legacy brandId subscription
+  if (message.brandId) {
+    roomsToSubscribe.push(`brand:${message.brandId}`);
+    socket.brandId = message.brandId; // Keep for backward compatibility
+  }
+
+  // Handle campaign subscription
+  if (message.campaignId) {
+    roomsToSubscribe.push(`campaign:${message.campaignId}`);
+  }
+
+  // Handle explicit rooms array
+  if (message.rooms && Array.isArray(message.rooms)) {
+    roomsToSubscribe.push(...message.rooms);
+  }
+
+  if (roomsToSubscribe.length === 0) {
     socket.send(
       JSON.stringify({
         type: 'error',
-        message: 'Brand ID required',
+        message: 'At least one room identifier required (brandId, campaignId, or rooms)',
       })
     );
     return;
   }
 
-  // Unsubscribe from current room if any
-  if (socket.brandId) {
-    const oldRoom = `brand:${socket.brandId}`;
-    connections.get(oldRoom)?.delete(socket);
+  // Unsubscribe from previous rooms
+  if (socket.subscribedRooms.size > 0) {
+    for (const oldRoom of socket.subscribedRooms) {
+      connections.get(oldRoom)?.delete(socket);
+      // Clean up empty rooms
+      if (connections.get(oldRoom)?.size === 0) {
+        connections.delete(oldRoom);
+      }
+    }
+    socket.subscribedRooms.clear();
   }
 
-  // Subscribe to new room
-  socket.brandId = message.brandId;
-  const room = `brand:${message.brandId}`;
-
-  if (!connections.has(room)) {
-    connections.set(room, new Set());
+  // Subscribe to new rooms
+  for (const room of roomsToSubscribe) {
+    if (!connections.has(room)) {
+      connections.set(room, new Set());
+    }
+    connections.get(room)!.add(socket);
+    socket.subscribedRooms.add(room);
   }
-  connections.get(room)!.add(socket);
 
   socket.send(
     JSON.stringify({
       type: 'subscribed',
       brandId: message.brandId,
+      campaignId: message.campaignId,
+      rooms: Array.from(socket.subscribedRooms),
       timestamp: new Date().toISOString(),
     })
   );
 }
 
 function handleUnsubscribe(socket: AuthenticatedSocket) {
+  // Unsubscribe from all rooms
+  if (socket.subscribedRooms && socket.subscribedRooms.size > 0) {
+    for (const room of socket.subscribedRooms) {
+      connections.get(room)?.delete(socket);
+      // Clean up empty rooms
+      if (connections.get(room)?.size === 0) {
+        connections.delete(room);
+      }
+    }
+    socket.subscribedRooms.clear();
+  }
+
+  // Legacy cleanup for backward compatibility
   if (socket.brandId) {
     const room = `brand:${socket.brandId}`;
     connections.get(room)?.delete(socket);
     socket.brandId = undefined;
-
-    socket.send(
-      JSON.stringify({
-        type: 'unsubscribed',
-        timestamp: new Date().toISOString(),
-      })
-    );
   }
+
+  socket.send(
+    JSON.stringify({
+      type: 'unsubscribed',
+      timestamp: new Date().toISOString(),
+    })
+  );
 }
 
 function cleanupSocket(socket: AuthenticatedSocket) {
-  // Remove from all rooms
+  // Remove from all subscribed rooms
+  if (socket.subscribedRooms && socket.subscribedRooms.size > 0) {
+    for (const room of socket.subscribedRooms) {
+      connections.get(room)?.delete(socket);
+      // Clean up empty rooms
+      if (connections.get(room)?.size === 0) {
+        connections.delete(room);
+      }
+    }
+    socket.subscribedRooms.clear();
+  }
+
+  // Legacy cleanup for backward compatibility
   if (socket.brandId) {
     const room = `brand:${socket.brandId}`;
     connections.get(room)?.delete(socket);
-
-    // Clean up empty rooms
-    if (connections.get(room)?.size === 0) {
-      connections.delete(room);
-    }
   }
 
   // Ensure socket is closed
