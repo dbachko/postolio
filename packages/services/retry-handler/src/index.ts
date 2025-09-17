@@ -36,11 +36,34 @@ const retryStrategy = new RetryStrategy(metrics);
 const MAX_RETRY_ATTEMPTS = 5; // Increased to match industry standard
 
 export const handler = async (event: SQSEvent): Promise<void> => {
+  // 🚨 RECURSIVE LOOP PREVENTION: Add circuit breaker with timestamp tracking
+  const processingStartTime = Date.now();
+  const maxProcessingTime = 45000; // 45 seconds max processing time
+
   logger.info('Processing retry messages', {
     messageCount: event.Records.length,
+    processingStartTime,
   });
 
+  // 🚨 PREVENT RECURSIVE LOOPS: Validate message count is reasonable
+  if (event.Records.length > 50) {
+    logger.error('Received too many messages in single batch - potential recursive loop detected', {
+      messageCount: event.Records.length,
+    });
+    metrics.addMetric('RecursiveLoopPrevented', MetricUnit.Count, 1);
+    return; // Exit early to prevent processing potentially malformed batch
+  }
+
   for (const record of event.Records) {
+    // 🚨 TIMEOUT PROTECTION: Check if we're approaching timeout
+    if (Date.now() - processingStartTime > maxProcessingTime) {
+      logger.warn('Approaching timeout - stopping message processing to prevent incomplete work', {
+        processedTime: Date.now() - processingStartTime,
+        maxProcessingTime,
+      });
+      break;
+    }
+
     try {
       await processRetryMessage(record);
       metrics.addMetric('RetryProcessed', MetricUnit.Count, 1);
@@ -61,6 +84,8 @@ export const handler = async (event: SQSEvent): Promise<void> => {
         }
       } catch (parseError) {
         logger.error('Failed to parse message for error handling', parseError as Error);
+        // 🚨 CRITICAL: Even if we can't parse the message, we MUST NOT throw
+        // This would cause SQS to retry and potentially create a recursive loop
       }
 
       // Always succeed to prevent SQS retry loop
@@ -75,11 +100,38 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
   const message = JSON.parse(record.body);
   const { scheduleId, originalError } = message;
 
+  // 🚨 RECURSIVE LOOP PREVENTION: Validate scheduleId exists and is reasonable
+  if (!scheduleId || typeof scheduleId !== 'string' || scheduleId.length > 100) {
+    logger.error('Invalid scheduleId in retry message - skipping to prevent loops', {
+      scheduleId,
+      messageLength: JSON.stringify(message).length,
+    });
+    metrics.addMetric('InvalidScheduleIdSkipped', MetricUnit.Count, 1);
+    return; // Skip invalid messages to prevent infinite processing
+  }
+
   logger.info('Processing retry for schedule', { scheduleId });
 
   // Get retry information
   const retryInfo = await getRetryInfo(scheduleId);
   const attemptNumber = (retryInfo?.attemptNumber || 0) + 1;
+
+  // 🚨 RECURSIVE LOOP PREVENTION: Hard limit on retry attempts to prevent infinite loops
+  const absoluteMaxRetries = 10; // Absolute hard limit regardless of retry strategy
+  if (attemptNumber > absoluteMaxRetries) {
+    logger.error('Retry attempt exceeds absolute maximum - preventing potential infinite loop', {
+      scheduleId,
+      attemptNumber,
+      absoluteMaxRetries,
+    });
+    await markAsFailed(
+      scheduleId,
+      `Exceeded absolute maximum retry limit (${absoluteMaxRetries})`,
+      new Error('Absolute retry limit exceeded')
+    );
+    metrics.addMetric('AbsoluteRetryLimitExceeded', MetricUnit.Count, 1);
+    return;
+  }
 
   // Parse the original error from the message
   let lastError: Error;
@@ -306,48 +358,69 @@ async function markAsFailed(
   reason: string,
   originalError?: Error | unknown
 ): Promise<void> {
-  // Analyze error to get structured information
-  const errorAnalysis = retryStrategy.analyzeError(originalError || reason);
+  try {
+    // Analyze error to get structured information
+    const errorAnalysis = retryStrategy.analyzeError(originalError || reason);
 
-  await docClient.send(
-    new UpdateCommand({
-      TableName: process.env.SCHEDULES_TABLE!,
-      Key: {
-        pk: `SCHEDULE#${scheduleId}`,
-        sk: 'METADATA',
-      },
-      UpdateExpression:
-        'SET #status = :status, #error = :error, #errorType = :errorType, #updatedAt = :updatedAt',
-      ExpressionAttributeNames: {
-        '#status': 'status',
-        '#error': 'schedulingError',
-        '#errorType': 'errorType',
-        '#updatedAt': 'updatedAt',
-      },
-      ExpressionAttributeValues: {
-        ':status': 'failed',
-        ':error': reason,
-        ':errorType': errorAnalysis.errorType,
-        ':updatedAt': new Date().toISOString(),
-      },
-    })
-  );
-
-  // Log to audit table
-  await docClient.send(
-    new PutCommand({
-      TableName: process.env.AUDIT_LOG_TABLE!,
-      Item: {
-        pk: `SCHEDULE#${scheduleId}`,
-        timestamp: new Date().toISOString(),
-        action: 'FAILED_AFTER_RETRIES',
-        reason,
-        metadata: {
-          maxAttempts: MAX_RETRY_ATTEMPTS,
+    await docClient.send(
+      new UpdateCommand({
+        TableName: process.env.SCHEDULES_TABLE!,
+        Key: {
+          pk: `SCHEDULE#${scheduleId}`,
+          sk: 'METADATA',
         },
-      },
-    })
-  );
+        UpdateExpression:
+          'SET #status = :status, #error = :error, #errorType = :errorType, #updatedAt = :updatedAt',
+        ExpressionAttributeNames: {
+          '#status': 'status',
+          '#error': 'schedulingError',
+          '#errorType': 'errorType',
+          '#updatedAt': 'updatedAt',
+        },
+        ExpressionAttributeValues: {
+          ':status': 'failed',
+          ':error': reason,
+          ':errorType': errorAnalysis.errorType,
+          ':updatedAt': new Date().toISOString(),
+        },
+      })
+    );
+
+    // Log to audit table - wrapped in try/catch to prevent audit logging failures from causing recursion
+    try {
+      await docClient.send(
+        new PutCommand({
+          TableName: process.env.AUDIT_LOG_TABLE!,
+          Item: {
+            pk: `SCHEDULE#${scheduleId}`,
+            timestamp: new Date().toISOString(),
+            action: 'FAILED_AFTER_RETRIES',
+            reason,
+            metadata: {
+              maxAttempts: MAX_RETRY_ATTEMPTS,
+            },
+          },
+        })
+      );
+    } catch (auditError) {
+      // 🚨 CRITICAL: Never let audit logging failures prevent marking as failed
+      logger.warn('Failed to write to audit log but schedule marked as failed', {
+        scheduleId,
+        auditError: (auditError as Error).message,
+      });
+      metrics.addMetric('AuditLogWriteFailed', MetricUnit.Count, 1);
+      // Continue - the main schedule update succeeded
+    }
+  } catch (error) {
+    // 🚨 CRITICAL: Log error but don't throw to prevent recursion
+    logger.error('Failed to mark schedule as failed - this could cause retry loops', {
+      scheduleId,
+      reason,
+      error: (error as Error).message,
+    });
+    metrics.addMetric('MarkAsFailedError', MetricUnit.Count, 1);
+    // Don't throw - this would cause the entire handler to fail and potentially retry
+  }
 }
 
 // Removed scheduleNextRetry function to prevent recursive invocations
