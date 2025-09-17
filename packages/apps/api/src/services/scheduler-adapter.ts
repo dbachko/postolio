@@ -298,7 +298,7 @@ export class SchedulerAdapter {
             },
           });
 
-          scheduleId = schedule.scheduleId;
+          scheduleId = schedule?.scheduleId;
           awsScheduleCreated = true;
         } catch (awsError: unknown) {
           // Handle circuit breaker and network errors gracefully
@@ -346,7 +346,7 @@ export class SchedulerAdapter {
       // If AWS succeeded, leave processing state active - EventBridge events will clear it
 
       // 6. Broadcast status change (only after both AWS and DB succeed)
-      if (awsScheduleCreated && this.broadcaster) {
+      if (awsScheduleCreated && this.broadcaster && scheduleId) {
         await this.broadcaster.broadcastStatusChange(
           content.id,
           content.brandId,

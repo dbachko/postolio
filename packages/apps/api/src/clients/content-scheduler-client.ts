@@ -441,7 +441,23 @@ export class ContentSchedulerClient {
         return ScheduleSchema.parse(response.data);
       } catch (parseError) {
         console.error('Failed to parse schedule response:', parseError);
-        console.error('Response data:', response.data);
+        console.error('Response data:', JSON.stringify(response.data, null, 2));
+        console.error(
+          'Schema validation error details:',
+          parseError instanceof Error ? parseError.message : String(parseError)
+        );
+
+        // If the response has scheduleId, try to return it anyway for backward compatibility
+        if (response.data && response.data.scheduleId) {
+          console.warn(
+            'Schema validation failed but scheduleId exists, returning partial response'
+          );
+          return {
+            ...response.data,
+            scheduleId: response.data.scheduleId,
+          } as Schedule;
+        }
+
         // If the response doesn't have scheduleId, use the contentId as a fallback
         if (response.data && !response.data.scheduleId) {
           return {
