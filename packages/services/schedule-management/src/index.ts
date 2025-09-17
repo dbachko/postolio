@@ -16,7 +16,7 @@ import {
   DeleteScheduleCommand,
 } from '@aws-sdk/client-scheduler';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
 import { randomUUID } from 'crypto';
 import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from './config';
 
@@ -225,19 +225,53 @@ function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult 
   };
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const handler = async (
+  event: APIGatewayProxyEvent | APIGatewayProxyEventV2
+): Promise<APIGatewayProxyResult> => {
+  // Determine if this is a Function URL event (API Gateway v2.0 also uses version '2.0', so check for requestContext.http)
+  const isV2Event =
+    'requestContext' in event &&
+    event.requestContext &&
+    'http' in event.requestContext &&
+    typeof event.requestContext.http === 'object';
+
+  // Extract HTTP method from the appropriate event format
+  const httpMethod = isV2Event
+    ? (event as APIGatewayProxyEventV2).requestContext.http.method
+    : (event as APIGatewayProxyEvent).httpMethod;
+
+  // Extract path from the appropriate event format
+  const path = isV2Event
+    ? (event as APIGatewayProxyEventV2).requestContext.http.path
+    : (event as APIGatewayProxyEvent).path;
+
+  // Extract path parameters - for Function URLs, we need to parse from the path
+  let scheduleId: string | undefined;
+  if (isV2Event) {
+    // For Function URLs, parse schedule ID from path like /schedules/123
+    const pathMatch = path.match(/\/schedules\/([^/]+)/);
+    scheduleId = pathMatch ? pathMatch[1] : undefined;
+  } else {
+    scheduleId = (event as APIGatewayProxyEvent).pathParameters?.scheduleId;
+  }
+
   // Add context to logs
   logger.addPersistentLogAttributes({
     requestId: event.requestContext.requestId,
-    method: event.httpMethod,
-    path: event.path,
+    method: httpMethod,
+    path: path,
+    eventVersion: isV2Event ? '2.0' : '1.0',
   });
 
   logger.info('Processing request', { event });
 
   try {
-    const { httpMethod, body, pathParameters } = event;
-    const scheduleId = pathParameters?.scheduleId;
+    const { body } = event;
+
+    // Extract query string parameters from the appropriate event format
+    const queryStringParameters = isV2Event
+      ? (event as APIGatewayProxyEventV2).queryStringParameters
+      : (event as APIGatewayProxyEvent).queryStringParameters;
 
     let result: APIGatewayProxyResult;
 
@@ -259,7 +293,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           result = await getSchedule(scheduleId);
           metrics.addMetric('ScheduleRetrieved', MetricUnit.Count, 1);
         } else {
-          result = await listSchedules(event.queryStringParameters);
+          result = await listSchedules(queryStringParameters);
           metrics.addMetric('SchedulesListed', MetricUnit.Count, 1);
         }
         break;

@@ -610,6 +610,15 @@ export class ContentSchedulerStack extends cdk.Stack {
       })
     );
 
+    // Grant Schedule Management Lambda permission to emit events to EventBridge
+    scheduleManagementLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['events:PutEvents'],
+        resources: [`arn:aws:events:${this.region}:${this.account}:event-bus/default`],
+      })
+    );
+
     // Grant Publisher Lambda SSM Parameter Store read permissions
     publisherLambda.addToRolePolicy(
       new iam.PolicyStatement({
