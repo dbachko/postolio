@@ -15,6 +15,7 @@ import { API_VERSIONS, API_BASE_URLS } from '@postolio/aws';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
+import { SchedulerClient, DeleteScheduleCommand } from '@aws-sdk/client-scheduler';
 
 // Platform-specific character limits
 const PLATFORM_LIMITS = {
@@ -45,6 +46,7 @@ const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 const eventBridge = new EventBridge({});
 const sqsClient = tracer.captureAWSv3Client(new SQSClient({}));
 const ssmClient = tracer.captureAWSv3Client(new SSMClient({}));
+const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 
 // Event from scheduler (minimal data)
 interface PublishEvent {
@@ -444,6 +446,25 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       publishResult.platformUrl
     );
 
+    // 🔥 CRITICAL: Delete EventBridge schedule after successful publishing
+    try {
+      await schedulerClient.send(
+        new DeleteScheduleCommand({
+          Name: event.scheduleId,
+          GroupName: process.env.SCHEDULE_GROUP_NAME || 'default',
+        })
+      );
+      logger.info('Deleted EventBridge schedule after successful publishing', {
+        scheduleId: event.scheduleId,
+      });
+    } catch (deleteError) {
+      logger.warn('Failed to delete EventBridge schedule after success', {
+        scheduleId: event.scheduleId,
+        error: deleteError,
+      });
+      // Don't fail the operation if schedule deletion fails
+    }
+
     // Emit EventBridge post.published event for downstream sync
     try {
       await eventBridge.putEvents({
@@ -508,6 +529,25 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       logger.info('Emitted post.failed event to EventBridge');
     } catch (emitErr) {
       logger.warn('Failed to emit post.failed event', { error: emitErr });
+    }
+
+    // 🔥 CRITICAL FIX: Delete EventBridge schedule to prevent infinite re-triggering
+    try {
+      await schedulerClient.send(
+        new DeleteScheduleCommand({
+          Name: event.scheduleId,
+          GroupName: process.env.SCHEDULE_GROUP_NAME || 'default',
+        })
+      );
+      logger.info('Deleted EventBridge schedule to prevent re-triggering', {
+        scheduleId: event.scheduleId,
+      });
+    } catch (deleteError) {
+      logger.warn('Failed to delete EventBridge schedule - may cause re-triggering', {
+        scheduleId: event.scheduleId,
+        error: deleteError,
+      });
+      // Don't fail the whole operation if schedule deletion fails
     }
 
     // 🔥 CRITICAL FIX: Send structured error message to DLQ for intelligent retry handling

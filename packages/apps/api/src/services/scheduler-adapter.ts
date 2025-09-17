@@ -534,17 +534,28 @@ export class SchedulerAdapter {
       // Removed unused awsError variable (errors handled inline)
 
       if (!scheduleId) {
-        // Content should have a schedule ID if it's currently scheduled
-        if (content.status === 'scheduled' && content.scheduledAt) {
+        // Auto-recovery pattern: Handle different scenarios where schedule ID is missing
+        if (content.scheduledAt) {
+          // Content has a scheduled time but no AWS schedule ID
+          // This typically happens when:
+          // 1. Initial scheduling failed (e.g., AWS was down)
+          // 2. Campaign started but scheduling failed
+          // 3. Manual scheduling attempt failed
+
           console.warn(
-            `Content ${contentId} is marked as scheduled but has no AWS schedule ID - creating new schedule`
+            `[AUTO-RECOVERY] Content ${contentId} (status: ${content.status}) has scheduledAt but no AWS schedule ID - treating as new schedule attempt`
           );
 
-          // Instead of failing, create a new schedule (this handles failed initial scheduling)
-          // Convert back to local time for scheduleContent since it expects local time by default
+          // Create a new schedule instead of failing
+          // This provides auto-recovery for failed scheduling attempts
           const newTimeLocal = isLocalTime
             ? newTime
             : TimezoneService.toLocal(newTimeUTC, brandTimezone);
+
+          console.log(
+            `Attempting to schedule content ${contentId} at ${newTimeUTC.toISOString()} (${brandTimezone})`
+          );
+
           const scheduleResult = await this.scheduleContent(
             contentId,
             newTimeLocal,
@@ -553,20 +564,60 @@ export class SchedulerAdapter {
 
           if (scheduleResult.success) {
             console.log(
-              `Successfully created new schedule for content ${contentId} at ${newTimeUTC.toISOString()}`
+              `[AUTO-RECOVERY SUCCESS] Content ${contentId} scheduled at ${newTimeUTC.toISOString()} after recovery`
             );
+
+            // Also update the scheduled time if it's different
+            if (content.scheduledAt.getTime() !== newTimeUTC.getTime()) {
+              await prisma.content.update({
+                where: { id: contentId },
+                data: {
+                  scheduledAt: newTimeUTC,
+                  schedulingError: null, // Clear any previous errors
+                },
+              });
+            }
+
             return { success: true };
           } else {
             return {
               success: false,
-              error: `Failed to create new schedule: ${scheduleResult.error}`,
+              error: `Failed to schedule content: ${scheduleResult.error}`,
+            };
+          }
+        } else if (content.status === 'scheduled') {
+          // Edge case: Content is marked as scheduled but has no scheduledAt or scheduleId
+          // This shouldn't happen but handle it gracefully
+          console.error(
+            `Data inconsistency: Content ${contentId} is marked as scheduled but has no scheduledAt or scheduleId`
+          );
+
+          // Try to schedule it at the requested time
+          const newTimeLocal = isLocalTime
+            ? newTime
+            : TimezoneService.toLocal(newTimeUTC, brandTimezone);
+
+          const scheduleResult = await this.scheduleContent(
+            contentId,
+            newTimeLocal,
+            content.brand.userId
+          );
+
+          if (scheduleResult.success) {
+            console.log(`Successfully created schedule for inconsistent content ${contentId}`);
+            return { success: true };
+          } else {
+            return {
+              success: false,
+              error: `Failed to create schedule: ${scheduleResult.error}`,
             };
           }
         } else {
-          // Content is not scheduled, nothing to reschedule
+          // Content is truly not scheduled (draft with no scheduledAt)
           return {
             success: false,
-            error: 'Content is not scheduled - nothing to reschedule',
+            error:
+              'Content is not scheduled. Please use the schedule action instead of reschedule.',
           };
         }
       }

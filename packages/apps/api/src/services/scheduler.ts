@@ -73,7 +73,8 @@ class SchedulerService {
     contentId: string,
     newTime: Date
   ): Promise<{ success: boolean; error?: string }> {
-    return schedulerAdapter.rescheduleContent(contentId, newTime);
+    // newTime is already UTC from database, don't convert again
+    return schedulerAdapter.rescheduleContent(contentId, newTime, false);
   }
 
   /**
