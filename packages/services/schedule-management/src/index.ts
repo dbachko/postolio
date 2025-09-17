@@ -230,7 +230,10 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   // Determine if this is a Function URL event (API Gateway v2.0 also uses version '2.0', so check for requestContext.http)
   const isV2Event =
-    'requestContext' in event && typeof (event as any).requestContext?.http === 'object';
+    'requestContext' in event &&
+    event.requestContext &&
+    'http' in event.requestContext &&
+    typeof event.requestContext.http === 'object';
 
   // Extract HTTP method from the appropriate event format
   const httpMethod = isV2Event
