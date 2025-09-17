@@ -360,7 +360,11 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
     };
   }
 
-  let scheduleId = `SCH_${Date.now()}_${randomUUID()}`;
+  // Generate hexadecimal-only schedule ID for AWS EventBridge compatibility
+  // EventBridge Scheduler requires schedule names to contain only hexadecimal digits
+  const timestamp = Date.now().toString(16).toUpperCase(); // Convert to hex
+  const randomHex = randomUUID().replace(/-/g, '').toUpperCase(); // Remove hyphens, ensure uppercase hex
+  let scheduleId = `${timestamp}${randomHex}`;
   const scheduledAt = new Date(validatedData.scheduledAt).toISOString();
 
   // Format date for EventBridge Scheduler
@@ -410,8 +414,10 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
   } catch (error) {
     if ((error as { name?: string }).name === 'ConditionalCheckFailedException') {
       logger.warn('Schedule already exists with this ID, likely a race condition', { scheduleId });
-      // Generate a new ID and retry once
-      const newScheduleId = `SCH_${Date.now()}_${randomUUID()}`;
+      // Generate a new hex-only ID and retry once
+      const retryTimestamp = Date.now().toString(16).toUpperCase();
+      const retryRandomHex = randomUUID().replace(/-/g, '').toUpperCase();
+      const newScheduleId = `${retryTimestamp}${retryRandomHex}`;
       scheduleItem.pk = `SCHEDULE#${newScheduleId}`;
       scheduleItem.scheduleId = newScheduleId;
 
@@ -434,7 +440,7 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
   try {
     await schedulerClient.send(
       new CreateScheduleCommand({
-        Name: `schedule-${scheduleId}`,
+        Name: scheduleId, // Use hex-only schedule ID directly for EventBridge compatibility
         GroupName: process.env.SCHEDULER_GROUP_NAME,
         ScheduleExpression: `at(${eventBridgeScheduleTime})`,
         Target: {
@@ -699,7 +705,7 @@ async function updateSchedule(
       try {
         await schedulerClient.send(
           new DeleteScheduleCommand({
-            Name: `schedule-${scheduleId}`,
+            Name: scheduleId, // Use hex-only schedule ID directly for EventBridge compatibility
             GroupName: process.env.SCHEDULER_GROUP_NAME,
           })
         );
@@ -712,7 +718,7 @@ async function updateSchedule(
       // Create new EventBridge schedule
       await schedulerClient.send(
         new CreateScheduleCommand({
-          Name: `schedule-${scheduleId}`,
+          Name: scheduleId, // Use hex-only schedule ID directly for EventBridge compatibility
           GroupName: process.env.SCHEDULER_GROUP_NAME,
           ScheduleExpression: `at(${eventBridgeScheduleTime})`,
           Target: {
@@ -814,7 +820,7 @@ async function deleteSchedule(scheduleId: string): Promise<APIGatewayProxyResult
   // Delete EventBridge schedule
   await schedulerClient.send(
     new DeleteScheduleCommand({
-      Name: `schedule-${scheduleId}`,
+      Name: scheduleId, // Use hex-only schedule ID directly for EventBridge compatibility
       GroupName: process.env.SCHEDULER_GROUP_NAME,
     })
   );
