@@ -990,7 +990,7 @@ export class PostolioStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'ECS task requires S3 operations for image storage, CloudFront/SES wildcard permissions, Service Discovery, SSM parameter access, and Token Service API invocation',
+            'ECS task requires S3 operations for image storage, CloudFront/SES wildcard permissions, Service Discovery, SSM parameter access, Token Service API invocation, and Lambda Function URL invocation for microservice communication',
           appliesTo: [
             'Action::s3:Abort*',
             'Action::s3:DeleteObject*',
@@ -1006,6 +1006,9 @@ export class PostolioStack extends cdk.Stack {
             `Resource::arn:aws:execute-api:${this.region}:${this.account}:*/*/GET/health`,
             // SSM parameter permissions for service discovery
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`,
+            // Lambda Function URL permissions for microservice communication (wildcards required for service discovery across environments)
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
           ],
         },
       ]
