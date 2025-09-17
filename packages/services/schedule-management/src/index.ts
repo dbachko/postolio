@@ -183,7 +183,7 @@ async function publishScheduleEvent(
 
   const eventBridgeEvent = {
     Source: process.env.EVENT_SOURCE || 'postolio.scheduler',
-    DetailType: 'Schedule Event',
+    DetailType: eventType, // Use specific event type (schedule.created, schedule.updated, etc.)
     Detail: JSON.stringify(eventDetail),
     EventBusName: process.env.EVENT_BUS_NAME, // Use custom event bus if configured
   };
