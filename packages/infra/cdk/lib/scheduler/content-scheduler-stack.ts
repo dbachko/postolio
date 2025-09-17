@@ -494,6 +494,16 @@ export class ContentSchedulerStack extends cdk.Stack {
         ],
         // Include Prisma packages - CDK will handle bundling automatically
         nodeModules: ['@prisma/client', 'prisma'],
+        // Ensure Prisma client is generated and binaries are included
+        commandHooks: {
+          beforeInstall: (): string[] => [],
+          beforeBundling: (inputDir: string): string[] => [
+            `cd ${inputDir} && npx prisma generate --schema=packages/libs/database/prisma/schema.prisma`,
+          ],
+          afterBundling: (inputDir: string, outputDir: string): string[] => [
+            `mkdir -p ${outputDir}/.prisma && cp ${inputDir}/node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/libquery_engine-rhel-openssl-3.0.x.so.node ${outputDir}/.prisma/`,
+          ],
+        },
         // Remove commandHooks to avoid permission issues in CI/CD
         // Prisma client should be pre-generated via CI build steps
       },
