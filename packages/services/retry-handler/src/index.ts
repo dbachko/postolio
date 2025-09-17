@@ -124,7 +124,11 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
       attemptNumber,
       absoluteMaxRetries,
     });
-    await markAsFailed(scheduleId, `Exceeded absolute maximum retry limit (${absoluteMaxRetries})`, new Error('Absolute retry limit exceeded'));
+    await markAsFailed(
+      scheduleId,
+      `Exceeded absolute maximum retry limit (${absoluteMaxRetries})`,
+      new Error('Absolute retry limit exceeded')
+    );
     metrics.addMetric('AbsoluteRetryLimitExceeded', MetricUnit.Count, 1);
     return;
   }
