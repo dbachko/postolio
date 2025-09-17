@@ -969,6 +969,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
           ],
         },
       ]
@@ -1059,6 +1060,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
           ],
         },
       ]
@@ -1085,6 +1087,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
           ],
         },
       ]
@@ -1107,6 +1110,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
           ],
         },
       ]
@@ -1128,6 +1132,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
           ],
         },
       ]
