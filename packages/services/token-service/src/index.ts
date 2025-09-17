@@ -3,7 +3,7 @@
  * Enterprise-grade token management with comprehensive security features
  */
 
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
@@ -487,11 +487,36 @@ function parsePathParameters(path: string): Record<string, string> {
 }
 
 // Main Lambda handler with enhanced error handling
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const handler = async (
+  event: APIGatewayProxyEvent | APIGatewayProxyEventV2
+): Promise<APIGatewayProxyResult> => {
+  // Determine if this is v1 (API Gateway) or v2 (Function URL) event format
+  const isV2Event = 'version' in event && event.version === '2.0';
+
+  // Extract values from the appropriate event format
   const requestId = event.requestContext.requestId || crypto.randomUUID();
-  const correlationId = event.headers['X-Correlation-ID'] || crypto.randomUUID();
-  const ipAddress = event.requestContext.identity.sourceIp;
-  const userAgent = event.headers['User-Agent'];
+  const headers = event.headers || {};
+  const correlationId =
+    headers['X-Correlation-ID'] || headers['x-correlation-id'] || crypto.randomUUID();
+
+  // Handle different sourceIp extraction for v1 vs v2
+  let ipAddress: string;
+  if (isV2Event) {
+    ipAddress = (event as APIGatewayProxyEventV2).requestContext.http.sourceIp;
+  } else {
+    ipAddress = (event as APIGatewayProxyEvent).requestContext.identity.sourceIp;
+  }
+
+  const userAgent = headers['User-Agent'] || headers['user-agent'];
+
+  // Extract HTTP method and path from appropriate format
+  const method = isV2Event
+    ? (event as APIGatewayProxyEventV2).requestContext.http.method
+    : (event as APIGatewayProxyEvent).httpMethod;
+
+  const path = isV2Event
+    ? (event as APIGatewayProxyEventV2).requestContext.http.path
+    : (event as APIGatewayProxyEvent).path;
 
   const requestContext = {
     requestId,
@@ -501,15 +526,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   };
 
   logger.info('Request received', {
-    path: event.path,
-    method: event.httpMethod,
+    path,
+    method,
     requestId,
     correlationId,
     ipAddress,
+    eventVersion: isV2Event ? '2.0' : '1.0',
   });
 
   // CORS headers for all responses
-  const headers: Record<string, string> = {
+  const responseHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTIONS',
@@ -519,20 +545,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   };
 
   try {
-    const method = event.httpMethod;
-    const path = event.path;
     const pathParams = parsePathParameters(path);
 
     // Handle OPTIONS for CORS
     if (method === 'OPTIONS') {
-      return { statusCode: 200, headers, body: '' };
+      return { statusCode: 200, headers: responseHeaders, body: '' };
     }
 
     // Health check
     if (path === '/health' && method === 'GET') {
       return {
         statusCode: 200,
-        headers,
+        headers: responseHeaders,
         body: JSON.stringify({
           status: 'healthy',
           service: 'token-service',
@@ -574,7 +598,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
       return {
         statusCode: 200,
-        headers,
+        headers: responseHeaders,
         body: JSON.stringify({ success: true }),
       };
     }
@@ -599,14 +623,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       if (!token) {
         return {
           statusCode: 404,
-          headers,
+          headers: responseHeaders,
           body: JSON.stringify({ error: 'Token not found' }),
         };
       }
 
       return {
         statusCode: 200,
-        headers,
+        headers: responseHeaders,
         body: JSON.stringify(token),
       };
     }
@@ -624,7 +648,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
       return {
         statusCode: 200,
-        headers,
+        headers: responseHeaders,
         body: JSON.stringify(rotatedToken),
       };
     }
@@ -632,7 +656,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Invalid endpoint
     return {
       statusCode: 404,
-      headers,
+      headers: responseHeaders,
       body: JSON.stringify({ error: 'Endpoint not found' }),
     };
   } catch (error) {
@@ -645,7 +669,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     metrics.addMetric('RequestErrors', MetricUnit.Count, 1);
 
     if (error instanceof TokenServiceError) {
-      const retryHeaders: Record<string, string> = { ...headers };
+      const retryHeaders: Record<string, string> = { ...responseHeaders };
       if (error instanceof RateLimitError) {
         retryHeaders['Retry-After'] = error.retryAfter.toString();
       }
@@ -666,7 +690,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     return {
       statusCode: 500,
-      headers,
+      headers: responseHeaders,
       body: JSON.stringify({
         error: 'Internal server error',
         code: 'INTERNAL_ERROR',
