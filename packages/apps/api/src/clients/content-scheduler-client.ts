@@ -1036,10 +1036,13 @@ export class ContentSchedulerClient {
   }
 
   /**
-   * Generate unique request ID
+   * Generate unique request ID - hex-only format for AWS compatibility
    */
   private generateRequestId(): string {
-    return `req_${randomUUID()}`;
+    // Generate hex-only request ID for AWS EventBridge compatibility
+    const timestamp = Date.now().toString(16).toUpperCase();
+    const randomHex = randomUUID().replace(/-/g, '').substring(0, 16).toUpperCase();
+    return `${timestamp}${randomHex}`;
   }
 
   /** Log helper */
