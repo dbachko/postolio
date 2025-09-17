@@ -541,6 +541,7 @@ export class ContentSchedulerStack extends cdk.Stack {
     retryQueueTable.grantReadWriteData(retryHandlerLambda);
     auditLogTable.grantWriteData(scheduleManagementLambda);
     auditLogTable.grantWriteData(publisherLambda);
+    auditLogTable.grantWriteData(retryHandlerLambda); // ✅ CRITICAL FIX: Grant audit log write permissions
     this.videoBucket.grantReadWrite(publisherLambda);
     platformCredentials.grantRead(publisherLambda);
     publisherLambda.grantInvoke(retryHandlerLambda);
