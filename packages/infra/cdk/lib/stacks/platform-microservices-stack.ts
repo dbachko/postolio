@@ -386,6 +386,19 @@ export class PlatformMicroservicesStack extends cdk.Stack {
         })
       );
 
+      // Grant permission to invoke Lambda Function URLs for service-to-service communication
+      publisherLambda.addToRolePolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['lambda:InvokeFunctionUrl'],
+          resources: [
+            `arn:aws:lambda:${this.region}:${this.account}:function:token-service-${environment}`,
+            `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
+            `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+          ],
+        })
+      );
+
       // SQS trigger
       publisherLambda.addEventSource(
         new cdk.aws_lambda_event_sources.SqsEventSource(queue, {
