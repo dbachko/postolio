@@ -496,6 +496,26 @@ export class ContentSchedulerStack extends cdk.Stack {
           '@aws-lambda-powertools/metrics',
         ],
         nodeModules: ['pg', '@prisma/adapter-pg'],
+        commandHooks: {
+          beforeBundling(inputDir: string, outputDir: string): string[] {
+            return [];
+          },
+          afterBundling(inputDir: string, outputDir: string): string[] {
+            return [
+              // Create lambda-client directory for Prisma client files
+              `mkdir -p ${outputDir}/lambda-client`,
+              // Copy essential Prisma client files (lightweight, no binary engines)
+              `cp -r ${inputDir}/packages/libs/database/lambda-client/* ${outputDir}/lambda-client/`,
+              // Copy the required WASM files for PostgreSQL query compilation
+              `cp ${inputDir}/node_modules/.pnpm/prisma*/node_modules/prisma/build/query_compiler_bg.postgresql.wasm ${outputDir}/lambda-client/query_compiler_bg.wasm 2>/dev/null || true`,
+              // Copy PostgreSQL query engine WASM if it exists and is needed
+              `cp ${inputDir}/node_modules/.pnpm/prisma*/node_modules/prisma/build/query_engine_bg.postgresql.wasm ${outputDir}/lambda-client/query_engine_bg.wasm 2>/dev/null || true`,
+            ];
+          },
+          beforeInstall(inputDir: string, outputDir: string): string[] {
+            return [];
+          },
+        },
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
