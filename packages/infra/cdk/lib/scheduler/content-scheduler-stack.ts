@@ -34,7 +34,7 @@ export class ContentSchedulerStack extends cdk.Stack {
     super(scope, id, props);
 
     const { environment, alertEmail } = props;
-    const prefix = `postolio-scheduler-${environment}`;
+    const prefix = `postolio-${environment}-scheduler`;
 
     // Publisher Lambda now uses AWS IAM SigV4 authentication instead of API keys
 
@@ -304,7 +304,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
         resources: [
-          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${prefix}-*`,
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/postolio-${environment}-*`,
         ],
       })
     );
@@ -1031,7 +1031,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::kms:GenerateDataKey*',
             'Action::kms:ReEncrypt*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
-            `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-scheduler-${environment}-schedules/*`,
+            `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-${environment}-scheduler-schedules/*`,
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           ],
@@ -1097,7 +1097,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::kms:GenerateDataKey*',
             'Action::kms:ReEncrypt*',
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
-            `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-scheduler-${environment}-schedules/*`,
+            `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-${environment}-scheduler-schedules/*`,
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           ],

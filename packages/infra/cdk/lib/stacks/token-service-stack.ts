@@ -40,12 +40,12 @@ export class TokenServiceStack extends cdk.Stack {
     const encryptionKey = new kms.Key(this, 'TokenEncryptionKey', {
       description: `Token Service encryption key - ${environment}`,
       enableKeyRotation: true,
-      alias: `alias/token-service-${environment}`,
+      alias: `alias/postolio-${environment}-token-service`,
     });
 
     // Create DynamoDB table for tokens
     const tokensTable = new dynamodb.Table(this, 'TokensTable', {
-      tableName: `token-service-${environment}`,
+      tableName: `postolio-${environment}-token-service`,
       partitionKey: {
         name: 'pk',
         type: dynamodb.AttributeType.STRING,
@@ -77,7 +77,7 @@ export class TokenServiceStack extends cdk.Stack {
 
     // Create Lambda function
     const tokenServiceLambda = new NodejsFunction(this, 'TokenServiceFunction', {
-      functionName: `token-service-${environment}`,
+      functionName: `postolio-${environment}-token-service`,
       entry: path.join(__dirname, '../../../../services/token-service/src/index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
@@ -121,8 +121,7 @@ export class TokenServiceStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunctionUrl'],
         resources: [
-          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
         ],
       })
     );
@@ -140,7 +139,7 @@ export class TokenServiceStack extends cdk.Stack {
 
     // CloudWatch Alarms
     const errorAlarm = new cloudwatch.Alarm(this, 'TokenServiceErrors', {
-      alarmName: `token-service-errors-${environment}`,
+      alarmName: `postolio-${environment}-token-service-errors`,
       metric: tokenServiceLambda.metricErrors(),
       threshold: 5,
       evaluationPeriods: 1,
@@ -148,7 +147,7 @@ export class TokenServiceStack extends cdk.Stack {
     });
 
     const throttleAlarm = new cloudwatch.Alarm(this, 'TokenServiceThrottles', {
-      alarmName: `token-service-throttles-${environment}`,
+      alarmName: `postolio-${environment}-token-service-throttles`,
       metric: tokenServiceLambda.metricThrottles(),
       threshold: 10,
       evaluationPeriods: 1,
@@ -158,7 +157,7 @@ export class TokenServiceStack extends cdk.Stack {
     // SNS Topic for alarms (if email provided)
     if (alertEmail) {
       const alarmTopic = new sns.Topic(this, 'TokenServiceAlarms', {
-        topicName: `token-service-alarms-${environment}`,
+        topicName: `postolio-${environment}-token-service-alarms`,
         displayName: 'Token Service Alarms',
       });
 
@@ -241,8 +240,7 @@ export class TokenServiceStack extends cdk.Stack {
             'Action::kms:GenerateDataKey*',
             'Action::kms:ReEncrypt*',
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           ],
         },
         {
