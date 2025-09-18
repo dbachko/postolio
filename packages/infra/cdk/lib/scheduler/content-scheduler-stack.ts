@@ -502,15 +502,8 @@ export class ContentSchedulerStack extends cdk.Stack {
           },
           afterBundling(inputDir: string, outputDir: string): string[] {
             return [
-              // Create lambda-client directory for Prisma client files
-              `mkdir -p ${outputDir}/lambda-client`,
-              // Copy essential Prisma client files (lightweight, no binary engines)
-              `cp -r ${inputDir}/packages/libs/database/lambda-client/* ${outputDir}/lambda-client/`,
-              // Find and copy the required WASM files for PostgreSQL query compilation
-              `find ${inputDir}/node_modules -name "query_compiler_bg.postgresql.wasm" -exec cp {} ${outputDir}/lambda-client/query_compiler_bg.wasm \\; 2>/dev/null || echo "query_compiler WASM not found"`,
-              `find ${inputDir}/node_modules -name "query_engine_bg.postgresql.wasm" -exec cp {} ${outputDir}/lambda-client/query_engine_bg.wasm \\; 2>/dev/null || echo "query_engine WASM not found"`,
-              // List what we actually copied for debugging
-              `ls -la ${outputDir}/lambda-client/*.wasm 2>/dev/null || echo "No WASM files found in lambda-client"`,
+              // Copy the Prisma lambda client directory with all necessary files
+              `cp -r ${inputDir}/packages/libs/database/lambda-client ${outputDir}/`,
             ];
           },
           beforeInstall(inputDir: string, outputDir: string): string[] {
