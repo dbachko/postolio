@@ -306,6 +306,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
       const statusBroadcaster = new StatusBroadcaster(app, redis);
       schedulerAdapter.setBroadcaster(statusBroadcaster);
+
+      // Inject status broadcaster into campaign service for real-time updates
+      const { campaignService } = await import('./services/campaign.js');
+      campaignService.setStatusBroadcaster(statusBroadcaster);
+
       app.log.info('✅ WebSocket real-time updates initialized');
 
       // Initialize retention manager

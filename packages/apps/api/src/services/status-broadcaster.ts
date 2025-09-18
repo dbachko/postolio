@@ -2,6 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 
 export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
+export type CampaignStatus =
+  | 'draft'
+  | 'preview'
+  | 'creating'
+  | 'active'
+  | 'paused'
+  | 'completed'
+  | 'failed';
 
 export interface StatusChangeEvent {
   type: 'status_change';
@@ -9,6 +17,47 @@ export interface StatusChangeEvent {
   oldStatus: ContentStatus;
   newStatus: ContentStatus;
   metadata?: Record<string, unknown>;
+  timestamp: string;
+}
+
+export interface CampaignStatusUpdateEvent {
+  type: 'campaign_status_update';
+  campaignId: string;
+  brandId: string;
+  oldStatus: CampaignStatus;
+  newStatus: CampaignStatus;
+  progress: number;
+  errorMessage?: string | null;
+  previewGenerated?: boolean;
+  isRunning: boolean;
+  metadata?: {
+    completedSteps?: string[];
+    totalSteps?: number;
+    estimatedTimeRemaining?: number;
+    lastActivity?: string;
+  };
+  timestamp: string;
+}
+
+export interface CampaignProgressUpdateEvent {
+  type: 'campaign_progress_update';
+  campaignId: string;
+  brandId: string;
+  progress: number;
+  currentStep?: string;
+  totalSteps?: number;
+  estimatedTimeRemaining?: number;
+  timestamp: string;
+}
+
+export interface CampaignErrorEvent {
+  type: 'campaign_error';
+  campaignId: string;
+  brandId: string;
+  errorType: 'validation' | 'generation' | 'scheduling' | 'network' | 'system';
+  errorMessage: string;
+  errorCode?: string;
+  retryable: boolean;
   timestamp: string;
 }
 
@@ -247,6 +296,268 @@ export class StatusBroadcaster {
         oldestEvent: null,
         newestEvent: null,
       };
+    }
+  }
+
+  /**
+   * Broadcast campaign status change to all connected clients in the brand room
+   * and store the event in Redis Stream for persistence
+   */
+  async broadcastCampaignStatusChange(
+    campaignId: string,
+    brandId: string,
+    oldStatus: CampaignStatus,
+    newStatus: CampaignStatus,
+    progress: number,
+    options?: {
+      errorMessage?: string | null;
+      previewGenerated?: boolean;
+      isRunning?: boolean;
+      metadata?: CampaignStatusUpdateEvent['metadata'];
+    }
+  ): Promise<void> {
+    const timestamp = Date.now();
+    const event: CampaignStatusUpdateEvent = {
+      type: 'campaign_status_update',
+      campaignId,
+      brandId,
+      oldStatus,
+      newStatus,
+      progress,
+      errorMessage: options?.errorMessage,
+      previewGenerated: options?.previewGenerated ?? false,
+      isRunning: options?.isRunning ?? false,
+      metadata: options?.metadata,
+      timestamp: new Date(timestamp).toISOString(),
+    };
+
+    // Store in Redis Stream for campaign events
+    try {
+      await this.redis.xadd(
+        `campaign_events:${brandId}`,
+        'MAXLEN',
+        '~',
+        '5000', // Keep approximately 5k campaign events max
+        '*',
+        'type',
+        'campaign_status_update',
+        'campaignId',
+        campaignId,
+        'oldStatus',
+        oldStatus,
+        'newStatus',
+        newStatus,
+        'progress',
+        progress.toString(),
+        'errorMessage',
+        options?.errorMessage || '',
+        'previewGenerated',
+        (options?.previewGenerated ?? false).toString(),
+        'isRunning',
+        (options?.isRunning ?? false).toString(),
+        'metadata',
+        JSON.stringify(options?.metadata || {}),
+        'timestamp',
+        timestamp.toString()
+      );
+    } catch (error) {
+      this.fastify.log.error(
+        { error, brandId, campaignId },
+        'Failed to store campaign event in Redis'
+      );
+    }
+
+    // Broadcast to brand room
+    try {
+      this.fastify.broadcastToRoom(`brand:${brandId}`, event as unknown as Record<string, unknown>);
+    } catch (error) {
+      this.fastify.log.error(
+        { error, brandId, campaignId },
+        'Failed to broadcast campaign status update'
+      );
+    }
+
+    // Also broadcast to campaign-specific room if anyone is subscribed
+    try {
+      this.fastify.broadcastToRoom(
+        `campaign:${campaignId}`,
+        event as unknown as Record<string, unknown>
+      );
+    } catch (error) {
+      this.fastify.log.error({ error, campaignId }, 'Failed to broadcast to campaign room');
+    }
+  }
+
+  /**
+   * Broadcast campaign progress update
+   */
+  async broadcastCampaignProgress(
+    campaignId: string,
+    brandId: string,
+    progress: number,
+    options?: {
+      currentStep?: string;
+      totalSteps?: number;
+      estimatedTimeRemaining?: number;
+    }
+  ): Promise<void> {
+    const timestamp = Date.now();
+    const event: CampaignProgressUpdateEvent = {
+      type: 'campaign_progress_update',
+      campaignId,
+      brandId,
+      progress,
+      currentStep: options?.currentStep,
+      totalSteps: options?.totalSteps,
+      estimatedTimeRemaining: options?.estimatedTimeRemaining,
+      timestamp: new Date(timestamp).toISOString(),
+    };
+
+    // Store in Redis Stream (lighter weight for progress updates)
+    try {
+      await this.redis.xadd(
+        `campaign_progress:${campaignId}`,
+        'MAXLEN',
+        '~',
+        '100', // Keep only last 100 progress updates per campaign
+        '*',
+        'type',
+        'campaign_progress_update',
+        'progress',
+        progress.toString(),
+        'currentStep',
+        options?.currentStep || '',
+        'totalSteps',
+        (options?.totalSteps || 0).toString(),
+        'estimatedTimeRemaining',
+        (options?.estimatedTimeRemaining || 0).toString(),
+        'timestamp',
+        timestamp.toString()
+      );
+    } catch (error) {
+      this.fastify.log.error({ error, campaignId }, 'Failed to store progress event in Redis');
+    }
+
+    // Broadcast to both rooms
+    try {
+      this.fastify.broadcastToRoom(`brand:${brandId}`, event as unknown as Record<string, unknown>);
+      this.fastify.broadcastToRoom(
+        `campaign:${campaignId}`,
+        event as unknown as Record<string, unknown>
+      );
+    } catch (error) {
+      this.fastify.log.error({ error, brandId, campaignId }, 'Failed to broadcast progress update');
+    }
+  }
+
+  /**
+   * Broadcast campaign error event
+   */
+  async broadcastCampaignError(
+    campaignId: string,
+    brandId: string,
+    errorType: CampaignErrorEvent['errorType'],
+    errorMessage: string,
+    options?: {
+      errorCode?: string;
+      retryable?: boolean;
+    }
+  ): Promise<void> {
+    const timestamp = Date.now();
+    const event: CampaignErrorEvent = {
+      type: 'campaign_error',
+      campaignId,
+      brandId,
+      errorType,
+      errorMessage,
+      errorCode: options?.errorCode,
+      retryable: options?.retryable ?? false,
+      timestamp: new Date(timestamp).toISOString(),
+    };
+
+    // Store in Redis Stream for error tracking
+    try {
+      await this.redis.xadd(
+        `campaign_errors:${brandId}`,
+        'MAXLEN',
+        '~',
+        '1000', // Keep last 1000 errors per brand
+        '*',
+        'type',
+        'campaign_error',
+        'campaignId',
+        campaignId,
+        'errorType',
+        errorType,
+        'errorMessage',
+        errorMessage,
+        'errorCode',
+        options?.errorCode || '',
+        'retryable',
+        (options?.retryable ?? false).toString(),
+        'timestamp',
+        timestamp.toString()
+      );
+    } catch (error) {
+      this.fastify.log.error(
+        { error, brandId, campaignId },
+        'Failed to store error event in Redis'
+      );
+    }
+
+    // Broadcast to both rooms
+    try {
+      this.fastify.broadcastToRoom(`brand:${brandId}`, event as unknown as Record<string, unknown>);
+      this.fastify.broadcastToRoom(
+        `campaign:${campaignId}`,
+        event as unknown as Record<string, unknown>
+      );
+    } catch (error) {
+      this.fastify.log.error({ error, brandId, campaignId }, 'Failed to broadcast error event');
+    }
+  }
+
+  /**
+   * Get recent campaign events for a brand (for catch-up on reconnection)
+   */
+  async getRecentCampaignEvents(
+    brandId: string,
+    limit: number = 50
+  ): Promise<(CampaignStatusUpdateEvent | CampaignProgressUpdateEvent | CampaignErrorEvent)[]> {
+    try {
+      const events = await this.redis.xrevrange(
+        `campaign_events:${brandId}`,
+        '+',
+        '-',
+        'COUNT',
+        limit.toString()
+      );
+
+      return events
+        .map(([, fields]) => {
+          const data = this.parseStreamFields(fields);
+          if (data.type === 'campaign_status_update') {
+            return {
+              type: 'campaign_status_update' as const,
+              campaignId: data.campaignId || '',
+              brandId,
+              oldStatus: (data.oldStatus || 'draft') as CampaignStatus,
+              newStatus: (data.newStatus || 'draft') as CampaignStatus,
+              progress: parseInt(data.progress || '0'),
+              errorMessage: data.errorMessage || null,
+              previewGenerated: data.previewGenerated === 'true',
+              isRunning: data.isRunning === 'true',
+              metadata: data.metadata ? JSON.parse(data.metadata) : undefined,
+              timestamp: new Date(parseInt(data.timestamp || '0')).toISOString(),
+            } as CampaignStatusUpdateEvent;
+          }
+          // Add other event types as needed
+          return null;
+        })
+        .filter((event): event is CampaignStatusUpdateEvent => event !== null);
+    } catch (error) {
+      this.fastify.log.error({ error, brandId }, 'Failed to get recent campaign events');
+      return [];
     }
   }
 

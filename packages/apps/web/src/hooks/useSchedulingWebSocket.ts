@@ -15,6 +15,9 @@ import { WebSocketError, ConnectionError, AuthenticationError } from '../types/w
 export function useSchedulingWebSocket({
   enabled = true,
   onStatusUpdate,
+  onCampaignStatusUpdate,
+  onCampaignProgressUpdate,
+  onCampaignError,
   onConnectionChange,
   onError,
   maxReconnectAttempts = 5,
@@ -438,6 +441,38 @@ export function useSchedulingWebSocket({
 
           if (message.type === 'status_update' || message.type === 'batch_status_update') {
             handleStatusUpdate(message as StatusUpdateEvent);
+          }
+
+          if (message.type === 'campaign_status_update') {
+            console.log('Campaign status update received:', message.data);
+            if (onCampaignStatusUpdate && message.data) {
+              onCampaignStatusUpdate(
+                message.data as import('../types/websocket').CampaignStatusUpdateData
+              );
+            }
+          }
+
+          if (message.type === 'campaign_progress_update') {
+            console.log('Campaign progress update received:', message.data);
+            if (onCampaignProgressUpdate && message.data) {
+              onCampaignProgressUpdate(
+                message.data as import('../types/websocket').CampaignProgressUpdateData
+              );
+            }
+          }
+
+          if (message.type === 'campaign_error') {
+            console.log('Campaign error received:', message.data);
+            if (onCampaignError && message.data) {
+              onCampaignError(message.data as import('../types/websocket').CampaignErrorData);
+            }
+            // Also show error toast
+            toast.error('Campaign Error', {
+              description:
+                (message.data as import('../types/websocket').CampaignErrorData)?.errorMessage ||
+                'An error occurred with your campaign',
+              duration: 8000,
+            });
           }
         } catch (error) {
           const parseError =
