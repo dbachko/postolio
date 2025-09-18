@@ -502,11 +502,14 @@ export class ContentSchedulerStack extends cdk.Stack {
           },
           afterBundling(inputDir: string, outputDir: string): string[] {
             return [
-              // Copy Prisma Lambda client engine binary for AWS Lambda runtime
-              `cp ${inputDir}/packages/libs/database/lambda-client/libquery_engine-rhel-openssl-3.0.x.so.node ${outputDir}/`,
-              // Create lambda-client directory and copy all necessary files
+              // Create lambda-client directory and copy only essential files for AWS Lambda
               `mkdir -p ${outputDir}/lambda-client`,
-              `cp -r ${inputDir}/packages/libs/database/lambda-client/* ${outputDir}/lambda-client/`,
+              // Copy the required Lambda binary engine
+              `cp ${inputDir}/packages/libs/database/lambda-client/libquery_engine-rhel-openssl-3.0.x.so.node ${outputDir}/lambda-client/`,
+              // Copy JS client files (exclude other platform binaries to reduce size)
+              `cp ${inputDir}/packages/libs/database/lambda-client/*.js ${outputDir}/lambda-client/`,
+              `cp ${inputDir}/packages/libs/database/lambda-client/*.d.ts ${outputDir}/lambda-client/ || true`,
+              `cp ${inputDir}/packages/libs/database/lambda-client/package.json ${outputDir}/lambda-client/ || true`,
             ];
           },
           beforeInstall(inputDir: string, outputDir: string): string[] {
