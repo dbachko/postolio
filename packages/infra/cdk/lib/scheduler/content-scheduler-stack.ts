@@ -495,7 +495,21 @@ export class ContentSchedulerStack extends cdk.Stack {
           '@aws-lambda-powertools/tracer',
           '@aws-lambda-powertools/metrics',
         ],
-        nodeModules: ['pg', '@prisma/adapter-pg'],
+        nodeModules: ['pg', '@prisma/adapter-pg', '@prisma/client'],
+        commandHooks: {
+          beforeBundling(inputDir: string, outputDir: string): string[] {
+            return [];
+          },
+          afterBundling(inputDir: string, outputDir: string): string[] {
+            return [
+              // Copy Prisma Lambda client and query engine WASM file
+              `cp -r ${inputDir}/packages/libs/database/lambda-client ${outputDir}/`,
+            ];
+          },
+          beforeInstall(inputDir: string, outputDir: string): string[] {
+            return [];
+          },
+        },
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,

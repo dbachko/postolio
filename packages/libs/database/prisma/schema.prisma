@@ -5,7 +5,7 @@ generator client {
 generator lambdaClient {
   provider   = "prisma-client-js"
   output     = "../lambda-client"
-  engineType = "client"
+  engineType = "library"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
