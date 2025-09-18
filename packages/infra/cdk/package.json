@@ -63,9 +63,11 @@
     "@aws-sdk/core": "^3.883.0",
     "@postolio/aws": "workspace:^",
     "@postolio/service-parameters": "workspace:^",
+    "@prisma/adapter-pg": "^6.2.0",
     "@smithy/core": "^3.11.0",
     "aws-cdk-lib": "^2.93.0",
     "aws-xray-sdk-core": "^3.10.3",
-    "constructs": "^10.2.69"
+    "constructs": "^10.2.69",
+    "pg": "^8.13.1"
   }
 }

@@ -1,4 +1,4 @@
 {
   "extends": "@postolio/tsconfig/base.json",
-  "include": ["index.ts", "prisma/**/*.ts"]
+  "include": ["index.ts", "lambda.ts", "lambda-client/**/*.ts", "prisma/**/*.ts"]
 }

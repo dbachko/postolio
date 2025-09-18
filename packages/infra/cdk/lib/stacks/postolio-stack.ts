@@ -123,6 +123,7 @@ export class PostolioStack extends cdk.Stack {
 
     // Database secret with URL-safe password generation
     const dbSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
+      secretName: `postolio-${environment}-database-credentials`,
       description: 'Postolio database credentials',
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: 'postgres' }),
@@ -154,6 +155,7 @@ export class PostolioStack extends cdk.Stack {
       multiAz: environment === 'prod', // Enable Multi-AZ for production
       port: 5433, // Use non-default port for security
     });
+
 
     // ElastiCache Redis Subnet Group
     const cacheSubnetGroup = new elasticache.CfnSubnetGroup(this, 'CacheSubnetGroup', {
@@ -701,7 +703,7 @@ export class PostolioStack extends cdk.Stack {
     // Note: Bucket policy for OAC will be added after CloudFront distribution creation
 
     // CloudFront Distribution with multiple origins for same-domain architecture
-    const distributionProps: any = {
+    const distributionProps: cloudfront.DistributionProps = {
       // Default behavior - serves frontend from S3
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(frontendBucket, {
