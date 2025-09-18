@@ -304,7 +304,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
         resources: [
-          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${prefix}-*`,
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/postolio-${environment}-*`,
         ],
       })
     );
