@@ -33,6 +33,7 @@ const stack = new ContentSchedulerStack(app, stackName, {
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
   mainAppApiUrl: app.node.tryGetContext('mainAppApiUrl') || 'https://postolio.example',
+  databaseUrl: process.env.DATABASE_URL || app.node.tryGetContext('databaseUrl'),
   description: `Content Scheduler Microservice - ${environment} environment`,
   tags: {
     Environment: environment,
