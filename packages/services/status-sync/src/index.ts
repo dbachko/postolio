@@ -71,12 +71,23 @@ async function getDatabaseUrl(): Promise<string> {
   let username = process.env.DB_USERNAME;
   let password = process.env.DB_PASSWORD;
 
+  console.log('DB config from env:', {
+    hasHost: !!host,
+    port,
+    name,
+    hasUsername: !!username,
+    hasPassword: !!password,
+    secretArn: process.env.DB_SECRET_ARN
+  });
+
   try {
     const secretId = process.env.DB_SECRET_ARN || process.env.DB_SECRET_NAME;
+    console.log('Attempting to read secret:', secretId);
     if ((!username || !password) && secretId) {
       const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
       if (res.SecretString) {
         const obj = JSON.parse(res.SecretString);
+        console.log('Secret keys:', Object.keys(obj));
         username = username || obj.username;
         password = password || obj.password;
         host = host || obj.host || obj.hostname;
@@ -87,10 +98,12 @@ async function getDatabaseUrl(): Promise<string> {
         if (!name && (obj.dbname || obj.database || obj.db)) {
           name = obj.dbname || obj.database || obj.db;
         }
+        console.log('Final DB config:', { host, port, name, hasUsername: !!username, hasPassword: !!password });
       }
     }
-  } catch {
-    console.warn('Failed to read DB secret, falling back to env vars');
+  } catch (error) {
+    console.error('Failed to read DB secret:', error);
+    console.warn('Falling back to env vars');
   }
 
   if (!host || !username || !password) {

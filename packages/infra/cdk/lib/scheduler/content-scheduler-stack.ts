@@ -24,7 +24,6 @@ export interface ContentSchedulerStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
   alertEmail?: string;
   mainAppApiUrl?: string;
-  databaseUrl?: string;
 }
 
 export class ContentSchedulerStack extends cdk.Stack {
@@ -34,7 +33,7 @@ export class ContentSchedulerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ContentSchedulerStackProps) {
     super(scope, id, props);
 
-    const { environment, alertEmail, databaseUrl } = props;
+    const { environment, alertEmail } = props;
     const prefix = `postolio-${environment}-scheduler`;
 
     // Publisher Lambda now uses AWS IAM SigV4 authentication instead of API keys
@@ -517,7 +516,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       description: 'Status Sync Lambda with WASM files included',
       environment: {
         ...lambdaEnvironment,
-        DATABASE_URL: databaseUrl || '',
       },
       tracing: lambda.Tracing.ACTIVE,
       deadLetterQueueEnabled: true,
