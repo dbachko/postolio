@@ -21,7 +21,8 @@ export function createLambdaPrismaClient(
   options: LambdaPrismaClientOptions = {}
 ): LambdaPrismaInstance {
   const { connectionString, pool, poolConfig, ...prismaOptions } = options;
-  const resolvedPool = pool ?? new Pool(poolConfig ?? (connectionString ? { connectionString } : undefined));
+  const resolvedPool =
+    pool ?? new Pool(poolConfig ?? (connectionString ? { connectionString } : undefined));
   const adapter = new PrismaPg(resolvedPool);
   const client = new LambdaPrismaClient({
     ...prismaOptions,
@@ -30,4 +31,3 @@ export function createLambdaPrismaClient(
 
   return { client, pool: resolvedPool };
 }
-

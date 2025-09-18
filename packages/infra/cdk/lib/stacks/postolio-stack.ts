@@ -156,7 +156,6 @@ export class PostolioStack extends cdk.Stack {
       port: 5433, // Use non-default port for security
     });
 
-
     // ElastiCache Redis Subnet Group
     const cacheSubnetGroup = new elasticache.CfnSubnetGroup(this, 'CacheSubnetGroup', {
       description: 'Subnet group for ElastiCache',
