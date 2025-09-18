@@ -114,6 +114,9 @@ async function getClient(): Promise<LambdaPrismaClient> {
       poolConfig: {
         connectionString: url,
         max: Number(process.env.DB_CONNECTION_LIMIT || process.env.DB_POOL_MAX || '1'),
+        connectionTimeoutMillis: 10000, // 10 seconds
+        idleTimeoutMillis: 30000, // 30 seconds
+        query_timeout: 20000, // 20 seconds
       },
     });
     prisma = client;
