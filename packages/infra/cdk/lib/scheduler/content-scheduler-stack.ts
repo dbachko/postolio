@@ -617,9 +617,9 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunctionUrl'],
         resources: [
-          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:token-service-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
         ],
       })
     );
@@ -650,9 +650,9 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunctionUrl'],
         resources: [
-          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:token-service-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
         ],
       })
     );
@@ -800,9 +800,9 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunctionUrl'],
         resources: [
-          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:token-service-${environment}`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
         ],
       })
     );
