@@ -495,27 +495,7 @@ export class ContentSchedulerStack extends cdk.Stack {
           '@aws-lambda-powertools/tracer',
           '@aws-lambda-powertools/metrics',
         ],
-        nodeModules: ['pg', '@prisma/adapter-pg', '@prisma/client'],
-        commandHooks: {
-          beforeBundling(inputDir: string, outputDir: string): string[] {
-            return [];
-          },
-          afterBundling(inputDir: string, outputDir: string): string[] {
-            return [
-              // Create lambda-client directory and copy only essential files for AWS Lambda
-              `mkdir -p ${outputDir}/lambda-client`,
-              // Copy the required Lambda binary engine
-              `cp ${inputDir}/packages/libs/database/lambda-client/libquery_engine-rhel-openssl-3.0.x.so.node ${outputDir}/lambda-client/`,
-              // Copy JS client files (exclude other platform binaries to reduce size)
-              `cp ${inputDir}/packages/libs/database/lambda-client/*.js ${outputDir}/lambda-client/`,
-              `cp ${inputDir}/packages/libs/database/lambda-client/*.d.ts ${outputDir}/lambda-client/ || true`,
-              `cp ${inputDir}/packages/libs/database/lambda-client/package.json ${outputDir}/lambda-client/ || true`,
-            ];
-          },
-          beforeInstall(inputDir: string, outputDir: string): string[] {
-            return [];
-          },
-        },
+        nodeModules: ['pg', '@prisma/adapter-pg'],
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
