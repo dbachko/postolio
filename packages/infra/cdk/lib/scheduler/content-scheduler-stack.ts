@@ -554,6 +554,14 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // ==================== EventBridge Scheduler (Modern API) ====================
 
+    // Create the scheduler group
+    const schedulerGroup = new cdk.CfnResource(this, 'SchedulerGroup', {
+      type: 'AWS::Scheduler::ScheduleGroup',
+      properties: {
+        Name: `${prefix}-schedules`,
+      },
+    });
+
     const schedulerRole = new iam.Role(this, 'SchedulerRole', {
       assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
     });
@@ -563,6 +571,9 @@ export class ContentSchedulerStack extends cdk.Stack {
     // Add environment variables to Lambda functions here
     scheduleManagementLambda.addEnvironment('PUBLISHER_LAMBDA_ARN', publisherLambda.functionArn);
     scheduleManagementLambda.addEnvironment('SCHEDULER_ROLE_ARN', schedulerRole.roleArn);
+
+    // Ensure Lambda functions depend on the scheduler group being created
+    scheduleManagementLambda.node.addDependency(schedulerGroup);
 
     // Add scheduler-specific environment variables to retry handler
     retryHandlerLambda.addEnvironment('PUBLISHER_LAMBDA_ARN', publisherLambda.functionArn);
