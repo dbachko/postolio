@@ -495,25 +495,7 @@ export class ContentSchedulerStack extends cdk.Stack {
           '@aws-lambda-powertools/tracer',
           '@aws-lambda-powertools/metrics',
         ],
-        nodeModules: ['pg', '@prisma/adapter-pg'],
-        commandHooks: {
-          beforeBundling(inputDir: string, outputDir: string): string[] {
-            return [];
-          },
-          afterBundling(inputDir: string, outputDir: string): string[] {
-            return [
-              // Copy Prisma Lambda client with only necessary files for Lambda runtime
-              `cp -r ${inputDir}/packages/libs/database/lambda-client ${outputDir}/`,
-              // Remove unnecessary binary files to reduce bundle size (keep only Lambda-compatible ones)
-              `rm -f ${outputDir}/lambda-client/*.dylib.node`,
-              `rm -f ${outputDir}/lambda-client/libquery_engine-debian-*.node`,
-              `rm -f ${outputDir}/lambda-client/libquery_engine-darwin-*.node`,
-            ];
-          },
-          beforeInstall(inputDir: string, outputDir: string): string[] {
-            return [];
-          },
-        },
+        nodeModules: ['pg', '@prisma/adapter-pg', '@postolio/database'],
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
