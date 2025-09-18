@@ -520,6 +520,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
+      description: 'Status Sync Lambda with WASM files included',
       environment: {
         ...lambdaEnvironment,
         // Expect DATABASE_URL to be set via stack parameters or environment config
