@@ -392,9 +392,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
           effect: iam.Effect.ALLOW,
           actions: ['lambda:InvokeFunctionUrl'],
           resources: [
-            `arn:aws:lambda:${this.region}:${this.account}:function:token-service-${environment}`,
             `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
-            `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
           ],
         })
       );
@@ -531,7 +529,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
 
     // DLQ Processing State Table
     const dlqStateTable = new dynamodb.Table(this, 'DLQStateTable', {
-      tableName: `postolio-dlq-state-${environment}`,
+      tableName: `postolio-${environment}-dlq-state`,
       partitionKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -550,7 +548,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
 
     // DLQ Processor Lambda
     const dlqProcessorLambda = new lambda.Function(this, 'DLQProcessorLambda', {
-      functionName: `postolio-dlq-processor-${environment}`,
+      functionName: `postolio-${environment}-dlq-processor`,
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('./lib/lambdas/dlq-processor'),
@@ -598,7 +596,7 @@ export class PlatformMicroservicesStack extends cdk.Stack {
 
     // Manual reprocess Lambda
     const dlqReprocessLambda = new lambda.Function(this, 'DLQReprocessLambda', {
-      functionName: `postolio-dlq-reprocess-${environment}`,
+      functionName: `postolio-${environment}-dlq-reprocess`,
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.reprocessHandler',
       code: lambda.Code.fromAsset('./lib/lambdas/dlq-processor'),

@@ -75,14 +75,14 @@ Update service discovery parameters to match new naming.
 - [x] Update EventBridge scheduler ARN patterns in suppressions
 - [x] Test CDK synth - no errors
 
-### Phase 2 (Future PRs)
-- [ ] Update video-processing-stack.ts Lambda names
-- [ ] Update token-service-stack.ts Lambda names (currently `token-service-${environment}`)
-- [ ] Update platform-microservices-stack.ts Lambda names
-- [ ] Update platform-microservices-stack.ts IAM references to token-service
-- [ ] Update postolio-lambda-stack.ts Lambda names
-- [ ] Update any hardcoded references in application code
-- [ ] Update cross-stack references
+### Phase 2 (This PR - Completed)
+- [x] Update video-processing-stack.ts Lambda names
+- [x] Update token-service-stack.ts Lambda names (changed from `token-service-${environment}`)
+- [x] Update platform-microservices-stack.ts Lambda names
+- [x] Update platform-microservices-stack.ts IAM references to remove old patterns
+- [x] Update postolio-lambda-stack.ts Lambda names (already followed pattern)
+- [x] Update cross-stack IAM references to single pattern
+- [x] Simplify all IAM permissions to use `postolio-${environment}-*`
 
 ## Notes
 
@@ -93,7 +93,36 @@ Update service discovery parameters to match new naming.
 4. **Prefix Variables**: Using centralized prefix helps maintain consistency across resources
 
 ### Benefits Achieved
-- Single IAM pattern for Lambda invocations in content-scheduler-stack
-- Reduced CDK Nag suppression complexity from 5+ patterns to 1
-- Consistent resource naming with `postolio-${environment}-scheduler-*` pattern
-- CDK synth passes without errors
+- **Single IAM pattern** for all Lambda invocations: `postolio-${environment}-*`
+- **Reduced CDK Nag suppression complexity** from 5+ patterns to 1
+- **Consistent resource naming** across all stacks
+- **CDK synth passes** without errors for all stacks
+
+## Lambda Name Changes Summary
+
+### Content Scheduler Stack
+- `postolio-scheduler-dev-schedule-management` → `postolio-dev-scheduler-management`
+- `postolio-scheduler-dev-publisher` → `postolio-dev-scheduler-publisher`
+- `postolio-scheduler-dev-retry-handler` → `postolio-dev-scheduler-retry`
+- `postolio-scheduler-dev-schedule-cleanup` → `postolio-dev-scheduler-cleanup`
+- `postolio-scheduler-dev-status-sync` → `postolio-dev-scheduler-status-sync`
+
+### Token Service Stack
+- `token-service-dev` → `postolio-dev-token-service`
+
+### Video Processing Stack
+- `video-upload-dev` → `postolio-dev-video-upload`
+- `video-processor-dev` → `postolio-dev-video-processor`
+- `video-validator-dev` → `postolio-dev-video-validator`
+- `mediaconvert-event-handler-dev` → `postolio-dev-video-mediaconvert-handler`
+
+### Platform Microservices Stack
+- `postolio-dev-token-service` (already correct)
+- `postolio-dev-token-rotation` (already correct)
+- `postolio-dev-scheduler-service` (already correct)
+- `postolio-dev-{platform}-publisher` (already correct)
+- `postolio-dlq-processor-dev` → `postolio-dev-dlq-processor`
+- `postolio-dlq-reprocess-dev` → `postolio-dev-dlq-reprocess`
+
+### Postolio Lambda Stack
+- `postolio-dev-eventbridge-handler` (already correct)

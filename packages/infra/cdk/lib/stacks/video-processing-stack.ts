@@ -175,7 +175,7 @@ export class VideoProcessingStack extends Stack {
 
     // Video Upload Lambda
     this.videoUploadFunction = new NodejsFunction(this, 'VideoUploadFunction', {
-      functionName: `video-upload-${environment}`,
+      functionName: `postolio-${environment}-video-upload`,
       entry: path.join(__dirname, '../lambda/video-upload/index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
@@ -197,7 +197,7 @@ export class VideoProcessingStack extends Stack {
 
     // Video Processor Lambda
     this.videoProcessorFunction = new NodejsFunction(this, 'VideoProcessorFunction', {
-      functionName: `video-processor-${environment}`,
+      functionName: `postolio-${environment}-video-processor`,
       entry: path.join(__dirname, '../lambda/video-processor/index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
@@ -307,7 +307,7 @@ export class VideoProcessingStack extends Stack {
     });
 
     this.videoValidatorFunction = new NodejsFunction(this, 'VideoValidatorFunction', {
-      functionName: `video-validator-${environment}`,
+      functionName: `postolio-${environment}-video-validator`,
       entry: path.join(__dirname, '../lambda/video-validator/index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
@@ -348,7 +348,7 @@ export class VideoProcessingStack extends Stack {
 
     // Create a separate handler for MediaConvert events
     const mediaConvertEventHandler = new NodejsFunction(this, 'MediaConvertEventHandler', {
-      functionName: `mediaconvert-event-handler-${environment}`,
+      functionName: `postolio-${environment}-video-mediaconvert-handler`,
       entry: path.join(__dirname, '../lambda/video-processor/index.ts'),
       handler: 'handleJobStatusUpdate',
       runtime: lambda.Runtime.NODEJS_20_X,
