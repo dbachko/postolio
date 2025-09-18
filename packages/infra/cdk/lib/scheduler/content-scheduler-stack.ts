@@ -495,7 +495,7 @@ export class ContentSchedulerStack extends cdk.Stack {
           '@aws-lambda-powertools/tracer',
           '@aws-lambda-powertools/metrics',
         ],
-        nodeModules: ['pg', '@prisma/adapter-pg', '@postolio/database'],
+        nodeModules: ['pg', '@prisma/adapter-pg', '@prisma/client'],
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
