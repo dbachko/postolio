@@ -4,14 +4,13 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as scheduler from 'aws-cdk-lib/aws-scheduler';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -19,7 +18,6 @@ import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 import * as path from 'path';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { ParameterNames, type Environment } from '@postolio/service-parameters';
 
 export interface ContentSchedulerStackProps extends cdk.StackProps {
@@ -35,11 +33,8 @@ export class ContentSchedulerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ContentSchedulerStackProps) {
     super(scope, id, props);
 
-    const { environment, alertEmail, mainAppApiUrl } = props;
+    const { environment, alertEmail } = props;
     const prefix = `postolio-scheduler-${environment}`;
-
-    // All environments use the production URL
-    const resolvedMainAppApiUrl = mainAppApiUrl || 'https://postolio.example';
 
     // Publisher Lambda now uses AWS IAM SigV4 authentication instead of API keys
 
@@ -266,6 +261,13 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // ==================== Lambda Functions with Best Practices ====================
 
+    const databaseSecretName = `postolio-${environment}-database-credentials`;
+    const databaseSecret = secretsmanager.Secret.fromSecretNameV2(
+      this,
+      'DatabaseCredentialsSecret',
+      databaseSecretName
+    );
+
     // Shared Lambda environment variables
     const lambdaEnvironment = {
       ENVIRONMENT: environment,
@@ -283,6 +285,9 @@ export class ContentSchedulerStack extends cdk.Stack {
       POWERTOOLS_METRICS_NAMESPACE: 'ContentScheduler',
       LOG_LEVEL: environment === 'prod' ? 'INFO' : 'DEBUG',
       SCHEDULER_GROUP_NAME: `${prefix}-schedules`,
+      DB_SECRET_ARN: databaseSecret.secretArn,
+      DB_PORT: '5433',
+      DB_NAME: 'postolio',
     };
 
     // Custom IAM Role for Lambda (Least Privilege)
@@ -290,6 +295,8 @@ export class ContentSchedulerStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'Custom execution role for Content Scheduler Lambda functions',
     });
+
+    databaseSecret.grantRead(lambdaRole);
 
     // Add only necessary permissions
     lambdaRole.addToPolicy(
@@ -345,7 +352,6 @@ export class ContentSchedulerStack extends cdk.Stack {
         handler: 'handler',
         entry: path.join(__dirname, '../../../../services/schedule-management/src/index.ts'),
         bundling: {
-          nodeModules: ['@prisma/client', 'prisma'],
           externalModules: [
             '@aws-lambda-powertools/logger',
             '@aws-lambda-powertools/tracer',
@@ -387,7 +393,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       handler: 'handler',
       entry: path.join(__dirname, '../../../../services/publisher/src/index.ts'),
       bundling: {
-        nodeModules: ['@prisma/client', 'prisma'],
         externalModules: [
           '@aws-lambda-powertools/logger',
           '@aws-lambda-powertools/tracer',
@@ -417,7 +422,6 @@ export class ContentSchedulerStack extends cdk.Stack {
       handler: 'handler',
       entry: path.join(__dirname, '../../../../services/retry-handler/src/index.ts'),
       bundling: {
-        nodeModules: ['@prisma/client', 'prisma'],
         externalModules: [
           '@aws-lambda-powertools/logger',
           '@aws-lambda-powertools/tracer',
@@ -493,20 +497,7 @@ export class ContentSchedulerStack extends cdk.Stack {
           '@aws-lambda-powertools/tracer',
           '@aws-lambda-powertools/metrics',
         ],
-        // Include Prisma packages - CDK will handle bundling automatically
-        nodeModules: ['@prisma/client', 'prisma'],
-        // Ensure Prisma client is generated and binaries are included
-        commandHooks: {
-          beforeInstall: (): string[] => [],
-          beforeBundling: (inputDir: string): string[] => [
-            `cd ${inputDir} && npx prisma generate --schema=packages/libs/database/prisma/schema.prisma`,
-          ],
-          afterBundling: (inputDir: string, outputDir: string): string[] => [
-            `mkdir -p ${outputDir}/.prisma && cp ${inputDir}/node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/libquery_engine-rhel-openssl-3.0.x.so.node ${outputDir}/.prisma/`,
-          ],
-        },
-        // Remove commandHooks to avoid permission issues in CI/CD
-        // Prisma client should be pre-generated via CI build steps
+        nodeModules: ['pg', '@prisma/adapter-pg'],
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
@@ -517,6 +508,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       deadLetterQueueEnabled: true,
       deadLetterQueue: deadLetterQueue,
+      layers: [powertoolsLayer],
     });
 
     // Logging permissions are provided via the shared LambdaExecutionRole (lambdaRole) with scoped resources
@@ -569,11 +561,6 @@ export class ContentSchedulerStack extends cdk.Stack {
     });
 
     publisherLambda.grantInvoke(schedulerRole);
-
-    // Create scheduler group
-    const _schedulerGroup = new scheduler.CfnScheduleGroup(this, 'SchedulerGroup', {
-      name: `${prefix}-schedules`,
-    });
 
     // Add environment variables to Lambda functions here
     scheduleManagementLambda.addEnvironment('PUBLISHER_LAMBDA_ARN', publisherLambda.functionArn);

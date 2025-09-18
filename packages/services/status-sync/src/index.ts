@@ -4,8 +4,9 @@
  * Handles: post.published, post.failed, schedule.created, schedule.updated, schedule.canceled
  */
 
-import { PrismaClient, ContentStatus } from '@postolio/database';
-import type { EventBridgeEvent } from 'aws-lambda';
+import type { PrismaClient as LambdaPrismaClient } from '@postolio/database/lambda';
+import { createLambdaPrismaClient, ContentStatus } from '@postolio/database/lambda';
+import type { Context, EventBridgeEvent } from 'aws-lambda';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
 interface BaseDetailData {
@@ -28,8 +29,29 @@ type PlatformEventDetail = {
   metadata?: Record<string, unknown>;
 };
 
-let prisma: PrismaClient | null = null;
+let prisma: LambdaPrismaClient | null = null;
 let cachedDbUrl: string | null = null;
+
+function ensureAwsProxyParams(urlString: string): string {
+  try {
+    const url = new URL(urlString);
+    if (!url.searchParams.has('schema')) {
+      url.searchParams.set('schema', process.env.DB_SCHEMA || 'public');
+    }
+    if (!url.searchParams.has('pgbouncer')) {
+      url.searchParams.set('pgbouncer', 'true');
+    }
+    if (!url.searchParams.has('connection_limit')) {
+      url.searchParams.set('connection_limit', process.env.DB_CONNECTION_LIMIT || '1');
+    }
+    if (process.env.DB_SSL_MODE && !url.searchParams.has('sslmode')) {
+      url.searchParams.set('sslmode', process.env.DB_SSL_MODE);
+    }
+    return url.toString();
+  } catch {
+    return urlString;
+  }
+}
 
 const secrets = new SecretsManagerClient({});
 
@@ -37,14 +59,14 @@ async function getDatabaseUrl(): Promise<string> {
   if (cachedDbUrl) return cachedDbUrl;
 
   if (process.env.DATABASE_URL) {
-    cachedDbUrl = process.env.DATABASE_URL;
+    cachedDbUrl = ensureAwsProxyParams(process.env.DATABASE_URL);
     return cachedDbUrl;
   }
 
   // Build from pieces: either from env values, or from a secret for username/password
-  const host = process.env.DB_HOST;
-  const port = process.env.DB_PORT || '5432';
-  const name = process.env.DB_NAME || 'postolio';
+  let host = process.env.DB_HOST;
+  let port = process.env.DB_PORT || '5432';
+  let name = process.env.DB_NAME || 'postolio';
 
   let username = process.env.DB_USERNAME;
   let password = process.env.DB_PASSWORD;
@@ -57,6 +79,14 @@ async function getDatabaseUrl(): Promise<string> {
         const obj = JSON.parse(res.SecretString);
         username = username || obj.username;
         password = password || obj.password;
+        host = host || obj.host || obj.hostname;
+        if ((!port || port === '') && (obj.port || obj.portNumber)) {
+          const secretPort = obj.port ?? obj.portNumber;
+          port = secretPort ? String(secretPort) : port;
+        }
+        if (!name && (obj.dbname || obj.database || obj.db)) {
+          name = obj.dbname || obj.database || obj.db;
+        }
       }
     }
   } catch {
@@ -71,16 +101,23 @@ async function getDatabaseUrl(): Promise<string> {
 
   const encUser = encodeURIComponent(username);
   const encPass = encodeURIComponent(password);
-  cachedDbUrl = `postgresql://${encUser}:${encPass}@${host}:${port}/${name}?schema=public`;
+  const connectionUrl = `postgresql://${encUser}:${encPass}@${host}:${port}/${name}`;
+  cachedDbUrl = ensureAwsProxyParams(connectionUrl);
   return cachedDbUrl;
 }
 
-async function getClient(): Promise<PrismaClient> {
+async function getClient(): Promise<LambdaPrismaClient> {
   if (!prisma) {
     const url = await getDatabaseUrl();
-    prisma = new PrismaClient({
-      datasources: { db: { url } },
+    const { client } = createLambdaPrismaClient({
+      connectionString: url,
+      poolConfig: {
+        connectionString: url,
+        max: Number(process.env.DB_CONNECTION_LIMIT || process.env.DB_POOL_MAX || '1'),
+      },
     });
+    prisma = client;
+    // Note: Pool cleanup is handled by Lambda runtime
   }
   return prisma;
 }
@@ -194,7 +231,7 @@ async function handleScheduleUpdated(detail: PlatformEventDetail) {
       scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
       generationParams: {
         ...existingParams,
-        scheduleId: scheduleId || existingParams.scheduleId, // Preserve or update schedule ID
+        ...(scheduleId && { scheduleId }), // Only include scheduleId if it exists
         awsScheduleCreated: true,
         processing: null, // Clear processing state - update completed
         lastUpdated: new Date().toISOString(),
@@ -233,7 +270,12 @@ async function handleScheduleCanceled(detail: PlatformEventDetail) {
   });
 }
 
-export async function handler(event: EventBridgeEvent<string, PlatformEventDetail>) {
+export async function handler(
+  event: EventBridgeEvent<string, PlatformEventDetail>,
+  context: Context
+) {
+  context.callbackWaitsForEmptyEventLoop = false;
+
   console.log(
     'StatusSync received event',
     JSON.stringify({
