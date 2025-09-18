@@ -395,8 +395,7 @@ export class PostolioStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunctionUrl'],
         resources: [
-          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
         ],
       })
     );
@@ -1008,8 +1007,7 @@ export class PostolioStack extends cdk.Stack {
             // SSM parameter permissions for service discovery
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/*`,
             // Lambda Function URL permissions for microservice communication (wildcards required for service discovery across environments)
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           ],
         },
       ]

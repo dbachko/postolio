@@ -27,7 +27,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
     // Token Service API Gateway
     const tokenApi = new apigateway.RestApi(this, 'TokenServiceApi', {
-      restApiName: `postolio-token-service-${environment}`,
+      restApiName: `postolio-${environment}-token-service-api`,
       description: `Token Service API for ${environment}`,
       defaultMethodOptions: {
         authorizationType: apigateway.AuthorizationType.IAM,
@@ -68,7 +68,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
     // Content Scheduler API Gateway
     const schedulerApi = new apigateway.RestApi(this, 'SchedulerApi', {
-      restApiName: `postolio-scheduler-${environment}`,
+      restApiName: `postolio-${environment}-scheduler-api`,
       description: `Content Scheduler API for ${environment}`,
       defaultMethodOptions: {
         authorizationType: apigateway.AuthorizationType.IAM,
