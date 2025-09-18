@@ -335,9 +335,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunctionUrl'],
         resources: [
-          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
         ],
       })
     );
@@ -347,7 +345,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       this,
       'ScheduleManagementLambda',
       {
-        functionName: `${prefix}-schedule-management`,
+        functionName: `postolio-${environment}-scheduler-management`,
         runtime: lambda.Runtime.NODEJS_22_X, // ✅ Latest runtime
         handler: 'handler',
         entry: path.join(__dirname, '../../../../services/schedule-management/src/index.ts'),
@@ -388,7 +386,7 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // Publisher Lambda with proper configuration
     const publisherLambda = new lambdaNodejs.NodejsFunction(this, 'PublisherLambda', {
-      functionName: `${prefix}-publisher`,
+      functionName: `postolio-${environment}-scheduler-publisher`,
       runtime: lambda.Runtime.NODEJS_22_X, // ✅ Latest runtime
       handler: 'handler',
       entry: path.join(__dirname, '../../../../services/publisher/src/index.ts'),
@@ -417,7 +415,7 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // Retry Handler Lambda
     const retryHandlerLambda = new lambdaNodejs.NodejsFunction(this, 'RetryHandlerLambda', {
-      functionName: `${prefix}-retry-handler`,
+      functionName: `postolio-${environment}-scheduler-retry`,
       runtime: lambda.Runtime.NODEJS_22_X, // ✅ Latest runtime
       handler: 'handler',
       entry: path.join(__dirname, '../../../../services/retry-handler/src/index.ts'),
@@ -443,7 +441,7 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // Schedule Cleanup Lambda: runs daily to clean up orphaned schedules
     const scheduleCleanupLambda = new lambdaNodejs.NodejsFunction(this, 'ScheduleCleanupLambda', {
-      functionName: `${prefix}-schedule-cleanup`,
+      functionName: `postolio-${environment}-scheduler-cleanup`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'handler',
       entry: path.join(__dirname, '../../../../services/schedule-cleanup/src/index.ts'),
@@ -483,7 +481,7 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // Status Sync Lambda: updates main PostgreSQL based on EventBridge events
     const statusSyncLambda = new lambdaNodejs.NodejsFunction(this, 'StatusSyncLambda', {
-      functionName: `${prefix}-status-sync`,
+      functionName: `postolio-${environment}-scheduler-status-sync`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'handler',
       entry: path.join(__dirname, '../../../../services/status-sync/src/index.ts'),
@@ -604,9 +602,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunctionUrl'],
         resources: [
-          `arn:aws:lambda:${this.region}:${this.account}:function:token-service-${environment}`,
           `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
         ],
       })
     );
@@ -637,9 +633,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunctionUrl'],
         resources: [
-          `arn:aws:lambda:${this.region}:${this.account}:function:token-service-${environment}`,
           `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
         ],
       })
     );
@@ -743,9 +737,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunctionUrl'],
         resources: [
-          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
+          `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
         ],
       })
     );
@@ -787,9 +779,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunctionUrl'],
         resources: [
-          `arn:aws:lambda:${this.region}:${this.account}:function:token-service-${environment}`,
           `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
-          `arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
         ],
       })
     );
@@ -952,11 +942,9 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Lambda execution role requires wildcard permissions for CloudWatch Logs, X-Ray tracing, SSM parameter access, and Lambda Function URL invocation',
           appliesTo: [
             'Resource::*',
-            `Resource::arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/postolio-scheduler-${environment}-*`,
+            `Resource::arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/postolio-${environment}-*`,
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           ],
         },
       ]
@@ -1045,9 +1033,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-scheduler-${environment}-schedules/*`,
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           ],
         },
       ]
@@ -1072,9 +1058,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             'Resource::<VideoBucket6ED8E1AF.Arn>/*',
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           ],
         },
       ]
@@ -1095,9 +1079,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             // Grant for DynamoDB GSIs produced by table grants; limited to this table's indexes
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           ],
         },
       ]
@@ -1117,9 +1099,7 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Resource::<SchedulesTableFBEB0188.Arn>/index/*',
             `Resource::arn:aws:scheduler:${this.region}:${this.account}:schedule/postolio-scheduler-${environment}-schedules/*`,
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-*-${environment}`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}-*`,
-            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:*-${environment}`, // For token-service-dev pattern
+            `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           ],
         },
       ]
