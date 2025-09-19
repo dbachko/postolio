@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { getDatabaseClient } from '../config/database.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 import { validateAndSanitize } from '../middleware/validation.js';

@@ -509,7 +509,7 @@ export class TwoFactorService {
   }> {
     try {
       // Verify password before disabling 2FA
-      const bcrypt = await import('bcrypt');
+      const bcrypt = await import('bcryptjs');
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { password: true, email: true },
@@ -626,7 +626,7 @@ export class TwoFactorService {
   }> {
     try {
       // Verify password
-      const bcrypt = await import('bcrypt');
+      const bcrypt = await import('bcryptjs');
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: {

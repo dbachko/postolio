@@ -39,9 +39,6 @@ COPY --from=installer /app/packages ./packages
 COPY --from=installer /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/full/ ./
 
-# Rebuild native modules for Alpine Linux
-RUN pnpm rebuild bcrypt
-
 # Build the API (and any required deps per turbo pipeline)
 RUN pnpm turbo run build --filter=api
 

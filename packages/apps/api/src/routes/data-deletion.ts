@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database.js';
 import crypto from 'crypto';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { markdownToHtml } from '../utils/markdown.js';
 import { deletionQueueService } from '../services/deletion-queue.js';
 import { EmailService } from '../services/email.js';

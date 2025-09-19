@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { getDatabaseClient } from '../config/database.js';
 import { EmailService } from './email.js';
 import { AuditLogger, AuditEventType } from './audit-logger.js';

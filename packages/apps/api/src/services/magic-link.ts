@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { randomBytes } from 'crypto';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { getDatabaseClient } from '../config/database.js';
 import { EmailService } from './email.js';
 import Redis from 'ioredis';
