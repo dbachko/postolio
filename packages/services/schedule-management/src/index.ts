@@ -160,13 +160,14 @@ function validateScheduleRequest(data: unknown): {
 
 // EventBridge event publisher
 async function publishScheduleEvent(
-  eventType: 'schedule.created' | 'schedule.updated' | 'schedule.canceled',
+  eventType: 'schedule.created' | 'schedule.updated' | 'schedule.canceled' | 'schedule.failed',
   scheduleData: {
     scheduleId: string;
     contentId: string;
     brandId?: string;
     scheduledAt?: string;
     updates?: { scheduledAt?: string };
+    error?: string;
   }
 ): Promise<void> {
   const eventDetail = {
@@ -522,6 +523,14 @@ async function createSchedule(data: unknown): Promise<APIGatewayProxyResult> {
       });
       // Continue to throw original error even if rollback fails
     }
+
+    // Emit schedule.failed event to notify status-sync
+    await publishScheduleEvent('schedule.failed', {
+      scheduleId,
+      contentId: validatedData.contentId,
+      brandId: validatedData.brandId,
+      error: error instanceof Error ? error.message : 'Failed to create EventBridge schedule',
+    });
 
     throw error;
   }
