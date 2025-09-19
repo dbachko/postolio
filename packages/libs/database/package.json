@@ -9,13 +9,13 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^6.2.0",
-    "@prisma/client": "^6.2.0",
+    "@prisma/adapter-pg": "^6.16.2",
+    "@prisma/client": "^6.16.2",
     "pg": "^8.13.1"
   },
   "devDependencies": {
-    "prisma": "^6.2.0",
     "@postolio/tsconfig": "workspace:*",
-    "@types/pg": "^8.11.10"
+    "@types/pg": "^8.11.10",
+    "prisma": "^6.16.2"
   }
 }
