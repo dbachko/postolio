@@ -96,6 +96,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.2.0
         version: 11.2.0
+      '@postolio/aws':
+        specifier: workspace:*
+        version: link:../../libs/aws
       '@postolio/database':
         specifier: workspace:*
         version: link:../../libs/database

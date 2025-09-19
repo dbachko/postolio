@@ -6,6 +6,7 @@ import CircuitBreaker from 'opossum';
 import { SignatureV4 } from '@aws-sdk/signature-v4';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { resolveAwsServiceTarget } from '@postolio/aws';
 import { ParameterManager, getCurrentEnvironment } from '@postolio/service-parameters';
 import type { StoreTokenParams, TokenData } from '../types/token-service.js';
 import { getRedisClient } from '../services/redis.js';
@@ -164,12 +165,16 @@ export class TokenServiceClient {
   private initializeSigner(): void {
     if (process.env.AWS_REGION || process.env.AWS_ACCESS_KEY_ID) {
       try {
+        const { service, region } = resolveAwsServiceTarget(this.baseURL);
+
         this.signer = new SignatureV4({
-          service: 'execute-api',
-          region: process.env.AWS_REGION || 'us-east-1',
+          service,
+          region,
           credentials: defaultProvider(),
           sha256: Sha256,
         });
+
+        this.logInfo('Initialized AWS SigV4 signer', { service, region, baseURL: this.baseURL });
       } catch (error) {
         this.logWarn('Failed to initialize AWS SigV4 signer', {
           error: error instanceof Error ? error.message : 'Unknown error',

@@ -12,6 +12,7 @@ import CircuitBreaker from 'opossum';
 import type { Options as CircuitBreakerOptions } from 'opossum';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { ParameterManager, getCurrentEnvironment } from '@postolio/service-parameters';
+import { resolveAwsServiceTarget } from '@postolio/aws';
 
 // ==================== Validation Schemas ====================
 
@@ -215,26 +216,8 @@ export class ContentSchedulerClient {
     const normalizedBaseURL = this.config.baseURL.replace(/\/+$/, '');
 
     // Infer AWS region and service from hostname
-    const { region: inferredRegion, service: inferredService } = (() => {
-      try {
-        const host = new URL(normalizedBaseURL).hostname;
-
-        // Check for Lambda Function URL pattern first
-        const lambdaMatch = host.match(/([a-z0-9]+)\.lambda-url\.([a-z0-9-]+)\.on\.aws$/);
-        if (lambdaMatch && lambdaMatch[2]) {
-          return { region: lambdaMatch[2], service: 'lambda' };
-        }
-
-        // Check for API Gateway pattern
-        const apiGatewayMatch = host.match(/execute-api\.([a-z0-9-]+)\.amazonaws\.com$/);
-        if (apiGatewayMatch && apiGatewayMatch[1]) {
-          return { region: apiGatewayMatch[1], service: 'execute-api' };
-        }
-      } catch {
-        /* ignore parse errors */
-      }
-      return { region: process.env.AWS_REGION || 'us-east-1', service: 'execute-api' };
-    })();
+    const { region: inferredRegion, service: inferredService } =
+      resolveAwsServiceTarget(normalizedBaseURL);
     this.region = inferredRegion;
     this.debug = this.config.debugLogging ?? true; // default on for now per request for comprehensive logging
 
