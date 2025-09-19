@@ -215,10 +215,10 @@ export class PostolioStack extends cdk.Stack {
       'Allow RDS Proxy to connect to database'
     );
 
-    // Allow Lambda functions to connect to RDS Proxy on port 5432
+    // Allow Lambda functions to connect to RDS Proxy on port 5433
     dbSecurityGroup.addIngressRule(
       dbSecurityGroup, // Self-reference for Lambda -> Proxy connections
-      ec2.Port.tcp(5432),
+      ec2.Port.tcp(5433),
       'Allow Lambda functions to connect to RDS Proxy'
     );
 

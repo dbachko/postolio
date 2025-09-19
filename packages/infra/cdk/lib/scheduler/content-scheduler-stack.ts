@@ -50,9 +50,15 @@ export class ContentSchedulerStack extends cdk.Stack {
     let dbSecurityGroup: ec2.ISecurityGroup | undefined;
     let lambdaSecurityGroup: ec2.ISecurityGroup | undefined;
 
-    // Use hardcoded values for now - these should match the main stack
-    const vpcId = 'vpc-03e5d38b2feb71ed8';
-    const dbSecurityGroupId = 'sg-052204ee9b595cfc3';
+    // Lookup VPC and security group IDs from SSM Parameter Store
+    const vpcId = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/vpc/id`
+    );
+    const dbSecurityGroupId = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/database/security-group-id`
+    );
 
     if (vpcId && dbSecurityGroupId) {
       vpc = ec2.Vpc.fromLookup(this, 'DatabaseVpc', {
@@ -75,7 +81,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       // Allow Lambda security group to access database security group on RDS Proxy port
       dbSecurityGroup.addIngressRule(
         lambdaSecurityGroup,
-        ec2.Port.tcp(5432),
+        ec2.Port.tcp(5433),
         'Allow Lambda functions to connect to RDS Proxy'
       );
     }
@@ -323,7 +329,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       LOG_LEVEL: environment === 'prod' ? 'INFO' : 'DEBUG',
       SCHEDULER_GROUP_NAME: `${prefix}-schedules`,
       DB_SECRET_ARN: databaseSecret.secretArn,
-      DB_PORT: '5432',
+      DB_PORT: '5433',
       DB_NAME: 'postolio',
       // RDS Proxy configuration will be read from SSM parameters at runtime
     };
