@@ -8,6 +8,7 @@ import type { PrismaClient as LambdaPrismaClient } from '@postolio/database/lamb
 import { createLambdaPrismaClient, ContentStatus } from '@postolio/database/lambda';
 import type { Context, EventBridgeEvent } from 'aws-lambda';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
 interface BaseDetailData {
   contentId?: string;
@@ -31,21 +32,23 @@ type PlatformEventDetail = {
 
 let prisma: LambdaPrismaClient | null = null;
 let cachedDbUrl: string | null = null;
+let cachedProxyEndpoint: string | null = null;
 
-function ensureAwsProxyParams(urlString: string): string {
+function ensureProxyParams(urlString: string): string {
   try {
     const url = new URL(urlString);
+    // Add essential proxy connection parameters
     if (!url.searchParams.has('schema')) {
-      url.searchParams.set('schema', process.env.DB_SCHEMA || 'public');
+      url.searchParams.set('schema', 'public');
     }
     if (!url.searchParams.has('pgbouncer')) {
       url.searchParams.set('pgbouncer', 'true');
     }
     if (!url.searchParams.has('connection_limit')) {
-      url.searchParams.set('connection_limit', process.env.DB_CONNECTION_LIMIT || '1');
+      url.searchParams.set('connection_limit', '1');
     }
-    if (process.env.DB_SSL_MODE && !url.searchParams.has('sslmode')) {
-      url.searchParams.set('sslmode', process.env.DB_SSL_MODE);
+    if (!url.searchParams.has('sslmode')) {
+      url.searchParams.set('sslmode', 'require');
     }
     return url.toString();
   } catch {
@@ -54,69 +57,73 @@ function ensureAwsProxyParams(urlString: string): string {
 }
 
 const secrets = new SecretsManagerClient({});
+const ssm = new SSMClient({});
+
+async function getDatabaseProxyEndpoint(): Promise<string> {
+  if (cachedProxyEndpoint) return cachedProxyEndpoint;
+
+  const environment = process.env.ENVIRONMENT || 'dev';
+
+  try {
+    const parameter = await ssm.send(new GetParameterCommand({
+      Name: `/postolio/${environment}/database/proxy-endpoint`,
+    }));
+
+    if (parameter.Parameter?.Value) {
+      cachedProxyEndpoint = parameter.Parameter.Value;
+      console.log('Using RDS Proxy endpoint for database connection');
+      return cachedProxyEndpoint;
+    }
+  } catch (error) {
+    console.warn('Failed to get RDS Proxy endpoint from SSM:', error);
+    throw new Error('RDS Proxy endpoint not available - cannot connect to database');
+  }
+
+  throw new Error('RDS Proxy endpoint not configured');
+}
 
 async function getDatabaseUrl(): Promise<string> {
   if (cachedDbUrl) return cachedDbUrl;
 
+  // For local development, use DATABASE_URL if provided
   if (process.env.DATABASE_URL) {
-    cachedDbUrl = ensureAwsProxyParams(process.env.DATABASE_URL);
+    cachedDbUrl = ensureProxyParams(process.env.DATABASE_URL);
+    console.log('Using DATABASE_URL for local development');
     return cachedDbUrl;
   }
 
-  // Build from pieces: either from env values, or from a secret for username/password
-  let host = process.env.DB_HOST;
-  let port = process.env.DB_PORT || '5432';
-  let name = process.env.DB_NAME || 'postolio';
+  // Production: Use RDS Proxy with IAM authentication
+  const proxyEndpoint = await getDatabaseProxyEndpoint();
+  const dbName = process.env.DB_NAME || 'postolio';
 
-  let username = process.env.DB_USERNAME;
-  let password = process.env.DB_PASSWORD;
-
-  console.log('DB config from env:', {
-    hasHost: !!host,
-    port,
-    name,
-    hasUsername: !!username,
-    hasPassword: !!password,
-    secretArn: process.env.DB_SECRET_ARN
-  });
+  // Get credentials from secret for RDS Proxy IAM auth
+  const secretId = process.env.DB_SECRET_ARN;
+  if (!secretId) {
+    throw new Error('DB_SECRET_ARN required for RDS Proxy authentication');
+  }
 
   try {
-    const secretId = process.env.DB_SECRET_ARN || process.env.DB_SECRET_NAME;
-    console.log('Attempting to read secret:', secretId);
-    if ((!username || !password) && secretId) {
-      const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
-      if (res.SecretString) {
-        const obj = JSON.parse(res.SecretString);
-        console.log('Secret keys:', Object.keys(obj));
-        username = username || obj.username;
-        password = password || obj.password;
-        host = host || obj.host || obj.hostname;
-        if ((!port || port === '') && (obj.port || obj.portNumber)) {
-          const secretPort = obj.port ?? obj.portNumber;
-          port = secretPort ? String(secretPort) : port;
-        }
-        if (!name && (obj.dbname || obj.database || obj.db)) {
-          name = obj.dbname || obj.database || obj.db;
-        }
-        console.log('Final DB config:', { host, port, name, hasUsername: !!username, hasPassword: !!password });
-      }
+    const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
+    if (!res.SecretString) {
+      throw new Error('Empty database secret');
     }
+
+    const credentials = JSON.parse(res.SecretString);
+    const username = credentials.username;
+    const password = credentials.password;
+
+    if (!username || !password) {
+      throw new Error('Missing username or password in database secret');
+    }
+
+    const connectionUrl = `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${proxyEndpoint}:5432/${dbName}`;
+    cachedDbUrl = ensureProxyParams(connectionUrl);
+    console.log('Using RDS Proxy connection:', { endpoint: proxyEndpoint, database: dbName });
+    return cachedDbUrl;
   } catch (error) {
-    console.error('Failed to read DB secret:', error);
-    console.warn('Falling back to env vars');
+    console.error('Failed to read database secret:', error);
+    throw new Error('Cannot authenticate with RDS Proxy');
   }
-
-  if (!host || !username || !password) {
-    throw new Error(
-      'Database configuration missing: set DATABASE_URL or DB_HOST, DB_USERNAME, DB_PASSWORD'
-    );
-  }
-
-  const encUser = encodeURIComponent(username);
-  const encPass = encodeURIComponent(password);
-  const connectionUrl = `postgresql://${encUser}:${encPass}@${host}:${port}/${name}`;
-  cachedDbUrl = ensureAwsProxyParams(connectionUrl);
-  return cachedDbUrl;
 }
 
 async function getClient(): Promise<LambdaPrismaClient> {
@@ -126,14 +133,13 @@ async function getClient(): Promise<LambdaPrismaClient> {
       connectionString: url,
       poolConfig: {
         connectionString: url,
-        max: Number(process.env.DB_CONNECTION_LIMIT || process.env.DB_POOL_MAX || '1'),
-        connectionTimeoutMillis: 10000, // 10 seconds
-        idleTimeoutMillis: 30000, // 30 seconds
-        query_timeout: 20000, // 20 seconds
+        max: 1, // Single connection for Lambda
+        connectionTimeoutMillis: 5000, // 5 seconds with RDS Proxy
+        idleTimeoutMillis: 10000, // 10 seconds with RDS Proxy
+        query_timeout: 30000, // 30 seconds for query execution
       },
     });
     prisma = client;
-    // Note: Pool cleanup is handled by Lambda runtime
   }
   return prisma;
 }
