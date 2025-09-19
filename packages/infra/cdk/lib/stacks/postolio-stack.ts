@@ -16,6 +16,7 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 import { WAFConstruct } from '../constructs/waf-construct';
@@ -121,6 +122,21 @@ export class PostolioStack extends cdk.Stack {
       'Allow ECS tasks to connect to Redis'
     );
 
+    // Store VPC and database security group information in SSM parameters for microservices
+    new ssm.StringParameter(this, 'VpcIdParameter', {
+      parameterName: `/postolio/${environment}/vpc/id`,
+      stringValue: vpc.vpcId,
+      description: 'VPC ID for Postolio microservices',
+      tier: ssm.ParameterTier.STANDARD,
+    });
+
+    new ssm.StringParameter(this, 'DatabaseSecurityGroupParameter', {
+      parameterName: `/postolio/${environment}/database/security-group-id`,
+      stringValue: dbSecurityGroup.securityGroupId,
+      description: 'Database security group ID for Postolio microservices',
+      tier: ssm.ParameterTier.STANDARD,
+    });
+
     // Database secret with URL-safe password generation
     const dbSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
       secretName: `postolio-${environment}-database-credentials`,
@@ -154,6 +170,64 @@ export class PostolioStack extends cdk.Stack {
       storageEncrypted: true, // Enable encryption at rest
       multiAz: environment === 'prod', // Enable Multi-AZ for production
       port: 5433, // Use non-default port for security
+    });
+
+    // RDS Proxy for Lambda connection pooling and scaling
+    const dbProxyRole = new iam.Role(this, 'DatabaseProxyRole', {
+      assumedBy: new iam.ServicePrincipal('rds.amazonaws.com'),
+      inlinePolicies: {
+        SecretsManagerAccess: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'secretsmanager:GetSecretValue',
+                'secretsmanager:DescribeSecret',
+              ],
+              resources: [dbSecret.secretArn],
+            }),
+          ],
+        }),
+      },
+    });
+
+    const dbProxy = new rds.DatabaseProxy(this, 'DatabaseProxy', {
+      proxyTarget: rds.ProxyTarget.fromInstance(database),
+      secrets: [dbSecret],
+      vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [dbSecurityGroup],
+      role: dbProxyRole,
+      dbProxyName: `postolio-${environment}-db-proxy`,
+      maxConnectionsPercent: 100,
+      maxIdleConnectionsPercent: 50,
+      borrowTimeout: cdk.Duration.seconds(120),
+      debugLogging: environment !== 'prod',
+      requireTLS: true,
+    });
+
+    // Allow RDS Proxy to connect to database on port 5433
+    dbSecurityGroup.addIngressRule(
+      dbSecurityGroup, // Self-reference for proxy connections
+      ec2.Port.tcp(5433),
+      'Allow RDS Proxy to connect to database'
+    );
+
+    // Allow Lambda functions to connect to RDS Proxy on port 5432
+    dbSecurityGroup.addIngressRule(
+      dbSecurityGroup, // Self-reference for Lambda -> Proxy connections
+      ec2.Port.tcp(5432),
+      'Allow Lambda functions to connect to RDS Proxy'
+    );
+
+    // Store RDS Proxy endpoint in SSM parameter for microservices
+    new ssm.StringParameter(this, 'DatabaseProxyEndpointParameter', {
+      parameterName: `/postolio/${environment}/database/proxy-endpoint`,
+      stringValue: dbProxy.endpoint,
+      description: 'RDS Proxy endpoint for Postolio microservices',
+      tier: ssm.ParameterTier.STANDARD,
     });
 
     // ElastiCache Redis Subnet Group

@@ -14,6 +14,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
@@ -35,6 +36,49 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     const { environment, alertEmail } = props;
     const prefix = `postolio-${environment}-scheduler`;
+
+    // VPC configuration from database secret
+    const databaseSecretName = `postolio-${environment}-database-credentials`;
+    const databaseSecret = secretsmanager.Secret.fromSecretNameV2(
+      this,
+      'DatabaseCredentialsSecret',
+      databaseSecretName
+    );
+
+    // VPC configuration for database access - lookup from database secret
+    let vpc: ec2.IVpc | undefined;
+    let dbSecurityGroup: ec2.ISecurityGroup | undefined;
+    let lambdaSecurityGroup: ec2.ISecurityGroup | undefined;
+
+    // Use hardcoded values for now - these should match the main stack
+    const vpcId = 'vpc-03e5d38b2feb71ed8';
+    const dbSecurityGroupId = 'sg-052204ee9b595cfc3';
+
+    if (vpcId && dbSecurityGroupId) {
+      vpc = ec2.Vpc.fromLookup(this, 'DatabaseVpc', {
+        vpcId: vpcId,
+      });
+
+      dbSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+        this,
+        'DatabaseSecurityGroup',
+        dbSecurityGroupId
+      );
+
+      // Create a dedicated security group for Lambda functions
+      lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
+        vpc: vpc,
+        description: 'Security group for Lambda functions accessing RDS Proxy',
+        allowAllOutbound: true,
+      });
+
+      // Allow Lambda security group to access database security group on RDS Proxy port
+      dbSecurityGroup.addIngressRule(
+        lambdaSecurityGroup,
+        ec2.Port.tcp(5432),
+        'Allow Lambda functions to connect to RDS Proxy'
+      );
+    }
 
     // Publisher Lambda now uses AWS IAM SigV4 authentication instead of API keys
 
@@ -261,13 +305,6 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // ==================== Lambda Functions with Best Practices ====================
 
-    const databaseSecretName = `postolio-${environment}-database-credentials`;
-    const databaseSecret = secretsmanager.Secret.fromSecretNameV2(
-      this,
-      'DatabaseCredentialsSecret',
-      databaseSecretName
-    );
-
     // Shared Lambda environment variables
     const lambdaEnvironment = {
       ENVIRONMENT: environment,
@@ -286,8 +323,9 @@ export class ContentSchedulerStack extends cdk.Stack {
       LOG_LEVEL: environment === 'prod' ? 'INFO' : 'DEBUG',
       SCHEDULER_GROUP_NAME: `${prefix}-schedules`,
       DB_SECRET_ARN: databaseSecret.secretArn,
-      DB_PORT: '5433',
+      DB_PORT: '5432',
       DB_NAME: 'postolio',
+      // RDS Proxy configuration will be read from SSM parameters at runtime
     };
 
     // Custom IAM Role for Lambda (Least Privilege)
@@ -318,16 +356,50 @@ export class ContentSchedulerStack extends cdk.Stack {
       })
     );
 
-    // Add SSM Parameter Store read permissions for service discovery replacement
+    // Add VPC permissions for Lambda functions to access database
+    if (vpc && lambdaSecurityGroup) {
+      lambdaRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'ec2:CreateNetworkInterface',
+            'ec2:DescribeNetworkInterfaces',
+            'ec2:DeleteNetworkInterface',
+            'ec2:AttachNetworkInterface',
+            'ec2:DetachNetworkInterface',
+          ],
+          resources: ['*'],
+        })
+      );
+    }
+
+    // Add SSM Parameter Store read permissions for service discovery replacement and VPC configuration
     lambdaRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['ssm:GetParameter', 'ssm:GetParameters'],
         resources: [
           `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/vpc/*`,
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/database/*`,
         ],
       })
     );
+
+    // Add RDS Proxy permissions for Lambda database access
+    if (vpc && lambdaSecurityGroup) {
+      lambdaRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'rds-db:connect',
+          ],
+          resources: [
+            `arn:aws:rds-db:${this.region}:${this.account}:dbuser:postolio-${environment}-db-proxy/*`,
+          ],
+        })
+      );
+    }
 
     // Add Lambda Function URL invocation permissions for service-to-service calls
     lambdaRole.addToPolicy(
@@ -497,7 +569,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         ],
         nodeModules: ['pg', '@prisma/adapter-pg'],
         commandHooks: {
-          beforeBundling(inputDir: string, outputDir: string): string[] {
+          beforeBundling(): string[] {
             return [];
           },
           afterBundling(inputDir: string, outputDir: string): string[] {
@@ -506,7 +578,7 @@ export class ContentSchedulerStack extends cdk.Stack {
               `cp -r ${inputDir}/packages/libs/database/lambda-client ${outputDir}/`,
             ];
           },
-          beforeInstall(inputDir: string, outputDir: string): string[] {
+          beforeInstall(): string[] {
             return [];
           },
         },
@@ -521,6 +593,13 @@ export class ContentSchedulerStack extends cdk.Stack {
       deadLetterQueueEnabled: true,
       deadLetterQueue: deadLetterQueue,
       layers: [powertoolsLayer],
+      ...(vpc && lambdaSecurityGroup && {
+        vpc: vpc,
+        securityGroups: [lambdaSecurityGroup],
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      }),
     });
 
     // Logging permissions are provided via the shared LambdaExecutionRole (lambdaRole) with scoped resources
@@ -964,11 +1043,19 @@ export class ContentSchedulerStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'Lambda execution role requires wildcard permissions for CloudWatch Logs, X-Ray tracing, SSM parameter access, and Lambda Function URL invocation',
+            'Lambda execution role requires wildcard permissions for CloudWatch Logs, X-Ray tracing, VPC network interface management, SSM parameter access, and Lambda Function URL invocation',
           appliesTo: [
             'Resource::*',
+            'Action::ec2:CreateNetworkInterface',
+            'Action::ec2:DescribeNetworkInterfaces',
+            'Action::ec2:DeleteNetworkInterface',
+            'Action::ec2:AttachNetworkInterface',
+            'Action::ec2:DetachNetworkInterface',
             `Resource::arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/postolio-${environment}-*`,
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/vpc/*`,
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/database/*`,
+            `Resource::arn:aws:rds-db:${this.region}:${this.account}:dbuser:postolio-${environment}-db-proxy/*`,
             `Resource::arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
           ],
         },
