@@ -180,10 +180,7 @@ export class PostolioStack extends cdk.Stack {
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'secretsmanager:GetSecretValue',
-                'secretsmanager:DescribeSecret',
-              ],
+              actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
               resources: [dbSecret.secretArn],
             }),
           ],
@@ -215,10 +212,10 @@ export class PostolioStack extends cdk.Stack {
       'Allow RDS Proxy to connect to database'
     );
 
-    // Allow Lambda functions to connect to RDS Proxy on port 5433
+    // Allow Lambda functions to connect to RDS Proxy on port 5432
     dbSecurityGroup.addIngressRule(
       dbSecurityGroup, // Self-reference for Lambda -> Proxy connections
-      ec2.Port.tcp(5433),
+      ec2.Port.tcp(5432),
       'Allow Lambda functions to connect to RDS Proxy'
     );
 

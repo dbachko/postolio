@@ -65,9 +65,11 @@ async function getDatabaseProxyEndpoint(): Promise<string> {
   const environment = process.env.ENVIRONMENT || 'dev';
 
   try {
-    const parameter = await ssm.send(new GetParameterCommand({
-      Name: `/postolio/${environment}/database/proxy-endpoint`,
-    }));
+    const parameter = await ssm.send(
+      new GetParameterCommand({
+        Name: `/postolio/${environment}/database/proxy-endpoint`,
+      })
+    );
 
     if (parameter.Parameter?.Value) {
       cachedProxyEndpoint = parameter.Parameter.Value;
@@ -134,7 +136,7 @@ async function getClient(): Promise<LambdaPrismaClient> {
       poolConfig: {
         connectionString: url,
         max: 1, // Single connection for Lambda
-        connectionTimeoutMillis: 5000, // 5 seconds with RDS Proxy
+        connectionTimeoutMillis: 15000, // 15 seconds for Lambda cold starts with RDS Proxy
         idleTimeoutMillis: 10000, // 10 seconds with RDS Proxy
         query_timeout: 30000, // 30 seconds for query execution
       },

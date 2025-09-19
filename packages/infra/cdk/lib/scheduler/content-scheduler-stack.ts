@@ -78,7 +78,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       // Allow Lambda security group to access database security group on RDS Proxy port
       dbSecurityGroup.addIngressRule(
         lambdaSecurityGroup,
-        ec2.Port.tcp(5433),
+        ec2.Port.tcp(5432),
         'Allow Lambda functions to connect to RDS Proxy'
       );
     }
@@ -326,7 +326,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       LOG_LEVEL: environment === 'prod' ? 'INFO' : 'DEBUG',
       SCHEDULER_GROUP_NAME: `${prefix}-schedules`,
       DB_SECRET_ARN: databaseSecret.secretArn,
-      DB_PORT: '5433',
+      DB_PORT: '5432',
       DB_NAME: 'postolio',
       // RDS Proxy configuration will be read from SSM parameters at runtime
     };
@@ -394,9 +394,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       lambdaRole.addToPolicy(
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
-          actions: [
-            'rds-db:connect',
-          ],
+          actions: ['rds-db:connect'],
           resources: [
             `arn:aws:rds-db:${this.region}:${this.account}:dbuser:postolio-${environment}-db-proxy/*`,
           ],
@@ -596,13 +594,14 @@ export class ContentSchedulerStack extends cdk.Stack {
       deadLetterQueueEnabled: true,
       deadLetterQueue: deadLetterQueue,
       layers: [powertoolsLayer],
-      ...(vpc && lambdaSecurityGroup && {
-        vpc: vpc,
-        securityGroups: [lambdaSecurityGroup],
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-      }),
+      ...(vpc &&
+        lambdaSecurityGroup && {
+          vpc: vpc,
+          securityGroups: [lambdaSecurityGroup],
+          vpcSubnets: {
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
+        }),
     });
 
     // Logging permissions are provided via the shared LambdaExecutionRole (lambdaRole) with scoped resources
