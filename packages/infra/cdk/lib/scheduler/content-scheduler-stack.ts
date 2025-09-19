@@ -50,11 +50,8 @@ export class ContentSchedulerStack extends cdk.Stack {
     let dbSecurityGroup: ec2.ISecurityGroup | undefined;
     let lambdaSecurityGroup: ec2.ISecurityGroup | undefined;
 
-    // Lookup VPC and security group IDs from SSM Parameter Store
-    const vpcId = ssm.StringParameter.valueForStringParameter(
-      this,
-      `/postolio/${environment}/vpc/id`
-    );
+    // VPC lookup requires concrete value at synthesis time, but security group can use SSM
+    const vpcId = 'vpc-03e5d38b2feb71ed8'; // Must be concrete for Vpc.fromLookup()
     const dbSecurityGroupId = ssm.StringParameter.valueForStringParameter(
       this,
       `/postolio/${environment}/database/security-group-id`
