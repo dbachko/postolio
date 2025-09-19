@@ -1,3 +1,3 @@
-export * from './src/api-versions';
-export * from './src/request-signer';
-export * from './src/signer-utils';
+export * from './src/api-versions.js';
+export * from './src/request-signer.js';
+export * from './src/signer-utils.js';
