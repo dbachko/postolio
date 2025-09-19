@@ -30,6 +30,7 @@
     "@fastify/oauth2": "^8.1.2",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/websocket": "^11.2.0",
+    "@postolio/aws": "workspace:*",
     "@postolio/database": "workspace:*",
     "@postolio/errors": "workspace:*",
     "@postolio/logger": "workspace:*",
