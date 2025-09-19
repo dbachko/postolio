@@ -113,7 +113,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           'pages_read_engagement',
           'pages_manage_posts',
           'business_management',
-          'instagram_content_publish'
+          'instagram_content_publish',
         ].join(',');
 
         const authUrl =
