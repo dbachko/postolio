@@ -653,6 +653,9 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           FACEBOOK_APP_SECRET: ${{ secrets.FACEBOOK_APP_SECRET }}
+          INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
+          LINKEDIN_CLIENT_SECRET: ${{ secrets.LINKEDIN_CLIENT_SECRET }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           FACEBOOK_APP_ID: ${{ vars.FACEBOOK_APP_ID }}
@@ -669,11 +672,17 @@ jobs:
             --context imageTag=api-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }} \
             --context domainName=${{ vars.DOMAIN_NAME }} \
             --context corsOrigin=${{ vars.VITE_API_URL }} \
+            --context openaiApiKey=${{ secrets.OPENAI_API_KEY }} \
             --context googleClientId=${{ vars.VITE_GOOGLE_CLIENT_ID }} \
+            --context googleClientSecret=${{ secrets.GOOGLE_CLIENT_SECRET }} \
             --context facebookAppId=${{ vars.FACEBOOK_APP_ID }} \
+            --context facebookAppSecret=${{ secrets.FACEBOOK_APP_SECRET }} \
             --context instagramAppId=${{ vars.INSTAGRAM_APP_ID }} \
+            --context instagramAppSecret=${{ secrets.INSTAGRAM_APP_SECRET }} \
             --context linkedinClientId=${{ vars.LINKEDIN_CLIENT_ID }} \
+            --context linkedinClientSecret=${{ secrets.LINKEDIN_CLIENT_SECRET }} \
             --context tiktokClientKey=${{ vars.TIKTOK_CLIENT_KEY }} \
+            --context tiktokClientSecret=${{ secrets.TIKTOK_CLIENT_SECRET }} \
             --context nodeEnv=${{ vars.NODE_ENV }} \
             --context logLevel=${{ vars.LOG_LEVEL }} \
             --context enableMonitoring=${{ vars.ENABLE_MONITORING }}

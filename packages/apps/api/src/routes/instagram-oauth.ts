@@ -108,9 +108,13 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
 
         // Build Facebook OAuth URL for Instagram Graph API permissions
         // Note: Instagram Graph API uses Pages API permissions
-        const scopes = ['pages_show_list', 'pages_read_engagement', 'business_management'].join(
-          ','
-        );
+        const scopes = [
+          'pages_show_list',
+          'pages_read_engagement',
+          'pages_manage_posts',
+          'business_management',
+          'instagram_content_publish'
+        ].join(',');
 
         const authUrl =
           `https://www.facebook.com/dialog/oauth?` +
