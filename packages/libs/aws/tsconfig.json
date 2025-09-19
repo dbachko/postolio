@@ -1,4 +1,0 @@
-{
-  "extends": "@postolio/tsconfig/base.json",
-  "include": ["index.ts", "src/**/*.ts"]
-}
