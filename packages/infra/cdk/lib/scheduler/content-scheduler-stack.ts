@@ -99,6 +99,18 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // ==================== DynamoDB Tables with PITR ====================
 
+    // Campaigns Table with PITR
+    const campaignsTable = new dynamodb.Table(this, 'CampaignsTable', {
+      tableName: `${prefix}-campaigns`,
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: true, // ✅ PITR enabled
+      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
+      encryptionKey: encryptionKey,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
     // Schedules Table with PITR
     this.schedulesTable = new dynamodb.Table(this, 'SchedulesTable', {
       tableName: `${prefix}-schedules`,
@@ -312,6 +324,7 @@ export class ContentSchedulerStack extends cdk.Stack {
     const lambdaEnvironment = {
       ENVIRONMENT: environment,
       SCHEDULES_TABLE: this.schedulesTable.tableName,
+      CAMPAIGNS_TABLE: campaignsTable.tableName,
       SCHEDULES_TABLE_BRAND_INDEX: brandIndexName,
       SCHEDULES_TABLE_STATUS_INDEX: statusIndexName,
       RETRY_QUEUE_TABLE: retryQueueTable.tableName,
@@ -622,6 +635,16 @@ export class ContentSchedulerStack extends cdk.Stack {
     });
     statusSyncRule.addTarget(new targets.LambdaFunction(statusSyncLambda));
 
+    // EventBridge rule to forward campaign events to Schedule Management Lambda for DynamoDB sync
+    const campaignSyncRule = new events.Rule(this, 'CampaignSyncRule', {
+      ruleName: `${prefix}-campaign-sync`,
+      eventPattern: {
+        source: ['postolio.campaign'],
+        detailType: ['campaign.created', 'campaign.status.changed'],
+      },
+    });
+    campaignSyncRule.addTarget(new targets.LambdaFunction(scheduleManagementLambda));
+
     // Add DLQ as event source for retry handler
     retryHandlerLambda.addEventSource(
       new SqsEventSource(deadLetterQueue, {
@@ -635,6 +658,8 @@ export class ContentSchedulerStack extends cdk.Stack {
     this.schedulesTable.grantReadWriteData(publisherLambda);
     this.schedulesTable.grantReadWriteData(retryHandlerLambda); // Need to update schedule status on failure
     this.schedulesTable.grantReadWriteData(scheduleCleanupLambda); // Need to cleanup orphaned entries
+    campaignsTable.grantReadWriteData(scheduleManagementLambda); // Need to manage campaign state
+    campaignsTable.grantReadData(publisherLambda); // Need to validate campaign status before publishing
     retryQueueTable.grantReadWriteData(publisherLambda);
     retryQueueTable.grantReadWriteData(retryHandlerLambda);
     auditLogTable.grantWriteData(scheduleManagementLambda);

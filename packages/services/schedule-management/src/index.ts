@@ -17,6 +17,24 @@ import {
 } from '@aws-sdk/client-scheduler';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
+
+// EventBridge event types for campaign management
+interface EventBridgeEvent {
+  'detail-type': string;
+  source: string;
+  detail: {
+    campaignId: string;
+    brandId: string;
+    oldStatus?: string;
+    newStatus?: string;
+    status?: string;
+    triggeredBy?: {
+      userId?: string;
+      operation?: string;
+    };
+    timestamp: string;
+  };
+}
 import { randomUUID } from 'crypto';
 import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from './config';
 import {
@@ -222,6 +240,51 @@ async function publishScheduleEvent(
   }
 }
 
+// Campaign event handler for EventBridge events
+async function handleCampaignEvent(event: EventBridgeEvent): Promise<void> {
+  logger.info('Processing campaign event', {
+    source: event.source,
+    detailType: event['detail-type'],
+    campaignId: event.detail.campaignId,
+  });
+
+  try {
+    const { campaignId, brandId, oldStatus, newStatus, status } = event.detail;
+
+    if (event['detail-type'] === 'campaign.created') {
+      // Handle campaign creation event
+      await createCampaignRecord(campaignId, brandId, status || 'active');
+      logger.info(`✅ Created campaign record in DynamoDB: ${campaignId}`);
+
+      metrics.addMetric('CampaignCreated', MetricUnit.Count, 1);
+    } else if (event['detail-type'] === 'campaign.status.changed') {
+      // Handle campaign status change event
+      if (newStatus) {
+        await updateCampaignStatusRecord(campaignId, newStatus);
+        logger.info(
+          `✅ Updated campaign status in DynamoDB: ${campaignId} (${oldStatus} → ${newStatus})`
+        );
+
+        metrics.addMetric('CampaignStatusUpdated', MetricUnit.Count, 1);
+      }
+    }
+
+    // Publish metrics
+    metrics.publishStoredMetrics();
+  } catch (error) {
+    logger.error('Failed to handle campaign event', {
+      error: error instanceof Error ? error.message : String(error),
+      event,
+    });
+
+    metrics.addMetric('CampaignEventErrors', MetricUnit.Count, 1);
+    metrics.publishStoredMetrics();
+
+    // Re-throw to ensure proper error handling
+    throw error;
+  }
+}
+
 // CORS headers helper
 function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult {
   return {
@@ -237,24 +300,38 @@ function addCorsHeaders(response: APIGatewayProxyResult): APIGatewayProxyResult 
 }
 
 export const handler = async (
-  event: APIGatewayProxyEvent | APIGatewayProxyEventV2
-): Promise<APIGatewayProxyResult> => {
+  event: APIGatewayProxyEvent | APIGatewayProxyEventV2 | EventBridgeEvent
+): Promise<APIGatewayProxyResult | void> => {
+  // Check if this is an EventBridge event
+  if ('source' in event && 'detail-type' in event && event.source === 'postolio.campaign') {
+    logger.info('Received EventBridge campaign event', {
+      source: event.source,
+      detailType: event['detail-type'],
+    });
+
+    await handleCampaignEvent(event as EventBridgeEvent);
+    return; // EventBridge events don't need HTTP responses
+  }
+
+  // Handle HTTP events (API Gateway / Function URL)
+  const apiEvent = event as APIGatewayProxyEvent | APIGatewayProxyEventV2;
+
   // Determine if this is a Function URL event (API Gateway v2.0 also uses version '2.0', so check for requestContext.http)
   const isV2Event =
-    'requestContext' in event &&
-    event.requestContext &&
-    'http' in event.requestContext &&
-    typeof event.requestContext.http === 'object';
+    'requestContext' in apiEvent &&
+    apiEvent.requestContext &&
+    'http' in apiEvent.requestContext &&
+    typeof apiEvent.requestContext.http === 'object';
 
   // Extract HTTP method from the appropriate event format
   const httpMethod = isV2Event
-    ? (event as APIGatewayProxyEventV2).requestContext.http.method
-    : (event as APIGatewayProxyEvent).httpMethod;
+    ? (apiEvent as APIGatewayProxyEventV2).requestContext.http.method
+    : (apiEvent as APIGatewayProxyEvent).httpMethod;
 
   // Extract path from the appropriate event format
   const path = isV2Event
-    ? (event as APIGatewayProxyEventV2).requestContext.http.path
-    : (event as APIGatewayProxyEvent).path;
+    ? (apiEvent as APIGatewayProxyEventV2).requestContext.http.path
+    : (apiEvent as APIGatewayProxyEvent).path;
 
   // Extract path parameters - for Function URLs, we need to parse from the path
   let scheduleId: string | undefined;
@@ -272,14 +349,14 @@ export const handler = async (
       campaignAction = campaignMatch[2]; // start, pause, resume, complete
     }
   } else {
-    scheduleId = (event as APIGatewayProxyEvent).pathParameters?.scheduleId;
-    campaignId = (event as APIGatewayProxyEvent).pathParameters?.campaignId;
-    campaignAction = (event as APIGatewayProxyEvent).pathParameters?.action;
+    scheduleId = (apiEvent as APIGatewayProxyEvent).pathParameters?.scheduleId;
+    campaignId = (apiEvent as APIGatewayProxyEvent).pathParameters?.campaignId;
+    campaignAction = (apiEvent as APIGatewayProxyEvent).pathParameters?.action;
   }
 
   // Add context to logs
   logger.addPersistentLogAttributes({
-    requestId: event.requestContext.requestId,
+    requestId: apiEvent.requestContext.requestId,
     method: httpMethod,
     path: path,
     eventVersion: isV2Event ? '2.0' : '1.0',

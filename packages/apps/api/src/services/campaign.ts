@@ -18,6 +18,7 @@ import {
   StatusBroadcaster,
   type CampaignStatus as StatusBroadcasterCampaignStatus,
 } from './status-broadcaster.js';
+import { eventEmitter } from './event-emitter.js';
 
 const prisma = new PrismaClient();
 
@@ -657,6 +658,12 @@ class CampaignService {
         },
       });
 
+      // 🔥 CRITICAL: Emit campaign created event for microservices
+      eventEmitter.emitCampaignCreated(campaignId, campaign.brandId, 'active', {
+        userId,
+        operation: 'campaign.start',
+      });
+
       return {
         success: true,
         campaign: updatedCampaign,
@@ -1289,6 +1296,21 @@ class CampaignService {
           message: `Campaign status updated to ${newStatus}`,
         };
       });
+
+      // 🔔 CRITICAL: Emit campaign status changed event for microservices
+      if (result.success && result.campaign && result.oldStatus) {
+        const campaign = result.campaign as any;
+        eventEmitter.emitCampaignStatusChanged(
+          campaignId,
+          campaign.brandId,
+          result.oldStatus,
+          newStatus,
+          {
+            userId,
+            operation: 'campaign.status.update',
+          }
+        );
+      }
 
       // TODO: Fix TypeScript casting issue for broadcast
       // Broadcast status change after successful transaction
