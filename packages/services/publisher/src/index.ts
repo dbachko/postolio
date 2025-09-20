@@ -15,7 +15,8 @@ import { API_VERSIONS, API_BASE_URLS } from '@postolio/aws';
 import {
   getCampaignByContentId,
   isCampaignActive,
-  getCampaignBlockReason
+  getCampaignBlockReason,
+  type DynamoCampaign,
 } from '@postolio/aws';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
@@ -433,11 +434,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       });
 
       // Update schedule status to skipped (not failed - this is intentional)
-      await updateScheduleStatus(
-        event.scheduleId,
-        'skipped',
-        blockReason || 'Campaign not active'
-      );
+      await updateScheduleStatus(event.scheduleId, 'skipped', blockReason || 'Campaign not active');
 
       // Delete EventBridge schedule to prevent re-triggering
       try {

@@ -21,8 +21,12 @@ import { randomUUID } from 'crypto';
 import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from './config';
 import {
   getCampaignByContentId,
+  getCampaignById,
   canCampaignSchedule,
-  getCampaignScheduleBlockReason
+  getCampaignScheduleBlockReason,
+  createCampaign as createCampaignRecord,
+  updateCampaignStatus as updateCampaignStatusRecord,
+  type DynamoCampaign,
 } from '@postolio/aws';
 
 /**
@@ -57,6 +61,7 @@ const eventBridgeClient = tracer.captureAWSv3Client(new EventBridgeClient({}));
 interface ScheduleRequest {
   brandId: string;
   contentId: string;
+  campaignId?: string; // Link schedule to campaign
   platform: 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
   scheduledAt: string;
   contentType?: 'image' | 'video' | 'carousel' | 'reel' | 'story';
@@ -253,12 +258,23 @@ export const handler = async (
 
   // Extract path parameters - for Function URLs, we need to parse from the path
   let scheduleId: string | undefined;
+  let campaignId: string | undefined;
+  let campaignAction: string | undefined;
+
   if (isV2Event) {
-    // For Function URLs, parse schedule ID from path like /schedules/123
-    const pathMatch = path.match(/\/schedules\/([^/]+)/);
-    scheduleId = pathMatch ? pathMatch[1] : undefined;
+    // For Function URLs, parse IDs from path
+    const scheduleMatch = path.match(/\/schedules\/([^/]+)/);
+    const campaignMatch = path.match(/\/campaigns\/([^/]+)(?:\/([^/]+))?/);
+
+    scheduleId = scheduleMatch ? scheduleMatch[1] : undefined;
+    if (campaignMatch) {
+      campaignId = campaignMatch[1];
+      campaignAction = campaignMatch[2]; // start, pause, resume, complete
+    }
   } else {
     scheduleId = (event as APIGatewayProxyEvent).pathParameters?.scheduleId;
+    campaignId = (event as APIGatewayProxyEvent).pathParameters?.campaignId;
+    campaignAction = (event as APIGatewayProxyEvent).pathParameters?.action;
   }
 
   // Add context to logs
@@ -291,11 +307,19 @@ export const handler = async (
 
     switch (httpMethod) {
       case 'POST':
-        result = await createSchedule(JSON.parse(body || '{}'));
-        metrics.addMetric('ScheduleCreated', MetricUnit.Count, 1);
+        if (path.includes('/campaigns/')) {
+          result = await createCampaign(JSON.parse(body || '{}'));
+          metrics.addMetric('CampaignCreated', MetricUnit.Count, 1);
+        } else {
+          result = await createSchedule(JSON.parse(body || '{}'));
+          metrics.addMetric('ScheduleCreated', MetricUnit.Count, 1);
+        }
         break;
       case 'GET':
-        if (scheduleId) {
+        if (campaignId) {
+          result = await getCampaign(campaignId);
+          metrics.addMetric('CampaignRetrieved', MetricUnit.Count, 1);
+        } else if (scheduleId) {
           result = await getSchedule(scheduleId);
           metrics.addMetric('ScheduleRetrieved', MetricUnit.Count, 1);
         } else {
@@ -304,12 +328,32 @@ export const handler = async (
         }
         break;
       case 'PUT':
-        result = await updateSchedule(scheduleId!, JSON.parse(body || '{}'));
-        metrics.addMetric('ScheduleUpdated', MetricUnit.Count, 1);
+        if (campaignId && campaignAction) {
+          result = await updateCampaignStatus(campaignId, campaignAction);
+          metrics.addMetric('CampaignStatusUpdated', MetricUnit.Count, 1);
+        } else if (scheduleId) {
+          result = await updateSchedule(scheduleId, JSON.parse(body || '{}'));
+          metrics.addMetric('ScheduleUpdated', MetricUnit.Count, 1);
+        } else {
+          result = {
+            statusCode: 400,
+            body: JSON.stringify({ error: 'Invalid PUT request' }),
+          };
+        }
         break;
       case 'DELETE':
-        result = await deleteSchedule(scheduleId!);
-        metrics.addMetric('ScheduleDeleted', MetricUnit.Count, 1);
+        if (campaignId) {
+          result = await deleteCampaign(campaignId);
+          metrics.addMetric('CampaignDeleted', MetricUnit.Count, 1);
+        } else if (scheduleId) {
+          result = await deleteSchedule(scheduleId);
+          metrics.addMetric('ScheduleDeleted', MetricUnit.Count, 1);
+        } else {
+          result = {
+            statusCode: 400,
+            body: JSON.stringify({ error: 'Invalid DELETE request' }),
+          };
+        }
         break;
       default:
         result = {
@@ -775,7 +819,7 @@ async function updateSchedule(
         logger.info('Schedule updated in DynamoDB only (EventBridge skipped)', {
           scheduleId,
           campaignId: campaign?.id,
-          campaignStatus: campaign?.status
+          campaignStatus: campaign?.status,
         });
 
         // Publish EventBridge event to notify status-sync Lambda about the update
@@ -964,4 +1008,205 @@ async function deleteSchedule(scheduleId: string): Promise<APIGatewayProxyResult
     statusCode: 204,
     body: '',
   };
+}
+
+// Campaign management functions
+
+interface CampaignRequest {
+  campaignId: string;
+  brandId: string;
+  status?: DynamoCampaign['status'];
+}
+
+async function createCampaign(data: unknown): Promise<APIGatewayProxyResult> {
+  try {
+    const d = data as CampaignRequest;
+
+    if (!d.campaignId || !d.brandId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error: 'campaignId and brandId are required',
+        }),
+      };
+    }
+
+    logger.info('Creating campaign in DynamoDB', {
+      campaignId: d.campaignId,
+      brandId: d.brandId,
+      status: d.status || 'active',
+    });
+
+    const campaign = await createCampaignRecord(d.campaignId, d.brandId, d.status || 'active');
+
+    logger.info('Campaign created successfully', { campaignId: d.campaignId });
+
+    return {
+      statusCode: 201,
+      body: JSON.stringify(campaign),
+    };
+  } catch (error) {
+    logger.error('Error creating campaign', error as Error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: 'Failed to create campaign',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      }),
+    };
+  }
+}
+
+async function getCampaign(campaignId: string): Promise<APIGatewayProxyResult> {
+  try {
+    logger.info('Retrieving campaign', { campaignId });
+
+    const campaign = await getCampaignById(campaignId);
+
+    if (!campaign) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: 'Campaign not found' }),
+      };
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify(campaign),
+    };
+  } catch (error) {
+    logger.error('Error retrieving campaign', error as Error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: 'Failed to retrieve campaign',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      }),
+    };
+  }
+}
+
+async function updateCampaignStatus(
+  campaignId: string,
+  action: string
+): Promise<APIGatewayProxyResult> {
+  try {
+    const statusMap: Record<string, DynamoCampaign['status']> = {
+      start: 'active',
+      pause: 'paused',
+      resume: 'active',
+      complete: 'completed',
+      fail: 'failed',
+    };
+
+    const newStatus = statusMap[action];
+    if (!newStatus) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error: 'Invalid action',
+          validActions: Object.keys(statusMap),
+        }),
+      };
+    }
+
+    logger.info('Updating campaign status', {
+      campaignId,
+      action,
+      newStatus,
+    });
+
+    await updateCampaignStatusRecord(campaignId, newStatus);
+
+    // Emit EventBridge event for campaign status change
+    await eventBridgeClient.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            Source: 'postolio.schedule-management',
+            DetailType: 'campaign.status.updated',
+            Time: new Date(),
+            Detail: JSON.stringify({
+              campaignId,
+              action,
+              status: newStatus,
+              updatedAt: new Date().toISOString(),
+            }),
+          },
+        ],
+      })
+    );
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        campaignId,
+        status: newStatus,
+        action,
+        updatedAt: new Date().toISOString(),
+      }),
+    };
+  } catch (error) {
+    logger.error('Error updating campaign status', error as Error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: 'Failed to update campaign status',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      }),
+    };
+  }
+}
+
+async function deleteCampaign(campaignId: string): Promise<APIGatewayProxyResult> {
+  try {
+    logger.info('Deleting campaign', { campaignId });
+
+    // Get campaign config
+    const dbConfig = getDynamoDBConfig();
+
+    // Delete campaign from DynamoDB
+    await docClient.send(
+      new DeleteCommand({
+        TableName: process.env.CAMPAIGNS_TABLE || dbConfig.tableName,
+        Key: {
+          pk: `CAMPAIGN#${campaignId}`,
+          sk: 'METADATA',
+        },
+      })
+    );
+
+    // Emit EventBridge event for campaign deletion
+    await eventBridgeClient.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            Source: 'postolio.schedule-management',
+            DetailType: 'campaign.deleted',
+            Time: new Date(),
+            Detail: JSON.stringify({
+              campaignId,
+              deletedAt: new Date().toISOString(),
+            }),
+          },
+        ],
+      })
+    );
+
+    logger.info('Campaign deleted successfully', { campaignId });
+
+    return {
+      statusCode: 204,
+      body: '',
+    };
+  } catch (error) {
+    logger.error('Error deleting campaign', error as Error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: 'Failed to delete campaign',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      }),
+    };
+  }
 }
