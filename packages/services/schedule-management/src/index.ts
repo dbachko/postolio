@@ -19,6 +19,11 @@ import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge
 import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
 import { randomUUID } from 'crypto';
 import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from './config';
+import {
+  getCampaignByContentId,
+  canCampaignSchedule,
+  getCampaignScheduleBlockReason
+} from '@postolio/aws';
 
 /**
  * Schedule Management Lambda
@@ -737,8 +742,84 @@ async function updateSchedule(
       // Format date for EventBridge Scheduler
       const eventBridgeScheduleTime = formatEventBridgeScheduleTime(partial.scheduledAt);
 
-      logger.info('Updating schedule time', {
+      // 🔥 CRITICAL: Validate campaign status before updating EventBridge
+      const campaign = await getCampaignByContentId(baseItem.contentId);
+
+      if (!canCampaignSchedule(campaign)) {
+        const blockReason = getCampaignScheduleBlockReason(campaign);
+        logger.warn('Skipping EventBridge update - campaign cannot be scheduled', {
+          scheduleId,
+          contentId: baseItem.contentId,
+          campaignId: campaign?.id,
+          campaignStatus: campaign?.status,
+          blockReason,
+          oldTime: existingSchedule.Item.scheduledAt,
+          newTime: newScheduledAt,
+        });
+
+        // Update DynamoDB with new schedule time but skip EventBridge operations
+        updatedItem.scheduledAt = newScheduledAt;
+        updatedItem.gsi1sk = newScheduledAt;
+
+        // Add a note about why EventBridge wasn't updated
+        updatedItem.schedulingError = blockReason || 'Campaign scheduling blocked';
+
+        // Update in DynamoDB only
+        await docClient.send(
+          new PutCommand({
+            TableName: process.env.SCHEDULES_TABLE!,
+            Item: updatedItem,
+          })
+        );
+
+        logger.info('Schedule updated in DynamoDB only (EventBridge skipped)', {
+          scheduleId,
+          campaignId: campaign?.id,
+          campaignStatus: campaign?.status
+        });
+
+        // Publish EventBridge event to notify status-sync Lambda about the update
+        await publishScheduleEvent('schedule.updated', {
+          scheduleId,
+          contentId: updatedItem.contentId,
+          brandId: updatedItem.brandId,
+          scheduledAt: updatedItem.scheduledAt,
+          updates: { scheduledAt: updatedItem.scheduledAt },
+        });
+
+        // Return the updated schedule (with the scheduling error noted)
+        const scheduleResponse = {
+          scheduleId: updatedItem.scheduleId,
+          contentId: updatedItem.contentId,
+          brandId: updatedItem.brandId,
+          userId: updatedItem.userId,
+          platform: updatedItem.platform,
+          scheduledAt: updatedItem.scheduledAt,
+          contentType: updatedItem.contentType,
+          videoUrl: updatedItem.videoUrl,
+          caption: updatedItem.caption,
+          hashtags: updatedItem.hashtags,
+          mediaUrls: updatedItem.mediaUrls,
+          status: updatedItem.status,
+          retryCount: updatedItem.retryCount || 0,
+          metadata: updatedItem.metadata,
+          createdAt: updatedItem.createdAt,
+          updatedAt: updatedItem.updatedAt,
+          publishedAt: updatedItem.publishedAt,
+          errorMessage: updatedItem.schedulingError,
+        };
+
+        return {
+          statusCode: 200,
+          body: JSON.stringify(scheduleResponse),
+        };
+      }
+
+      logger.info('Updating schedule time - campaign validation passed', {
         scheduleId,
+        contentId: baseItem.contentId,
+        campaignId: campaign?.id,
+        campaignStatus: campaign?.status,
         oldTime: existingSchedule.Item.scheduledAt,
         newTime: newScheduledAt,
         eventBridgeTime: eventBridgeScheduleTime,

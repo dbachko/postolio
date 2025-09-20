@@ -615,12 +615,18 @@ importers:
       '@aws-crypto/sha256-js':
         specifier: ^5.2.0
         version: 5.2.0
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3.883.0
+        version: 3.888.0
       '@aws-sdk/client-eventbridge':
         specifier: ^3.883.0
         version: 3.888.0
       '@aws-sdk/credential-provider-node':
         specifier: ^3.883.0
         version: 3.888.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3.883.0
+        version: 3.888.0(@aws-sdk/client-dynamodb@3.888.0)
       '@aws-sdk/protocol-http':
         specifier: ^3.374.0
         version: 3.374.0
@@ -946,6 +952,9 @@ importers:
       '@aws-sdk/lib-dynamodb':
         specifier: ^3.872.0
         version: 3.888.0(@aws-sdk/client-dynamodb@3.888.0)
+      '@postolio/aws':
+        specifier: workspace:*
+        version: link:../../libs/aws
       '@postolio/errors':
         specifier: workspace:*
         version: link:../../libs/errors

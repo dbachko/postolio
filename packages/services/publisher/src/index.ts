@@ -12,6 +12,11 @@ import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { signRequest } from '@postolio/aws';
 import { API_VERSIONS, API_BASE_URLS } from '@postolio/aws';
+import {
+  getCampaignByContentId,
+  isCampaignActive,
+  getCampaignBlockReason
+} from '@postolio/aws';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
@@ -414,10 +419,82 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       return;
     }
 
+    // 🔥 CRITICAL: Validate campaign status before publishing
+    const campaign = await getCampaignByContentId(schedule.contentId || event.scheduleId);
+
+    if (!isCampaignActive(campaign)) {
+      const blockReason = getCampaignBlockReason(campaign);
+      logger.warn('Skipping publish - campaign not active', {
+        scheduleId: event.scheduleId,
+        contentId: schedule.contentId,
+        campaignId: campaign?.id,
+        campaignStatus: campaign?.status,
+        blockReason,
+      });
+
+      // Update schedule status to skipped (not failed - this is intentional)
+      await updateScheduleStatus(
+        event.scheduleId,
+        'skipped',
+        blockReason || 'Campaign not active'
+      );
+
+      // Delete EventBridge schedule to prevent re-triggering
+      try {
+        await schedulerClient.send(
+          new DeleteScheduleCommand({
+            Name: event.scheduleId,
+            GroupName: process.env.SCHEDULE_GROUP_NAME || 'default',
+          })
+        );
+        logger.info('Deleted EventBridge schedule for inactive campaign', {
+          scheduleId: event.scheduleId,
+          campaignId: campaign?.id,
+        });
+      } catch (deleteError) {
+        logger.warn('Failed to delete EventBridge schedule for inactive campaign', {
+          scheduleId: event.scheduleId,
+          error: deleteError,
+        });
+      }
+
+      // Emit EventBridge post.skipped event for downstream sync
+      try {
+        await eventBridge.putEvents({
+          Entries: [
+            {
+              Source: 'postolio.platform',
+              DetailType: 'post.skipped',
+              Time: new Date(),
+              Detail: JSON.stringify({
+                scheduleId: event.scheduleId,
+                contentId: schedule.contentId,
+                brandId: schedule.brandId,
+                campaignId: campaign?.id,
+                campaignStatus: campaign?.status,
+                reason: blockReason || 'Campaign not active',
+                skippedAt: new Date().toISOString(),
+              }),
+            },
+          ],
+        });
+        logger.info('Emitted post.skipped event to EventBridge');
+      } catch (emitErr) {
+        logger.warn('Failed to emit post.skipped event', { error: emitErr });
+      }
+
+      metrics.addMetric('ContentSkipped', MetricUnit.Count, 1);
+      metrics.addMetric('ContentSkipped_CampaignInactive', MetricUnit.Count, 1);
+      metrics.publishStoredMetrics();
+      return;
+    }
+
     // Use content directly from schedule
-    logger.info('Using content from schedule', {
+    logger.info('Using content from schedule - campaign validation passed', {
       contentId: schedule.contentId,
       brandId: schedule.brandId,
+      campaignId: campaign?.id,
+      campaignStatus: campaign?.status,
       hasCaption: !!schedule.caption,
       hasHashtags: !!schedule.hashtags,
     });
