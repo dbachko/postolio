@@ -48,6 +48,48 @@ const sqsClient = tracer.captureAWSv3Client(new SQSClient({}));
 const ssmClient = tracer.captureAWSv3Client(new SSMClient({}));
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 
+type ServiceEnvironment = 'dev' | 'staging' | 'prod';
+
+function resolveServiceEnvironment(): ServiceEnvironment {
+  const candidates = [
+    process.env.ENVIRONMENT,
+    process.env.SERVICE_ENVIRONMENT,
+    process.env.NODE_ENV,
+  ];
+
+  const resolvedValues: Record<string, string | undefined> = {
+    ENVIRONMENT: process.env.ENVIRONMENT,
+    SERVICE_ENVIRONMENT: process.env.SERVICE_ENVIRONMENT,
+    NODE_ENV: process.env.NODE_ENV,
+  };
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const normalized = candidate.trim().toLowerCase();
+
+    switch (normalized) {
+      case 'prod':
+      case 'production':
+        return 'prod';
+      case 'staging':
+        return 'staging';
+      case 'dev':
+      case 'development':
+        return 'dev';
+      default:
+        break;
+    }
+  }
+
+  logger.warn('Falling back to dev environment for service discovery', {
+    resolvedValues,
+  });
+  return 'dev';
+}
+
 // Event from scheduler (minimal data)
 interface PublishEvent {
   scheduleId: string;
@@ -612,10 +654,10 @@ async function getTokenFromTokenService(
 
   try {
     let tokenServiceUrl: string;
+    const environment = resolveServiceEnvironment();
 
     // Get from parameter store
     try {
-      const environment = process.env.NODE_ENV || 'dev';
       const parameterName = `/postolio/${environment}/services/token-service/url`;
 
       const response = await ssmClient.send(
@@ -629,6 +671,7 @@ async function getTokenFromTokenService(
         logger.info('Token Service URL retrieved from parameter store', {
           url: tokenServiceUrl,
           parameterName,
+          environment,
         });
       } else {
         throw new Error('SSM Parameter value is empty');
@@ -636,6 +679,7 @@ async function getTokenFromTokenService(
     } catch (ssmError) {
       logger.warn('Failed to get Token Service URL from parameter store', {
         error: ssmError,
+        environment,
       });
 
       // Fallback to environment variable
@@ -647,16 +691,21 @@ async function getTokenFromTokenService(
 
       logger.info('Using Token Service URL from environment variable', {
         url: tokenServiceUrl,
+        environment,
       });
     }
 
     // Validate we have a proper URL
-    if (tokenServiceUrl.includes('localhost') && process.env.NODE_ENV === 'prod') {
+    if (tokenServiceUrl.includes('localhost') && environment === 'prod') {
       throw new Error('Token Service URL not properly configured for prod environment');
     }
 
-    // Parse URL for signing
-    const url = new URL(`${tokenServiceUrl}/tokens/${userId}/${platform}/${brandId}`);
+    // Parse URL for signing (avoid double slashes in pathname which break SigV4)
+    const url = new URL(tokenServiceUrl);
+    const pathSegments = ['tokens', userId, platform, brandId].map((segment) =>
+      encodeURIComponent(segment)
+    );
+    url.pathname = `/${pathSegments.join('/')}`;
 
     // Create HTTP request for signing
     // Sign the request with our shared signing utility
@@ -675,9 +724,17 @@ async function getTokenFromTokenService(
     });
 
     if (!response.ok) {
+      let errorBody: string | undefined;
+      try {
+        errorBody = await response.text();
+      } catch (parseError) {
+        logger.warn('Failed to read Token Service error body', { parseError });
+      }
+
       logger.error('Token Service request failed', {
         status: response.status,
         statusText: response.statusText,
+        body: errorBody,
       });
 
       if (response.status === 404) {
