@@ -8,5 +8,5 @@ export type {
   Campaign,
   AuditLog,
   ContentStatus,
-  CampaignStatus
+  CampaignStatus,
 } from '@prisma/client';
