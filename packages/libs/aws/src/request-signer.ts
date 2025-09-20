@@ -12,6 +12,14 @@ export async function signRequest(request: {
 }): Promise<Record<string, string>> {
   const { service, region } = resolveAwsServiceTarget(request.url);
 
+  const headers: Record<string, string> = {
+    ...request.headers,
+  };
+
+  if (!headers.host && !headers.Host) {
+    headers.host = request.url.host;
+  }
+
   const signer = new SignatureV4({
     credentials: defaultProvider(),
     region,
@@ -24,7 +32,7 @@ export async function signRequest(request: {
     hostname: request.url.hostname,
     path: request.url.pathname,
     query: Object.fromEntries(request.url.searchParams.entries()),
-    headers: request.headers,
+    headers,
     body: request.body,
   });
 
