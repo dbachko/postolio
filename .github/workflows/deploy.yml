@@ -491,6 +491,7 @@ jobs:
           # Build shared libraries and generate Prisma client
           pnpm --filter=@postolio/database build || true
           pnpm --filter=@postolio/errors build || true
+          pnpm --filter=@postolio/aws build
 
       - name: Build service
         run: npx turbo build --filter="@postolio/${{ matrix.service }}"
