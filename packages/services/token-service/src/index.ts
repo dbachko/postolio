@@ -10,7 +10,7 @@ import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import crypto from 'crypto';
-import { TokenServiceError, ValidationError, RateLimitError } from '@postolio/errors';
+import { ServiceError, ErrorFactory } from '@postolio/errors';
 
 const logger = new Logger({ serviceName: 'token-service' });
 const metrics = new Metrics({
@@ -29,9 +29,14 @@ const KMS_KEY_ID = process.env.KMS_KEY_ID!;
 const RATE_LIMIT_TABLE = process.env.RATE_LIMIT_TABLE || 'token-rate-limits';
 
 // Custom error classes
-class NotFoundError extends TokenServiceError {
+class NotFoundError extends ServiceError {
   constructor(message: string) {
-    super(message, 'NOT_FOUND', 404, false);
+    super({
+      code: 'NOT_FOUND',
+      message,
+      retryable: false,
+      userMessage: 'The requested resource was not found.',
+    });
   }
 }
 
@@ -100,7 +105,10 @@ async function encryptToken(token: string): Promise<string> {
     return Buffer.from(response.CiphertextBlob!).toString('base64');
   } catch (error) {
     logger.error('Token encryption failed', { error });
-    throw new TokenServiceError('Failed to encrypt token', 'ENCRYPTION_ERROR', 500, true);
+    throw ErrorFactory.internalError(
+      'Failed to encrypt token',
+      error instanceof Error ? error : new Error(String(error))
+    );
   }
 }
 
@@ -115,7 +123,10 @@ async function decryptToken(encryptedToken: string): Promise<string> {
     return Buffer.from(response.Plaintext!).toString();
   } catch (error) {
     logger.error('Token decryption failed', { error });
-    throw new TokenServiceError('Failed to decrypt token', 'DECRYPTION_ERROR', 500, true);
+    throw ErrorFactory.internalError(
+      'Failed to decrypt token',
+      error instanceof Error ? error : new Error(String(error))
+    );
   }
 }
 
@@ -172,8 +183,7 @@ async function checkRateLimit(userId: string, platform?: string): Promise<void> 
 
     if (currentCount >= limit.maxRequests) {
       const retryAfter = Math.ceil((limit.windowMs - (now % limit.windowMs)) / 1000);
-      const error = new RateLimitError(retryAfter);
-      throw error;
+      throw ErrorFactory.rateLimited(retryAfter);
     }
 
     // Increment counter
@@ -191,7 +201,7 @@ async function checkRateLimit(userId: string, platform?: string): Promise<void> 
       })
     );
   } catch (error) {
-    if (error instanceof RateLimitError) {
+    if (error instanceof ServiceError && error.code === 'RATE_LIMITED') {
       throw error;
     }
     // Don't block on rate limit check failures
@@ -210,11 +220,13 @@ async function storeToken(
 ): Promise<void> {
   // Validate input
   if (!data.userId || !data.brandId || !data.platform || !data.accessToken) {
-    throw new ValidationError('Missing required fields');
+    throw ErrorFactory.validationFailed([
+      'Missing required fields: userId, brandId, platform, or accessToken',
+    ]);
   }
 
   if (new Date(data.expiresAt) < new Date()) {
-    throw new ValidationError('Token already expired');
+    throw ErrorFactory.validationFailed(['Token already expired']);
   }
 
   try {
@@ -275,7 +287,7 @@ async function storeToken(
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
       result: 'failure',
-      errorCode: error instanceof TokenServiceError ? error.code : 'UNKNOWN_ERROR',
+      errorCode: error instanceof ServiceError ? error.code : 'UNKNOWN_ERROR',
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
     });
     throw error;
@@ -367,7 +379,7 @@ async function getToken(
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
       result: 'failure',
-      errorCode: error instanceof TokenServiceError ? error.code : 'UNKNOWN_ERROR',
+      errorCode: error instanceof ServiceError ? error.code : 'UNKNOWN_ERROR',
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
     });
     throw error;
@@ -456,7 +468,7 @@ async function rotateToken(
       correlationId: requestContext.correlationId,
       ipAddress: requestContext.ipAddress,
       result: 'failure',
-      errorCode: error instanceof TokenServiceError ? error.code : 'UNKNOWN_ERROR',
+      errorCode: error instanceof ServiceError ? error.code : 'UNKNOWN_ERROR',
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
     });
     throw error;
@@ -672,13 +684,14 @@ export const handler = async (
 
     metrics.addMetric('RequestErrors', MetricUnit.Count, 1);
 
-    if (error instanceof TokenServiceError) {
+    if (error instanceof ServiceError) {
       const retryHeaders: Record<string, string> = { ...responseHeaders };
-      if (error instanceof RateLimitError) {
-        retryHeaders['Retry-After'] = error.retryAfter.toString();
+      if (error.code === 'RATE_LIMITED' && error.details?.retryAfterSeconds) {
+        retryHeaders['Retry-After'] = error.details.retryAfterSeconds.toString();
       }
-      const statusCode = typeof error.statusCode === 'number' ? error.statusCode : 500;
-      const retryable = (error as TokenServiceError & { retryable?: boolean }).retryable ?? false;
+      const statusCode =
+        error.code === 'VALIDATION_FAILED' ? 400 : error.code === 'RATE_LIMITED' ? 429 : 500;
+      const retryable = error.retryable ?? false;
       return {
         statusCode,
         headers: retryHeaders,
