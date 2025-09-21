@@ -1299,7 +1299,7 @@ class CampaignService {
 
       // 🔔 CRITICAL: Emit campaign status changed event for microservices
       if (result.success && result.campaign && result.oldStatus) {
-        const campaign = result.campaign as any;
+        const campaign = result.campaign;
         eventEmitter.emitCampaignStatusChanged(
           campaignId,
           campaign.brandId,
