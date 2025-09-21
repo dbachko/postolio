@@ -1,0 +1,197 @@
+/**
+ * Schedule Request Validator
+ *
+ * Input validation for schedule requests
+ * Separated for better testability and reusability
+ */
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+export interface ScheduleRequest {
+  contentId: string;
+  brandId: string;
+  campaignId?: string;
+  userId: string;
+  platform: string;
+  scheduledAt: string;
+  contentType: string;
+  caption?: string;
+  hashtags?: string[];
+  mediaUrls?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Validate a schedule request
+ */
+export function validateScheduleRequest(request: Record<string, unknown>): ValidationResult {
+  const errors: string[] = [];
+
+  // Check required fields
+  if (!request.contentId || typeof request.contentId !== 'string') {
+    errors.push('contentId is required and must be a string');
+  }
+
+  if (!request.brandId || typeof request.brandId !== 'string') {
+    errors.push('brandId is required and must be a string');
+  }
+
+  if (!request.userId || typeof request.userId !== 'string') {
+    errors.push('userId is required and must be a string');
+  }
+
+  if (!request.platform || typeof request.platform !== 'string') {
+    errors.push('platform is required and must be a string');
+  }
+
+  if (!request.scheduledAt || typeof request.scheduledAt !== 'string') {
+    errors.push('scheduledAt is required and must be a string');
+  } else {
+    // Validate scheduledAt is a valid ISO date string
+    const scheduledDate = new Date(request.scheduledAt);
+    if (isNaN(scheduledDate.getTime())) {
+      errors.push('scheduledAt must be a valid ISO 8601 date string');
+    } else {
+      // Check that scheduled time is in the future
+      if (scheduledDate <= new Date()) {
+        errors.push('scheduledAt must be in the future');
+      }
+    }
+  }
+
+  if (!request.contentType || typeof request.contentType !== 'string') {
+    errors.push('contentType is required and must be a string');
+  }
+
+  // Validate optional fields
+  if (request.campaignId !== undefined && typeof request.campaignId !== 'string') {
+    errors.push('campaignId must be a string if provided');
+  }
+
+  if (request.caption !== undefined && typeof request.caption !== 'string') {
+    errors.push('caption must be a string if provided');
+  }
+
+  if (request.hashtags !== undefined) {
+    if (!Array.isArray(request.hashtags)) {
+      errors.push('hashtags must be an array if provided');
+    } else {
+      const invalidHashtags = request.hashtags.filter((tag: unknown) => typeof tag !== 'string');
+      if (invalidHashtags.length > 0) {
+        errors.push('all hashtags must be strings');
+      }
+    }
+  }
+
+  if (request.mediaUrls !== undefined) {
+    if (!Array.isArray(request.mediaUrls)) {
+      errors.push('mediaUrls must be an array if provided');
+    } else {
+      const invalidUrls = request.mediaUrls.filter((url: unknown) => typeof url !== 'string');
+      if (invalidUrls.length > 0) {
+        errors.push('all mediaUrls must be strings');
+      }
+    }
+  }
+
+  if (request.metadata !== undefined && typeof request.metadata !== 'object') {
+    errors.push('metadata must be an object if provided');
+  }
+
+  // Validate platform values
+  const validPlatforms = ['instagram', 'facebook', 'twitter', 'linkedin', 'tiktok'];
+  if (request.platform && !validPlatforms.includes((request.platform as string).toLowerCase())) {
+    errors.push(`platform must be one of: ${validPlatforms.join(', ')}`);
+  }
+
+  // Validate content type values
+  const validContentTypes = ['image', 'video', 'carousel', 'reel', 'story'];
+  if (
+    request.contentType &&
+    !validContentTypes.includes((request.contentType as string).toLowerCase())
+  ) {
+    errors.push(`contentType must be one of: ${validContentTypes.join(', ')}`);
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Validate campaign request
+ */
+export function validateCampaignRequest(request: Record<string, unknown>): ValidationResult {
+  const errors: string[] = [];
+
+  if (!request.campaignId || typeof request.campaignId !== 'string') {
+    errors.push('campaignId is required and must be a string');
+  }
+
+  if (!request.brandId || typeof request.brandId !== 'string') {
+    errors.push('brandId is required and must be a string');
+  }
+
+  if (!request.status || typeof request.status !== 'string') {
+    errors.push('status is required and must be a string');
+  } else {
+    const validStatuses = ['active', 'paused', 'completed', 'failed'];
+    if (!validStatuses.includes((request.status as string).toLowerCase())) {
+      errors.push(`status must be one of: ${validStatuses.join(', ')}`);
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Validate update request (allows partial updates)
+ */
+export function validateScheduleUpdateRequest(request: Record<string, unknown>): ValidationResult {
+  const errors: string[] = [];
+
+  // For updates, fields are optional but must be valid if provided
+  if (request.scheduledAt !== undefined) {
+    if (typeof request.scheduledAt !== 'string') {
+      errors.push('scheduledAt must be a string if provided');
+    } else {
+      const scheduledDate = new Date(request.scheduledAt);
+      if (isNaN(scheduledDate.getTime())) {
+        errors.push('scheduledAt must be a valid ISO 8601 date string');
+      } else if (scheduledDate <= new Date()) {
+        errors.push('scheduledAt must be in the future');
+      }
+    }
+  }
+
+  if (request.caption !== undefined && typeof request.caption !== 'string') {
+    errors.push('caption must be a string if provided');
+  }
+
+  if (request.hashtags !== undefined) {
+    if (!Array.isArray(request.hashtags)) {
+      errors.push('hashtags must be an array if provided');
+    } else {
+      const invalidHashtags = request.hashtags.filter((tag: unknown) => typeof tag !== 'string');
+      if (invalidHashtags.length > 0) {
+        errors.push('all hashtags must be strings');
+      }
+    }
+  }
+
+  if (request.metadata !== undefined && typeof request.metadata !== 'object') {
+    errors.push('metadata must be an object if provided');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}

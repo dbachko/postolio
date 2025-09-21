@@ -12,7 +12,13 @@ import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { signRequest } from '@postolio/aws';
 import { API_VERSIONS, API_BASE_URLS } from '@postolio/aws';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import {
+  getCampaignByContentId,
+  getCampaignById,
+  isCampaignActive,
+  getCampaignBlockReason,
+  getServiceUrl,
+} from '@postolio/aws';
 import { EventBridge } from '@aws-sdk/client-eventbridge';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { SchedulerClient, DeleteScheduleCommand } from '@aws-sdk/client-scheduler';
@@ -45,50 +51,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
 const s3Client = tracer.captureAWSv3Client(new S3Client({}));
 const eventBridge = new EventBridge({});
 const sqsClient = tracer.captureAWSv3Client(new SQSClient({}));
-const ssmClient = tracer.captureAWSv3Client(new SSMClient({}));
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
-
-type ServiceEnvironment = 'dev' | 'staging' | 'prod';
-
-function resolveServiceEnvironment(): ServiceEnvironment {
-  const candidates = [
-    process.env.ENVIRONMENT,
-    process.env.SERVICE_ENVIRONMENT,
-    process.env.NODE_ENV,
-  ];
-
-  const resolvedValues: Record<string, string | undefined> = {
-    ENVIRONMENT: process.env.ENVIRONMENT,
-    SERVICE_ENVIRONMENT: process.env.SERVICE_ENVIRONMENT,
-    NODE_ENV: process.env.NODE_ENV,
-  };
-
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
-    }
-
-    const normalized = candidate.trim().toLowerCase();
-
-    switch (normalized) {
-      case 'prod':
-      case 'production':
-        return 'prod';
-      case 'staging':
-        return 'staging';
-      case 'dev':
-      case 'development':
-        return 'dev';
-      default:
-        break;
-    }
-  }
-
-  logger.warn('Falling back to dev environment for service discovery', {
-    resolvedValues,
-  });
-  return 'dev';
-}
 
 // Event from scheduler (minimal data)
 interface PublishEvent {
@@ -414,10 +377,101 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       return;
     }
 
+    // 🔥 CRITICAL: Validate campaign status before publishing with consistency check
+    const campaign = await getCampaignByContentId(schedule.contentId || event.scheduleId);
+
+    // For critical publishing decisions, perform consistency validation if we have a campaign
+    let validatedCampaign = campaign;
+    if (campaign) {
+      try {
+        validatedCampaign = await getCampaignById(campaign.campaignId, true); // Enable consistency validation
+        if (validatedCampaign && validatedCampaign.status !== campaign.status) {
+          logger.warn('Campaign status changed after consistency validation', {
+            scheduleId: event.scheduleId,
+            campaignId: campaign.campaignId,
+            originalStatus: campaign.status,
+            validatedStatus: validatedCampaign.status,
+          });
+        }
+      } catch (consistencyError) {
+        logger.warn('Consistency validation failed, using original campaign data', {
+          scheduleId: event.scheduleId,
+          campaignId: campaign.campaignId,
+          error: consistencyError,
+        });
+        // Continue with original campaign data
+      }
+    }
+
+    if (!isCampaignActive(validatedCampaign)) {
+      const blockReason = getCampaignBlockReason(validatedCampaign);
+      logger.warn('Skipping publish - campaign not active', {
+        scheduleId: event.scheduleId,
+        contentId: schedule.contentId,
+        campaignId: validatedCampaign?.campaignId,
+        campaignStatus: validatedCampaign?.status,
+        blockReason,
+      });
+
+      // Update schedule status to skipped (not failed - this is intentional)
+      await updateScheduleStatus(event.scheduleId, 'skipped', blockReason || 'Campaign not active');
+
+      // Delete EventBridge schedule to prevent re-triggering
+      try {
+        await schedulerClient.send(
+          new DeleteScheduleCommand({
+            Name: event.scheduleId,
+            GroupName: process.env.SCHEDULE_GROUP_NAME || 'default',
+          })
+        );
+        logger.info('Deleted EventBridge schedule for inactive campaign', {
+          scheduleId: event.scheduleId,
+          campaignId: validatedCampaign?.campaignId,
+        });
+      } catch (deleteError) {
+        logger.warn('Failed to delete EventBridge schedule for inactive campaign', {
+          scheduleId: event.scheduleId,
+          error: deleteError,
+        });
+      }
+
+      // Emit EventBridge post.skipped event for downstream sync
+      try {
+        await eventBridge.putEvents({
+          Entries: [
+            {
+              Source: 'postolio.platform',
+              DetailType: 'post.skipped',
+              Time: new Date(),
+              Detail: JSON.stringify({
+                scheduleId: event.scheduleId,
+                contentId: schedule.contentId,
+                brandId: schedule.brandId,
+                campaignId: validatedCampaign?.campaignId,
+                campaignStatus: validatedCampaign?.status,
+                reason: blockReason || 'Campaign not active',
+                skippedAt: new Date().toISOString(),
+              }),
+            },
+          ],
+        });
+        logger.info('Emitted post.skipped event to EventBridge');
+      } catch (emitErr) {
+        logger.warn('Failed to emit post.skipped event', { error: emitErr });
+      }
+
+      metrics.addMetric('ContentSkipped', MetricUnit.Count, 1);
+      metrics.addMetric('ContentSkipped_CampaignInactive', MetricUnit.Count, 1);
+      metrics.publishStoredMetrics();
+      return;
+    }
+
     // Use content directly from schedule
-    logger.info('Using content from schedule', {
+    logger.info('Using content from schedule - campaign validation passed', {
       contentId: schedule.contentId,
       brandId: schedule.brandId,
+      campaignId: campaign?.campaignId,
+      campaignStatus: campaign?.status,
       hasCaption: !!schedule.caption,
       hasHashtags: !!schedule.hashtags,
     });
@@ -653,52 +707,12 @@ async function getTokenFromTokenService(
   });
 
   try {
-    let tokenServiceUrl: string;
-    const environment = resolveServiceEnvironment();
+    // Use simplified service discovery
+    const tokenServiceUrl = await getServiceUrl('token-service');
 
-    // Get from parameter store
-    try {
-      const parameterName = `/postolio/${environment}/services/token-service/url`;
-
-      const response = await ssmClient.send(
-        new GetParameterCommand({
-          Name: parameterName,
-        })
-      );
-
-      if (response.Parameter?.Value) {
-        tokenServiceUrl = response.Parameter.Value;
-        logger.info('Token Service URL retrieved from parameter store', {
-          url: tokenServiceUrl,
-          parameterName,
-          environment,
-        });
-      } else {
-        throw new Error('SSM Parameter value is empty');
-      }
-    } catch (ssmError) {
-      logger.warn('Failed to get Token Service URL from parameter store', {
-        error: ssmError,
-        environment,
-      });
-
-      // Fallback to environment variable
-      tokenServiceUrl = process.env.TOKEN_SERVICE_FUNCTION_URL || process.env.TOKEN_SERVICE_URL;
-
-      if (!tokenServiceUrl) {
-        throw new Error('Token Service URL not found in parameter store or environment variables');
-      }
-
-      logger.info('Using Token Service URL from environment variable', {
-        url: tokenServiceUrl,
-        environment,
-      });
-    }
-
-    // Validate we have a proper URL
-    if (tokenServiceUrl.includes('localhost') && environment === 'prod') {
-      throw new Error('Token Service URL not properly configured for prod environment');
-    }
+    logger.info('Token Service URL retrieved', {
+      url: tokenServiceUrl,
+    });
 
     // Parse URL for signing (avoid double slashes in pathname which break SigV4)
     const url = new URL(tokenServiceUrl);

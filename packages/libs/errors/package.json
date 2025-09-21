@@ -1,9 +1,21 @@
 {
   "name": "@postolio/errors",
-  "version": "0.0.0",
-  "private": true,
-  "main": "index.ts",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {},
   "devDependencies": {
-    "@postolio/tsconfig": "workspace:*"
+    "typescript": "^5.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   }
 }

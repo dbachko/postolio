@@ -175,6 +175,130 @@ export class EventEmitter {
       console.error('Error emitting content scheduling failed event:', error);
     }
   }
+
+  /**
+   * Emit campaign status changed event for microservices
+   */
+  async emitCampaignStatusChanged(
+    campaignId: string,
+    brandId: string,
+    oldStatus: string,
+    newStatus: string,
+    triggeredBy?: {
+      userId?: string;
+      operation?: string;
+    }
+  ): Promise<void> {
+    try {
+      const result = await this.eventBridge.putEvents({
+        Entries: [
+          {
+            Source: 'postolio.campaign',
+            DetailType: 'campaign.status.changed',
+            Detail: JSON.stringify({
+              campaignId,
+              brandId,
+              oldStatus,
+              newStatus,
+              triggeredBy,
+              timestamp: new Date().toISOString(),
+            }),
+          },
+        ],
+      });
+
+      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
+        console.error('Failed to emit campaign status changed event:', result.Entries);
+      } else {
+        console.log(
+          `🔔 Campaign status event emitted: ${campaignId} (${oldStatus} → ${newStatus})`
+        );
+      }
+    } catch (error) {
+      // Log error but don't fail the request - this is non-blocking
+      console.error('Error emitting campaign status changed event:', error);
+    }
+  }
+
+  /**
+   * Emit campaign created event for microservices
+   */
+  async emitCampaignCreated(
+    campaignId: string,
+    brandId: string,
+    status: string,
+    triggeredBy?: {
+      userId?: string;
+      operation?: string;
+    }
+  ): Promise<void> {
+    try {
+      const result = await this.eventBridge.putEvents({
+        Entries: [
+          {
+            Source: 'postolio.campaign',
+            DetailType: 'campaign.created',
+            Detail: JSON.stringify({
+              campaignId,
+              brandId,
+              status,
+              triggeredBy,
+              timestamp: new Date().toISOString(),
+            }),
+          },
+        ],
+      });
+
+      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
+        console.error('Failed to emit campaign created event:', result.Entries);
+      } else {
+        console.log(`🔔 Campaign created event emitted: ${campaignId} (status: ${status})`);
+      }
+    } catch (error) {
+      // Log error but don't fail the request - this is non-blocking
+      console.error('Error emitting campaign created event:', error);
+    }
+  }
+
+  /**
+   * Emit content-campaign association event for tracking validation coverage
+   */
+  async emitCampaignContentAssociated(
+    campaignId: string,
+    contentId: string,
+    brandId: string,
+    triggeredBy?: {
+      userId?: string;
+      operation?: string;
+    }
+  ): Promise<void> {
+    try {
+      const result = await this.eventBridge.putEvents({
+        Entries: [
+          {
+            Source: 'postolio.campaign',
+            DetailType: 'campaign.content.associated',
+            Detail: JSON.stringify({
+              campaignId,
+              contentId,
+              brandId,
+              triggeredBy,
+              timestamp: new Date().toISOString(),
+            }),
+          },
+        ],
+      });
+
+      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
+        console.error('Failed to emit campaign content association event:', result.Entries);
+      } else {
+        console.log(`🔗 Campaign content association event emitted: ${contentId} → ${campaignId}`);
+      }
+    } catch (error) {
+      // Log error but don't fail the request - this is non-blocking
+      console.error('Error emitting campaign content association event:', error);
+    }
+  }
 }
 
 // Export singleton instance

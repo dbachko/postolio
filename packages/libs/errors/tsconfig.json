@@ -1,4 +1,11 @@
 {
-  "extends": "@postolio/tsconfig/base.json",
-  "include": ["index.ts"]
+  "extends": "../tsconfig/base.json",
+  "include": ["src/**/*"],
+  "compilerOptions": {
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "target": "ES2020",
+    "module": "ESNext"
+  }
 }

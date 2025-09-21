@@ -5,11 +5,6 @@ import { logger } from '@postolio/logger';
 // Type guards for enhanced error handling
 interface ExtendedAPIError extends APIError {
   correlationId?: string;
-  statusCode: number;
-  code: string;
-  type: string;
-  details?: Record<string, unknown>;
-  toJSON(): APIErrorResponse;
 }
 
 interface FastifyValidationError extends FastifyError {
@@ -72,7 +67,6 @@ export async function errorHandler(
       logger.error(`API Error: ${error.message}`, {
         ...context,
         code: error.code,
-        type: error.type,
         details: error.details,
         stack: error.stack,
       });
@@ -80,7 +74,6 @@ export async function errorHandler(
       logger.warn(`Client Error: ${error.message}`, {
         ...context,
         code: error.code,
-        type: error.type,
         details: error.details,
       });
     }
@@ -114,26 +107,24 @@ export async function errorHandler(
 
     switch (error.statusCode) {
       case 404:
-        apiError = new APIError('Endpoint not found', 'ENDPOINT_NOT_FOUND', 404, 'ROUTING_ERROR');
+        apiError = new APIError('Endpoint not found', 'ENDPOINT_NOT_FOUND', 404, {
+          type: 'ROUTING_ERROR',
+        }) as ExtendedAPIError;
         break;
       case 405:
-        apiError = new APIError('Method not allowed', 'METHOD_NOT_ALLOWED', 405, 'ROUTING_ERROR');
+        apiError = new APIError('Method not allowed', 'METHOD_NOT_ALLOWED', 405, {
+          type: 'ROUTING_ERROR',
+        }) as ExtendedAPIError;
         break;
       case 413:
-        apiError = new APIError(
-          'Request entity too large',
-          'PAYLOAD_TOO_LARGE',
-          413,
-          'REQUEST_ERROR'
-        );
+        apiError = new APIError('Request entity too large', 'PAYLOAD_TOO_LARGE', 413, {
+          type: 'REQUEST_ERROR',
+        }) as ExtendedAPIError;
         break;
       default:
-        apiError = new APIError(
-          error.message,
-          'HTTP_ERROR',
-          error.statusCode || 500,
-          'HTTP_ERROR'
-        ) as ExtendedAPIError;
+        apiError = new APIError(error.message, 'HTTP_ERROR', error.statusCode || 500, {
+          type: 'HTTP_ERROR',
+        }) as ExtendedAPIError;
     }
 
     apiError.correlationId = context.correlationId;
