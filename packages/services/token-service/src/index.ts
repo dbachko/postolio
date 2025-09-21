@@ -35,7 +35,7 @@ class NotFoundError extends ServiceError {
       code: 'NOT_FOUND',
       message,
       retryable: false,
-      userMessage: 'The requested resource was not found.'
+      userMessage: 'The requested resource was not found.',
     });
   }
 }
@@ -105,7 +105,10 @@ async function encryptToken(token: string): Promise<string> {
     return Buffer.from(response.CiphertextBlob!).toString('base64');
   } catch (error) {
     logger.error('Token encryption failed', { error });
-    throw ErrorFactory.internalError('Failed to encrypt token', error instanceof Error ? error : new Error(String(error)));
+    throw ErrorFactory.internalError(
+      'Failed to encrypt token',
+      error instanceof Error ? error : new Error(String(error))
+    );
   }
 }
 
@@ -120,7 +123,10 @@ async function decryptToken(encryptedToken: string): Promise<string> {
     return Buffer.from(response.Plaintext!).toString();
   } catch (error) {
     logger.error('Token decryption failed', { error });
-    throw ErrorFactory.internalError('Failed to decrypt token', error instanceof Error ? error : new Error(String(error)));
+    throw ErrorFactory.internalError(
+      'Failed to decrypt token',
+      error instanceof Error ? error : new Error(String(error))
+    );
   }
 }
 
@@ -214,7 +220,9 @@ async function storeToken(
 ): Promise<void> {
   // Validate input
   if (!data.userId || !data.brandId || !data.platform || !data.accessToken) {
-    throw ErrorFactory.validationFailed(['Missing required fields: userId, brandId, platform, or accessToken']);
+    throw ErrorFactory.validationFailed([
+      'Missing required fields: userId, brandId, platform, or accessToken',
+    ]);
   }
 
   if (new Date(data.expiresAt) < new Date()) {
@@ -681,8 +689,8 @@ export const handler = async (
       if (error.code === 'RATE_LIMITED' && error.details?.retryAfterSeconds) {
         retryHeaders['Retry-After'] = error.details.retryAfterSeconds.toString();
       }
-      const statusCode = error.code === 'VALIDATION_FAILED' ? 400 :
-                        error.code === 'RATE_LIMITED' ? 429 : 500;
+      const statusCode =
+        error.code === 'VALIDATION_FAILED' ? 400 : error.code === 'RATE_LIMITED' ? 429 : 500;
       const retryable = error.retryable ?? false;
       return {
         statusCode,
