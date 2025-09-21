@@ -14,6 +14,7 @@ import { getDatabaseClient } from '../config/database.js';
 import { TimezoneService } from './timezone.js';
 import type { StatusBroadcaster } from './status-broadcaster.js';
 import type { GenerationParams } from '../types/scheduler.js';
+import { eventEmitter } from './event-emitter.js';
 
 const prisma = getDatabaseClient();
 
@@ -164,6 +165,7 @@ export class SchedulerAdapter {
     success: boolean;
     scheduleId?: string;
     brandId?: string;
+    campaignId?: string;
     error?: string;
   }> {
     // Store original state for rollback
@@ -180,11 +182,46 @@ export class SchedulerAdapter {
               user: true,
             },
           },
+          campaign: true, // Include campaign data for validation
         },
       });
 
       if (!content) {
         return { success: false, error: 'Content not found' };
+      }
+
+      // 🔥 CRITICAL: Validate campaign association to prevent validation bypass
+      if (!content.campaignId) {
+        console.error(
+          `Scheduling blocked: Content ${contentId} is not associated with a campaign. ` +
+            `All scheduled content must be part of a campaign for proper state management.`
+        );
+        return {
+          success: false,
+          error: 'Content must be associated with a campaign before scheduling',
+        };
+      }
+
+      // Validate campaign exists and is in a valid state
+      if (!content.campaign) {
+        console.error(
+          `Scheduling blocked: Campaign ${content.campaignId} not found for content ${contentId}`
+        );
+        return {
+          success: false,
+          error: 'Associated campaign not found',
+        };
+      }
+
+      // Only allow scheduling for active campaigns
+      if (content.campaign.status !== 'active') {
+        console.warn(
+          `Scheduling blocked: Campaign ${content.campaignId} is ${content.campaign.status}, not ACTIVE`
+        );
+        return {
+          success: false,
+          error: `Cannot schedule content for ${content.campaign.status.toLowerCase()} campaign`,
+        };
       }
 
       // Store original state for potential rollback
@@ -279,6 +316,7 @@ export class SchedulerAdapter {
           ).createSchedule({
             contentId: content.id,
             brandId: content.brandId,
+            campaignId: content.campaignId!, // 🔥 CRITICAL: Always include campaignId for validation
             userId: userId || content.brand.userId,
             platform: 'instagram', // Default for now, could expand to other platforms
             scheduledAt: scheduledTimeUTC.toISOString(), // Lambda expects 'scheduledAt'
@@ -295,6 +333,7 @@ export class SchedulerAdapter {
             metadata: {
               timezone: brandTimezone,
               localTime: customTime ? customTime.toISOString() : undefined,
+              campaignName: content.campaign?.name, // Include campaign context for debugging
             },
           });
 
@@ -360,6 +399,19 @@ export class SchedulerAdapter {
         );
       }
 
+      // 7. Emit campaign-content association event for tracking
+      if (awsScheduleCreated && content.campaignId) {
+        await eventEmitter.emitCampaignContentAssociated(
+          content.campaignId,
+          content.id,
+          content.brandId,
+          {
+            userId: userId || content.brand.userId,
+            operation: 'content.scheduled',
+          }
+        );
+      }
+
       // Log with timezone context
       if (awsScheduleCreated) {
         const localTimeDisplay = TimezoneService.formatWithTimezone(
@@ -370,7 +422,12 @@ export class SchedulerAdapter {
       }
 
       return awsScheduleCreated
-        ? { success: true, scheduleId: scheduleId!, brandId: content.brandId }
+        ? {
+            success: true,
+            scheduleId: scheduleId!,
+            brandId: content.brandId,
+            campaignId: content.campaignId! // Include campaignId in successful response
+          }
         : {
             success: false,
             error: 'AWS Scheduler unavailable - content not scheduled',

@@ -309,6 +309,15 @@ export class ContentSchedulerStack extends cdk.Stack {
       visibilityTimeout: cdk.Duration.seconds(360),
     });
 
+    // Campaign Event DLQ for ensuring campaign sync events are never lost
+    const campaignEventDLQ = new sqs.Queue(this, 'CampaignEventDLQ', {
+      queueName: `${prefix}-campaign-event-dlq`,
+      encryption: sqs.QueueEncryption.KMS,
+      encryptionMasterKey: encryptionKey,
+      retentionPeriod: cdk.Duration.days(14), // Retain failed events for 14 days
+      visibilityTimeout: cdk.Duration.seconds(360),
+    });
+
     // ==================== Lambda Layer for Powertools ====================
 
     const powertoolsLayer = new lambda.LayerVersion(this, 'PowertoolsLayer', {
@@ -332,6 +341,7 @@ export class ContentSchedulerStack extends cdk.Stack {
       VIDEO_BUCKET: this.videoBucket.bucketName,
       PLATFORM_CREDENTIALS_SECRET: platformCredentials.secretArn,
       DLQ_URL: deadLetterQueue.queueUrl, // For intelligent retry handling
+      CAMPAIGN_EVENT_DLQ_URL: campaignEventDLQ.queueUrl, // For campaign event failures
       // MAIN_APP_API_URL removed - publisher now uses content from DynamoDB
       // TOKEN_SERVICE_URL removed - publisher uses service discovery to find Token Service
       POWERTOOLS_SERVICE_NAME: 'content-scheduler',
@@ -525,6 +535,62 @@ export class ContentSchedulerStack extends cdk.Stack {
       // logRetention removed to avoid circular dependencies
     });
 
+    // Campaign Event DLQ Processor Lambda
+    const campaignEventDLQProcessorLambda = new lambdaNodejs.NodejsFunction(
+      this,
+      'CampaignEventDLQProcessorLambda',
+      {
+        functionName: `postolio-${environment}-scheduler-campaign-dlq-processor`,
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: 'handler',
+        entry: path.join(__dirname, '../../../../services/campaign-event-dlq-processor/src/index.ts'),
+        bundling: {
+          externalModules: [
+            '@aws-lambda-powertools/logger',
+            '@aws-lambda-powertools/tracer',
+            '@aws-lambda-powertools/metrics',
+            '@aws-sdk/client-dynamodb',
+            '@aws-sdk/lib-dynamodb',
+            '@aws-sdk/client-sqs',
+            '@aws-sdk/client-eventbridge',
+            '@aws-sdk/*',
+          ],
+          nodeModules: ['pg', '@prisma/adapter-pg'],
+          commandHooks: {
+            beforeBundling(): string[] {
+              return [];
+            },
+            afterBundling(inputDir: string, outputDir: string): string[] {
+              return [
+                // Copy the Prisma lambda client directory for consistency checks
+                `cp -r ${inputDir}/packages/libs/database/lambda-client ${outputDir}/`,
+              ];
+            },
+            beforeInstall(): string[] {
+              return [];
+            },
+          },
+        },
+        timeout: cdk.Duration.minutes(2),
+        memorySize: 1024,
+        environment: {
+          ...lambdaEnvironment,
+        },
+        layers: [powertoolsLayer],
+        role: lambdaRole, // Use role with VPC and database permissions
+        tracing: lambda.Tracing.ACTIVE,
+        deadLetterQueueEnabled: false, // DLQ processor shouldn't have its own DLQ
+        ...(vpc &&
+          lambdaSecurityGroup && {
+            vpc: vpc,
+            securityGroups: [lambdaSecurityGroup],
+            vpcSubnets: {
+              subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+            },
+          }),
+      }
+    );
+
     // Schedule Cleanup Lambda: runs daily to clean up orphaned schedules
     const scheduleCleanupLambda = new lambdaNodejs.NodejsFunction(this, 'ScheduleCleanupLambda', {
       functionName: `postolio-${environment}-scheduler-cleanup`,
@@ -643,13 +709,30 @@ export class ContentSchedulerStack extends cdk.Stack {
         detailType: ['campaign.created', 'campaign.status.changed'],
       },
     });
-    campaignSyncRule.addTarget(new targets.LambdaFunction(scheduleManagementLambda));
+
+    // Add Lambda target with DLQ and retry configuration for campaign events
+    campaignSyncRule.addTarget(
+      new targets.LambdaFunction(scheduleManagementLambda, {
+        deadLetterQueue: campaignEventDLQ,
+        retryAttempts: 3, // Retry up to 3 times before sending to DLQ
+        maxEventAge: cdk.Duration.hours(2), // Events expire after 2 hours
+      })
+    );
 
     // Add DLQ as event source for retry handler
     retryHandlerLambda.addEventSource(
       new SqsEventSource(deadLetterQueue, {
         batchSize: 10,
         maxBatchingWindow: cdk.Duration.seconds(5),
+      })
+    );
+
+    // Add Campaign Event DLQ as event source for campaign DLQ processor
+    campaignEventDLQProcessorLambda.addEventSource(
+      new SqsEventSource(campaignEventDLQ, {
+        batchSize: 5, // Process fewer messages at once for complex reconciliation
+        maxBatchingWindow: cdk.Duration.seconds(10),
+        reportBatchItemFailures: true, // Enable partial batch failure reporting
       })
     );
 
@@ -671,6 +754,11 @@ export class ContentSchedulerStack extends cdk.Stack {
     deadLetterQueue.grantConsumeMessages(retryHandlerLambda);
     // Grant publisher permission to send messages to DLQ for intelligent retry handling
     deadLetterQueue.grantSendMessages(publisherLambda);
+
+    // Grant Campaign Event DLQ Processor necessary permissions
+    campaignsTable.grantReadWriteData(campaignEventDLQProcessorLambda); // Need campaign data access
+    campaignEventDLQ.grantConsumeMessages(campaignEventDLQProcessorLambda); // Consume from DLQ
+    auditLogTable.grantWriteData(campaignEventDLQProcessorLambda); // Write audit logs
 
     // ==================== EventBridge Scheduler (Modern API) ====================
 
@@ -771,6 +859,15 @@ export class ContentSchedulerStack extends cdk.Stack {
 
     // Grant Publisher Lambda permission to emit events to EventBridge (default bus)
     publisherLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['events:PutEvents'],
+        resources: ['*'],
+      })
+    );
+
+    // Grant Campaign Event DLQ Processor permission to emit events to EventBridge
+    campaignEventDLQProcessorLambda.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['events:PutEvents'],
@@ -963,6 +1060,32 @@ export class ContentSchedulerStack extends cdk.Stack {
       metric: deadLetterQueue.metricApproximateNumberOfMessagesVisible(),
       threshold: 10,
       evaluationPeriods: 1,
+    }).addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
+    // Campaign Event DLQ message count alarm - critical for data consistency
+    new cloudwatch.Alarm(this, 'CampaignEventDLQAlarm', {
+      alarmName: `${prefix}-campaign-event-dlq-messages`,
+      metric: campaignEventDLQ.metricApproximateNumberOfMessagesVisible(),
+      threshold: 1, // Any message in campaign DLQ is critical
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Campaign event DLQ has messages - data consistency issue detected',
+    }).addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
+    // Campaign Event DLQ Processor failure alarm
+    new cloudwatch.Alarm(this, 'CampaignEventDLQProcessorFailureAlarm', {
+      alarmName: `${prefix}-campaign-dlq-processor-failures`,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/Lambda',
+        metricName: 'Errors',
+        dimensionsMap: {
+          FunctionName: campaignEventDLQProcessorLambda.functionName,
+        },
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Campaign DLQ processor is failing - manual intervention may be required',
     }).addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
 
     // Orphaned schedules alarm - triggers if too many orphaned schedules are found

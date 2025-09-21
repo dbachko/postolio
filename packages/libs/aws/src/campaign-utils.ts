@@ -5,7 +5,10 @@ import {
   PutCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { createServiceLogger } from './logger';
+import { campaignConsistency } from './campaign-consistency';
 
+const logger = createServiceLogger('campaign-utils');
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
@@ -58,7 +61,11 @@ export async function getCampaignByContentId(contentId: string): Promise<DynamoC
     // Get the campaign details from campaigns table
     return await getCampaignById(schedule.campaignId);
   } catch (error) {
-    console.error('Failed to get campaign by content ID:', error);
+    logger.error('Failed to get campaign by content ID', {
+      operation: 'getCampaignByContentId',
+      error,
+      contentId
+    });
     // On error, return null to allow operation (fail-open for availability)
     return null;
   }
@@ -66,8 +73,12 @@ export async function getCampaignByContentId(contentId: string): Promise<DynamoC
 
 /**
  * Get campaign by campaign ID from the dedicated campaigns table
+ * Includes consistency validation for critical operations
  */
-export async function getCampaignById(campaignId: string): Promise<DynamoCampaign | null> {
+export async function getCampaignById(
+  campaignId: string,
+  validateConsistency: boolean = false
+): Promise<DynamoCampaign | null> {
   try {
     const result = await docClient.send(
       new GetCommand({
@@ -79,9 +90,58 @@ export async function getCampaignById(campaignId: string): Promise<DynamoCampaig
       })
     );
 
-    return result?.Item as DynamoCampaign | null;
+    const dynamoCampaign = result?.Item as DynamoCampaign | null;
+
+    // If consistency validation is requested and we have a campaign
+    if (validateConsistency && dynamoCampaign) {
+      try {
+        const consistencyCheck = await campaignConsistency.checkConsistency(campaignId);
+
+        if (!consistencyCheck.isConsistent) {
+          logger.consistencyIssue('Campaign consistency mismatch detected', {
+            campaignId,
+            expected: consistencyCheck.conflict?.resolvedValue,
+            actual: consistencyCheck.conflict?.dynamoValue,
+            source: 'dynamodb_vs_postgresql'
+          });
+
+          // Auto-reconcile if possible
+          const reconciliation = await campaignConsistency.reconcileCampaignState(campaignId);
+          if (reconciliation.success) {
+            logger.operationSuccess('auto-reconcile campaign state', {
+              campaignId,
+              action: reconciliation.action,
+              details: reconciliation.details,
+            });
+
+            // Return the reconciled campaign
+            if (reconciliation.action === 'sync_to_dynamo' && consistencyCheck.pgCampaign) {
+              // Return updated campaign state based on PostgreSQL
+              return await getCampaignById(campaignId, false); // Avoid infinite recursion
+            }
+          } else {
+            logger.operationFailure('auto-reconcile campaign state', reconciliation.error, {
+              campaignId,
+            });
+          }
+        }
+      } catch (consistencyError) {
+        logger.error('Consistency check failed, continuing with DynamoDB data', {
+          operation: 'consistency_check',
+          error: consistencyError,
+          campaignId,
+        });
+        // Continue with DynamoDB data if consistency check fails
+      }
+    }
+
+    return dynamoCampaign;
   } catch (error) {
-    console.error('Failed to get campaign by ID:', error);
+    logger.error('Failed to get campaign by ID', {
+      operation: 'getCampaignById',
+      error,
+      campaignId
+    });
     // On error, return null to allow operation (fail-open for availability)
     return null;
   }

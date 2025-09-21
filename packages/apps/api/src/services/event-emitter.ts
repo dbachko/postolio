@@ -259,6 +259,46 @@ export class EventEmitter {
       console.error('Error emitting campaign created event:', error);
     }
   }
+
+  /**
+   * Emit content-campaign association event for tracking validation coverage
+   */
+  async emitCampaignContentAssociated(
+    campaignId: string,
+    contentId: string,
+    brandId: string,
+    triggeredBy?: {
+      userId?: string;
+      operation?: string;
+    }
+  ): Promise<void> {
+    try {
+      const result = await this.eventBridge.putEvents({
+        Entries: [
+          {
+            Source: 'postolio.campaign',
+            DetailType: 'campaign.content.associated',
+            Detail: JSON.stringify({
+              campaignId,
+              contentId,
+              brandId,
+              triggeredBy,
+              timestamp: new Date().toISOString(),
+            }),
+          },
+        ],
+      });
+
+      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
+        console.error('Failed to emit campaign content association event:', result.Entries);
+      } else {
+        console.log(`🔗 Campaign content association event emitted: ${contentId} → ${campaignId}`);
+      }
+    } catch (error) {
+      // Log error but don't fail the request - this is non-blocking
+      console.error('Error emitting campaign content association event:', error);
+    }
+  }
 }
 
 // Export singleton instance
