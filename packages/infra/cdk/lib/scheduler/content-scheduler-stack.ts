@@ -543,7 +543,10 @@ export class ContentSchedulerStack extends cdk.Stack {
         functionName: `postolio-${environment}-scheduler-campaign-dlq-processor`,
         runtime: lambda.Runtime.NODEJS_22_X,
         handler: 'handler',
-        entry: path.join(__dirname, '../../../../services/campaign-event-dlq-processor/src/index.ts'),
+        entry: path.join(
+          __dirname,
+          '../../../../services/campaign-event-dlq-processor/src/index.ts'
+        ),
         bundling: {
           externalModules: [
             '@aws-lambda-powertools/logger',

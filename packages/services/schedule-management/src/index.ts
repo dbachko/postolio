@@ -74,7 +74,7 @@ export const handler = async (
  * Determine if this is an EventBridge event
  */
 function isEventBridgeEvent(
-  event: APIGatewayProxyEvent | APIGatewayProxyEventV2 | EventBridgeEvent,
+  event: APIGatewayProxyEvent | APIGatewayProxyEventV2 | EventBridgeEvent
 ): event is EventBridgeEvent {
   return (
     'source' in event &&
@@ -88,7 +88,7 @@ function isEventBridgeEvent(
  * Determine the event type for logging
  */
 function determineEventType(
-  event: APIGatewayProxyEvent | APIGatewayProxyEventV2 | EventBridgeEvent,
+  event: APIGatewayProxyEvent | APIGatewayProxyEventV2 | EventBridgeEvent
 ): string {
   if (isEventBridgeEvent(event)) {
     return 'EventBridge';
@@ -148,8 +148,7 @@ export const healthCheck = async (): Promise<{
     // Check campaign event handler health
     const campaignEventHealth = await campaignEventHandler.healthCheck();
 
-    const allHealthy =
-      httpHealth.statusCode === 200 && campaignEventHealth.healthy;
+    const allHealthy = httpHealth.statusCode === 200 && campaignEventHealth.healthy;
 
     return {
       healthy: allHealthy,

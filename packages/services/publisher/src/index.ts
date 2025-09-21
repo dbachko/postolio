@@ -53,7 +53,6 @@ const eventBridge = new EventBridge({});
 const sqsClient = tracer.captureAWSv3Client(new SQSClient({}));
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 
-
 // Event from scheduler (minimal data)
 interface PublishEvent {
   scheduleId: string;

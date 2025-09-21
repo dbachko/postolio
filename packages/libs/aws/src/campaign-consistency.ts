@@ -169,7 +169,8 @@ export class CampaignConsistencyHandler {
         return {
           success: false,
           action: 'manual_review',
-          details: 'Campaign exists in DynamoDB but not in PostgreSQL - requires manual investigation',
+          details:
+            'Campaign exists in DynamoDB but not in PostgreSQL - requires manual investigation',
         };
       }
 

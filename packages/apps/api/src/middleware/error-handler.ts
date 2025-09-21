@@ -107,26 +107,24 @@ export async function errorHandler(
 
     switch (error.statusCode) {
       case 404:
-        apiError = new APIError('Endpoint not found', 'ENDPOINT_NOT_FOUND', 404, { type: 'ROUTING_ERROR' }) as ExtendedAPIError;
+        apiError = new APIError('Endpoint not found', 'ENDPOINT_NOT_FOUND', 404, {
+          type: 'ROUTING_ERROR',
+        }) as ExtendedAPIError;
         break;
       case 405:
-        apiError = new APIError('Method not allowed', 'METHOD_NOT_ALLOWED', 405, { type: 'ROUTING_ERROR' }) as ExtendedAPIError;
+        apiError = new APIError('Method not allowed', 'METHOD_NOT_ALLOWED', 405, {
+          type: 'ROUTING_ERROR',
+        }) as ExtendedAPIError;
         break;
       case 413:
-        apiError = new APIError(
-          'Request entity too large',
-          'PAYLOAD_TOO_LARGE',
-          413,
-          { type: 'REQUEST_ERROR' }
-        ) as ExtendedAPIError;
+        apiError = new APIError('Request entity too large', 'PAYLOAD_TOO_LARGE', 413, {
+          type: 'REQUEST_ERROR',
+        }) as ExtendedAPIError;
         break;
       default:
-        apiError = new APIError(
-          error.message,
-          'HTTP_ERROR',
-          error.statusCode || 500,
-          { type: 'HTTP_ERROR' }
-        ) as ExtendedAPIError;
+        apiError = new APIError(error.message, 'HTTP_ERROR', error.statusCode || 500, {
+          type: 'HTTP_ERROR',
+        }) as ExtendedAPIError;
     }
 
     apiError.correlationId = context.correlationId;

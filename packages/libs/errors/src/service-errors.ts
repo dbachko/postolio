@@ -162,26 +162,32 @@ export class ErrorFactory {
    * DynamoDB error
    */
   static dynamoDBError(operation: string, tableName: string, originalError: Error): ServiceError {
-    return new ServiceError({
-      code: ErrorCodes.DYNAMODB_ERROR,
-      message: `DynamoDB ${operation} failed on table ${tableName}`,
-      details: { operation, tableName },
-      retryable: true,
-      userMessage: 'Database operation failed. Please try again.',
-    }, originalError);
+    return new ServiceError(
+      {
+        code: ErrorCodes.DYNAMODB_ERROR,
+        message: `DynamoDB ${operation} failed on table ${tableName}`,
+        details: { operation, tableName },
+        retryable: true,
+        userMessage: 'Database operation failed. Please try again.',
+      },
+      originalError
+    );
   }
 
   /**
    * EventBridge error
    */
   static eventBridgeError(operation: string, originalError: Error): ServiceError {
-    return new ServiceError({
-      code: ErrorCodes.EVENTBRIDGE_ERROR,
-      message: `EventBridge ${operation} failed`,
-      details: { operation },
-      retryable: true,
-      userMessage: 'Event processing failed. Please try again.',
-    }, originalError);
+    return new ServiceError(
+      {
+        code: ErrorCodes.EVENTBRIDGE_ERROR,
+        message: `EventBridge ${operation} failed`,
+        details: { operation },
+        retryable: true,
+        userMessage: 'Event processing failed. Please try again.',
+      },
+      originalError
+    );
   }
 
   /**
@@ -201,12 +207,15 @@ export class ErrorFactory {
    * Internal server error
    */
   static internalError(message: string, originalError?: Error): ServiceError {
-    return new ServiceError({
-      code: ErrorCodes.INTERNAL_ERROR,
-      message: `Internal error: ${message}`,
-      retryable: true,
-      userMessage: 'An unexpected error occurred. Please try again.',
-    }, originalError);
+    return new ServiceError(
+      {
+        code: ErrorCodes.INTERNAL_ERROR,
+        message: `Internal error: ${message}`,
+        retryable: true,
+        userMessage: 'An unexpected error occurred. Please try again.',
+      },
+      originalError
+    );
   }
 
   /**
@@ -313,7 +322,12 @@ export function isServiceError(error: any, code?: string): error is ServiceError
 export class APIError extends ServiceError {
   public readonly statusCode: number;
 
-  constructor(message: string, code: string, statusCode: number = 400, details?: Record<string, any>) {
+  constructor(
+    message: string,
+    code: string,
+    statusCode: number = 400,
+    details?: Record<string, any>
+  ) {
     super({
       code,
       message,

@@ -10,10 +10,7 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventV2 } from 'aws-lambda';
 import { ScheduleService } from '../services/schedule-service';
 import { CampaignService, CampaignRequest } from '../services/campaign-service';
-import {
-  validateCampaignRequest,
-  validateScheduleRequest,
-} from '../validators/schedule-validator';
+import { validateCampaignRequest, validateScheduleRequest } from '../validators/schedule-validator';
 import { createErrorResponse, createSuccessResponse } from '../utils/response-utils';
 
 const logger = new Logger({ serviceName: 'schedule-management-http' });
@@ -34,7 +31,9 @@ export class HttpHandler {
   /**
    * Main HTTP request handler
    */
-  async handle(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): Promise<APIGatewayProxyResult> {
+  async handle(
+    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
+  ): Promise<APIGatewayProxyResult> {
     logger.info('Processing HTTP request', {
       path: this.getPath(event),
       method: this.getMethod(event),
@@ -185,7 +184,12 @@ export class HttpHandler {
       try {
         scheduleRequest = JSON.parse(body);
       } catch {
-        return createErrorResponse(400, 'Invalid JSON in request body', undefined, 'INVALID_REQUEST_BODY');
+        return createErrorResponse(
+          400,
+          'Invalid JSON in request body',
+          undefined,
+          'INVALID_REQUEST_BODY'
+        );
       }
 
       // Validate request
@@ -468,7 +472,9 @@ export class HttpHandler {
     return event.body || '{}';
   }
 
-  private getQueryParams(event: APIGatewayProxyEvent | APIGatewayProxyEventV2): Record<string, string> {
+  private getQueryParams(
+    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
+  ): Record<string, string> {
     if ('queryStringParameters' in event) {
       // Filter out undefined values from query parameters
       const params: Record<string, string> = {};

@@ -55,7 +55,11 @@ export class CampaignEventHandler {
       await this.processCampaignEvent(event);
 
       metrics.addMetric('CampaignEventProcessed', MetricUnit.Count, 1);
-      metrics.addMetric(`CampaignEvent_${event['detail-type'].replace('.', '_')}`, MetricUnit.Count, 1);
+      metrics.addMetric(
+        `CampaignEvent_${event['detail-type'].replace('.', '_')}`,
+        MetricUnit.Count,
+        1
+      );
 
       logger.info('Campaign event processed successfully', {
         campaignId: event.detail.campaignId,
@@ -97,7 +101,7 @@ export class CampaignEventHandler {
           detailType: event['detail-type'],
           campaignId,
         });
-        // Don't throw error for unknown events - just log and continue
+      // Don't throw error for unknown events - just log and continue
     }
   }
 
@@ -115,7 +119,10 @@ export class CampaignEventHandler {
 
     // Validate and cast status to ensure it's a valid campaign status
     const validStatuses: readonly string[] = ['active', 'paused', 'completed', 'failed'];
-    const campaignStatus = status && validStatuses.includes(status) ? status as 'active' | 'paused' | 'completed' | 'failed' : 'active';
+    const campaignStatus =
+      status && validStatuses.includes(status)
+        ? (status as 'active' | 'paused' | 'completed' | 'failed')
+        : 'active';
 
     try {
       const result = await this.campaignService.createCampaignRecord({
@@ -165,7 +172,9 @@ export class CampaignEventHandler {
     // Validate that newStatus is a valid campaign status
     const validStatuses: readonly string[] = ['active', 'paused', 'completed', 'failed'];
     if (!validStatuses.includes(newStatus)) {
-      throw new Error(`Invalid campaign status: ${newStatus}. Must be one of: ${validStatuses.join(', ')}`);
+      throw new Error(
+        `Invalid campaign status: ${newStatus}. Must be one of: ${validStatuses.join(', ')}`
+      );
     }
 
     try {
@@ -214,7 +223,7 @@ export class CampaignEventHandler {
 
       if (!event.detail.campaignId || !event.detail.brandId) {
         logger.error('Invalid event detail - missing campaignId or brandId', {
-          detail: event.detail
+          detail: event.detail,
         });
         return false;
       }
@@ -223,7 +232,7 @@ export class CampaignEventHandler {
       if (event.source !== 'postolio.campaign') {
         logger.error('Invalid event source', {
           source: event.source,
-          expected: 'postolio.campaign'
+          expected: 'postolio.campaign',
         });
         return false;
       }

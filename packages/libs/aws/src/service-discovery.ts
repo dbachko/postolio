@@ -191,7 +191,7 @@ export class ServiceDiscovery {
       logger.operationSuccess('getServiceUrls', {
         serviceNames,
         foundServices: Object.keys(results),
-        missingServices: serviceNames.filter(name => !results[name]),
+        missingServices: serviceNames.filter((name) => !results[name]),
       });
 
       return results;
@@ -300,7 +300,7 @@ export class ServiceDiscovery {
    */
   private async getBatchFromSSM(serviceNames: string[]): Promise<Record<string, string>> {
     try {
-      const parameterNames = serviceNames.map(name => this.getSSMParameterName(name));
+      const parameterNames = serviceNames.map((name) => this.getSSMParameterName(name));
 
       const response = await this.ssmClient.send(
         new GetParametersCommand({
@@ -346,7 +346,7 @@ export class ServiceDiscovery {
     const defaults: Record<string, string> = {
       'content-scheduler': 'http://localhost:4000',
       'token-service': 'http://localhost:4001',
-      'publisher': 'http://localhost:4002',
+      publisher: 'http://localhost:4002',
     };
 
     return defaults[serviceName] || null;

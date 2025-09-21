@@ -64,7 +64,7 @@ export async function getCampaignByContentId(contentId: string): Promise<DynamoC
     logger.error('Failed to get campaign by content ID', {
       operation: 'getCampaignByContentId',
       error,
-      contentId
+      contentId,
     });
     // On error, return null to allow operation (fail-open for availability)
     return null;
@@ -102,7 +102,7 @@ export async function getCampaignById(
             campaignId,
             expected: consistencyCheck.conflict?.resolvedValue,
             actual: consistencyCheck.conflict?.dynamoValue,
-            source: 'dynamodb_vs_postgresql'
+            source: 'dynamodb_vs_postgresql',
           });
 
           // Auto-reconcile if possible
@@ -140,7 +140,7 @@ export async function getCampaignById(
     logger.error('Failed to get campaign by ID', {
       operation: 'getCampaignById',
       error,
-      campaignId
+      campaignId,
     });
     // On error, return null to allow operation (fail-open for availability)
     return null;

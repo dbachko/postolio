@@ -24,11 +24,14 @@ export function createSuccessResponse(
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       ...headers,
     },
-    body: data !== null ? JSON.stringify({
-      success: true,
-      data,
-      timestamp: new Date().toISOString(),
-    }) : '',
+    body:
+      data !== null
+        ? JSON.stringify({
+            success: true,
+            data,
+            timestamp: new Date().toISOString(),
+          })
+        : '',
   };
 }
 
@@ -64,12 +67,7 @@ export function createValidationErrorResponse(
   errors: string[],
   headers?: Record<string, string>
 ): APIGatewayProxyResult {
-  return createErrorResponse(
-    400,
-    'Validation failed',
-    { validationErrors: errors },
-    headers
-  );
+  return createErrorResponse(400, 'Validation failed', { validationErrors: errors }, headers);
 }
 
 /**
@@ -79,12 +77,7 @@ export function createNotFoundResponse(
   resource: string,
   headers?: Record<string, string>
 ): APIGatewayProxyResult {
-  return createErrorResponse(
-    404,
-    `${resource} not found`,
-    undefined,
-    headers
-  );
+  return createErrorResponse(404, `${resource} not found`, undefined, headers);
 }
 
 /**
@@ -99,7 +92,7 @@ export function createMethodNotAllowedResponse(
     'Method not allowed',
     { allowedMethods },
     {
-      'Allow': allowedMethods.join(', '),
+      Allow: allowedMethods.join(', '),
       ...headers,
     }
   );
@@ -113,12 +106,7 @@ export function createInternalServerErrorResponse(
   details?: unknown,
   headers?: Record<string, string>
 ): APIGatewayProxyResult {
-  return createErrorResponse(
-    500,
-    message || 'Internal server error',
-    details,
-    headers
-  );
+  return createErrorResponse(500, message || 'Internal server error', details, headers);
 }
 
 /**
@@ -128,10 +116,5 @@ export function createServiceUnavailableResponse(
   service: string,
   headers?: Record<string, string>
 ): APIGatewayProxyResult {
-  return createErrorResponse(
-    503,
-    `${service} service unavailable`,
-    undefined,
-    headers
-  );
+  return createErrorResponse(503, `${service} service unavailable`, undefined, headers);
 }

@@ -55,7 +55,9 @@ describe('HttpHandler', () => {
     httpHandler = new HttpHandler();
 
     // Get the mock instances
-    mockScheduleService = (httpHandler as unknown as { scheduleService: typeof mockScheduleService }).scheduleService;
+    mockScheduleService = (
+      httpHandler as unknown as { scheduleService: typeof mockScheduleService }
+    ).scheduleService;
   });
 
   afterEach(() => {
@@ -341,7 +343,10 @@ describe('HttpHandler', () => {
         headers: {},
       };
 
-      const serviceError = new Error('Campaign validation failed') as Error & { code: string; retryable: boolean };
+      const serviceError = new Error('Campaign validation failed') as Error & {
+        code: string;
+        retryable: boolean;
+      };
       serviceError.name = 'ServiceError';
       serviceError.code = 'CAMPAIGN_VALIDATION_FAILED';
       serviceError.retryable = false;

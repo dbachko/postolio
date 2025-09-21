@@ -144,7 +144,9 @@ export class ScheduleService {
         createdAt: now,
         updatedAt: now,
         // Set TTL for 30 days after scheduled time for cleanup
-        ttl: Math.floor((new Date(request.scheduledAt).getTime() + 30 * 24 * 60 * 60 * 1000) / 1000),
+        ttl: Math.floor(
+          (new Date(request.scheduledAt).getTime() + 30 * 24 * 60 * 60 * 1000) / 1000
+        ),
       };
 
       await docClient.send(
@@ -322,7 +324,10 @@ export class ScheduleService {
   /**
    * Update a schedule
    */
-  async updateSchedule(scheduleId: string, updateRequest: Partial<ScheduleRequest>): Promise<ScheduleResult> {
+  async updateSchedule(
+    scheduleId: string,
+    updateRequest: Partial<ScheduleRequest>
+  ): Promise<ScheduleResult> {
     try {
       // First, get the existing schedule
       const getResult = await this.getSchedule(scheduleId);
@@ -417,9 +422,8 @@ export class ScheduleService {
             sk: existingSchedule.sk,
           },
           UpdateExpression: `SET ${updateExpressions.join(', ')}`,
-          ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0
-            ? expressionAttributeNames
-            : undefined,
+          ExpressionAttributeNames:
+            Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
           ExpressionAttributeValues: expressionAttributeValues,
           ReturnValues: 'ALL_NEW',
         })

@@ -211,9 +211,7 @@ describe('Campaign Event DLQ Processor', () => {
     it('should handle health check errors', async () => {
       const { campaignConsistency } = await import('@postolio/aws');
 
-      vi.mocked(campaignConsistency.healthCheck).mockRejectedValue(
-        new Error('Network timeout')
-      );
+      vi.mocked(campaignConsistency.healthCheck).mockRejectedValue(new Error('Network timeout'));
 
       const result = await healthCheck();
 

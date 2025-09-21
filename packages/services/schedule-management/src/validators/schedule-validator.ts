@@ -27,9 +27,7 @@ export interface ScheduleRequest {
 /**
  * Validate a schedule request
  */
-export function validateScheduleRequest(
-  request: Record<string, unknown>,
-): ValidationResult {
+export function validateScheduleRequest(request: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
 
   // Check required fields
@@ -105,10 +103,7 @@ export function validateScheduleRequest(
 
   // Validate platform values
   const validPlatforms = ['instagram', 'facebook', 'twitter', 'linkedin', 'tiktok'];
-  if (
-    request.platform &&
-    !validPlatforms.includes((request.platform as string).toLowerCase())
-  ) {
+  if (request.platform && !validPlatforms.includes((request.platform as string).toLowerCase())) {
     errors.push(`platform must be one of: ${validPlatforms.join(', ')}`);
   }
 
@@ -130,9 +125,7 @@ export function validateScheduleRequest(
 /**
  * Validate campaign request
  */
-export function validateCampaignRequest(
-  request: Record<string, unknown>,
-): ValidationResult {
+export function validateCampaignRequest(request: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
 
   if (!request.campaignId || typeof request.campaignId !== 'string') {
@@ -161,9 +154,7 @@ export function validateCampaignRequest(
 /**
  * Validate update request (allows partial updates)
  */
-export function validateScheduleUpdateRequest(
-  request: Record<string, unknown>,
-): ValidationResult {
+export function validateScheduleUpdateRequest(request: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
 
   // For updates, fields are optional but must be valid if provided

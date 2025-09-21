@@ -72,7 +72,8 @@ export const CAMPAIGN_VALIDATION_SUMMARY: CampaignValidationSummary = {
   consistencyMechanisms: [
     {
       name: 'Real-time Consistency Validation',
-      description: 'getCampaignById() with validateConsistency=true performs PostgreSQL↔DynamoDB sync check',
+      description:
+        'getCampaignById() with validateConsistency=true performs PostgreSQL↔DynamoDB sync check',
       triggerConditions: [
         'Critical publishing decisions',
         'Campaign status changes',
@@ -88,15 +89,13 @@ export const CAMPAIGN_VALIDATION_SUMMARY: CampaignValidationSummary = {
         'Lambda timeout/error during event processing',
         'DynamoDB write failures',
       ],
-      recoverMechanism: 'Campaign Event DLQ Processor attempts auto-reconciliation and alerts ops team',
+      recoverMechanism:
+        'Campaign Event DLQ Processor attempts auto-reconciliation and alerts ops team',
     },
     {
       name: 'Campaign-Content Association Tracking',
       description: 'All content scheduling emits campaign.content.associated events',
-      triggerConditions: [
-        'Content successfully scheduled',
-        'Campaign validation bypass attempts',
-      ],
+      triggerConditions: ['Content successfully scheduled', 'Campaign validation bypass attempts'],
       recoverMechanism: 'Audit trail for investigation and validation coverage monitoring',
     },
   ],
@@ -105,19 +104,22 @@ export const CAMPAIGN_VALIDATION_SUMMARY: CampaignValidationSummary = {
     {
       scenario: 'Paused campaign content publishing detected',
       detection: 'CloudWatch alarms, post.published events for non-active campaigns',
-      response: '1. Immediate campaign pause validation, 2. Content status review, 3. Publisher service restart',
+      response:
+        '1. Immediate campaign pause validation, 2. Content status review, 3. Publisher service restart',
       escalation: 'Page ops team if manual intervention events detected',
     },
     {
       scenario: 'Campaign Event DLQ has messages',
       detection: 'CloudWatch alarm: campaign-event-dlq-messages threshold=1',
-      response: '1. Review DLQ messages, 2. Check consistency status, 3. Manual reconciliation if needed',
+      response:
+        '1. Review DLQ messages, 2. Check consistency status, 3. Manual reconciliation if needed',
       escalation: 'Auto-alert via SNS topic to ops team',
     },
     {
       scenario: 'Data consistency between PostgreSQL and DynamoDB',
       detection: 'Consistency check failures, reconciliation events',
-      response: '1. Run batch consistency check, 2. Auto-reconcile where possible, 3. Manual review conflicts',
+      response:
+        '1. Run batch consistency check, 2. Auto-reconcile where possible, 3. Manual review conflicts',
       escalation: 'Manual intervention events trigger ops team alerts',
     },
   ],

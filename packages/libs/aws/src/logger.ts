@@ -144,11 +144,14 @@ export class ServiceLogger {
   /**
    * Log consistency issue
    */
-  consistencyIssue(message: string, context: LogContext & {
-    expected?: any;
-    actual?: any;
-    source?: string;
-  }): void {
+  consistencyIssue(
+    message: string,
+    context: LogContext & {
+      expected?: any;
+      actual?: any;
+      source?: string;
+    }
+  ): void {
     this.warn(`Data consistency issue: ${message}`, {
       type: 'consistency_issue',
       expected: context.expected,
@@ -161,10 +164,13 @@ export class ServiceLogger {
   /**
    * Log security event
    */
-  securityEvent(message: string, context: LogContext & {
-    severity: 'low' | 'medium' | 'high' | 'critical';
-    eventType: string;
-  }): void {
+  securityEvent(
+    message: string,
+    context: LogContext & {
+      severity: 'low' | 'medium' | 'high' | 'critical';
+      eventType: string;
+    }
+  ): void {
     this.warn(`Security event: ${message}`, {
       type: 'security_event',
       severity: context.severity,
@@ -243,7 +249,7 @@ export class ServiceLogger {
     keys: K[]
   ): Omit<T, K> {
     const result = { ...obj };
-    keys.forEach(key => delete result[key]);
+    keys.forEach((key) => delete result[key]);
     return result;
   }
 }

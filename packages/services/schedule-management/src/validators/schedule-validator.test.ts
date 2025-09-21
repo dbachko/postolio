@@ -46,11 +46,11 @@ describe('Schedule Validator', () => {
       const result = validateScheduleRequest(invalidRequest);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some(error => error.includes('brandId'))).toBe(true);
-      expect(result.errors.some(error => error.includes('userId'))).toBe(true);
-      expect(result.errors.some(error => error.includes('platform'))).toBe(true);
-      expect(result.errors.some(error => error.includes('contentType'))).toBe(true);
-      expect(result.errors.some(error => error.includes('scheduledAt'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('brandId'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('userId'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('platform'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('contentType'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('scheduledAt'))).toBe(true);
     });
 
     it('should reject invalid platform values', () => {
@@ -65,7 +65,7 @@ describe('Schedule Validator', () => {
 
       const result = validateScheduleRequest(invalidRequest);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(error => error.includes('platform'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('platform'))).toBe(true);
     });
 
     it('should reject past scheduledAt dates', () => {
@@ -80,7 +80,7 @@ describe('Schedule Validator', () => {
 
       const result = validateScheduleRequest(invalidRequest);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(error => error.includes('future'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('future'))).toBe(true);
     });
 
     it('should reject invalid ISO date strings', () => {
@@ -95,13 +95,13 @@ describe('Schedule Validator', () => {
 
       const result = validateScheduleRequest(invalidRequest);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(error => error.includes('valid ISO'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('valid ISO'))).toBe(true);
     });
 
     it('should accept all valid platforms', () => {
       const platforms = ['instagram', 'facebook', 'twitter', 'linkedin'];
 
-      platforms.forEach(platform => {
+      platforms.forEach((platform) => {
         const request = {
           contentId: 'content-123',
           brandId: 'brand-789',
@@ -146,15 +146,15 @@ describe('Schedule Validator', () => {
 
       const result = validateScheduleRequest(invalidRequest);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(error => error.includes('contentId'))).toBe(true);
-      expect(result.errors.some(error => error.includes('brandId'))).toBe(true);
-      expect(result.errors.some(error => error.includes('userId'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('contentId'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('brandId'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('userId'))).toBe(true);
     });
 
     it('should validate content types correctly', () => {
       const validContentTypes = ['image', 'video', 'carousel', 'reel', 'story'];
 
-      validContentTypes.forEach(contentType => {
+      validContentTypes.forEach((contentType) => {
         const request = {
           contentId: 'content-123',
           brandId: 'brand-789',
@@ -182,7 +182,7 @@ describe('Schedule Validator', () => {
 
       const result = validateScheduleRequest(invalidRequest);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(error => error.includes('contentType'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('contentType'))).toBe(true);
     });
 
     it('should reject invalid array elements', () => {
@@ -199,8 +199,8 @@ describe('Schedule Validator', () => {
 
       const result = validateScheduleRequest(invalidRequest);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(error => error.includes('hashtags'))).toBe(true);
-      expect(result.errors.some(error => error.includes('mediaUrls'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('hashtags'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('mediaUrls'))).toBe(true);
     });
   });
 });

@@ -54,11 +54,7 @@ export class CampaignService {
     });
 
     try {
-      const campaign = await createCampaign(
-        request.campaignId,
-        request.brandId,
-        request.status
-      );
+      const campaign = await createCampaign(request.campaignId, request.brandId, request.status);
 
       logger.info('Campaign record created successfully', {
         campaignId: request.campaignId,
@@ -140,7 +136,10 @@ export class CampaignService {
   /**
    * Update a campaign
    */
-  async updateCampaign(campaignId: string, updateRequest: Partial<CampaignRequest>): Promise<CampaignResult> {
+  async updateCampaign(
+    campaignId: string,
+    updateRequest: Partial<CampaignRequest>
+  ): Promise<CampaignResult> {
     try {
       // For now, only support status updates
       if (updateRequest.status) {
@@ -185,7 +184,10 @@ export class CampaignService {
   /**
    * Update campaign status (used by event handlers)
    */
-  async updateCampaignStatus(request: { campaignId: string; status: DynamoCampaign['status'] }): Promise<CampaignResult> {
+  async updateCampaignStatus(request: {
+    campaignId: string;
+    status: DynamoCampaign['status'];
+  }): Promise<CampaignResult> {
     logger.info('Updating campaign status', {
       campaignId: request.campaignId,
       status: request.status,

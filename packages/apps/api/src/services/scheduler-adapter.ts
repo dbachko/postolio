@@ -426,7 +426,7 @@ export class SchedulerAdapter {
             success: true,
             scheduleId: scheduleId!,
             brandId: content.brandId,
-            campaignId: content.campaignId! // Include campaignId in successful response
+            campaignId: content.campaignId!, // Include campaignId in successful response
           }
         : {
             success: false,
