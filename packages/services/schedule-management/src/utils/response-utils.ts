@@ -39,7 +39,7 @@ export function createErrorResponse(
   statusCode: number,
   message: string,
   details?: unknown,
-  headers?: Record<string, string>
+  code?: string
 ): APIGatewayProxyResult {
   return {
     statusCode,
@@ -48,16 +48,11 @@ export function createErrorResponse(
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      ...headers,
     },
     body: JSON.stringify({
-      success: false,
-      error: {
-        message,
-        details,
-        statusCode,
-      },
-      timestamp: new Date().toISOString(),
+      error: message,
+      ...(code && { code }),
+      ...(details && { details }),
     }),
   };
 }

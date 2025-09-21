@@ -7,17 +7,23 @@ vi.mock('../services/schedule-service', () => ({
   ScheduleService: vi.fn(() => ({
     createSchedule: vi.fn(),
     getSchedule: vi.fn(),
+    listSchedules: vi.fn(),
     updateSchedule: vi.fn(),
-    cancelSchedule: vi.fn(),
-    getSchedulesByBrand: vi.fn(),
+    deleteSchedule: vi.fn(),
+    healthCheck: vi.fn(),
   })),
 }));
 
 vi.mock('../services/campaign-service', () => ({
   CampaignService: vi.fn(() => ({
+    createCampaign: vi.fn(),
+    createCampaignRecord: vi.fn(),
     getCampaign: vi.fn(),
+    listCampaigns: vi.fn(),
     updateCampaign: vi.fn(),
-    getCampaignsByBrand: vi.fn(),
+    updateCampaignStatus: vi.fn(),
+    deleteCampaign: vi.fn(),
+    healthCheck: vi.fn(),
   })),
 }));
 
@@ -38,9 +44,10 @@ describe('HttpHandler', () => {
   let mockScheduleService: {
     createSchedule: ReturnType<typeof vi.fn>;
     getSchedule: ReturnType<typeof vi.fn>;
-    getSchedulesByBrand: ReturnType<typeof vi.fn>;
+    listSchedules: ReturnType<typeof vi.fn>;
     updateSchedule: ReturnType<typeof vi.fn>;
-    cancelSchedule: ReturnType<typeof vi.fn>;
+    deleteSchedule: ReturnType<typeof vi.fn>;
+    healthCheck: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -65,30 +72,41 @@ describe('HttpHandler', () => {
           brandId: 'brand-789',
           userId: 'user-012',
           platform: 'instagram',
+          contentType: 'image',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
         }),
         headers: {},
       };
 
+      const mockSchedule = {
+        scheduleId: 'schedule-456',
+        contentId: 'content-123',
+        brandId: 'brand-789',
+        userId: 'user-012',
+        platform: 'instagram',
+        contentType: 'image',
+        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+        status: 'pending',
+      };
+
       mockScheduleService.createSchedule.mockResolvedValue({
         success: true,
-        scheduleId: 'schedule-456',
-        message: 'Schedule created successfully',
+        schedule: mockSchedule,
       });
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
 
       expect(result.statusCode).toBe(201);
-      expect(JSON.parse(result.body)).toEqual({
-        success: true,
-        scheduleId: 'schedule-456',
-        message: 'Schedule created successfully',
-      });
+      const responseBody = JSON.parse(result.body);
+      expect(responseBody.success).toBe(true);
+      expect(responseBody.data).toEqual(mockSchedule);
+      expect(responseBody.timestamp).toBeDefined();
       expect(mockScheduleService.createSchedule).toHaveBeenCalledWith({
         contentId: 'content-123',
         brandId: 'brand-789',
         userId: 'user-012',
         platform: 'instagram',
+        contentType: 'image',
         scheduledAt: expect.any(String),
       });
     });
@@ -108,12 +126,18 @@ describe('HttpHandler', () => {
         scheduledAt: new Date().toISOString(),
       };
 
-      mockScheduleService.getSchedule.mockResolvedValue(mockSchedule);
+      mockScheduleService.getSchedule.mockResolvedValue({
+        success: true,
+        schedule: mockSchedule,
+      });
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
 
       expect(result.statusCode).toBe(200);
-      expect(JSON.parse(result.body)).toEqual(mockSchedule);
+      const responseBody = JSON.parse(result.body);
+      expect(responseBody.success).toBe(true);
+      expect(responseBody.data).toEqual(mockSchedule);
+      expect(responseBody.timestamp).toBeDefined();
       expect(mockScheduleService.getSchedule).toHaveBeenCalledWith('test-123');
     });
 
@@ -136,16 +160,27 @@ describe('HttpHandler', () => {
         nextToken: undefined,
       };
 
-      mockScheduleService.getSchedulesByBrand.mockResolvedValue(mockSchedules);
+      mockScheduleService.listSchedules.mockResolvedValue({
+        success: true,
+        schedules: mockSchedules.schedules,
+        pagination: {
+          nextToken: mockSchedules.nextToken,
+          hasMore: false,
+        },
+      });
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
 
       expect(result.statusCode).toBe(200);
-      expect(JSON.parse(result.body)).toEqual(mockSchedules);
-      expect(mockScheduleService.getSchedulesByBrand).toHaveBeenCalledWith(
-        'brand-789',
-        { limit: 10 }
-      );
+      const responseBody = JSON.parse(result.body);
+      expect(responseBody.success).toBe(true);
+      expect(responseBody.data.schedules).toEqual(mockSchedules.schedules);
+      expect(responseBody.data.pagination).toBeDefined();
+      expect(responseBody.timestamp).toBeDefined();
+      expect(mockScheduleService.listSchedules).toHaveBeenCalledWith({
+        brandId: 'brand-789',
+        limit: '10',
+      });
     });
 
     it('should handle PUT /schedules/{id} request', async () => {
@@ -160,24 +195,28 @@ describe('HttpHandler', () => {
         headers: {},
       };
 
+      const mockUpdatedSchedule = {
+        scheduleId: 'test-123',
+        caption: 'Updated caption',
+        scheduledAt: new Date(Date.now() + 7200000).toISOString(),
+        status: 'pending',
+      };
+
       mockScheduleService.updateSchedule.mockResolvedValue({
         success: true,
-        message: 'Schedule updated successfully',
+        schedule: mockUpdatedSchedule,
       });
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
 
       expect(result.statusCode).toBe(200);
-      expect(JSON.parse(result.body)).toEqual({
-        success: true,
-        message: 'Schedule updated successfully',
-      });
-      expect(mockScheduleService.updateSchedule).toHaveBeenCalledWith({
-        scheduleId: 'test-123',
-        updates: {
-          caption: 'Updated caption',
-          scheduledAt: expect.any(String),
-        },
+      const responseBody = JSON.parse(result.body);
+      expect(responseBody.success).toBe(true);
+      expect(responseBody.data).toEqual(mockUpdatedSchedule);
+      expect(responseBody.timestamp).toBeDefined();
+      expect(mockScheduleService.updateSchedule).toHaveBeenCalledWith('test-123', {
+        caption: 'Updated caption',
+        scheduledAt: expect.any(String),
       });
     });
 
@@ -189,19 +228,15 @@ describe('HttpHandler', () => {
         headers: {},
       };
 
-      mockScheduleService.cancelSchedule.mockResolvedValue({
+      mockScheduleService.deleteSchedule.mockResolvedValue({
         success: true,
-        message: 'Schedule cancelled successfully',
       });
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
 
-      expect(result.statusCode).toBe(200);
-      expect(JSON.parse(result.body)).toEqual({
-        success: true,
-        message: 'Schedule cancelled successfully',
-      });
-      expect(mockScheduleService.cancelSchedule).toHaveBeenCalledWith('test-123');
+      expect(result.statusCode).toBe(204);
+      expect(result.body).toBe('');
+      expect(mockScheduleService.deleteSchedule).toHaveBeenCalledWith('test-123');
     });
 
     it('should return 404 for non-existent schedule', async () => {
@@ -212,7 +247,10 @@ describe('HttpHandler', () => {
         headers: {},
       };
 
-      mockScheduleService.getSchedule.mockResolvedValue(null);
+      mockScheduleService.getSchedule.mockResolvedValue({
+        success: true,
+        schedule: undefined,
+      });
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
 
@@ -314,9 +352,10 @@ describe('HttpHandler', () => {
 
       expect(result.statusCode).toBe(400);
       expect(JSON.parse(result.body)).toEqual({
-        error: 'Campaign validation failed',
-        code: 'CAMPAIGN_VALIDATION_FAILED',
-        retryable: false,
+        error: 'Invalid request',
+        details: {
+          errors: ['contentType is required and must be a string'],
+        },
       });
     });
 
@@ -334,8 +373,7 @@ describe('HttpHandler', () => {
 
       expect(result.statusCode).toBe(500);
       expect(JSON.parse(result.body)).toEqual({
-        error: 'Internal server error',
-        code: 'INTERNAL_ERROR',
+        error: 'Failed to get schedule',
       });
     });
 
@@ -358,12 +396,18 @@ describe('HttpHandler', () => {
         status: 'pending',
       };
 
-      mockScheduleService.getSchedule.mockResolvedValue(mockSchedule);
+      mockScheduleService.getSchedule.mockResolvedValue({
+        success: true,
+        schedule: mockSchedule,
+      });
 
       const result = await httpHandler.handle(event as APIGatewayProxyEventV2);
 
       expect(result.statusCode).toBe(200);
-      expect(JSON.parse(result.body)).toEqual(mockSchedule);
+      const responseBody = JSON.parse(result.body);
+      expect(responseBody.success).toBe(true);
+      expect(responseBody.data).toEqual(mockSchedule);
+      expect(responseBody.timestamp).toBeDefined();
     });
   });
 

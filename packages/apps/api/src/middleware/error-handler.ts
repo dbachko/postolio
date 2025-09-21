@@ -67,7 +67,6 @@ export async function errorHandler(
       logger.error(`API Error: ${error.message}`, {
         ...context,
         code: error.code,
-        type: error.details?.type || 'API_ERROR',
         details: error.details,
         stack: error.stack,
       });
@@ -75,7 +74,6 @@ export async function errorHandler(
       logger.warn(`Client Error: ${error.message}`, {
         ...context,
         code: error.code,
-        type: error.details?.type || 'API_ERROR',
         details: error.details,
       });
     }

@@ -1302,7 +1302,7 @@ class CampaignService {
         const campaign = result.campaign;
         eventEmitter.emitCampaignStatusChanged(
           campaignId,
-          campaign.brandId,
+          campaign.brandId as string,
           result.oldStatus,
           newStatus,
           {

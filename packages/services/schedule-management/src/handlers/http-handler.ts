@@ -43,6 +43,20 @@ export class HttpHandler {
     const method = this.getMethod(event);
     const path = this.getPath(event);
 
+    // Handle OPTIONS requests for CORS
+    if (method === 'OPTIONS') {
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+        body: '',
+      };
+    }
+
     try {
       // Route requests to appropriate handlers
       if (path.startsWith('/schedules')) {
@@ -52,17 +66,13 @@ export class HttpHandler {
       } else if (path === '/health') {
         return await this.handleHealthCheck();
       } else {
-        return createErrorResponse(404, 'Route not found');
+        return createErrorResponse(404, 'Route not found', undefined, 'ROUTE_NOT_FOUND');
       }
     } catch (error) {
       logger.error('HTTP request failed', { error, path, method });
       metrics.addMetric('HttpRequestError', MetricUnit.Count, 1);
 
-      return createErrorResponse(
-        500,
-        'Internal server error',
-        process.env.LOG_LEVEL === 'DEBUG' ? { error: String(error) } : undefined
-      );
+      return createErrorResponse(500, 'Internal server error', undefined, 'INTERNAL_ERROR');
     } finally {
       metrics.publishStoredMetrics();
     }
@@ -108,10 +118,10 @@ export class HttpHandler {
           // DELETE /schedules/{id} - delete schedule
           return await this.deleteSchedule(pathSegments[1]);
         }
-        return createErrorResponse(404, 'Route not found');
+        return createErrorResponse(404, 'Route not found', undefined, 'ROUTE_NOT_FOUND');
 
       default:
-        return createErrorResponse(405, 'Method not allowed');
+        return createErrorResponse(405, 'Method not allowed', undefined, 'METHOD_NOT_ALLOWED');
     }
   }
 
@@ -170,7 +180,13 @@ export class HttpHandler {
   ): Promise<APIGatewayProxyResult> {
     try {
       const body = this.getBody(event);
-      const scheduleRequest = JSON.parse(body);
+
+      let scheduleRequest;
+      try {
+        scheduleRequest = JSON.parse(body);
+      } catch {
+        return createErrorResponse(400, 'Invalid JSON in request body', undefined, 'INVALID_REQUEST_BODY');
+      }
 
       // Validate request
       const validation = validateScheduleRequest(scheduleRequest);
@@ -200,6 +216,12 @@ export class HttpHandler {
   ): Promise<APIGatewayProxyResult> {
     try {
       const queryParams = this.getQueryParams(event);
+
+      // Brand ID is required for listing schedules
+      if (!queryParams.brandId) {
+        return createErrorResponse(400, 'Brand ID is required', undefined, 'MISSING_BRAND_ID');
+      }
+
       const result = await this.scheduleService.listSchedules(queryParams);
 
       if (result.success) {
@@ -226,7 +248,7 @@ export class HttpHandler {
       if (result.success && result.schedule) {
         return createSuccessResponse(200, result.schedule);
       } else if (result.success && !result.schedule) {
-        return createErrorResponse(404, 'Schedule not found');
+        return createErrorResponse(404, 'Schedule not found', undefined, 'SCHEDULE_NOT_FOUND');
       } else {
         return createErrorResponse(400, result.error || 'Failed to get schedule');
       }
