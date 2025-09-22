@@ -771,6 +771,12 @@ importers:
       '@postolio/errors':
         specifier: workspace:*
         version: link:../../libs/errors
+      '@prisma/adapter-pg':
+        specifier: ^6.16.2
+        version: 6.16.2
+      pg:
+        specifier: ^8.13.1
+        version: 8.13.1
     devDependencies:
       '@postolio/tsconfig':
         specifier: workspace:*
