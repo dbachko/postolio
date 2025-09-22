@@ -10,25 +10,22 @@ import type { Context, EventBridgeEvent } from 'aws-lambda';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
-interface BaseDetailData {
+// EventBridge event detail structure matching what publisher/scheduler services emit
+interface EventDetail {
+  scheduleId?: string;
   contentId?: string;
-  publishedAt?: string;
+  brandId?: string;
+  platform?: string;
   platformPostId?: string;
   permalink?: string;
-  error?: string | { message?: string };
-  scheduleId?: string;
+  publishedAt?: string;
   scheduledAt?: string;
+  error?: string;
+  reason?: string;
+  status?: string;
+  campaignId?: string;
   updates?: { scheduledAt?: string };
 }
-
-type PlatformEventDetail = {
-  id: string;
-  source: string;
-  type: string;
-  timestamp: string;
-  data: BaseDetailData;
-  metadata?: Record<string, unknown>;
-};
 
 let prisma: LambdaPrismaClient | null = null;
 let cachedDbUrl: string | null = null;
@@ -146,8 +143,8 @@ async function getClient(): Promise<LambdaPrismaClient> {
   return prisma;
 }
 
-async function handlePostPublished(detail: PlatformEventDetail) {
-  const { contentId, publishedAt, platformPostId, permalink } = detail.data;
+async function handlePostPublished(detail: EventDetail) {
+  const { contentId, publishedAt, platformPostId, permalink } = detail;
   if (!contentId) return;
   const client = await getClient();
   await client.content.update({
@@ -162,22 +159,34 @@ async function handlePostPublished(detail: PlatformEventDetail) {
   });
 }
 
-async function handlePostFailed(detail: PlatformEventDetail) {
-  const { contentId, error } = detail.data;
+async function handlePostFailed(detail: EventDetail) {
+  const { contentId, error } = detail;
   if (!contentId) return;
-  const message: string | undefined = typeof error === 'string' ? error : error?.message;
   const client = await getClient();
   await client.content.update({
     where: { id: contentId },
     data: {
       status: 'failed' as ContentStatus,
-      schedulingError: message?.slice(0, 500) || 'Unknown error',
+      schedulingError: error?.slice(0, 500) || 'Unknown error',
     },
   });
 }
 
-async function handleScheduleFailed(detail: PlatformEventDetail) {
-  const { contentId, error } = detail.data;
+async function handlePostSkipped(detail: EventDetail) {
+  const { contentId, reason } = detail;
+  if (!contentId) return;
+  const client = await getClient();
+  await client.content.update({
+    where: { id: contentId },
+    data: {
+      status: 'draft' as ContentStatus,
+      schedulingError: reason?.slice(0, 500) || 'Content skipped',
+    },
+  });
+}
+
+async function handleScheduleFailed(detail: EventDetail) {
+  const { contentId, error } = detail;
   if (!contentId) return;
   const client = await getClient();
 
@@ -188,14 +197,13 @@ async function handleScheduleFailed(detail: PlatformEventDetail) {
   });
 
   const existingParams = (currentContent?.generationParams as Record<string, unknown>) || {};
-  const message: string | undefined = typeof error === 'string' ? error : error?.message;
 
   await client.content.update({
     where: { id: contentId },
     data: {
       status: 'draft' as ContentStatus, // Revert from 'scheduled' back to 'draft' when scheduling fails
       scheduledAt: null, // Clear the scheduled time since scheduling failed
-      schedulingError: message?.slice(0, 500) || 'Scheduling failed',
+      schedulingError: error?.slice(0, 500) || 'Scheduling failed',
       generationParams: {
         ...existingParams,
         processing: null, // Clear processing state - scheduling failed
@@ -206,8 +214,8 @@ async function handleScheduleFailed(detail: PlatformEventDetail) {
   });
 }
 
-async function handleScheduleCreated(detail: PlatformEventDetail) {
-  const { contentId, scheduledAt, scheduleId } = detail.data;
+async function handleScheduleCreated(detail: EventDetail) {
+  const { contentId, scheduledAt, scheduleId } = detail;
   if (!contentId) return;
   const client = await getClient();
 
@@ -237,8 +245,8 @@ async function handleScheduleCreated(detail: PlatformEventDetail) {
   });
 }
 
-async function handleScheduleUpdated(detail: PlatformEventDetail) {
-  const { scheduleId, updates, contentId } = detail.data;
+async function handleScheduleUpdated(detail: EventDetail) {
+  const { scheduleId, updates, contentId } = detail;
   const scheduledAt = updates?.scheduledAt;
   if (!contentId) return;
   const client = await getClient();
@@ -266,8 +274,8 @@ async function handleScheduleUpdated(detail: PlatformEventDetail) {
   });
 }
 
-async function handleScheduleCanceled(detail: PlatformEventDetail) {
-  const { contentId } = detail.data;
+async function handleScheduleCanceled(detail: EventDetail) {
+  const { contentId } = detail;
   if (!contentId) return;
   const client = await getClient();
 
@@ -297,7 +305,7 @@ async function handleScheduleCanceled(detail: PlatformEventDetail) {
 }
 
 export async function handler(
-  event: EventBridgeEvent<string, PlatformEventDetail>,
+  event: EventBridgeEvent<string, EventDetail>,
   context: Context
 ) {
   context.callbackWaitsForEmptyEventLoop = false;
@@ -309,22 +317,29 @@ export async function handler(
       source: event.source,
       'detail-type': event['detail-type'],
       time: event.time,
+      detail: event.detail,
     })
   );
 
+  // EventBridge delivers events with 'detail-type' at the top level
+  const eventType = event['detail-type'];
   const detail = event.detail;
-  if (!detail || !detail.type) {
-    console.warn('Missing detail/type in EventBridge event');
+
+  if (!eventType || !detail) {
+    console.warn('Missing detail-type or detail in EventBridge event');
     return { statusCode: 400 };
   }
 
   try {
-    switch (detail.type) {
+    switch (eventType) {
       case 'post.published':
         await handlePostPublished(detail);
         break;
       case 'post.failed':
         await handlePostFailed(detail);
+        break;
+      case 'post.skipped':
+        await handlePostSkipped(detail);
         break;
       case 'schedule.created':
         await handleScheduleCreated(detail);
@@ -339,7 +354,7 @@ export async function handler(
         await handleScheduleFailed(detail);
         break;
       default:
-        console.log(`Unhandled event type: ${detail.type}`);
+        console.log(`Unhandled event type: ${eventType}`);
     }
     return { statusCode: 200 };
   } catch (error) {
