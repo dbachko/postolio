@@ -95,7 +95,7 @@ Web Stack ← (depends on API)
 ```
 packages/infra/cdk/
 ├── bin/
-│   ├── optimized-app.ts          # New consolidated CDK app
+│   ├── app.ts          # New consolidated CDK app
 │   ├── app.ts                    # Legacy app (to be deprecated)
 │   ├── platform-microservices.ts # Legacy app (to be deprecated)
 │   └── scheduler-app.ts          # Legacy app (to be deprecated)
@@ -108,13 +108,13 @@ packages/infra/cdk/
 │   ├── ecr-registry-stack.ts     # Foundation stack (existing)
 │   └── ...                       # Other existing stacks
 └── .github/workflows/
-    ├── deploy-optimized.yml      # NEW: Stack-based deployment
+    ├── deploy.yml      # NEW: Stack-based deployment
     └── deploy.yml                # Legacy workflow (to be deprecated)
 ```
 
 ### New CI/CD Workflow
 
-The new workflow (`deploy-optimized.yml`) features:
+The new workflow (`deploy.yml`) features:
 
 - **Stack-based change detection**: Detects which logical stacks need deployment
 - **Dependency management**: Ensures stacks deploy in correct order
@@ -129,7 +129,7 @@ The new workflow (`deploy-optimized.yml`) features:
 1. **Review the new architecture**:
    ```bash
    # Examine the new CDK app structure
-   cat packages/infra/cdk/bin/optimized-app.ts
+   cat packages/infra/cdk/bin/app.ts
 
    # Review stack definitions
    ls packages/infra/cdk/lib/stacks/
@@ -139,7 +139,7 @@ The new workflow (`deploy-optimized.yml`) features:
    ```bash
    # Deploy using the new optimized workflow
    cd packages/infra/cdk
-   pnpm cdk list --app "npx tsx bin/optimized-app.ts"
+   pnpm cdk list --app "npx tsx bin/app.ts"
    ```
 
 ### Phase 2: Deployment (Choose One)
@@ -153,12 +153,12 @@ For new environments or when you can afford downtime:
 cd packages/infra/cdk
 
 # Deploy all stacks in dependency order
-pnpm cdk deploy Foundation-dev --app "npx tsx bin/optimized-app.ts"
-pnpm cdk deploy Auth-dev --app "npx tsx bin/optimized-app.ts"
-pnpm cdk deploy Scheduling-dev --app "npx tsx bin/optimized-app.ts"
-pnpm cdk deploy Publishing-dev --app "npx tsx bin/optimized-app.ts"
-pnpm cdk deploy API-dev --app "npx tsx bin/optimized-app.ts"
-pnpm cdk deploy Web-dev --app "npx tsx bin/optimized-app.ts"
+pnpm cdk deploy Foundation-dev --app "npx tsx bin/app.ts"
+pnpm cdk deploy Auth-dev --app "npx tsx bin/app.ts"
+pnpm cdk deploy Scheduling-dev --app "npx tsx bin/app.ts"
+pnpm cdk deploy Publishing-dev --app "npx tsx bin/app.ts"
+pnpm cdk deploy API-dev --app "npx tsx bin/app.ts"
+pnpm cdk deploy Web-dev --app "npx tsx bin/app.ts"
 ```
 
 #### Option B: Gradual Migration
@@ -168,7 +168,7 @@ For production environments requiring zero downtime:
 1. **Deploy new stacks alongside existing**:
    ```bash
    # Deploy new stacks with different names first
-   pnpm cdk deploy Auth-dev-v2 --app "npx tsx bin/optimized-app.ts"
+   pnpm cdk deploy Auth-dev-v2 --app "npx tsx bin/app.ts"
    ```
 
 2. **Migrate traffic gradually**
@@ -180,7 +180,7 @@ For production environments requiring zero downtime:
    ```bash
    # Rename workflows
    mv .github/workflows/deploy.yml .github/workflows/deploy-legacy.yml
-   mv .github/workflows/deploy-optimized.yml .github/workflows/deploy.yml
+   mv .github/workflows/deploy.yml .github/workflows/deploy.yml
    ```
 
 2. **Update deployment triggers**:
@@ -310,16 +310,16 @@ All stacks include CDK NAG suppressions with documented rationale for security c
 
 ```bash
 # List all stacks in optimized app
-pnpm cdk list --app "npx tsx bin/optimized-app.ts"
+pnpm cdk list --app "npx tsx bin/app.ts"
 
 # Deploy specific stack
-pnpm cdk deploy Auth-dev --app "npx tsx bin/optimized-app.ts"
+pnpm cdk deploy Auth-dev --app "npx tsx bin/app.ts"
 
 # Check stack diff
-pnpm cdk diff Auth-dev --app "npx tsx bin/optimized-app.ts"
+pnpm cdk diff Auth-dev --app "npx tsx bin/app.ts"
 
 # Destroy stack (careful!)
-pnpm cdk destroy Auth-dev --app "npx tsx bin/optimized-app.ts"
+pnpm cdk destroy Auth-dev --app "npx tsx bin/app.ts"
 ```
 
 ### Environment Variables

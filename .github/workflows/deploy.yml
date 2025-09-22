@@ -1,4 +1,4 @@
-name: Deploy Microservices
+name: Deploy Stack-Based Architecture
 
 on:
   push:
@@ -15,13 +15,13 @@ on:
           - dev
           - staging
           - prod
-      services:
-        description: 'Services to deploy (comma-separated, or "all")'
+      stacks:
+        description: 'Stacks to deploy (comma-separated, or "all")'
         required: false
         default: 'all'
 
 concurrency:
-  group: deploy-${{ github.ref }}-${{ github.event.inputs.environment || 'dev' }}
+  group: deploy-stack-${{ github.ref }}-${{ github.event.inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 permissions:
@@ -40,26 +40,22 @@ env:
 
 jobs:
   # ============================================
-  # STEP 1: Detect Changes
+  # STEP 1: Detect Changes and Plan Deployment
   # ============================================
   detect-changes:
-    name: Detect Changes
+    name: Detect Changes & Plan Deployment
     runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.env.outputs.environment }}
+      foundation-changed: ${{ steps.changes.outputs.foundation }}
+      auth-changed: ${{ steps.changes.outputs.auth }}
+      scheduling-changed: ${{ steps.changes.outputs.scheduling }}
+      publishing-changed: ${{ steps.changes.outputs.publishing }}
       api-changed: ${{ steps.changes.outputs.api }}
       web-changed: ${{ steps.changes.outputs.web }}
       infra-changed: ${{ steps.changes.outputs.infra }}
-      token-service-changed: ${{ steps.changes.outputs.token-service }}
-      publisher-changed: ${{ steps.changes.outputs.publisher }}
-      retry-handler-changed: ${{ steps.changes.outputs.retry-handler }}
-      dlq-processor-changed: ${{ steps.changes.outputs.dlq-processor }}
-      schedule-management-changed: ${{ steps.changes.outputs.schedule-management }}
-      schedule-cleanup-changed: ${{ steps.changes.outputs.schedule-cleanup }}
-      status-sync-changed: ${{ steps.changes.outputs.status-sync }}
-      libs-changed: ${{ steps.changes.outputs.libs }}
-      any-service-changed: ${{ steps.changes.outputs.any-service }}
-      matrix: ${{ steps.matrix.outputs.matrix }}
+      any-stack-changed: ${{ steps.changes.outputs.any-stack }}
+      stack-matrix: ${{ steps.matrix.outputs.stack-matrix }}
 
     steps:
       - name: Checkout code
@@ -73,7 +69,6 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            # Deploy main to 'dev' until production is enabled
             echo "environment=dev" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
             echo "environment=staging" >> $GITHUB_OUTPUT
@@ -87,90 +82,81 @@ jobs:
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
           filters: |
+            foundation:
+              - 'packages/infra/cdk/lib/stacks/ecr-registry-stack.ts'
+              - 'packages/infra/cdk/lib/stacks/foundation-*.ts'
+            auth:
+              - 'packages/services/token-service/**'
+              - 'packages/infra/cdk/lib/stacks/auth-stack.ts'
+              - 'packages/libs/**'
+            scheduling:
+              - 'packages/services/schedule-management/**'
+              - 'packages/services/schedule-cleanup/**'
+              - 'packages/services/status-sync/**'
+              - 'packages/infra/cdk/lib/stacks/scheduling-stack.ts'
+              - 'packages/libs/**'
+            publishing:
+              - 'packages/services/publisher/**'
+              - 'packages/services/retry-handler/**'
+              - 'packages/services/dlq-processor/**'
+              - 'packages/services/campaign-event-dlq-processor/**'
+              - 'packages/infra/cdk/lib/stacks/publishing-stack.ts'
+              - 'packages/libs/**'
             api:
               - 'packages/apps/api/**'
+              - 'packages/infra/cdk/lib/stacks/api-stack.ts'
               - 'packages/libs/**'
-              - 'pnpm-lock.yaml'
             web:
               - 'packages/apps/web/**'
-              - 'packages/libs/**'
-              - 'pnpm-lock.yaml'
+              - 'packages/infra/cdk/lib/stacks/web-stack.ts'
             infra:
               - 'packages/infra/**'
               - '.github/workflows/**'
-            token-service:
-              - 'packages/services/token-service/**'
-              - 'packages/libs/**'
-              - 'pnpm-lock.yaml'
-            publisher:
-              - 'packages/services/publisher/**'
-              - 'packages/libs/**'
-              - 'pnpm-lock.yaml'
-            retry-handler:
-              - 'packages/services/retry-handler/**'
-              - 'packages/libs/**'
-              - 'pnpm-lock.yaml'
-            dlq-processor:
-              - 'packages/services/dlq-processor/**'
-              - 'packages/libs/**'
-              - 'pnpm-lock.yaml'
-            schedule-management:
-              - 'packages/services/schedule-management/**'
-              - 'packages/libs/**'
-              - 'pnpm-lock.yaml'
-            schedule-cleanup:
-              - 'packages/services/schedule-cleanup/**'
-              - 'packages/libs/**'
-              - 'pnpm-lock.yaml'
-            status-sync:
-              - 'packages/services/status-sync/**'
-              - 'packages/libs/**'
-              - 'pnpm-lock.yaml'
-            libs:
-              - 'packages/libs/**'
-            any-service:
+            any-stack:
               - 'packages/services/**'
               - 'packages/apps/**'
+              - 'packages/libs/**'
+              - 'packages/infra/**'
 
-      - name: Generate deployment matrix
+      - name: Generate stack deployment matrix
         id: matrix
         run: |
-          SERVICES=()
-          ALL_SERVICES=("token-service" "publisher" "retry-handler" "dlq-processor" "schedule-management" "schedule-cleanup" "status-sync")
+          STACKS=()
+          ALL_STACKS=("foundation" "auth" "scheduling" "publishing" "api" "web")
 
-          # Check if manual deployment with specific services
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.services }}" != "all" ]]; then
-            IFS=',' read -ra REQUESTED_SERVICES <<< "${{ github.event.inputs.services }}"
-            for service in "${REQUESTED_SERVICES[@]}"; do
-              SERVICES+=("\"$service\"")
+          # Check if manual deployment with specific stacks
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.stacks }}" != "all" ]]; then
+            IFS=',' read -ra REQUESTED_STACKS <<< "${{ github.event.inputs.stacks }}"
+            for stack in "${REQUESTED_STACKS[@]}"; do
+              STACKS+=("\"$stack\"")
             done
           else
-            # If any service anywhere changed, or infra changed, or pushing to main (dev env), deploy all microservices
-            if [[ "${{ steps.changes.outputs.any-service }}" == "true" || "${{ steps.changes.outputs.infra }}" == "true" || "${{ github.ref }}" == "refs/heads/main" ]]; then
-              for s in "${ALL_SERVICES[@]}"; do SERVICES+=("\"$s\""); done
-            else
-            # Auto-detect changed services
-            [[ "${{ steps.changes.outputs.token-service }}" == "true" ]] && SERVICES+=("\"token-service\"")
-            [[ "${{ steps.changes.outputs.publisher }}" == "true" ]] && SERVICES+=("\"publisher\"")
-            [[ "${{ steps.changes.outputs.retry-handler }}" == "true" ]] && SERVICES+=("\"retry-handler\"")
-            [[ "${{ steps.changes.outputs.dlq-processor }}" == "true" ]] && SERVICES+=("\"dlq-processor\"")
-            [[ "${{ steps.changes.outputs.schedule-management }}" == "true" ]] && SERVICES+=("\"schedule-management\"")
-            [[ "${{ steps.changes.outputs.schedule-cleanup }}" == "true" ]] && SERVICES+=("\"schedule-cleanup\"")
-            [[ "${{ steps.changes.outputs.status-sync }}" == "true" ]] && SERVICES+=("\"status-sync\"")
+            # Auto-detect changed stacks
+            [[ "${{ steps.changes.outputs.foundation }}" == "true" ]] && STACKS+=("\"foundation\"")
+            [[ "${{ steps.changes.outputs.auth }}" == "true" ]] && STACKS+=("\"auth\"")
+            [[ "${{ steps.changes.outputs.scheduling }}" == "true" ]] && STACKS+=("\"scheduling\"")
+            [[ "${{ steps.changes.outputs.publishing }}" == "true" ]] && STACKS+=("\"publishing\"")
+            [[ "${{ steps.changes.outputs.api }}" == "true" ]] && STACKS+=("\"api\"")
+            [[ "${{ steps.changes.outputs.web }}" == "true" ]] && STACKS+=("\"web\"")
+
+            # If infra changed or pushing to main, deploy all stacks
+            if [[ "${{ steps.changes.outputs.infra }}" == "true" || "${{ github.ref }}" == "refs/heads/main" ]]; then
+              STACKS=()
+              for s in "${ALL_STACKS[@]}"; do STACKS+=("\"$s\""); done
             fi
           fi
 
-          if [ ${#SERVICES[@]} -eq 0 ]; then
-            echo "matrix=[]" >> $GITHUB_OUTPUT
+          if [ ${#STACKS[@]} -eq 0 ]; then
+            echo "stack-matrix=[]" >> $GITHUB_OUTPUT
           else
-            MATRIX=$(IFS=,; echo "[${SERVICES[*]}]")
-            echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+            MATRIX=$(IFS=,; echo "[${STACKS[*]}]")
+            echo "stack-matrix=$MATRIX" >> $GITHUB_OUTPUT
           fi
 
-          echo "Services to deploy: $MATRIX"
+          echo "Stacks to deploy: $MATRIX"
 
   # ============================================
-  # STEP 2: Run Tests
+  # STEP 2: Run Tests (if PR)
   # ============================================
   test:
     name: Test Changed Packages
@@ -207,7 +193,6 @@ jobs:
 
       - name: Run type checking
         run: |
-          # Try typecheck first, fallback to build if not available
           npx turbo typecheck --filter='...[origin/${{ github.base_ref || github.event.before }}]' || \
           npx turbo build --filter='...[origin/${{ github.base_ref || github.event.before }}]'
 
@@ -215,58 +200,18 @@ jobs:
         run: npx turbo test --filter='...[origin/${{ github.base_ref || github.event.before }}]'
 
   # ============================================
-  # STEP 2.5: Check Infra Bootstrap
-  # ============================================
-  infra-bootstrap-check:
-    name: Check Infra Bootstrap
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    outputs:
-      needs-deploy: ${{ steps.check.outputs.needs_deploy }}
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Check CloudFormation stacks
-        id: check
-        run: |
-          ENV="${{ needs.detect-changes.outputs.environment }}"
-          NEEDS_DEPLOY=false
-
-
-          if ! aws cloudformation describe-stacks --stack-name "Postolio-$ENV" >/dev/null 2>&1; then
-            echo "Postolio stack missing for $ENV"
-            NEEDS_DEPLOY=true
-          fi
-
-          echo "needs_deploy=$NEEDS_DEPLOY" >> "$GITHUB_OUTPUT"
-
-  # ============================================
-  # STEP 3: Build & Push Docker Images
+  # STEP 3: Build Docker Images (API only)
   # ============================================
   build-images:
     name: Build Docker Images
     runs-on: ubuntu-latest
     needs: detect-changes
     if: |
-      github.event_name == 'workflow_dispatch' || 
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      github.event_name != 'pull_request' &&
+      (needs.detect-changes.outputs.api-changed == 'true' ||
+       github.event_name == 'workflow_dispatch' ||
+       github.ref == 'refs/heads/main')
     environment: ${{ needs.detect-changes.outputs.environment }}
-    strategy:
-      matrix:
-        service:
-          - name: api
-            path: packages/apps/api
-            context: .
-            changed: ${{ needs.detect-changes.outputs.api-changed }}
-          - name: web
-            path: packages/apps/web
-            context: .
-            changed: ${{ needs.detect-changes.outputs.web-changed }}
 
     steps:
       - name: Checkout code
@@ -284,71 +229,40 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set up Docker Buildx
-        if: matrix.service.name == 'api' && (matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch')
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push Docker image (API only)
-        if: matrix.service.name == 'api' && (matrix.service.changed == 'true' || github.event_name == 'workflow_dispatch')
+      - name: Build and push API Docker image
         uses: docker/build-push-action@v5
         env:
           REPO_NAME: postolio
         with:
-          context: ${{ matrix.service.context }}
-          file: ${{ matrix.service.path }}/Dockerfile
+          context: .
+          file: packages/apps/api/Dockerfile
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ matrix.service.name }}-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ matrix.service.name }}-${{ needs.detect-changes.outputs.environment }}-latest
-          cache-from: type=gha,scope=${{ matrix.service.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:api-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:api-${{ needs.detect-changes.outputs.environment }}-latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
           build-args: |
             NODE_ENV=${{ needs.detect-changes.outputs.environment }}
 
-      - name: Copy latest to commit tag if no changes (API only)
-        if: matrix.service.name == 'api' && matrix.service.changed != 'true' && github.event_name != 'workflow_dispatch'
-        env:
-          REPO_NAME: postolio
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ENV: ${{ needs.detect-changes.outputs.environment }}
-          SHA: ${{ github.sha }}
-        run: |
-          LATEST_TAG="${{ matrix.service.name }}-$ENV-latest"
-          NEW_TAG="${{ matrix.service.name }}-$ENV-$SHA"
-
-          # Get manifest from latest
-          MANIFEST=$(aws ecr batch-get-image \
-            --repository-name $REPO_NAME \
-            --image-ids imageTag=$LATEST_TAG \
-            --query 'images[].imageManifest' \
-            --output text)
-
-          if [ -n "$MANIFEST" ]; then
-            # Put the manifest with new tag
-            aws ecr put-image \
-              --repository-name $REPO_NAME \
-              --image-tag $NEW_TAG \
-              --image-manifest "$MANIFEST"
-            
-            echo "Copied $LATEST_TAG to $NEW_TAG"
-          else
-            echo "Warning: Latest image $LATEST_TAG not found, skipping copy"
-            echo "This is expected for the first deployment with new tagging format"
-            # Don't fail - this is OK for initial deployments
-          fi
-
   # ============================================
-  # STEP 4: Deploy Infrastructure
+  # STEP 4: Deploy Stacks
   # ============================================
-  deploy-infrastructure:
-    name: Deploy Infrastructure
+  deploy-stacks:
+    name: Deploy ${{ matrix.stack }} Stack
     runs-on: ubuntu-latest
-    needs: [detect-changes, infra-bootstrap-check, build-images]
+    needs: [detect-changes, build-images]
     if: |
       github.event_name != 'pull_request' &&
-      (needs.detect-changes.outputs.infra-changed == 'true' || 
-      needs.infra-bootstrap-check.outputs.needs-deploy == 'true' || 
-      github.event_name == 'workflow_dispatch')
+      needs.detect-changes.outputs.stack-matrix != '[]'
     environment: ${{ needs.detect-changes.outputs.environment }}
+    strategy:
+      matrix:
+        stack: ${{ fromJson(needs.detect-changes.outputs.stack-matrix) }}
+      max-parallel: 2  # Deploy stacks in controlled parallel (respecting dependencies)
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -369,287 +283,94 @@ jobs:
             pnpm cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
           fi
 
-      - name: Ensure ECR repository via CDK (if missing)
-        working-directory: packages/infra/cdk
+      - name: Wait for dependencies
         run: |
-          if aws ecr describe-repositories --repository-names postolio >/dev/null 2>&1; then
-            echo "ECR repository 'postolio' already exists, skipping CDK deploy"
-          else
-            pnpm cdk deploy EcrRegistry-${{ needs.detect-changes.outputs.environment }} \
-              --require-approval never \
-              --context environment=${{ needs.detect-changes.outputs.environment }}
-          fi
+          ENV="${{ needs.detect-changes.outputs.environment }}"
+          STACK="${{ matrix.stack }}"
 
+          # Define stack dependencies
+          case $STACK in
+            "foundation")
+              DEPS=()
+              ;;
+            "auth")
+              DEPS=("Foundation-$ENV")
+              ;;
+            "scheduling")
+              DEPS=("Auth-$ENV")
+              ;;
+            "publishing")
+              DEPS=("Auth-$ENV" "Scheduling-$ENV")
+              ;;
+            "api")
+              DEPS=("Foundation-$ENV" "Auth-$ENV" "Scheduling-$ENV" "Publishing-$ENV")
+              ;;
+            "web")
+              DEPS=("API-$ENV")
+              ;;
+          esac
 
-      - name: Deploy Monitoring Stack (if present)
-        working-directory: packages/infra/cdk
-        if: needs.detect-changes.outputs.environment == 'prod'
-        run: |
-          STACK_NAME="Monitoring-${{ needs.detect-changes.outputs.environment }}"
-          if pnpm cdk ls | grep -xq "$STACK_NAME"; then
-            echo "Found $STACK_NAME in app. Deploying..."
-            pnpm cdk deploy "$STACK_NAME" \
-              --require-approval never \
-              --context environment=${{ needs.detect-changes.outputs.environment }} \
-              --context alertEmail=${{ vars.ALERT_EMAIL }}
-          else
-            echo "Stack $STACK_NAME not in CDK app. Skipping."
-          fi
+          # Wait for dependencies to be ready
+          for dep_stack in "${DEPS[@]}"; do
+            echo "Waiting for dependency: $dep_stack"
+            WAIT_TIME=0
+            MAX_WAIT=1800  # 30 minutes
 
-      - name: Deploy EventBridge Rules Stack (if present)
-        working-directory: packages/infra/cdk
-        run: |
-          STACK_NAME="EventBridgeRules-${{ needs.detect-changes.outputs.environment }}"
-          if pnpm cdk ls | grep -xq "$STACK_NAME"; then
-            echo "Found $STACK_NAME in app. Deploying..."
-            pnpm cdk deploy "$STACK_NAME" \
-              --require-approval never \
-              --context environment=${{ needs.detect-changes.outputs.environment }}
-          else
-            echo "Stack $STACK_NAME not in CDK app. Skipping."
-          fi
+            while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+              STATUS=$(aws cloudformation describe-stacks --stack-name "$dep_stack" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
 
-  # ============================================
-  # STEP 5: Deploy Microservices
-  # ============================================
-  deploy-microservices:
-    name: Deploy ${{ matrix.service }}
-    runs-on: ubuntu-latest
-    needs: [detect-changes]
-    if: |
-      github.event_name != 'pull_request' &&
-      needs.detect-changes.outputs.matrix != '[]'
-    environment: ${{ needs.detect-changes.outputs.environment }}
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
-      max-parallel: 3
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Wait for infrastructure if deploying
-        run: |
-          # Check if infrastructure deployment is running
-          INFRA_STACK="Postolio-${{ needs.detect-changes.outputs.environment }}"
-          
-          # Wait for stack to be ready (max 10 minutes)
-          WAIT_TIME=0
-          MAX_WAIT=600
-          while [ $WAIT_TIME -lt $MAX_WAIT ]; do
-            STATUS=$(aws cloudformation describe-stacks --stack-name "$INFRA_STACK" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-            
-            if [[ "$STATUS" == "CREATE_COMPLETE" || "$STATUS" == "UPDATE_COMPLETE" ]]; then
-              echo "Infrastructure stack is ready: $STATUS"
-              break
-            elif [[ "$STATUS" == "DOES_NOT_EXIST" ]]; then
-              echo "Infrastructure stack does not exist. It may be created by another job."
-              sleep 30
-              WAIT_TIME=$((WAIT_TIME + 30))
-            elif [[ "$STATUS" == *"IN_PROGRESS" ]]; then
-              echo "Infrastructure deployment in progress: $STATUS. Waiting..."
-              sleep 30
-              WAIT_TIME=$((WAIT_TIME + 30))
-            elif [[ "$STATUS" == *"FAILED" || "$STATUS" == "ROLLBACK_COMPLETE" ]]; then
-              echo "Infrastructure stack failed: $STATUS"
-              exit 1
-            else
-              echo "Infrastructure stack status: $STATUS"
-              break
-            fi
-          done
-          
-          if [ $WAIT_TIME -ge $MAX_WAIT ]; then
-            echo "Timeout waiting for infrastructure"
-            exit 1
-          fi
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build dependencies
-        run: |
-          # Build shared libraries and generate Prisma client
-          pnpm --filter=@postolio/database build || true
-          pnpm --filter=@postolio/errors build || true
-          pnpm --filter=@postolio/aws build
-
-      - name: Build service
-        run: npx turbo build --filter="@postolio/${{ matrix.service }}"
-
-      - name: Package Lambda
-        working-directory: packages/services/${{ matrix.service }}
-        run: |
-          # Create deployment package
-          mkdir -p deploy
-          cp -r dist/* deploy/
-          cd deploy
-          # Artifacts are bundled with tsup; no install needed (avoids lockfile issues)
-          zip -r ../${{ matrix.service }}.zip .
-
-      - name: Set Function Name
-        id: vars
-        run: echo "function_name=postolio-${{ needs.detect-changes.outputs.environment }}-${{ matrix.service }}" >> $GITHUB_OUTPUT
-
-      - name: Check if Function Exists
-        id: check
-        run: |
-          if aws lambda get-function --function-name ${{ steps.vars.outputs.function_name }} &>/dev/null; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Update Lambda Code
-        if: steps.check.outputs.exists == 'true'
-        run: |
-          aws lambda update-function-code \
-            --function-name ${{ steps.vars.outputs.function_name }} \
-            --zip-file fileb://packages/services/${{ matrix.service }}/${{ matrix.service }}.zip
-
-          aws lambda wait function-updated \
-            --function-name ${{ steps.vars.outputs.function_name }}
-
-      - name: Update Lambda Configuration
-        if: steps.check.outputs.exists == 'true'
-        run: |
-          aws lambda update-function-configuration \
-            --function-name ${{ steps.vars.outputs.function_name }} \
-            --environment Variables="{
-              NODE_ENV=${{ vars.NODE_ENV || 'dev' }},
-              SERVICE_NAME=${{ matrix.service }},
-              ENVIRONMENT=${{ needs.detect-changes.outputs.environment }},
-              LOG_LEVEL=${{ vars.LOG_LEVEL || 'info' }},
-              AWS_REGION=${{ vars.AWS_REGION || 'us-east-1' }},
-              ENABLE_MONITORING=${{ vars.ENABLE_MONITORING || 'false' }}
-            }"
-
-      - name: CDK Setup for New Function
-        if: steps.check.outputs.exists == 'false'
-        uses: ./.github/actions/cdk-setup
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-          pnpm-version: ${{ env.PNPM_VERSION }}
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Deploy via CDK
-        if: steps.check.outputs.exists == 'false'
-        working-directory: packages/infra/cdk
-        run: |
-          if [ "${{ matrix.service }}" = "token-service" ]; then
-            STACK_NAME="TokenService-${{ needs.detect-changes.outputs.environment }}"
-          else
-            STACK_NAME="ContentScheduler-${{ needs.detect-changes.outputs.environment }}"
-          fi
-
-          if pnpm cdk ls | grep -xq "$STACK_NAME"; then
-            # Retry logic for CDK deploy to handle ChangeSet conflicts
-            MAX_RETRIES=3
-            RETRY_COUNT=0
-            RETRY_DELAY=30
-            
-            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-              echo "Deployment attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
-              
-              if pnpm cdk deploy "$STACK_NAME" \
-                --require-approval never \
-                --context environment=${{ needs.detect-changes.outputs.environment }}; then
-                echo "CDK deployment successful"
+              if [[ "$STATUS" == "CREATE_COMPLETE" || "$STATUS" == "UPDATE_COMPLETE" ]]; then
+                echo "Dependency $dep_stack is ready: $STATUS"
                 break
+              elif [[ "$STATUS" == "DOES_NOT_EXIST" ]]; then
+                echo "Dependency $dep_stack does not exist yet, waiting..."
+                sleep 30
+                WAIT_TIME=$((WAIT_TIME + 30))
+              elif [[ "$STATUS" == *"IN_PROGRESS" ]]; then
+                echo "Dependency $dep_stack deployment in progress: $STATUS"
+                sleep 60
+                WAIT_TIME=$((WAIT_TIME + 60))
+              elif [[ "$STATUS" == *"FAILED" || "$STATUS" == "ROLLBACK_COMPLETE" ]]; then
+                echo "Dependency $dep_stack failed: $STATUS"
+                exit 1
               else
-                EXIT_CODE=$?
-                RETRY_COUNT=$((RETRY_COUNT + 1))
-                
-                if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                  echo "CDK deployment failed with exit code $EXIT_CODE. Retrying in $RETRY_DELAY seconds..."
-                  sleep $RETRY_DELAY
-                  # Exponential backoff
-                  RETRY_DELAY=$((RETRY_DELAY * 2))
-                else
-                  echo "CDK deployment failed after $MAX_RETRIES attempts"
-                  exit $EXIT_CODE
-                fi
+                echo "Dependency $dep_stack status: $STATUS"
+                break
               fi
             done
-          else
-            echo "Stack $STACK_NAME not found in CDK app; skipping CDK deploy"
-          fi
 
-  # ============================================
-  # STEP 6: Deploy Main Application
-  # ============================================
-  deploy-main-app:
-    name: Deploy Main Application
-    runs-on: ubuntu-latest
-    needs: [detect-changes, build-images, deploy-microservices]
-    if: |
-      github.event_name != 'pull_request' &&
-      (needs.detect-changes.outputs.api-changed == 'true' || 
-      needs.detect-changes.outputs.infra-changed == 'true' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')))
-    environment: ${{ needs.detect-changes.outputs.environment }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: CDK Setup
-        uses: ./.github/actions/cdk-setup
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-          pnpm-version: ${{ env.PNPM_VERSION }}
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Wait for any ongoing infrastructure deployment
-        run: |
-          # Check if another job is deploying infrastructure
-          INFRA_STACK="Postolio-${{ needs.detect-changes.outputs.environment }}"
-          
-          # Wait for any in-progress deployments to complete
-          WAIT_TIME=0
-          MAX_WAIT=600
-          while [ $WAIT_TIME -lt $MAX_WAIT ]; do
-            STATUS=$(aws cloudformation describe-stacks --stack-name "$INFRA_STACK" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-            
-            if [[ "$STATUS" == *"IN_PROGRESS" ]]; then
-              echo "Another infrastructure deployment in progress: $STATUS. Waiting..."
-              sleep 30
-              WAIT_TIME=$((WAIT_TIME + 30))
-            else
-              echo "Infrastructure stack status: $STATUS. Proceeding with deployment."
-              break
+            if [ $WAIT_TIME -ge $MAX_WAIT ]; then
+              echo "Timeout waiting for dependency $dep_stack"
+              exit 1
             fi
           done
-          
-          if [ $WAIT_TIME -ge $MAX_WAIT ]; then
-            echo "Timeout waiting for other infrastructure deployment"
-            exit 1
-          fi
 
-      - name: Deploy Postolio Stack
+      - name: Build stack dependencies
+        run: |
+          # Build shared libraries and services based on stack
+          case "${{ matrix.stack }}" in
+            "auth"|"scheduling"|"publishing")
+              # Build shared libraries for microservices
+              pnpm --filter=@postolio/database build || true
+              pnpm --filter=@postolio/errors build || true
+              pnpm --filter=@postolio/aws build
+              ;;
+            "api")
+              # Build API and its dependencies
+              pnpm --filter=@postolio/database build || true
+              pnpm --filter=@postolio/errors build || true
+              pnpm --filter=@postolio/csrf-client build || true
+              pnpm --filter=api build
+              ;;
+            "web")
+              # Build frontend dependencies
+              pnpm --filter=@postolio/csrf-client build || true
+              pnpm --filter=@postolio/errors build || true
+              pnpm --filter=@postolio/database build || true
+              ;;
+          esac
+
+      - name: Deploy Stack via CDK
         working-directory: packages/infra/cdk
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -667,45 +388,104 @@ jobs:
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
           ENABLE_MONITORING: ${{ vars.ENABLE_MONITORING }}
         run: |
-          pnpm cdk deploy Postolio-${{ needs.detect-changes.outputs.environment }} \
-            --require-approval never \
-            --context environment=${{ needs.detect-changes.outputs.environment }} \
-            --context imageTag=api-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }} \
-            --context domainName=${{ vars.DOMAIN_NAME }} \
-            --context corsOrigin=${{ vars.VITE_API_URL }} \
-            --context openaiApiKey=${{ secrets.OPENAI_API_KEY }} \
-            --context googleClientId=${{ vars.VITE_GOOGLE_CLIENT_ID }} \
-            --context googleClientSecret=${{ secrets.GOOGLE_CLIENT_SECRET }} \
-            --context facebookAppId=${{ vars.FACEBOOK_APP_ID }} \
-            --context facebookAppSecret=${{ secrets.FACEBOOK_APP_SECRET }} \
-            --context instagramAppId=${{ vars.INSTAGRAM_APP_ID }} \
-            --context instagramAppSecret=${{ secrets.INSTAGRAM_APP_SECRET }} \
-            --context linkedinClientId=${{ vars.LINKEDIN_CLIENT_ID }} \
-            --context linkedinClientSecret=${{ secrets.LINKEDIN_CLIENT_SECRET }} \
-            --context tiktokClientKey=${{ vars.TIKTOK_CLIENT_KEY }} \
-            --context tiktokClientSecret=${{ secrets.TIKTOK_CLIENT_SECRET }} \
-            --context nodeEnv=${{ vars.NODE_ENV }} \
-            --context logLevel=${{ vars.LOG_LEVEL }} \
-            --context enableMonitoring=${{ vars.ENABLE_MONITORING }}
+          ENV="${{ needs.detect-changes.outputs.environment }}"
+          STACK="${{ matrix.stack }}"
 
-      - name: Update ECS Service
+          # Map stack names to CDK stack names
+          case $STACK in
+            "foundation")
+              CDK_STACK="Foundation-$ENV"
+              CDK_APP="bin/app.ts"
+              ;;
+            "auth")
+              CDK_STACK="Auth-$ENV"
+              CDK_APP="bin/app.ts"
+              ;;
+            "scheduling")
+              CDK_STACK="Scheduling-$ENV"
+              CDK_APP="bin/app.ts"
+              ;;
+            "publishing")
+              CDK_STACK="Publishing-$ENV"
+              CDK_APP="bin/app.ts"
+              ;;
+            "api")
+              CDK_STACK="API-$ENV"
+              CDK_APP="bin/app.ts"
+              ;;
+            "web")
+              CDK_STACK="Web-$ENV"
+              CDK_APP="bin/app.ts"
+              ;;
+          esac
+
+          # Deploy the stack with retry logic
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          RETRY_DELAY=30
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Deployment attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES for $CDK_STACK"
+
+            if pnpm cdk deploy "$CDK_STACK" \
+              --app "npx tsx $CDK_APP" \
+              --require-approval never \
+              --context environment="$ENV" \
+              --context imageTag="api-$ENV-${{ github.sha }}" \
+              --context domainName="${{ vars.DOMAIN_NAME }}" \
+              --context corsOrigin="${{ vars.VITE_API_URL }}" \
+              --context openaiApiKey="$OPENAI_API_KEY" \
+              --context googleClientId="$GOOGLE_CLIENT_ID" \
+              --context googleClientSecret="$GOOGLE_CLIENT_SECRET" \
+              --context facebookAppId="$FACEBOOK_APP_ID" \
+              --context facebookAppSecret="$FACEBOOK_APP_SECRET" \
+              --context instagramAppId="$INSTAGRAM_APP_ID" \
+              --context instagramAppSecret="$INSTAGRAM_APP_SECRET" \
+              --context linkedinClientId="$LINKEDIN_CLIENT_ID" \
+              --context linkedinClientSecret="$LINKEDIN_CLIENT_SECRET" \
+              --context tiktokClientKey="$TIKTOK_CLIENT_KEY" \
+              --context tiktokClientSecret="$TIKTOK_CLIENT_SECRET" \
+              --context nodeEnv="$NODE_ENV" \
+              --context logLevel="$LOG_LEVEL" \
+              --context enableMonitoring="$ENABLE_MONITORING"; then
+              echo "CDK deployment successful for $CDK_STACK"
+              break
+            else
+              EXIT_CODE=$?
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "CDK deployment failed for $CDK_STACK with exit code $EXIT_CODE. Retrying in $RETRY_DELAY seconds..."
+                sleep $RETRY_DELAY
+                RETRY_DELAY=$((RETRY_DELAY * 2))
+              else
+                echo "CDK deployment failed for $CDK_STACK after $MAX_RETRIES attempts"
+                exit $EXIT_CODE
+              fi
+            fi
+          done
+
+      - name: Update ECS Service (API Stack only)
+        if: matrix.stack == 'api'
         run: |
+          ENV="${{ needs.detect-changes.outputs.environment }}"
+
           CLUSTER_NAME=$(aws cloudformation describe-stacks \
-            --stack-name "Postolio-${{ needs.detect-changes.outputs.environment }}" \
+            --stack-name "API-$ENV" \
             --query "Stacks[0].Outputs[?OutputKey=='EcsClusterName'].OutputValue" \
             --output text)
-            
+
           SERVICE_NAME=$(aws cloudformation describe-stacks \
-            --stack-name "Postolio-${{ needs.detect-changes.outputs.environment }}" \
+            --stack-name "API-$ENV" \
             --query "Stacks[0].Outputs[?OutputKey=='EcsServiceName'].OutputValue" \
             --output text)
-            
+
           if [[ -n "$CLUSTER_NAME" && -n "$SERVICE_NAME" ]]; then
             aws ecs update-service \
               --cluster "$CLUSTER_NAME" \
               --service "$SERVICE_NAME" \
               --force-new-deployment
-            
+
             # Wait for service to stabilize
             aws ecs wait services-stable \
               --cluster "$CLUSTER_NAME" \
@@ -713,19 +493,20 @@ jobs:
           fi
 
   # ============================================
-  # STEP 7: Deploy Frontend
+  # STEP 5: Deploy Frontend to S3 (Web Stack)
   # ============================================
   deploy-frontend:
-    name: Deploy Frontend
+    name: Deploy Frontend Assets
     runs-on: ubuntu-latest
-    needs: [detect-changes]
+    needs: [detect-changes, deploy-stacks]
     if: |
       github.event_name != 'pull_request' &&
-      (needs.detect-changes.outputs.web-changed == 'true' || 
-      needs.detect-changes.outputs.api-changed == 'true' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')))
+      (needs.detect-changes.outputs.web-changed == 'true' ||
+       github.event_name == 'workflow_dispatch' ||
+       github.ref == 'refs/heads/main') &&
+      contains(needs.detect-changes.outputs.stack-matrix, 'web')
     environment: ${{ needs.detect-changes.outputs.environment }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -748,48 +529,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Wait for infrastructure readiness
-        run: |
-          # Check if infrastructure is ready for frontend deployment
-          INFRA_STACK="Postolio-${{ needs.detect-changes.outputs.environment }}"
-          
-          # Wait for stack to be ready (max 10 minutes)
-          WAIT_TIME=0
-          MAX_WAIT=600
-          while [ $WAIT_TIME -lt $MAX_WAIT ]; do
-            STATUS=$(aws cloudformation describe-stacks --stack-name "$INFRA_STACK" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-            
-            if [[ "$STATUS" == "CREATE_COMPLETE" || "$STATUS" == "UPDATE_COMPLETE" ]]; then
-              echo "Infrastructure stack is ready: $STATUS"
-              break
-            elif [[ "$STATUS" == "DOES_NOT_EXIST" ]]; then
-              echo "Infrastructure stack does not exist. Waiting for creation..."
-              sleep 30
-              WAIT_TIME=$((WAIT_TIME + 30))
-            elif [[ "$STATUS" == *"IN_PROGRESS" ]]; then
-              echo "Infrastructure deployment in progress: $STATUS. Waiting..."
-              sleep 30
-              WAIT_TIME=$((WAIT_TIME + 30))
-            elif [[ "$STATUS" == *"FAILED" || "$STATUS" == "ROLLBACK_COMPLETE" ]]; then
-              echo "Infrastructure stack failed: $STATUS"
-              exit 1
-            else
-              echo "Infrastructure stack status: $STATUS"
-              break
-            fi
-          done
-          
-          if [ $WAIT_TIME -ge $MAX_WAIT ]; then
-            echo "Timeout waiting for infrastructure"
-            exit 1
-          fi
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build dependencies
+      - name: Build frontend dependencies
         run: |
-          # Build shared libraries that frontend depends on
           pnpm --filter=@postolio/csrf-client build || true
           pnpm --filter=@postolio/errors build || true
           pnpm --filter=@postolio/database build || true
@@ -809,11 +553,13 @@ jobs:
       - name: Deploy to S3
         working-directory: packages/apps/web
         run: |
+          ENV="${{ needs.detect-changes.outputs.environment }}"
+
           BUCKET_NAME=$(aws cloudformation describe-stacks \
-            --stack-name "Postolio-${{ needs.detect-changes.outputs.environment }}" \
+            --stack-name "Web-$ENV" \
             --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
             --output text)
-            
+
           if [[ -z "$BUCKET_NAME" ]]; then
             echo "Error: Frontend bucket not found"
             exit 1
@@ -825,7 +571,7 @@ jobs:
             --exclude "index.html" \
             --exclude "*.js.map" \
             --cache-control "public, max-age=31536000, immutable"
-            
+
           # Upload index.html without cache
           aws s3 cp dist/index.html s3://$BUCKET_NAME/index.html \
             --cache-control "no-cache, no-store, must-revalidate" \
@@ -833,11 +579,13 @@ jobs:
 
       - name: Invalidate CloudFront
         run: |
+          ENV="${{ needs.detect-changes.outputs.environment }}"
+
           DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-            --stack-name "Postolio-${{ needs.detect-changes.outputs.environment }}" \
+            --stack-name "Web-$ENV" \
             --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" \
             --output text)
-            
+
           if [[ -n "$DISTRIBUTION_ID" ]]; then
             aws cloudfront create-invalidation \
               --distribution-id "$DISTRIBUTION_ID" \
@@ -845,101 +593,62 @@ jobs:
           fi
 
   # ============================================
-  # STEP 8: Run E2E Tests (DISABLED)
-  # ============================================
-  # e2e-tests:
-  #   name: E2E Tests
-  #   runs-on: ubuntu-latest
-  #   needs: [deploy-frontend]
-  #   if: needs.detect-changes.outputs.environment != 'prod' && false  # Disabled for now
-  #   environment: ${{ needs.detect-changes.outputs.environment }}
-  #
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #
-  #     - name: Setup Node.js and pnpm
-  #       uses: ./.github/actions/setup-node-pnpm
-  #       with:
-  #         pnpm-version: ${{ env.PNPM_VERSION }}
-  #         node-version: ${{ env.NODE_VERSION }}
-  #
-  #     - name: Install dependencies
-  #       run: pnpm install --frozen-lockfile
-  #
-  #     - name: Install Playwright browsers
-  #       run: |
-  #         cd packages/apps/web
-  #         npx playwright install --with-deps
-  #
-  #     - name: Run E2E tests
-  #       env:
-  #         BASE_URL: ${{ vars.VITE_API_URL }}
-  #         TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
-  #         TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
-  #       run: |
-  #         cd packages/apps/web
-  #         pnpm test:e2e
-
-  # ============================================
-  # STEP 9: Deployment Summary
+  # STEP 6: Deployment Summary
   # ============================================
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    needs: [detect-changes, deploy-frontend, deploy-microservices]
-    if: always()
+    needs: [detect-changes, deploy-stacks, deploy-frontend]
+    if: always() && github.event_name != 'pull_request'
 
     steps:
       - name: Generate deployment report
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🎉 Deployment Summary"
+          echo "🎉 Stack-Based Deployment Summary"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📍 Environment: ${{ needs.detect-changes.outputs.environment }}"
           echo "🔄 Commit: ${{ github.sha }}"
           echo ""
-          echo "📦 Changed Components:"
-          [[ "${{ needs.detect-changes.outputs.api-changed }}" == "true" ]] && echo "  ✅ API"
-          [[ "${{ needs.detect-changes.outputs.web-changed }}" == "true" ]] && echo "  ✅ Web"
-          [[ "${{ needs.detect-changes.outputs.infra-changed }}" == "true" ]] && echo "  ✅ Infrastructure"
-          [[ "${{ needs.detect-changes.outputs.token-service-changed }}" == "true" ]] && echo "  ✅ Token Service"
-          [[ "${{ needs.detect-changes.outputs.publisher-changed }}" == "true" ]] && echo "  ✅ Publisher"
-          [[ "${{ needs.detect-changes.outputs.retry-handler-changed }}" == "true" ]] && echo "  ✅ Retry Handler"
-          [[ "${{ needs.detect-changes.outputs.dlq-processor-changed }}" == "true" ]] && echo "  ✅ DLQ Processor"
-          [[ "${{ needs.detect-changes.outputs.schedule-management-changed }}" == "true" ]] && echo "  ✅ Schedule Management"
-          [[ "${{ needs.detect-changes.outputs.schedule-cleanup-changed }}" == "true" ]] && echo "  ✅ Schedule Cleanup"
-          [[ "${{ needs.detect-changes.outputs.status-sync-changed }}" == "true" ]] && echo "  ✅ Status Sync"
+          echo "📦 Deployed Stacks:"
+          STACKS="${{ needs.detect-changes.outputs.stack-matrix }}"
+          if [[ "$STACKS" != "[]" ]]; then
+            echo "$STACKS" | jq -r '.[] | "  ✅ " + . + " Stack"'
+          else
+            echo "  ℹ️  No stacks deployed (no changes detected)"
+          fi
           echo ""
           echo "🔗 Application URL: ${{ vars.VITE_API_URL }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Send deployment notification
-        if: needs.detect-changes.outputs.environment == 'prod' && github.event_name == 'pull_request'
+        if: needs.detect-changes.outputs.environment == 'prod' && github.event_name == 'push'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const changes = [];
-            if ('${{ needs.detect-changes.outputs.api-changed }}' === 'true') changes.push('- API');
-            if ('${{ needs.detect-changes.outputs.web-changed }}' === 'true') changes.push('- Web Frontend');
-            if ('${{ needs.detect-changes.outputs.token-service-changed }}' === 'true') changes.push('- Token Service');
-            if ('${{ needs.detect-changes.outputs.publisher-changed }}' === 'true') changes.push('- Publisher Service');
+            const stacks = JSON.parse('${{ needs.detect-changes.outputs.stack-matrix }}');
+            const stackList = stacks.map(stack => `- ${stack} Stack`).join('\n');
 
             const summary = `
-            ## 🚀 Production Deployment Complete
+            ## 🚀 Production Deployment Complete (Stack-Based)
 
             **Environment:** ${{ needs.detect-changes.outputs.environment }}
             **Commit:** ${{ github.sha }}
             **Deployed by:** ${{ github.actor }}
 
-            ### Changed Services:
-            ${changes.join('\n')}
+            ### Deployed Stacks:
+            ${stackList || '- No stacks deployed'}
+
+            ### Architecture Improvement:
+            ✅ Deployed using optimized stack-based architecture
+            ✅ Reduced deployment complexity from 8+ microservices to ${stacks.length} logical stacks
+            ✅ Improved deployment reliability and consistency
             `;
 
-            await github.rest.issues.createComment({
+            await github.rest.repos.createCommitComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              commit_sha: '${{ github.sha }}',
               body: summary
             });
