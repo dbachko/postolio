@@ -711,6 +711,7 @@ export class ContentSchedulerStack extends cdk.Stack {
         detailType: [
           'post.published',
           'post.failed',
+          'post.skipped',
           'schedule.created',
           'schedule.updated',
           'schedule.canceled',
