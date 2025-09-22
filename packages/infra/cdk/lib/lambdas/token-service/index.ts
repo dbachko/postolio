@@ -9,7 +9,7 @@ import {
 import { KMSClient, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
 import { createHash } from 'crypto';
 import { z } from 'zod';
-import { RateLimiter } from '../../services/rate-limiter';
+// Rate limiting removed - this service is for internal use with IAM authentication
 
 // Initialize clients outside handler for connection reuse across invocations
 const dynamoClient = new DynamoDBClient({
@@ -30,7 +30,7 @@ const kmsClient = new KMSClient({
   retryMode: 'adaptive',
 });
 
-const rateLimiter = RateLimiter.getInstance();
+// Rate limiter instance removed - internal service doesn't need rate limiting
 
 const TOKEN_TABLE_NAME = process.env.TOKEN_TABLE_NAME!;
 const KMS_KEY_ID = process.env.KMS_KEY_ID!;
@@ -120,59 +120,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     'unknown';
   console.log('Authenticated caller:', callerIdentity);
 
-  // Extract user information for rate limiting
-  const sourceIp =
-    event.requestContext?.identity?.sourceIp || event.headers['X-Forwarded-For'] || 'unknown';
-  const userId = event.headers['x-user-id'] || callerIdentity;
-  const userTier = event.headers['x-user-tier'] || 'default';
-
-  // Apply rate limiting
-  const rateLimitResult = await rateLimiter.checkUserRateLimit(userId, 'token-service', userTier);
-
-  if (!rateLimitResult.allowed) {
-    console.warn('Rate limit exceeded', {
-      userId,
-      sourceIp,
-      remainingTokens: rateLimitResult.remainingTokens,
-      retryAfterMs: rateLimitResult.retryAfterMs,
-    });
-
-    return {
-      statusCode: 429,
-      headers: {
-        'Retry-After': String(Math.ceil(rateLimitResult.retryAfterMs! / 1000)),
-        'X-RateLimit-Remaining': String(rateLimitResult.remainingTokens),
-        'X-RateLimit-Reset': String(Math.floor(rateLimitResult.nextRefillAt / 1000)),
-      },
-      body: JSON.stringify({
-        error: 'Rate limit exceeded',
-        message: rateLimitResult.reason,
-        retryAfterSeconds: Math.ceil(rateLimitResult.retryAfterMs! / 1000),
-      }),
-    };
-  }
-
-  // Also apply IP-based rate limiting for additional protection
-  const ipRateLimitResult = await rateLimiter.checkIPRateLimit(sourceIp, 'token-service', userTier);
-
-  if (!ipRateLimitResult.allowed) {
-    console.warn('IP rate limit exceeded', {
-      sourceIp,
-      remainingTokens: ipRateLimitResult.remainingTokens,
-    });
-
-    return {
-      statusCode: 429,
-      headers: {
-        'Retry-After': String(Math.ceil(ipRateLimitResult.retryAfterMs! / 1000)),
-        'X-RateLimit-Remaining': String(ipRateLimitResult.remainingTokens),
-      },
-      body: JSON.stringify({
-        error: 'Rate limit exceeded',
-        message: 'Too many requests from this IP address',
-      }),
-    };
-  }
+  // Rate limiting removed for internal service - IAM authentication provides sufficient access control
+  console.log('Internal token service request - skipping rate limiting');
 
   try {
     const method = event.httpMethod;

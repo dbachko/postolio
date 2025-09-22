@@ -278,8 +278,8 @@ export class ApiStack extends cdk.Stack {
       publicLoadBalancer: true,
       domainName: domainName,
       domainZone: hostedZoneId ? route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId) : undefined,
-      listenerPort: 443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
+      listenerPort: domainName ? 443 : 80,
+      protocol: domainName ? elbv2.ApplicationProtocol.HTTPS : elbv2.ApplicationProtocol.HTTP,
       platformVersion: ecs.FargatePlatformVersion.LATEST,
     });
 

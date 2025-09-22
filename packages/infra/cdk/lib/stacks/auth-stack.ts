@@ -144,7 +144,7 @@ export class AuthStack extends cdk.Stack {
       functionName: `${prefix}-token-service`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      entry: path.join(__dirname, '../../lib/lambdas/token-service/index.ts'),
+      entry: path.join(__dirname, '../../../../services/token-service/src/index.ts'),
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
       role: tokenServiceRole,
@@ -153,7 +153,7 @@ export class AuthStack extends cdk.Stack {
         SERVICE_NAME: 'token-service',
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        AWS_REGION: this.region,
+        // AWS_REGION is automatically provided by Lambda runtime
         TOKENS_TABLE_NAME: this.tokenTable.tableName,
         KMS_KEY_ID: this.encryptionKey.keyId,
         FACEBOOK_APP_ID: props.facebookAppId || '',
@@ -219,19 +219,19 @@ export class AuthStack extends cdk.Stack {
 
     // ==================== SSM Parameters for Service Discovery ====================
     new ssm.StringParameter(this, 'TokenServiceUrlParameter', {
-      parameterName: ParameterNames.tokenServiceUrl(environment as Environment),
+      parameterName: `/postolio/${environment}/auth/token-service-url`,
       stringValue: this.tokenServiceUrl,
       description: 'Token Service Function URL',
     });
 
     new ssm.StringParameter(this, 'TokenTableNameParameter', {
-      parameterName: ParameterNames.tokenTableName(environment as Environment),
+      parameterName: `/postolio/${environment}/auth/token-table-name`,
       stringValue: this.tokenTable.tableName,
       description: 'Token Service DynamoDB Table Name',
     });
 
     new ssm.StringParameter(this, 'AuthEncryptionKeyParameter', {
-      parameterName: ParameterNames.authEncryptionKey(environment as Environment),
+      parameterName: `/postolio/${environment}/auth/encryption-key-id`,
       stringValue: this.encryptionKey.keyId,
       description: 'Auth Stack KMS Encryption Key ID',
     });

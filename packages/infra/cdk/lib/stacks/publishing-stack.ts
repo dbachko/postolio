@@ -218,7 +218,7 @@ export class PublishingStack extends cdk.Stack {
       functionName: `${prefix}-publisher`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      entry: path.join(__dirname, '../../lib/lambdas/publishers/main/index.ts'),
+      entry: path.join(__dirname, '../../../../services/publisher/src/index.ts'),
       timeout: cdk.Duration.minutes(10),
       memorySize: 1024,
       role: publishingLambdaRole,
@@ -229,7 +229,7 @@ export class PublishingStack extends cdk.Stack {
         SERVICE_NAME: 'publisher',
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        AWS_REGION: this.region,
+        // AWS_REGION is automatically provided by Lambda runtime
         PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         RETRY_QUEUE_URL: this.retryQueue.queueUrl,
         DLQ_URL: this.deadLetterQueue.queueUrl,
@@ -255,7 +255,7 @@ export class PublishingStack extends cdk.Stack {
       functionName: `${prefix}-retry-handler`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      entry: path.join(__dirname, '../../lib/lambdas/retry-handler/index.ts'),
+      entry: path.join(__dirname, '../../../../services/retry-handler/src/index.ts'),
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
       role: publishingLambdaRole,
@@ -266,7 +266,7 @@ export class PublishingStack extends cdk.Stack {
         SERVICE_NAME: 'retry-handler',
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        AWS_REGION: this.region,
+        // AWS_REGION is automatically provided by Lambda runtime
         PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         RETRY_QUEUE_URL: this.retryQueue.queueUrl,
         DLQ_URL: this.deadLetterQueue.queueUrl,
@@ -283,7 +283,7 @@ export class PublishingStack extends cdk.Stack {
       functionName: `${prefix}-dlq-processor`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      entry: path.join(__dirname, '../../lib/lambdas/dlq-processor/index.ts'),
+      entry: path.join(__dirname, '../../../../services/dlq-processor/src/index.ts'),
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
       role: publishingLambdaRole,
@@ -294,7 +294,7 @@ export class PublishingStack extends cdk.Stack {
         SERVICE_NAME: 'dlq-processor',
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        AWS_REGION: this.region,
+        // AWS_REGION is automatically provided by Lambda runtime
         DLQ_URL: this.deadLetterQueue.queueUrl,
         EVENT_BUS_NAME: publishingEventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
@@ -309,7 +309,7 @@ export class PublishingStack extends cdk.Stack {
       functionName: `${prefix}-campaign-dlq-processor`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      entry: path.join(__dirname, '../../lib/lambdas/campaign-event-dlq-processor/index.ts'),
+      entry: path.join(__dirname, '../../../../services/campaign-event-dlq-processor/src/index.ts'),
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
       role: publishingLambdaRole,
@@ -320,7 +320,7 @@ export class PublishingStack extends cdk.Stack {
         SERVICE_NAME: 'campaign-event-dlq-processor',
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        AWS_REGION: this.region,
+        // AWS_REGION is automatically provided by Lambda runtime
         CAMPAIGN_DLQ_URL: campaignDLQ.queueUrl,
         EVENT_BUS_NAME: publishingEventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
@@ -361,7 +361,7 @@ export class PublishingStack extends cdk.Stack {
       ruleName: `${prefix}-retry-rule`,
       description: 'Trigger retry processing periodically',
       schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
-      eventBus: publishingEventBus,
+      // Note: Scheduled rules use default EventBridge bus, not custom eventBus
     });
 
     retryRule.addTarget(new targets.LambdaFunction(retryHandlerFunction));
@@ -413,7 +413,12 @@ export class PublishingStack extends cdk.Stack {
     // Queue depth monitoring
     const queueDepthAlarm = new cloudwatch.Alarm(this, 'PublishingQueueDepthAlarm', {
       alarmName: `${prefix}-queue-depth`,
-      metric: this.publishingQueue.metricApproximateNumberOfVisibleMessages({
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/SQS',
+        metricName: 'ApproximateNumberOfVisibleMessages',
+        dimensionsMap: {
+          QueueName: this.publishingQueue.queueName,
+        },
         period: cdk.Duration.minutes(5),
       }),
       threshold: 1000,
@@ -426,25 +431,25 @@ export class PublishingStack extends cdk.Stack {
 
     // ==================== SSM Parameters ====================
     new ssm.StringParameter(this, 'PublishingQueueUrlParameter', {
-      parameterName: ParameterNames.publishingQueueUrl(environment as Environment),
+      parameterName: `/postolio/${environment}/publishing/queue-url`,
       stringValue: this.publishingQueue.queueUrl,
       description: 'Publishing Queue URL',
     });
 
     new ssm.StringParameter(this, 'RetryQueueUrlParameter', {
-      parameterName: ParameterNames.retryQueueUrl(environment as Environment),
+      parameterName: `/postolio/${environment}/publishing/retry-queue-url`,
       stringValue: this.retryQueue.queueUrl,
       description: 'Retry Queue URL',
     });
 
     new ssm.StringParameter(this, 'PublishingDLQUrlParameter', {
-      parameterName: ParameterNames.publishingDLQUrl(environment as Environment),
+      parameterName: `/postolio/${environment}/publishing/dlq-url`,
       stringValue: this.deadLetterQueue.queueUrl,
       description: 'Publishing Dead Letter Queue URL',
     });
 
     new ssm.StringParameter(this, 'PublishingEventBusNameParameter', {
-      parameterName: ParameterNames.publishingEventBusName(environment as Environment),
+      parameterName: `/postolio/${environment}/publishing/event-bus-name`,
       stringValue: publishingEventBus.eventBusName,
       description: 'Publishing EventBridge Bus Name',
     });

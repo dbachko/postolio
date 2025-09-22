@@ -276,7 +276,7 @@ export class SchedulingStack extends cdk.Stack {
       functionName: `${prefix}-schedule-management`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      entry: path.join(__dirname, '../../lib/lambdas/schedule-management/index.ts'),
+      entry: path.join(__dirname, '../../../../services/schedule-management/src/index.ts'),
       timeout: cdk.Duration.minutes(5),
       memorySize: 1024,
       role: schedulingLambdaRole,
@@ -287,7 +287,7 @@ export class SchedulingStack extends cdk.Stack {
         SERVICE_NAME: 'schedule-management',
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        AWS_REGION: this.region,
+        // AWS_REGION is automatically provided by Lambda runtime
         SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
         VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
         EVENT_BUS_NAME: this.eventBus.eventBusName,
@@ -303,7 +303,7 @@ export class SchedulingStack extends cdk.Stack {
       functionName: `${prefix}-schedule-cleanup`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      entry: path.join(__dirname, '../../lib/lambdas/schedule-cleanup/index.ts'),
+      entry: path.join(__dirname, '../../../../services/schedule-cleanup/src/index.ts'),
       timeout: cdk.Duration.minutes(10),
       memorySize: 512,
       role: schedulingLambdaRole,
@@ -314,7 +314,7 @@ export class SchedulingStack extends cdk.Stack {
         SERVICE_NAME: 'schedule-cleanup',
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        AWS_REGION: this.region,
+        // AWS_REGION is automatically provided by Lambda runtime
         SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
         VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
         KMS_KEY_ID: encryptionKey.keyId,
@@ -328,7 +328,7 @@ export class SchedulingStack extends cdk.Stack {
       functionName: `${prefix}-status-sync`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      entry: path.join(__dirname, '../../lib/lambdas/status-sync/index.ts'),
+      entry: path.join(__dirname, '../../../../services/status-sync/src/index.ts'),
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
       role: schedulingLambdaRole,
@@ -339,7 +339,7 @@ export class SchedulingStack extends cdk.Stack {
         SERVICE_NAME: 'status-sync',
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        AWS_REGION: this.region,
+        // AWS_REGION is automatically provided by Lambda runtime
         SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
         EVENT_BUS_NAME: this.eventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
@@ -364,7 +364,7 @@ export class SchedulingStack extends cdk.Stack {
         hour: '2',
         minute: '0',
       }),
-      eventBus: this.eventBus,
+      // Note: Scheduled rules use default EventBridge bus, not custom eventBus
     });
 
     cleanupRule.addTarget(new targets.LambdaFunction(scheduleCleanupFunction));
@@ -407,25 +407,25 @@ export class SchedulingStack extends cdk.Stack {
 
     // ==================== SSM Parameters ====================
     new ssm.StringParameter(this, 'ScheduleManagementUrlParameter', {
-      parameterName: ParameterNames.scheduleManagementUrl(environment as Environment),
+      parameterName: `/postolio/${environment}/scheduling/schedule-management-url`,
       stringValue: scheduleManagementUrl.url,
       description: 'Schedule Management Function URL',
     });
 
     new ssm.StringParameter(this, 'SchedulesTableNameParameter', {
-      parameterName: ParameterNames.schedulesTableName(environment as Environment),
+      parameterName: `/postolio/${environment}/scheduling/schedules-table-name`,
       stringValue: this.schedulesTable.tableName,
       description: 'Schedules DynamoDB Table Name',
     });
 
     new ssm.StringParameter(this, 'VideoBucketNameParameter', {
-      parameterName: ParameterNames.videoBucketName(environment as Environment),
+      parameterName: `/postolio/${environment}/scheduling/video-bucket-name`,
       stringValue: this.videoBucket.bucketName,
       description: 'Video Processing S3 Bucket Name',
     });
 
     new ssm.StringParameter(this, 'SchedulingEventBusNameParameter', {
-      parameterName: ParameterNames.schedulingEventBusName(environment as Environment),
+      parameterName: `/postolio/${environment}/scheduling/event-bus-name`,
       stringValue: this.eventBus.eventBusName,
       description: 'Scheduling EventBridge Bus Name',
     });
