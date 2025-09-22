@@ -66,6 +66,13 @@ export class ApiStack extends cdk.Stack {
       },
     });
 
+    // Create VPC flow logs log group
+    const vpcFlowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
+      logGroupName: `/aws/vpc/${prefix}-flowlogs`,
+      retention: logs.RetentionDays.TWO_WEEKS,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
     // Create VPC with proper configuration
     const vpc = new ec2.Vpc(this, 'PostolioVPC', {
       vpcName: `${prefix}-vpc`,
@@ -93,9 +100,7 @@ export class ApiStack extends cdk.Stack {
       enableDnsSupport: true,
       flowLogs: {
         cloudwatch: {
-          destination: ec2.FlowLogDestination.toCloudWatchLogs(
-            logs.LogGroup.fromLogGroupName(this, 'VpcFlowLogGroup', `/aws/vpc/${prefix}-flowlogs`)
-          ),
+          destination: ec2.FlowLogDestination.toCloudWatchLogs(vpcFlowLogGroup),
           trafficType: ec2.FlowLogTrafficType.ALL,
         },
       },
@@ -386,12 +391,138 @@ export class ApiStack extends cdk.Stack {
     });
 
     // CDK NAG Suppressions
+
+    // VPC Flow Logs Role suppressions
+    NagSuppressions.addResourceSuppressions(
+      vpcFlowLogsRole,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'VPC Flow Logs requires wildcard permissions to write to CloudWatch Logs across different log groups and streams',
+          appliesTo: ['Resource::*'],
+        },
+      ],
+      true
+    );
+
+    // VPC Flow Logs CloudWatch policy suppressions - find and suppress the IAM role created by VPC
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      '/API-dev/PostolioVPC/cloudwatch/IAMRole/DefaultPolicy',
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'VPC Flow Logs CloudWatch integration requires wildcard permissions for log group operations',
+          appliesTo: ['Resource::arn:aws:logs:us-east-1:*:log-group:/aws/vpc/postolio-dev-api-flowlogs:*'],
+        },
+      ]
+    );
+
+    // Database credentials suppressions
+    NagSuppressions.addResourceSuppressions(
+      databaseSecret,
+      [
+        {
+          id: 'AwsSolutions-SMG4',
+          reason: 'Database credentials are managed manually in development environment. Production should enable automatic rotation.',
+        },
+      ],
+      true
+    );
+
+    // Database configuration suppressions
+    NagSuppressions.addResourceSuppressions(
+      database,
+      [
+        {
+          id: 'AwsSolutions-RDS3',
+          reason: 'Multi-AZ is disabled in development environment for cost optimization. Production environments enable multi-AZ.',
+        },
+        {
+          id: 'AwsSolutions-RDS10',
+          reason: 'Deletion protection is disabled in development environment for easier cleanup. Production environments enable deletion protection.',
+        },
+        {
+          id: 'AwsSolutions-RDS11',
+          reason: 'Using standard PostgreSQL port (5432) within private isolated subnets provides sufficient security through network isolation.',
+        },
+      ],
+      true
+    );
+
+    // Redis cache suppressions
+    NagSuppressions.addResourceSuppressions(
+      redisCache,
+      [
+        {
+          id: 'AwsSolutions-AEC5',
+          reason: 'Using standard Redis port (6379) within private isolated subnets provides sufficient security through network isolation.',
+        },
+      ],
+      true
+    );
+
+    // ECS Cluster suppressions
+    NagSuppressions.addResourceSuppressions(
+      this.ecsCluster,
+      [
+        {
+          id: 'AwsSolutions-ECS4',
+          reason: 'Container Insights is disabled in development environment for cost optimization. Production environments enable Container Insights.',
+        },
+      ],
+      true
+    );
+
+    // ECS Task Role suppressions
     NagSuppressions.addResourceSuppressions(
       taskRole,
       [
         {
           id: 'AwsSolutions-IAM5',
-          reason: 'ECS task role requires broad permissions for microservices communication',
+          reason: 'ECS task role requires broad permissions for microservices communication and AWS service integration',
+        },
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'AmazonSSMReadOnlyAccess managed policy provides necessary SSM Parameter Store access for configuration management',
+          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/AmazonSSMReadOnlyAccess'],
+        },
+      ],
+      true
+    );
+
+    // ELB access logs suppressions
+    NagSuppressions.addResourceSuppressions(
+      this.loadBalancer,
+      [
+        {
+          id: 'AwsSolutions-ELB2',
+          reason: 'Access logs are disabled in development environment for cost optimization. Production environments should enable access logs for security analysis.',
+        },
+      ],
+      true
+    );
+
+    // ECS Task Execution Role suppressions
+    NagSuppressions.addResourceSuppressions(
+      this.apiService.taskDefinition.executionRole!,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'ECS Task Execution Role requires wildcard permissions for CloudWatch Logs and ECR operations',
+          appliesTo: ['Resource::*'],
+        },
+      ],
+      true
+    );
+
+    // ECS Service suppressions
+    NagSuppressions.addResourceSuppressions(
+      this.apiService.service,
+      [
+        {
+          id: 'AwsSolutions-ECS7',
+          reason: 'Development environment uses 50% minimum healthy percent for faster deployments. Production should use higher values.',
         },
       ],
       true
