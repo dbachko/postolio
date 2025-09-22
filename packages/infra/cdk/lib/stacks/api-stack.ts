@@ -241,6 +241,9 @@ export class ApiStack extends cdk.Stack {
     });
 
     // Application Load Balanced Fargate Service
+    // Only use HTTPS when both domainName AND hostedZoneId are provided
+    const useHttps = domainName && hostedZoneId;
+
     this.apiService = new ecsPatterns.ApplicationLoadBalancedFargateService(
       this,
       'PostolioService',
@@ -269,12 +272,12 @@ export class ApiStack extends cdk.Stack {
           }),
         },
         publicLoadBalancer: true,
-        domainName: domainName,
-        domainZone: hostedZoneId
-          ? route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId)
+        domainName: useHttps ? domainName : undefined,
+        domainZone: useHttps
+          ? route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId!)
           : undefined,
-        listenerPort: domainName ? 443 : 80,
-        protocol: domainName ? elbv2.ApplicationProtocol.HTTPS : elbv2.ApplicationProtocol.HTTP,
+        listenerPort: useHttps ? 443 : 80,
+        protocol: useHttps ? elbv2.ApplicationProtocol.HTTPS : elbv2.ApplicationProtocol.HTTP,
         platformVersion: ecs.FargatePlatformVersion.LATEST,
       }
     );
