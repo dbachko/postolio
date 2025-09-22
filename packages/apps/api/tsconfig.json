@@ -2,11 +2,13 @@
   "extends": "@postolio/tsconfig/base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
     "lib": ["ESNext"],
     "module": "ESNext",
-    "moduleResolution": "bundler",
-    "downlevelIteration": true
+    "moduleResolution": "node",
+    "downlevelIteration": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test"]

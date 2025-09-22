@@ -153,4 +153,4 @@ export async function getDatabaseMetrics(): Promise<{
 }
 
 // Export the client instance for backward compatibility
-export const prisma = getDatabaseClient();
+export const prisma: PrismaClient = getDatabaseClient();
