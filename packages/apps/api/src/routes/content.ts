@@ -348,12 +348,15 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
         const { contentId, scheduledAt } = request.body;
 
-        // Verify user owns the content through brand ownership
+        // Verify user owns the content through brand ownership and get campaign info
         const content = await prisma.content.findFirst({
           where: { id: contentId },
           include: {
             brand: {
               select: { userId: true },
+            },
+            campaign: {
+              select: { id: true, status: true },
             },
           },
         });
@@ -383,23 +386,30 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
-        // If scheduledAt is provided, create a schedule in AWS
-        if (scheduledAt) {
-          try {
-            // Don't pass customTime - let scheduler-adapter read scheduledAt from database
-            // This avoids timezone conversion issues since DB stores UTC
-            const scheduleResult = await schedulerService.scheduleContent(contentId);
+        // Check if content belongs to a campaign in preview (draft) state
+        const isInDraftCampaign = content.campaign && content.campaign.status === 'preview';
 
-            if (!scheduleResult.success) {
-              console.error('Failed to create AWS schedule:', scheduleResult.error);
-              // Note: We don't fail the request here as the content is already scheduled locally
-              // The scheduler adapter has fallback logic
-            } else {
-              console.log(`Content ${contentId} scheduled successfully in AWS`);
+        // If scheduledAt is provided, create a schedule in AWS (unless in draft campaign)
+        if (scheduledAt) {
+          if (isInDraftCampaign) {
+            console.log(`Content ${contentId} belongs to campaign ${content.campaign?.id} in preview state - updating database only, not scheduling in AWS`);
+          } else {
+            try {
+              // Don't pass customTime - let scheduler-adapter read scheduledAt from database
+              // This avoids timezone conversion issues since DB stores UTC
+              const scheduleResult = await schedulerService.scheduleContent(contentId);
+
+              if (!scheduleResult.success) {
+                console.error('Failed to create AWS schedule:', scheduleResult.error);
+                // Note: We don't fail the request here as the content is already scheduled locally
+                // The scheduler adapter has fallback logic
+              } else {
+                console.log(`Content ${contentId} scheduled successfully in AWS`);
+              }
+            } catch (scheduleError) {
+              console.error('Error calling scheduler service:', scheduleError);
+              // Continue with local scheduling
             }
-          } catch (scheduleError) {
-            console.error('Error calling scheduler service:', scheduleError);
-            // Continue with local scheduling
           }
         }
 
@@ -467,12 +477,15 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
         const { contentId, caption, hashtags, cdnImageUrl, scheduledAt } = request.body;
 
-        // Verify user owns the content through brand ownership
+        // Verify user owns the content through brand ownership and get campaign info
         const content = await prisma.content.findFirst({
           where: { id: contentId },
           include: {
             brand: {
               select: { userId: true, id: true },
+            },
+            campaign: {
+              select: { id: true, status: true },
             },
           },
         });
@@ -562,13 +575,23 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           })
         );
 
+        // Check if content belongs to a campaign in preview (draft) state
+        // If so, only update local database, don't schedule in AWS until campaign is started
+        const isInDraftCampaign = content.campaign && content.campaign.status === 'preview';
+
+        if (isInDraftCampaign && scheduledAt !== undefined) {
+          console.log(`Content ${contentId} belongs to campaign ${content.campaign?.id} in preview state - updating database only, not scheduling in AWS`);
+        }
+
         // Handle AWS scheduling operations FIRST before updating local DB
         // This prevents race conditions where local DB has new time but AWS doesn't
         const originalScheduledTime = content.scheduledAt?.toISOString();
         const newScheduledTime = updateData.scheduledAt?.toISOString();
 
         // Check if this is a reschedule operation (time changed)
+        // Skip AWS operations if content belongs to a draft campaign
         if (
+          !isInDraftCampaign &&
           originalScheduledTime &&
           newScheduledTime &&
           originalScheduledTime !== newScheduledTime
@@ -647,7 +670,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         );
 
         // Handle scheduling changes with AWS ContentScheduler
-        if (scheduledAt !== undefined) {
+        // Skip AWS operations if content belongs to a draft campaign
+        if (scheduledAt !== undefined && !isInDraftCampaign) {
           const originalScheduledTime = content.scheduledAt?.toISOString();
           const newScheduledTime = updatedContent.scheduledAt?.toISOString();
 
@@ -682,6 +706,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           }
           // Note: Reschedule logic moved earlier in the flow to prevent race conditions
           // AWS operations now happen BEFORE local DB updates
+        } else if (scheduledAt !== undefined && isInDraftCampaign) {
+          console.log(`Skipping AWS scheduling operations for content ${contentId} - belongs to draft campaign ${content.campaign?.id}`);
         }
 
         // Apply AI learning if there were changes
