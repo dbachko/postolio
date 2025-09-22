@@ -11,12 +11,14 @@ export interface OAuthConfig {
   instagramAppId?: string;
   linkedinClientId?: string;
   tiktokClientKey?: string;
+  googleClientId?: string;
 
   // OAuth Secrets (from GitHub Secrets)
   facebookAppSecret?: string;
   instagramAppSecret?: string;
   linkedinClientSecret?: string;
   tiktokClientSecret?: string;
+  googleClientSecret?: string;
 }
 
 /**
@@ -31,6 +33,7 @@ export function getOAuthConfig(app: cdk.App): OAuthConfig {
     instagramAppId: app.node.tryGetContext('instagramAppId') || process.env.INSTAGRAM_APP_ID,
     linkedinClientId: app.node.tryGetContext('linkedinClientId') || process.env.LINKEDIN_CLIENT_ID,
     tiktokClientKey: app.node.tryGetContext('tiktokClientKey') || process.env.TIKTOK_CLIENT_KEY,
+    googleClientId: app.node.tryGetContext('googleClientId') || process.env.GOOGLE_CLIENT_ID,
 
     // OAuth Secrets (from GitHub Secrets via CDK context)
     facebookAppSecret:
@@ -41,6 +44,8 @@ export function getOAuthConfig(app: cdk.App): OAuthConfig {
       app.node.tryGetContext('linkedinClientSecret') || process.env.LINKEDIN_CLIENT_SECRET,
     tiktokClientSecret:
       app.node.tryGetContext('tiktokClientSecret') || process.env.TIKTOK_CLIENT_SECRET,
+    googleClientSecret:
+      app.node.tryGetContext('googleClientSecret') || process.env.GOOGLE_CLIENT_SECRET,
   };
 }
 
@@ -56,6 +61,7 @@ export function getOAuthEnvironmentVariables(config: OAuthConfig): Record<string
     INSTAGRAM_APP_ID: config.instagramAppId || '',
     LINKEDIN_CLIENT_ID: config.linkedinClientId || '',
     TIKTOK_CLIENT_KEY: config.tiktokClientKey || '',
+    GOOGLE_CLIENT_ID: config.googleClientId || '',
 
     // OAuth Secrets (only if provided)
     ...(config.facebookAppSecret && {
@@ -69,6 +75,9 @@ export function getOAuthEnvironmentVariables(config: OAuthConfig): Record<string
     }),
     ...(config.tiktokClientSecret && {
       TIKTOK_CLIENT_SECRET: config.tiktokClientSecret,
+    }),
+    ...(config.googleClientSecret && {
+      GOOGLE_CLIENT_SECRET: config.googleClientSecret,
     }),
   };
 }

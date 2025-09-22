@@ -22,16 +22,16 @@ import {
   BatchGetCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { CloudWatchClient, PutMetricDataCommand, MetricDatum } from '@aws-sdk/client-cloudwatch';
-import { TracingService } from '@postolio/aws';
-import { EventBusService } from '@postolio/aws';
+// import { TracingService } from '@postolio/aws'; // Temporarily disabled - service not implemented
+// import { EventBusService } from '@postolio/aws'; // Temporarily disabled - service not implemented
 
 const sqsClient = new SQSClient({});
 const snsClient = new SNSClient({});
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const cloudWatchClient = new CloudWatchClient({});
-const tracingService = new TracingService();
-const eventBus = EventBusService.getInstance();
+// const tracingService = new TracingService(); // Temporarily disabled
+// const eventBus = EventBusService.getInstance(); // Temporarily disabled
 
 const DLQ_STATE_TABLE = process.env.DLQ_STATE_TABLE_NAME || 'dlq-processing-state';
 const ALERT_TOPIC_ARN = process.env.DLQ_ALERT_TOPIC_ARN;
@@ -100,49 +100,47 @@ export class DLQProcessor {
     const dlqName = this.extractQueueName(dlqUrl);
     const results: ProcessingResult[] = [];
 
-    return await tracingService.traceOperation(
-      'DLQ.process',
-      async () => {
-        // Check if already processing this queue
-        if (this.processingQueues.get(dlqName)) {
-          console.log(`Already processing DLQ: ${dlqName}`);
-          return [];
+    // Temporarily removed tracing - direct execution
+    console.log('Processing DLQ:', dlqName);
+    return await (async () => {
+      // Check if already processing this queue
+      if (this.processingQueues.get(dlqName)) {
+        console.log(`Already processing DLQ: ${dlqName}`);
+        return [];
+      }
+
+      this.processingQueues.set(dlqName, true);
+
+      try {
+        // Receive messages from DLQ
+        const messages = await this.receiveMessages(dlqUrl);
+
+        // Batch load all message states for performance
+        const messageIds = messages.map((msg) => msg.MessageId || '');
+        const messageStates = await this.batchLoadMessageStates(messageIds.filter((id) => id));
+
+        for (const message of messages) {
+          const result = await this.processMessage(
+            message,
+            dlqName,
+            originalQueueUrl,
+            processorFn,
+            messageStates
+          );
+          results.push(result);
+
+          // Update metrics
+          await this.updateMetrics(dlqName, result);
         }
 
-        this.processingQueues.set(dlqName, true);
+        // Check for critical thresholds
+        await this.checkThresholds(dlqName);
 
-        try {
-          // Receive messages from DLQ
-          const messages = await this.receiveMessages(dlqUrl);
-
-          // Batch load all message states for performance
-          const messageIds = messages.map((msg) => msg.MessageId || '');
-          const messageStates = await this.batchLoadMessageStates(messageIds.filter((id) => id));
-
-          for (const message of messages) {
-            const result = await this.processMessage(
-              message,
-              dlqName,
-              originalQueueUrl,
-              processorFn,
-              messageStates
-            );
-            results.push(result);
-
-            // Update metrics
-            await this.updateMetrics(dlqName, result);
-          }
-
-          // Check for critical thresholds
-          await this.checkThresholds(dlqName);
-
-          return results;
-        } finally {
-          this.processingQueues.delete(dlqName);
-        }
-      },
-      { dlqName, messageCount: results.length }
-    );
+        return results;
+      } finally {
+        this.processingQueues.delete(dlqName);
+      }
+    })(); // End of async IIFE
   }
 
   /**
@@ -285,21 +283,13 @@ export class DLQProcessor {
       await this.deleteMessage(message.dlqName, message.receiptHandle);
     }
 
-    // Publish event
-    await eventBus.publish(
-      'dlq.message.parked',
-      {
-        messageId: message.messageId,
-        dlqName: message.dlqName,
-        reason: reason || 'Max retries exceeded',
-        retryCount: message.retryCount,
-      },
-      {
-        correlationId: message.messageId,
-        userId: 'system',
-        brandId: 'system',
-      }
-    );
+    // Publish event - temporarily disabled until EventBusService is implemented
+    console.log('DLQ message parked:', {
+      messageId: message.messageId,
+      dlqName: message.dlqName,
+      reason: reason || 'Max retries exceeded',
+      retryCount: message.retryCount,
+    });
 
     return {
       success: false,

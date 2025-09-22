@@ -14,12 +14,7 @@
     "diff": "cdk diff",
     "synth": "cdk synth",
     "postinstall": "npm run prepare:layers",
-    "prepare:layers": "cd lib/layers/powertools/nodejs && npm install && cd -",
-    "deploy:scheduler:dev": "npm run prepare:layers && cdk deploy ContentScheduler-dev -c environment=dev --app 'npx ts-node --prefer-ts-exts bin/scheduler-app.ts' --require-approval never",
-    "deploy:scheduler:staging": "npm run prepare:layers && cdk deploy ContentScheduler-staging -c environment=staging --app 'npx ts-node --prefer-ts-exts bin/scheduler-app.ts' --require-approval never",
-    "deploy:scheduler:prod": "npm run prepare:layers && cdk deploy ContentScheduler-prod -c environment=prod --app 'npx ts-node --prefer-ts-exts bin/scheduler-app.ts' --require-approval broadening",
-    "synth:scheduler": "npm run prepare:layers && cdk synth ContentScheduler-* -c environment=dev --app 'npx ts-node --prefer-ts-exts bin/scheduler-app.ts'",
-    "diff:scheduler": "npm run prepare:layers && cdk diff ContentScheduler-dev -c environment=dev --app 'npx ts-node --prefer-ts-exts bin/scheduler-app.ts'"
+    "prepare:layers": "cd lib/layers/powertools/nodejs && npm install && cd -"
   },
   "devDependencies": {
     "@aws-lambda-powertools/logger": "^2.25.1",
