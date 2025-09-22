@@ -121,20 +121,17 @@ const webStack = new WebStack(app, `Web-${environment}`, {
   },
 });
 
-// Stack Dependencies
-// Auth stack needs foundation for ECR
+// Stack Dependencies - Optimized for parallel deployment
+// Foundation is the base dependency for all stacks
 authStack.addDependency(foundationStack);
-// Scheduling stack can reference auth stack for token services
+apiStack.addDependency(foundationStack);
+
+// Microservice dependencies (can run in parallel with API)
 schedulingStack.addDependency(authStack);
-// Publishing stack needs auth for tokens and scheduling for coordination
 publishingStack.addDependency(authStack);
 publishingStack.addDependency(schedulingStack);
-// API stack needs foundation and all microservices to be deployed
-apiStack.addDependency(foundationStack);
-apiStack.addDependency(authStack);
-apiStack.addDependency(schedulingStack);
-apiStack.addDependency(publishingStack);
-// Web stack needs API to be deployed (for API URLs)
+
+// Web needs API for the load balancer URL (for CloudFront API proxy)
 webStack.addDependency(apiStack);
 
 // Apply CDK Nag security checks
