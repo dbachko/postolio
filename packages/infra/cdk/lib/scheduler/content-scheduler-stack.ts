@@ -318,6 +318,21 @@ export class ContentSchedulerStack extends cdk.Stack {
       visibilityTimeout: cdk.Duration.seconds(360),
     });
 
+    // Enforce TLS for all queue access to satisfy security controls
+    campaignEventDLQ.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        actions: ['sqs:*'],
+        principals: [new iam.AnyPrincipal()],
+        resources: [campaignEventDLQ.queueArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
     // ==================== Lambda Layer for Powertools ====================
 
     const powertoolsLayer = new lambda.LayerVersion(this, 'PowertoolsLayer', {
@@ -1187,6 +1202,18 @@ export class ContentSchedulerStack extends cdk.Stack {
         reason: 'Dead letter queue is only accessed by Lambda functions within VPC using IAM roles',
       },
     ]);
+    NagSuppressions.addResourceSuppressions(campaignEventDLQ, [
+      {
+        id: 'AwsSolutions-SQS3',
+        reason:
+          'Queue is intentionally used as a dead-letter queue, so it cannot configure another DLQ.',
+      },
+      {
+        id: 'AwsSolutions-SQS4',
+        reason:
+          'TLS enforcement is handled through an explicit queue policy denying non-secure transport.',
+      },
+    ]);
 
     // Suppress X-Ray permissions specifically
     NagSuppressions.addResourceSuppressionsByPath(
@@ -1204,6 +1231,8 @@ export class ContentSchedulerStack extends cdk.Stack {
             'Action::ec2:DeleteNetworkInterface',
             'Action::ec2:AttachNetworkInterface',
             'Action::ec2:DetachNetworkInterface',
+            'Action::kms:GenerateDataKey*',
+            'Action::kms:ReEncrypt*',
             `Resource::arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/postolio-${environment}-*`,
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/services/*`,
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/vpc/*`,
