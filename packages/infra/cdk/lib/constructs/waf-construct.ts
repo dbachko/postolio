@@ -4,6 +4,7 @@ import { Construct } from 'constructs';
 
 export interface WAFConstructProps {
   environment: 'dev' | 'staging' | 'prod';
+  resourceArn?: string;
   rateLimitPerMinute?: number;
 }
 

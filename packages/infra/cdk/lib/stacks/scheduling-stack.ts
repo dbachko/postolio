@@ -160,7 +160,7 @@ export class SchedulingStack extends cdk.Stack {
     const deadLetterQueue = new sqs.Queue(this, 'SchedulingDLQ', {
       queueName: `${prefix}-dlq`,
       encryption: sqs.QueueEncryption.KMS_MANAGED,
-      messageRetentionPeriod: cdk.Duration.days(14),
+      retentionPeriod: cdk.Duration.days(14),
     });
 
     const scheduleProcessingQueue = new sqs.Queue(this, 'ScheduleProcessingQueue', {

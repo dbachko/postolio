@@ -89,7 +89,7 @@ export class PublishingStack extends cdk.Stack {
     this.deadLetterQueue = new sqs.Queue(this, 'PublishingDLQ', {
       queueName: `${prefix}-dlq`,
       encryption: sqs.QueueEncryption.KMS_MANAGED,
-      messageRetentionPeriod: cdk.Duration.days(14),
+      retentionPeriod: cdk.Duration.days(14),
       visibilityTimeout: cdk.Duration.minutes(15),
     });
 
@@ -97,7 +97,7 @@ export class PublishingStack extends cdk.Stack {
     const campaignDLQ = new sqs.Queue(this, 'CampaignEventDLQ', {
       queueName: `${prefix}-campaign-dlq`,
       encryption: sqs.QueueEncryption.KMS_MANAGED,
-      messageRetentionPeriod: cdk.Duration.days(14),
+      retentionPeriod: cdk.Duration.days(14),
       visibilityTimeout: cdk.Duration.minutes(15),
     });
 
@@ -106,7 +106,7 @@ export class PublishingStack extends cdk.Stack {
       queueName: `${prefix}-retry`,
       encryption: sqs.QueueEncryption.KMS_MANAGED,
       visibilityTimeout: cdk.Duration.minutes(5),
-      messageRetentionPeriod: cdk.Duration.hours(12),
+      retentionPeriod: cdk.Duration.hours(12),
       deadLetterQueue: {
         queue: this.deadLetterQueue,
         maxReceiveCount: 3,
@@ -118,7 +118,7 @@ export class PublishingStack extends cdk.Stack {
       queueName: `${prefix}-main`,
       encryption: sqs.QueueEncryption.KMS_MANAGED,
       visibilityTimeout: cdk.Duration.minutes(10),
-      messageRetentionPeriod: cdk.Duration.hours(6),
+      retentionPeriod: cdk.Duration.hours(6),
       deadLetterQueue: {
         queue: this.retryQueue,
         maxReceiveCount: 2,

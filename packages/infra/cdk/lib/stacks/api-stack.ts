@@ -24,7 +24,7 @@ import { Construct } from 'constructs';
 import { WAFConstruct } from '../constructs/waf-construct';
 
 export interface ApiStackProps extends cdk.StackProps {
-  environment: string;
+  environment: 'dev' | 'staging' | 'prod';
   domainName?: string;
   hostedZoneId?: string;
   useExternalDns?: boolean;

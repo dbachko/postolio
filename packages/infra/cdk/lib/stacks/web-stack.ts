@@ -153,10 +153,11 @@ export class WebStack extends cdk.Stack {
         validation: acm.CertificateValidation.fromDns(hostedZone),
       });
 
-      distributionProps.domainNames = [domainName, `www.${domainName}`];
-      distributionProps.certificate = certificate;
-
-      this.distribution = new cloudfront.Distribution(this, 'Distribution', distributionProps);
+      this.distribution = new cloudfront.Distribution(this, 'Distribution', {
+        ...distributionProps,
+        domainNames: [domainName, `www.${domainName}`],
+        certificate: certificate,
+      });
 
       // Create Route53 records
       new route53.ARecord(this, 'AliasRecord', {

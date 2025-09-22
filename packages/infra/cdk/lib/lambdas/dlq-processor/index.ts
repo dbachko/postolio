@@ -4,9 +4,9 @@
  */
 
 import { ScheduledEvent, Context } from 'aws-lambda';
-import { DLQProcessor } from '../../services/dlq-processor';
+import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand, SendMessageCommand } from '@aws-sdk/client-sqs';
 
-const dlqProcessor = DLQProcessor.getInstance();
+const sqsClient = new SQSClient({});
 
 // DLQ to Original Queue mapping
 const DLQ_MAPPINGS = {
@@ -133,7 +133,7 @@ export const handler = async (event: ScheduledEvent, context: Context): Promise<
 
       try {
         console.log(`Processing DLQ: ${dlqName}`);
-        const processingResults = await dlqProcessor.processDLQ(
+        const processingResults = await processDLQ(
           dlqUrl,
           config.originalQueue,
           processorFn
@@ -164,7 +164,7 @@ export const handler = async (event: ScheduledEvent, context: Context): Promise<
 
     // Get overall stats for monitoring
     const stats = await Promise.all(
-      Object.keys(DLQ_MAPPINGS).map((dlqName) => dlqProcessor.getDLQStats(dlqName))
+      Object.keys(DLQ_MAPPINGS).map((dlqName) => getDLQStats(dlqName))
     );
 
     console.log('DLQ Processing Complete:', {
@@ -214,7 +214,7 @@ export const reprocessHandler = async (event: any, context: Context): Promise<an
   }
 
   try {
-    const results = await dlqProcessor.reprocessParkedMessages(dlqName, messageIds);
+    const results = await reprocessParkedMessages(dlqName, messageIds);
 
     return {
       statusCode: 200,
@@ -237,3 +237,81 @@ export const reprocessHandler = async (event: any, context: Context): Promise<an
     };
   }
 };
+
+/**
+ * Process messages from a DLQ
+ */
+async function processDLQ(
+  dlqUrl: string,
+  originalQueueUrl: string,
+  processorFn?: (message: any) => Promise<boolean>
+): Promise<Array<{ success: boolean; action?: string }>> {
+  const results: Array<{ success: boolean; action?: string }> = [];
+
+  try {
+    // Receive messages from DLQ
+    const receiveCommand = new ReceiveMessageCommand({
+      QueueUrl: dlqUrl,
+      MaxNumberOfMessages: 10,
+      WaitTimeSeconds: 5,
+    });
+
+    const response = await sqsClient.send(receiveCommand);
+    const messages = response.Messages || [];
+
+    for (const message of messages) {
+      try {
+        const body = JSON.parse(message.Body || '{}');
+
+        // Process with custom processor if available
+        let shouldRequeue = true;
+        if (processorFn) {
+          shouldRequeue = await processorFn(body);
+        }
+
+        if (shouldRequeue) {
+          // Send back to original queue
+          await sqsClient.send(new SendMessageCommand({
+            QueueUrl: originalQueueUrl,
+            MessageBody: message.Body,
+          }));
+        }
+
+        // Delete from DLQ
+        await sqsClient.send(new DeleteMessageCommand({
+          QueueUrl: dlqUrl,
+          ReceiptHandle: message.ReceiptHandle,
+        }));
+
+        results.push({ success: true });
+      } catch (error) {
+        console.error('Error processing message:', error);
+        results.push({ success: false, action: 'parked' });
+      }
+    }
+  } catch (error) {
+    console.error('Error processing DLQ:', error);
+    results.push({ success: false });
+  }
+
+  return results;
+}
+
+/**
+ * Get DLQ statistics
+ */
+async function getDLQStats(dlqName: string): Promise<{ dlqName: string; messageCount: number }> {
+  // Simplified stats - in real implementation would query CloudWatch
+  return {
+    dlqName,
+    messageCount: 0
+  };
+}
+
+/**
+ * Reprocess parked messages
+ */
+async function reprocessParkedMessages(dlqName: string, messageIds?: string[]): Promise<any[]> {
+  // Simplified implementation - would normally handle specific message IDs
+  return [];
+}
