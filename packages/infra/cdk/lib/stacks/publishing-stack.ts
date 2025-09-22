@@ -93,6 +93,22 @@ export class PublishingStack extends cdk.Stack {
       visibilityTimeout: cdk.Duration.minutes(15),
     });
 
+    // Add SSL requirement policy to PublishingDLQ
+    this.deadLetterQueue.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sqs:*'],
+        resources: [this.deadLetterQueue.queueArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
     // Campaign-specific dead letter queue
     const campaignDLQ = new sqs.Queue(this, 'CampaignEventDLQ', {
       queueName: `${prefix}-campaign-dlq`,
@@ -100,6 +116,22 @@ export class PublishingStack extends cdk.Stack {
       retentionPeriod: cdk.Duration.days(14),
       visibilityTimeout: cdk.Duration.minutes(15),
     });
+
+    // Add SSL requirement policy to CampaignEventDLQ
+    campaignDLQ.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sqs:*'],
+        resources: [campaignDLQ.queueArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
 
     // Retry queue for failed publishing attempts
     this.retryQueue = new sqs.Queue(this, 'RetryQueue', {
@@ -113,6 +145,22 @@ export class PublishingStack extends cdk.Stack {
       },
     });
 
+    // Add SSL requirement policy to RetryQueue
+    this.retryQueue.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sqs:*'],
+        resources: [this.retryQueue.queueArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
     // Main publishing queue
     this.publishingQueue = new sqs.Queue(this, 'PublishingQueue', {
       queueName: `${prefix}-main`,
@@ -125,6 +173,22 @@ export class PublishingStack extends cdk.Stack {
       },
     });
 
+    // Add SSL requirement policy to PublishingQueue
+    this.publishingQueue.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sqs:*'],
+        resources: [this.publishingQueue.queueArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
     // ==================== EventBridge Custom Bus ====================
     const publishingEventBus = new events.EventBus(this, 'PublishingEventBus', {
       eventBusName: `${prefix}-events`,
@@ -135,6 +199,22 @@ export class PublishingStack extends cdk.Stack {
       topicName: `${prefix}-alerts`,
       displayName: `Publishing Stack Alerts - ${environment}`,
     });
+
+    // Add SSL requirement policy to SNS topic
+    alertTopic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sns:Publish'],
+        resources: [alertTopic.topicArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
 
     if (alertEmail) {
       alertTopic.addSubscription(new snsSubscriptions.EmailSubscription(alertEmail));
@@ -496,13 +576,43 @@ export class PublishingStack extends cdk.Stack {
           reason:
             'Lambda execution role requires broad permissions for SQS and EventBridge operations',
         },
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'AWS managed policies for Lambda execution are standard and secure',
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+          ],
+        },
       ],
       true
     );
 
+    // Suppress CampaignEventDLQ not having a DLQ (it IS a DLQ itself)
+    NagSuppressions.addResourceSuppressions(
+      campaignDLQ,
+      [
+        {
+          id: 'AwsSolutions-SQS3',
+          reason: 'This queue IS a dead letter queue for campaign events - it does not need its own DLQ',
+        },
+      ]
+    );
+
+    // Suppress log retention function IAM issues (created automatically by CDK)
     NagSuppressions.addResourceSuppressions(
       this,
       [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'Log retention function uses AWS managed policy - standard CDK behavior',
+          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+        },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Log retention function requires wildcard permissions - standard CDK behavior',
+          appliesTo: ['Resource::*'],
+        },
         {
           id: 'AwsSolutions-L1',
           reason: 'Using latest stable Node.js runtime for Lambda functions',
