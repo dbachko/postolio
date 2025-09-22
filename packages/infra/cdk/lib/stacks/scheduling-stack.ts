@@ -132,10 +132,46 @@ export class SchedulingStack extends cdk.Stack {
     });
 
     // ==================== S3 Bucket for Video Processing ====================
+    // Create server access logging bucket
+    const logBucket = new s3.Bucket(this, 'VideoBucketAccessLogs', {
+      bucketName: `${prefix}-videos-logs`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      lifecycleRules: [
+        {
+          id: 'delete-old-logs',
+          expiration: cdk.Duration.days(90),
+        },
+      ],
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add bucket policy to require SSL for log bucket
+    logBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:*'],
+        resources: [
+          logBucket.bucketArn,
+          `${logBucket.bucketArn}/*`,
+        ],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
     this.videoBucket = new s3.Bucket(this, 'VideoBucket', {
       bucketName: `${prefix}-videos`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: false,
+      serverAccessLogsBucket: logBucket,
+      serverAccessLogsPrefix: 'access-logs/',
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       lifecycleRules: [
         {
           id: 'temp-uploads-cleanup',
@@ -151,6 +187,25 @@ export class SchedulingStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
+    // Add bucket policy to require SSL
+    this.videoBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:*'],
+        resources: [
+          this.videoBucket.bucketArn,
+          `${this.videoBucket.bucketArn}/*`,
+        ],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
     // ==================== EventBridge Custom Bus ====================
     this.eventBus = new events.EventBus(this, 'SchedulingEventBus', {
       eventBusName: `${prefix}-events`,
@@ -163,6 +218,22 @@ export class SchedulingStack extends cdk.Stack {
       retentionPeriod: cdk.Duration.days(14),
     });
 
+    // Add queue policy to require SSL for DLQ
+    deadLetterQueue.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sqs:*'],
+        resources: [deadLetterQueue.queueArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
     const scheduleProcessingQueue = new sqs.Queue(this, 'ScheduleProcessingQueue', {
       queueName: `${prefix}-processing`,
       encryption: sqs.QueueEncryption.KMS_MANAGED,
@@ -173,11 +244,43 @@ export class SchedulingStack extends cdk.Stack {
       },
     });
 
+    // Add queue policy to require SSL for processing queue
+    scheduleProcessingQueue.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sqs:*'],
+        resources: [scheduleProcessingQueue.queueArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
     // ==================== SNS Topic for Alerts ====================
     const alertTopic = new sns.Topic(this, 'SchedulingAlertTopic', {
       topicName: `${prefix}-alerts`,
       displayName: `Scheduling Stack Alerts - ${environment}`,
     });
+
+    // Add topic policy to require SSL
+    alertTopic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sns:Publish'],
+        resources: [alertTopic.topicArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
 
     if (alertEmail) {
       alertTopic.addSubscription(new snsSubscriptions.EmailSubscription(alertEmail));
@@ -458,13 +561,45 @@ export class SchedulingStack extends cdk.Stack {
           id: 'AwsSolutions-IAM5',
           reason: 'Lambda execution role requires broad permissions for DynamoDB and S3 operations',
         },
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'AWS managed policies for Lambda execution are standard and secure',
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+          ],
+        },
       ],
       true
     );
 
+    // Suppress DynamoDB PITR requirement for non-prod environments
+    if (environment !== 'prod') {
+      NagSuppressions.addResourceSuppressions(
+        this.schedulesTable,
+        [
+          {
+            id: 'AwsSolutions-DDB3',
+            reason: 'Point-in-time recovery is only enabled for production to reduce costs',
+          },
+        ]
+      );
+    }
+
+    // Suppress log retention function IAM issues (created automatically by CDK)
     NagSuppressions.addResourceSuppressions(
       this,
       [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'Log retention function uses AWS managed policy - standard CDK behavior',
+          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+        },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Log retention function requires wildcard permissions - standard CDK behavior',
+          appliesTo: ['Resource::*'],
+        },
         {
           id: 'AwsSolutions-L1',
           reason: 'Using latest stable Node.js runtime for Lambda functions',
