@@ -103,44 +103,44 @@ export class DLQProcessor {
     // Temporarily removed tracing - direct execution
     console.log('Processing DLQ:', dlqName);
     return await (async () => {
-        // Check if already processing this queue
-        if (this.processingQueues.get(dlqName)) {
-          console.log(`Already processing DLQ: ${dlqName}`);
-          return [];
+      // Check if already processing this queue
+      if (this.processingQueues.get(dlqName)) {
+        console.log(`Already processing DLQ: ${dlqName}`);
+        return [];
+      }
+
+      this.processingQueues.set(dlqName, true);
+
+      try {
+        // Receive messages from DLQ
+        const messages = await this.receiveMessages(dlqUrl);
+
+        // Batch load all message states for performance
+        const messageIds = messages.map((msg) => msg.MessageId || '');
+        const messageStates = await this.batchLoadMessageStates(messageIds.filter((id) => id));
+
+        for (const message of messages) {
+          const result = await this.processMessage(
+            message,
+            dlqName,
+            originalQueueUrl,
+            processorFn,
+            messageStates
+          );
+          results.push(result);
+
+          // Update metrics
+          await this.updateMetrics(dlqName, result);
         }
 
-        this.processingQueues.set(dlqName, true);
+        // Check for critical thresholds
+        await this.checkThresholds(dlqName);
 
-        try {
-          // Receive messages from DLQ
-          const messages = await this.receiveMessages(dlqUrl);
-
-          // Batch load all message states for performance
-          const messageIds = messages.map((msg) => msg.MessageId || '');
-          const messageStates = await this.batchLoadMessageStates(messageIds.filter((id) => id));
-
-          for (const message of messages) {
-            const result = await this.processMessage(
-              message,
-              dlqName,
-              originalQueueUrl,
-              processorFn,
-              messageStates
-            );
-            results.push(result);
-
-            // Update metrics
-            await this.updateMetrics(dlqName, result);
-          }
-
-          // Check for critical thresholds
-          await this.checkThresholds(dlqName);
-
-          return results;
-        } finally {
-          this.processingQueues.delete(dlqName);
-        }
-      })(); // End of async IIFE
+        return results;
+      } finally {
+        this.processingQueues.delete(dlqName);
+      }
+    })(); // End of async IIFE
   }
 
   /**

@@ -25,14 +25,14 @@ This document outlines the optimization of Postolio's deployment architecture fr
 
 ### New Logical Stack Organization
 
-| Stack | Services | Purpose |
-|-------|----------|---------|
-| **Foundation** | ECR Registry, Shared Infrastructure | Base infrastructure for all services |
-| **Auth** | token-service | Authentication and OAuth token management |
-| **Scheduling** | schedule-management, schedule-cleanup, status-sync | Content scheduling and lifecycle |
-| **Publishing** | publisher, retry-handler, dlq-processor, campaign-event-dlq-processor | Content publishing and error handling |
-| **API** | Backend API (ECS) | Main application backend |
-| **Web** | Frontend (React) | User interface |
+| Stack          | Services                                                              | Purpose                                   |
+| -------------- | --------------------------------------------------------------------- | ----------------------------------------- |
+| **Foundation** | ECR Registry, Shared Infrastructure                                   | Base infrastructure for all services      |
+| **Auth**       | token-service                                                         | Authentication and OAuth token management |
+| **Scheduling** | schedule-management, schedule-cleanup, status-sync                    | Content scheduling and lifecycle          |
+| **Publishing** | publisher, retry-handler, dlq-processor, campaign-event-dlq-processor | Content publishing and error handling     |
+| **API**        | Backend API (ECS)                                                     | Main application backend                  |
+| **Web**        | Frontend (React)                                                      | User interface                            |
 
 ### Key Improvements
 
@@ -64,26 +64,31 @@ Web Stack ← (depends on API)
 ### Service Grouping Logic
 
 #### Auth Stack
+
 - **Services**: token-service
 - **Rationale**: Centralized authentication and OAuth token management
 - **Resources**: DynamoDB, KMS, Lambda Function URL
 
 #### Scheduling Stack
+
 - **Services**: schedule-management, schedule-cleanup, status-sync
 - **Rationale**: All related to content scheduling lifecycle
 - **Resources**: DynamoDB, S3, EventBridge, SQS, Lambda Functions
 
 #### Publishing Stack
+
 - **Services**: publisher, retry-handler, dlq-processor, campaign-event-dlq-processor
 - **Rationale**: Content publishing pipeline and error handling
 - **Resources**: SQS queues, Lambda Functions, EventBridge rules
 
 #### API Stack
+
 - **Services**: Backend API
 - **Rationale**: Main application infrastructure (ECS, database, VPC)
 - **Resources**: ECS Cluster, RDS, Redis, VPC, Load Balancer
 
 #### Web Stack
+
 - **Services**: Frontend
 - **Rationale**: Static asset hosting and CDN
 - **Resources**: S3, CloudFront, Route53
@@ -127,6 +132,7 @@ The new workflow (`deploy.yml`) features:
 ### Phase 1: Preparation (Recommended)
 
 1. **Review the new architecture**:
+
    ```bash
    # Examine the new CDK app structure
    cat packages/infra/cdk/bin/app.ts
@@ -166,6 +172,7 @@ pnpm cdk deploy Web-dev --app "npx tsx bin/app.ts"
 For production environments requiring zero downtime:
 
 1. **Deploy new stacks alongside existing**:
+
    ```bash
    # Deploy new stacks with different names first
    pnpm cdk deploy Auth-dev-v2 --app "npx tsx bin/app.ts"
@@ -177,6 +184,7 @@ For production environments requiring zero downtime:
 ### Phase 3: CI/CD Migration
 
 1. **Update GitHub workflow**:
+
    ```bash
    # Rename workflows
    mv .github/workflows/deploy.yml .github/workflows/deploy-legacy.yml
@@ -191,6 +199,7 @@ For production environments requiring zero downtime:
 ### Phase 4: Cleanup
 
 1. **Remove legacy CDK apps**:
+
    ```bash
    # After confirming new stack works
    rm packages/infra/cdk/bin/platform-microservices.ts
@@ -232,6 +241,7 @@ For production environments requiring zero downtime:
 ### Stack-Level Monitoring
 
 Each stack includes:
+
 - CloudWatch alarms for critical metrics
 - SNS notifications for deployment events
 - Stack-specific dashboards
@@ -325,6 +335,7 @@ pnpm cdk destroy Auth-dev --app "npx tsx bin/app.ts"
 ### Environment Variables
 
 All stacks use consistent environment variable patterns:
+
 - `NODE_ENV`: Environment (dev/staging/prod)
 - `SERVICE_NAME`: Service identifier
 - `ENVIRONMENT`: Deployment environment
@@ -334,6 +345,7 @@ All stacks use consistent environment variable patterns:
 ### SSM Parameters
 
 Stacks communicate via SSM Parameter Store:
+
 - `/postolio/{env}/auth/*`: Auth stack parameters
 - `/postolio/{env}/scheduling/*`: Scheduling stack parameters
 - `/postolio/{env}/publishing/*`: Publishing stack parameters

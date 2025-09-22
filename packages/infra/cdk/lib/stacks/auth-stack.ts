@@ -106,10 +106,7 @@ export class AuthStack extends cdk.Stack {
                 'dynamodb:Query',
                 'dynamodb:Scan',
               ],
-              resources: [
-                this.tokenTable.tableArn,
-                `${this.tokenTable.tableArn}/index/*`,
-              ],
+              resources: [this.tokenTable.tableArn, `${this.tokenTable.tableArn}/index/*`],
             }),
             // KMS permissions
             new iam.PolicyStatement({
@@ -126,10 +123,7 @@ export class AuthStack extends cdk.Stack {
             // SSM permissions for service discovery
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'ssm:GetParameter',
-                'ssm:PutParameter',
-              ],
+              actions: ['ssm:GetParameter', 'ssm:PutParameter'],
               resources: [
                 `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/auth/*`,
               ],

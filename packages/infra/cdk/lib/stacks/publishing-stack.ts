@@ -170,9 +170,7 @@ export class PublishingStack extends cdk.Stack {
             // EventBridge permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'events:PutEvents',
-              ],
+              actions: ['events:PutEvents'],
               resources: [publishingEventBus.eventBusArn],
             }),
             // KMS permissions
@@ -190,10 +188,7 @@ export class PublishingStack extends cdk.Stack {
             // SSM permissions to read auth and scheduling parameters
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'ssm:GetParameter',
-                'ssm:GetParameters',
-              ],
+              actions: ['ssm:GetParameter', 'ssm:GetParameters'],
               resources: [
                 `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
               ],
@@ -201,9 +196,7 @@ export class PublishingStack extends cdk.Stack {
             // SNS permissions for notifications
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'sns:Publish',
-              ],
+              actions: ['sns:Publish'],
               resources: [alertTopic.topicArn],
             }),
           ],
@@ -305,55 +298,70 @@ export class PublishingStack extends cdk.Stack {
     });
 
     // 4. Campaign Event DLQ Processor Function
-    const campaignDLQProcessorFunction = new lambdaNodejs.NodejsFunction(this, 'CampaignDLQProcessorFunction', {
-      functionName: `${prefix}-campaign-dlq-processor`,
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.handler',
-      entry: path.join(__dirname, '../../../../services/campaign-event-dlq-processor/src/index.ts'),
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 512,
-      role: publishingLambdaRole,
-      vpc: vpc,
-      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
-      environment: {
-        NODE_ENV: environment,
-        SERVICE_NAME: 'campaign-event-dlq-processor',
-        ENVIRONMENT: environment,
-        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        // AWS_REGION is automatically provided by Lambda runtime
-        CAMPAIGN_DLQ_URL: campaignDLQ.queueUrl,
-        EVENT_BUS_NAME: publishingEventBus.eventBusName,
-        KMS_KEY_ID: encryptionKey.keyId,
-        ALERT_TOPIC_ARN: alertTopic.topicArn,
-      },
-      logRetention: logs.RetentionDays.TWO_WEEKS,
-      tracing: lambda.Tracing.ACTIVE,
-    });
+    const campaignDLQProcessorFunction = new lambdaNodejs.NodejsFunction(
+      this,
+      'CampaignDLQProcessorFunction',
+      {
+        functionName: `${prefix}-campaign-dlq-processor`,
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: 'index.handler',
+        entry: path.join(
+          __dirname,
+          '../../../../services/campaign-event-dlq-processor/src/index.ts'
+        ),
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 512,
+        role: publishingLambdaRole,
+        vpc: vpc,
+        securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+        environment: {
+          NODE_ENV: environment,
+          SERVICE_NAME: 'campaign-event-dlq-processor',
+          ENVIRONMENT: environment,
+          LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+          // AWS_REGION is automatically provided by Lambda runtime
+          CAMPAIGN_DLQ_URL: campaignDLQ.queueUrl,
+          EVENT_BUS_NAME: publishingEventBus.eventBusName,
+          KMS_KEY_ID: encryptionKey.keyId,
+          ALERT_TOPIC_ARN: alertTopic.topicArn,
+        },
+        logRetention: logs.RetentionDays.TWO_WEEKS,
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
 
     // ==================== Event Sources ====================
     // Connect publisher to main publishing queue
-    publisherFunction.addEventSource(new SqsEventSource(this.publishingQueue, {
-      batchSize: 10,
-      maxBatchingWindow: cdk.Duration.seconds(5),
-    }));
+    publisherFunction.addEventSource(
+      new SqsEventSource(this.publishingQueue, {
+        batchSize: 10,
+        maxBatchingWindow: cdk.Duration.seconds(5),
+      })
+    );
 
     // Connect retry handler to retry queue
-    retryHandlerFunction.addEventSource(new SqsEventSource(this.retryQueue, {
-      batchSize: 5,
-      maxBatchingWindow: cdk.Duration.seconds(10),
-    }));
+    retryHandlerFunction.addEventSource(
+      new SqsEventSource(this.retryQueue, {
+        batchSize: 5,
+        maxBatchingWindow: cdk.Duration.seconds(10),
+      })
+    );
 
     // Connect DLQ processor to dead letter queue
-    dlqProcessorFunction.addEventSource(new SqsEventSource(this.deadLetterQueue, {
-      batchSize: 5,
-      maxBatchingWindow: cdk.Duration.seconds(30),
-    }));
+    dlqProcessorFunction.addEventSource(
+      new SqsEventSource(this.deadLetterQueue, {
+        batchSize: 5,
+        maxBatchingWindow: cdk.Duration.seconds(30),
+      })
+    );
 
     // Connect campaign DLQ processor to campaign dead letter queue
-    campaignDLQProcessorFunction.addEventSource(new SqsEventSource(campaignDLQ, {
-      batchSize: 5,
-      maxBatchingWindow: cdk.Duration.seconds(30),
-    }));
+    campaignDLQProcessorFunction.addEventSource(
+      new SqsEventSource(campaignDLQ, {
+        batchSize: 5,
+        maxBatchingWindow: cdk.Duration.seconds(30),
+      })
+    );
 
     // ==================== EventBridge Rules ====================
     // Scheduled retry processing
@@ -485,7 +493,8 @@ export class PublishingStack extends cdk.Stack {
       [
         {
           id: 'AwsSolutions-IAM5',
-          reason: 'Lambda execution role requires broad permissions for SQS and EventBridge operations',
+          reason:
+            'Lambda execution role requires broad permissions for SQS and EventBridge operations',
         },
       ],
       true

@@ -69,9 +69,10 @@ export class WebStack extends cdk.Stack {
       defaultRootObject: 'index.html',
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
-      priceClass: environment === 'prod'
-        ? cloudfront.PriceClass.PRICE_CLASS_ALL
-        : cloudfront.PriceClass.PRICE_CLASS_100,
+      priceClass:
+        environment === 'prod'
+          ? cloudfront.PriceClass.PRICE_CLASS_ALL
+          : cloudfront.PriceClass.PRICE_CLASS_100,
       enableIpv6: true,
       defaultBehavior: {
         origin: new origins.S3Origin(this.frontendBucket, {
@@ -105,7 +106,10 @@ export class WebStack extends cdk.Stack {
             defaultTtl: cdk.Duration.seconds(0),
             maxTtl: cdk.Duration.seconds(0),
             minTtl: cdk.Duration.seconds(0),
-            headerBehavior: cloudfront.CacheHeaderBehavior.allowList('CloudFront-Is-Mobile-Viewer', 'CloudFront-Is-Tablet-Viewer'),
+            headerBehavior: cloudfront.CacheHeaderBehavior.allowList(
+              'CloudFront-Is-Mobile-Viewer',
+              'CloudFront-Is-Tablet-Viewer'
+            ),
             queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
             cookieBehavior: cloudfront.CacheCookieBehavior.none(),
           }),
@@ -113,10 +117,7 @@ export class WebStack extends cdk.Stack {
         // API proxy behavior (optional - for same-domain API calls)
         '/api/*': {
           origin: new origins.HttpOrigin(
-            ssm.StringParameter.valueForStringParameter(
-              this,
-              `/postolio/${environment}/api/url`
-            )
+            ssm.StringParameter.valueForStringParameter(this, `/postolio/${environment}/api/url`)
           ),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
@@ -137,9 +138,8 @@ export class WebStack extends cdk.Stack {
           ttl: cdk.Duration.minutes(5),
         },
       ],
-      geoRestriction: environment === 'prod'
-        ? undefined
-        : cloudfront.GeoRestriction.denylist('CN', 'RU'), // Block certain countries in non-prod
+      geoRestriction:
+        environment === 'prod' ? undefined : cloudfront.GeoRestriction.denylist('CN', 'RU'), // Block certain countries in non-prod
     };
 
     // Add domain configuration if provided
@@ -163,13 +163,17 @@ export class WebStack extends cdk.Stack {
       new route53.ARecord(this, 'AliasRecord', {
         zone: hostedZone,
         recordName: domainName,
-        target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(this.distribution)),
+        target: route53.RecordTarget.fromAlias(
+          new route53Targets.CloudFrontTarget(this.distribution)
+        ),
       });
 
       new route53.ARecord(this, 'WwwAliasRecord', {
         zone: hostedZone,
         recordName: `www.${domainName}`,
-        target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(this.distribution)),
+        target: route53.RecordTarget.fromAlias(
+          new route53Targets.CloudFrontTarget(this.distribution)
+        ),
       });
     } else {
       this.distribution = new cloudfront.Distribution(this, 'Distribution', distributionProps);
@@ -219,7 +223,9 @@ export class WebStack extends cdk.Stack {
       description: 'CloudFront Distribution Domain Name',
     });
 
-    const webUrl = domainName ? `https://${domainName}` : `https://${this.distribution.distributionDomainName}`;
+    const webUrl = domainName
+      ? `https://${domainName}`
+      : `https://${this.distribution.distributionDomainName}`;
     new ssm.StringParameter(this, 'WebUrlParameter', {
       parameterName: `/postolio/${environment}/web/url`,
       stringValue: webUrl,

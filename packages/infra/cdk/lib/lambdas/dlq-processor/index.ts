@@ -4,7 +4,12 @@
  */
 
 import { ScheduledEvent, Context } from 'aws-lambda';
-import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand, SendMessageCommand } from '@aws-sdk/client-sqs';
+import {
+  SQSClient,
+  ReceiveMessageCommand,
+  DeleteMessageCommand,
+  SendMessageCommand,
+} from '@aws-sdk/client-sqs';
 
 const sqsClient = new SQSClient({});
 
@@ -133,11 +138,7 @@ export const handler = async (event: ScheduledEvent, context: Context): Promise<
 
       try {
         console.log(`Processing DLQ: ${dlqName}`);
-        const processingResults = await processDLQ(
-          dlqUrl,
-          config.originalQueue,
-          processorFn
-        );
+        const processingResults = await processDLQ(dlqUrl, config.originalQueue, processorFn);
 
         // Aggregate results
         for (const result of processingResults) {
@@ -271,17 +272,21 @@ async function processDLQ(
 
         if (shouldRequeue) {
           // Send back to original queue
-          await sqsClient.send(new SendMessageCommand({
-            QueueUrl: originalQueueUrl,
-            MessageBody: message.Body,
-          }));
+          await sqsClient.send(
+            new SendMessageCommand({
+              QueueUrl: originalQueueUrl,
+              MessageBody: message.Body,
+            })
+          );
         }
 
         // Delete from DLQ
-        await sqsClient.send(new DeleteMessageCommand({
-          QueueUrl: dlqUrl,
-          ReceiptHandle: message.ReceiptHandle,
-        }));
+        await sqsClient.send(
+          new DeleteMessageCommand({
+            QueueUrl: dlqUrl,
+            ReceiptHandle: message.ReceiptHandle,
+          })
+        );
 
         results.push({ success: true });
       } catch (error) {
@@ -304,7 +309,7 @@ async function getDLQStats(dlqName: string): Promise<{ dlqName: string; messageC
   // Simplified stats - in real implementation would query CloudWatch
   return {
     dlqName,
-    messageCount: 0
+    messageCount: 0,
   };
 }
 

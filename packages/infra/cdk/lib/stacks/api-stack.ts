@@ -147,9 +147,10 @@ export class ApiStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15,
       }),
-      instanceType: environment === 'prod'
-        ? ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM)
-        : ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType:
+        environment === 'prod'
+          ? ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM)
+          : ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       vpc: vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
@@ -205,19 +206,14 @@ export class ApiStack extends cdk.Stack {
     // ECS Task Role with necessary permissions
     const taskRole = new iam.Role(this, 'EcsTaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMReadOnlyAccess'),
-      ],
+      managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMReadOnlyAccess')],
       inlinePolicies: {
         PostolioTaskPolicy: new iam.PolicyDocument({
           statements: [
             // Secrets Manager permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'secretsmanager:GetSecretValue',
-                'secretsmanager:DescribeSecret',
-              ],
+              actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
               resources: [
                 databaseSecret.secretArn,
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio/${environment}/*`,
@@ -226,11 +222,7 @@ export class ApiStack extends cdk.Stack {
             // SSM Parameter Store permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'ssm:GetParameter',
-                'ssm:GetParameters',
-                'ssm:GetParametersByPath',
-              ],
+              actions: ['ssm:GetParameter', 'ssm:GetParameters', 'ssm:GetParametersByPath'],
               resources: [
                 `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
               ],
@@ -238,9 +230,7 @@ export class ApiStack extends cdk.Stack {
             // Lambda invoke permissions for microservices
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'lambda:InvokeFunction',
-              ],
+              actions: ['lambda:InvokeFunction'],
               resources: [
                 `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
               ],
@@ -251,37 +241,43 @@ export class ApiStack extends cdk.Stack {
     });
 
     // Application Load Balanced Fargate Service
-    this.apiService = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'PostolioService', {
-      serviceName: `${prefix}-service`,
-      cluster: this.ecsCluster,
-      cpu: environment === 'prod' ? 1024 : 512,
-      memoryLimitMiB: environment === 'prod' ? 2048 : 1024,
-      desiredCount: environment === 'prod' ? 2 : 1,
-      taskImageOptions: {
-        image: ecs.ContainerImage.fromEcrRepository(ecrRepository, `api-${environment}-latest`),
-        containerPort: 3000,
-        taskRole: taskRole,
-        environment: {
-          NODE_ENV: environment,
-          PORT: '3000',
-          LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+    this.apiService = new ecsPatterns.ApplicationLoadBalancedFargateService(
+      this,
+      'PostolioService',
+      {
+        serviceName: `${prefix}-service`,
+        cluster: this.ecsCluster,
+        cpu: environment === 'prod' ? 1024 : 512,
+        memoryLimitMiB: environment === 'prod' ? 2048 : 1024,
+        desiredCount: environment === 'prod' ? 2 : 1,
+        taskImageOptions: {
+          image: ecs.ContainerImage.fromEcrRepository(ecrRepository, `api-${environment}-latest`),
+          containerPort: 3000,
+          taskRole: taskRole,
+          environment: {
+            NODE_ENV: environment,
+            PORT: '3000',
+            LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+          },
+          secrets: {
+            DATABASE_URL: ecs.Secret.fromSecretsManager(databaseSecret, 'connectionString'),
+            JWT_SECRET: ecs.Secret.fromSecretsManager(databaseSecret, 'jwtSecret'),
+          },
+          logDriver: ecs.LogDrivers.awsLogs({
+            streamPrefix: `${prefix}-api`,
+            logRetention: logs.RetentionDays.TWO_WEEKS,
+          }),
         },
-        secrets: {
-          DATABASE_URL: ecs.Secret.fromSecretsManager(databaseSecret, 'connectionString'),
-          JWT_SECRET: ecs.Secret.fromSecretsManager(databaseSecret, 'jwtSecret'),
-        },
-        logDriver: ecs.LogDrivers.awsLogs({
-          streamPrefix: `${prefix}-api`,
-          logRetention: logs.RetentionDays.TWO_WEEKS,
-        }),
-      },
-      publicLoadBalancer: true,
-      domainName: domainName,
-      domainZone: hostedZoneId ? route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId) : undefined,
-      listenerPort: domainName ? 443 : 80,
-      protocol: domainName ? elbv2.ApplicationProtocol.HTTPS : elbv2.ApplicationProtocol.HTTP,
-      platformVersion: ecs.FargatePlatformVersion.LATEST,
-    });
+        publicLoadBalancer: true,
+        domainName: domainName,
+        domainZone: hostedZoneId
+          ? route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId)
+          : undefined,
+        listenerPort: domainName ? 443 : 80,
+        protocol: domainName ? elbv2.ApplicationProtocol.HTTPS : elbv2.ApplicationProtocol.HTTP,
+        platformVersion: ecs.FargatePlatformVersion.LATEST,
+      }
+    );
 
     this.loadBalancer = this.apiService.loadBalancer;
 

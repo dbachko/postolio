@@ -204,27 +204,18 @@ export class SchedulingStack extends cdk.Stack {
                 'dynamodb:Query',
                 'dynamodb:Scan',
               ],
-              resources: [
-                this.schedulesTable.tableArn,
-                `${this.schedulesTable.tableArn}/index/*`,
-              ],
+              resources: [this.schedulesTable.tableArn, `${this.schedulesTable.tableArn}/index/*`],
             }),
             // S3 permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-                's3:PutObject',
-                's3:DeleteObject',
-              ],
+              actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
               resources: [`${this.videoBucket.bucketArn}/*`],
             }),
             // EventBridge permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'events:PutEvents',
-              ],
+              actions: ['events:PutEvents'],
               resources: [this.eventBus.eventBusArn],
             }),
             // SQS permissions
@@ -236,10 +227,7 @@ export class SchedulingStack extends cdk.Stack {
                 'sqs:DeleteMessage',
                 'sqs:GetQueueAttributes',
               ],
-              resources: [
-                scheduleProcessingQueue.queueArn,
-                deadLetterQueue.queueArn,
-              ],
+              resources: [scheduleProcessingQueue.queueArn, deadLetterQueue.queueArn],
             }),
             // KMS permissions
             new iam.PolicyStatement({
@@ -256,10 +244,7 @@ export class SchedulingStack extends cdk.Stack {
             // SSM permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'ssm:GetParameter',
-                'ssm:GetParameters',
-              ],
+              actions: ['ssm:GetParameter', 'ssm:GetParameters'],
               resources: [
                 `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
               ],
@@ -272,56 +257,64 @@ export class SchedulingStack extends cdk.Stack {
     // ==================== Lambda Functions ====================
 
     // 1. Schedule Management Function
-    const scheduleManagementFunction = new lambdaNodejs.NodejsFunction(this, 'ScheduleManagementFunction', {
-      functionName: `${prefix}-schedule-management`,
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.handler',
-      entry: path.join(__dirname, '../../../../services/schedule-management/src/index.ts'),
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 1024,
-      role: schedulingLambdaRole,
-      vpc: vpc,
-      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
-      environment: {
-        NODE_ENV: environment,
-        SERVICE_NAME: 'schedule-management',
-        ENVIRONMENT: environment,
-        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        // AWS_REGION is automatically provided by Lambda runtime
-        SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
-        VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
-        EVENT_BUS_NAME: this.eventBus.eventBusName,
-        PROCESSING_QUEUE_URL: scheduleProcessingQueue.queueUrl,
-        KMS_KEY_ID: encryptionKey.keyId,
-      },
-      logRetention: logs.RetentionDays.TWO_WEEKS,
-      tracing: lambda.Tracing.ACTIVE,
-    });
+    const scheduleManagementFunction = new lambdaNodejs.NodejsFunction(
+      this,
+      'ScheduleManagementFunction',
+      {
+        functionName: `${prefix}-schedule-management`,
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: 'index.handler',
+        entry: path.join(__dirname, '../../../../services/schedule-management/src/index.ts'),
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 1024,
+        role: schedulingLambdaRole,
+        vpc: vpc,
+        securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+        environment: {
+          NODE_ENV: environment,
+          SERVICE_NAME: 'schedule-management',
+          ENVIRONMENT: environment,
+          LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+          // AWS_REGION is automatically provided by Lambda runtime
+          SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
+          VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
+          EVENT_BUS_NAME: this.eventBus.eventBusName,
+          PROCESSING_QUEUE_URL: scheduleProcessingQueue.queueUrl,
+          KMS_KEY_ID: encryptionKey.keyId,
+        },
+        logRetention: logs.RetentionDays.TWO_WEEKS,
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
 
     // 2. Schedule Cleanup Function
-    const scheduleCleanupFunction = new lambdaNodejs.NodejsFunction(this, 'ScheduleCleanupFunction', {
-      functionName: `${prefix}-schedule-cleanup`,
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.handler',
-      entry: path.join(__dirname, '../../../../services/schedule-cleanup/src/index.ts'),
-      timeout: cdk.Duration.minutes(10),
-      memorySize: 512,
-      role: schedulingLambdaRole,
-      vpc: vpc,
-      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
-      environment: {
-        NODE_ENV: environment,
-        SERVICE_NAME: 'schedule-cleanup',
-        ENVIRONMENT: environment,
-        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-        // AWS_REGION is automatically provided by Lambda runtime
-        SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
-        VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
-        KMS_KEY_ID: encryptionKey.keyId,
-      },
-      logRetention: logs.RetentionDays.TWO_WEEKS,
-      tracing: lambda.Tracing.ACTIVE,
-    });
+    const scheduleCleanupFunction = new lambdaNodejs.NodejsFunction(
+      this,
+      'ScheduleCleanupFunction',
+      {
+        functionName: `${prefix}-schedule-cleanup`,
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: 'index.handler',
+        entry: path.join(__dirname, '../../../../services/schedule-cleanup/src/index.ts'),
+        timeout: cdk.Duration.minutes(10),
+        memorySize: 512,
+        role: schedulingLambdaRole,
+        vpc: vpc,
+        securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+        environment: {
+          NODE_ENV: environment,
+          SERVICE_NAME: 'schedule-cleanup',
+          ENVIRONMENT: environment,
+          LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+          // AWS_REGION is automatically provided by Lambda runtime
+          SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
+          VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
+          KMS_KEY_ID: encryptionKey.keyId,
+        },
+        logRetention: logs.RetentionDays.TWO_WEEKS,
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
 
     // 3. Status Sync Function
     const statusSyncFunction = new lambdaNodejs.NodejsFunction(this, 'StatusSyncFunction', {
@@ -350,10 +343,12 @@ export class SchedulingStack extends cdk.Stack {
 
     // ==================== Event Sources ====================
     // Connect status sync to SQS queue
-    statusSyncFunction.addEventSource(new SqsEventSource(scheduleProcessingQueue, {
-      batchSize: 10,
-      maxBatchingWindow: cdk.Duration.seconds(5),
-    }));
+    statusSyncFunction.addEventSource(
+      new SqsEventSource(scheduleProcessingQueue, {
+        batchSize: 10,
+        maxBatchingWindow: cdk.Duration.seconds(5),
+      })
+    );
 
     // ==================== EventBridge Rules ====================
     // Daily cleanup schedule
