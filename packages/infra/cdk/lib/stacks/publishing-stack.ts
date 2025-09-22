@@ -1,0 +1,500 @@
+/**
+ * Publishing Stack - Content Publishing Microservices
+ * Groups publisher, retry-handler, dlq-processor, and campaign-event-dlq-processor services
+ */
+
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { NagSuppressions } from 'cdk-nag';
+import * as path from 'path';
+import { ParameterNames, type Environment } from '@postolio/service-parameters';
+import { OAuthConfig } from '../utils/oauth-config';
+
+export interface PublishingStackProps extends cdk.StackProps, OAuthConfig {
+  environment: 'dev' | 'staging' | 'prod';
+  alertEmail?: string;
+}
+
+export class PublishingStack extends cdk.Stack {
+  public readonly publishingQueue: sqs.Queue;
+  public readonly retryQueue: sqs.Queue;
+  public readonly deadLetterQueue: sqs.Queue;
+
+  constructor(scope: Construct, id: string, props: PublishingStackProps) {
+    super(scope, id, props);
+
+    const { environment, alertEmail } = props;
+    const prefix = `postolio-${environment}-publishing`;
+
+    // ==================== VPC Configuration ====================
+    let vpc: ec2.IVpc | undefined;
+    let dbSecurityGroup: ec2.ISecurityGroup | undefined;
+    let lambdaSecurityGroup: ec2.ISecurityGroup | undefined;
+
+    const vpcId = 'vpc-03e5d38b2feb71ed8'; // Must be concrete for Vpc.fromLookup()
+    const dbSecurityGroupId = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/database/security-group-id`
+    );
+
+    if (vpcId && dbSecurityGroupId) {
+      vpc = ec2.Vpc.fromLookup(this, 'DatabaseVpc', {
+        vpcId: vpcId,
+      });
+
+      dbSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+        this,
+        'DatabaseSecurityGroup',
+        dbSecurityGroupId
+      );
+
+      lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
+        vpc: vpc,
+        description: 'Security group for Lambda functions accessing RDS Proxy',
+        allowAllOutbound: true,
+      });
+
+      dbSecurityGroup.addIngressRule(
+        lambdaSecurityGroup,
+        ec2.Port.tcp(5432),
+        'Allow Lambda functions to connect to RDS Proxy'
+      );
+    }
+
+    // ==================== KMS Encryption Key ====================
+    const encryptionKey = new kms.Key(this, 'PublishingEncryptionKey', {
+      alias: `alias/${prefix}-encryption`,
+      description: 'KMS key for Publishing services encryption',
+      enableKeyRotation: true,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // ==================== SQS Queues ====================
+    // Main dead letter queue for all publishing failures
+    this.deadLetterQueue = new sqs.Queue(this, 'PublishingDLQ', {
+      queueName: `${prefix}-dlq`,
+      encryption: sqs.QueueEncryption.KMS_MANAGED,
+      messageRetentionPeriod: cdk.Duration.days(14),
+      visibilityTimeout: cdk.Duration.minutes(15),
+    });
+
+    // Campaign-specific dead letter queue
+    const campaignDLQ = new sqs.Queue(this, 'CampaignEventDLQ', {
+      queueName: `${prefix}-campaign-dlq`,
+      encryption: sqs.QueueEncryption.KMS_MANAGED,
+      messageRetentionPeriod: cdk.Duration.days(14),
+      visibilityTimeout: cdk.Duration.minutes(15),
+    });
+
+    // Retry queue for failed publishing attempts
+    this.retryQueue = new sqs.Queue(this, 'RetryQueue', {
+      queueName: `${prefix}-retry`,
+      encryption: sqs.QueueEncryption.KMS_MANAGED,
+      visibilityTimeout: cdk.Duration.minutes(5),
+      messageRetentionPeriod: cdk.Duration.hours(12),
+      deadLetterQueue: {
+        queue: this.deadLetterQueue,
+        maxReceiveCount: 3,
+      },
+    });
+
+    // Main publishing queue
+    this.publishingQueue = new sqs.Queue(this, 'PublishingQueue', {
+      queueName: `${prefix}-main`,
+      encryption: sqs.QueueEncryption.KMS_MANAGED,
+      visibilityTimeout: cdk.Duration.minutes(10),
+      messageRetentionPeriod: cdk.Duration.hours(6),
+      deadLetterQueue: {
+        queue: this.retryQueue,
+        maxReceiveCount: 2,
+      },
+    });
+
+    // ==================== EventBridge Custom Bus ====================
+    const publishingEventBus = new events.EventBus(this, 'PublishingEventBus', {
+      eventBusName: `${prefix}-events`,
+    });
+
+    // ==================== SNS Topic for Alerts ====================
+    const alertTopic = new sns.Topic(this, 'PublishingAlertTopic', {
+      topicName: `${prefix}-alerts`,
+      displayName: `Publishing Stack Alerts - ${environment}`,
+    });
+
+    if (alertEmail) {
+      alertTopic.addSubscription(new snsSubscriptions.EmailSubscription(alertEmail));
+    }
+
+    // ==================== Lambda Function Shared Role ====================
+    const publishingLambdaRole = new iam.Role(this, 'PublishingLambdaRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
+      ],
+      inlinePolicies: {
+        PublishingPolicy: new iam.PolicyDocument({
+          statements: [
+            // SQS permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'sqs:SendMessage',
+                'sqs:ReceiveMessage',
+                'sqs:DeleteMessage',
+                'sqs:GetQueueAttributes',
+                'sqs:ChangeMessageVisibility',
+              ],
+              resources: [
+                this.publishingQueue.queueArn,
+                this.retryQueue.queueArn,
+                this.deadLetterQueue.queueArn,
+                campaignDLQ.queueArn,
+              ],
+            }),
+            // EventBridge permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'events:PutEvents',
+              ],
+              resources: [publishingEventBus.eventBusArn],
+            }),
+            // KMS permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey',
+                'kms:DescribeKey',
+              ],
+              resources: [encryptionKey.keyArn],
+            }),
+            // SSM permissions to read auth and scheduling parameters
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'ssm:GetParameter',
+                'ssm:GetParameters',
+              ],
+              resources: [
+                `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
+              ],
+            }),
+            // SNS permissions for notifications
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'sns:Publish',
+              ],
+              resources: [alertTopic.topicArn],
+            }),
+          ],
+        }),
+      },
+    });
+
+    // ==================== Lambda Functions ====================
+
+    // 1. Publisher Function
+    const publisherFunction = new lambdaNodejs.NodejsFunction(this, 'PublisherFunction', {
+      functionName: `${prefix}-publisher`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      entry: path.join(__dirname, '../../lib/lambdas/publishers/main/index.ts'),
+      timeout: cdk.Duration.minutes(10),
+      memorySize: 1024,
+      role: publishingLambdaRole,
+      vpc: vpc,
+      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+      environment: {
+        NODE_ENV: environment,
+        SERVICE_NAME: 'publisher',
+        ENVIRONMENT: environment,
+        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+        AWS_REGION: this.region,
+        PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
+        RETRY_QUEUE_URL: this.retryQueue.queueUrl,
+        DLQ_URL: this.deadLetterQueue.queueUrl,
+        EVENT_BUS_NAME: publishingEventBus.eventBusName,
+        KMS_KEY_ID: encryptionKey.keyId,
+        ALERT_TOPIC_ARN: alertTopic.topicArn,
+        // OAuth configuration
+        FACEBOOK_APP_ID: props.facebookAppId || '',
+        FACEBOOK_APP_SECRET: props.facebookAppSecret || '',
+        INSTAGRAM_APP_ID: props.instagramAppId || '',
+        INSTAGRAM_APP_SECRET: props.instagramAppSecret || '',
+        LINKEDIN_CLIENT_ID: props.linkedinClientId || '',
+        LINKEDIN_CLIENT_SECRET: props.linkedinClientSecret || '',
+        TIKTOK_CLIENT_KEY: props.tiktokClientKey || '',
+        TIKTOK_CLIENT_SECRET: props.tiktokClientSecret || '',
+      },
+      logRetention: logs.RetentionDays.TWO_WEEKS,
+      tracing: lambda.Tracing.ACTIVE,
+    });
+
+    // 2. Retry Handler Function
+    const retryHandlerFunction = new lambdaNodejs.NodejsFunction(this, 'RetryHandlerFunction', {
+      functionName: `${prefix}-retry-handler`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      entry: path.join(__dirname, '../../lib/lambdas/retry-handler/index.ts'),
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      role: publishingLambdaRole,
+      vpc: vpc,
+      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+      environment: {
+        NODE_ENV: environment,
+        SERVICE_NAME: 'retry-handler',
+        ENVIRONMENT: environment,
+        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+        AWS_REGION: this.region,
+        PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
+        RETRY_QUEUE_URL: this.retryQueue.queueUrl,
+        DLQ_URL: this.deadLetterQueue.queueUrl,
+        EVENT_BUS_NAME: publishingEventBus.eventBusName,
+        KMS_KEY_ID: encryptionKey.keyId,
+        ALERT_TOPIC_ARN: alertTopic.topicArn,
+      },
+      logRetention: logs.RetentionDays.TWO_WEEKS,
+      tracing: lambda.Tracing.ACTIVE,
+    });
+
+    // 3. DLQ Processor Function
+    const dlqProcessorFunction = new lambdaNodejs.NodejsFunction(this, 'DLQProcessorFunction', {
+      functionName: `${prefix}-dlq-processor`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      entry: path.join(__dirname, '../../lib/lambdas/dlq-processor/index.ts'),
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      role: publishingLambdaRole,
+      vpc: vpc,
+      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+      environment: {
+        NODE_ENV: environment,
+        SERVICE_NAME: 'dlq-processor',
+        ENVIRONMENT: environment,
+        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+        AWS_REGION: this.region,
+        DLQ_URL: this.deadLetterQueue.queueUrl,
+        EVENT_BUS_NAME: publishingEventBus.eventBusName,
+        KMS_KEY_ID: encryptionKey.keyId,
+        ALERT_TOPIC_ARN: alertTopic.topicArn,
+      },
+      logRetention: logs.RetentionDays.TWO_WEEKS,
+      tracing: lambda.Tracing.ACTIVE,
+    });
+
+    // 4. Campaign Event DLQ Processor Function
+    const campaignDLQProcessorFunction = new lambdaNodejs.NodejsFunction(this, 'CampaignDLQProcessorFunction', {
+      functionName: `${prefix}-campaign-dlq-processor`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      entry: path.join(__dirname, '../../lib/lambdas/campaign-event-dlq-processor/index.ts'),
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      role: publishingLambdaRole,
+      vpc: vpc,
+      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+      environment: {
+        NODE_ENV: environment,
+        SERVICE_NAME: 'campaign-event-dlq-processor',
+        ENVIRONMENT: environment,
+        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+        AWS_REGION: this.region,
+        CAMPAIGN_DLQ_URL: campaignDLQ.queueUrl,
+        EVENT_BUS_NAME: publishingEventBus.eventBusName,
+        KMS_KEY_ID: encryptionKey.keyId,
+        ALERT_TOPIC_ARN: alertTopic.topicArn,
+      },
+      logRetention: logs.RetentionDays.TWO_WEEKS,
+      tracing: lambda.Tracing.ACTIVE,
+    });
+
+    // ==================== Event Sources ====================
+    // Connect publisher to main publishing queue
+    publisherFunction.addEventSource(new SqsEventSource(this.publishingQueue, {
+      batchSize: 10,
+      maxBatchingWindow: cdk.Duration.seconds(5),
+    }));
+
+    // Connect retry handler to retry queue
+    retryHandlerFunction.addEventSource(new SqsEventSource(this.retryQueue, {
+      batchSize: 5,
+      maxBatchingWindow: cdk.Duration.seconds(10),
+    }));
+
+    // Connect DLQ processor to dead letter queue
+    dlqProcessorFunction.addEventSource(new SqsEventSource(this.deadLetterQueue, {
+      batchSize: 5,
+      maxBatchingWindow: cdk.Duration.seconds(30),
+    }));
+
+    // Connect campaign DLQ processor to campaign dead letter queue
+    campaignDLQProcessorFunction.addEventSource(new SqsEventSource(campaignDLQ, {
+      batchSize: 5,
+      maxBatchingWindow: cdk.Duration.seconds(30),
+    }));
+
+    // ==================== EventBridge Rules ====================
+    // Scheduled retry processing
+    const retryRule = new events.Rule(this, 'RetryProcessingRule', {
+      ruleName: `${prefix}-retry-rule`,
+      description: 'Trigger retry processing periodically',
+      schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
+      eventBus: publishingEventBus,
+    });
+
+    retryRule.addTarget(new targets.LambdaFunction(retryHandlerFunction));
+
+    // ==================== CloudWatch Monitoring ====================
+    const functions = [
+      { func: publisherFunction, name: 'publisher' },
+      { func: retryHandlerFunction, name: 'retry-handler' },
+      { func: dlqProcessorFunction, name: 'dlq-processor' },
+      { func: campaignDLQProcessorFunction, name: 'campaign-dlq-processor' },
+    ];
+
+    functions.forEach(({ func, name }) => {
+      // Error rate alarm
+      const errorMetric = func.metricErrors({
+        period: cdk.Duration.minutes(5),
+      });
+
+      const errorAlarm = new cloudwatch.Alarm(this, `${name}ErrorAlarm`, {
+        alarmName: `${prefix}-${name}-errors`,
+        metric: errorMetric,
+        threshold: 5,
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: `${name} service error rate too high`,
+      });
+
+      errorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+      // Duration alarm for publisher (most critical)
+      if (name === 'publisher') {
+        const durationMetric = func.metricDuration({
+          period: cdk.Duration.minutes(5),
+        });
+
+        const durationAlarm = new cloudwatch.Alarm(this, 'PublisherDurationAlarm', {
+          alarmName: `${prefix}-publisher-duration`,
+          metric: durationMetric,
+          threshold: 300000, // 5 minutes
+          evaluationPeriods: 3,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+          alarmDescription: 'Publisher service duration too high',
+        });
+
+        durationAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+      }
+    });
+
+    // Queue depth monitoring
+    const queueDepthAlarm = new cloudwatch.Alarm(this, 'PublishingQueueDepthAlarm', {
+      alarmName: `${prefix}-queue-depth`,
+      metric: this.publishingQueue.metricApproximateNumberOfVisibleMessages({
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 1000,
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Publishing queue depth too high',
+    });
+
+    queueDepthAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    // ==================== SSM Parameters ====================
+    new ssm.StringParameter(this, 'PublishingQueueUrlParameter', {
+      parameterName: ParameterNames.publishingQueueUrl(environment as Environment),
+      stringValue: this.publishingQueue.queueUrl,
+      description: 'Publishing Queue URL',
+    });
+
+    new ssm.StringParameter(this, 'RetryQueueUrlParameter', {
+      parameterName: ParameterNames.retryQueueUrl(environment as Environment),
+      stringValue: this.retryQueue.queueUrl,
+      description: 'Retry Queue URL',
+    });
+
+    new ssm.StringParameter(this, 'PublishingDLQUrlParameter', {
+      parameterName: ParameterNames.publishingDLQUrl(environment as Environment),
+      stringValue: this.deadLetterQueue.queueUrl,
+      description: 'Publishing Dead Letter Queue URL',
+    });
+
+    new ssm.StringParameter(this, 'PublishingEventBusNameParameter', {
+      parameterName: ParameterNames.publishingEventBusName(environment as Environment),
+      stringValue: publishingEventBus.eventBusName,
+      description: 'Publishing EventBridge Bus Name',
+    });
+
+    // ==================== Stack Outputs ====================
+    new cdk.CfnOutput(this, 'PublishingQueueUrl', {
+      value: this.publishingQueue.queueUrl,
+      description: 'Publishing Queue URL',
+      exportName: `${prefix}-publishing-queue-url`,
+    });
+
+    new cdk.CfnOutput(this, 'RetryQueueUrl', {
+      value: this.retryQueue.queueUrl,
+      description: 'Retry Queue URL',
+      exportName: `${prefix}-retry-queue-url`,
+    });
+
+    new cdk.CfnOutput(this, 'PublishingDLQUrl', {
+      value: this.deadLetterQueue.queueUrl,
+      description: 'Publishing Dead Letter Queue URL',
+      exportName: `${prefix}-dlq-url`,
+    });
+
+    new cdk.CfnOutput(this, 'PublishingEventBusName', {
+      value: publishingEventBus.eventBusName,
+      description: 'Publishing EventBridge Bus Name',
+      exportName: `${prefix}-event-bus-name`,
+    });
+
+    // ==================== CDK NAG Suppressions ====================
+    NagSuppressions.addResourceSuppressions(
+      publishingLambdaRole,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Lambda execution role requires broad permissions for SQS and EventBridge operations',
+        },
+      ],
+      true
+    );
+
+    NagSuppressions.addResourceSuppressions(
+      this,
+      [
+        {
+          id: 'AwsSolutions-L1',
+          reason: 'Using latest stable Node.js runtime for Lambda functions',
+        },
+      ],
+      true
+    );
+  }
+}
