@@ -7,7 +7,7 @@ export interface EcrRegistryStackProps extends cdk.StackProps {
 }
 
 export class EcrRegistryStack extends cdk.Stack {
-  public readonly repository: ecr.Repository;
+  public readonly repository: ecr.IRepository;
 
   constructor(scope: Construct, id: string, props: EcrRegistryStackProps) {
     super(scope, id, props);
@@ -15,20 +15,8 @@ export class EcrRegistryStack extends cdk.Stack {
     const { environment } = props;
 
     // Primary ECR repository for API container images
-    this.repository = new ecr.Repository(this, 'PostolioRepository', {
-      repositoryName: 'postolio',
-      imageScanOnPush: true,
-      imageTagMutability: ecr.TagMutability.MUTABLE, // allow moving the `*-latest` tags
-      lifecycleRules: [
-        // Keep a reasonable number of images overall (tagged or untagged)
-        { maxImageCount: 100, tagStatus: ecr.TagStatus.ANY },
-        // Cleanup untagged images quickly to save space
-        {
-          tagStatus: ecr.TagStatus.UNTAGGED,
-          maxImageAge: cdk.Duration.days(7),
-        },
-      ],
-    });
+    // Import existing repository if it exists, otherwise create new one
+    this.repository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
 
     new cdk.CfnOutput(this, 'EcrRepositoryUri', {
       value: this.repository.repositoryUri,
