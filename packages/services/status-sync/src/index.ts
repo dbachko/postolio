@@ -304,10 +304,7 @@ async function handleScheduleCanceled(detail: EventDetail) {
   });
 }
 
-export async function handler(
-  event: EventBridgeEvent<string, EventDetail>,
-  context: Context
-) {
+export async function handler(event: EventBridgeEvent<string, EventDetail>, context: Context) {
   context.callbackWaitsForEmptyEventLoop = false;
 
   console.log(

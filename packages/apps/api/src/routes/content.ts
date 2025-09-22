@@ -392,7 +392,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // If scheduledAt is provided, create a schedule in AWS (unless in draft campaign)
         if (scheduledAt) {
           if (isInDraftCampaign) {
-            console.log(`Content ${contentId} belongs to campaign ${content.campaign?.id} in preview state - updating database only, not scheduling in AWS`);
+            console.log(
+              `Content ${contentId} belongs to campaign ${content.campaign?.id} in preview state - updating database only, not scheduling in AWS`
+            );
           } else {
             try {
               // Don't pass customTime - let scheduler-adapter read scheduledAt from database
@@ -580,7 +582,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         const isInDraftCampaign = content.campaign && content.campaign.status === 'preview';
 
         if (isInDraftCampaign && scheduledAt !== undefined) {
-          console.log(`Content ${contentId} belongs to campaign ${content.campaign?.id} in preview state - updating database only, not scheduling in AWS`);
+          console.log(
+            `Content ${contentId} belongs to campaign ${content.campaign?.id} in preview state - updating database only, not scheduling in AWS`
+          );
         }
 
         // Handle AWS scheduling operations FIRST before updating local DB
@@ -707,7 +711,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           // Note: Reschedule logic moved earlier in the flow to prevent race conditions
           // AWS operations now happen BEFORE local DB updates
         } else if (scheduledAt !== undefined && isInDraftCampaign) {
-          console.log(`Skipping AWS scheduling operations for content ${contentId} - belongs to draft campaign ${content.campaign?.id}`);
+          console.log(
+            `Skipping AWS scheduling operations for content ${contentId} - belongs to draft campaign ${content.campaign?.id}`
+          );
         }
 
         // Apply AI learning if there were changes
