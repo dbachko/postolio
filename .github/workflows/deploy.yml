@@ -205,6 +205,7 @@ jobs:
   build-images:
     name: Build Docker Images
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # Add timeout for image builds
     needs: detect-changes
     if: |
       github.event_name != 'pull_request' &&
@@ -254,6 +255,7 @@ jobs:
     name: Deploy ${{ matrix.stack }} Stack
     runs-on: ubuntu-latest
     needs: [detect-changes, build-images]
+    timeout-minutes: 60  # Increase timeout for CDK deployments
     if: |
       github.event_name != 'pull_request' &&
       needs.detect-changes.outputs.stack-matrix != '[]'
@@ -261,7 +263,8 @@ jobs:
     strategy:
       matrix:
         stack: ${{ fromJson(needs.detect-changes.outputs.stack-matrix) }}
-      max-parallel: 2  # Deploy stacks in controlled parallel (respecting dependencies)
+      max-parallel: 1  # Deploy stacks sequentially to avoid resource contention
+      fail-fast: false  # Allow other stacks to continue if one fails
 
     steps:
       - name: Checkout code
@@ -277,13 +280,20 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: CDK Bootstrap (if needed)
+        timeout-minutes: 15  # Extended timeout for bootstrap
         working-directory: packages/infra/cdk
         run: |
+          echo "Checking CDK bootstrap status..."
           if ! aws cloudformation describe-stacks --stack-name CDKToolkit &>/dev/null; then
-            pnpm cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
+            echo "CDK not bootstrapped, running bootstrap..."
+            pnpm cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }} --verbose
+            echo "CDK bootstrap completed"
+          else
+            echo "CDK already bootstrapped"
           fi
 
       - name: Wait for dependencies
+        timeout-minutes: 45  # Extended timeout for dependency waiting
         run: |
           ENV="${{ needs.detect-changes.outputs.environment }}"
           STACK="${{ matrix.stack }}"
@@ -314,7 +324,7 @@ jobs:
           for dep_stack in "${DEPS[@]}"; do
             echo "Waiting for dependency: $dep_stack"
             WAIT_TIME=0
-            MAX_WAIT=1800  # 30 minutes
+            MAX_WAIT=2400  # 40 minutes (increased from 30)
 
             while [ $WAIT_TIME -lt $MAX_WAIT ]; do
               STATUS=$(aws cloudformation describe-stacks --stack-name "$dep_stack" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
@@ -332,6 +342,9 @@ jobs:
                 WAIT_TIME=$((WAIT_TIME + 60))
               elif [[ "$STATUS" == *"FAILED" || "$STATUS" == "ROLLBACK_COMPLETE" ]]; then
                 echo "Dependency $dep_stack failed: $STATUS"
+                # Check if this is a transient failure and allow retry
+                echo "Checking stack events for details..."
+                aws cloudformation describe-stack-events --stack-name "$dep_stack" --max-items 5 --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' --output table || true
                 exit 1
               else
                 echo "Dependency $dep_stack status: $STATUS"
@@ -371,6 +384,7 @@ jobs:
           esac
 
       - name: Deploy Stack via CDK
+        timeout-minutes: 45  # Extended timeout for CDK deployments
         working-directory: packages/infra/cdk
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -419,15 +433,29 @@ jobs:
               ;;
           esac
 
-          # Deploy the stack with retry logic
+          # Deploy the stack with enhanced retry logic
           MAX_RETRIES=3
           RETRY_COUNT=0
-          RETRY_DELAY=30
+          RETRY_DELAY=60  # Start with 60 seconds
+          SUCCESS=false
 
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             echo "Deployment attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES for $CDK_STACK"
+            
+            # Check if stack exists and is in a failed state
+            STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$CDK_STACK" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+            
+            if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]]; then
+              echo "Stack is in ROLLBACK_COMPLETE state, attempting to delete before retry..."
+              aws cloudformation delete-stack --stack-name "$CDK_STACK" || true
+              
+              # Wait for deletion to complete
+              echo "Waiting for stack deletion to complete..."
+              aws cloudformation wait stack-delete-complete --stack-name "$CDK_STACK" --cli-read-timeout 0 --cli-connect-timeout 60 || true
+              sleep 30
+            fi
 
-            if pnpm cdk deploy "$CDK_STACK" \
+            if timeout 2400 pnpm cdk deploy "$CDK_STACK" \
               --app "npx tsx $CDK_APP" \
               --require-approval never \
               --context environment="$ENV" \
@@ -447,23 +475,33 @@ jobs:
               --context tiktokClientSecret="$TIKTOK_CLIENT_SECRET" \
               --context nodeEnv="$NODE_ENV" \
               --context logLevel="$LOG_LEVEL" \
-              --context enableMonitoring="$ENABLE_MONITORING"; then
+              --context enableMonitoring="$ENABLE_MONITORING" \
+              --verbose; then
               echo "CDK deployment successful for $CDK_STACK"
+              SUCCESS=true
               break
             else
               EXIT_CODE=$?
               RETRY_COUNT=$((RETRY_COUNT + 1))
+              
+              echo "CDK deployment failed for $CDK_STACK with exit code $EXIT_CODE"
+              
+              # Get detailed error information
+              echo "Getting stack events for debugging..."
+              aws cloudformation describe-stack-events --stack-name "$CDK_STACK" --max-items 10 --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' --output table || true
 
               if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                echo "CDK deployment failed for $CDK_STACK with exit code $EXIT_CODE. Retrying in $RETRY_DELAY seconds..."
+                echo "Retrying in $RETRY_DELAY seconds... (Attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES)"
                 sleep $RETRY_DELAY
-                RETRY_DELAY=$((RETRY_DELAY * 2))
-              else
-                echo "CDK deployment failed for $CDK_STACK after $MAX_RETRIES attempts"
-                exit $EXIT_CODE
+                RETRY_DELAY=$((RETRY_DELAY * 2))  # Exponential backoff
               fi
             fi
           done
+
+          if [ "$SUCCESS" != "true" ]; then
+            echo "CDK deployment failed for $CDK_STACK after $MAX_RETRIES attempts"
+            exit 1
+          fi
 
       - name: Update ECS Service (API Stack only)
         if: matrix.stack == 'api'
@@ -498,6 +536,7 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend Assets
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # Add timeout for frontend deployment
     needs: [detect-changes, deploy-stacks]
     if: |
       github.event_name != 'pull_request' &&
@@ -598,6 +637,7 @@ jobs:
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # Short timeout for summary
     needs: [detect-changes, deploy-stacks, deploy-frontend]
     if: always() && github.event_name != 'pull_request'
 
@@ -610,6 +650,10 @@ jobs:
           echo "📍 Environment: ${{ needs.detect-changes.outputs.environment }}"
           echo "🔄 Commit: ${{ github.sha }}"
           echo ""
+          echo "📊 Job Results:"
+          echo "  - Stack Deployment: ${{ needs.deploy-stacks.result }}"
+          echo "  - Frontend Deployment: ${{ needs.deploy-frontend.result }}"
+          echo ""
           echo "📦 Deployed Stacks:"
           STACKS="${{ needs.detect-changes.outputs.stack-matrix }}"
           if [[ "$STACKS" != "[]" ]]; then
@@ -620,6 +664,16 @@ jobs:
           echo ""
           echo "🔗 Application URL: ${{ vars.VITE_API_URL }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Check deployment failures
+        if: |
+          needs.deploy-stacks.result == 'failure' || 
+          needs.deploy-frontend.result == 'failure'
+        run: |
+          echo "⚠️ Some deployments failed. Check the logs for details."
+          echo "Stack deployment result: ${{ needs.deploy-stacks.result }}"
+          echo "Frontend deployment result: ${{ needs.deploy-frontend.result }}"
+          exit 1
 
       - name: Send deployment notification
         if: needs.detect-changes.outputs.environment == 'prod' && github.event_name == 'push'
