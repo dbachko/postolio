@@ -205,7 +205,7 @@ export class FoundationStack extends cdk.Stack {
 
     this.database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.of('15.14', '15'),
+        version: rds.PostgresEngineVersion.VER_17,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
