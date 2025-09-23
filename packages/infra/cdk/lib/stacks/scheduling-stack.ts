@@ -44,69 +44,84 @@ export class SchedulingStack extends cdk.Stack {
     const prefix = `postolio-${environment}-scheduling`;
 
     // ==================== VPC Configuration ====================
-    // VPC configuration for database access - optional
-    // For initial deployments, Lambda functions will run without VPC
-    // VPC configuration can be added later when database infrastructure is deployed
+    // Import VPC and security groups from Foundation stack
     let vpc: ec2.IVpc | undefined;
-    let dbSecurityGroup: ec2.ISecurityGroup | undefined;
     let lambdaSecurityGroup: ec2.ISecurityGroup | undefined;
+    let vpcConfig: ec2.SubnetSelection | undefined;
 
-    // Check if we should configure VPC (via context variable)
-    const enableVpcConfig = this.node.tryGetContext('enableVpcConfig') === 'true';
+    try {
+      // Import VPC from Foundation stack
+      const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
 
-    if (enableVpcConfig) {
-      // Try to get VPC configuration from SSM parameters
-      const vpcId = ssm.StringParameter.valueFromLookup(
+      // Import Lambda security group from Foundation stack
+      const lambdaSecurityGroupId = ssm.StringParameter.valueFromLookup(
         this,
-        `/postolio/${environment}/vpc/id`
-      );
-      const dbSecurityGroupId = ssm.StringParameter.valueFromLookup(
-        this,
-        `/postolio/${environment}/database/security-group-id`
+        `/postolio/${environment}/security-groups/lambda`
       );
 
-      // Only configure VPC if we have valid values (not dummy values)
-      // CDK returns 'dummy-value-for-/path' when SSM parameters don't exist
-      const hasValidVpcConfig = vpcId && dbSecurityGroupId &&
+      // Check if Foundation resources are available (not dummy values)
+      const hasFoundationResources =
+        vpcId &&
+        lambdaSecurityGroupId &&
         !vpcId.startsWith('dummy-value-for-') &&
-        !dbSecurityGroupId.startsWith('dummy-value-for-');
+        !lambdaSecurityGroupId.startsWith('dummy-value-for-');
 
-      if (hasValidVpcConfig) {
-        vpc = ec2.Vpc.fromLookup(this, 'DatabaseVpc', {
+      if (hasFoundationResources) {
+        vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', {
           vpcId: vpcId,
         });
 
-        dbSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+        lambdaSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
           this,
-          'DatabaseSecurityGroup',
-          dbSecurityGroupId
+          'LambdaSecurityGroup',
+          lambdaSecurityGroupId
         );
 
-        lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
-          vpc: vpc,
-          description: 'Security group for Lambda functions accessing RDS Proxy',
-          allowAllOutbound: true,
-        });
+        vpcConfig = {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        };
 
-        dbSecurityGroup.addIngressRule(
-          lambdaSecurityGroup,
-          ec2.Port.tcp(5432),
-          'Allow Lambda functions to connect to RDS Proxy'
-        );
+        console.log(`Using VPC configuration from Foundation stack for environment ${environment}`);
       } else {
-        console.log(`VPC configuration not available for environment ${environment} - Lambda functions will run without VPC`);
+        console.log(
+          `Foundation VPC not available for environment ${environment} - Lambda functions will run without VPC`
+        );
       }
-    } else {
-      console.log(`VPC configuration disabled for environment ${environment} - Lambda functions will run without VPC`);
+    } catch (error) {
+      console.log(`Error accessing Foundation VPC configuration: ${error}`);
     }
 
     // ==================== KMS Encryption Key ====================
-    const encryptionKey = new kms.Key(this, 'SchedulingEncryptionKey', {
-      alias: `alias/${prefix}-encryption`,
-      description: 'KMS key for Scheduling services encryption',
-      enableKeyRotation: true,
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
+    // Try to import shared encryption key from Foundation stack
+    let encryptionKey: kms.IKey;
+
+    try {
+      const kmsKeyArn = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/kms/key-arn`
+      );
+
+      if (kmsKeyArn && !kmsKeyArn.startsWith('dummy-value-for-')) {
+        encryptionKey = kms.Key.fromKeyArn(this, 'FoundationEncryptionKey', kmsKeyArn);
+        console.log(
+          `Using shared encryption key from Foundation stack for environment ${environment}`
+        );
+      } else {
+        throw new Error('Foundation encryption key not available');
+      }
+    } catch (error) {
+      // Fallback to creating own key if Foundation key not available
+      encryptionKey = new kms.Key(this, 'SchedulingEncryptionKey', {
+        alias: `alias/${prefix}-encryption`,
+        description: 'KMS key for Scheduling services encryption',
+        enableKeyRotation: true,
+        removalPolicy:
+          environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      });
+      console.log(
+        `Created dedicated encryption key for Scheduling stack in environment ${environment}`
+      );
+    }
 
     // ==================== DynamoDB Tables ====================
     this.schedulesTable = new dynamodb.Table(this, 'SchedulesTable', {
@@ -174,10 +189,7 @@ export class SchedulingStack extends cdk.Stack {
         effect: iam.Effect.DENY,
         principals: [new iam.AnyPrincipal()],
         actions: ['s3:*'],
-        resources: [
-          logBucket.bucketArn,
-          `${logBucket.bucketArn}/*`,
-        ],
+        resources: [logBucket.bucketArn, `${logBucket.bucketArn}/*`],
         conditions: {
           Bool: {
             'aws:SecureTransport': 'false',
@@ -215,10 +227,7 @@ export class SchedulingStack extends cdk.Stack {
         effect: iam.Effect.DENY,
         principals: [new iam.AnyPrincipal()],
         actions: ['s3:*'],
-        resources: [
-          this.videoBucket.bucketArn,
-          `${this.videoBucket.bucketArn}/*`,
-        ],
+        resources: [this.videoBucket.bucketArn, `${this.videoBucket.bucketArn}/*`],
         conditions: {
           Bool: {
             'aws:SecureTransport': 'false',
@@ -393,6 +402,7 @@ export class SchedulingStack extends cdk.Stack {
         memorySize: 1024,
         role: schedulingLambdaRole,
         vpc: vpc,
+        vpcSubnets: vpcConfig,
         securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
         environment: {
           NODE_ENV: environment,
@@ -424,6 +434,7 @@ export class SchedulingStack extends cdk.Stack {
         memorySize: 512,
         role: schedulingLambdaRole,
         vpc: vpc,
+        vpcSubnets: vpcConfig,
         securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
         environment: {
           NODE_ENV: environment,
@@ -596,15 +607,12 @@ export class SchedulingStack extends cdk.Stack {
 
     // Suppress DynamoDB PITR requirement for non-prod environments
     if (environment !== 'prod') {
-      NagSuppressions.addResourceSuppressions(
-        this.schedulesTable,
-        [
-          {
-            id: 'AwsSolutions-DDB3',
-            reason: 'Point-in-time recovery is only enabled for production to reduce costs',
-          },
-        ]
-      );
+      NagSuppressions.addResourceSuppressions(this.schedulesTable, [
+        {
+          id: 'AwsSolutions-DDB3',
+          reason: 'Point-in-time recovery is only enabled for production to reduce costs',
+        },
+      ]);
     }
 
     // Suppress log retention function IAM issues (created automatically by CDK)
@@ -614,7 +622,9 @@ export class SchedulingStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM4',
           reason: 'Log retention function uses AWS managed policy - standard CDK behavior',
-          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+          ],
         },
         {
           id: 'AwsSolutions-IAM5',

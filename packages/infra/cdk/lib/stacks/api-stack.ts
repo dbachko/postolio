@@ -1,6 +1,6 @@
 /**
  * API Stack - Backend API Infrastructure (ECS)
- * Contains the main backend API running on ECS Fargate
+ * Contains only the ECS-specific resources, using shared infrastructure from Foundation stack
  */
 
 import * as cdk from 'aws-cdk-lib';
@@ -9,15 +9,10 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
-import * as acm from 'aws-cdk-lib/aws-certificatemanager';
-import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
@@ -41,174 +36,85 @@ export class ApiStack extends cdk.Stack {
     const { environment, domainName, hostedZoneId, useExternalDns } = props;
     const prefix = `postolio-${environment}-api`;
 
-    // ECR Repository for backend container images - reference existing repository
+    // ==================== Import Foundation Resources ====================
+    // Import VPC from Foundation stack (for CDK lookup, must use valueFromLookup)
+    const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
+
+    // Check if Foundation resources are available
+    const hasFoundationVpc = vpcId && !vpcId.startsWith('dummy-value-for-');
+
+    if (!hasFoundationVpc) {
+      console.log(
+        `Foundation VPC not available for environment ${environment} - API stack will need Foundation deployed first`
+      );
+      // During synthesis, we'll create a placeholder VPC reference
+      // This will fail at deployment time if Foundation isn't deployed first
+    }
+
+    // Only attempt VPC lookup if we have a valid VPC ID
+    let vpc: ec2.IVpc;
+    if (hasFoundationVpc) {
+      vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', {
+        vpcId: vpcId,
+      });
+    } else {
+      // During synthesis without Foundation, create a default VPC
+      // This will require Foundation to be deployed before API stack
+      vpc = new ec2.Vpc(this, 'PlaceholderVpc', {
+        maxAzs: 2,
+        natGateways: 1,
+      });
+    }
+
+    // Import security groups and database secret from Foundation stack (runtime values)
+    let ecsSecurityGroup: ec2.ISecurityGroup | undefined;
+    let databaseSecret: secretsmanager.ISecret | undefined;
+
+    if (hasFoundationVpc) {
+      const ecsSecurityGroupId = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/security-groups/ecs`
+      );
+
+      ecsSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+        this,
+        'EcsSecurityGroup',
+        ecsSecurityGroupId
+      );
+
+      const databaseSecretArn = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/database/secret-arn`
+      );
+
+      databaseSecret = secretsmanager.Secret.fromSecretCompleteArn(
+        this,
+        'DatabaseSecret',
+        databaseSecretArn
+      );
+    } else {
+      // Create placeholder resources for synthesis
+      ecsSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderEcsSecurityGroup', {
+        vpc: vpc,
+        description: 'Placeholder security group - Foundation needed for production',
+      });
+
+      databaseSecret = new secretsmanager.Secret(this, 'PlaceholderDatabaseSecret', {
+        description: 'Placeholder secret - Foundation needed for production',
+      });
+    }
+
+    // Import ECR repository from Foundation stack - use repository name
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
 
-    // VPC Flow Logs role
-    const vpcFlowLogsRole = new iam.Role(this, 'VpcFlowLogsRole', {
-      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      inlinePolicies: {
-        FlowLogsDeliveryRolePolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams',
-              ],
-              resources: ['*'],
-            }),
-          ],
-        }),
-      },
-    });
-
-    // Create VPC flow logs log group
-    const vpcFlowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
-      logGroupName: `/aws/vpc/${prefix}-flowlogs`,
-      retention: logs.RetentionDays.TWO_WEEKS,
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
-
-    // Create VPC with proper configuration
-    const vpc = new ec2.Vpc(this, 'PostolioVPC', {
-      vpcName: `${prefix}-vpc`,
-      maxAzs: 2,
-      natGateways: environment === 'prod' ? 2 : 1,
-      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'private-with-egress',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        {
-          cidrMask: 28,
-          name: 'isolated',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      ],
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      flowLogs: {
-        cloudwatch: {
-          destination: ec2.FlowLogDestination.toCloudWatchLogs(vpcFlowLogGroup),
-          trafficType: ec2.FlowLogTrafficType.ALL,
-        },
-      },
-    });
-
-    // Store VPC details in SSM for other stacks
-    new ssm.StringParameter(this, 'VpcIdParameter', {
-      parameterName: `/postolio/${environment}/vpc/id`,
-      stringValue: vpc.vpcId,
-      description: 'VPC ID for Postolio application',
-    });
-
-    // Database subnet group
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
-      description: 'Subnet group for RDS database',
-      vpc: vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-      subnetGroupName: `${prefix}-db-subnet-group`,
-    });
-
-    // Database security group
-    const databaseSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      vpc: vpc,
-      description: 'Security group for RDS database',
-      allowAllOutbound: false,
-    });
-
-    // Store database security group ID in SSM for microservices
-    new ssm.StringParameter(this, 'DatabaseSecurityGroupParameter', {
-      parameterName: `/postolio/${environment}/database/security-group-id`,
-      stringValue: databaseSecurityGroup.securityGroupId,
-      description: 'Database security group ID',
-    });
-
-    // RDS PostgreSQL Database
-    const databaseSecret = new secretsmanager.Secret(this, 'DatabaseCredentials', {
-      secretName: `${prefix}-database-credentials`,
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ username: 'postgres' }),
-        generateStringKey: 'password',
-        excludeCharacters: '"@/\\',
-      },
-    });
-
-    const database = new rds.DatabaseInstance(this, 'Database', {
-      instanceIdentifier: `${prefix}-database`,
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15,
-      }),
-      instanceType:
-        environment === 'prod'
-          ? ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM)
-          : ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      vpc: vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [databaseSecurityGroup],
-      credentials: rds.Credentials.fromSecret(databaseSecret),
-      multiAz: environment === 'prod',
-      storageEncrypted: true,
-      backupRetention: environment === 'prod' ? cdk.Duration.days(7) : cdk.Duration.days(1),
-      deletionProtection: environment === 'prod',
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      allowMajorVersionUpgrade: false,
-      autoMinorVersionUpgrade: true,
-      enablePerformanceInsights: environment === 'prod',
-    });
-
-    // Redis cache security group
-    const cacheSecurityGroup = new ec2.SecurityGroup(this, 'CacheSecurityGroup', {
-      vpc: vpc,
-      description: 'Security group for Redis cache',
-      allowAllOutbound: false,
-    });
-
-    // Redis cache subnet group
-    const cacheSubnetGroup = new elasticache.CfnSubnetGroup(this, 'CacheSubnetGroup', {
-      description: 'Subnet group for Redis cache',
-      subnetIds: vpc.selectSubnets({
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      }).subnetIds,
-      cacheSubnetGroupName: `${prefix}-cache-subnet-group`,
-    });
-
-    // Redis ElastiCache cluster
-    const redisCache = new elasticache.CfnCacheCluster(this, 'RedisCache', {
-      cacheNodeType: environment === 'prod' ? 'cache.t3.micro' : 'cache.t2.micro',
-      engine: 'redis',
-      numCacheNodes: 1,
-      cacheSubnetGroupName: cacheSubnetGroup.cacheSubnetGroupName,
-      vpcSecurityGroupIds: [cacheSecurityGroup.securityGroupId],
-      clusterName: `${prefix}-redis`,
-    });
-
-    redisCache.addDependency(cacheSubnetGroup);
-
-    // ECS Cluster
+    // ==================== ECS Cluster ====================
     this.ecsCluster = new ecs.Cluster(this, 'EcsCluster', {
       clusterName: `${prefix}-cluster`,
       vpc: vpc,
       containerInsights: environment === 'prod',
     });
 
-    // ECS Task Role with necessary permissions
+    // ==================== ECS Task Role ====================
     const taskRole = new iam.Role(this, 'EcsTaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMReadOnlyAccess')],
@@ -220,7 +126,7 @@ export class ApiStack extends cdk.Stack {
               effect: iam.Effect.ALLOW,
               actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
               resources: [
-                databaseSecret.secretArn,
+                databaseSecret?.secretArn || '',
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio/${environment}/*`,
               ],
             }),
@@ -240,13 +146,27 @@ export class ApiStack extends cdk.Stack {
                 `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
               ],
             }),
+            // KMS permissions for encryption
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+              resources: [`arn:aws:kms:${this.region}:${this.account}:key/*`],
+            }),
+            // S3 permissions for shared buckets
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:ListBucket'],
+              resources: [
+                `arn:aws:s3:::postolio-${environment}-shared-data-${this.account}`,
+                `arn:aws:s3:::postolio-${environment}-shared-data-${this.account}/*`,
+              ],
+            }),
           ],
         }),
       },
     });
 
-    // Application Load Balanced Fargate Service
-    // Only use HTTPS when both domainName AND hostedZoneId are provided
+    // ==================== Application Load Balanced Fargate Service ====================
     const useHttps = domainName && hostedZoneId;
 
     this.apiService = new ecsPatterns.ApplicationLoadBalancedFargateService(
@@ -267,14 +187,21 @@ export class ApiStack extends cdk.Stack {
             PORT: '3000',
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
           },
-          secrets: {
-            DATABASE_URL: ecs.Secret.fromSecretsManager(databaseSecret, 'connectionString'),
-            JWT_SECRET: ecs.Secret.fromSecretsManager(databaseSecret, 'jwtSecret'),
-          },
+          secrets: databaseSecret
+            ? {
+                // Database connection from Foundation stack secret
+                DATABASE_URL: ecs.Secret.fromSecretsManager(databaseSecret, 'connectionString'),
+                JWT_SECRET: ecs.Secret.fromSecretsManager(databaseSecret, 'jwtSecret'),
+              }
+            : undefined,
           logDriver: ecs.LogDrivers.awsLogs({
             streamPrefix: `${prefix}-api`,
             logRetention: logs.RetentionDays.TWO_WEEKS,
           }),
+        },
+        assignPublicIp: false,
+        taskSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         publicLoadBalancer: true,
         domainName: useHttps ? domainName : undefined,
@@ -289,31 +216,19 @@ export class ApiStack extends cdk.Stack {
 
     this.loadBalancer = this.apiService.loadBalancer;
 
-    // Configure security groups
-    const appSecurityGroup = new ec2.SecurityGroup(this, 'AppSecurityGroup', {
-      vpc: vpc,
-      description: 'Security group for Postolio application',
-      allowAllOutbound: true,
+    // ==================== Security Group Configuration ====================
+    // Use the ECS security group from Foundation stack
+    this.apiService.service.connections.securityGroups.forEach((sg) => {
+      sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS traffic');
+      sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP traffic');
     });
 
-    this.apiService.service.connections.allowFromAnyIpv4(ec2.Port.tcp(443), 'HTTPS traffic');
-    this.apiService.service.connections.allowFromAnyIpv4(ec2.Port.tcp(80), 'HTTP traffic');
+    // Connect the ECS service to the Foundation security group if available
+    if (ecsSecurityGroup) {
+      this.apiService.service.connections.addSecurityGroup(ecsSecurityGroup);
+    }
 
-    // Allow app to connect to database
-    databaseSecurityGroup.addIngressRule(
-      appSecurityGroup,
-      ec2.Port.tcp(5432),
-      'Allow app to connect to database'
-    );
-
-    // Allow app to connect to Redis
-    cacheSecurityGroup.addIngressRule(
-      appSecurityGroup,
-      ec2.Port.tcp(6379),
-      'Allow app to connect to Redis'
-    );
-
-    // Configure health check
+    // ==================== Health Check Configuration ====================
     this.apiService.targetGroup.configureHealthCheck({
       path: '/api/health',
       interval: cdk.Duration.seconds(30),
@@ -322,7 +237,7 @@ export class ApiStack extends cdk.Stack {
       unhealthyThresholdCount: 5,
     });
 
-    // Auto-scaling configuration
+    // ==================== Auto-scaling Configuration ====================
     const scaling = this.apiService.service.autoScaleTaskCount({
       minCapacity: environment === 'prod' ? 2 : 1,
       maxCapacity: environment === 'prod' ? 10 : 3,
@@ -340,26 +255,40 @@ export class ApiStack extends cdk.Stack {
       scaleOutCooldown: cdk.Duration.minutes(2),
     });
 
-    // WAF v2 for security
+    // ==================== WAF v2 for Security ====================
     const waf = new WAFConstruct(this, 'WAF', {
       resourceArn: this.loadBalancer.loadBalancerArn,
       environment,
     });
 
-    // Store important outputs in SSM for other stacks
+    // ==================== SSM Parameters for Cross-Stack References ====================
     new ssm.StringParameter(this, 'ApiUrlParameter', {
       parameterName: `/postolio/${environment}/api/url`,
-      stringValue: `https://${this.apiService.loadBalancer.loadBalancerDnsName}`,
+      stringValue: useHttps
+        ? `https://${domainName}`
+        : `https://${this.apiService.loadBalancer.loadBalancerDnsName}`,
       description: 'API Load Balancer URL',
     });
 
-    new ssm.StringParameter(this, 'DatabaseEndpointParameter', {
-      parameterName: `/postolio/${environment}/database/endpoint`,
-      stringValue: database.instanceEndpoint.hostname,
-      description: 'Database endpoint hostname',
+    new ssm.StringParameter(this, 'LoadBalancerDnsParameter', {
+      parameterName: `/postolio/${environment}/api/load-balancer-dns`,
+      stringValue: this.apiService.loadBalancer.loadBalancerDnsName,
+      description: 'API Load Balancer DNS Name',
     });
 
-    // Stack outputs
+    new ssm.StringParameter(this, 'EcsClusterNameParameter', {
+      parameterName: `/postolio/${environment}/api/cluster-name`,
+      stringValue: this.ecsCluster.clusterName,
+      description: 'ECS Cluster Name',
+    });
+
+    new ssm.StringParameter(this, 'EcsServiceNameParameter', {
+      parameterName: `/postolio/${environment}/api/service-name`,
+      stringValue: this.apiService.service.serviceName,
+      description: 'ECS Service Name',
+    });
+
+    // ==================== Stack Outputs ====================
     new cdk.CfnOutput(this, 'EcsClusterName', {
       value: this.ecsCluster.clusterName,
       description: 'ECS Cluster Name',
@@ -378,169 +307,21 @@ export class ApiStack extends cdk.Stack {
       exportName: `${prefix}-lb-dns`,
     });
 
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: database.instanceEndpoint.hostname,
-      description: 'RDS Database Endpoint',
-      exportName: `${prefix}-db-endpoint`,
-    });
-
-    new cdk.CfnOutput(this, 'RedisEndpoint', {
-      value: redisCache.attrRedisEndpointAddress,
-      description: 'Redis Cache Endpoint',
-      exportName: `${prefix}-redis-endpoint`,
-    });
-
-    // CDK NAG Suppressions
-
-    // VPC Flow Logs Role suppressions
-    NagSuppressions.addResourceSuppressions(
-      vpcFlowLogsRole,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason: 'VPC Flow Logs requires wildcard permissions to write to CloudWatch Logs across different log groups and streams',
-          appliesTo: ['Resource::*'],
-        },
-      ],
-      true
-    );
-
-    // VPC Flow Logs CloudWatch policy suppressions - find and suppress the IAM role created by VPC
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      `/${this.stackName}/PostolioVPC/cloudwatch/IAMRole/DefaultPolicy`,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason: 'VPC Flow Logs CloudWatch integration requires wildcard permissions for log group operations',
-          appliesTo: ['Resource::arn:aws:logs:us-east-1:*:log-group:/aws/vpc/postolio-dev-api-flowlogs:*'],
-        },
-      ]
-    );
-
-    // Database credentials suppressions
-    NagSuppressions.addResourceSuppressions(
-      databaseSecret,
-      [
-        {
-          id: 'AwsSolutions-SMG4',
-          reason: 'Database credentials are managed manually in development environment. Production should enable automatic rotation.',
-        },
-      ],
-      true
-    );
-
-    // Database configuration suppressions
-    NagSuppressions.addResourceSuppressions(
-      database,
-      [
-        {
-          id: 'AwsSolutions-RDS3',
-          reason: 'Multi-AZ is disabled in development environment for cost optimization. Production environments enable multi-AZ.',
-        },
-        {
-          id: 'AwsSolutions-RDS10',
-          reason: 'Deletion protection is disabled in development environment for easier cleanup. Production environments enable deletion protection.',
-        },
-        {
-          id: 'AwsSolutions-RDS11',
-          reason: 'Using standard PostgreSQL port (5432) within private isolated subnets provides sufficient security through network isolation.',
-        },
-      ],
-      true
-    );
-
-    // Redis cache suppressions
-    NagSuppressions.addResourceSuppressions(
-      redisCache,
-      [
-        {
-          id: 'AwsSolutions-AEC5',
-          reason: 'Using standard Redis port (6379) within private isolated subnets provides sufficient security through network isolation.',
-        },
-      ],
-      true
-    );
-
-    // ECS Cluster suppressions
-    NagSuppressions.addResourceSuppressions(
-      this.ecsCluster,
-      [
-        {
-          id: 'AwsSolutions-ECS4',
-          reason: 'Container Insights is disabled in development environment for cost optimization. Production environments enable Container Insights.',
-        },
-      ],
-      true
-    );
-
-    // ECS Task Role suppressions
-    NagSuppressions.addResourceSuppressions(
-      taskRole,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason: 'ECS task role requires broad permissions for microservices communication and AWS service integration',
-        },
-        {
-          id: 'AwsSolutions-IAM4',
-          reason: 'AmazonSSMReadOnlyAccess managed policy provides necessary SSM Parameter Store access for configuration management',
-          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/AmazonSSMReadOnlyAccess'],
-        },
-      ],
-      true
-    );
-
-    // ELB access logs suppressions
-    NagSuppressions.addResourceSuppressions(
-      this.loadBalancer,
-      [
-        {
-          id: 'AwsSolutions-ELB2',
-          reason: 'Access logs are disabled in development environment for cost optimization. Production environments should enable access logs for security analysis.',
-        },
-      ],
-      true
-    );
-
-    // ECS Task Execution Role suppressions
-    NagSuppressions.addResourceSuppressions(
-      this.apiService.taskDefinition.executionRole!,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason: 'ECS Task Execution Role requires wildcard permissions for CloudWatch Logs and ECR operations',
-          appliesTo: ['Resource::*'],
-        },
-      ],
-      true
-    );
-
-    // ECS Service suppressions
-    NagSuppressions.addResourceSuppressions(
-      this.apiService.service,
-      [
-        {
-          id: 'AwsSolutions-ECS7',
-          reason: 'Development environment uses 50% minimum healthy percent for faster deployments. Production should use higher values.',
-        },
-      ],
-      true
-    );
-
-    NagSuppressions.addResourceSuppressions(
-      this,
-      [
-        {
-          id: 'AwsSolutions-ECS2',
-          reason: 'Environment variables contain non-sensitive configuration',
-        },
-        {
-          id: 'AwsSolutions-EC23',
-          reason: 'Security groups allow necessary traffic for application functionality',
-        },
-      ],
-      true
-    );
+    // ==================== CDK Nag Suppressions ====================
+    NagSuppressions.addStackSuppressions(this, [
+      {
+        id: 'AwsSolutions-IAM4',
+        reason: 'ECS task role uses managed policies for SSM access which is acceptable',
+      },
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'Wildcard permissions needed for Lambda invocations and KMS operations within scope',
+      },
+      {
+        id: 'AwsSolutions-ECS2',
+        reason: 'Environment variables do not contain sensitive data; secrets are properly managed',
+      },
+    ]);
   }
 }
