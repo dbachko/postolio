@@ -57,22 +57,19 @@ export class FoundationStack extends cdk.Stack {
     });
 
     // ==================== ECR Repository ====================
-    try {
-      this.repository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
-    } catch {
-      this.repository = new ecr.Repository(this, 'PostolioRepository', {
-        repositoryName: 'postolio',
-        imageScanOnPush: true,
-        imageTagMutability: ecr.TagMutability.MUTABLE,
-        lifecycleRules: [
-          {
-            rulePriority: 1,
-            description: 'Keep last 10 images',
-            maxImageCount: 10,
-          },
-        ],
-      });
-    }
+    this.repository = new ecr.Repository(this, 'PostolioRepository', {
+      repositoryName: 'postolio',
+      imageScanOnPush: true,
+      imageTagMutability: ecr.TagMutability.MUTABLE,
+      lifecycleRules: [
+        {
+          rulePriority: 1,
+          description: 'Keep last 10 images',
+          maxImageCount: 10,
+        },
+      ],
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
 
     // ==================== VPC Configuration ====================
     const vpcFlowLogsRole = enableVpcFlowLogs
@@ -208,7 +205,7 @@ export class FoundationStack extends cdk.Stack {
 
     this.database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_3,
+        version: rds.PostgresEngineVersion.of('15.14', '15'),
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
