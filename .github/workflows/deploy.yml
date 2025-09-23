@@ -294,19 +294,19 @@ jobs:
               DEPS=()
               ;;
             "auth")
-              DEPS=("Foundation-$ENV")
+              DEPS=("Postolio-Foundation-$ENV")
               ;;
             "scheduling")
-              DEPS=("Auth-$ENV")
+              DEPS=("Postolio-Auth-$ENV")
               ;;
             "publishing")
-              DEPS=("Auth-$ENV" "Scheduling-$ENV")
+              DEPS=("Postolio-Auth-$ENV" "Postolio-Scheduling-$ENV")
               ;;
             "api")
-              DEPS=("Foundation-$ENV" "Auth-$ENV" "Scheduling-$ENV" "Publishing-$ENV")
+              DEPS=("Postolio-Foundation-$ENV" "Postolio-Auth-$ENV" "Postolio-Scheduling-$ENV" "Postolio-Publishing-$ENV")
               ;;
             "web")
-              DEPS=("API-$ENV")
+              DEPS=("Postolio-API-$ENV")
               ;;
           esac
 
@@ -394,27 +394,27 @@ jobs:
           # Map stack names to CDK stack names
           case $STACK in
             "foundation")
-              CDK_STACK="Foundation-$ENV"
+              CDK_STACK="Postolio-Foundation-$ENV"
               CDK_APP="bin/app.ts"
               ;;
             "auth")
-              CDK_STACK="Auth-$ENV"
+              CDK_STACK="Postolio-Auth-$ENV"
               CDK_APP="bin/app.ts"
               ;;
             "scheduling")
-              CDK_STACK="Scheduling-$ENV"
+              CDK_STACK="Postolio-Scheduling-$ENV"
               CDK_APP="bin/app.ts"
               ;;
             "publishing")
-              CDK_STACK="Publishing-$ENV"
+              CDK_STACK="Postolio-Publishing-$ENV"
               CDK_APP="bin/app.ts"
               ;;
             "api")
-              CDK_STACK="API-$ENV"
+              CDK_STACK="Postolio-API-$ENV"
               CDK_APP="bin/app.ts"
               ;;
             "web")
-              CDK_STACK="Web-$ENV"
+              CDK_STACK="Postolio-Web-$ENV"
               CDK_APP="bin/app.ts"
               ;;
           esac
@@ -471,12 +471,12 @@ jobs:
           ENV="${{ needs.detect-changes.outputs.environment }}"
 
           CLUSTER_NAME=$(aws cloudformation describe-stacks \
-            --stack-name "API-$ENV" \
+            --stack-name "Postolio-API-$ENV" \
             --query "Stacks[0].Outputs[?OutputKey=='EcsClusterName'].OutputValue" \
             --output text)
 
           SERVICE_NAME=$(aws cloudformation describe-stacks \
-            --stack-name "API-$ENV" \
+            --stack-name "Postolio-API-$ENV" \
             --query "Stacks[0].Outputs[?OutputKey=='EcsServiceName'].OutputValue" \
             --output text)
 
@@ -556,7 +556,7 @@ jobs:
           ENV="${{ needs.detect-changes.outputs.environment }}"
 
           BUCKET_NAME=$(aws cloudformation describe-stacks \
-            --stack-name "Web-$ENV" \
+            --stack-name "Postolio-Web-$ENV" \
             --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
             --output text)
 
@@ -582,7 +582,7 @@ jobs:
           ENV="${{ needs.detect-changes.outputs.environment }}"
 
           DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-            --stack-name "Web-$ENV" \
+            --stack-name "Postolio-Web-$ENV" \
             --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" \
             --output text)
 
