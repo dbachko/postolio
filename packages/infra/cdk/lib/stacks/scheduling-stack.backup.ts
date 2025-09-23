@@ -1,0 +1,632 @@
+/**
+ * Scheduling Stack - Content Scheduling Microservices
+ * Groups schedule-management, schedule-cleanup, and status-sync services
+ */
+
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { NagSuppressions } from 'cdk-nag';
+import * as path from 'path';
+import { ParameterNames, type Environment } from '@postolio/service-parameters';
+
+export interface SchedulingStackProps extends cdk.StackProps {
+  environment: 'dev' | 'staging' | 'prod';
+  alertEmail?: string;
+}
+
+export class SchedulingStack extends cdk.Stack {
+  public readonly schedulesTable: dynamodb.Table;
+  public readonly videoBucket: s3.Bucket;
+  public readonly eventBus: events.EventBus;
+
+  constructor(scope: Construct, id: string, props: SchedulingStackProps) {
+    super(scope, id, props);
+
+    const { environment, alertEmail } = props;
+    const prefix = `postolio-${environment}-scheduling`;
+
+    // ==================== VPC Configuration ====================
+    // VPC configuration for database access - optional
+    // For initial deployments, Lambda functions will run without VPC
+    // VPC configuration can be added later when database infrastructure is deployed
+    let vpc: ec2.IVpc | undefined;
+    let dbSecurityGroup: ec2.ISecurityGroup | undefined;
+    let lambdaSecurityGroup: ec2.ISecurityGroup | undefined;
+
+    // Check if we should configure VPC (via context variable)
+    const enableVpcConfig = this.node.tryGetContext('enableVpcConfig') === 'true';
+
+    if (enableVpcConfig) {
+      // Try to get VPC configuration from SSM parameters
+      const vpcId = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/vpc/id`
+      );
+      const dbSecurityGroupId = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/database/security-group-id`
+      );
+
+      // Only configure VPC if we have valid values (not dummy values)
+      // CDK returns 'dummy-value-for-/path' when SSM parameters don't exist
+      const hasValidVpcConfig = vpcId && dbSecurityGroupId &&
+        !vpcId.startsWith('dummy-value-for-') &&
+        !dbSecurityGroupId.startsWith('dummy-value-for-');
+
+      if (hasValidVpcConfig) {
+        vpc = ec2.Vpc.fromLookup(this, 'DatabaseVpc', {
+          vpcId: vpcId,
+        });
+
+        dbSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+          this,
+          'DatabaseSecurityGroup',
+          dbSecurityGroupId
+        );
+
+        lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
+          vpc: vpc,
+          description: 'Security group for Lambda functions accessing RDS Proxy',
+          allowAllOutbound: true,
+        });
+
+        dbSecurityGroup.addIngressRule(
+          lambdaSecurityGroup,
+          ec2.Port.tcp(5432),
+          'Allow Lambda functions to connect to RDS Proxy'
+        );
+      } else {
+        console.log(`VPC configuration not available for environment ${environment} - Lambda functions will run without VPC`);
+      }
+    } else {
+      console.log(`VPC configuration disabled for environment ${environment} - Lambda functions will run without VPC`);
+    }
+
+    // ==================== KMS Encryption Key ====================
+    const encryptionKey = new kms.Key(this, 'SchedulingEncryptionKey', {
+      alias: `alias/${prefix}-encryption`,
+      description: 'KMS key for Scheduling services encryption',
+      enableKeyRotation: true,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // ==================== DynamoDB Tables ====================
+    this.schedulesTable = new dynamodb.Table(this, 'SchedulesTable', {
+      tableName: `${prefix}-schedules`,
+      partitionKey: {
+        name: 'pk',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'sk',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
+      encryptionKey: encryptionKey,
+      pointInTimeRecovery: environment === 'prod',
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      timeToLiveAttribute: 'ttl',
+    });
+
+    // Add GSI for status and time-based queries
+    this.schedulesTable.addGlobalSecondaryIndex({
+      indexName: 'StatusIndex',
+      partitionKey: {
+        name: 'status',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'scheduledTime',
+        type: dynamodb.AttributeType.STRING,
+      },
+    });
+
+    this.schedulesTable.addGlobalSecondaryIndex({
+      indexName: 'TimeIndex',
+      partitionKey: {
+        name: 'datePartition',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'scheduledTime',
+        type: dynamodb.AttributeType.STRING,
+      },
+    });
+
+    // ==================== S3 Bucket for Video Processing ====================
+    // Create server access logging bucket
+    const logBucket = new s3.Bucket(this, 'VideoBucketAccessLogs', {
+      bucketName: `${prefix}-videos-logs`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      lifecycleRules: [
+        {
+          id: 'delete-old-logs',
+          expiration: cdk.Duration.days(90),
+        },
+      ],
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add bucket policy to require SSL for log bucket
+    logBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:*'],
+        resources: [
+          logBucket.bucketArn,
+          `${logBucket.bucketArn}/*`,
+        ],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
+    this.videoBucket = new s3.Bucket(this, 'VideoBucket', {
+      bucketName: `${prefix}-videos`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      versioned: false,
+      serverAccessLogsBucket: logBucket,
+      serverAccessLogsPrefix: 'access-logs/',
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      lifecycleRules: [
+        {
+          id: 'temp-uploads-cleanup',
+          prefix: 'temp/',
+          expiration: cdk.Duration.days(1),
+        },
+        {
+          id: 'processed-videos-cleanup',
+          prefix: 'processed/',
+          expiration: cdk.Duration.days(30),
+        },
+      ],
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add bucket policy to require SSL
+    this.videoBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:*'],
+        resources: [
+          this.videoBucket.bucketArn,
+          `${this.videoBucket.bucketArn}/*`,
+        ],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
+    // ==================== EventBridge Custom Bus ====================
+    this.eventBus = new events.EventBus(this, 'SchedulingEventBus', {
+      eventBusName: `${prefix}-events`,
+    });
+
+    // ==================== SQS Queues ====================
+    const deadLetterQueue = new sqs.Queue(this, 'SchedulingDLQ', {
+      queueName: `${prefix}-dlq`,
+      encryption: sqs.QueueEncryption.KMS_MANAGED,
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    // Add queue policy to require SSL for DLQ
+    deadLetterQueue.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sqs:*'],
+        resources: [deadLetterQueue.queueArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
+    const scheduleProcessingQueue = new sqs.Queue(this, 'ScheduleProcessingQueue', {
+      queueName: `${prefix}-processing`,
+      encryption: sqs.QueueEncryption.KMS_MANAGED,
+      visibilityTimeout: cdk.Duration.minutes(5),
+      deadLetterQueue: {
+        queue: deadLetterQueue,
+        maxReceiveCount: 3,
+      },
+    });
+
+    // Add queue policy to require SSL for processing queue
+    scheduleProcessingQueue.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sqs:*'],
+        resources: [scheduleProcessingQueue.queueArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
+    // ==================== SNS Topic for Alerts ====================
+    const alertTopic = new sns.Topic(this, 'SchedulingAlertTopic', {
+      topicName: `${prefix}-alerts`,
+      displayName: `Scheduling Stack Alerts - ${environment}`,
+    });
+
+    // Add topic policy to require SSL
+    alertTopic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSSLRequestsOnly',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sns:Publish'],
+        resources: [alertTopic.topicArn],
+        conditions: {
+          Bool: {
+            'aws:SecureTransport': 'false',
+          },
+        },
+      })
+    );
+
+    if (alertEmail) {
+      alertTopic.addSubscription(new snsSubscriptions.EmailSubscription(alertEmail));
+    }
+
+    // ==================== Lambda Function Shared Role ====================
+    const schedulingLambdaRole = new iam.Role(this, 'SchedulingLambdaRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
+      ],
+      inlinePolicies: {
+        SchedulingPolicy: new iam.PolicyDocument({
+          statements: [
+            // DynamoDB permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'dynamodb:GetItem',
+                'dynamodb:PutItem',
+                'dynamodb:UpdateItem',
+                'dynamodb:DeleteItem',
+                'dynamodb:Query',
+                'dynamodb:Scan',
+              ],
+              resources: [this.schedulesTable.tableArn, `${this.schedulesTable.tableArn}/index/*`],
+            }),
+            // S3 permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+              resources: [`${this.videoBucket.bucketArn}/*`],
+            }),
+            // EventBridge permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['events:PutEvents'],
+              resources: [this.eventBus.eventBusArn],
+            }),
+            // SQS permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'sqs:SendMessage',
+                'sqs:ReceiveMessage',
+                'sqs:DeleteMessage',
+                'sqs:GetQueueAttributes',
+              ],
+              resources: [scheduleProcessingQueue.queueArn, deadLetterQueue.queueArn],
+            }),
+            // KMS permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey',
+                'kms:DescribeKey',
+              ],
+              resources: [encryptionKey.keyArn],
+            }),
+            // SSM permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+              resources: [
+                `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
+              ],
+            }),
+          ],
+        }),
+      },
+    });
+
+    // ==================== Lambda Functions ====================
+
+    // 1. Schedule Management Function
+    const scheduleManagementFunction = new lambdaNodejs.NodejsFunction(
+      this,
+      'ScheduleManagementFunction',
+      {
+        functionName: `${prefix}-schedule-management`,
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: 'index.handler',
+        entry: path.join(__dirname, '../../../../services/schedule-management/src/index.ts'),
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 1024,
+        role: schedulingLambdaRole,
+        vpc: vpc,
+        securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+        environment: {
+          NODE_ENV: environment,
+          SERVICE_NAME: 'schedule-management',
+          ENVIRONMENT: environment,
+          LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+          // AWS_REGION is automatically provided by Lambda runtime
+          SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
+          VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
+          EVENT_BUS_NAME: this.eventBus.eventBusName,
+          PROCESSING_QUEUE_URL: scheduleProcessingQueue.queueUrl,
+          KMS_KEY_ID: encryptionKey.keyId,
+        },
+        logRetention: logs.RetentionDays.TWO_WEEKS,
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
+
+    // 2. Schedule Cleanup Function
+    const scheduleCleanupFunction = new lambdaNodejs.NodejsFunction(
+      this,
+      'ScheduleCleanupFunction',
+      {
+        functionName: `${prefix}-schedule-cleanup`,
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: 'index.handler',
+        entry: path.join(__dirname, '../../../../services/schedule-cleanup/src/index.ts'),
+        timeout: cdk.Duration.minutes(10),
+        memorySize: 512,
+        role: schedulingLambdaRole,
+        vpc: vpc,
+        securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+        environment: {
+          NODE_ENV: environment,
+          SERVICE_NAME: 'schedule-cleanup',
+          ENVIRONMENT: environment,
+          LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+          // AWS_REGION is automatically provided by Lambda runtime
+          SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
+          VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
+          KMS_KEY_ID: encryptionKey.keyId,
+        },
+        logRetention: logs.RetentionDays.TWO_WEEKS,
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
+
+    // 3. Status Sync Function
+    const statusSyncFunction = new lambdaNodejs.NodejsFunction(this, 'StatusSyncFunction', {
+      functionName: `${prefix}-status-sync`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      entry: path.join(__dirname, '../../../../services/status-sync/src/index.ts'),
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      role: schedulingLambdaRole,
+      vpc: vpc,
+      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+      environment: {
+        NODE_ENV: environment,
+        SERVICE_NAME: 'status-sync',
+        ENVIRONMENT: environment,
+        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+        // AWS_REGION is automatically provided by Lambda runtime
+        SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
+        EVENT_BUS_NAME: this.eventBus.eventBusName,
+        KMS_KEY_ID: encryptionKey.keyId,
+      },
+      logRetention: logs.RetentionDays.TWO_WEEKS,
+      tracing: lambda.Tracing.ACTIVE,
+    });
+
+    // ==================== Event Sources ====================
+    // Connect status sync to SQS queue
+    statusSyncFunction.addEventSource(
+      new SqsEventSource(scheduleProcessingQueue, {
+        batchSize: 10,
+        maxBatchingWindow: cdk.Duration.seconds(5),
+      })
+    );
+
+    // ==================== EventBridge Rules ====================
+    // Daily cleanup schedule
+    const cleanupRule = new events.Rule(this, 'ScheduleCleanupRule', {
+      ruleName: `${prefix}-cleanup-rule`,
+      description: 'Trigger schedule cleanup daily',
+      schedule: events.Schedule.cron({
+        hour: '2',
+        minute: '0',
+      }),
+      // Note: Scheduled rules use default EventBridge bus, not custom eventBus
+    });
+
+    cleanupRule.addTarget(new targets.LambdaFunction(scheduleCleanupFunction));
+
+    // ==================== Function URLs ====================
+    const scheduleManagementUrl = scheduleManagementFunction.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.AWS_IAM,
+      cors: {
+        allowCredentials: true,
+        allowedOrigins: ['*'],
+        allowedMethods: [lambda.HttpMethod.ALL],
+        allowedHeaders: ['*'],
+      },
+    });
+
+    // ==================== CloudWatch Monitoring ====================
+    const functions = [
+      { func: scheduleManagementFunction, name: 'schedule-management' },
+      { func: scheduleCleanupFunction, name: 'schedule-cleanup' },
+      { func: statusSyncFunction, name: 'status-sync' },
+    ];
+
+    functions.forEach(({ func, name }) => {
+      // Error rate alarm
+      const errorMetric = func.metricErrors({
+        period: cdk.Duration.minutes(5),
+      });
+
+      const errorAlarm = new cloudwatch.Alarm(this, `${name}ErrorAlarm`, {
+        alarmName: `${prefix}-${name}-errors`,
+        metric: errorMetric,
+        threshold: 5,
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: `${name} service error rate too high`,
+      });
+
+      errorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+    });
+
+    // ==================== SSM Parameters ====================
+    new ssm.StringParameter(this, 'ScheduleManagementUrlParameter', {
+      parameterName: `/postolio/${environment}/scheduling/schedule-management-url`,
+      stringValue: scheduleManagementUrl.url,
+      description: 'Schedule Management Function URL',
+    });
+
+    new ssm.StringParameter(this, 'SchedulesTableNameParameter', {
+      parameterName: `/postolio/${environment}/scheduling/schedules-table-name`,
+      stringValue: this.schedulesTable.tableName,
+      description: 'Schedules DynamoDB Table Name',
+    });
+
+    new ssm.StringParameter(this, 'VideoBucketNameParameter', {
+      parameterName: `/postolio/${environment}/scheduling/video-bucket-name`,
+      stringValue: this.videoBucket.bucketName,
+      description: 'Video Processing S3 Bucket Name',
+    });
+
+    new ssm.StringParameter(this, 'SchedulingEventBusNameParameter', {
+      parameterName: `/postolio/${environment}/scheduling/event-bus-name`,
+      stringValue: this.eventBus.eventBusName,
+      description: 'Scheduling EventBridge Bus Name',
+    });
+
+    // ==================== Stack Outputs ====================
+    new cdk.CfnOutput(this, 'ScheduleManagementUrl', {
+      value: scheduleManagementUrl.url,
+      description: 'Schedule Management Function URL',
+      exportName: `${prefix}-schedule-management-url`,
+    });
+
+    new cdk.CfnOutput(this, 'SchedulesTableName', {
+      value: this.schedulesTable.tableName,
+      description: 'Schedules DynamoDB Table Name',
+      exportName: `${prefix}-schedules-table-name`,
+    });
+
+    new cdk.CfnOutput(this, 'VideoBucketName', {
+      value: this.videoBucket.bucketName,
+      description: 'Video Processing S3 Bucket Name',
+      exportName: `${prefix}-video-bucket-name`,
+    });
+
+    new cdk.CfnOutput(this, 'EventBusName', {
+      value: this.eventBus.eventBusName,
+      description: 'Scheduling EventBridge Bus Name',
+      exportName: `${prefix}-event-bus-name`,
+    });
+
+    // ==================== CDK NAG Suppressions ====================
+    NagSuppressions.addResourceSuppressions(
+      schedulingLambdaRole,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Lambda execution role requires broad permissions for DynamoDB and S3 operations',
+        },
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'AWS managed policies for Lambda execution are standard and secure',
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+          ],
+        },
+      ],
+      true
+    );
+
+    // Suppress DynamoDB PITR requirement for non-prod environments
+    if (environment !== 'prod') {
+      NagSuppressions.addResourceSuppressions(
+        this.schedulesTable,
+        [
+          {
+            id: 'AwsSolutions-DDB3',
+            reason: 'Point-in-time recovery is only enabled for production to reduce costs',
+          },
+        ]
+      );
+    }
+
+    // Suppress log retention function IAM issues (created automatically by CDK)
+    NagSuppressions.addResourceSuppressions(
+      this,
+      [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'Log retention function uses AWS managed policy - standard CDK behavior',
+          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+        },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Log retention function requires wildcard permissions - standard CDK behavior',
+          appliesTo: ['Resource::*'],
+        },
+        {
+          id: 'AwsSolutions-L1',
+          reason: 'Using latest stable Node.js runtime for Lambda functions',
+        },
+      ],
+      true
+    );
+  }
+}

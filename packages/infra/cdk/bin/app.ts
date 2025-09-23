@@ -2,7 +2,7 @@
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import { AwsSolutionsChecks } from 'cdk-nag';
-import { EcrRegistryStack } from '../lib/stacks/ecr-registry-stack';
+import { FoundationStack } from '../lib/stacks/foundation-stack';
 import { AuthStack } from '../lib/stacks/auth-stack';
 import { SchedulingStack } from '../lib/stacks/scheduling-stack';
 import { PublishingStack } from '../lib/stacks/publishing-stack';
@@ -47,10 +47,12 @@ const stackTags = {
 // Get OAuth configuration from shared utility
 const oauthConfig = getOAuthConfig(app);
 
-// 1. Foundation Stack - ECR and shared infrastructure
-const foundationStack = new EcrRegistryStack(app, `Postolio-Foundation-${environment}`, {
+// 1. Foundation Stack - VPC, Database, Cache, ECR, and all shared infrastructure
+const foundationStack = new FoundationStack(app, `Postolio-Foundation-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
+  enableVpcFlowLogs: environment === 'prod',
+  enableDatabaseProxy: true,
   description: `Postolio Foundation infrastructure - ${environment} environment`,
   tags: {
     ...stackTags,
@@ -121,16 +123,17 @@ const webStack = new WebStack(app, `Postolio-Web-${environment}`, {
   },
 });
 
-// Stack Dependencies - Optimized for parallel deployment
-// Foundation is the base dependency for all stacks
+// Stack Dependencies - Optimized for parallel deployment with Foundation as base
+// All stacks depend on Foundation for shared infrastructure
 authStack.addDependency(foundationStack);
+schedulingStack.addDependency(foundationStack);
+publishingStack.addDependency(foundationStack);
 apiStack.addDependency(foundationStack);
+webStack.addDependency(foundationStack);
 
-// Microservice dependencies - need API stack for VPC and database configuration
+// Service-specific dependencies
 schedulingStack.addDependency(authStack);
-schedulingStack.addDependency(apiStack); // Add dependency on API stack for VPC/database access
 publishingStack.addDependency(authStack);
-publishingStack.addDependency(apiStack); // Add dependency on API stack for VPC/database access
 publishingStack.addDependency(schedulingStack);
 
 // Web needs API for the load balancer URL (for CloudFront API proxy)
