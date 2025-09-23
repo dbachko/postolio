@@ -44,51 +44,60 @@ export class SchedulingStack extends cdk.Stack {
     const prefix = `postolio-${environment}-scheduling`;
 
     // ==================== VPC Configuration ====================
-    // VPC configuration for database access - lookup from SSM parameters
+    // VPC configuration for database access - optional
+    // For initial deployments, Lambda functions will run without VPC
+    // VPC configuration can be added later when database infrastructure is deployed
     let vpc: ec2.IVpc | undefined;
     let dbSecurityGroup: ec2.ISecurityGroup | undefined;
     let lambdaSecurityGroup: ec2.ISecurityGroup | undefined;
 
-    // Get VPC ID from SSM parameter (optional - if not set, Lambda functions run without VPC)
-    let vpcId: string | undefined;
-    let dbSecurityGroupId: string | undefined;
-    
-    try {
-      vpcId = ssm.StringParameter.valueForStringParameter(
+    // Check if we should configure VPC (via context variable)
+    const enableVpcConfig = this.node.tryGetContext('enableVpcConfig') === 'true';
+
+    if (enableVpcConfig) {
+      // Try to get VPC configuration from SSM parameters
+      const vpcId = ssm.StringParameter.valueFromLookup(
         this,
         `/postolio/${environment}/vpc/id`
       );
-      dbSecurityGroupId = ssm.StringParameter.valueForStringParameter(
+      const dbSecurityGroupId = ssm.StringParameter.valueFromLookup(
         this,
         `/postolio/${environment}/database/security-group-id`
       );
-    } catch (error) {
-      // SSM parameters don't exist - Lambda functions will run without VPC
-      console.log(`VPC configuration not found for environment ${environment} - Lambda functions will run without VPC`);
-    }
 
-    if (vpcId && dbSecurityGroupId) {
-      vpc = ec2.Vpc.fromLookup(this, 'DatabaseVpc', {
-        vpcId: vpcId,
-      });
+      // Only configure VPC if we have valid values (not dummy values)
+      // CDK returns 'dummy-value-for-/path' when SSM parameters don't exist
+      const hasValidVpcConfig = vpcId && dbSecurityGroupId &&
+        !vpcId.startsWith('dummy-value-for-') &&
+        !dbSecurityGroupId.startsWith('dummy-value-for-');
 
-      dbSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
-        this,
-        'DatabaseSecurityGroup',
-        dbSecurityGroupId
-      );
+      if (hasValidVpcConfig) {
+        vpc = ec2.Vpc.fromLookup(this, 'DatabaseVpc', {
+          vpcId: vpcId,
+        });
 
-      lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
-        vpc: vpc,
-        description: 'Security group for Lambda functions accessing RDS Proxy',
-        allowAllOutbound: true,
-      });
+        dbSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+          this,
+          'DatabaseSecurityGroup',
+          dbSecurityGroupId
+        );
 
-      dbSecurityGroup.addIngressRule(
-        lambdaSecurityGroup,
-        ec2.Port.tcp(5432),
-        'Allow Lambda functions to connect to RDS Proxy'
-      );
+        lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
+          vpc: vpc,
+          description: 'Security group for Lambda functions accessing RDS Proxy',
+          allowAllOutbound: true,
+        });
+
+        dbSecurityGroup.addIngressRule(
+          lambdaSecurityGroup,
+          ec2.Port.tcp(5432),
+          'Allow Lambda functions to connect to RDS Proxy'
+        );
+      } else {
+        console.log(`VPC configuration not available for environment ${environment} - Lambda functions will run without VPC`);
+      }
+    } else {
+      console.log(`VPC configuration disabled for environment ${environment} - Lambda functions will run without VPC`);
     }
 
     // ==================== KMS Encryption Key ====================
