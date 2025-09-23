@@ -182,7 +182,7 @@ export class WAFConstruct extends Construct {
       name: wafName,
       scope: 'REGIONAL', // Use REGIONAL for API Gateway
       defaultAction: { allow: {} },
-      description: `Postolio WAF for ${environment} environment (${stackName})`,
+      description: `Postolio WAF for ${environment} environment - ${stackName}`,
       rules,
       visibilityConfig: {
         sampledRequestsEnabled: true,
