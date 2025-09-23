@@ -42,15 +42,28 @@ export class PublishingStack extends cdk.Stack {
     const prefix = `postolio-${environment}-publishing`;
 
     // ==================== VPC Configuration ====================
+    // VPC configuration for database access - lookup from SSM parameters
     let vpc: ec2.IVpc | undefined;
     let dbSecurityGroup: ec2.ISecurityGroup | undefined;
     let lambdaSecurityGroup: ec2.ISecurityGroup | undefined;
 
-    const vpcId = 'vpc-03e5d38b2feb71ed8'; // Must be concrete for Vpc.fromLookup()
-    const dbSecurityGroupId = ssm.StringParameter.valueForStringParameter(
-      this,
-      `/postolio/${environment}/database/security-group-id`
-    );
+    // Get VPC ID from SSM parameter (optional - if not set, Lambda functions run without VPC)
+    let vpcId: string | undefined;
+    let dbSecurityGroupId: string | undefined;
+    
+    try {
+      vpcId = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/vpc/id`
+      );
+      dbSecurityGroupId = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/database/security-group-id`
+      );
+    } catch (error) {
+      // SSM parameters don't exist - Lambda functions will run without VPC
+      console.log(`VPC configuration not found for environment ${environment} - Lambda functions will run without VPC`);
+    }
 
     if (vpcId && dbSecurityGroupId) {
       vpc = ec2.Vpc.fromLookup(this, 'DatabaseVpc', {

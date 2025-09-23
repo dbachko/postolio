@@ -126,9 +126,11 @@ const webStack = new WebStack(app, `Postolio-Web-${environment}`, {
 authStack.addDependency(foundationStack);
 apiStack.addDependency(foundationStack);
 
-// Microservice dependencies (can run in parallel with API)
+// Microservice dependencies - need API stack for VPC and database configuration
 schedulingStack.addDependency(authStack);
+schedulingStack.addDependency(apiStack); // Add dependency on API stack for VPC/database access
 publishingStack.addDependency(authStack);
+publishingStack.addDependency(apiStack); // Add dependency on API stack for VPC/database access
 publishingStack.addDependency(schedulingStack);
 
 // Web needs API for the load balancer URL (for CloudFront API proxy)
