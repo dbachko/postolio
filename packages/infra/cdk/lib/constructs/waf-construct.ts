@@ -174,17 +174,20 @@ export class WAFConstruct extends Construct {
       },
     ];
 
-    // Create the Web ACL
+    // Create the Web ACL with stack-specific naming to avoid conflicts
+    const stackName = cdk.Stack.of(this).stackName;
+    const wafName = `postolio-waf-${environment}-${stackName.toLowerCase()}`;
+
     this.webAcl = new wafv2.CfnWebACL(this, 'PostolioWebACL', {
-      name: `postolio-waf-${environment}`,
+      name: wafName,
       scope: 'REGIONAL', // Use REGIONAL for API Gateway
       defaultAction: { allow: {} },
-      description: `Postolio WAF for ${environment} environment`,
+      description: `Postolio WAF for ${environment} environment (${stackName})`,
       rules,
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudWatchMetricsEnabled: true,
-        metricName: `PostolioWAF${environment}`,
+        metricName: `PostolioWAF${environment}${stackName.replace(/-/g, '')}`,
       },
       tags: [
         {
