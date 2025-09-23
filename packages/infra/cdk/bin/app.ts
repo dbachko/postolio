@@ -48,10 +48,10 @@ const stackTags = {
 const oauthConfig = getOAuthConfig(app);
 
 // 1. Foundation Stack - ECR and shared infrastructure
-const foundationStack = new EcrRegistryStack(app, `Foundation-${environment}`, {
+const foundationStack = new EcrRegistryStack(app, `Postolio-Foundation-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
-  description: `Foundation infrastructure - ${environment} environment`,
+  description: `Postolio Foundation infrastructure - ${environment} environment`,
   tags: {
     ...stackTags,
     Service: 'Foundation',
@@ -59,12 +59,12 @@ const foundationStack = new EcrRegistryStack(app, `Foundation-${environment}`, {
 });
 
 // 2. Auth Stack - token-service microservice
-const authStack = new AuthStack(app, `Auth-${environment}`, {
+const authStack = new AuthStack(app, `Postolio-Auth-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
   ...oauthConfig,
-  description: `Authentication services - ${environment} environment`,
+  description: `Postolio Authentication services - ${environment} environment`,
   tags: {
     ...stackTags,
     Service: 'Auth',
@@ -72,11 +72,11 @@ const authStack = new AuthStack(app, `Auth-${environment}`, {
 });
 
 // 3. Scheduling Stack - schedule-management, schedule-cleanup, status-sync
-const schedulingStack = new SchedulingStack(app, `Scheduling-${environment}`, {
+const schedulingStack = new SchedulingStack(app, `Postolio-Scheduling-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
-  description: `Content scheduling services - ${environment} environment`,
+  description: `Postolio Content scheduling services - ${environment} environment`,
   tags: {
     ...stackTags,
     Service: 'Scheduling',
@@ -84,12 +84,12 @@ const schedulingStack = new SchedulingStack(app, `Scheduling-${environment}`, {
 });
 
 // 4. Publishing Stack - publisher, retry-handler, dlq-processor, campaign-event-dlq-processor
-const publishingStack = new PublishingStack(app, `Publishing-${environment}`, {
+const publishingStack = new PublishingStack(app, `Postolio-Publishing-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
   ...oauthConfig,
-  description: `Content publishing services - ${environment} environment`,
+  description: `Postolio Content publishing services - ${environment} environment`,
   tags: {
     ...stackTags,
     Service: 'Publishing',
@@ -97,13 +97,13 @@ const publishingStack = new PublishingStack(app, `Publishing-${environment}`, {
 });
 
 // 5. API Stack - Backend API (ECS)
-const apiStack = new ApiStack(app, `API-${environment}`, {
+const apiStack = new ApiStack(app, `Postolio-API-${environment}`, {
   env: stackEnv,
   environment,
   domainName,
   hostedZoneId,
   useExternalDns,
-  description: `Backend API - ${environment} environment`,
+  description: `Postolio Backend API - ${environment} environment`,
   tags: {
     ...stackTags,
     Service: 'API',
@@ -111,10 +111,10 @@ const apiStack = new ApiStack(app, `API-${environment}`, {
 });
 
 // 6. Web Stack - Frontend (React)
-const webStack = new WebStack(app, `Web-${environment}`, {
+const webStack = new WebStack(app, `Postolio-Web-${environment}`, {
   env: stackEnv,
   environment,
-  description: `Frontend application - ${environment} environment`,
+  description: `Postolio Frontend application - ${environment} environment`,
   tags: {
     ...stackTags,
     Service: 'Web',
@@ -146,32 +146,32 @@ cdk.Aspects.of(app).add(
 // Output stack references for cross-stack communication
 new cdk.CfnOutput(authStack, 'AuthStackReference', {
   value: authStack.stackName,
-  description: 'Auth stack reference for cross-stack dependencies',
-  exportName: `Auth-${environment}-StackRef`,
+  description: 'Postolio Auth stack reference for cross-stack dependencies',
+  exportName: `Postolio-Auth-${environment}-StackRef`,
 });
 
 new cdk.CfnOutput(schedulingStack, 'SchedulingStackReference', {
   value: schedulingStack.stackName,
-  description: 'Scheduling stack reference for cross-stack dependencies',
-  exportName: `Scheduling-${environment}-StackRef`,
+  description: 'Postolio Scheduling stack reference for cross-stack dependencies',
+  exportName: `Postolio-Scheduling-${environment}-StackRef`,
 });
 
 new cdk.CfnOutput(publishingStack, 'PublishingStackReference', {
   value: publishingStack.stackName,
-  description: 'Publishing stack reference for cross-stack dependencies',
-  exportName: `Publishing-${environment}-StackRef`,
+  description: 'Postolio Publishing stack reference for cross-stack dependencies',
+  exportName: `Postolio-Publishing-${environment}-StackRef`,
 });
 
 new cdk.CfnOutput(apiStack, 'ApiStackReference', {
   value: apiStack.stackName,
-  description: 'API stack reference for cross-stack dependencies',
-  exportName: `API-${environment}-StackRef`,
+  description: 'Postolio API stack reference for cross-stack dependencies',
+  exportName: `Postolio-API-${environment}-StackRef`,
 });
 
 new cdk.CfnOutput(webStack, 'WebStackReference', {
   value: webStack.stackName,
-  description: 'Web stack reference for cross-stack dependencies',
-  exportName: `Web-${environment}-StackRef`,
+  description: 'Postolio Web stack reference for cross-stack dependencies',
+  exportName: `Postolio-Web-${environment}-StackRef`,
 });
 
 console.log(`Optimized stack-based deployment configured for ${environment} environment`);

@@ -176,7 +176,7 @@ export class WAFConstruct extends Construct {
 
     // Create the Web ACL with stack-specific naming to avoid conflicts
     const stackName = cdk.Stack.of(this).stackName;
-    const wafName = `postolio-waf-${environment}-${stackName.toLowerCase()}`;
+    const wafName = `postolio-waf-${environment}-${stackName.toLowerCase().replace('postolio-', '')}`;
 
     this.webAcl = new wafv2.CfnWebACL(this, 'PostolioWebACL', {
       name: wafName,

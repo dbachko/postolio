@@ -408,7 +408,7 @@ export class ApiStack extends cdk.Stack {
     // VPC Flow Logs CloudWatch policy suppressions - find and suppress the IAM role created by VPC
     NagSuppressions.addResourceSuppressionsByPath(
       this,
-      '/API-dev/PostolioVPC/cloudwatch/IAMRole/DefaultPolicy',
+      `/${this.stackName}/PostolioVPC/cloudwatch/IAMRole/DefaultPolicy`,
       [
         {
           id: 'AwsSolutions-IAM5',
