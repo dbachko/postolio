@@ -42,7 +42,6 @@ export class PublishingStack extends cdk.Stack {
     const prefix = `postolio-${environment}-publishing`;
 
     // ==================== VPC Configuration ====================
-    // ==================== VPC Configuration ====================
     // Import VPC and security groups from Foundation stack
     let vpc: ec2.IVpc | undefined;
     let lambdaSecurityGroup: ec2.ISecurityGroup | undefined;

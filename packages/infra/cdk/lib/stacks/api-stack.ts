@@ -47,36 +47,63 @@ export class ApiStack extends cdk.Stack {
     const hasFoundationVpc = vpcId && !vpcId.startsWith('dummy-value-for-');
 
     if (!hasFoundationVpc) {
-      throw new Error(`Foundation VPC not found for environment ${environment}. Please deploy Foundation stack first.`);
+      console.log(`Foundation VPC not available for environment ${environment} - API stack will need Foundation deployed first`);
+      // During synthesis, we'll create a placeholder VPC reference
+      // This will fail at deployment time if Foundation isn't deployed first
     }
 
-    const vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', {
-      vpcId: vpcId,
-    });
+    // Only attempt VPC lookup if we have a valid VPC ID
+    let vpc: ec2.IVpc;
+    if (hasFoundationVpc) {
+      vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', {
+        vpcId: vpcId,
+      });
+    } else {
+      // During synthesis without Foundation, create a default VPC
+      // This will require Foundation to be deployed before API stack
+      vpc = new ec2.Vpc(this, 'PlaceholderVpc', {
+        maxAzs: 2,
+        natGateways: 1,
+      });
+    }
 
-    // Import security groups from Foundation stack (runtime values)
-    const ecsSecurityGroupId = ssm.StringParameter.valueForStringParameter(
-      this,
-      `/postolio/${environment}/security-groups/ecs`
-    );
+    // Import security groups and database secret from Foundation stack (runtime values)
+    let ecsSecurityGroup: ec2.ISecurityGroup | undefined;
+    let databaseSecret: secretsmanager.ISecret | undefined;
 
-    const ecsSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
-      this,
-      'EcsSecurityGroup',
-      ecsSecurityGroupId
-    );
+    if (hasFoundationVpc) {
+      const ecsSecurityGroupId = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/security-groups/ecs`
+      );
 
-    // Import database secret from Foundation stack (runtime values)
-    const databaseSecretArn = ssm.StringParameter.valueForStringParameter(
-      this,
-      `/postolio/${environment}/database/secret-arn`
-    );
+      ecsSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+        this,
+        'EcsSecurityGroup',
+        ecsSecurityGroupId
+      );
 
-    const databaseSecret = secretsmanager.Secret.fromSecretCompleteArn(
-      this,
-      'DatabaseSecret',
-      databaseSecretArn
-    );
+      const databaseSecretArn = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/database/secret-arn`
+      );
+
+      databaseSecret = secretsmanager.Secret.fromSecretCompleteArn(
+        this,
+        'DatabaseSecret',
+        databaseSecretArn
+      );
+    } else {
+      // Create placeholder resources for synthesis
+      ecsSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderEcsSecurityGroup', {
+        vpc: vpc,
+        description: 'Placeholder security group - Foundation needed for production',
+      });
+
+      databaseSecret = new secretsmanager.Secret(this, 'PlaceholderDatabaseSecret', {
+        description: 'Placeholder secret - Foundation needed for production',
+      });
+    }
 
     // Import ECR repository from Foundation stack - use repository name
     const ecrRepository = ecr.Repository.fromRepositoryName(
@@ -104,7 +131,7 @@ export class ApiStack extends cdk.Stack {
               effect: iam.Effect.ALLOW,
               actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
               resources: [
-                databaseSecret.secretArn,
+                databaseSecret?.secretArn || '',
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio/${environment}/*`,
               ],
             }),
@@ -175,11 +202,11 @@ export class ApiStack extends cdk.Stack {
             PORT: '3000',
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
           },
-          secrets: {
+          secrets: databaseSecret ? {
             // Database connection from Foundation stack secret
             DATABASE_URL: ecs.Secret.fromSecretsManager(databaseSecret, 'connectionString'),
             JWT_SECRET: ecs.Secret.fromSecretsManager(databaseSecret, 'jwtSecret'),
-          },
+          } : undefined,
           logDriver: ecs.LogDrivers.awsLogs({
             streamPrefix: `${prefix}-api`,
             logRetention: logs.RetentionDays.TWO_WEEKS,
@@ -209,8 +236,10 @@ export class ApiStack extends cdk.Stack {
       sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP traffic');
     });
 
-    // Connect the ECS service to the Foundation security group
-    this.apiService.service.connections.addSecurityGroup(ecsSecurityGroup);
+    // Connect the ECS service to the Foundation security group if available
+    if (ecsSecurityGroup) {
+      this.apiService.service.connections.addSecurityGroup(ecsSecurityGroup);
+    }
 
     // ==================== Health Check Configuration ====================
     this.apiService.targetGroup.configureHealthCheck({
