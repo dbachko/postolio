@@ -49,10 +49,7 @@ export class PublishingStack extends cdk.Stack {
 
     try {
       // Import VPC from Foundation stack
-      const vpcId = ssm.StringParameter.valueFromLookup(
-        this,
-        `/postolio/${environment}/vpc/id`
-      );
+      const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
 
       // Import Lambda security group from Foundation stack
       const lambdaSecurityGroupId = ssm.StringParameter.valueFromLookup(
@@ -61,7 +58,9 @@ export class PublishingStack extends cdk.Stack {
       );
 
       // Check if Foundation resources are available (not dummy values)
-      const hasFoundationResources = vpcId && lambdaSecurityGroupId &&
+      const hasFoundationResources =
+        vpcId &&
+        lambdaSecurityGroupId &&
         !vpcId.startsWith('dummy-value-for-') &&
         !lambdaSecurityGroupId.startsWith('dummy-value-for-');
 
@@ -82,7 +81,9 @@ export class PublishingStack extends cdk.Stack {
 
         console.log(`Using VPC configuration from Foundation stack for environment ${environment}`);
       } else {
-        console.log(`Foundation VPC not available for environment ${environment} - Lambda functions will run without VPC`);
+        console.log(
+          `Foundation VPC not available for environment ${environment} - Lambda functions will run without VPC`
+        );
       }
     } catch (error) {
       console.log(`Error accessing Foundation VPC configuration: ${error}`);
@@ -100,7 +101,9 @@ export class PublishingStack extends cdk.Stack {
 
       if (kmsKeyArn && !kmsKeyArn.startsWith('dummy-value-for-')) {
         encryptionKey = kms.Key.fromKeyArn(this, 'FoundationEncryptionKey', kmsKeyArn);
-        console.log(`Using shared encryption key from Foundation stack for environment ${environment}`);
+        console.log(
+          `Using shared encryption key from Foundation stack for environment ${environment}`
+        );
       } else {
         throw new Error('Foundation encryption key not available');
       }
@@ -110,9 +113,12 @@ export class PublishingStack extends cdk.Stack {
         alias: `alias/${prefix}-encryption`,
         description: 'KMS key for Publishing services encryption',
         enableKeyRotation: true,
-        removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+        removalPolicy:
+          environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       });
-      console.log(`Created dedicated encryption key for Publishing stack in environment ${environment}`);
+      console.log(
+        `Created dedicated encryption key for Publishing stack in environment ${environment}`
+      );
     }
 
     // ==================== SQS Queues ====================
@@ -623,15 +629,13 @@ export class PublishingStack extends cdk.Stack {
     );
 
     // Suppress CampaignEventDLQ not having a DLQ (it IS a DLQ itself)
-    NagSuppressions.addResourceSuppressions(
-      campaignDLQ,
-      [
-        {
-          id: 'AwsSolutions-SQS3',
-          reason: 'This queue IS a dead letter queue for campaign events - it does not need its own DLQ',
-        },
-      ]
-    );
+    NagSuppressions.addResourceSuppressions(campaignDLQ, [
+      {
+        id: 'AwsSolutions-SQS3',
+        reason:
+          'This queue IS a dead letter queue for campaign events - it does not need its own DLQ',
+      },
+    ]);
 
     // Suppress log retention function IAM issues (created automatically by CDK)
     NagSuppressions.addResourceSuppressions(
@@ -640,7 +644,9 @@ export class PublishingStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM4',
           reason: 'Log retention function uses AWS managed policy - standard CDK behavior',
-          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+          ],
         },
         {
           id: 'AwsSolutions-IAM5',

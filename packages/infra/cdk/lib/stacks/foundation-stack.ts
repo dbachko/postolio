@@ -75,31 +75,35 @@ export class FoundationStack extends cdk.Stack {
     }
 
     // ==================== VPC Configuration ====================
-    const vpcFlowLogsRole = enableVpcFlowLogs ? new iam.Role(this, 'VpcFlowLogsRole', {
-      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      inlinePolicies: {
-        FlowLogsDeliveryRolePolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              actions: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams',
+    const vpcFlowLogsRole = enableVpcFlowLogs
+      ? new iam.Role(this, 'VpcFlowLogsRole', {
+          assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+          inlinePolicies: {
+            FlowLogsDeliveryRolePolicy: new iam.PolicyDocument({
+              statements: [
+                new iam.PolicyStatement({
+                  actions: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                    'logs:DescribeLogGroups',
+                    'logs:DescribeLogStreams',
+                  ],
+                  resources: ['*'],
+                }),
               ],
-              resources: ['*'],
             }),
-          ],
-        }),
-      },
-    }) : undefined;
+          },
+        })
+      : undefined;
 
-    const vpcFlowLogGroup = enableVpcFlowLogs ? new logs.LogGroup(this, 'VpcFlowLogGroup', {
-      logGroupName: `/aws/vpc/${prefix}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    }) : undefined;
+    const vpcFlowLogGroup = enableVpcFlowLogs
+      ? new logs.LogGroup(this, 'VpcFlowLogGroup', {
+          logGroupName: `/aws/vpc/${prefix}`,
+          retention: logs.RetentionDays.ONE_WEEK,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        })
+      : undefined;
 
     this.vpc = new ec2.Vpc(this, 'FoundationVPC', {
       vpcName: `${prefix}-vpc`,
@@ -331,13 +335,13 @@ export class FoundationStack extends cdk.Stack {
 
     new ssm.StringListParameter(this, 'PrivateSubnetIdsParameter', {
       parameterName: `/postolio/${environment}/vpc/private-subnet-ids`,
-      stringListValue: this.vpc.privateSubnets.map(subnet => subnet.subnetId),
+      stringListValue: this.vpc.privateSubnets.map((subnet) => subnet.subnetId),
       description: 'Private subnet IDs for Lambda and ECS deployments',
     });
 
     new ssm.StringListParameter(this, 'PublicSubnetIdsParameter', {
       parameterName: `/postolio/${environment}/vpc/public-subnet-ids`,
-      stringListValue: this.vpc.publicSubnets.map(subnet => subnet.subnetId),
+      stringListValue: this.vpc.publicSubnets.map((subnet) => subnet.subnetId),
       description: 'Public subnet IDs for ALB deployments',
     });
 
@@ -468,7 +472,8 @@ export class FoundationStack extends cdk.Stack {
       },
       {
         id: 'AwsSolutions-S1',
-        reason: 'Access logging not required for centralized logs bucket to avoid recursive logging',
+        reason:
+          'Access logging not required for centralized logs bucket to avoid recursive logging',
       },
       {
         id: 'AwsSolutions-AEC5',

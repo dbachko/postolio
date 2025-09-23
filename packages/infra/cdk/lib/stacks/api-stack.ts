@@ -38,16 +38,15 @@ export class ApiStack extends cdk.Stack {
 
     // ==================== Import Foundation Resources ====================
     // Import VPC from Foundation stack (for CDK lookup, must use valueFromLookup)
-    const vpcId = ssm.StringParameter.valueFromLookup(
-      this,
-      `/postolio/${environment}/vpc/id`
-    );
+    const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
 
     // Check if Foundation resources are available
     const hasFoundationVpc = vpcId && !vpcId.startsWith('dummy-value-for-');
 
     if (!hasFoundationVpc) {
-      console.log(`Foundation VPC not available for environment ${environment} - API stack will need Foundation deployed first`);
+      console.log(
+        `Foundation VPC not available for environment ${environment} - API stack will need Foundation deployed first`
+      );
       // During synthesis, we'll create a placeholder VPC reference
       // This will fail at deployment time if Foundation isn't deployed first
     }
@@ -106,11 +105,7 @@ export class ApiStack extends cdk.Stack {
     }
 
     // Import ECR repository from Foundation stack - use repository name
-    const ecrRepository = ecr.Repository.fromRepositoryName(
-      this,
-      'PostolioRepository',
-      'postolio'
-    );
+    const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
 
     // ==================== ECS Cluster ====================
     this.ecsCluster = new ecs.Cluster(this, 'EcsCluster', {
@@ -154,23 +149,13 @@ export class ApiStack extends cdk.Stack {
             // KMS permissions for encryption
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'kms:Decrypt',
-                'kms:GenerateDataKey',
-              ],
-              resources: [
-                `arn:aws:kms:${this.region}:${this.account}:key/*`,
-              ],
+              actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+              resources: [`arn:aws:kms:${this.region}:${this.account}:key/*`],
             }),
             // S3 permissions for shared buckets
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-                's3:PutObject',
-                's3:DeleteObject',
-                's3:ListBucket',
-              ],
+              actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:ListBucket'],
               resources: [
                 `arn:aws:s3:::postolio-${environment}-shared-data-${this.account}`,
                 `arn:aws:s3:::postolio-${environment}-shared-data-${this.account}/*`,
@@ -202,11 +187,13 @@ export class ApiStack extends cdk.Stack {
             PORT: '3000',
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
           },
-          secrets: databaseSecret ? {
-            // Database connection from Foundation stack secret
-            DATABASE_URL: ecs.Secret.fromSecretsManager(databaseSecret, 'connectionString'),
-            JWT_SECRET: ecs.Secret.fromSecretsManager(databaseSecret, 'jwtSecret'),
-          } : undefined,
+          secrets: databaseSecret
+            ? {
+                // Database connection from Foundation stack secret
+                DATABASE_URL: ecs.Secret.fromSecretsManager(databaseSecret, 'connectionString'),
+                JWT_SECRET: ecs.Secret.fromSecretsManager(databaseSecret, 'jwtSecret'),
+              }
+            : undefined,
           logDriver: ecs.LogDrivers.awsLogs({
             streamPrefix: `${prefix}-api`,
             logRetention: logs.RetentionDays.TWO_WEEKS,
@@ -328,7 +315,8 @@ export class ApiStack extends cdk.Stack {
       },
       {
         id: 'AwsSolutions-IAM5',
-        reason: 'Wildcard permissions needed for Lambda invocations and KMS operations within scope',
+        reason:
+          'Wildcard permissions needed for Lambda invocations and KMS operations within scope',
       },
       {
         id: 'AwsSolutions-ECS2',

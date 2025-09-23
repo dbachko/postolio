@@ -51,10 +51,7 @@ export class SchedulingStack extends cdk.Stack {
 
     try {
       // Import VPC from Foundation stack
-      const vpcId = ssm.StringParameter.valueFromLookup(
-        this,
-        `/postolio/${environment}/vpc/id`
-      );
+      const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
 
       // Import Lambda security group from Foundation stack
       const lambdaSecurityGroupId = ssm.StringParameter.valueFromLookup(
@@ -63,7 +60,9 @@ export class SchedulingStack extends cdk.Stack {
       );
 
       // Check if Foundation resources are available (not dummy values)
-      const hasFoundationResources = vpcId && lambdaSecurityGroupId &&
+      const hasFoundationResources =
+        vpcId &&
+        lambdaSecurityGroupId &&
         !vpcId.startsWith('dummy-value-for-') &&
         !lambdaSecurityGroupId.startsWith('dummy-value-for-');
 
@@ -84,7 +83,9 @@ export class SchedulingStack extends cdk.Stack {
 
         console.log(`Using VPC configuration from Foundation stack for environment ${environment}`);
       } else {
-        console.log(`Foundation VPC not available for environment ${environment} - Lambda functions will run without VPC`);
+        console.log(
+          `Foundation VPC not available for environment ${environment} - Lambda functions will run without VPC`
+        );
       }
     } catch (error) {
       console.log(`Error accessing Foundation VPC configuration: ${error}`);
@@ -102,7 +103,9 @@ export class SchedulingStack extends cdk.Stack {
 
       if (kmsKeyArn && !kmsKeyArn.startsWith('dummy-value-for-')) {
         encryptionKey = kms.Key.fromKeyArn(this, 'FoundationEncryptionKey', kmsKeyArn);
-        console.log(`Using shared encryption key from Foundation stack for environment ${environment}`);
+        console.log(
+          `Using shared encryption key from Foundation stack for environment ${environment}`
+        );
       } else {
         throw new Error('Foundation encryption key not available');
       }
@@ -112,9 +115,12 @@ export class SchedulingStack extends cdk.Stack {
         alias: `alias/${prefix}-encryption`,
         description: 'KMS key for Scheduling services encryption',
         enableKeyRotation: true,
-        removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+        removalPolicy:
+          environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       });
-      console.log(`Created dedicated encryption key for Scheduling stack in environment ${environment}`);
+      console.log(
+        `Created dedicated encryption key for Scheduling stack in environment ${environment}`
+      );
     }
 
     // ==================== DynamoDB Tables ====================
@@ -183,10 +189,7 @@ export class SchedulingStack extends cdk.Stack {
         effect: iam.Effect.DENY,
         principals: [new iam.AnyPrincipal()],
         actions: ['s3:*'],
-        resources: [
-          logBucket.bucketArn,
-          `${logBucket.bucketArn}/*`,
-        ],
+        resources: [logBucket.bucketArn, `${logBucket.bucketArn}/*`],
         conditions: {
           Bool: {
             'aws:SecureTransport': 'false',
@@ -224,10 +227,7 @@ export class SchedulingStack extends cdk.Stack {
         effect: iam.Effect.DENY,
         principals: [new iam.AnyPrincipal()],
         actions: ['s3:*'],
-        resources: [
-          this.videoBucket.bucketArn,
-          `${this.videoBucket.bucketArn}/*`,
-        ],
+        resources: [this.videoBucket.bucketArn, `${this.videoBucket.bucketArn}/*`],
         conditions: {
           Bool: {
             'aws:SecureTransport': 'false',
@@ -607,15 +607,12 @@ export class SchedulingStack extends cdk.Stack {
 
     // Suppress DynamoDB PITR requirement for non-prod environments
     if (environment !== 'prod') {
-      NagSuppressions.addResourceSuppressions(
-        this.schedulesTable,
-        [
-          {
-            id: 'AwsSolutions-DDB3',
-            reason: 'Point-in-time recovery is only enabled for production to reduce costs',
-          },
-        ]
-      );
+      NagSuppressions.addResourceSuppressions(this.schedulesTable, [
+        {
+          id: 'AwsSolutions-DDB3',
+          reason: 'Point-in-time recovery is only enabled for production to reduce costs',
+        },
+      ]);
     }
 
     // Suppress log retention function IAM issues (created automatically by CDK)
@@ -625,7 +622,9 @@ export class SchedulingStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM4',
           reason: 'Log retention function uses AWS managed policy - standard CDK behavior',
-          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+          ],
         },
         {
           id: 'AwsSolutions-IAM5',

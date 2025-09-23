@@ -1,6 +1,7 @@
 # Foundation Stack Migration Guide
 
 ## Overview
+
 This guide provides step-by-step instructions for migrating shared infrastructure components from the API stack to the new enhanced Foundation stack.
 
 ## Pre-Migration Checklist
@@ -28,15 +29,13 @@ pnpm cdk deploy Postolio-Foundation-dev --context environment=dev
 Update the Scheduling and Publishing stacks to conditionally use Foundation resources:
 
 #### scheduling-stack.ts
+
 ```typescript
 // Before (current implementation)
 const enableVpcConfig = this.node.tryGetContext('enableVpcConfig') === 'true';
 
 // After (use Foundation resources if available)
-const vpcId = ssm.StringParameter.valueFromLookup(
-  this,
-  `/postolio/${environment}/vpc/id`
-);
+const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
 
 // Check if Foundation stack resources exist
 const hasFoundationResources = vpcId && !vpcId.startsWith('dummy-value-for-');
@@ -66,6 +65,7 @@ if (hasFoundationResources) {
 Modify the API stack to use Foundation resources instead of creating its own:
 
 #### api-stack.ts
+
 ```typescript
 export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
@@ -205,11 +205,13 @@ pnpm cdk deploy Postolio-API-dev
 If issues arise during migration:
 
 ### Quick Rollback
+
 1. Revert code changes in git
 2. Deploy previous version of stacks
 3. Restore from RDS snapshot if needed
 
 ### Gradual Rollback
+
 1. Keep both old and new infrastructure running
 2. Switch back to old resources via SSM parameter updates
 3. Fix issues in new infrastructure
@@ -218,16 +220,19 @@ If issues arise during migration:
 ## Environment-Specific Considerations
 
 ### Development
+
 - Can afford downtime for migration
 - Test all changes thoroughly
 - Document any issues for staging/prod
 
 ### Staging
+
 - Schedule migration during low-traffic window
 - Run parallel infrastructure if possible
 - Validate with integration tests
 
 ### Production
+
 - Use blue-green deployment strategy
 - Maintain old infrastructure until new is proven
 - Have database failover ready
@@ -247,18 +252,21 @@ If issues arise during migration:
 ### Common Issues and Solutions
 
 #### VPC Lookup Fails
+
 ```
 Error: Could not find VPC
 Solution: Ensure Foundation stack is deployed and SSM parameters exist
 ```
 
 #### Lambda Cannot Connect to Database
+
 ```
 Error: Connection timeout
 Solution: Check security group rules and VPC endpoints
 ```
 
 #### ECS Tasks Cannot Start
+
 ```
 Error: No container instances
 Solution: Verify ECS cluster is using correct VPC and subnets

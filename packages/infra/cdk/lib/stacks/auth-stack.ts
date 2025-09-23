@@ -275,8 +275,11 @@ export class AuthStack extends cdk.Stack {
         },
         {
           id: 'AwsSolutions-IAM4',
-          reason: 'AWS managed policy AWSLambdaBasicExecutionRole is standard for Lambda functions and provides minimal CloudWatch Logs permissions',
-          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+          reason:
+            'AWS managed policy AWSLambdaBasicExecutionRole is standard for Lambda functions and provides minimal CloudWatch Logs permissions',
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+          ],
         },
       ],
       true
@@ -284,15 +287,13 @@ export class AuthStack extends cdk.Stack {
 
     // Suppress DynamoDB PITR requirement for non-prod environments
     if (environment !== 'prod') {
-      NagSuppressions.addResourceSuppressions(
-        this.tokenTable,
-        [
-          {
-            id: 'AwsSolutions-DDB3',
-            reason: 'Point-in-time recovery is only enabled for production environment to reduce costs in dev/staging',
-          },
-        ]
-      );
+      NagSuppressions.addResourceSuppressions(this.tokenTable, [
+        {
+          id: 'AwsSolutions-DDB3',
+          reason:
+            'Point-in-time recovery is only enabled for production environment to reduce costs in dev/staging',
+        },
+      ]);
     }
 
     // Suppress log retention function IAM issues (created automatically by CDK)
@@ -301,12 +302,16 @@ export class AuthStack extends cdk.Stack {
       [
         {
           id: 'AwsSolutions-IAM4',
-          reason: 'Log retention function uses AWS managed policy for CloudWatch Logs access - this is standard CDK behavior',
-          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+          reason:
+            'Log retention function uses AWS managed policy for CloudWatch Logs access - this is standard CDK behavior',
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+          ],
         },
         {
           id: 'AwsSolutions-IAM5',
-          reason: 'Log retention function requires wildcard permissions for CloudWatch Logs management - this is standard CDK behavior',
+          reason:
+            'Log retention function requires wildcard permissions for CloudWatch Logs management - this is standard CDK behavior',
           appliesTo: ['Resource::*'],
         },
         {
