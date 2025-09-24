@@ -111,7 +111,7 @@ export class ApiStack extends cdk.Stack {
     this.ecsCluster = new ecs.Cluster(this, 'EcsCluster', {
       clusterName: `${prefix}-cluster`,
       vpc: vpc,
-      containerInsights: environment === 'prod',
+      containerInsights: true, // Enable for all environments to satisfy CDK Nag AwsSolutions-ECS4
     });
 
     // ==================== ECS Task Role ====================
@@ -169,6 +169,32 @@ export class ApiStack extends cdk.Stack {
     // ==================== Application Load Balanced Fargate Service ====================
     const useHttps = domainName && hostedZoneId;
 
+    // Create S3 bucket for ALB access logs
+    const logBucket = new cdk.aws_s3.Bucket(this, 'AlbAccessLogsBucket', {
+      bucketName: `postolio-alb-logs-${environment}-${this.account}`,
+      blockPublicAccess: cdk.aws_s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true, // Require SSL for all requests
+      lifecycleRules: [{
+        id: 'DeleteOldLogs',
+        expiration: cdk.Duration.days(30),
+      }],
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    // CDK Nag suppression for S3 bucket access logs
+    // ALB access log buckets should not have their own access logs to avoid infinite loops
+    NagSuppressions.addResourceSuppressions(
+      logBucket,
+      [
+        {
+          id: 'AwsSolutions-S1',
+          reason: 'ALB access log bucket should not have server access logging to avoid infinite recursion',
+        },
+      ]
+    );
+
     this.apiService = new ecsPatterns.ApplicationLoadBalancedFargateService(
       this,
       'PostolioService',
@@ -216,12 +242,15 @@ export class ApiStack extends cdk.Stack {
 
     this.loadBalancer = this.apiService.loadBalancer;
 
+    // Enable ALB access logs to satisfy CDK Nag AwsSolutions-ELB2
+    this.loadBalancer.logAccessLogs(logBucket, 'alb-logs');
+
     // ==================== Security Group Configuration ====================
-    // Use the ECS security group from Foundation stack
-    this.apiService.service.connections.securityGroups.forEach((sg) => {
-      sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS traffic');
-      sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP traffic');
-    });
+    // Note: The ApplicationLoadBalancedFargateService pattern automatically creates
+    // security groups with appropriate ingress rules. The ALB security group will
+    // allow traffic from the internet, and the service security group will only
+    // allow traffic from the ALB. This is the intended pattern and CDK Nag
+    // warnings for public-facing ALBs are expected behavior.
 
     // Connect the ECS service to the Foundation security group if available
     if (ecsSecurityGroup) {
@@ -322,6 +351,33 @@ export class ApiStack extends cdk.Stack {
         id: 'AwsSolutions-ECS2',
         reason: 'Environment variables do not contain sensitive data; secrets are properly managed',
       },
+      {
+        id: 'AwsSolutions-EC23',
+        reason: 'ALB requires public internet access as this is a public-facing API. The security group rules are appropriately scoped for the ALB pattern.',
+      },
     ]);
+
+    // Resource-specific suppressions for ALB and service security groups
+    NagSuppressions.addResourceSuppressions(
+      this.loadBalancer,
+      [
+        {
+          id: 'AwsSolutions-EC23',
+          reason: 'Public-facing ALB requires internet access on ports 80/443 for external API access',
+        },
+      ],
+      true // Apply to child constructs
+    );
+
+    NagSuppressions.addResourceSuppressions(
+      this.apiService.service,
+      [
+        {
+          id: 'AwsSolutions-EC23',
+          reason: 'Service security group is properly restricted to only allow traffic from ALB',
+        },
+      ],
+      true // Apply to child constructs
+    );
   }
 }
