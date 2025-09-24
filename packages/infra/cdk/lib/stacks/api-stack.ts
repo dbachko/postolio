@@ -352,15 +352,20 @@ export class ApiStack extends cdk.Stack {
     }
 
     // Grant the API service security group access to the database
-    if (databaseSecurityGroup) {
+    if (databaseSecurityGroup && hasFoundationVpc) {
       // The ApplicationLoadBalancedFargateService creates its own service security group
       // We need to allow this service security group to connect to the database
       const serviceSecurityGroup = this.apiService.service.connections.securityGroups[0];
-      databaseSecurityGroup.addIngressRule(
-        serviceSecurityGroup,
-        ec2.Port.tcp(5432),
-        'Allow API ECS service to connect to database'
-      );
+
+      // Use CfnSecurityGroupIngress since we can't modify imported security groups directly
+      new ec2.CfnSecurityGroupIngress(this, 'DatabaseAccessRule', {
+        groupId: databaseSecurityGroup.securityGroupId,
+        ipProtocol: 'tcp',
+        fromPort: 5432,
+        toPort: 5432,
+        sourceSecurityGroupId: serviceSecurityGroup.securityGroupId,
+        description: 'Allow API ECS service to connect to database',
+      });
     }
 
     // ==================== Health Check Configuration ====================
