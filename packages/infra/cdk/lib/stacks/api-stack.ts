@@ -104,6 +104,18 @@ export class ApiStack extends cdk.Stack {
       });
     }
 
+    // Create JWT Secret
+    const jwtSecret = new secretsmanager.Secret(this, 'JwtSecret', {
+      secretName: `postolio-${environment}/jwt-secret`,
+      description: 'JWT secret for token signing',
+      generateSecretString: {
+        secretStringTemplate: '{}',
+        generateStringKey: 'secret',
+        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+        passwordLength: 32,
+      },
+    });
+
     // Import ECR repository from Foundation stack - use repository name
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
 
@@ -127,6 +139,8 @@ export class ApiStack extends cdk.Stack {
               actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
               resources: [
                 databaseSecret?.secretArn || '',
+                jwtSecret.secretArn,
+                `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio/${environment}/*`,
               ],
             }),
@@ -212,12 +226,19 @@ export class ApiStack extends cdk.Stack {
             NODE_ENV: environment,
             PORT: '3000',
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+            // Additional environment variables that don't need to be secrets
+            AWS_REGION: this.region,
           },
           secrets: databaseSecret
             ? {
-                // Database connection from Foundation stack secret
-                DATABASE_URL: ecs.Secret.fromSecretsManager(databaseSecret, 'connectionString'),
-                JWT_SECRET: ecs.Secret.fromSecretsManager(databaseSecret, 'jwtSecret'),
+                // Database credentials from RDS-managed secret - get individual components
+                DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),
+                DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, 'password'),
+                DB_HOST: ecs.Secret.fromSecretsManager(databaseSecret, 'host'),
+                DB_PORT: ecs.Secret.fromSecretsManager(databaseSecret, 'port'),
+                DB_NAME: ecs.Secret.fromSecretsManager(databaseSecret, 'dbname'),
+                // JWT secret from dedicated secret
+                JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret, 'secret'),
               }
             : undefined,
           logDriver: ecs.LogDrivers.awsLogs({

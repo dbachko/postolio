@@ -54,12 +54,13 @@ RUN adduser --system --uid 1001 nodejs
 # Copy pruned workspace (built output + node_modules)
 COPY --from=builder --chown=nodejs:nodejs /app/ .
 
-# Copy startup script and legal docs from source
+# Copy startup script, entrypoint, and legal docs from source
 COPY --from=pruner --chown=nodejs:nodejs /app/scripts/start-with-migration.sh ./start-with-migration.sh
+COPY --from=pruner --chown=nodejs:nodejs /app/packages/apps/api/docker-entrypoint.sh ./docker-entrypoint.sh
 COPY --from=pruner --chown=nodejs:nodejs /app/legal ./legal
 
-# Make startup script executable
-RUN chmod +x ./start-with-migration.sh
+# Make scripts executable
+RUN chmod +x ./start-with-migration.sh ./docker-entrypoint.sh
 
 # Set user and environment
 USER nodejs
@@ -70,6 +71,9 @@ ENV NODE_ENV=dev
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
   CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })" || exit 1
+
+# Set entrypoint to handle DATABASE_URL construction
+ENTRYPOINT ["./docker-entrypoint.sh"]
 
 # Start command
 CMD ["./start-with-migration.sh"]
