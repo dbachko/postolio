@@ -23,6 +23,7 @@ export interface ApiStackProps extends cdk.StackProps {
   domainName?: string;
   hostedZoneId?: string;
   useExternalDns?: boolean;
+  openaiApiKey?: string;
 }
 
 export class ApiStack extends cdk.Stack {
@@ -33,7 +34,7 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const { environment, domainName, hostedZoneId, useExternalDns } = props;
+    const { environment, domainName, hostedZoneId, useExternalDns, openaiApiKey } = props;
     const prefix = `postolio-${environment}-api`;
 
     // ==================== Import Foundation Resources ====================
@@ -294,6 +295,8 @@ export class ApiStack extends cdk.Stack {
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
             // Additional environment variables that don't need to be secrets
             AWS_REGION: this.region,
+            // OpenAI API Key from GitHub secrets (passed via CI/CD)
+            ...(openaiApiKey && { OPENAI_API_KEY: openaiApiKey }),
           },
           secrets: databaseSecret
             ? {

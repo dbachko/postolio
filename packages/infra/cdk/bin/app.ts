@@ -105,6 +105,7 @@ const apiStack = new ApiStack(app, `Postolio-API-${environment}`, {
   domainName,
   hostedZoneId,
   useExternalDns,
+  openaiApiKey: app.node.tryGetContext('openaiApiKey'),
   description: `Postolio Backend API - ${environment} environment`,
   tags: {
     ...stackTags,
