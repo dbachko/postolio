@@ -116,6 +116,19 @@ export class ApiStack extends cdk.Stack {
       },
     });
 
+    // CDK Nag suppression for JWT secret rotation
+    // JWT secrets don't typically need automatic rotation as they're used for token signing
+    // and rotation would invalidate all existing tokens
+    NagSuppressions.addResourceSuppressions(
+      jwtSecret,
+      [
+        {
+          id: 'AwsSolutions-SMG4',
+          reason: 'JWT secret does not require automatic rotation. Token expiry provides security, and rotation would invalidate all existing sessions.',
+        },
+      ]
+    );
+
     // Import ECR repository from Foundation stack - use repository name
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
 
@@ -297,6 +310,14 @@ export class ApiStack extends cdk.Stack {
     );
 
     this.loadBalancer = this.apiService.loadBalancer;
+
+    // Configure deployment settings to ensure service availability during updates
+    // Setting minHealthyPercent to 100 ensures all tasks remain running during deployment
+    const cfnService = this.apiService.service.node.defaultChild as ecs.CfnService;
+    cfnService.deploymentConfiguration = {
+      minimumHealthyPercent: 100, // Maintain 100% of desired tasks during deployment
+      maximumPercent: 200, // Allow up to 200% of desired tasks during deployment
+    };
 
     // Enable ALB access logs to satisfy CDK Nag AwsSolutions-ELB2
     this.loadBalancer.logAccessLogs(logBucket, 'alb-logs');

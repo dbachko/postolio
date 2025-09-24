@@ -441,18 +441,15 @@ jobs:
 
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             echo "Deployment attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES for $CDK_STACK"
-            
-            # Check if stack exists and is in a failed state
+
+            # Check if stack exists and log its status (no automatic deletion)
             STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$CDK_STACK" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-            
+
             if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]]; then
-              echo "Stack is in ROLLBACK_COMPLETE state, attempting to delete before retry..."
-              aws cloudformation delete-stack --stack-name "$CDK_STACK" || true
-              
-              # Wait for deletion to complete
-              echo "Waiting for stack deletion to complete..."
-              aws cloudformation wait stack-delete-complete --stack-name "$CDK_STACK" --cli-read-timeout 0 --cli-connect-timeout 60 || true
-              sleep 30
+              echo "⚠️ Stack is in ROLLBACK_COMPLETE state. Manual intervention may be required."
+              echo "To fix this, you can manually delete the stack using:"
+              echo "  aws cloudformation delete-stack --stack-name $CDK_STACK"
+              # Continue with deployment attempt - CDK may handle this
             fi
 
             if timeout 2400 pnpm cdk deploy "$CDK_STACK" \
