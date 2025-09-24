@@ -42,7 +42,6 @@ runs:
         aws-region: ${{ inputs.aws-region }}
 
     - name: Install all workspace dependencies
-      timeout-minutes: 20  # Extended timeout for dependency installation
       run: |
         echo "Installing workspace dependencies..."
         pnpm install --frozen-lockfile --prefer-offline
@@ -50,7 +49,6 @@ runs:
       shell: bash
 
     - name: Build dependencies
-      timeout-minutes: 15  # Extended timeout for builds
       run: |
         echo "Building required dependencies for CDK deployment..."
         
