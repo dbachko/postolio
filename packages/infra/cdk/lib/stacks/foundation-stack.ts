@@ -57,19 +57,37 @@ export class FoundationStack extends cdk.Stack {
     });
 
     // ==================== ECR Repository ====================
-    this.repository = new ecr.Repository(this, 'PostolioRepository', {
-      repositoryName: 'postolio',
-      imageScanOnPush: true,
-      imageTagMutability: ecr.TagMutability.MUTABLE,
-      lifecycleRules: [
-        {
-          rulePriority: 1,
-          description: 'Keep last 10 images',
-          maxImageCount: 10,
-        },
-      ],
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
+    // Import existing repository if it exists (e.g., from previous failed deployments)
+    // Otherwise create a new one
+    const repositoryName = 'postolio';
+
+    // Check if we should import existing repository
+    // This is useful when the repository was created in a previous deployment that failed
+    const existingRepositoryArn = this.node.tryGetContext('existing-ecr-arn');
+
+    if (existingRepositoryArn) {
+      // Import existing repository by ARN
+      this.repository = ecr.Repository.fromRepositoryArn(
+        this,
+        'PostolioRepository',
+        existingRepositoryArn
+      );
+    } else {
+      // Create new repository or use existing one if the logical ID matches
+      this.repository = new ecr.Repository(this, 'PostolioRepository', {
+        repositoryName,
+        imageScanOnPush: true,
+        imageTagMutability: ecr.TagMutability.MUTABLE,
+        lifecycleRules: [
+          {
+            rulePriority: 1,
+            description: 'Keep last 10 images',
+            maxImageCount: 10,
+          },
+        ],
+        removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      });
+    }
 
     // ==================== VPC Configuration ====================
     const vpcFlowLogsRole = enableVpcFlowLogs
