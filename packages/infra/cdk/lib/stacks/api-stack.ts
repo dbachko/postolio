@@ -126,6 +126,41 @@ export class ApiStack extends cdk.Stack {
       containerInsights: true, // Enable for all environments to satisfy CDK Nag AwsSolutions-ECS4
     });
 
+    // ==================== ECS Execution Role ====================
+    // This role is used by ECS to pull container images and fetch secrets
+    const executionRole = new iam.Role(this, 'EcsExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy'),
+      ],
+      inlinePolicies: {
+        SecretAccess: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['secretsmanager:GetSecretValue'],
+              resources: [
+                databaseSecret?.secretArn || '',
+                jwtSecret.secretArn,
+                `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
+                `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio/${environment}/*`,
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['kms:Decrypt'],
+              resources: [`arn:aws:kms:${this.region}:${this.account}:key/*`],
+              conditions: {
+                StringEquals: {
+                  'kms:ViaService': `secretsmanager.${this.region}.amazonaws.com`,
+                },
+              },
+            }),
+          ],
+        }),
+      },
+    });
+
     // ==================== ECS Task Role ====================
     const taskRole = new iam.Role(this, 'EcsTaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
@@ -222,6 +257,7 @@ export class ApiStack extends cdk.Stack {
           image: ecs.ContainerImage.fromEcrRepository(ecrRepository, `api-${environment}-latest`),
           containerPort: 3000,
           taskRole: taskRole,
+          executionRole: executionRole,
           environment: {
             NODE_ENV: environment,
             PORT: '3000',
@@ -236,7 +272,6 @@ export class ApiStack extends cdk.Stack {
                 DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, 'password'),
                 DB_HOST: ecs.Secret.fromSecretsManager(databaseSecret, 'host'),
                 DB_PORT: ecs.Secret.fromSecretsManager(databaseSecret, 'port'),
-                DB_NAME: ecs.Secret.fromSecretsManager(databaseSecret, 'dbname'),
                 // JWT secret from dedicated secret
                 JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret, 'secret'),
               }
