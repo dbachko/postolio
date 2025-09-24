@@ -68,6 +68,7 @@ export class ApiStack extends cdk.Stack {
 
     // Import security groups and database secret from Foundation stack (runtime values)
     let ecsSecurityGroup: ec2.ISecurityGroup | undefined;
+    let databaseSecurityGroup: ec2.ISecurityGroup | undefined;
     let databaseSecret: secretsmanager.ISecret | undefined;
 
     if (hasFoundationVpc) {
@@ -80,6 +81,17 @@ export class ApiStack extends cdk.Stack {
         this,
         'EcsSecurityGroup',
         ecsSecurityGroupId
+      );
+
+      const databaseSecurityGroupId = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/security-groups/database`
+      );
+
+      databaseSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+        this,
+        'DatabaseSecurityGroup',
+        databaseSecurityGroupId
       );
 
       const databaseSecretArn = ssm.StringParameter.valueForStringParameter(
@@ -97,6 +109,11 @@ export class ApiStack extends cdk.Stack {
       ecsSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderEcsSecurityGroup', {
         vpc: vpc,
         description: 'Placeholder security group - Foundation needed for production',
+      });
+
+      databaseSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderDatabaseSecurityGroup', {
+        vpc: vpc,
+        description: 'Placeholder database security group - Foundation needed for production',
       });
 
       databaseSecret = new secretsmanager.Secret(this, 'PlaceholderDatabaseSecret', {
@@ -332,6 +349,18 @@ export class ApiStack extends cdk.Stack {
     // Connect the ECS service to the Foundation security group if available
     if (ecsSecurityGroup) {
       this.apiService.service.connections.addSecurityGroup(ecsSecurityGroup);
+    }
+
+    // Grant the API service security group access to the database
+    if (databaseSecurityGroup) {
+      // The ApplicationLoadBalancedFargateService creates its own service security group
+      // We need to allow this service security group to connect to the database
+      const serviceSecurityGroup = this.apiService.service.connections.securityGroups[0];
+      databaseSecurityGroup.addIngressRule(
+        serviceSecurityGroup,
+        ec2.Port.tcp(5432),
+        'Allow API ECS service to connect to database'
+      );
     }
 
     // ==================== Health Check Configuration ====================
