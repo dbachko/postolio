@@ -42,14 +42,32 @@ runs:
         aws-region: ${{ inputs.aws-region }}
 
     - name: Install all workspace dependencies
-      run: pnpm install --frozen-lockfile
+      timeout-minutes: 20  # Extended timeout for dependency installation
+      run: |
+        echo "Installing workspace dependencies..."
+        pnpm install --frozen-lockfile --prefer-offline
+        echo "Dependencies installed successfully"
       shell: bash
 
     - name: Build dependencies
+      timeout-minutes: 15  # Extended timeout for builds
       run: |
-        # Build required dependencies for CDK deployment
+        echo "Building required dependencies for CDK deployment..."
+        
+        # Build required dependencies for CDK deployment with error handling
+        echo "Building service-parameters..."
         pnpm --filter=@postolio/service-parameters build
-        pnpm --filter=@postolio/database build || true
+        
+        echo "Building database (may fail, continuing)..."
+        pnpm --filter=@postolio/database build || {
+          echo "Database build failed, continuing without it..."
+        }
+        
+        echo "Building errors..."
         pnpm --filter=@postolio/errors build
+        
+        echo "Building AWS utilities..."
         pnpm --filter=@postolio/aws build
+        
+        echo "All dependency builds completed"
       shell: bash
