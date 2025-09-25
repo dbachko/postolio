@@ -1,19 +1,8 @@
 import { randomUUID } from 'crypto';
-import OpenAI from 'openai';
+import { getOpenAIClient } from './openai-client.js';
 import type { StyleProfile } from './ai.js';
 import { generateMidjourneyImage } from './midjourney.js';
 import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// Validate OpenAI API key on startup
-if (!process.env.OPENAI_API_KEY) {
-  console.error('WARNING: OPENAI_API_KEY environment variable is not set');
-} else {
-  console.log('OpenAI API key is configured');
-}
 
 export interface ContentGenerationRequest {
   brandId: string;
@@ -55,6 +44,12 @@ export async function generateInstagramContent(
   brandName: string,
   request: ContentGenerationRequest
 ): Promise<GeneratedContent[]> {
+  const openai = getOpenAIClient();
+  if (!openai) {
+    console.warn('OpenAI client is not configured. Returning fallback content batch.');
+    return buildFallbackGeneratedContent(styleProfile, brandName, request);
+  }
+
   const { count, theme, style } = request;
 
   const systemPrompt = `You are an expert Instagram content creator specializing in high-quality, engaging posts. You adapt your content creation based on learned user preferences.
@@ -229,21 +224,38 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
 
     // Return fallback content for other errors
     console.warn('Falling back to template content due to OpenAI error');
-    return Array.from({ length: count }, (_, i) => ({
-      caption: `Generated content ${
-        i + 1
-      } for ${brandName}. This engaging post captures the essence of your brand while connecting with your audience. Share your story and inspire your followers! 🌟`,
-      hashtags: ['inspiration', 'lifestyle', 'authentic', 'community', 'brand'],
-      imagePrompt: `A beautiful ${(styleProfile.aestheticStyle || 'modern').toLowerCase()} image featuring ${
-        Array.isArray(styleProfile.colorPalette) && styleProfile.colorPalette.length >= 2
-          ? `${styleProfile.colorPalette[0]} and ${styleProfile.colorPalette[1]}`
-          : 'vibrant'
-      } colors`,
-    }));
+    return buildFallbackGeneratedContent(styleProfile, brandName, request);
   }
 }
 
+function buildFallbackGeneratedContent(
+  styleProfile: StyleProfile,
+  brandName: string,
+  request: ContentGenerationRequest
+): GeneratedContent[] {
+  const { count } = request;
+
+  return Array.from({ length: count }, (_, i) => ({
+    caption: `Generated content ${
+      i + 1
+    } for ${brandName}. This engaging post captures the essence of your brand while connecting with your audience. Share your story and inspire your followers! 🌟`,
+    hashtags: ['inspiration', 'lifestyle', 'authentic', 'community', 'brand'],
+    imagePrompt: `A beautiful ${(styleProfile.aestheticStyle || 'modern').toLowerCase()} image featuring ${
+      Array.isArray(styleProfile.colorPalette) && styleProfile.colorPalette.length >= 2
+        ? `${styleProfile.colorPalette[0]} and ${styleProfile.colorPalette[1]}`
+        : 'vibrant'
+    } colors`,
+  }));
+}
+
 export async function generateContentImage(prompt: string): Promise<string> {
+  const openai = getOpenAIClient();
+
+  if (!openai) {
+    console.warn('OpenAI client is not configured. Cannot generate content image.');
+    throw new Error('OpenAI API key configuration error');
+  }
+
   try {
     const response = await openai.images.generate({
       model: 'dall-e-3',
@@ -282,6 +294,13 @@ export async function generateBrandContentImage(
 
     // Fallback to DALL-E with enhanced prompt that includes brand characteristics
     try {
+      const openai = getOpenAIClient();
+
+      if (!openai) {
+        console.warn('OpenAI client is not configured. Cannot generate DALL-E fallback image.');
+        throw new Error('OpenAI API key configuration error');
+      }
+
       const { aestheticStyle, colorPalette, brandPersonality } = styleProfile;
 
       let enhancedPrompt = `Create a high-quality Instagram-worthy image: ${prompt}`;

@@ -1,8 +1,4 @@
-import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { getOpenAIClient } from './openai-client.js';
 
 export interface PostAnalysis {
   imageUrl: string;
@@ -29,6 +25,13 @@ export async function analyzeBrandStyle(
   posts: PostAnalysis[],
   brandName: string
 ): Promise<BrandAnalysisResult> {
+  const openai = getOpenAIClient();
+
+  if (!openai) {
+    console.warn('OpenAI client is not configured. Returning fallback brand analysis.');
+    return buildFallbackBrandAnalysis();
+  }
+
   const postsText = posts
     .map((post) => `Caption: ${post.caption}\nHashtags: ${post.hashtags.join(', ')}`)
     .join('\n\n');
@@ -89,23 +92,7 @@ Return only valid JSON without any additional text or formatting.`;
   } catch (error) {
     console.error('Brand analysis error:', error);
 
-    // Return fallback analysis
-    return {
-      styleProfile: {
-        colorPalette: ['#333333', '#ffffff'],
-        aestheticStyle: 'Modern and clean',
-        contentThemes: ['lifestyle', 'product'],
-        toneOfVoice: 'Professional and friendly',
-        targetAudience: 'General audience',
-        brandPersonality: ['authentic', 'approachable'],
-      },
-      recommendations: [
-        'Maintain consistent visual style',
-        'Engage with audience regularly',
-        'Use trending hashtags strategically',
-      ],
-      confidence: 0.5,
-    };
+    return buildFallbackBrandAnalysis();
   }
 }
 
@@ -114,6 +101,13 @@ export async function analyzeImageStyle(imageUrl: string): Promise<{
   colors: string[];
   style: string;
 }> {
+  const openai = getOpenAIClient();
+
+  if (!openai) {
+    console.warn('OpenAI client is not configured. Returning fallback image analysis.');
+    return buildFallbackImageAnalysis();
+  }
+
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -143,10 +137,37 @@ export async function analyzeImageStyle(imageUrl: string): Promise<{
     return JSON.parse(content);
   } catch (error) {
     console.error('Image analysis error:', error);
-    return {
-      description: 'Unable to analyze image',
-      colors: ['#000000'],
-      style: 'Unknown',
-    };
+    return buildFallbackImageAnalysis();
   }
+}
+
+function buildFallbackBrandAnalysis(): BrandAnalysisResult {
+  return {
+    styleProfile: {
+      colorPalette: ['#333333', '#ffffff'],
+      aestheticStyle: 'Modern and clean',
+      contentThemes: ['lifestyle', 'product'],
+      toneOfVoice: 'Professional and friendly',
+      targetAudience: 'General audience',
+      brandPersonality: ['authentic', 'approachable'],
+    },
+    recommendations: [
+      'Maintain consistent visual style',
+      'Engage with audience regularly',
+      'Use trending hashtags strategically',
+    ],
+    confidence: 0.5,
+  };
+}
+
+function buildFallbackImageAnalysis(): {
+  description: string;
+  colors: string[];
+  style: string;
+} {
+  return {
+    description: 'Unable to analyze image',
+    colors: ['#000000'],
+    style: 'Unknown',
+  };
 }
