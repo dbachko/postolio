@@ -63,11 +63,7 @@ export class FoundationStack extends cdk.Stack {
 
     // Import the existing ECR repository
     // The repository was created outside of this stack and must be imported
-    this.repository = ecr.Repository.fromRepositoryName(
-      this,
-      'PostolioRepository',
-      repositoryName
-    );
+    this.repository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', repositoryName);
 
     // ==================== VPC Configuration ====================
     const vpcFlowLogsRole = enableVpcFlowLogs
