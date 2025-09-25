@@ -137,15 +137,13 @@ export class ApiStack extends cdk.Stack {
     // CDK Nag suppression for JWT secret rotation
     // JWT secrets don't typically need automatic rotation as they're used for token signing
     // and rotation would invalidate all existing tokens
-    NagSuppressions.addResourceSuppressions(
-      jwtSecret,
-      [
-        {
-          id: 'AwsSolutions-SMG4',
-          reason: 'JWT secret does not require automatic rotation. Token expiry provides security, and rotation would invalidate all existing sessions.',
-        },
-      ]
-    );
+    NagSuppressions.addResourceSuppressions(jwtSecret, [
+      {
+        id: 'AwsSolutions-SMG4',
+        reason:
+          'JWT secret does not require automatic rotation. Token expiry provides security, and rotation would invalidate all existing sessions.',
+      },
+    ]);
 
     // Import ECR repository from Foundation stack - use repository name
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
@@ -255,25 +253,25 @@ export class ApiStack extends cdk.Stack {
       blockPublicAccess: cdk.aws_s3.BlockPublicAccess.BLOCK_ALL,
       encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true, // Require SSL for all requests
-      lifecycleRules: [{
-        id: 'DeleteOldLogs',
-        expiration: cdk.Duration.days(30),
-      }],
+      lifecycleRules: [
+        {
+          id: 'DeleteOldLogs',
+          expiration: cdk.Duration.days(30),
+        },
+      ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
 
     // CDK Nag suppression for S3 bucket access logs
     // ALB access log buckets should not have their own access logs to avoid infinite loops
-    NagSuppressions.addResourceSuppressions(
-      logBucket,
-      [
-        {
-          id: 'AwsSolutions-S1',
-          reason: 'ALB access log bucket should not have server access logging to avoid infinite recursion',
-        },
-      ]
-    );
+    NagSuppressions.addResourceSuppressions(logBucket, [
+      {
+        id: 'AwsSolutions-S1',
+        reason:
+          'ALB access log bucket should not have server access logging to avoid infinite recursion',
+      },
+    ]);
 
     this.apiService = new ecsPatterns.ApplicationLoadBalancedFargateService(
       this,
@@ -467,7 +465,8 @@ export class ApiStack extends cdk.Stack {
       },
       {
         id: 'AwsSolutions-EC23',
-        reason: 'ALB requires public internet access as this is a public-facing API. The security group rules are appropriately scoped for the ALB pattern.',
+        reason:
+          'ALB requires public internet access as this is a public-facing API. The security group rules are appropriately scoped for the ALB pattern.',
       },
     ]);
 
@@ -477,7 +476,8 @@ export class ApiStack extends cdk.Stack {
       [
         {
           id: 'AwsSolutions-EC23',
-          reason: 'Public-facing ALB requires internet access on ports 80/443 for external API access',
+          reason:
+            'Public-facing ALB requires internet access on ports 80/443 for external API access',
         },
       ],
       true // Apply to child constructs

@@ -1,10 +1,6 @@
 import { Midjourney } from 'midjourney';
-import OpenAI from 'openai';
 import type { StyleProfile } from './ai.js';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { getOpenAIClient } from './openai-client.js';
 
 // Midjourney client configuration
 interface MidjourneyConfig {
@@ -92,6 +88,13 @@ export class MidjourneyService {
   ): Promise<string> {
     void _brandName;
     try {
+      const openai = getOpenAIClient();
+
+      if (!openai) {
+        console.warn('OpenAI client is not configured. Cannot generate DALL-E image.');
+        throw new Error('OpenAI API key configuration error');
+      }
+
       const { aestheticStyle, colorPalette, brandPersonality } = styleProfile;
 
       let enhancedPrompt = `Create a high-quality Instagram-worthy image: ${prompt}`;

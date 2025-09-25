@@ -1,12 +1,8 @@
 import { PrismaClient, Prisma } from '@postolio/database';
-import OpenAI from 'openai';
 import type { StyleProfile } from './ai.js';
+import { getOpenAIClient } from './openai-client.js';
 
 const prisma = new PrismaClient();
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 export interface EditAnalysis {
   captionChanges: {
@@ -302,6 +298,20 @@ export class AILearningService {
     const lengthChange = edited.length - original.length;
 
     // Use AI to analyze tone and style changes
+    const fallback: EditAnalysis['captionChanges'] = {
+      lengthChange,
+      toneChange: 'no_change',
+      emojiChange: 'no_change',
+      callToActionChange: 'no_change',
+      personalityShift: [],
+    };
+
+    const openai = getOpenAIClient();
+    if (!openai) {
+      console.warn('OpenAI client is not configured. Using default caption analysis.');
+      return fallback;
+    }
+
     try {
       const prompt = `Analyze the changes between these two Instagram captions:
 
@@ -337,13 +347,7 @@ Focus on significant changes only. Return only JSON.`;
         'Caption analysis error:',
         JSON.stringify(error, Object.getOwnPropertyNames(error))
       );
-      return {
-        lengthChange,
-        toneChange: 'no_change',
-        emojiChange: 'no_change',
-        callToActionChange: 'no_change',
-        personalityShift: [],
-      };
+      return fallback;
     }
   }
 
@@ -449,6 +453,12 @@ Focus on significant changes only. Return only JSON.`;
    */
   private async categorizeHashtags(hashtags: string[]): Promise<string[]> {
     if (hashtags.length === 0) return [];
+
+    const openai = getOpenAIClient();
+    if (!openai) {
+      console.warn('OpenAI client is not configured. Skipping hashtag categorization.');
+      return [];
+    }
 
     try {
       const prompt = `Categorize these Instagram hashtags into content themes: ${hashtags.join(', ')}
