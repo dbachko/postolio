@@ -1,6 +1,7 @@
-import { PrismaClient, Content } from '@postolio/database';
+import { Content } from '@postolio/database';
+import { getDatabaseClient } from '../config/database.js';
 
-const prisma = new PrismaClient();
+const prisma = getDatabaseClient();
 
 interface HashtagOptimization {
   optimizedHashtags: string[];

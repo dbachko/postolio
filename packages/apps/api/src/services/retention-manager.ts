@@ -1,9 +1,9 @@
-import { PrismaClient } from '@postolio/database';
 import { deleteExpiredImages } from './s3-image.js';
 import fastify, { FastifyInstance } from 'fastify';
 import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-events.js';
+import { getDatabaseClient } from '../config/database.js';
 
-const prisma = new PrismaClient();
+const prisma = getDatabaseClient();
 
 export class RetentionManager {
   private app: FastifyInstance;

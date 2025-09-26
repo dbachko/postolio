@@ -1,8 +1,10 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getRetentionManager } from '../services/retention-manager.js';
+import { getDatabaseClient } from '../config/database.js';
 
 export async function complianceRoutes(app: FastifyInstance) {
   const retentionManager = getRetentionManager(app);
+  const prisma = getDatabaseClient();
 
   // GDPR - Delete all user data
   app.post(
@@ -52,9 +54,6 @@ export async function complianceRoutes(app: FastifyInstance) {
         }
 
         // Get all user data from database
-        const { PrismaClient } = await import('@postolio/database');
-        const prisma = new PrismaClient();
-
         const userData = await prisma.user.findUnique({
           where: { id: user.id },
           include: {
@@ -66,8 +65,6 @@ export async function complianceRoutes(app: FastifyInstance) {
             },
           },
         });
-
-        await prisma.$disconnect();
 
         // Remove sensitive fields
         if (userData && typeof userData === 'object' && 'password' in userData) {
@@ -149,9 +146,6 @@ export async function complianceRoutes(app: FastifyInstance) {
         const { brandId } = request.params;
 
         // Verify user owns the brand
-        const { PrismaClient } = await import('@postolio/database');
-        const prisma = new PrismaClient();
-
         const brand = await prisma.brand.findFirst({
           where: {
             id: brandId,
@@ -160,7 +154,6 @@ export async function complianceRoutes(app: FastifyInstance) {
         });
 
         if (!brand) {
-          await prisma.$disconnect();
           return reply.code(404).send({ error: 'Brand not found or unauthorized' });
         }
 
@@ -170,8 +163,6 @@ export async function complianceRoutes(app: FastifyInstance) {
         await prisma.brand.delete({
           where: { id: brandId },
         });
-
-        await prisma.$disconnect();
 
         return reply.send({
           success: true,
