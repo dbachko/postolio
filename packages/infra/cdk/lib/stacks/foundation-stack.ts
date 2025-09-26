@@ -266,9 +266,18 @@ export class FoundationStack extends cdk.Stack {
       cacheSubnetGroupName: `${prefix}-cache-subnet-group`,
     });
 
+    const cacheParameterGroup = new elasticache.CfnParameterGroup(this, 'RedisParameterGroup', {
+      cacheParameterGroupFamily: 'redis7',
+      description: 'Postolio Redis parameter configuration',
+      properties: {
+        'maxmemory-policy': 'noeviction',
+      },
+    });
+
     this.cache = new elasticache.CfnCacheCluster(this, 'RedisCache', {
       cacheNodeType: environment === 'prod' ? 'cache.r7g.large' : 'cache.t3.micro',
       engine: 'redis',
+      cacheParameterGroupName: cacheParameterGroup.ref,
       numCacheNodes: 1,
       cacheSubnetGroupName: cacheSubnetGroup.ref,
       vpcSecurityGroupIds: [cacheSecurityGroup.securityGroupId],
