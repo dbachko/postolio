@@ -96,9 +96,13 @@ export class WebStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    const originAccessControl = new cloudfront.S3OriginAccessControl(this, 'FrontendOriginAccessControl', {
-      originAccessControlName: `${prefix}-oac`,
-    });
+    const originAccessControl = new cloudfront.S3OriginAccessControl(
+      this,
+      'FrontendOriginAccessControl',
+      {
+        originAccessControlName: `${prefix}-oac`,
+      }
+    );
 
     const s3Origin = origins.S3BucketOrigin.withOriginAccessControl(this.frontendBucket, {
       originAccessControl,
@@ -317,7 +321,8 @@ export class WebStack extends cdk.Stack {
       [
         {
           id: 'AwsSolutions-S1',
-          reason: 'Access logs bucket is the final destination for server logs and cannot log to itself',
+          reason:
+            'Access logs bucket is the final destination for server logs and cannot log to itself',
         },
       ],
       true
