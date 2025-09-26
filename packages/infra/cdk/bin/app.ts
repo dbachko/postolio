@@ -21,6 +21,7 @@ const imageTag = app.node.tryGetContext('imageTag') as string | undefined;
 const domainName = app.node.tryGetContext('domainName');
 const hostedZoneId = app.node.tryGetContext('hostedZoneId');
 const useExternalDns = app.node.tryGetContext('useExternalDns') || false;
+const webCertificateArn = app.node.tryGetContext('webCertificateArn');
 
 // Environment-specific configuration
 const envConfig = {
@@ -119,6 +120,10 @@ const apiStack = new ApiStack(app, `Postolio-API-${environment}`, {
 const webStack = new WebStack(app, `Postolio-Web-${environment}`, {
   env: stackEnv,
   environment,
+  domainName,
+  hostedZoneId,
+  useExternalDns,
+  certificateArn: webCertificateArn,
   description: `Postolio Frontend application - ${environment} environment`,
   tags: {
     ...stackTags,
