@@ -4,6 +4,7 @@ import {
   type MetricDatum,
 } from '@aws-sdk/client-cloudwatch';
 import { FastifyInstance } from 'fastify';
+import { getDatabaseClient } from '../config/database.js';
 
 export class ImageMonitoringService {
   private cloudWatchClient: CloudWatchClient;
@@ -200,8 +201,7 @@ export class ImageMonitoringService {
    * Get image storage statistics from database
    */
   async getStorageStats() {
-    const { PrismaClient } = await import('@postolio/database');
-    const prisma = new PrismaClient();
+    const prisma = getDatabaseClient();
 
     try {
       const totalImages = await prisma.content.count({

@@ -1,7 +1,8 @@
-import { PrismaClient, Prisma } from '@postolio/database';
+import { Prisma } from '@postolio/database';
 import { instagramService } from './instagram.js';
+import { getDatabaseClient } from '../config/database.js';
 
-const prisma = new PrismaClient();
+const prisma = getDatabaseClient();
 
 export interface EngagementRules {
   id?: string;

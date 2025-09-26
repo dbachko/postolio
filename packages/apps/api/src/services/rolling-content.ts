@@ -1,10 +1,10 @@
-import { PrismaClient } from '@postolio/database';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
 import { schedulerService } from './scheduler.js';
 import { analyzeBrandStyle } from './ai.js';
 import type { StyleProfile } from './ai.js';
+import { getDatabaseClient } from '../config/database.js';
 
-const prisma = new PrismaClient();
+const prisma = getDatabaseClient();
 
 export interface QueueStatus {
   totalScheduled: number;

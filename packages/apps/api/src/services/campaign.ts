@@ -1,4 +1,4 @@
-import { PrismaClient, CampaignStatus } from '@postolio/database';
+import { CampaignStatus } from '@postolio/database';
 import {
   generateInstagramContent,
   type ContentGenerationRequest,
@@ -19,8 +19,9 @@ import {
   type CampaignStatus as StatusBroadcasterCampaignStatus,
 } from './status-broadcaster.js';
 import { eventEmitter } from './event-emitter.js';
+import { getDatabaseClient } from '../config/database.js';
 
-const prisma = new PrismaClient();
+const prisma = getDatabaseClient();
 
 // In-memory store for edit sessions (in production, this would be Redis or database)
 const editSessions = new Map<string, { userId: string; startedAt: Date }>();

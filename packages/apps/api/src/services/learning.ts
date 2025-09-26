@@ -1,8 +1,9 @@
-import { PrismaClient, Prisma } from '@postolio/database';
+import { Prisma } from '@postolio/database';
 import type { StyleProfile } from './ai.js';
 import { getOpenAIClient } from './openai-client.js';
+import { getDatabaseClient } from '../config/database.js';
 
-const prisma = new PrismaClient();
+const prisma = getDatabaseClient();
 
 export interface EditAnalysis {
   captionChanges: {

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@postolio/database';
+import { getDatabaseClient } from '../config/database.js';
 import {
   generateInstagramContent,
   type ContentGenerationRequest,
@@ -7,7 +7,7 @@ import {
 import type { StyleProfile } from './ai.js';
 import { analyzeBrandStyle } from './ai.js';
 
-const prisma = new PrismaClient();
+const prisma = getDatabaseClient();
 
 export interface CampaignJob {
   campaignId: string;

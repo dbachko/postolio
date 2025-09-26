@@ -1,6 +1,6 @@
-import { PrismaClient } from '@postolio/database';
+import { getDatabaseClient } from '../config/database.js';
 
-const prisma = new PrismaClient();
+const prisma = getDatabaseClient();
 
 export interface SchedulingConflict {
   conflictingCampaignId: string;
