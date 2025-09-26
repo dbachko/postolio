@@ -7,7 +7,6 @@ import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
@@ -19,6 +18,8 @@ export interface WebStackProps extends cdk.StackProps {
   environment: string;
   domainName?: string;
   hostedZoneId?: string;
+  useExternalDns?: boolean;
+  certificateArn?: string;
 }
 
 export class WebStack extends cdk.Stack {
@@ -28,8 +29,25 @@ export class WebStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: WebStackProps) {
     super(scope, id, props);
 
-    const { environment, domainName, hostedZoneId } = props;
+    const { environment, domainName, hostedZoneId, useExternalDns, certificateArn } = props;
     const prefix = `postolio-${environment}-web`;
+
+    // ==================== Shared Access Logs Archive ====================
+    const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
+      bucketName: `${prefix}-access-logs`,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
+      accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
+      lifecycleRules: [
+        {
+          id: 'expire-access-logs',
+          expiration: cdk.Duration.days(365),
+        },
+      ],
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
 
     // ==================== S3 Bucket for Frontend ====================
     this.frontendBucket = new s3.Bucket(this, 'FrontendBucket', {
@@ -39,6 +57,8 @@ export class WebStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       versioned: false,
+      serverAccessLogsBucket: accessLogsBucket,
+      serverAccessLogsPrefix: 'frontend/',
       lifecycleRules: [
         {
           id: 'delete-old-versions',
@@ -48,20 +68,42 @@ export class WebStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // ==================== CloudFront Origin Access Identity ====================
-    const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'OriginAccessIdentity', {
-      comment: `${prefix} - CloudFront access to S3`,
+    // ==================== CloudFront Logs Bucket ====================
+    const logsBucket = new s3.Bucket(this, 'LogsBucket', {
+      bucketName: `${prefix}-logs`,
+      publicReadAccess: false,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      objectOwnership: s3.ObjectOwnership.OBJECT_WRITER,
+      serverAccessLogsBucket: accessLogsBucket,
+      serverAccessLogsPrefix: 'cloudfront/',
+      lifecycleRules: [
+        {
+          id: 'delete-old-logs',
+          expiration: cdk.Duration.days(90),
+        },
+        {
+          id: 'transition-to-ia',
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(30),
+            },
+          ],
+        },
+      ],
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // Grant CloudFront read access to the S3 bucket
-    this.frontendBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        principals: [originAccessIdentity.grantPrincipal],
-        actions: ['s3:GetObject'],
-        resources: [`${this.frontendBucket.bucketArn}/*`],
-      })
-    );
+    const originAccessControl = new cloudfront.S3OriginAccessControl(this, 'FrontendOriginAccessControl', {
+      originAccessControlName: `${prefix}-oac`,
+    });
+
+    const s3Origin = origins.S3BucketOrigin.withOriginAccessControl(this.frontendBucket, {
+      originAccessControl,
+      originAccessLevels: [cloudfront.AccessLevel.READ],
+    });
 
     // ==================== CloudFront Distribution ====================
     const distributionProps: cloudfront.DistributionProps = {
@@ -74,10 +116,11 @@ export class WebStack extends cdk.Stack {
           ? cloudfront.PriceClass.PRICE_CLASS_ALL
           : cloudfront.PriceClass.PRICE_CLASS_100,
       enableIpv6: true,
+      enableLogging: true,
+      logBucket: logsBucket,
+      logFilePrefix: 'cloudfront/',
       defaultBehavior: {
-        origin: new origins.S3Origin(this.frontendBucket, {
-          originAccessIdentity: originAccessIdentity,
-        }),
+        origin: s3Origin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
@@ -96,9 +139,7 @@ export class WebStack extends cdk.Stack {
       additionalBehaviors: {
         // Special handling for index.html - no caching
         '/index.html': {
-          origin: new origins.S3Origin(this.frontendBucket, {
-            originAccessIdentity: originAccessIdentity,
-          }),
+          origin: s3Origin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: new cloudfront.CachePolicy(this, 'IndexCachePolicy', {
             cachePolicyName: `${prefix}-index-cache-policy`,
@@ -142,24 +183,43 @@ export class WebStack extends cdk.Stack {
         environment === 'prod' ? undefined : cloudfront.GeoRestriction.denylist('CN', 'RU'), // Block certain countries in non-prod
     };
 
-    // Add domain configuration if provided
+    let hostedZone: route53.IHostedZone | undefined;
     if (domainName && hostedZoneId) {
-      const hostedZone = route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId);
+      hostedZone = route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId);
+    }
 
-      // Create SSL certificate
-      const certificate = new acm.Certificate(this, 'Certificate', {
+    let distributionCertificate: acm.ICertificate | undefined;
+    const distributionDomainNames: string[] = [];
+
+    if (domainName && hostedZone) {
+      distributionCertificate = new acm.Certificate(this, 'Certificate', {
         domainName: domainName,
         subjectAlternativeNames: [`www.${domainName}`],
         validation: acm.CertificateValidation.fromDns(hostedZone),
       });
 
+      distributionDomainNames.push(domainName, `www.${domainName}`);
+    } else if (domainName && certificateArn) {
+      distributionCertificate = acm.Certificate.fromCertificateArn(
+        this,
+        'ImportedWebCertificate',
+        certificateArn
+      );
+
+      distributionDomainNames.push(domainName);
+    }
+
+    if (distributionCertificate) {
       this.distribution = new cloudfront.Distribution(this, 'Distribution', {
         ...distributionProps,
-        domainNames: [domainName, `www.${domainName}`],
-        certificate: certificate,
+        domainNames: distributionDomainNames,
+        certificate: distributionCertificate,
       });
+    } else {
+      this.distribution = new cloudfront.Distribution(this, 'Distribution', distributionProps);
+    }
 
-      // Create Route53 records
+    if (domainName && hostedZone && !useExternalDns) {
       new route53.ARecord(this, 'AliasRecord', {
         zone: hostedZone,
         recordName: domainName,
@@ -175,34 +235,7 @@ export class WebStack extends cdk.Stack {
           new route53Targets.CloudFrontTarget(this.distribution)
         ),
       });
-    } else {
-      this.distribution = new cloudfront.Distribution(this, 'Distribution', distributionProps);
     }
-
-    // ==================== S3 Bucket for Application Logs ====================
-    const logsBucket = new s3.Bucket(this, 'LogsBucket', {
-      bucketName: `${prefix}-logs`,
-      publicReadAccess: false,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      lifecycleRules: [
-        {
-          id: 'delete-old-logs',
-          expiration: cdk.Duration.days(90),
-        },
-        {
-          id: 'transition-to-ia',
-          transitions: [
-            {
-              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(30),
-            },
-          ],
-        },
-      ],
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
 
     // ==================== SSM Parameters ====================
     new ssm.StringParameter(this, 'FrontendBucketNameParameter', {
@@ -265,17 +298,6 @@ export class WebStack extends cdk.Stack {
 
     // ==================== CDK NAG Suppressions ====================
     NagSuppressions.addResourceSuppressions(
-      this.frontendBucket,
-      [
-        {
-          id: 'AwsSolutions-S1',
-          reason: 'Access logs not required for frontend bucket, CloudFront provides access logs',
-        },
-      ],
-      true
-    );
-
-    NagSuppressions.addResourceSuppressions(
       this.distribution,
       [
         {
@@ -285,6 +307,17 @@ export class WebStack extends cdk.Stack {
         {
           id: 'AwsSolutions-CFR2',
           reason: 'WAF integration handled at ALB level for API, frontend is static content',
+        },
+      ],
+      true
+    );
+
+    NagSuppressions.addResourceSuppressions(
+      accessLogsBucket,
+      [
+        {
+          id: 'AwsSolutions-S1',
+          reason: 'Access logs bucket is the final destination for server logs and cannot log to itself',
         },
       ],
       true
