@@ -277,15 +277,37 @@ export class ServiceDiscovery {
    */
   private async getFromSSM(serviceName: string): Promise<string | null> {
     try {
-      const parameterName = this.getSSMParameterName(serviceName);
+      const parameterNames = this.getSSMParameterNames(serviceName);
+      const errors: Array<{ parameterName: string; error: unknown }> = [];
 
-      const response = await this.ssmClient.send(
-        new GetParameterCommand({
-          Name: parameterName,
-        })
-      );
+      for (const parameterName of parameterNames) {
+        try {
+          const response = await this.ssmClient.send(
+            new GetParameterCommand({
+              Name: parameterName,
+            })
+          );
 
-      return response.Parameter?.Value || null;
+          const value = response.Parameter?.Value;
+          if (value) {
+            return value;
+          }
+        } catch (error) {
+          errors.push({ parameterName, error });
+        }
+      }
+
+      if (errors.length > 0) {
+        logger.debug('Failed to get service URL from SSM', {
+          serviceName,
+          attempts: errors.map((entry) => ({
+            parameterName: entry.parameterName,
+            error: entry.error,
+          })),
+        });
+      }
+
+      return null;
     } catch (error) {
       logger.debug('Failed to get service URL from SSM', {
         serviceName,
@@ -300,7 +322,9 @@ export class ServiceDiscovery {
    */
   private async getBatchFromSSM(serviceNames: string[]): Promise<Record<string, string>> {
     try {
-      const parameterNames = serviceNames.map((name) => this.getSSMParameterName(name));
+      const parameterNames = Array.from(
+        new Set(serviceNames.flatMap((name) => this.getSSMParameterNames(name)))
+      );
 
       const response = await this.ssmClient.send(
         new GetParametersCommand({
@@ -355,17 +379,32 @@ export class ServiceDiscovery {
   /**
    * Get SSM parameter name for service
    */
-  private getSSMParameterName(serviceName: string): string {
-    const environment = process.env.ENVIRONMENT || 'dev';
-    return `/postolio/${environment}/services/${serviceName.toUpperCase()}_URL`;
+  private getSSMParameterNames(serviceName: string): string[] {
+    const environment = this.getEnvironmentName();
+    const normalizedName = serviceName.toLowerCase();
+    const legacyName = normalizedName.replace(/-/g, '_').toUpperCase();
+
+    return [
+      `/postolio/${environment}/services/${normalizedName}/url`,
+      `/postolio/${environment}/services/${legacyName}_URL`,
+    ];
   }
 
   /**
    * Extract service name from SSM parameter name
    */
   private getServiceNameFromParameter(parameterName: string): string | null {
-    const match = parameterName.match(/\/postolio\/[^/]+\/services\/(.+)_URL$/);
-    return match ? match[1].toLowerCase().replace('_', '-') : null;
+    const normalizedMatch = parameterName.match(/\/postolio\/[^/]+\/services\/([^/]+)\/url$/i);
+    if (normalizedMatch) {
+      return normalizedMatch[1].toLowerCase();
+    }
+
+    const legacyMatch = parameterName.match(/\/postolio\/[^/]+\/services\/([^/]+)_URL$/i);
+    if (legacyMatch) {
+      return legacyMatch[1].toLowerCase().replace(/_/g, '-');
+    }
+
+    return null;
   }
 
   /**
@@ -373,6 +412,13 @@ export class ServiceDiscovery {
    */
   private getEnvironmentVariableName(serviceName: string): string {
     return `${serviceName.toUpperCase().replace('-', '_')}_URL`;
+  }
+
+  /**
+   * Resolve the active deployment environment name
+   */
+  private getEnvironmentName(): string {
+    return (process.env.ENVIRONMENT || process.env.NODE_ENV || 'dev').toLowerCase();
   }
 }
 
