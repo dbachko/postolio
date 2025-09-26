@@ -67,6 +67,10 @@ USER nodejs
 EXPOSE 3000
 ENV PORT=3000
 ENV NODE_ENV=dev
+ARG REDIS_HOST=localhost
+ARG REDIS_PORT=6379
+ENV REDIS_HOST=${REDIS_HOST}
+ENV REDIS_PORT=${REDIS_PORT}
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \

@@ -76,7 +76,10 @@ export class ApiStack extends cdk.Stack {
     // Import security groups and database secret from Foundation stack (runtime values)
     let ecsSecurityGroup: ec2.ISecurityGroup | undefined;
     let databaseSecurityGroup: ec2.ISecurityGroup | undefined;
+    let cacheSecurityGroup: ec2.ISecurityGroup | undefined;
     let databaseSecret: secretsmanager.ISecret | undefined;
+    let redisEndpointParam: ssm.IStringParameter | undefined;
+    let redisPortParam: ssm.IStringParameter | undefined;
 
     if (hasFoundationVpc) {
       const ecsSecurityGroupId = ssm.StringParameter.valueForStringParameter(
@@ -111,6 +114,29 @@ export class ApiStack extends cdk.Stack {
         'DatabaseSecret',
         databaseSecretArn
       );
+
+      const cacheSecurityGroupId = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/cache/security-group-id`
+      );
+
+      cacheSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+        this,
+        'CacheSecurityGroup',
+        cacheSecurityGroupId
+      );
+
+      redisEndpointParam = ssm.StringParameter.fromStringParameterName(
+        this,
+        'RedisEndpointParameter',
+        `/postolio/${environment}/cache/endpoint`
+      );
+
+      redisPortParam = ssm.StringParameter.fromStringParameterName(
+        this,
+        'RedisPortParameter',
+        `/postolio/${environment}/cache/port`
+      );
     } else {
       // Create placeholder resources for synthesis
       ecsSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderEcsSecurityGroup', {
@@ -121,6 +147,11 @@ export class ApiStack extends cdk.Stack {
       databaseSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderDatabaseSecurityGroup', {
         vpc: vpc,
         description: 'Placeholder database security group - Foundation needed for production',
+      });
+
+      cacheSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderCacheSecurityGroup', {
+        vpc: vpc,
+        description: 'Placeholder cache security group - Foundation needed for production',
       });
 
       databaseSecret = new secretsmanager.Secret(this, 'PlaceholderDatabaseSecret', {
@@ -299,6 +330,8 @@ export class ApiStack extends cdk.Stack {
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
             // Additional environment variables that don't need to be secrets
             AWS_REGION: this.region,
+            ...(redisEndpointParam && { REDIS_HOST: redisEndpointParam.stringValue }),
+            ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
             ...(openaiApiKey && { OPENAI_API_KEY: openaiApiKey }),
           },
@@ -372,6 +405,19 @@ export class ApiStack extends cdk.Stack {
         toPort: 5432,
         sourceSecurityGroupId: serviceSecurityGroup.securityGroupId,
         description: 'Allow API ECS service to connect to database',
+      });
+    }
+
+    if (cacheSecurityGroup && hasFoundationVpc) {
+      const serviceSecurityGroup = this.apiService.service.connections.securityGroups[0];
+
+      new ec2.CfnSecurityGroupIngress(this, 'CacheAccessRule', {
+        groupId: cacheSecurityGroup.securityGroupId,
+        ipProtocol: 'tcp',
+        fromPort: 6379,
+        toPort: 6379,
+        sourceSecurityGroupId: serviceSecurityGroup.securityGroupId,
+        description: 'Allow API ECS service to connect to Redis cache',
       });
     }
 

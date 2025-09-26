@@ -376,6 +376,12 @@ export class FoundationStack extends cdk.Stack {
       description: 'Redis cache port',
     });
 
+    new ssm.StringParameter(this, 'CacheSecurityGroupParameter', {
+      parameterName: `/postolio/${environment}/cache/security-group-id`,
+      stringValue: cacheSecurityGroup.securityGroupId,
+      description: 'Security group ID for the Redis cache cluster',
+    });
+
     // Security Group Parameters
     new ssm.StringParameter(this, 'LambdaSecurityGroupParameter', {
       parameterName: `/postolio/${environment}/security-groups/lambda`,
