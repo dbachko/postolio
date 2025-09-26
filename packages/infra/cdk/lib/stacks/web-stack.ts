@@ -195,6 +195,8 @@ export class WebStack extends cdk.Stack {
     let distributionCertificate: acm.ICertificate | undefined;
     const distributionDomainNames: string[] = [];
 
+    const isProduction = environment === 'prod';
+
     if (domainName && hostedZone) {
       distributionCertificate = new acm.Certificate(this, 'Certificate', {
         domainName: domainName,
@@ -223,7 +225,9 @@ export class WebStack extends cdk.Stack {
       this.distribution = new cloudfront.Distribution(this, 'Distribution', distributionProps);
     }
 
-    if (domainName && hostedZone && !useExternalDns) {
+    const domainConfigured = Boolean(distributionCertificate);
+
+    if (domainName && hostedZone && domainConfigured && !useExternalDns) {
       new route53.ARecord(this, 'AliasRecord', {
         zone: hostedZone,
         recordName: domainName,
@@ -260,7 +264,7 @@ export class WebStack extends cdk.Stack {
       description: 'CloudFront Distribution Domain Name',
     });
 
-    const webUrl = domainName
+    const webUrl = domainConfigured
       ? `https://${domainName}`
       : `https://${this.distribution.distributionDomainName}`;
     new ssm.StringParameter(this, 'WebUrlParameter', {
@@ -301,20 +305,32 @@ export class WebStack extends cdk.Stack {
     });
 
     // ==================== CDK NAG Suppressions ====================
-    NagSuppressions.addResourceSuppressions(
-      this.distribution,
-      [
-        {
-          id: 'AwsSolutions-CFR1',
-          reason: 'CloudFront geo-restriction not required for this application',
-        },
-        {
-          id: 'AwsSolutions-CFR2',
-          reason: 'WAF integration handled at ALB level for API, frontend is static content',
-        },
-      ],
-      true
-    );
+    const distributionSuppressions = [
+      {
+        id: 'AwsSolutions-CFR1',
+        reason: 'CloudFront geo-restriction not required for this application',
+      },
+      {
+        id: 'AwsSolutions-CFR2',
+        reason: 'WAF integration handled at ALB level for API, frontend is static content',
+      },
+    ];
+
+    if (!distributionCertificate) {
+      if (isProduction) {
+        throw new Error(
+          'An ACM certificate is required for the web distribution in production. Provide a hostedZoneId or webCertificateArn context value.'
+        );
+      }
+
+      distributionSuppressions.push({
+        id: 'AwsSolutions-CFR4',
+        reason:
+          'Non-production environment uses default CloudFront certificate; custom certificate will be supplied when promoting to production.',
+      });
+    }
+
+    NagSuppressions.addResourceSuppressions(this.distribution, distributionSuppressions, true);
 
     NagSuppressions.addResourceSuppressions(
       accessLogsBucket,
