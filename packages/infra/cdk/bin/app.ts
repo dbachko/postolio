@@ -15,6 +15,7 @@ const app = new cdk.App();
 // Get environment from context or default to 'dev'
 const environment = app.node.tryGetContext('environment') || 'dev';
 const alertEmail = app.node.tryGetContext('alertEmail');
+const imageTag = app.node.tryGetContext('imageTag') as string | undefined;
 
 // Custom domain configuration for Postolio stack
 const domainName = app.node.tryGetContext('domainName');
@@ -106,6 +107,7 @@ const apiStack = new ApiStack(app, `Postolio-API-${environment}`, {
   hostedZoneId,
   useExternalDns,
   openaiApiKey: app.node.tryGetContext('openaiApiKey'),
+  imageTag,
   description: `Postolio Backend API - ${environment} environment`,
   tags: {
     ...stackTags,

@@ -24,6 +24,7 @@ export interface ApiStackProps extends cdk.StackProps {
   hostedZoneId?: string;
   useExternalDns?: boolean;
   openaiApiKey?: string;
+  imageTag?: string;
 }
 
 export class ApiStack extends cdk.Stack {
@@ -34,8 +35,13 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const { environment, domainName, hostedZoneId, useExternalDns, openaiApiKey } = props;
+    const { environment, domainName, hostedZoneId, useExternalDns, openaiApiKey, imageTag } = props;
     const prefix = `postolio-${environment}-api`;
+
+    const contextImageTag = imageTag ?? (this.node.tryGetContext('imageTag') as string | undefined);
+    const defaultImageTag = `api-${environment}-latest`;
+    const containerImageTag =
+      contextImageTag && contextImageTag.trim().length > 0 ? contextImageTag : defaultImageTag;
 
     // ==================== Import Foundation Resources ====================
     // Import VPC from Foundation stack (for CDK lookup, must use valueFromLookup)
@@ -283,7 +289,7 @@ export class ApiStack extends cdk.Stack {
         memoryLimitMiB: environment === 'prod' ? 2048 : 1024,
         desiredCount: environment === 'prod' ? 2 : 1,
         taskImageOptions: {
-          image: ecs.ContainerImage.fromEcrRepository(ecrRepository, `api-${environment}-latest`),
+          image: ecs.ContainerImage.fromEcrRepository(ecrRepository, containerImageTag),
           containerPort: 3000,
           taskRole: taskRole,
           executionRole: executionRole,
