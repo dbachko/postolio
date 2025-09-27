@@ -11,11 +11,13 @@ This runbook captures the exact steps used to rebuild and deploy the Fastify API
 ## Step-by-step checklist
 
 1. **Set working directory**
+
    ```bash
    cd /home/developer/project
    ```
 
 2. **Build API image for `linux/amd64`**
+
    ```bash
    docker buildx build \
      --platform linux/amd64 \
@@ -23,15 +25,18 @@ This runbook captures the exact steps used to rebuild and deploy the Fastify API
      -t 000000000000.dkr.ecr.us-east-1.amazonaws.com/postolio:api-dev-<tag> \
      --push .
    ```
+
    - Always pin the full tag provided by release engineering.
    - Buildx ensures the manifest contains the `linux/amd64` platform required by Fargate.
 
 3. **(Optional) Pull locally for verification**
+
    ```bash
    docker pull 000000000000.dkr.ecr.us-east-1.amazonaws.com/postolio:api-dev-<tag>
    ```
 
 4. **Force new ECS deployment**
+
    ```bash
    aws ecs update-service \
      --cluster postolio-dev-api-cluster \
@@ -40,28 +45,34 @@ This runbook captures the exact steps used to rebuild and deploy the Fastify API
    ```
 
 5. **Watch deployment progress**
+
    ```bash
    aws ecs describe-services \
      --cluster postolio-dev-api-cluster \
      --services postolio-dev-api-service \
      | jq '.services[0].deployments'
    ```
+
    - Ensure the new deployment reaches `PRIMARY` with `runningCount = desiredCount` and no failed tasks.
 
 6. **Confirm tasks are on the new image**
+
    ```bash
    aws ecs list-tasks --cluster postolio-dev-api-cluster --service-name postolio-dev-api-service
    aws ecs describe-tasks --cluster postolio-dev-api-cluster --tasks <taskArns>
    ```
+
    - Check `containers[].image` matches the pushed tag.
 
 7. **Monitor events for pull failures**
+
    ```bash
    aws ecs describe-services \
      --cluster postolio-dev-api-cluster \
      --services postolio-dev-api-service \
      | jq '.services[0].events[:5]'
    ```
+
    - If you see `CannotPullContainerError` mentioning architecture, rebuild with the explicit `--platform linux/amd64` flag.
 
 8. **Log verification (optional)**
