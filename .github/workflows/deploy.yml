@@ -682,9 +682,14 @@ jobs:
           echo "  - Frontend Deployment: ${{ needs.deploy-frontend.result }}"
           echo ""
           echo "📦 Deployed Stacks:"
-          STACKS="${{ needs.detect-changes.outputs.stack-matrix }}"
+          STACKS='${{ needs.detect-changes.outputs.stack-matrix }}'
+          if [[ -z "$STACKS" || "$STACKS" == "null" ]]; then
+            STACKS='[]'
+          fi
           if [[ "$STACKS" != "[]" ]]; then
-            echo "$STACKS" | jq -r '.[] | "  ✅ " + . + " Stack"'
+            if ! echo "$STACKS" | jq -r '.[] | "  ✅ " + . + " Stack"'; then
+              echo "  ⚠️  Unable to parse stack list: $STACKS"
+            fi
           else
             echo "  ℹ️  No stacks deployed (no changes detected)"
           fi
