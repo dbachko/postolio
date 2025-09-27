@@ -228,6 +228,7 @@ export function buildFastify(): FastifyInstance {
       method: 'GET',
       url: path,
       logLevel: 'silent',
+      exposeHeadRoute: false,
       handler: async (_, reply) => {
         const payload = { status: 'ok', timestamp: new Date().toISOString() };
         reply.header('cache-control', 'no-store');
