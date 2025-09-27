@@ -242,7 +242,7 @@ export function buildFastify(): FastifyInstance {
       logLevel: 'silent',
       handler: async (_, reply) => {
         reply.header('cache-control', 'no-store');
-        reply.code(200).send();
+        reply.code(200);
       },
     });
   };
