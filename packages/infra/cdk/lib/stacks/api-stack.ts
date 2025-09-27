@@ -331,7 +331,12 @@ export class ApiStack extends cdk.Stack {
 
     let hostedZone: route53.IHostedZone | undefined;
     if (useHttps && !useExternalDns) {
-      if (hostedZoneId) {
+      if (hostedZoneId && hostedZoneName) {
+        hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'ApiHostedZone', {
+          hostedZoneId,
+          zoneName: hostedZoneName,
+        });
+      } else if (hostedZoneId) {
         hostedZone = route53.HostedZone.fromHostedZoneId(this, 'ApiHostedZone', hostedZoneId);
       } else if (domainName) {
         const lookupDomain = hostedZoneName ?? deriveHostedZoneName(domainName);
@@ -488,7 +493,7 @@ export class ApiStack extends cdk.Stack {
       parameterName: `/postolio/${environment}/api/url`,
       stringValue: useHttps
         ? `https://${domainName}`
-        : `https://${this.apiService.loadBalancer.loadBalancerDnsName}`,
+        : `http://${this.apiService.loadBalancer.loadBalancerDnsName}`,
       description: 'API Load Balancer URL',
     });
 
