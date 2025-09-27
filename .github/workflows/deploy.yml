@@ -502,61 +502,6 @@ jobs:
             exit 1
           fi
 
-      - name: Update ECS Service (API Stack only)
-        if: matrix.stack == 'api'
-        run: |
-          ENV="${{ needs.detect-changes.outputs.environment }}"
-
-          CLUSTER_NAME=$(aws cloudformation describe-stacks \
-            --stack-name "Postolio-API-$ENV" \
-            --query "Stacks[0].Outputs[?OutputKey=='EcsClusterName'].OutputValue" \
-            --output text)
-
-          if [[ -z "$CLUSTER_NAME" || "$CLUSTER_NAME" == "None" ]]; then
-            CLUSTER_NAME=$(aws ssm get-parameter \
-              --name "/postolio/$ENV/api/cluster-name" \
-              --query Parameter.Value \
-              --output text 2>/dev/null || true)
-          fi
-
-          SERVICE_NAME=$(aws cloudformation describe-stacks \
-            --stack-name "Postolio-API-$ENV" \
-            --query "Stacks[0].Outputs[?OutputKey=='EcsServiceName'].OutputValue" \
-            --output text)
-
-          if [[ -z "$SERVICE_NAME" || "$SERVICE_NAME" == "None" ]]; then
-            SERVICE_NAME=$(aws ssm get-parameter \
-              --name "/postolio/$ENV/api/service-name" \
-              --query Parameter.Value \
-              --output text 2>/dev/null || true)
-          fi
-
-          if [[ -z "$SERVICE_NAME" || "$SERVICE_NAME" == "None" ]]; then
-            if [[ -n "$CLUSTER_NAME" && "$CLUSTER_NAME" != "None" ]]; then
-              SERVICE_ARN=$(aws ecs list-services \
-                --cluster "$CLUSTER_NAME" \
-                --query 'serviceArns[0]' \
-                --output text 2>/dev/null || true)
-              SERVICE_NAME=${SERVICE_ARN##*/}
-            fi
-          fi
-
-          [[ "$CLUSTER_NAME" == "None" ]] && CLUSTER_NAME=""
-          [[ "$SERVICE_NAME" == "None" ]] && SERVICE_NAME=""
-
-          if [[ -n "$CLUSTER_NAME" && -n "$SERVICE_NAME" ]]; then
-            echo "Forcing new ECS deployment of $SERVICE_NAME on $CLUSTER_NAME with image tag $IMAGE_TAG"
-            aws ecs update-service \
-              --cluster "$CLUSTER_NAME" \
-              --service "$SERVICE_NAME" \
-              --force-new-deployment
-
-            # Wait for service to stabilize
-            aws ecs wait services-stable \
-              --cluster "$CLUSTER_NAME" \
-              --services "$SERVICE_NAME"
-          fi
-
   # ============================================
   # STEP 5: Deploy Frontend to S3 (Web Stack)
   # ============================================
