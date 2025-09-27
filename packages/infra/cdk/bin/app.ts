@@ -34,7 +34,10 @@ const hostedZoneId = resolveContext<string>('hostedZoneId', 'HOSTED_ZONE_ID');
 const hostedZoneName = resolveContext<string>('hostedZoneName', 'HOSTED_ZONE_NAME');
 const webCertificateArn = resolveContext<string>('webCertificateArn', 'WEB_CERTIFICATE_ARN');
 
-const useExternalDnsContext = resolveContext<string | boolean>('useExternalDns', 'USE_EXTERNAL_DNS');
+const useExternalDnsContext = resolveContext<string | boolean>(
+  'useExternalDns',
+  'USE_EXTERNAL_DNS'
+);
 const useExternalDns =
   typeof useExternalDnsContext === 'boolean'
     ? useExternalDnsContext
