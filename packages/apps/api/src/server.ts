@@ -222,13 +222,34 @@ export function buildFastify(): FastifyInstance {
   app.register(configRoutes); // Config routes include their own /api prefix
   app.register(backgroundJobsRoutes); // Background job monitoring routes
 
-  // Health check endpoint for both load balancer health checks and API requests
-  app.get('/health', async () => {
-    return { status: 'ok', timestamp: new Date().toISOString() };
-  });
-  app.get('/api/health', async () => {
-    return { status: 'ok', timestamp: new Date().toISOString() };
-  });
+  const registerHealthRoute = (path: string) => {
+    // GET handler - returns JSON status payload
+    app.route({
+      method: 'GET',
+      url: path,
+      logLevel: 'silent',
+      handler: async (_, reply) => {
+        const payload = { status: 'ok', timestamp: new Date().toISOString() };
+        reply.header('cache-control', 'no-store');
+        return payload;
+      },
+    });
+
+    // HEAD handler - allows lightweight health checks without logging noise
+    app.route({
+      method: 'HEAD',
+      url: path,
+      logLevel: 'silent',
+      handler: async (_, reply) => {
+        reply.header('cache-control', 'no-store');
+        reply.code(200).send();
+      },
+    });
+  };
+
+  // Health check endpoints for both load balancer probes and internal monitoring
+  registerHealthRoute('/health');
+  registerHealthRoute('/api/health');
 
   return app;
 }
