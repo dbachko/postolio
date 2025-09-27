@@ -20,6 +20,7 @@ export interface WebStackProps extends cdk.StackProps {
   hostedZoneId?: string;
   useExternalDns?: boolean;
   certificateArn?: string;
+  hostedZoneName?: string;
 }
 
 export class WebStack extends cdk.Stack {
@@ -29,7 +30,14 @@ export class WebStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: WebStackProps) {
     super(scope, id, props);
 
-    const { environment, domainName, hostedZoneId, useExternalDns, certificateArn } = props;
+    const {
+      environment,
+      domainName,
+      hostedZoneId,
+      hostedZoneName,
+      useExternalDns,
+      certificateArn,
+    } = props;
     const prefix = `postolio-${environment}-web`;
 
     // ==================== Shared Access Logs Archive ====================
@@ -109,6 +117,71 @@ export class WebStack extends cdk.Stack {
       originAccessLevels: [cloudfront.AccessLevel.READ],
     });
 
+    const apiUrlValue = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/api/url`
+    );
+
+    let apiOrigin: origins.HttpOrigin;
+    if (!cdk.Token.isUnresolved(apiUrlValue)) {
+      const apiUrl = new URL(apiUrlValue);
+      const normalizedPath =
+        apiUrl.pathname.endsWith('/') && apiUrl.pathname !== '/'
+          ? apiUrl.pathname.slice(0, -1)
+          : apiUrl.pathname;
+
+      let originProps: origins.HttpOriginProps = {
+        originPath: normalizedPath !== '/' ? normalizedPath : undefined,
+        protocolPolicy:
+          apiUrl.protocol === 'http:'
+            ? cloudfront.OriginProtocolPolicy.HTTP_ONLY
+            : cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+      };
+
+      if (apiUrl.port) {
+        const portNumber = Number(apiUrl.port);
+        if (Number.isNaN(portNumber)) {
+          throw new Error(`Invalid port in API URL: ${apiUrl.port}`);
+        }
+
+        if (apiUrl.protocol === 'http:') {
+          originProps = {
+            ...originProps,
+            httpPort: portNumber,
+          };
+        } else {
+          originProps = {
+            ...originProps,
+            httpsPort: portNumber,
+          };
+        }
+      }
+
+      if (apiUrl.protocol === 'https:') {
+        originProps = {
+          ...originProps,
+          originSslProtocols: [cloudfront.OriginSslPolicy.TLS_V1_2],
+        };
+      } else if (apiUrl.protocol !== 'http:') {
+        throw new Error(`Unsupported protocol for API URL: ${apiUrl.protocol}`);
+      }
+
+      apiOrigin = new origins.HttpOrigin(apiUrl.hostname, originProps);
+    } else {
+      const rest = cdk.Fn.select(1, cdk.Fn.split('://', apiUrlValue));
+      const hostWithPath = rest;
+      const hostWithPort = cdk.Fn.select(0, cdk.Fn.split('/', hostWithPath));
+      const hostname = cdk.Fn.select(0, cdk.Fn.split(':', hostWithPort));
+
+      apiOrigin = new origins.HttpOrigin(hostname, {
+        protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+      });
+
+      cdk.Annotations.of(this).addWarning(
+        'Using simplified API origin configuration because the API URL is unresolved at synthesis. Ensure /postolio/${environment}/api/url is a full URL if stage-specific routing is required.'
+      );
+    }
+
     // ==================== CloudFront Distribution ====================
     const distributionProps: cloudfront.DistributionProps = {
       comment: `${prefix} - Frontend Distribution`,
@@ -158,9 +231,7 @@ export class WebStack extends cdk.Stack {
         },
         // API proxy behavior (optional - for same-domain API calls)
         '/api/*': {
-          origin: new origins.HttpOrigin(
-            ssm.StringParameter.valueForStringParameter(this, `/postolio/${environment}/api/url`)
-          ),
+          origin: apiOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
@@ -185,8 +256,15 @@ export class WebStack extends cdk.Stack {
     };
 
     let hostedZone: route53.IHostedZone | undefined;
-    if (domainName && hostedZoneId) {
-      hostedZone = route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId);
+    if (domainName && !useExternalDns) {
+      if (hostedZoneId) {
+        hostedZone = route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId);
+      } else {
+        const lookupDomain = hostedZoneName ?? deriveHostedZoneName(domainName);
+        hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
+          domainName: lookupDomain,
+        });
+      }
     }
 
     let distributionCertificate: acm.ICertificate | undefined;
@@ -224,7 +302,7 @@ export class WebStack extends cdk.Stack {
 
     const domainConfigured = Boolean(distributionCertificate);
 
-    if (domainName && hostedZone && domainConfigured && !useExternalDns) {
+    if (domainName && hostedZone && domainConfigured) {
       new route53.ARecord(this, 'AliasRecord', {
         zone: hostedZone,
         recordName: domainName,
@@ -261,9 +339,8 @@ export class WebStack extends cdk.Stack {
       description: 'CloudFront Distribution Domain Name',
     });
 
-    const webUrl = domainConfigured
-      ? `https://${domainName}`
-      : `https://${this.distribution.distributionDomainName}`;
+    const preferredDomain = domainName ? `https://${domainName}` : undefined;
+    const webUrl = preferredDomain || `https://${this.distribution.distributionDomainName}`;
     new ssm.StringParameter(this, 'WebUrlParameter', {
       parameterName: `/postolio/${environment}/web/url`,
       stringValue: webUrl,
@@ -352,4 +429,14 @@ export class WebStack extends cdk.Stack {
       true
     );
   }
+}
+
+function deriveHostedZoneName(domainName: string): string {
+  const trimmed = domainName.replace(/\.$/, '');
+  const parts = trimmed.split('.');
+  if (parts.length <= 2) {
+    return trimmed;
+  }
+
+  return parts.slice(-2).join('.');
 }
