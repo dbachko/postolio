@@ -47,13 +47,13 @@ export class ParameterNames {
    */
   public static forEnvironment(env: Environment): ServiceParameters {
     return {
-      TOKEN_SERVICE_URL: `${this.BASE_PATH}/${env}/services/token-service/url`,
-      CONTENT_SCHEDULER_URL: `${this.BASE_PATH}/${env}/services/content-scheduler/url`,
-      PUBLISHER_SERVICE_URL: `${this.BASE_PATH}/${env}/services/publisher/url`,
-      DLQ_PROCESSOR_URL: `${this.BASE_PATH}/${env}/services/dlq-processor/url`,
-      RETRY_HANDLER_URL: `${this.BASE_PATH}/${env}/services/retry-handler/url`,
-      STATUS_SYNC_URL: `${this.BASE_PATH}/${env}/services/status-sync/url`,
-      SCHEDULE_CLEANUP_URL: `${this.BASE_PATH}/${env}/services/schedule-cleanup/url`,
+      TOKEN_SERVICE_URL: `${this.BASE_PATH}/${env}/auth/token-service-url`,
+      CONTENT_SCHEDULER_URL: `${this.BASE_PATH}/${env}/scheduling/schedule-management-url`,
+      PUBLISHER_SERVICE_URL: `${this.BASE_PATH}/${env}/publishing/publisher-url`,
+      DLQ_PROCESSOR_URL: `${this.BASE_PATH}/${env}/publishing/dlq-processor-url`,
+      RETRY_HANDLER_URL: `${this.BASE_PATH}/${env}/publishing/retry-handler-url`,
+      STATUS_SYNC_URL: `${this.BASE_PATH}/${env}/scheduling/status-sync-url`,
+      SCHEDULE_CLEANUP_URL: `${this.BASE_PATH}/${env}/scheduling/schedule-cleanup-url`,
     };
   }
 
@@ -189,15 +189,12 @@ export class ParameterManager {
       );
 
       if (!response.Parameter?.Value) {
-        this.metrics.retrievalErrors++;
         throw new Error(`Parameter ${parameterName} not found or has empty value`);
       }
 
       const value = response.Parameter.Value;
 
-      // Cache the result
       this.setInCache(parameterName, value, ttl);
-
       this.updateAverageResponseTime(Date.now() - startTime);
       return value;
     } catch (error) {

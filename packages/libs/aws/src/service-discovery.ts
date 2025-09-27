@@ -10,6 +10,18 @@ import { createServiceLogger } from './logger';
 
 const logger = createServiceLogger('service-discovery');
 
+const SERVICE_PARAMETER_TEMPLATES: Record<string, string> = {
+  'token-service': '/postolio/{env}/auth/token-service-url',
+  'content-scheduler': '/postolio/{env}/scheduling/schedule-management-url',
+  'schedule-management': '/postolio/{env}/scheduling/schedule-management-url',
+  'schedule-cleanup': '/postolio/{env}/scheduling/schedule-cleanup-url',
+  'status-sync': '/postolio/{env}/scheduling/status-sync-url',
+  publisher: '/postolio/{env}/publishing/publisher-url',
+  'retry-handler': '/postolio/{env}/publishing/retry-handler-url',
+  'dlq-processor': '/postolio/{env}/publishing/dlq-processor-url',
+  'campaign-dlq-processor': '/postolio/{env}/publishing/campaign-dlq-processor-url',
+};
+
 export interface ServiceEndpoint {
   url: string;
   lastUpdated: Date;
@@ -380,28 +392,24 @@ export class ServiceDiscovery {
    * Get SSM parameter name for service
    */
   private getSSMParameterNames(serviceName: string): string[] {
-    const environment = this.getEnvironmentName();
-    const normalizedName = serviceName.toLowerCase();
-    const legacyName = normalizedName.replace(/-/g, '_').toUpperCase();
+    const template = SERVICE_PARAMETER_TEMPLATES[serviceName];
+    if (!template) {
+      return [];
+    }
 
-    return [
-      `/postolio/${environment}/services/${normalizedName}/url`,
-      `/postolio/${environment}/services/${legacyName}_URL`,
-    ];
+    const environment = this.getEnvironmentName();
+    return [template.replace('{env}', environment)];
   }
 
   /**
    * Extract service name from SSM parameter name
    */
   private getServiceNameFromParameter(parameterName: string): string | null {
-    const normalizedMatch = parameterName.match(/\/postolio\/[^/]+\/services\/([^/]+)\/url$/i);
-    if (normalizedMatch) {
-      return normalizedMatch[1].toLowerCase();
-    }
-
-    const legacyMatch = parameterName.match(/\/postolio\/[^/]+\/services\/([^/]+)_URL$/i);
-    if (legacyMatch) {
-      return legacyMatch[1].toLowerCase().replace(/_/g, '-');
+    const environment = this.getEnvironmentName();
+    for (const [serviceName, template] of Object.entries(SERVICE_PARAMETER_TEMPLATES)) {
+      if (parameterName === template.replace('{env}', environment)) {
+        return serviceName;
+      }
     }
 
     return null;

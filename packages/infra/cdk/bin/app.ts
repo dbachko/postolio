@@ -18,10 +18,29 @@ const alertEmail = app.node.tryGetContext('alertEmail');
 const imageTag = app.node.tryGetContext('imageTag') as string | undefined;
 
 // Custom domain configuration for Postolio stack
-const domainName = app.node.tryGetContext('domainName');
-const hostedZoneId = app.node.tryGetContext('hostedZoneId');
-const useExternalDns = app.node.tryGetContext('useExternalDns') || false;
-const webCertificateArn = app.node.tryGetContext('webCertificateArn');
+const resolveContext = <T>(key: string, envKey?: string): T | undefined => {
+  const contextValue = app.node.tryGetContext(key);
+  if (contextValue !== undefined) {
+    return contextValue as T;
+  }
+
+  const resolvedEnvKey = envKey ?? key.toUpperCase();
+  const envValue = process.env[resolvedEnvKey];
+  return (envValue as unknown as T) ?? undefined;
+};
+
+const domainName = resolveContext<string>('domainName', 'DOMAIN_NAME');
+const hostedZoneId = resolveContext<string>('hostedZoneId', 'HOSTED_ZONE_ID');
+const hostedZoneName = resolveContext<string>('hostedZoneName', 'HOSTED_ZONE_NAME');
+const webCertificateArn = resolveContext<string>('webCertificateArn', 'WEB_CERTIFICATE_ARN');
+
+const useExternalDnsContext = resolveContext<string | boolean>('useExternalDns', 'USE_EXTERNAL_DNS');
+const useExternalDns =
+  typeof useExternalDnsContext === 'boolean'
+    ? useExternalDnsContext
+    : typeof useExternalDnsContext === 'string'
+      ? ['true', '1', 'yes'].includes(useExternalDnsContext.toLowerCase())
+      : false;
 
 // Environment-specific configuration
 const envConfig = {
@@ -106,6 +125,7 @@ const apiStack = new ApiStack(app, `Postolio-API-${environment}`, {
   environment,
   domainName,
   hostedZoneId,
+  hostedZoneName,
   useExternalDns,
   openaiApiKey: app.node.tryGetContext('openaiApiKey'),
   imageTag,
@@ -122,6 +142,7 @@ const webStack = new WebStack(app, `Postolio-Web-${environment}`, {
   environment,
   domainName,
   hostedZoneId,
+  hostedZoneName,
   useExternalDns,
   certificateArn: webCertificateArn,
   description: `Postolio Frontend application - ${environment} environment`,

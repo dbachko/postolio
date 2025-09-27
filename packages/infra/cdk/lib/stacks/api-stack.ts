@@ -22,9 +22,20 @@ export interface ApiStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
   domainName?: string;
   hostedZoneId?: string;
+  hostedZoneName?: string;
   useExternalDns?: boolean;
   openaiApiKey?: string;
   imageTag?: string;
+}
+
+function deriveHostedZoneName(domainName: string): string {
+  const trimmed = domainName.replace(/\.$/, '');
+  const parts = trimmed.split('.');
+  if (parts.length <= 2) {
+    return trimmed;
+  }
+
+  return parts.slice(-2).join('.');
 }
 
 export class ApiStack extends cdk.Stack {
@@ -35,7 +46,15 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const { environment, domainName, hostedZoneId, useExternalDns, openaiApiKey, imageTag } = props;
+    const {
+      environment,
+      domainName,
+      hostedZoneId,
+      hostedZoneName,
+      useExternalDns,
+      openaiApiKey,
+      imageTag,
+    } = props;
     const prefix = `postolio-${environment}-api`;
 
     const contextImageTag = imageTag ?? (this.node.tryGetContext('imageTag') as string | undefined);
@@ -310,6 +329,18 @@ export class ApiStack extends cdk.Stack {
       },
     ]);
 
+    let hostedZone: route53.IHostedZone | undefined;
+    if (useHttps && !useExternalDns) {
+      if (hostedZoneId) {
+        hostedZone = route53.HostedZone.fromHostedZoneId(this, 'ApiHostedZone', hostedZoneId);
+      } else if (domainName) {
+        const lookupDomain = hostedZoneName ?? deriveHostedZoneName(domainName);
+        hostedZone = route53.HostedZone.fromLookup(this, 'ApiHostedZone', {
+          domainName: lookupDomain,
+        });
+      }
+    }
+
     this.apiService = new ecsPatterns.ApplicationLoadBalancedFargateService(
       this,
       'PostolioService',
@@ -357,9 +388,7 @@ export class ApiStack extends cdk.Stack {
         },
         publicLoadBalancer: true,
         domainName: useHttps ? domainName : undefined,
-        domainZone: useHttps
-          ? route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId!)
-          : undefined,
+        domainZone: useHttps ? hostedZone : undefined,
         listenerPort: useHttps ? 443 : 80,
         protocol: useHttps ? elbv2.ApplicationProtocol.HTTPS : elbv2.ApplicationProtocol.HTTP,
         platformVersion: ecs.FargatePlatformVersion.LATEST,
