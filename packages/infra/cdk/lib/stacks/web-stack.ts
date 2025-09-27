@@ -174,7 +174,8 @@ export class WebStack extends cdk.Stack {
       const hostname = cdk.Fn.select(0, cdk.Fn.split(':', hostWithPort));
 
       apiOrigin = new origins.HttpOrigin(hostname, {
-        protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+        protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+        httpPort: 80,
       });
 
       cdk.Annotations.of(this).addWarning(
@@ -233,6 +234,8 @@ export class WebStack extends cdk.Stack {
         '/api/*': {
           origin: apiOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
         },
@@ -257,7 +260,12 @@ export class WebStack extends cdk.Stack {
 
     let hostedZone: route53.IHostedZone | undefined;
     if (domainName && !useExternalDns) {
-      if (hostedZoneId) {
+      if (hostedZoneId && hostedZoneName) {
+        hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
+          hostedZoneId,
+          zoneName: hostedZoneName,
+        });
+      } else if (hostedZoneId) {
         hostedZone = route53.HostedZone.fromHostedZoneId(this, 'HostedZone', hostedZoneId);
       } else {
         const lookupDomain = hostedZoneName ?? deriveHostedZoneName(domainName);
@@ -387,6 +395,11 @@ export class WebStack extends cdk.Stack {
       {
         id: 'AwsSolutions-CFR2',
         reason: 'WAF integration handled at ALB level for API, frontend is static content',
+      },
+      {
+        id: 'AwsSolutions-CFR5',
+        reason:
+          'Origin communicates over HTTP because the API load balancer only exposes HTTP endpoints; CloudFront still enforces HTTPS for viewers.',
       },
     ];
 
