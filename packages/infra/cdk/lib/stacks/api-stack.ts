@@ -337,20 +337,14 @@ export class ApiStack extends cdk.Stack {
     ]);
 
     let hostedZone: route53.IHostedZone | undefined;
-    if (useHttps && !useExternalDns) {
-      if (hostedZoneId && hostedZoneName) {
-        hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'ApiHostedZone', {
-          hostedZoneId,
-          zoneName: hostedZoneName,
-        });
-      } else if (hostedZoneId) {
-        hostedZone = route53.HostedZone.fromHostedZoneId(this, 'ApiHostedZone', hostedZoneId);
-      } else if (domainName) {
-        const lookupDomain = hostedZoneName ?? deriveHostedZoneName(domainName);
-        hostedZone = route53.HostedZone.fromLookup(this, 'ApiHostedZone', {
-          domainName: lookupDomain,
-        });
-      }
+    if (useHttps && !useExternalDns && domainName) {
+      // Use dynamic hosted zone lookup - automatically derive from domain name
+      const lookupDomain = deriveHostedZoneName(domainName);
+      hostedZone = route53.HostedZone.fromLookup(this, 'ApiHostedZone', {
+        domainName: lookupDomain,
+      });
+
+      console.log(`Using dynamic hosted zone lookup for domain: ${lookupDomain}`);
     }
 
     // ==================== WebSocket Subdomain Configuration ====================
