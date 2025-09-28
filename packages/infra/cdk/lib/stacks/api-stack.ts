@@ -13,6 +13,8 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
@@ -351,6 +353,24 @@ export class ApiStack extends cdk.Stack {
       }
     }
 
+    // ==================== WebSocket Subdomain Configuration ====================
+    // Calculate WebSocket domain before task definition so it can be passed as environment variable
+    // Using hardcoded postolio.example as per working PR #133
+    let wsDomain: string | undefined;
+    let certificate: acm.ICertificate | undefined;
+    if (domainName && hostedZone) {
+      // Use hardcoded postolio.example for now (as per working configuration)
+      wsDomain = 'postolio.example';
+
+      // Create certificate that includes both the main domain and WebSocket subdomain
+      // This matches the working configuration from PR #133
+      certificate = new acm.Certificate(this, 'ApiCertificate', {
+        domainName: domainName,
+        subjectAlternativeNames: ['postolio.example'], // Add WebSocket subdomain as SAN
+        validation: acm.CertificateValidation.fromDns(hostedZone),
+      });
+    }
+
     this.apiService = new ecsPatterns.ApplicationLoadBalancedFargateService(
       this,
       'PostolioService',
@@ -375,6 +395,8 @@ export class ApiStack extends cdk.Stack {
             ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
             ...(openaiApiKey && { OPENAI_API_KEY: openaiApiKey }),
+            // WebSocket domain for direct ALB connections (bypasses CloudFront)
+            ...(wsDomain && { WS_DOMAIN: wsDomain }),
             ...oauthEnvVars,
           },
           secrets: databaseSecret
@@ -400,6 +422,7 @@ export class ApiStack extends cdk.Stack {
         publicLoadBalancer: true,
         domainName: useHttps ? domainName : undefined,
         domainZone: useHttps ? hostedZone : undefined,
+        certificate: useHttps ? certificate : undefined, // Use our custom certificate with SAN
         listenerPort: useHttps ? 443 : 80,
         protocol: useHttps ? elbv2.ApplicationProtocol.HTTPS : elbv2.ApplicationProtocol.HTTP,
         platformVersion: ecs.FargatePlatformVersion.LATEST,
@@ -508,6 +531,32 @@ export class ApiStack extends cdk.Stack {
       stringValue: this.apiService.loadBalancer.loadBalancerDnsName,
       description: 'API Load Balancer DNS Name',
     });
+
+    // ==================== Create WebSocket DNS Record ====================
+    // Now create the actual DNS record for the WebSocket subdomain
+    if (wsDomain && hostedZone) {
+      // Create A record pointing directly to ALB
+      new route53.ARecord(this, 'WebSocketDomainRecord', {
+        zone: hostedZone,
+        recordName: 'ws', // Just 'ws' subdomain, not the full domain
+        target: route53.RecordTarget.fromAlias(
+          new route53Targets.LoadBalancerTarget(this.loadBalancer)
+        ),
+      });
+
+      // Store WebSocket domain in SSM for reference
+      new ssm.StringParameter(this, 'WebSocketDomainParameter', {
+        parameterName: `/postolio/${environment}/api/ws-domain`,
+        stringValue: wsDomain,
+        description: 'WebSocket Domain for direct ALB access (bypasses CloudFront)',
+      });
+
+      new cdk.CfnOutput(this, 'WebSocketDomain', {
+        value: `wss://${wsDomain}/`,
+        description: 'WebSocket URL for direct connections',
+        exportName: `${prefix}-ws-url`,
+      });
+    }
 
     new ssm.StringParameter(this, 'EcsClusterNameParameter', {
       parameterName: `/postolio/${environment}/api/cluster-name`,
