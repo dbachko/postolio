@@ -132,6 +132,7 @@ const apiStack = new ApiStack(app, `Postolio-API-${environment}`, {
   useExternalDns,
   openaiApiKey: app.node.tryGetContext('openaiApiKey'),
   imageTag,
+  ...oauthConfig,
   description: `Postolio Backend API - ${environment} environment`,
   tags: {
     ...stackTags,
