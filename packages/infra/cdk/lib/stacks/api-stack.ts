@@ -17,8 +17,9 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 import { WAFConstruct } from '../constructs/waf-construct';
+import { getOAuthEnvironmentVariables, type OAuthConfig } from '../utils/oauth-config';
 
-export interface ApiStackProps extends cdk.StackProps {
+export interface ApiStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod';
   domainName?: string;
   hostedZoneId?: string;
@@ -61,6 +62,10 @@ export class ApiStack extends cdk.Stack {
     const defaultImageTag = `api-${environment}-latest`;
     const containerImageTag =
       contextImageTag && contextImageTag.trim().length > 0 ? contextImageTag : defaultImageTag;
+
+    const oauthEnvVars = Object.fromEntries(
+      Object.entries(getOAuthEnvironmentVariables(props)).filter(([, value]) => value)
+    );
 
     // ==================== Import Foundation Resources ====================
     // Import VPC from Foundation stack (for CDK lookup, must use valueFromLookup)
@@ -370,6 +375,7 @@ export class ApiStack extends cdk.Stack {
             ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
             ...(openaiApiKey && { OPENAI_API_KEY: openaiApiKey }),
+            ...oauthEnvVars,
           },
           secrets: databaseSecret
             ? {
