@@ -347,20 +347,11 @@ export class ApiStack extends cdk.Stack {
       console.log(`Using dynamic hosted zone lookup for domain: ${lookupDomain}`);
     }
 
-    // ==================== WebSocket Subdomain Configuration ====================
-    // HARDCODED WebSocket domain - always use postolio.example regardless of main domain
-    let wsDomain: string | undefined;
     let certificate: acm.ICertificate | undefined;
     if (domainName && hostedZone) {
-      // ALWAYS use postolio.example for WebSocket connections
-      wsDomain = 'postolio.example';
-
-      console.log(`WebSocket domain hardcoded to: ${wsDomain}`);
-
-      // Create certificate that includes both the main domain and WebSocket subdomain
+      // Create certificate for the main domain only (WebSocket uses CloudFront)
       certificate = new acm.Certificate(this, 'ApiCertificate', {
         domainName: domainName,
-        subjectAlternativeNames: ['postolio.example'], // Always use postolio.example
         validation: acm.CertificateValidation.fromDns(hostedZone),
       });
     }
@@ -389,8 +380,6 @@ export class ApiStack extends cdk.Stack {
             ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
             ...(openaiApiKey && { OPENAI_API_KEY: openaiApiKey }),
-            // WebSocket domain for direct ALB connections (bypasses CloudFront)
-            ...(wsDomain && { WS_DOMAIN: wsDomain }),
             ...oauthEnvVars,
           },
           secrets: databaseSecret
@@ -487,6 +476,16 @@ export class ApiStack extends cdk.Stack {
       unhealthyThresholdCount: 5,
     });
 
+    // ==================== WebSocket Sticky Sessions Configuration ====================
+    // Enable sticky sessions for WebSocket connections to maintain connection affinity
+    this.apiService.targetGroup.setAttribute('stickiness.enabled', 'true');
+    this.apiService.targetGroup.setAttribute('stickiness.type', 'app_cookie');
+    this.apiService.targetGroup.setAttribute('stickiness.app_cookie.duration_seconds', '86400');
+    this.apiService.targetGroup.setAttribute('stickiness.app_cookie.cookie_name', 'WEBSOCKET_SESSION');
+
+    // Reduce deregistration delay for faster WebSocket failover
+    this.apiService.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '30');
+
     // ==================== Auto-scaling Configuration ====================
     const scaling = this.apiService.service.autoScaleTaskCount({
       minCapacity: environment === 'prod' ? 2 : 1,
@@ -526,37 +525,6 @@ export class ApiStack extends cdk.Stack {
       description: 'API Load Balancer DNS Name',
     });
 
-    // ==================== Create WebSocket DNS Record ====================
-    // Now create the actual DNS record for the WebSocket subdomain
-    if (wsDomain && hostedZone) {
-      // HARDCODED: Always create postolio.example record
-      // Since we're always using postolio.example, we need to ensure it's in the postolio.example zone
-      const recordName = 'ws'; // Just 'ws' for postolio.example in postolio.example zone
-
-      console.log(`Creating Route53 record: postolio.example in zone ${hostedZone.zoneName}`);
-
-      // Create A record pointing directly to ALB
-      new route53.ARecord(this, 'WebSocketDomainRecord', {
-        zone: hostedZone,
-        recordName: recordName,
-        target: route53.RecordTarget.fromAlias(
-          new route53Targets.LoadBalancerTarget(this.loadBalancer)
-        ),
-      });
-
-      // Store WebSocket domain in SSM for reference
-      new ssm.StringParameter(this, 'WebSocketDomainParameter', {
-        parameterName: `/postolio/${environment}/api/ws-domain`,
-        stringValue: wsDomain,
-        description: 'WebSocket Domain for direct ALB access (bypasses CloudFront)',
-      });
-
-      new cdk.CfnOutput(this, 'WebSocketDomain', {
-        value: `wss://${wsDomain}/`,
-        description: 'WebSocket URL for direct connections',
-        exportName: `${prefix}-ws-url`,
-      });
-    }
 
     new ssm.StringParameter(this, 'EcsClusterNameParameter', {
       parameterName: `/postolio/${environment}/api/cluster-name`,

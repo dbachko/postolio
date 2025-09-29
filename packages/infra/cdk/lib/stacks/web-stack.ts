@@ -183,6 +183,24 @@ export class WebStack extends cdk.Stack {
       );
     }
 
+    // ==================== WebSocket Origin Request Policy ====================
+    const wsOriginRequestPolicy = new cloudfront.OriginRequestPolicy(this, 'WebSocketOriginPolicy', {
+      originRequestPolicyName: `${prefix}-websocket-origin-policy`,
+      comment: 'Forward WebSocket headers for upgrade',
+      headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
+        'Sec-WebSocket-Key',
+        'Sec-WebSocket-Version',
+        'Sec-WebSocket-Protocol',
+        'Sec-WebSocket-Accept',
+        'Sec-WebSocket-Extensions',
+        'Upgrade',
+        'Connection',
+        'Authorization'
+      ),
+      cookieBehavior: cloudfront.OriginRequestCookieBehavior.all(),
+      queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
+    });
+
     // ==================== CloudFront Distribution ====================
     const distributionProps: cloudfront.DistributionProps = {
       comment: `${prefix} - Frontend Distribution`,
@@ -238,6 +256,14 @@ export class WebStack extends cdk.Stack {
           cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+        },
+        // WebSocket behavior - forwards upgrade headers to ALB
+        '/ws': {
+          origin: apiOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: wsOriginRequestPolicy,
         },
       },
       errorResponses: [
