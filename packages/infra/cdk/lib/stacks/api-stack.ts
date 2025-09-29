@@ -481,7 +481,10 @@ export class ApiStack extends cdk.Stack {
     this.apiService.targetGroup.setAttribute('stickiness.enabled', 'true');
     this.apiService.targetGroup.setAttribute('stickiness.type', 'app_cookie');
     this.apiService.targetGroup.setAttribute('stickiness.app_cookie.duration_seconds', '86400');
-    this.apiService.targetGroup.setAttribute('stickiness.app_cookie.cookie_name', 'WEBSOCKET_SESSION');
+    this.apiService.targetGroup.setAttribute(
+      'stickiness.app_cookie.cookie_name',
+      'WEBSOCKET_SESSION'
+    );
 
     // Reduce deregistration delay for faster WebSocket failover
     this.apiService.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '30');
@@ -524,7 +527,6 @@ export class ApiStack extends cdk.Stack {
       stringValue: this.apiService.loadBalancer.loadBalancerDnsName,
       description: 'API Load Balancer DNS Name',
     });
-
 
     new ssm.StringParameter(this, 'EcsClusterNameParameter', {
       parameterName: `/postolio/${environment}/api/cluster-name`,

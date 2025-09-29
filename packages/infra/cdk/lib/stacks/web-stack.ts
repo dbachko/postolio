@@ -184,22 +184,26 @@ export class WebStack extends cdk.Stack {
     }
 
     // ==================== WebSocket Origin Request Policy ====================
-    const wsOriginRequestPolicy = new cloudfront.OriginRequestPolicy(this, 'WebSocketOriginPolicy', {
-      originRequestPolicyName: `${prefix}-websocket-origin-policy`,
-      comment: 'Forward WebSocket headers for upgrade',
-      headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
-        'Sec-WebSocket-Key',
-        'Sec-WebSocket-Version',
-        'Sec-WebSocket-Protocol',
-        'Sec-WebSocket-Accept',
-        'Sec-WebSocket-Extensions',
-        'Upgrade',
-        'Connection',
-        'Authorization'
-      ),
-      cookieBehavior: cloudfront.OriginRequestCookieBehavior.all(),
-      queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
-    });
+    const wsOriginRequestPolicy = new cloudfront.OriginRequestPolicy(
+      this,
+      'WebSocketOriginPolicy',
+      {
+        originRequestPolicyName: `${prefix}-websocket-origin-policy`,
+        comment: 'Forward WebSocket headers for upgrade',
+        headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
+          'Sec-WebSocket-Key',
+          'Sec-WebSocket-Version',
+          'Sec-WebSocket-Protocol',
+          'Sec-WebSocket-Accept',
+          'Sec-WebSocket-Extensions',
+          'Upgrade',
+          'Connection',
+          'Authorization'
+        ),
+        cookieBehavior: cloudfront.OriginRequestCookieBehavior.all(),
+        queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
+      }
+    );
 
     // ==================== CloudFront Distribution ====================
     const distributionProps: cloudfront.DistributionProps = {
