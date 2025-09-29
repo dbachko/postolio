@@ -349,18 +349,30 @@ export class ApiStack extends cdk.Stack {
 
     // ==================== WebSocket Subdomain Configuration ====================
     // Calculate WebSocket domain before task definition so it can be passed as environment variable
-    // Using hardcoded postolio.example as per working PR #133
     let wsDomain: string | undefined;
     let certificate: acm.ICertificate | undefined;
     if (domainName && hostedZone) {
-      // Use hardcoded postolio.example for now (as per working configuration)
-      wsDomain = 'postolio.example';
+      // Create WebSocket subdomain based on the main domain
+      // If domain is postolio.example, WebSocket will be ws.postolio.example
+      // If domain is postolio.example, WebSocket will be postolio.example
+      const domainParts = domainName.split('.');
+      if (domainParts.length >= 3) {
+        // Domain is already a subdomain (e.g., postolio.example)
+        // Replace the first part with 'ws' (e.g., ws.postolio.example)
+        domainParts[0] = 'ws';
+        wsDomain = domainParts.join('.');
+      } else {
+        // Domain is a root domain (e.g., postolio.example)
+        // Add 'ws' as subdomain (e.g., postolio.example)
+        wsDomain = `ws.${domainName}`;
+      }
+
+      console.log(`WebSocket domain will be: ${wsDomain} (based on domain: ${domainName})`);
 
       // Create certificate that includes both the main domain and WebSocket subdomain
-      // This matches the working configuration from PR #133
       certificate = new acm.Certificate(this, 'ApiCertificate', {
         domainName: domainName,
-        subjectAlternativeNames: ['postolio.example'], // Add WebSocket subdomain as SAN
+        subjectAlternativeNames: [wsDomain], // Add WebSocket subdomain as SAN
         validation: acm.CertificateValidation.fromDns(hostedZone),
       });
     }
@@ -529,10 +541,25 @@ export class ApiStack extends cdk.Stack {
     // ==================== Create WebSocket DNS Record ====================
     // Now create the actual DNS record for the WebSocket subdomain
     if (wsDomain && hostedZone) {
+      // Extract the subdomain part from the full WebSocket domain
+      // For ws.postolio.example with zone postolio.example, recordName should be 'ws.app'
+      // For postolio.example with zone postolio.example, recordName should be 'ws'
+      const hostedZoneName = hostedZone.zoneName;
+      let recordName = wsDomain;
+
+      // Remove the hosted zone suffix to get just the subdomain part
+      if (wsDomain.endsWith(`.${hostedZoneName}`)) {
+        recordName = wsDomain.slice(0, -(hostedZoneName.length + 1));
+      } else if (wsDomain.endsWith(hostedZoneName)) {
+        recordName = wsDomain.slice(0, -hostedZoneName.length);
+      }
+
+      console.log(`Creating Route53 record: ${recordName} in zone ${hostedZoneName}`);
+
       // Create A record pointing directly to ALB
       new route53.ARecord(this, 'WebSocketDomainRecord', {
         zone: hostedZone,
-        recordName: 'ws', // Just 'ws' subdomain, not the full domain
+        recordName: recordName,
         target: route53.RecordTarget.fromAlias(
           new route53Targets.LoadBalancerTarget(this.loadBalancer)
         ),

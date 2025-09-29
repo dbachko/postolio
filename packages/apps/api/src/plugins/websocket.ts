@@ -93,7 +93,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
   );
 
   // WebSocket route handler
-  // In production with postolio.example subdomain, this handles root path
+  // In production with WebSocket subdomain (e.g., ws.postolio.example), this handles root path
   // In development, this handles /ws path (Vite proxy configuration)
   const wsPath = process.env.WS_DOMAIN ? '/' : '/ws';
   fastify.get(wsPath, { websocket: true }, (connection) => {
