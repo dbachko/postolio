@@ -282,7 +282,7 @@ export class ApiStack extends cdk.Stack {
             // Lambda invoke permissions for microservices
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: ['lambda:InvokeFunction'],
+              actions: ['lambda:InvokeFunction', 'lambda:InvokeFunctionUrl'],
               resources: [
                 `arn:aws:lambda:${this.region}:${this.account}:function:postolio-${environment}-*`,
               ],
