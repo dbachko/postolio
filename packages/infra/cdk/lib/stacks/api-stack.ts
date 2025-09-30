@@ -347,20 +347,11 @@ export class ApiStack extends cdk.Stack {
       console.log(`Using dynamic hosted zone lookup for domain: ${lookupDomain}`);
     }
 
-    // ==================== WebSocket Subdomain Configuration ====================
-    // Calculate WebSocket domain before task definition so it can be passed as environment variable
-    // Using hardcoded postolio.example as per working PR #133
-    let wsDomain: string | undefined;
     let certificate: acm.ICertificate | undefined;
     if (domainName && hostedZone) {
-      // Use hardcoded postolio.example for now (as per working configuration)
-      wsDomain = 'postolio.example';
-
-      // Create certificate that includes both the main domain and WebSocket subdomain
-      // This matches the working configuration from PR #133
+      // Create certificate for the main domain only (WebSocket uses CloudFront)
       certificate = new acm.Certificate(this, 'ApiCertificate', {
         domainName: domainName,
-        subjectAlternativeNames: ['postolio.example'], // Add WebSocket subdomain as SAN
         validation: acm.CertificateValidation.fromDns(hostedZone),
       });
     }
@@ -389,8 +380,6 @@ export class ApiStack extends cdk.Stack {
             ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
             ...(openaiApiKey && { OPENAI_API_KEY: openaiApiKey }),
-            // WebSocket domain for direct ALB connections (bypasses CloudFront)
-            ...(wsDomain && { WS_DOMAIN: wsDomain }),
             ...oauthEnvVars,
           },
           secrets: databaseSecret
@@ -487,6 +476,19 @@ export class ApiStack extends cdk.Stack {
       unhealthyThresholdCount: 5,
     });
 
+    // ==================== WebSocket Sticky Sessions Configuration ====================
+    // Enable sticky sessions for WebSocket connections to maintain connection affinity
+    this.apiService.targetGroup.setAttribute('stickiness.enabled', 'true');
+    this.apiService.targetGroup.setAttribute('stickiness.type', 'app_cookie');
+    this.apiService.targetGroup.setAttribute('stickiness.app_cookie.duration_seconds', '86400');
+    this.apiService.targetGroup.setAttribute(
+      'stickiness.app_cookie.cookie_name',
+      'WEBSOCKET_SESSION'
+    );
+
+    // Reduce deregistration delay for faster WebSocket failover
+    this.apiService.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '30');
+
     // ==================== Auto-scaling Configuration ====================
     const scaling = this.apiService.service.autoScaleTaskCount({
       minCapacity: environment === 'prod' ? 2 : 1,
@@ -525,32 +527,6 @@ export class ApiStack extends cdk.Stack {
       stringValue: this.apiService.loadBalancer.loadBalancerDnsName,
       description: 'API Load Balancer DNS Name',
     });
-
-    // ==================== Create WebSocket DNS Record ====================
-    // Now create the actual DNS record for the WebSocket subdomain
-    if (wsDomain && hostedZone) {
-      // Create A record pointing directly to ALB
-      new route53.ARecord(this, 'WebSocketDomainRecord', {
-        zone: hostedZone,
-        recordName: 'ws', // Just 'ws' subdomain, not the full domain
-        target: route53.RecordTarget.fromAlias(
-          new route53Targets.LoadBalancerTarget(this.loadBalancer)
-        ),
-      });
-
-      // Store WebSocket domain in SSM for reference
-      new ssm.StringParameter(this, 'WebSocketDomainParameter', {
-        parameterName: `/postolio/${environment}/api/ws-domain`,
-        stringValue: wsDomain,
-        description: 'WebSocket Domain for direct ALB access (bypasses CloudFront)',
-      });
-
-      new cdk.CfnOutput(this, 'WebSocketDomain', {
-        value: `wss://${wsDomain}/`,
-        description: 'WebSocket URL for direct connections',
-        exportName: `${prefix}-ws-url`,
-      });
-    }
 
     new ssm.StringParameter(this, 'EcsClusterNameParameter', {
       parameterName: `/postolio/${environment}/api/cluster-name`,

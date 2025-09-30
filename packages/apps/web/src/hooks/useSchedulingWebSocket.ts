@@ -348,30 +348,9 @@ export function useSchedulingWebSocket({
 
       handleConnectionChange('connecting');
 
-      // Fetch WebSocket configuration from backend
-      let wsUrl = '';
-      try {
-        const response = await fetch('/api/config/websocket', {
-          headers: {
-            Authorization: `Bearer ${currentToken}`,
-          },
-        });
-
-        if (response.ok) {
-          const config = await response.json();
-          if (!config.useRelative && config.wsUrl) {
-            wsUrl = config.wsUrl;
-          }
-        }
-      } catch (error) {
-        console.warn('Failed to fetch WebSocket config, using default:', error);
-      }
-
-      // Use configured URL or fall back to relative path
-      if (!wsUrl) {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        wsUrl = `${protocol}//${window.location.host}/ws`;
-      }
+      // Always use /ws path through CloudFront on main domain
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
 
       console.log('Connecting to WebSocket at:', wsUrl);
       const ws = new WebSocket(wsUrl);
