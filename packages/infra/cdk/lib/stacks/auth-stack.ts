@@ -76,6 +76,58 @@ export class AuthStack extends cdk.Stack {
       },
     });
 
+    // ==================== DynamoDB Table for Audit Logs ====================
+    const auditTable = new dynamodb.Table(this, 'AuditLogsTable', {
+      tableName: `${prefix}-audit-logs`,
+      partitionKey: {
+        name: 'pk',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'sk',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: false, // Not needed for audit logs with TTL
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      timeToLiveAttribute: 'ttl',
+    });
+
+    // Suppress PITR requirement for audit logs
+    NagSuppressions.addResourceSuppressions(auditTable, [
+      {
+        id: 'AwsSolutions-DDB3',
+        reason: 'Audit logs use TTL for retention and do not require point-in-time recovery',
+      },
+    ]);
+
+    // ==================== DynamoDB Table for Rate Limiting ====================
+    const rateLimitTable = new dynamodb.Table(this, 'RateLimitTable', {
+      tableName: `${prefix}-rate-limits`,
+      partitionKey: {
+        name: 'pk',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'sk',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: false, // Not needed for ephemeral rate limit data
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      timeToLiveAttribute: 'ttl',
+    });
+
+    // Suppress PITR requirement for rate limit table
+    NagSuppressions.addResourceSuppressions(rateLimitTable, [
+      {
+        id: 'AwsSolutions-DDB3',
+        reason: 'Rate limit table stores ephemeral data with TTL and does not require point-in-time recovery',
+      },
+    ]);
+
     // ==================== SNS Topic for Alerts ====================
     const alertTopic = new sns.Topic(this, 'AlertTopic', {
       topicName: `${prefix}-alerts`,
@@ -122,7 +174,12 @@ export class AuthStack extends cdk.Stack {
                 'dynamodb:Query',
                 'dynamodb:Scan',
               ],
-              resources: [this.tokenTable.tableArn, `${this.tokenTable.tableArn}/index/*`],
+              resources: [
+                this.tokenTable.tableArn,
+                `${this.tokenTable.tableArn}/index/*`,
+                auditTable.tableArn,
+                rateLimitTable.tableArn,
+              ],
             }),
             // KMS permissions
             new iam.PolicyStatement({
@@ -164,7 +221,9 @@ export class AuthStack extends cdk.Stack {
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
         // AWS_REGION is automatically provided by Lambda runtime
-        TOKENS_TABLE_NAME: this.tokenTable.tableName,
+        TOKENS_TABLE: this.tokenTable.tableName,
+        AUDIT_TABLE: auditTable.tableName,
+        RATE_LIMIT_TABLE: rateLimitTable.tableName,
         KMS_KEY_ID: this.encryptionKey.keyId,
         FACEBOOK_APP_ID: props.facebookAppId || '',
         FACEBOOK_APP_SECRET: props.facebookAppSecret || '',
