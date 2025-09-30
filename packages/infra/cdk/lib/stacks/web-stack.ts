@@ -197,13 +197,25 @@ export class WebStack extends cdk.Stack {
           'Sec-WebSocket-Accept',
           'Sec-WebSocket-Extensions',
           'Upgrade',
-          'Connection',
-          'Authorization'
+          'Connection'
         ),
         cookieBehavior: cloudfront.OriginRequestCookieBehavior.all(),
         queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
       }
     );
+
+    // ==================== WebSocket Cache Policy ====================
+    // Cache policy that forwards Authorization header for WebSocket authentication
+    const wsCachePolicy = new cloudfront.CachePolicy(this, 'WebSocketCachePolicy', {
+      cachePolicyName: `${prefix}-websocket-cache-policy`,
+      comment: 'Cache policy for WebSocket connections with auth headers',
+      defaultTtl: cdk.Duration.seconds(0),
+      maxTtl: cdk.Duration.seconds(0),
+      minTtl: cdk.Duration.seconds(0),
+      headerBehavior: cloudfront.CacheHeaderBehavior.allowList('Authorization'),
+      queryStringBehavior: cloudfront.CacheQueryStringBehavior.all(),
+      cookieBehavior: cloudfront.CacheCookieBehavior.all(),
+    });
 
     // ==================== CloudFront Distribution ====================
     const distributionProps: cloudfront.DistributionProps = {
@@ -266,7 +278,7 @@ export class WebStack extends cdk.Stack {
           origin: apiOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          cachePolicy: wsCachePolicy,
           originRequestPolicy: wsOriginRequestPolicy,
         },
       },
