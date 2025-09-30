@@ -183,39 +183,10 @@ export class WebStack extends cdk.Stack {
       );
     }
 
-    // ==================== WebSocket Origin Request Policy ====================
-    const wsOriginRequestPolicy = new cloudfront.OriginRequestPolicy(
-      this,
-      'WebSocketOriginPolicy',
-      {
-        originRequestPolicyName: `${prefix}-websocket-origin-policy`,
-        comment: 'Forward WebSocket headers for upgrade',
-        headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
-          'Sec-WebSocket-Key',
-          'Sec-WebSocket-Version',
-          'Sec-WebSocket-Protocol',
-          'Sec-WebSocket-Accept',
-          'Sec-WebSocket-Extensions',
-          'Upgrade',
-          'Connection'
-        ),
-        cookieBehavior: cloudfront.OriginRequestCookieBehavior.all(),
-        queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
-      }
-    );
-
-    // ==================== WebSocket Cache Policy ====================
-    // Cache policy that forwards Authorization header for WebSocket authentication
-    const wsCachePolicy = new cloudfront.CachePolicy(this, 'WebSocketCachePolicy', {
-      cachePolicyName: `${prefix}-websocket-cache-policy`,
-      comment: 'Cache policy for WebSocket connections with auth headers',
-      defaultTtl: cdk.Duration.seconds(0),
-      maxTtl: cdk.Duration.seconds(0),
-      minTtl: cdk.Duration.seconds(0),
-      headerBehavior: cloudfront.CacheHeaderBehavior.allowList('Authorization'),
-      queryStringBehavior: cloudfront.CacheQueryStringBehavior.all(),
-      cookieBehavior: cloudfront.CacheCookieBehavior.all(),
-    });
+    // ==================== WebSocket Policies ====================
+    // For WebSocket support, we use managed policies that handle the upgrade headers properly
+    // CloudFront doesn't allow custom forwarding of Upgrade/Connection headers - these are
+    // automatically handled by the ALL_VIEWER policy which forwards all viewer headers
 
     // ==================== CloudFront Distribution ====================
     const distributionProps: cloudfront.DistributionProps = {
@@ -273,13 +244,13 @@ export class WebStack extends cdk.Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
         },
-        // WebSocket behavior - forwards upgrade headers to ALB
+        // WebSocket behavior - uses ALL_VIEWER to forward all headers including upgrade headers
         '/ws': {
           origin: apiOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-          cachePolicy: wsCachePolicy,
-          originRequestPolicy: wsOriginRequestPolicy,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
         },
       },
       errorResponses: [
