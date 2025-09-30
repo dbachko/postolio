@@ -1,6 +1,7 @@
 # WebSocket Implementation Product Specification
 
 ## Executive Summary
+
 Real-time bidirectional communication system for Postolio using AWS infrastructure with proper subdomain routing to ensure reliable WebSocket connections at scale.
 
 ## Product Overview
@@ -49,26 +50,32 @@ Real-time bidirectional communication system for Postolio using AWS infrastructu
 ## Proper Architecture Solution
 
 ### Option 1: Direct ALB Connection (Currently Attempted)
+
 ```
 Client → postolio.example → Route 53 → ALB → ECS Tasks
          (bypass CloudFront)
 ```
+
 **Pros**: Lower latency, direct connection
 **Cons**: Requires separate subdomain management
 
 ### Option 2: CloudFront WebSocket Support (Modern Approach)
+
 ```
 Client → postolio.example/ws → CloudFront → ALB → ECS Tasks
          (with proper headers)
 ```
+
 **Pros**: Unified domain, CloudFront benefits (DDoS protection, edge locations)
 **Cons**: Slightly higher latency
 
 ### Option 3: Dynamic Subdomain (Flexible)
+
 ```
 Client → ws.{environment}.postolio.example → Route 53 → ALB → ECS Tasks
          (environment-specific)
 ```
+
 **Pros**: Environment isolation, clear separation
 **Cons**: More complex certificate management
 
@@ -77,6 +84,7 @@ Client → ws.{environment}.postolio.example → Route 53 → ALB → ECS Tasks
 ### Selected Approach: CloudFront WebSocket (Option 2)
 
 Based on our analysis, we're implementing the modern CloudFront WebSocket approach because:
+
 - **Simplified Architecture**: No separate subdomain management
 - **Better Performance**: CloudFront edge locations reduce latency globally
 - **Enhanced Security**: DDoS protection at edge locations
@@ -86,7 +94,9 @@ Based on our analysis, we're implementing the modern CloudFront WebSocket approa
 ### Implementation Phases
 
 #### Phase 1: CloudFront Configuration
+
 1. **Create WebSocket Origin Request Policy**
+
    ```typescript
    const wsOriginRequestPolicy = new cloudfront.OriginRequestPolicy(this, 'WebSocketOriginPolicy', {
      headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
@@ -116,6 +126,7 @@ Based on our analysis, we're implementing the modern CloudFront WebSocket approa
    ```
 
 #### Phase 2: Backend Configuration
+
 1. **Unify WebSocket Path**
    - Always use `/ws` path regardless of environment
    - Remove WS_DOMAIN environment variable dependency
@@ -125,6 +136,7 @@ Based on our analysis, we're implementing the modern CloudFront WebSocket approa
    - Let frontend construct URL from current location
 
 #### Phase 3: Frontend Updates
+
 1. **Use Main Domain**
    ```typescript
    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -132,6 +144,7 @@ Based on our analysis, we're implementing the modern CloudFront WebSocket approa
    ```
 
 #### Phase 4: Cleanup
+
 1. **Remove Subdomain Logic**
    - Delete postolio.example Route 53 record creation
    - Remove certificate SAN for postolio.example
@@ -206,13 +219,13 @@ Based on our analysis, we're implementing the modern CloudFront WebSocket approa
 
 ## Traceability
 
-| Feature | Implementation | Status |
-|---------|---------------|---------|
-| FEAT-1 | WebSocket plugin in Fastify | Implemented |
-| FEAT-2 | Route 53 subdomain setup | Needs Fix |
-| FEAT-3 | Multi-region not yet needed | Not Started |
-| FEAT-4 | ALB sticky sessions | Configurable |
-| FEAT-5 | Heartbeat mechanism | Implemented |
+| Feature | Implementation              | Status       |
+| ------- | --------------------------- | ------------ |
+| FEAT-1  | WebSocket plugin in Fastify | Implemented  |
+| FEAT-2  | Route 53 subdomain setup    | Needs Fix    |
+| FEAT-3  | Multi-region not yet needed | Not Started  |
+| FEAT-4  | ALB sticky sessions         | Configurable |
+| FEAT-5  | Heartbeat mechanism         | Implemented  |
 
 ## Decisions Made
 
@@ -226,11 +239,13 @@ Based on our analysis, we're implementing the modern CloudFront WebSocket approa
 ## Simple Implementation Approach
 
 ### Core Principles
+
 - **No over-engineering** - Use AWS defaults where possible
 - **Scale on demand** - Monitor actual usage, adjust as needed
 - **Minimal complexity** - Avoid unnecessary fallback mechanisms
 
 ### CloudWatch Metrics (Simple)
+
 ```typescript
 // Track only essential metrics
 await cloudWatch.putMetricData({
@@ -238,12 +253,13 @@ await cloudWatch.putMetricData({
   MetricData: [
     { MetricName: 'ConnectionCount', Value: 1, Unit: 'Count' },
     { MetricName: 'MessagesSent', Value: 1, Unit: 'Count' },
-    { MetricName: 'ConnectionErrors', Value: 1, Unit: 'Count' }
-  ]
+    { MetricName: 'ConnectionErrors', Value: 1, Unit: 'Count' },
+  ],
 });
 ```
 
 ### Rate Limiting (Simple)
+
 ```typescript
 // Connection-level rate limiting in middleware
 const connectionLimits = new Map(); // userId -> connection count
@@ -252,7 +268,8 @@ fastify.get('/ws', { websocket: true }, (connection) => {
   const userId = getUserFromToken(connection);
   const currentConnections = connectionLimits.get(userId) || 0;
 
-  if (currentConnections >= 5) { // Max 5 connections per user
+  if (currentConnections >= 5) {
+    // Max 5 connections per user
     connection.close(1008, 'Connection limit exceeded');
     return;
   }
