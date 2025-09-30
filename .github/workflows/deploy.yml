@@ -205,7 +205,7 @@ jobs:
   build-images:
     name: Build Docker Images
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Add timeout for image builds
+    timeout-minutes: 30 # Add timeout for image builds
     needs: detect-changes
     if: |
       github.event_name != 'pull_request' &&
@@ -213,7 +213,6 @@ jobs:
        github.event_name == 'workflow_dispatch' ||
        github.ref == 'refs/heads/main')
     environment: ${{ needs.detect-changes.outputs.environment }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -255,7 +254,7 @@ jobs:
     name: Deploy ${{ matrix.stack }} Stack
     runs-on: ubuntu-latest
     needs: [detect-changes, build-images]
-    timeout-minutes: 60  # Increase timeout for CDK deployments
+    timeout-minutes: 60 # Increase timeout for CDK deployments
     if: |
       github.event_name != 'pull_request' &&
       needs.detect-changes.outputs.stack-matrix != '[]'
@@ -265,8 +264,8 @@ jobs:
     strategy:
       matrix:
         stack: ${{ fromJson(needs.detect-changes.outputs.stack-matrix) }}
-      max-parallel: 1  # Deploy stacks sequentially to avoid resource contention
-      fail-fast: false  # Allow other stacks to continue if one fails
+      max-parallel: 1 # Deploy stacks sequentially to avoid resource contention
+      fail-fast: false # Allow other stacks to continue if one fails
 
     steps:
       - name: Checkout code
@@ -282,7 +281,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: CDK Bootstrap (if needed)
-        timeout-minutes: 15  # Extended timeout for bootstrap
+        timeout-minutes: 15 # Extended timeout for bootstrap
         working-directory: packages/infra/cdk
         run: |
           echo "Checking CDK bootstrap status..."
@@ -295,7 +294,7 @@ jobs:
           fi
 
       - name: Wait for dependencies
-        timeout-minutes: 45  # Extended timeout for dependency waiting
+        timeout-minutes: 45 # Extended timeout for dependency waiting
         run: |
           ENV="${{ needs.detect-changes.outputs.environment }}"
           STACK="${{ matrix.stack }}"
@@ -386,7 +385,7 @@ jobs:
           esac
 
       - name: Deploy Stack via CDK
-        timeout-minutes: 45  # Extended timeout for CDK deployments
+        timeout-minutes: 45 # Extended timeout for CDK deployments
         working-directory: packages/infra/cdk
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -398,6 +397,7 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           FACEBOOK_APP_ID: ${{ vars.FACEBOOK_APP_ID }}
           INSTAGRAM_APP_ID: ${{ vars.INSTAGRAM_APP_ID }}
+          INSTAGRAM_REDIRECT_URI: ${{ vars.INSTAGRAM_REDIRECT_URI }}
           LINKEDIN_CLIENT_ID: ${{ vars.LINKEDIN_CLIENT_ID }}
           TIKTOK_CLIENT_KEY: ${{ vars.TIKTOK_CLIENT_KEY }}
           NODE_ENV: ${{ vars.NODE_ENV }}
@@ -468,6 +468,7 @@ jobs:
               --context facebookAppSecret="$FACEBOOK_APP_SECRET" \
               --context instagramAppId="$INSTAGRAM_APP_ID" \
               --context instagramAppSecret="$INSTAGRAM_APP_SECRET" \
+              --context instagramRedirectUri="$INSTAGRAM_REDIRECT_URI" \
               --context linkedinClientId="$LINKEDIN_CLIENT_ID" \
               --context linkedinClientSecret="$LINKEDIN_CLIENT_SECRET" \
               --context tiktokClientKey="$TIKTOK_CLIENT_KEY" \
@@ -508,7 +509,7 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend Assets
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Add timeout for frontend deployment
+    timeout-minutes: 30 # Add timeout for frontend deployment
     needs: [detect-changes, deploy-stacks]
     if: |
       github.event_name != 'pull_request' &&
@@ -517,7 +518,6 @@ jobs:
        github.ref == 'refs/heads/main') &&
       contains(needs.detect-changes.outputs.stack-matrix, 'web')
     environment: ${{ needs.detect-changes.outputs.environment }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -609,7 +609,7 @@ jobs:
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # Short timeout for summary
+    timeout-minutes: 10 # Short timeout for summary
     needs: [detect-changes, deploy-stacks, deploy-frontend]
     if: always() && github.event_name != 'pull_request'
 

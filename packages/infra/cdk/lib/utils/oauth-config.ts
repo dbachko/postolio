@@ -19,6 +19,9 @@ export interface OAuthConfig {
   linkedinClientSecret?: string;
   tiktokClientSecret?: string;
   googleClientSecret?: string;
+
+  // OAuth Redirect URIs
+  instagramRedirectUri?: string;
 }
 
 /**
@@ -46,6 +49,10 @@ export function getOAuthConfig(app: cdk.App): OAuthConfig {
       app.node.tryGetContext('tiktokClientSecret') || process.env.TIKTOK_CLIENT_SECRET,
     googleClientSecret:
       app.node.tryGetContext('googleClientSecret') || process.env.GOOGLE_CLIENT_SECRET,
+
+    // OAuth Redirect URIs
+    instagramRedirectUri:
+      app.node.tryGetContext('instagramRedirectUri') || process.env.INSTAGRAM_REDIRECT_URI,
   };
 }
 
@@ -78,6 +85,11 @@ export function getOAuthEnvironmentVariables(config: OAuthConfig): Record<string
     }),
     ...(config.googleClientSecret && {
       GOOGLE_CLIENT_SECRET: config.googleClientSecret,
+    }),
+
+    // OAuth Redirect URIs (only if provided)
+    ...(config.instagramRedirectUri && {
+      INSTAGRAM_REDIRECT_URI: config.instagramRedirectUri,
     }),
   };
 }
