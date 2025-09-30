@@ -18,6 +18,15 @@ import { getRedisUrl } from '../utils/redis-url.js';
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
 
+/**
+ * Add a random delay to help mitigate timing attacks
+ * Delays between 10-50ms to normalize response times
+ */
+async function addTimingJitter(): Promise<void> {
+  const delayMs = Math.floor(Math.random() * 40) + 10; // 10-50ms random delay
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // User registration with rate limiting and validation
   fastify.post<{ Body: RegisterInput }>(
@@ -151,6 +160,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const dummyHash = '$2b$10$dqyYw5XovLjpmkYNiRDEWuwKaRAvLaG45fnXE5b3KTccKZcRPka2m'; // Hash of 'dummy'
       const passwordToCheck = user?.password || dummyHash;
       const validPassword = await bcrypt.compare(password, passwordToCheck);
+
+      // Add random timing jitter to mitigate timing-based user enumeration
+      // This helps normalize response times regardless of user existence
+      await addTimingJitter();
 
       // Check both user existence and password validity
       if (!user || !validPassword) {

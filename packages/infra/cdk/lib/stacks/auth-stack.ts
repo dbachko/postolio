@@ -19,11 +19,11 @@ import * as path from 'path';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { NagSuppressions } from 'cdk-nag';
 import { OAuthConfig } from '../utils/oauth-config';
-import { ParameterNames, type Environment } from '@postolio/service-parameters';
 
 export interface AuthStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod';
   alertEmail?: string;
+  domainName?: string;
 }
 
 export class AuthStack extends cdk.Stack {
@@ -34,7 +34,7 @@ export class AuthStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AuthStackProps) {
     super(scope, id, props);
 
-    const { environment, alertEmail } = props;
+    const { environment, alertEmail, domainName } = props;
     const prefix = `postolio-${environment}-auth`;
 
     // ==================== KMS Key for Token Encryption ====================
@@ -182,13 +182,38 @@ export class AuthStack extends cdk.Stack {
     });
 
     // Create Function URL for the token service
+    // CORS origins based on environment
+    // Note: dev environment is treated as production for security (deployed to AWS)
+    const corsOrigins =
+      environment === 'prod' || environment === 'dev'
+        ? [
+            'https://postolio.example', // Production frontend
+            `https://${domainName}`, // Configured API domain (if set)
+          ].filter((origin) => origin && !origin.includes('undefined'))
+        : [
+            // Staging/local development only
+            'http://localhost:5173', // Local Vite dev server
+            'https://localhost:5173',
+            'http://ai.localhost:5173',
+            'https://ai.localhost:5173',
+            'http://localhost:3000', // Local API server
+            'https://localhost:3000',
+          ];
+
     const tokenServiceUrl = tokenServiceFunction.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
       cors: {
         allowCredentials: true,
-        allowedOrigins: ['*'], // Restrict in production
-        allowedMethods: [lambda.HttpMethod.ALL],
-        allowedHeaders: ['*'],
+        allowedOrigins: corsOrigins,
+        allowedMethods: [lambda.HttpMethod.GET, lambda.HttpMethod.PUT, lambda.HttpMethod.POST],
+        allowedHeaders: [
+          'Content-Type',
+          'Authorization',
+          'X-Correlation-ID',
+          'X-Amz-Date',
+          'X-Api-Key',
+          'X-Amz-Security-Token',
+        ],
       },
     });
 

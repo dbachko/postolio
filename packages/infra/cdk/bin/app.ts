@@ -89,6 +89,7 @@ const authStack = new AuthStack(app, `Postolio-Auth-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   alertEmail: alertEmail,
+  domainName,
   ...oauthConfig,
   description: `Postolio Authentication services - ${environment} environment`,
   tags: {
