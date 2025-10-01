@@ -36,6 +36,7 @@ export class FoundationStack extends cdk.Stack {
   public readonly cache: elasticache.CfnCacheCluster;
   public readonly sharedBucket: s3.IBucket;
   public readonly logsBucket: s3.IBucket;
+  public readonly imagesBucket: s3.IBucket;
   public readonly encryptionKey: kms.IKey;
   public readonly repository: ecr.IRepository;
   public readonly databaseSecurityGroup: ec2.ISecurityGroup;
@@ -319,6 +320,43 @@ export class FoundationStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
+    // S3 Bucket for AI-generated images with intelligent tiering
+    this.imagesBucket = new s3.Bucket(this, 'AIImagesBucket', {
+      bucketName: `${prefix}-ai-images-${this.account}`,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption:
+        environment === 'prod'
+          ? s3.BucketEncryption.KMS_MANAGED
+          : s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      lifecycleRules: [
+        {
+          id: 'intelligent-tiering-transition',
+          enabled: true,
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INTELLIGENT_TIERING,
+              transitionAfter: cdk.Duration.days(0),
+            },
+          ],
+        },
+        {
+          id: 'expire-old-images',
+          enabled: true,
+          expiration: cdk.Duration.days(environment === 'prod' ? 365 : 90),
+        },
+      ],
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
+          allowedOrigins: ['*'],
+          allowedHeaders: ['*'],
+          maxAge: 3600,
+        },
+      ],
+    });
+
     // ==================== SSM Parameters for Cross-Stack References ====================
     // VPC Parameters
     new ssm.StringParameter(this, 'VpcIdParameter', {
@@ -415,6 +453,12 @@ export class FoundationStack extends cdk.Stack {
       parameterName: `/postolio/${environment}/s3/shared-bucket`,
       stringValue: this.sharedBucket.bucketName,
       description: 'S3 bucket for shared application data',
+    });
+
+    new ssm.StringParameter(this, 'ImagesBucketParameter', {
+      parameterName: `/postolio/${environment}/s3/images-bucket`,
+      stringValue: this.imagesBucket.bucketName,
+      description: 'S3 bucket for AI-generated images',
     });
 
     // KMS Key Parameters

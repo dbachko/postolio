@@ -69,6 +69,12 @@ export class ApiStack extends cdk.Stack {
       Object.entries(getOAuthEnvironmentVariables(props)).filter(([, value]) => value)
     );
 
+    // Import images bucket name from Foundation stack
+    const imagesBucketName = ssm.StringParameter.valueFromLookup(
+      this,
+      `/postolio/${environment}/s3/images-bucket`
+    );
+
     // ==================== Import Foundation Resources ====================
     // Import VPC from Foundation stack (for CDK lookup, must use valueFromLookup)
     const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
@@ -302,6 +308,21 @@ export class ApiStack extends cdk.Stack {
                 `arn:aws:s3:::postolio-${environment}-shared-data-${this.account}/*`,
               ],
             }),
+            // S3 permissions for AI-generated images bucket
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                's3:GetObject',
+                's3:PutObject',
+                's3:DeleteObject',
+                's3:ListBucket',
+                's3:GetBucketLocation',
+              ],
+              resources: [
+                `arn:aws:s3:::${imagesBucketName}`,
+                `arn:aws:s3:::${imagesBucketName}/*`,
+              ],
+            }),
           ],
         }),
       },
@@ -376,6 +397,7 @@ export class ApiStack extends cdk.Stack {
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
             // Additional environment variables that don't need to be secrets
             AWS_REGION: this.region,
+            S3_IMAGES_BUCKET: imagesBucketName,
             ...(redisEndpointParam && { REDIS_HOST: redisEndpointParam.stringValue }),
             ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
