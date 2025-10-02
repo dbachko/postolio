@@ -1015,10 +1015,10 @@ export function Campaigns() {
                       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {campaign.content.map((post: Content) => (
                           <Card key={post.id}>
-                            {post.cdnImageUrl && (
+                            {post.imageUrl && (
                               <div className="aspect-w-16 aspect-h-9">
                                 <img
-                                  src={post.cdnImageUrl || ''}
+                                  src={post.imageUrl || ''}
                                   alt={`Post ${post.id}`}
                                   className="h-48 w-full rounded-t-lg object-cover"
                                 />

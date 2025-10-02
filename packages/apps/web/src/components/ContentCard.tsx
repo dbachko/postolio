@@ -93,11 +93,11 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
       }`}
       onClick={() => navigate(`/posts/${content.id}`)}
     >
-      {content.cdnImageUrl && (
+      {content.imageUrl && (
         <div className="aspect-w-16 aspect-h-9">
           <OptimizedImage
-            src={content.cdnImageUrl}
-            cdnUrl={content.cdnImageUrl}
+            src={content.imageUrl}
+            cdnUrl={content.imageUrl}
             fallbackUrl={undefined}
             alt="Generated content"
             className="h-48 w-full object-cover"

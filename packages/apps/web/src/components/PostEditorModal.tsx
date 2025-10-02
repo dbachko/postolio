@@ -26,7 +26,7 @@ interface PostEditorModalProps {
 interface FormData {
   caption: string;
   hashtags: string[];
-  cdnImageUrl: string;
+  imageUrl: string;
   scheduledAt: string;
 }
 
@@ -36,7 +36,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
   const [formData, setFormData] = useState<FormData>({
     caption: '',
     hashtags: [],
-    cdnImageUrl: '',
+    imageUrl: '',
     scheduledAt: '',
   });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -75,7 +75,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       const initialData = {
         caption: content.caption || '',
         hashtags: content.hashtags || [],
-        cdnImageUrl: content.cdnImageUrl || '',
+        imageUrl: content.imageUrl || '',
         scheduledAt: content.scheduledAt
           ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm")
           : '',
@@ -94,7 +94,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       setFormData({
         caption: '',
         hashtags: [],
-        cdnImageUrl: '',
+        imageUrl: '',
         scheduledAt: '',
       });
       setLearningFeedback({ isVisible: false, message: '' });
@@ -129,7 +129,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
     const hasFormChanges =
       newData.caption !== originalDataRef.current.caption ||
       JSON.stringify(newData.hashtags) !== JSON.stringify(originalDataRef.current.hashtags) ||
-      newData.cdnImageUrl !== originalDataRef.current.cdnImageUrl ||
+      newData.imageUrl !== originalDataRef.current.imageUrl ||
       newData.scheduledAt !== originalDataRef.current.scheduledAt;
 
     setHasChanges(hasFormChanges);
@@ -152,7 +152,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       contentId: string;
       caption?: string;
       hashtags?: string[];
-      cdnImageUrl?: string;
+      imageUrl?: string;
       scheduledAt?: string;
     }) => {
       // Critical logging before mutation
@@ -161,7 +161,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
         caption: data.caption,
         captionLength: data.caption?.length || 0,
         hashtags: data.hashtags,
-        cdnImageUrl: data.cdnImageUrl,
+        imageUrl: data.imageUrl,
         scheduledAt: data.scheduledAt,
         scheduledAtType: typeof data.scheduledAt,
       });
@@ -237,7 +237,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       contentId: content.id,
       caption: formData.caption,
       hashtags: formData.hashtags,
-      cdnImageUrl: formData.cdnImageUrl || undefined,
+      imageUrl: formData.imageUrl || undefined,
       scheduledAt: payloadScheduledAt,
     });
 
@@ -261,7 +261,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
   const handleImageChange = async (fileOrUrl: string | File) => {
     if (typeof fileOrUrl === 'string') {
       // Direct URL update (e.g., when removing the image)
-      const newData = { ...formData, cdnImageUrl: fileOrUrl };
+      const newData = { ...formData, imageUrl: fileOrUrl };
       setFormData(newData);
       checkForChanges(newData);
     } else {
@@ -272,7 +272,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       }
       const objectUrl = URL.createObjectURL(fileOrUrl);
       objectUrlRef.current = objectUrl;
-      setFormData((prev) => ({ ...prev, cdnImageUrl: objectUrl }));
+      setFormData((prev) => ({ ...prev, imageUrl: objectUrl }));
 
       // Upload to server
       if (content) {
@@ -280,9 +280,9 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
         try {
           const response = await apiClient.uploadContentImage(content.id, fileOrUrl);
           if (response.success && response.content) {
-            // Update with the server's response - use cdnImageUrl if available
-            const newImageUrl = response.content.cdnImageUrl || objectUrl;
-            const newData = { ...formData, cdnImageUrl: newImageUrl };
+            // Update with the server's response - use imageUrl if available
+            const newImageUrl = response.content.imageUrl || objectUrl;
+            const newData = { ...formData, imageUrl: newImageUrl };
             setFormData(newData);
             checkForChanges(newData);
             setSaveStatus('saved');
@@ -297,7 +297,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
             // Update the content in cache without mutating the original
             updateContentInCache({
               ...content,
-              cdnImageUrl: response.content.cdnImageUrl,
+              imageUrl: response.content.imageUrl,
             });
 
             // Cache is already updated, no need to invalidate
@@ -312,7 +312,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
           // Revert to previous image on error
           setFormData((prev) => ({
             ...prev,
-            cdnImageUrl: content.cdnImageUrl || '',
+            imageUrl: content.imageUrl || '',
           }));
           setTimeout(() => {
             setSaveStatus('idle');
@@ -378,7 +378,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
           <div className="space-y-2">
             <Label>Post Image</Label>
             <ImageUploader
-              value={formData.cdnImageUrl || content.cdnImageUrl || undefined}
+              value={formData.imageUrl || content.imageUrl || undefined}
               onChange={handleImageChange}
               maxSizeInMB={10}
               acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}

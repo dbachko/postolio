@@ -131,7 +131,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Build CDN URLs from S3 keys
         const contentWithUrls = contentRecords.map((item) => ({
           ...item,
-          cdnImageUrl: buildCdnUrl(item.s3ImageKey),
+          imageUrl: buildCdnUrl(item.s3ImageKey),
         }));
 
         return reply.code(201).send({
@@ -277,7 +277,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Build CDN URL from S3 key
         const contentWithUrl = {
           ...content,
-          cdnImageUrl: buildCdnUrl(content.s3ImageKey),
+          imageUrl: buildCdnUrl(content.s3ImageKey),
         };
 
         return reply.code(201).send({
@@ -337,7 +337,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Build CDN URLs from S3 keys
         const contentWithUrls = draftContent.map((item) => ({
           ...item,
-          cdnImageUrl: buildCdnUrl(item.s3ImageKey),
+          imageUrl: buildCdnUrl(item.s3ImageKey),
         }));
 
         return { content: contentWithUrls };
@@ -768,7 +768,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Build CDN URL from S3 key
         const contentWithUrl = {
           ...updatedContent,
-          cdnImageUrl: buildCdnUrl(updatedContent.s3ImageKey),
+          imageUrl: buildCdnUrl(updatedContent.s3ImageKey),
         };
 
         return {
@@ -831,7 +831,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Build CDN URLs from S3 keys
         const historyWithUrls = contentHistory.map((item) => ({
           ...item,
-          cdnImageUrl: buildCdnUrl(item.s3ImageKey),
+          imageUrl: buildCdnUrl(item.s3ImageKey),
         }));
 
         return { content: historyWithUrls };
@@ -959,7 +959,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Build CDN URL from S3 key
         const contentWithUrl = {
           ...updatedContent,
-          cdnImageUrl: buildCdnUrl(updatedContent.s3ImageKey),
+          imageUrl: buildCdnUrl(updatedContent.s3ImageKey),
         };
 
         return reply.send({
@@ -1052,7 +1052,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       // Build CDN URLs from S3 keys
       const contentWithUrls = content.map((item) => ({
         ...item,
-        cdnImageUrl: buildCdnUrl(item.s3ImageKey),
+        imageUrl: buildCdnUrl(item.s3ImageKey),
       }));
 
       // Compute placeholders

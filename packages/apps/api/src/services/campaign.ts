@@ -732,7 +732,7 @@ class CampaignService {
         ...campaign,
         content: campaign.content.map((item) => ({
           ...item,
-          cdnImageUrl: buildCdnUrl(item.s3ImageKey),
+          imageUrl: buildCdnUrl(item.s3ImageKey),
         })),
       };
 
