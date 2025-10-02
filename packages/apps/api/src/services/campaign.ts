@@ -18,6 +18,7 @@ import {
   StatusBroadcaster,
   type CampaignStatus as StatusBroadcasterCampaignStatus,
 } from './status-broadcaster.js';
+import { buildCdnUrl } from './s3-image.js';
 import { eventEmitter } from './event-emitter.js';
 import { getDatabaseClient } from '../config/database.js';
 
@@ -726,7 +727,16 @@ class CampaignService {
         throw new Error('Campaign not found or access denied');
       }
 
-      return campaign;
+      // Build CDN URLs for all content
+      const campaignWithUrls = {
+        ...campaign,
+        content: campaign.content.map((item) => ({
+          ...item,
+          cdnImageUrl: buildCdnUrl(item.s3ImageKey),
+        })),
+      };
+
+      return campaignWithUrls;
     } catch (error) {
       console.error('Get campaign error:', error);
       throw error;
