@@ -7,11 +7,7 @@ import {
 } from '../services/content-generator.js';
 import type { StyleProfile } from '../services/ai.js';
 import learningService from '../services/learning.js';
-import {
-  uploadImageBufferToS3,
-  buildCdnUrl,
-  type ImageMetadata,
-} from '../services/s3-image.js';
+import { uploadImageBufferToS3, buildCdnUrl, type ImageMetadata } from '../services/s3-image.js';
 import { computePlaceholders } from '../services/placeholderService.js';
 import { schedulerService } from '../services/scheduler.js';
 

@@ -329,10 +329,7 @@ export class ApiStack extends cdk.Stack {
                 's3:ListBucket',
                 's3:GetBucketLocation',
               ],
-              resources: [
-                `arn:aws:s3:::${imagesBucketName}`,
-                `arn:aws:s3:::${imagesBucketName}/*`,
-              ],
+              resources: [`arn:aws:s3:::${imagesBucketName}`, `arn:aws:s3:::${imagesBucketName}/*`],
             }),
           ],
         }),

@@ -185,7 +185,10 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
             } catch (s3Error) {
               console.error('Failed to upload image to S3:', s3Error);
               // If S3 upload fails, throw error - we can't save content without S3 image
-              throw new Error('Failed to upload image to S3: ' + (s3Error instanceof Error ? s3Error.message : 'Unknown error'));
+              throw new Error(
+                'Failed to upload image to S3: ' +
+                  (s3Error instanceof Error ? s3Error.message : 'Unknown error')
+              );
             }
           }
 
