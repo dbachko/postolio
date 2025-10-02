@@ -7,7 +7,7 @@ import {
   validateRequest,
 } from '../schemas/api-validation.js';
 import { successResponse, ErrorResponses, paginatedResponse } from '../utils/api-response.js';
-import { buildCdnUrl } from '../utils/image-urls.js';
+import { buildCdnUrl } from '../services/s3-image.js';
 
 const prisma = getDatabaseClient();
 

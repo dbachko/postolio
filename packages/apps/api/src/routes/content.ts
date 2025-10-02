@@ -1074,21 +1074,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             },
           ],
         },
-        select: {
-          id: true,
-          caption: true,
-          hashtags: true,
-          s3ImageKey: true,
-          status: true,
-          scheduledAt: true,
-          postedAt: true,
-          createdAt: true,
-          updatedAt: true,
-          brandId: true,
-          campaignId: true,
-          instagramPostId: true,
-          instagramPermalink: true,
-        },
         orderBy: { scheduledAt: 'asc' },
       });
 
@@ -1099,6 +1084,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           status: { in: ['active', 'preview'] },
         },
       });
+
+      // Compute placeholders (uses original content for type compatibility)
+      const placeholders = computePlaceholders(campaigns, content, monthStart, monthEnd);
 
       // Build CDN URLs from S3 keys and map to public response format
       const contentWithUrls = content.map((item) => ({
@@ -1116,9 +1104,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         instagramPostId: item.instagramPostId,
         instagramPermalink: item.instagramPermalink,
       }));
-
-      // Compute placeholders
-      const placeholders = computePlaceholders(campaigns, contentWithUrls, monthStart, monthEnd);
 
       return {
         success: true,
