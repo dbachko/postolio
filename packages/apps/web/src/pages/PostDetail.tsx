@@ -42,7 +42,6 @@ interface PostDetailData {
   caption: string;
   hashtags: string[];
   imageUrl?: string;
-  cdnImageUrl?: string;
   status: string;
   // Normalize nullable backend fields: represent absence as undefined
   scheduledAt?: string;
@@ -88,7 +87,7 @@ interface PostInsights {
 interface FormData {
   caption: string;
   hashtags: string[];
-  cdnImageUrl: string;
+  imageUrl: string;
   scheduledAt: string;
 }
 
@@ -145,7 +144,7 @@ export default function PostDetail() {
   const [formData, setFormData] = useState<FormData>({
     caption: '',
     hashtags: [],
-    cdnImageUrl: '',
+    imageUrl: '',
     scheduledAt: '',
   });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -187,7 +186,7 @@ export default function PostDetail() {
         postedAt: raw.postedAt || undefined,
         instagramPostId: raw.instagramPostId || undefined,
         instagramPermalink: raw.instagramPermalink || undefined,
-        cdnImageUrl: raw.cdnImageUrl || raw.imageUrl || undefined,
+        imageUrl: raw.imageUrl || undefined,
         generationParams: raw.generationParams ? { ...raw.generationParams } : undefined,
         campaign: raw.campaign ? { ...raw.campaign } : undefined,
       };
@@ -225,7 +224,7 @@ export default function PostDetail() {
       setFormData({
         caption: post.caption || '',
         hashtags: post.hashtags || [],
-        cdnImageUrl: post.cdnImageUrl || post.imageUrl || '',
+        imageUrl: post.imageUrl || '',
         scheduledAt: post.scheduledAt
           ? format(new Date(post.scheduledAt), "yyyy-MM-dd'T'HH:mm")
           : '',
@@ -252,7 +251,7 @@ export default function PostDetail() {
       contentId: string;
       caption?: string;
       hashtags?: string[];
-      cdnImageUrl?: string;
+      imageUrl?: string;
       scheduledAt?: string;
     }) => {
       if (!data.caption || data.caption.trim().length === 0) {
@@ -314,7 +313,7 @@ export default function PostDetail() {
     const hasChanges =
       debouncedFormData.caption !== post.caption ||
       JSON.stringify(debouncedFormData.hashtags) !== JSON.stringify(post.hashtags) ||
-      debouncedFormData.cdnImageUrl !== (post.cdnImageUrl || post.imageUrl || '') ||
+      debouncedFormData.imageUrl !== (post.imageUrl || '') ||
       debouncedFormData.scheduledAt !==
         (post.scheduledAt ? format(new Date(post.scheduledAt), "yyyy-MM-dd'T'HH:mm") : '');
 
@@ -323,7 +322,7 @@ export default function PostDetail() {
         contentId: postId,
         caption: debouncedFormData.caption,
         hashtags: debouncedFormData.hashtags,
-        cdnImageUrl: debouncedFormData.cdnImageUrl || undefined,
+        imageUrl: debouncedFormData.imageUrl || undefined,
         scheduledAt: debouncedFormData.scheduledAt,
       });
     }
@@ -344,7 +343,7 @@ export default function PostDetail() {
   const handleImageChange = async (fileOrUrl: string | File) => {
     if (typeof fileOrUrl === 'string') {
       // Direct URL update
-      setFormData((prev) => ({ ...prev, cdnImageUrl: fileOrUrl }));
+      setFormData((prev) => ({ ...prev, imageUrl: fileOrUrl }));
     } else {
       // File upload
       if (objectUrlRef.current) {
@@ -352,7 +351,7 @@ export default function PostDetail() {
       }
       const objectUrl = URL.createObjectURL(fileOrUrl);
       objectUrlRef.current = objectUrl;
-      setFormData((prev) => ({ ...prev, cdnImageUrl: objectUrl }));
+      setFormData((prev) => ({ ...prev, imageUrl: objectUrl }));
 
       // Upload to server
       if (postId) {
@@ -360,10 +359,10 @@ export default function PostDetail() {
         try {
           const response = await apiClient.uploadContentImage(postId, fileOrUrl);
           if (response.success && response.content) {
-            const newImageUrl = response.content.cdnImageUrl || objectUrl;
+            const newImageUrl = response.content.imageUrl || objectUrl;
             setFormData((prev) => ({
               ...prev,
-              cdnImageUrl: newImageUrl,
+              imageUrl: newImageUrl,
             }));
             setSaveStatus('saved');
             setLastSaved(new Date());
@@ -379,8 +378,7 @@ export default function PostDetail() {
               if (!oldData) return oldData;
               return {
                 ...oldData,
-                cdnImageUrl: response.content.cdnImageUrl,
-                imageUrl: response.content.cdnImageUrl,
+                imageUrl: response.content.imageUrl,
               };
             });
 
@@ -395,7 +393,7 @@ export default function PostDetail() {
           // Revert to previous image
           setFormData((prev) => ({
             ...prev,
-            cdnImageUrl: post?.cdnImageUrl || post?.imageUrl || '',
+            imageUrl: post?.imageUrl || '',
           }));
           setTimeout(() => {
             setSaveStatus('idle');
@@ -572,7 +570,7 @@ export default function PostDetail() {
                 <div className="space-y-2">
                   <Label>Post Image</Label>
                   <ImageUploader
-                    value={formData.cdnImageUrl || undefined}
+                    value={formData.imageUrl || undefined}
                     onChange={handleImageChange}
                     maxSizeInMB={10}
                     acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
@@ -591,10 +589,10 @@ export default function PostDetail() {
             ) : (
               <>
                 {/* Image */}
-                {(post.cdnImageUrl || post.imageUrl) && (
+                {post.imageUrl && (
                   <div className="mb-4 overflow-hidden rounded-lg bg-gray-100">
                     <img
-                      src={post.cdnImageUrl || post.imageUrl}
+                      src={post.imageUrl}
                       alt="Post content"
                       className="h-auto max-h-[400px] w-full object-cover"
                       loading="lazy"

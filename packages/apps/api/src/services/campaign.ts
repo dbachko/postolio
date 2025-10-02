@@ -18,6 +18,7 @@ import {
   StatusBroadcaster,
   type CampaignStatus as StatusBroadcasterCampaignStatus,
 } from './status-broadcaster.js';
+import { buildCdnUrl } from './s3-image.js';
 import { eventEmitter } from './event-emitter.js';
 import { getDatabaseClient } from '../config/database.js';
 
@@ -726,7 +727,22 @@ class CampaignService {
         throw new Error('Campaign not found or access denied');
       }
 
-      return campaign;
+      // Build CDN URLs for all content and map to public response format
+      const campaignWithUrls = {
+        ...campaign,
+        content: campaign.content.map((item) => ({
+          id: item.id,
+          caption: item.caption,
+          hashtags: item.hashtags,
+          imageUrl: buildCdnUrl(item.s3ImageKey),
+          status: item.status,
+          scheduledAt: item.scheduledAt,
+          postedAt: item.postedAt,
+          createdAt: item.createdAt,
+        })),
+      };
+
+      return campaignWithUrls;
     } catch (error) {
       console.error('Get campaign error:', error);
       throw error;

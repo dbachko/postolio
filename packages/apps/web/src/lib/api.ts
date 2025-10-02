@@ -26,7 +26,7 @@ export interface Content {
   caption: string;
   hashtags: string[];
   s3ImageKey?: string | null;
-  cdnImageUrl?: string | null;
+  imageUrl?: string | null;
   imageRegion?: string | null;
   retentionExpiresAt?: string | null;
   status: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
@@ -762,7 +762,6 @@ class ApiClient {
       id: string;
       caption: string;
       hashtags: string[];
-      cdnImageUrl?: string;
       imageUrl?: string;
       status: string;
       scheduledAt?: string | null;
