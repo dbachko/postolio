@@ -78,5 +78,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
 # Set entrypoint to handle DATABASE_URL construction and migrations
 ENTRYPOINT ["./docker-entrypoint.sh"]
 
-# Start the API server
-CMD ["node", "packages/apps/api/dist/server.js"]
+# Start the API server (path is relative to /app/packages/apps/api set by entrypoint)
+CMD ["node", "dist/server.js"]
