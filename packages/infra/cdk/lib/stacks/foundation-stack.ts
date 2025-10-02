@@ -6,6 +6,12 @@
  * - Shared S3 buckets and KMS keys
  * - Security groups
  * - ECR repository
+ * - CloudFront CDN for AI-generated images
+ *
+ * Custom Domain Configuration:
+ * If domainName context is provided and Route53 hosted zone exists,
+ * automatically creates custom CDN domain (cdn.{rootDomain})
+ * Falls back to CloudFront default domain if hosted zone not found
  */
 
 import * as cdk from 'aws-cdk-lib';
@@ -333,9 +339,7 @@ export class FoundationStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption:
-        environment === 'prod'
-          ? s3.BucketEncryption.KMS_MANAGED
-          : s3.BucketEncryption.S3_MANAGED,
+        environment === 'prod' ? s3.BucketEncryption.KMS_MANAGED : s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       lifecycleRules: [
         {
@@ -364,22 +368,41 @@ export class FoundationStack extends cdk.Stack {
       ],
     });
 
-    // Lookup hosted zone and create certificate if domain is provided
+    // Custom domain setup - automatically extracts root domain from any domain format
+    // Examples: "postolio.example" -> root: "postolio.example", CDN: "postolio.example"
+    //           "postolio.example" -> root: "postolio.example", CDN: "postolio.example"
     let hostedZone: route53.IHostedZone | undefined;
     let certificate: acm.ICertificate | undefined;
-    const cdnDomainName = domainName ? `${cdnSubdomain}.${domainName}` : undefined;
+    let cdnDomainName: string | undefined;
 
     if (domainName) {
-      // Lookup Route53 hosted zone
-      hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
-        domainName: domainName,
-      });
+      // Extract root domain (last 2 parts) to find the Route53 hosted zone
+      // This handles subdomains: "postolio.example" -> "postolio.example"
+      const domainParts = domainName.split('.');
+      const rootDomain = domainParts.length >= 2 ? domainParts.slice(-2).join('.') : domainName;
 
-      // Create ACM certificate for CloudFront (must be in us-east-1)
-      certificate = new acm.Certificate(this, 'CdnCertificate', {
-        domainName: cdnDomainName!,
-        validation: acm.CertificateValidation.fromDns(hostedZone),
-      });
+      cdnDomainName = `${cdnSubdomain}.${rootDomain}`;
+
+      try {
+        // Lookup Route53 hosted zone for ROOT domain
+        hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
+          domainName: rootDomain,
+        });
+
+        // Create ACM certificate for CloudFront (must be in us-east-1)
+        certificate = new acm.Certificate(this, 'CdnCertificate', {
+          domainName: cdnDomainName,
+          validation: acm.CertificateValidation.fromDns(hostedZone),
+        });
+      } catch (error) {
+        // If hosted zone lookup fails, just use CloudFront default domain
+        console.warn(
+          `Route53 hosted zone not found for ${rootDomain}, using CloudFront default domain`
+        );
+        cdnDomainName = undefined;
+        hostedZone = undefined;
+        certificate = undefined;
+      }
     }
 
     // CloudFront Distribution for AI-generated images
@@ -406,9 +429,10 @@ export class FoundationStack extends cdk.Stack {
         }),
         compress: true,
       },
-      priceClass: environment === 'prod'
-        ? cloudfront.PriceClass.PRICE_CLASS_ALL
-        : cloudfront.PriceClass.PRICE_CLASS_100, // Use only North America and Europe for dev
+      priceClass:
+        environment === 'prod'
+          ? cloudfront.PriceClass.PRICE_CLASS_ALL
+          : cloudfront.PriceClass.PRICE_CLASS_100, // Use only North America and Europe for dev
       enableLogging: false, // Enable logging in production if needed
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
     });
@@ -644,7 +668,8 @@ export class FoundationStack extends cdk.Stack {
       },
       {
         id: 'AwsSolutions-CFR3',
-        reason: 'CloudFront access logging disabled for cost optimization in dev/staging; can be enabled in production',
+        reason:
+          'CloudFront access logging disabled for cost optimization in dev/staging; can be enabled in production',
       },
       {
         id: 'AwsSolutions-RDS10',

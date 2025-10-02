@@ -30,6 +30,7 @@ The `get-app-urls.sh` script retrieves URLs and resource information from your d
 ### Output
 
 The script displays:
+
 - **Application URLs**: Frontend (CloudFront), Backend API (ALB)
 - **Useful Endpoints**: Auth, Brands, Campaigns, Instagram OAuth
 - **AWS Resources**: Database, Redis, ECR, VPC, S3
@@ -101,15 +102,15 @@ The `deploy-stack.sh` script allows you to deploy individual CDK stacks locally 
 
 ### Available Stacks
 
-| Stack | Description | Dependencies |
-|-------|-------------|--------------|
-| `foundation` | ECR Registry, VPC, Database, Redis | None |
-| `auth` | Token Service (OAuth, JWT) | Foundation |
-| `scheduling` | Schedule Management, Cleanup, Status Sync | Auth |
-| `publishing` | Publisher, Retry Handler, DLQ Processors | Auth, Scheduling |
-| `api` | Backend API (ECS Fargate) | Foundation, Auth, Scheduling, Publishing |
-| `web` | Frontend (S3 + CloudFront) | API |
-| `all` | Deploy all stacks in order | - |
+| Stack        | Description                               | Dependencies                             |
+| ------------ | ----------------------------------------- | ---------------------------------------- |
+| `foundation` | ECR Registry, VPC, Database, Redis        | None                                     |
+| `auth`       | Token Service (OAuth, JWT)                | Foundation                               |
+| `scheduling` | Schedule Management, Cleanup, Status Sync | Auth                                     |
+| `publishing` | Publisher, Retry Handler, DLQ Processors  | Auth, Scheduling                         |
+| `api`        | Backend API (ECS Fargate)                 | Foundation, Auth, Scheduling, Publishing |
+| `web`        | Frontend (S3 + CloudFront)                | API                                      |
+| `all`        | Deploy all stacks in order                | -                                        |
 
 ### Options
 
@@ -191,9 +192,9 @@ LOG_LEVEL=debug
 ENABLE_MONITORING=true
 AWS_REGION=us-east-1
 
-# Custom Domain
-DOMAIN_NAME=postolio.example
-VITE_API_URL=https://postolio.example
+# Custom Domain (if Route53 hosted zone exists, CDN will use cdn.{rootDomain})
+DOMAIN_NAME=postolio.example               # App domain (root will be extracted for CDN)
+VITE_API_URL=https://postolio.example      # CORS origin for API
 
 # Docker Image
 IMAGE_TAG=api-dev-custom-tag
@@ -203,25 +204,25 @@ IMAGE_TAG=api-dev-custom-tag
 
 The script maps `.env` variables to CDK context parameters as follows:
 
-| .env Variable | CDK Context Parameter | Used By |
-|---------------|----------------------|---------|
-| `OPENAI_API_KEY` | `openaiApiKey` | API |
-| `GOOGLE_CLIENT_ID` | `googleClientId` | API |
-| `GOOGLE_CLIENT_SECRET` | `googleClientSecret` | API |
-| `FACEBOOK_APP_ID` | `facebookAppId` | API, Auth |
-| `FACEBOOK_APP_SECRET` | `facebookAppSecret` | API, Auth |
-| `INSTAGRAM_APP_ID` | `instagramAppId` | API, Auth |
-| `INSTAGRAM_APP_SECRET` | `instagramAppSecret` | API, Auth |
+| .env Variable            | CDK Context Parameter  | Used By   |
+| ------------------------ | ---------------------- | --------- |
+| `OPENAI_API_KEY`         | `openaiApiKey`         | API       |
+| `GOOGLE_CLIENT_ID`       | `googleClientId`       | API       |
+| `GOOGLE_CLIENT_SECRET`   | `googleClientSecret`   | API       |
+| `FACEBOOK_APP_ID`        | `facebookAppId`        | API, Auth |
+| `FACEBOOK_APP_SECRET`    | `facebookAppSecret`    | API, Auth |
+| `INSTAGRAM_APP_ID`       | `instagramAppId`       | API, Auth |
+| `INSTAGRAM_APP_SECRET`   | `instagramAppSecret`   | API, Auth |
 | `INSTAGRAM_REDIRECT_URI` | `instagramRedirectUri` | API, Auth |
-| `LINKEDIN_CLIENT_ID` | `linkedinClientId` | API, Auth |
+| `LINKEDIN_CLIENT_ID`     | `linkedinClientId`     | API, Auth |
 | `LINKEDIN_CLIENT_SECRET` | `linkedinClientSecret` | API, Auth |
-| `TIKTOK_CLIENT_KEY` | `tiktokClientKey` | API, Auth |
-| `TIKTOK_CLIENT_SECRET` | `tiktokClientSecret` | API, Auth |
-| `NODE_ENV` | `nodeEnv` | All |
-| `LOG_LEVEL` | `logLevel` | All |
-| `ENABLE_MONITORING` | `enableMonitoring` | All |
-| `DOMAIN_NAME` | `domainName` | API, Web |
-| `VITE_API_URL` | `corsOrigin` | API |
+| `TIKTOK_CLIENT_KEY`      | `tiktokClientKey`      | API, Auth |
+| `TIKTOK_CLIENT_SECRET`   | `tiktokClientSecret`   | API, Auth |
+| `NODE_ENV`               | `nodeEnv`              | All       |
+| `LOG_LEVEL`              | `logLevel`             | All       |
+| `ENABLE_MONITORING`      | `enableMonitoring`     | All       |
+| `DOMAIN_NAME`            | `domainName`           | API, Web  |
+| `VITE_API_URL`           | `corsOrigin`           | API       |
 
 ### Troubleshooting
 
@@ -285,14 +286,14 @@ When deploying with `all`, the script automatically handles this order.
 
 This script mirrors the GitHub Actions workflow in `.github/workflows/deploy.yml`:
 
-| Feature | Local Script | GitHub Actions |
-|---------|--------------|----------------|
-| Environment Variables | `.env` file | GitHub Secrets/Variables |
-| AWS Credentials | `aws configure` | AWS OIDC/Actions |
-| Dependency Building | Automatic | Automatic |
-| Stack Dependencies | Manual/Sequential | Automatic waiting |
-| Retry Logic | Manual | 3 retries with backoff |
-| Change Detection | Manual | Automatic (paths-filter) |
+| Feature               | Local Script      | GitHub Actions           |
+| --------------------- | ----------------- | ------------------------ |
+| Environment Variables | `.env` file       | GitHub Secrets/Variables |
+| AWS Credentials       | `aws configure`   | AWS OIDC/Actions         |
+| Dependency Building   | Automatic         | Automatic                |
+| Stack Dependencies    | Manual/Sequential | Automatic waiting        |
+| Retry Logic           | Manual            | 3 retries with backoff   |
+| Change Detection      | Manual            | Automatic (paths-filter) |
 
 ### Key Differences
 
