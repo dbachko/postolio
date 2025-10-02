@@ -54,13 +54,12 @@ RUN adduser --system --uid 1001 nodejs
 # Copy pruned workspace (built output + node_modules)
 COPY --from=builder --chown=nodejs:nodejs /app/ .
 
-# Copy startup script, entrypoint, and legal docs from source
-COPY --from=pruner --chown=nodejs:nodejs /app/scripts/start-with-migration.sh ./start-with-migration.sh
+# Copy entrypoint and legal docs from source
 COPY --from=pruner --chown=nodejs:nodejs /app/packages/apps/api/docker-entrypoint.sh ./docker-entrypoint.sh
 COPY --from=pruner --chown=nodejs:nodejs /app/legal ./legal
 
-# Make scripts executable
-RUN chmod +x ./start-with-migration.sh ./docker-entrypoint.sh
+# Make entrypoint executable
+RUN chmod +x ./docker-entrypoint.sh
 
 # Set user and environment
 USER nodejs
@@ -76,8 +75,8 @@ ENV REDIS_PORT=${REDIS_PORT}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
   CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })" || exit 1
 
-# Set entrypoint to handle DATABASE_URL construction
+# Set entrypoint to handle DATABASE_URL construction and migrations
 ENTRYPOINT ["./docker-entrypoint.sh"]
 
-# Start command
-CMD ["./start-with-migration.sh"]
+# Start the API server
+CMD ["node", "packages/apps/api/dist/server.js"]

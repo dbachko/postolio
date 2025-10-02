@@ -20,18 +20,11 @@ aws-infrastructure
 docs
 .github
 docker-compose*.yml
-# Ignore most scripts but keep migration scripts
+# Ignore scripts (migrations now handled in docker-entrypoint.sh)
 scripts/*.mjs
 scripts/*.js
 scripts/*.ts
-scripts/deploy-*.sh
-scripts/bootstrap-*.sh
-scripts/validate-*.sh
-scripts/quick-*.sh
-scripts/get-*.sh
-# Keep migration scripts
-!scripts/start-with-migration.sh
-!scripts/run-migrations-only.sh
+scripts/*.sh
 *.md
 # Allow legal documents needed by API endpoints
 !legal/DATA_DELETION.md

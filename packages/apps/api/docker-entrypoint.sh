@@ -30,5 +30,14 @@ fi
 
 echo "DATABASE_URL is configured"
 
+# Run Prisma migrations
+echo "Running database migrations..."
+cd /app/packages/libs/database
+npx prisma migrate deploy
+echo "Migrations completed"
+
+# Return to app directory
+cd /app/packages/apps/api
+
 # Execute the main command
 exec "$@"
