@@ -363,7 +363,7 @@ export class FoundationStack extends cdk.Stack {
     const imagesDistribution = new cloudfront.Distribution(this, 'ImagesDistribution', {
       comment: `AI Images CDN for ${environment}`,
       defaultBehavior: {
-        origin: new origins.S3Origin(this.imagesBucket),
+        origin: origins.S3BucketOrigin.withOriginAccessControl(this.imagesBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
         cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
