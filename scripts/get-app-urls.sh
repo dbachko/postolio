@@ -119,11 +119,13 @@ if [[ "$FOUNDATION_STATUS" != "NOT_FOUND" ]]; then
     REDIS_ENDPOINT=$(get_output "$FOUNDATION_STACK" "CacheEndpoint")
     ECR_REPO=$(get_output "$FOUNDATION_STACK" "EcrRepositoryUri")
     VPC_ID=$(get_output "$FOUNDATION_STACK" "VpcId")
+    IMAGES_CDN=$(get_output "$FOUNDATION_STACK" "ImagesCdnDomain")
 
     echo "Database:           ${DATABASE_ENDPOINT:-Not found}"
     echo "Redis:              ${REDIS_ENDPOINT:-Not found}"
     echo "ECR Repository:     ${ECR_REPO:-Not found}"
     echo "VPC ID:             ${VPC_ID:-Not found}"
+    echo "Images CDN:         ${IMAGES_CDN:-Not found}"
 fi
 
 # Get Web resources

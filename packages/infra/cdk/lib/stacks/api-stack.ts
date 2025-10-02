@@ -69,10 +69,20 @@ export class ApiStack extends cdk.Stack {
       Object.entries(getOAuthEnvironmentVariables(props)).filter(([, value]) => value)
     );
 
-    // Import images bucket name from Foundation stack
+    // Import images bucket name and CDN domain from Foundation stack
     const imagesBucketName = ssm.StringParameter.valueFromLookup(
       this,
       `/postolio/${environment}/s3/images-bucket`
+    );
+
+    const imagesCdnDomain = ssm.StringParameter.valueFromLookup(
+      this,
+      `/postolio/${environment}/cdn/images-domain`
+    );
+
+    const imagesCdnDistributionId = ssm.StringParameter.valueFromLookup(
+      this,
+      `/postolio/${environment}/cdn/images-distribution-id`
     );
 
     // ==================== Import Foundation Resources ====================
@@ -399,6 +409,8 @@ export class ApiStack extends cdk.Stack {
             // Additional environment variables that don't need to be secrets
             AWS_REGION: this.region,
             S3_IMAGES_BUCKET: imagesBucketName,
+            CLOUDFRONT_DOMAIN: imagesCdnDomain,
+            CLOUDFRONT_DISTRIBUTION_ID: imagesCdnDistributionId,
             ...(redisEndpointParam && { REDIS_HOST: redisEndpointParam.stringValue }),
             ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
             // OpenAI API Key from GitHub secrets (passed via CI/CD)

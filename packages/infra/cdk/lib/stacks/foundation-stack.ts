@@ -13,6 +13,8 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -357,6 +359,35 @@ export class FoundationStack extends cdk.Stack {
       ],
     });
 
+    // CloudFront Distribution for AI-generated images
+    const imagesDistribution = new cloudfront.Distribution(this, 'ImagesDistribution', {
+      comment: `AI Images CDN for ${environment}`,
+      defaultBehavior: {
+        origin: new origins.S3Origin(this.imagesBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
+        cachePolicy: new cloudfront.CachePolicy(this, 'ImagesCachePolicy', {
+          cachePolicyName: `${prefix}-images-cache-policy`,
+          comment: 'Cache policy for AI-generated images',
+          defaultTtl: cdk.Duration.days(365), // Images are immutable
+          maxTtl: cdk.Duration.days(365),
+          minTtl: cdk.Duration.days(30),
+          enableAcceptEncodingGzip: true,
+          enableAcceptEncodingBrotli: true,
+          headerBehavior: cloudfront.CacheHeaderBehavior.none(),
+          queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
+          cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+        }),
+        compress: true,
+      },
+      priceClass: environment === 'prod'
+        ? cloudfront.PriceClass.PRICE_CLASS_ALL
+        : cloudfront.PriceClass.PRICE_CLASS_100, // Use only North America and Europe for dev
+      enableLogging: false, // Enable logging in production if needed
+      httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+    });
+
     // ==================== SSM Parameters for Cross-Stack References ====================
     // VPC Parameters
     new ssm.StringParameter(this, 'VpcIdParameter', {
@@ -461,6 +492,18 @@ export class FoundationStack extends cdk.Stack {
       description: 'S3 bucket for AI-generated images',
     });
 
+    new ssm.StringParameter(this, 'ImagesCdnDomainParameter', {
+      parameterName: `/postolio/${environment}/cdn/images-domain`,
+      stringValue: imagesDistribution.distributionDomainName,
+      description: 'CloudFront domain for AI-generated images',
+    });
+
+    new ssm.StringParameter(this, 'ImagesCdnIdParameter', {
+      parameterName: `/postolio/${environment}/cdn/images-distribution-id`,
+      stringValue: imagesDistribution.distributionId,
+      description: 'CloudFront distribution ID for AI-generated images',
+    });
+
     // KMS Key Parameters
     new ssm.StringParameter(this, 'KmsKeyIdParameter', {
       parameterName: `/postolio/${environment}/kms/key-id`,
@@ -504,6 +547,18 @@ export class FoundationStack extends cdk.Stack {
       value: this.repository.repositoryUri,
       description: 'URI of the ECR repository for API images',
       exportName: `${prefix}-ecr-uri`,
+    });
+
+    new cdk.CfnOutput(this, 'ImagesCdnDomain', {
+      value: imagesDistribution.distributionDomainName,
+      description: 'CloudFront domain for AI-generated images',
+      exportName: `${prefix}-images-cdn-domain`,
+    });
+
+    new cdk.CfnOutput(this, 'ImagesCdnDistributionId', {
+      value: imagesDistribution.distributionId,
+      description: 'CloudFront distribution ID for AI-generated images',
+      exportName: `${prefix}-images-cdn-id`,
     });
 
     // ==================== CDK Nag Suppressions ====================
