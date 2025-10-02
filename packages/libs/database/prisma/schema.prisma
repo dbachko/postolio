@@ -98,11 +98,9 @@ model Content {
   instagramPostId    String?
   analytics          Json?
   schedulingError    String?
-  imageUrl           String?       // Legacy field for backward compatibility
-  cdnImageUrl        String?
-  imageRegion        String?
-  retentionExpiresAt DateTime?
-  s3ImageKey         String?
+  s3ImageKey         String?       // S3 object key (e.g., images/2025-10-01/brandId/contentId.jpg)
+  imageRegion        String?       // User region for compliance (EU, US, UK, etc.)
+  retentionExpiresAt DateTime?     // Image retention expiry date based on region
   brand              Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   campaign           Campaign?     @relation(fields: [campaignId], references: [id])
 
