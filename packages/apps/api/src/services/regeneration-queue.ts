@@ -125,7 +125,6 @@ const regenerationWorker = new Worker(
             data: {
               caption: newContent.caption,
               hashtags: newContent.hashtags,
-              cdnImageUrl: newContent.cdnImageUrl || null,
               s3ImageKey: newContent.s3ImageKey || null,
               imageRegion: newContent.imageRegion || null,
               retentionExpiresAt: newContent.retentionExpiresAt || null,

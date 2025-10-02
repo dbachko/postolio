@@ -9,6 +9,7 @@ For Postolio's use case (a traditional web application with long-lived user sess
 ## Current State Analysis
 
 ### What Postolio Currently Has:
+
 - ✅ JWT-based authentication
 - ✅ Refresh token rotation (database-backed)
 - ✅ HTTP-only cookies for token storage
@@ -23,6 +24,7 @@ For Postolio's use case (a traditional web application with long-lived user sess
 ### 1. Session Cookies (What Google/Facebook Use)
 
 #### How It Works:
+
 ```
 User logs in → Server creates session in DB/Redis → Returns session ID in HTTP-only cookie
 Every request → Cookie sent automatically → Server validates session ID → Returns data
@@ -30,6 +32,7 @@ User logs out → Server deletes session → Cookie cleared
 ```
 
 #### Pros:
+
 - ✅ **Instant Revocation**: Delete session from database = immediate logout
 - ✅ **Simple Implementation**: No token refresh logic needed
 - ✅ **Long-lived Sessions**: Set cookie expiration to 1 year, users stay logged in
@@ -41,12 +44,14 @@ User logs out → Server deletes session → Cookie cleared
 - ✅ **No Token Expiration Issues**: Session validity controlled entirely server-side
 
 #### Cons:
+
 - ❌ **Database Lookup**: Every request requires a DB/Redis query
 - ❌ **Statefulness**: Server must maintain session store
 - ❌ **Scalability**: All servers need access to shared session store
 - ❌ **CORS Complexity**: Requires careful cookie configuration for cross-origin requests
 
 #### Performance:
+
 - Redis lookup: ~1-5ms per request
 - With proper caching and Redis, can handle 10,000+ req/sec per server
 
@@ -55,6 +60,7 @@ User logs out → Server deletes session → Cookie cleared
 ### 2. JWT (What Postolio Currently Uses)
 
 #### How It Works:
+
 ```
 User logs in → Server signs JWT with user info → Returns JWT
 Every request → JWT sent in header/cookie → Server verifies signature → Returns data
@@ -62,6 +68,7 @@ Token expires → Frontend requests refresh → New JWT issued
 ```
 
 #### Pros:
+
 - ✅ **Stateless**: No database lookup needed for verification
 - ✅ **Microservices Friendly**: Each service can verify token independently
 - ✅ **Scalability**: No shared session store required
@@ -69,6 +76,7 @@ Token expires → Frontend requests refresh → New JWT issued
 - ✅ **Cross-Domain**: Easier to share authentication across subdomains
 
 #### Cons:
+
 - ❌ **Cannot Revoke**: Once issued, valid until expiration (unless maintaining a blacklist = database lookup anyway)
 - ❌ **"Logout All Devices" is Hard**: Need to maintain revocation list or short expiration times
 - ❌ **Token Size**: JWT contains user data, larger than session ID (500-1000 bytes vs 32 bytes)
@@ -78,6 +86,7 @@ Token expires → Frontend requests refresh → New JWT issued
 - ❌ **Cannot Update Permissions**: User permissions in token can't change until refresh
 
 #### Performance:
+
 - JWT verification: ~0.1-0.5ms per request (faster than DB lookup)
 - But requires refresh token flow every 15-60 minutes = additional overhead
 
@@ -86,6 +95,7 @@ Token expires → Frontend requests refresh → New JWT issued
 ## Real-World Examples
 
 ### Platforms Using Session Cookies:
+
 - **Google**: Session cookies with 1-2 year expiration
 - **Facebook**: Session cookies with auto-refresh on activity
 - **Instagram**: Session cookies with 1 year expiration
@@ -95,6 +105,7 @@ Token expires → Frontend requests refresh → New JWT issued
 - **Amazon**: Session cookies with very long expiration
 
 ### Why They Choose Sessions:
+
 1. **User Experience**: "Log out all devices" is critical for security
 2. **Control**: Can immediately terminate compromised sessions
 3. **Simplicity**: No complex token refresh flows
@@ -105,6 +116,7 @@ Token expires → Frontend requests refresh → New JWT issued
 ## Best Practices Comparison
 
 ### JWT Best Practices:
+
 ```javascript
 // ❌ Bad: Long-lived JWT
 expiresIn: '7d' // Cannot revoke if compromised
@@ -121,6 +133,7 @@ refreshToken: { expiresIn: '30d', stored: 'database' }
 ```
 
 ### Session Cookie Best Practices:
+
 ```javascript
 // ✅ Simple and secure
 cookie: {
@@ -142,12 +155,14 @@ cookie: {
 ## Postolio Specific Analysis
 
 ### Current Pain Points:
+
 1. **Users logging out after 15 minutes** - JWT expires too fast
 2. **Complex refresh logic** - Frontend has multiple strategies to refresh tokens
 3. **Token in localStorage** - Security risk + inconsistent with HTTP-only cookies
 4. **Can't implement "logout all devices"** - Would need JWT blacklist = database anyway
 
 ### What Users Expect:
+
 - ✅ Stay logged in for weeks/months (like Google/Facebook)
 - ✅ "Remember me" checkbox for persistent login
 - ✅ "Logout all devices" for security
@@ -155,12 +170,15 @@ cookie: {
 - ✅ No weird "token expired" messages
 
 ### Database Impact:
+
 **Current (JWT with refresh tokens):**
+
 - Every login: Write refresh token to database
 - Every refresh (every 15-60 min): Database query + write
 - Database queries: ~100-200 per user per day
 
 **With Sessions:**
+
 - Every login: Write session to Redis
 - Every request: Redis lookup (~1ms)
 - No refresh needed
@@ -197,6 +215,7 @@ cookie: {
    - Proven pattern used by all major platforms
 
 ### Migration Effort:
+
 - **Backend**: 4-6 hours (replace JWT plugin with session plugin)
 - **Frontend**: 2-3 hours (remove token refresh hook, simplify API client)
 - **Testing**: 2-3 hours
@@ -207,6 +226,7 @@ cookie: {
 ## Implementation Comparison
 
 ### Current JWT Implementation (Complex):
+
 ```typescript
 // Backend: 138 lines in auth.ts
 - JWT plugin configuration
@@ -227,6 +247,7 @@ cookie: {
 ```
 
 ### Proposed Session Implementation (Simple):
+
 ```typescript
 // Backend: ~50 lines
 - Session plugin configuration
@@ -250,12 +271,14 @@ cookie: {
 ## Security Comparison
 
 ### JWT Vulnerabilities:
+
 1. **XSS**: If stored in localStorage (current issue)
 2. **Cannot Revoke**: Compromised token valid until expiration
 3. **Token Theft**: If stolen, attacker has access until expiration
 4. **Refresh Token Rotation Complexity**: Easy to mess up
 
 ### Session Cookie Security:
+
 1. **XSS Protected**: HTTP-only cookies
 2. **CSRF Protected**: SameSite attribute + CSRF tokens
 3. **Instant Revocation**: Delete session on suspicious activity
@@ -263,6 +286,7 @@ cookie: {
 5. **Activity Monitoring**: Track all session activity
 
 ### Both Support:
+
 - ✅ Two-factor authentication
 - ✅ "Remember me" functionality
 - ✅ Device fingerprinting
@@ -274,6 +298,7 @@ cookie: {
 ## Performance Benchmark
 
 ### JWT Approach:
+
 ```
 Request Flow:
 1. Receive request with JWT (~800 bytes)
@@ -292,6 +317,7 @@ Total: ~15ms every hour
 ```
 
 ### Session Cookie Approach:
+
 ```
 Request Flow:
 1. Receive request with session ID (32 bytes)
@@ -310,6 +336,7 @@ Activity updates: Async, don't block response
 ## Final Verdict
 
 ### Choose Sessions If:
+
 - ✅ Building a traditional web application (like Postolio)
 - ✅ Need long-lived user sessions (weeks/months)
 - ✅ Need "logout all devices" functionality
@@ -319,6 +346,7 @@ Activity updates: Async, don't block response
 - ✅ Have Redis or similar available
 
 ### Choose JWT If:
+
 - ✅ Building microservices architecture
 - ✅ Need completely stateless backend
 - ✅ Building mobile apps with offline support
@@ -327,6 +355,7 @@ Activity updates: Async, don't block response
 - ✅ Performance is absolute priority (>10k req/sec per server)
 
 ### For Postolio:
+
 **Session cookies are the clear winner.** They match the use case, provide better UX, offer better security controls, and simplify the codebase significantly.
 
 ---
@@ -334,6 +363,7 @@ Activity updates: Async, don't block response
 ## Migration Plan
 
 ### Phase 1: Backend (4-6 hours)
+
 1. Install `@fastify/session` and `connect-redis`
 2. Configure session middleware
 3. Replace JWT logic in `/api/auth/*` endpoints
@@ -341,12 +371,14 @@ Activity updates: Async, don't block response
 5. Add session cleanup job
 
 ### Phase 2: Frontend (2-3 hours)
+
 1. Remove `useTokenRefresh.ts` hook
 2. Simplify API client (remove refresh logic)
 3. Update auth store
 4. Remove localStorage token management
 
 ### Phase 3: Testing (2-3 hours)
+
 1. Test login/logout flows
 2. Test "remember me" functionality
 3. Test session expiration
@@ -354,6 +386,7 @@ Activity updates: Async, don't block response
 5. Load testing
 
 ### Phase 4: Deployment
+
 1. Deploy backend changes
 2. Clear existing user sessions (users need to re-login once)
 3. Deploy frontend changes

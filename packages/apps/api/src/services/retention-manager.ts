@@ -125,7 +125,6 @@ export class RetentionManager {
           },
           data: {
             s3ImageKey: null,
-            cdnImageUrl: null,
           },
         });
 

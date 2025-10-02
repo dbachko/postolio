@@ -40,7 +40,6 @@ export interface ImageMetadata {
 
 export interface S3UploadResult {
   s3Key: string;
-  cdnUrl: string;
   region: string;
   retentionExpiresAt: Date;
 }
@@ -272,14 +271,8 @@ export async function uploadImageToS3(
     await s3Client.send(jpegCommand);
     console.log(`Uploaded image to S3: ${jpegKey}`);
 
-    // Generate CloudFront URL
-    const cdnUrl = CLOUDFRONT_DOMAIN
-      ? `https://${CLOUDFRONT_DOMAIN}/${jpegKey}`
-      : `https://${BUCKET_NAME}.s3.amazonaws.com/${jpegKey}`;
-
     return {
       s3Key: jpegKey,
-      cdnUrl,
       region: userRegion,
       retentionExpiresAt,
     };
@@ -398,14 +391,8 @@ export async function uploadImageBufferToS3(
     await s3Client.send(jpegCommand);
     console.log(`Uploaded image to S3: ${jpegKey}`);
 
-    // Generate CloudFront URL
-    const cdnUrl = CLOUDFRONT_DOMAIN
-      ? `https://${CLOUDFRONT_DOMAIN}/${jpegKey}`
-      : `https://${BUCKET_NAME}.s3.amazonaws.com/${jpegKey}`;
-
     return {
       s3Key: jpegKey,
-      cdnUrl,
       region: userRegion,
       retentionExpiresAt,
     };
@@ -467,4 +454,20 @@ export async function deleteExpiredImages(s3Keys: string[]): Promise<void> {
   const deletePromises = s3Keys.map((key) => deleteImageFromS3(key));
   await Promise.all(deletePromises);
   console.log(`Deleted ${s3Keys.length} expired images`);
+}
+
+/**
+ * Build CDN URL from S3 key
+ * Constructs the full CDN URL using the current CLOUDFRONT_DOMAIN configuration
+ */
+export function buildCdnUrl(s3Key: string | null | undefined): string | null {
+  if (!s3Key) return null;
+
+  // If CloudFront is configured, use it; otherwise fall back to S3
+  if (CLOUDFRONT_DOMAIN) {
+    return `https://${CLOUDFRONT_DOMAIN}/${s3Key}`;
+  }
+
+  // Fallback to S3 URL if CloudFront not configured
+  return `https://${BUCKET_NAME}.s3.amazonaws.com/${s3Key}`;
 }

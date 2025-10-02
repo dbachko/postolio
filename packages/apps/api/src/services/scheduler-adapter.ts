@@ -15,6 +15,7 @@ import { TimezoneService } from './timezone.js';
 import type { StatusBroadcaster } from './status-broadcaster.js';
 import type { GenerationParams } from '../types/scheduler.js';
 import { eventEmitter } from './event-emitter.js';
+import { buildCdnUrl } from './s3-image.js';
 
 const prisma = getDatabaseClient();
 
@@ -325,11 +326,7 @@ export class SchedulerAdapter {
             // When content is edited, EventBridge events will update this
             caption: content.caption || '',
             hashtags: content.hashtags || [],
-            mediaUrls: content.cdnImageUrl
-              ? [content.cdnImageUrl]
-              : content.imageUrl
-                ? [content.imageUrl]
-                : [],
+            mediaUrls: content.s3ImageKey ? [buildCdnUrl(content.s3ImageKey) || ''] : [],
             metadata: {
               timezone: brandTimezone,
               localTime: customTime ? customTime.toISOString() : undefined,
@@ -694,11 +691,7 @@ export class SchedulerAdapter {
           // Include content details in case they were edited
           caption: content.caption || '',
           hashtags: content.hashtags || [],
-          mediaUrls: content.cdnImageUrl
-            ? [content.cdnImageUrl]
-            : content.imageUrl
-              ? [content.imageUrl]
-              : [],
+          mediaUrls: content.s3ImageKey ? [buildCdnUrl(content.s3ImageKey) || ''] : [],
         });
         awsRescheduleSuccess = true;
         console.log(`AWS schedule ${scheduleId} rescheduled successfully with updated content`);

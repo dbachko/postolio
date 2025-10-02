@@ -179,17 +179,16 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
               return {
                 ...item,
                 s3ImageKey: s3Result.s3Key,
-                cdnImageUrl: s3Result.cdnUrl,
                 imageRegion: s3Result.region,
                 retentionExpiresAt: s3Result.retentionExpiresAt,
               };
             } catch (s3Error) {
-              console.error('Failed to upload image to S3, keeping external URL:', s3Error);
-              // If S3 upload fails, fall back to the original external URL
-              return {
-                ...item,
-                imageUrl, // Keep original URL as fallback
-              };
+              console.error('Failed to upload image to S3:', s3Error);
+              // If S3 upload fails, throw error - we can't save content without S3 image
+              throw new Error(
+                'Failed to upload image to S3: ' +
+                  (s3Error instanceof Error ? s3Error.message : 'Unknown error')
+              );
             }
           }
 

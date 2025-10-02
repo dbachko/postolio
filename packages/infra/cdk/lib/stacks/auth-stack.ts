@@ -124,7 +124,8 @@ export class AuthStack extends cdk.Stack {
     NagSuppressions.addResourceSuppressions(rateLimitTable, [
       {
         id: 'AwsSolutions-DDB3',
-        reason: 'Rate limit table stores ephemeral data with TTL and does not require point-in-time recovery',
+        reason:
+          'Rate limit table stores ephemeral data with TTL and does not require point-in-time recovery',
       },
     ]);
 

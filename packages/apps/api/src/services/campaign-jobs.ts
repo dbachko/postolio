@@ -185,8 +185,7 @@ class CampaignJobService {
             caption: post.caption?.substring(0, 50) + '...',
             hashtags: post.hashtags?.length || 0,
             s3ImageKey: post.s3ImageKey || 'NOT SET',
-            cdnImageUrl: post.cdnImageUrl?.substring(0, 80) + '...' || 'NOT SET',
-            hasS3Fields: !!(post.s3ImageKey && post.cdnImageUrl),
+            hasS3Fields: !!post.s3ImageKey,
           })
         );
 
@@ -195,7 +194,6 @@ class CampaignJobService {
             caption: post.caption,
             hashtags: post.hashtags,
             s3ImageKey: post.s3ImageKey ?? null,
-            cdnImageUrl: post.cdnImageUrl ?? null,
             imageRegion: post.imageRegion ?? null,
             retentionExpiresAt: post.retentionExpiresAt ?? null,
             brandId: campaign.brandId,
