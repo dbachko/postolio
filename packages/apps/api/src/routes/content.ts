@@ -128,8 +128,14 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           })
         );
 
+        // Build CDN URLs from S3 keys
+        const contentWithUrls = contentRecords.map((item) => ({
+          ...item,
+          cdnImageUrl: buildCdnUrl(item.s3ImageKey),
+        }));
+
         return reply.code(201).send({
-          content: contentRecords,
+          content: contentWithUrls,
           metadata: {
             brandId,
             count: contentRecords.length,
@@ -268,8 +274,14 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
+        // Build CDN URL from S3 key
+        const contentWithUrl = {
+          ...content,
+          cdnImageUrl: buildCdnUrl(content.s3ImageKey),
+        };
+
         return reply.code(201).send({
-          content,
+          content: contentWithUrl,
           metadata: {
             brandId,
             source: 'manual',
@@ -325,7 +337,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Build CDN URLs from S3 keys
         const contentWithUrls = draftContent.map((item) => ({
           ...item,
-          imageUrl: buildCdnUrl(item.s3ImageKey),
+          cdnImageUrl: buildCdnUrl(item.s3ImageKey),
         }));
 
         return { content: contentWithUrls };
@@ -753,8 +765,14 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        // Build CDN URL from S3 key
+        const contentWithUrl = {
+          ...updatedContent,
+          cdnImageUrl: buildCdnUrl(updatedContent.s3ImageKey),
+        };
+
         return {
-          content: updatedContent,
+          content: contentWithUrl,
           learning: learningResults,
         };
       } catch (error) {
@@ -813,7 +831,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Build CDN URLs from S3 keys
         const historyWithUrls = contentHistory.map((item) => ({
           ...item,
-          imageUrl: buildCdnUrl(item.s3ImageKey),
+          cdnImageUrl: buildCdnUrl(item.s3ImageKey),
         }));
 
         return { content: historyWithUrls };
@@ -938,9 +956,15 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
+        // Build CDN URL from S3 key
+        const contentWithUrl = {
+          ...updatedContent,
+          cdnImageUrl: buildCdnUrl(updatedContent.s3ImageKey),
+        };
+
         return reply.send({
           success: true,
-          content: updatedContent,
+          content: contentWithUrl,
           message: 'Image uploaded successfully',
         });
       } catch (uploadError) {
@@ -1028,7 +1052,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       // Build CDN URLs from S3 keys
       const contentWithUrls = content.map((item) => ({
         ...item,
-        imageUrl: buildCdnUrl(item.s3ImageKey),
+        cdnImageUrl: buildCdnUrl(item.s3ImageKey),
       }));
 
       // Compute placeholders
