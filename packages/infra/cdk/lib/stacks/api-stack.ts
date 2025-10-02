@@ -314,6 +314,7 @@ export class ApiStack extends cdk.Stack {
               actions: [
                 's3:GetObject',
                 's3:PutObject',
+                's3:PutObjectTagging',
                 's3:DeleteObject',
                 's3:ListBucket',
                 's3:GetBucketLocation',
