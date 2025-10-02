@@ -75,6 +75,7 @@ const oauthConfig = getOAuthConfig(app);
 const foundationStack = new FoundationStack(app, `Postolio-Foundation-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
+  domainName: domainName, // e.g., 'postolio.example' - used for CDN custom domain
   enableVpcFlowLogs: environment === 'prod',
   enableDatabaseProxy: true,
   description: `Postolio Foundation infrastructure - ${environment} environment`,
