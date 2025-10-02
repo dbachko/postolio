@@ -7,6 +7,7 @@ import {
   validateRequest,
 } from '../schemas/api-validation.js';
 import { successResponse, ErrorResponses, paginatedResponse } from '../utils/api-response.js';
+import { buildCdnUrl } from '../utils/image-urls.js';
 
 const prisma = getDatabaseClient();
 
@@ -35,9 +36,35 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       // Fetch post with all relations
       const post = await prisma.content.findUnique({
         where: { id: postId },
-        include: {
-          brand: true,
-          campaign: true,
+        select: {
+          id: true,
+          caption: true,
+          hashtags: true,
+          s3ImageKey: true,
+          status: true,
+          scheduledAt: true,
+          postedAt: true,
+          instagramPostId: true,
+          instagramPermalink: true,
+          analytics: true,
+          generationParams: true,
+          createdAt: true,
+          updatedAt: true,
+          brandId: true,
+          campaignId: true,
+          brand: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          campaign: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
+            },
+          },
         },
       });
 
@@ -57,7 +84,26 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
       }
 
-      return reply.send(successResponse(post));
+      // Build CDN URL and map to public response format
+      const postWithUrl = {
+        id: post.id,
+        caption: post.caption,
+        hashtags: post.hashtags,
+        imageUrl: buildCdnUrl(post.s3ImageKey),
+        status: post.status,
+        scheduledAt: post.scheduledAt,
+        postedAt: post.postedAt,
+        instagramPostId: post.instagramPostId,
+        instagramPermalink: post.instagramPermalink,
+        analytics: post.analytics,
+        generationParams: post.generationParams,
+        brand: post.brand,
+        campaign: post.campaign,
+        createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
+      };
+
+      return reply.send(successResponse(postWithUrl));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
       app.log.error({ message }, 'Error fetching post detail:');

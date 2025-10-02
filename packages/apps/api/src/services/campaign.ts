@@ -727,12 +727,18 @@ class CampaignService {
         throw new Error('Campaign not found or access denied');
       }
 
-      // Build CDN URLs for all content
+      // Build CDN URLs for all content and map to public response format
       const campaignWithUrls = {
         ...campaign,
         content: campaign.content.map((item) => ({
-          ...item,
+          id: item.id,
+          caption: item.caption,
+          hashtags: item.hashtags,
           imageUrl: buildCdnUrl(item.s3ImageKey),
+          status: item.status,
+          scheduledAt: item.scheduledAt,
+          postedAt: item.postedAt,
+          createdAt: item.createdAt,
         })),
       };
 
