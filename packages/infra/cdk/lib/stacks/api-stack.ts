@@ -231,7 +231,7 @@ export class ApiStack extends cdk.Stack {
     this.ecsCluster = new ecs.Cluster(this, 'EcsCluster', {
       clusterName: `${prefix}-cluster`,
       vpc: vpc,
-      containerInsights: true, // Enable for all environments to satisfy CDK Nag AwsSolutions-ECS4
+      containerInsightsV2: ecs.ContainerInsights.ENABLED, // Enable for all environments to satisfy CDK Nag AwsSolutions-ECS4
     });
 
     // ==================== ECS Execution Role ====================

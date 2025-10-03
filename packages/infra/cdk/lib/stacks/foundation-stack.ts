@@ -410,6 +410,7 @@ export class FoundationStack extends cdk.Stack {
       comment: `AI Images CDN for ${environment}`,
       domainNames: cdnDomainName ? [cdnDomainName] : undefined,
       certificate: certificate,
+      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.imagesBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -670,6 +671,11 @@ export class FoundationStack extends cdk.Stack {
         id: 'AwsSolutions-CFR3',
         reason:
           'CloudFront access logging disabled for cost optimization in dev/staging; can be enabled in production',
+      },
+      {
+        id: 'AwsSolutions-CFR4',
+        reason:
+          'Using CloudFront default certificate for dev environment; custom certificate with proper TLS policy is configured when domainName is provided',
       },
       {
         id: 'AwsSolutions-RDS10',
