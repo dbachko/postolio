@@ -58,7 +58,9 @@ export class AuthStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      pointInTimeRecovery: environment === 'prod',
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: environment === 'prod',
+      },
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       timeToLiveAttribute: 'ttl',
     });
@@ -89,7 +91,9 @@ export class AuthStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      pointInTimeRecovery: false, // Not needed for audit logs with TTL
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: false, // Not needed for audit logs with TTL
+      },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       timeToLiveAttribute: 'ttl',
     });
@@ -115,7 +119,9 @@ export class AuthStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      pointInTimeRecovery: false, // Not needed for ephemeral rate limit data
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: false, // Not needed for ephemeral rate limit data
+      },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       timeToLiveAttribute: 'ttl',
     });
@@ -237,7 +243,11 @@ export class AuthStack extends cdk.Stack {
         GOOGLE_CLIENT_ID: props.googleClientId || '',
         GOOGLE_CLIENT_SECRET: props.googleClientSecret || '',
       },
-      logRetention: logs.RetentionDays.TWO_WEEKS,
+      logGroup: new logs.LogGroup(this, 'TokenServiceLogGroup', {
+        logGroupName: `/aws/lambda/${prefix}-token-service`,
+        retention: logs.RetentionDays.TWO_WEEKS,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }),
       tracing: lambda.Tracing.ACTIVE,
     });
 

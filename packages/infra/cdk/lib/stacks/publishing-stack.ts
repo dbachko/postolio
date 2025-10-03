@@ -357,7 +357,11 @@ export class PublishingStack extends cdk.Stack {
         TIKTOK_CLIENT_KEY: props.tiktokClientKey || '',
         TIKTOK_CLIENT_SECRET: props.tiktokClientSecret || '',
       },
-      logRetention: logs.RetentionDays.TWO_WEEKS,
+      logGroup: new logs.LogGroup(this, 'PublisherLogGroup', {
+        logGroupName: `/aws/lambda/${prefix}-publisher`,
+        retention: logs.RetentionDays.TWO_WEEKS,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }),
       tracing: lambda.Tracing.ACTIVE,
     });
 
@@ -386,7 +390,11 @@ export class PublishingStack extends cdk.Stack {
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
       },
-      logRetention: logs.RetentionDays.TWO_WEEKS,
+      logGroup: new logs.LogGroup(this, 'RetryHandlerLogGroup', {
+        logGroupName: `/aws/lambda/${prefix}-retry-handler`,
+        retention: logs.RetentionDays.TWO_WEEKS,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }),
       tracing: lambda.Tracing.ACTIVE,
     });
 
@@ -413,7 +421,11 @@ export class PublishingStack extends cdk.Stack {
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
       },
-      logRetention: logs.RetentionDays.TWO_WEEKS,
+      logGroup: new logs.LogGroup(this, 'DLQProcessorLogGroup', {
+        logGroupName: `/aws/lambda/${prefix}-dlq-processor`,
+        retention: logs.RetentionDays.TWO_WEEKS,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }),
       tracing: lambda.Tracing.ACTIVE,
     });
 
@@ -445,7 +457,11 @@ export class PublishingStack extends cdk.Stack {
           KMS_KEY_ID: encryptionKey.keyId,
           ALERT_TOPIC_ARN: alertTopic.topicArn,
         },
-        logRetention: logs.RetentionDays.TWO_WEEKS,
+        logGroup: new logs.LogGroup(this, 'CampaignDLQProcessorLogGroup', {
+          logGroupName: `/aws/lambda/${prefix}-campaign-dlq-processor`,
+          retention: logs.RetentionDays.TWO_WEEKS,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        }),
         tracing: lambda.Tracing.ACTIVE,
       }
     );
