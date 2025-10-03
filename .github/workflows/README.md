@@ -12,7 +12,7 @@ This directory contains GitHub Actions workflows for the Postolio monorepo, impl
 
 **Key Features:**
 
-- **Intelligent Change Detection:** Only deploys services that have changed
+- **Intelligent Change Detection:** Only deploys changed stacks and their dependents
 - **Parallel Deployments:** Microservices deploy concurrently for speed
 - **Environment Management:** Automatic environment selection based on branch
 - **Docker Layer Caching:** Uses GitHub Actions cache for faster builds
@@ -140,7 +140,7 @@ LOG_LEVEL: info
 
 ### Service Deployment Matrix
 
-Services are deployed based on change detection:
+Services are deployed based on change detection (including transitive dependents):
 
 | Service        | Path                                 | Deployment Target |
 | -------------- | ------------------------------------ | ----------------- |
@@ -149,7 +149,13 @@ Services are deployed based on change detection:
 | Token Service  | `packages/services/token-service/**` | Lambda            |
 | Publisher      | `packages/services/publisher/**`     | Lambda            |
 | Other Services | `packages/services/**`               | Lambda            |
-| Infrastructure | `packages/infra/**`                  | CDK Stacks        |
+| Infrastructure | `packages/infra/**`                  | All Stacks        |
+
+Dependent rollout rules:
+- `foundation` → redeploys all stacks (everything depends on it)
+- `auth` → also redeploys `scheduling`, `publishing`, `api`
+- `scheduling` → also redeploys `publishing`, `api`
+- `publishing` → also redeploys `api`
 
 ### Manual Deployment
 
