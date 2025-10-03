@@ -55,6 +55,7 @@ export class EventEmitter {
               version,
               timestamp: new Date().toISOString(),
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       });
@@ -94,6 +95,7 @@ export class EventEmitter {
               platformUrl,
               publishedAt: new Date().toISOString(),
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       });
@@ -130,6 +132,7 @@ export class EventEmitter {
               scheduledAt,
               timestamp: new Date().toISOString(),
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       });
@@ -164,6 +167,7 @@ export class EventEmitter {
               error,
               timestamp: new Date().toISOString(),
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       });
@@ -203,6 +207,7 @@ export class EventEmitter {
               triggeredBy,
               timestamp: new Date().toISOString(),
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       });
@@ -245,6 +250,7 @@ export class EventEmitter {
               triggeredBy,
               timestamp: new Date().toISOString(),
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       });
@@ -285,6 +291,7 @@ export class EventEmitter {
               triggeredBy,
               timestamp: new Date().toISOString(),
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       });

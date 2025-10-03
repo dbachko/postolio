@@ -547,6 +547,7 @@ export class ScheduleService {
                 platform: schedule.platform,
                 timestamp: new Date().toISOString(),
               }),
+              EventBusName: process.env.EVENT_BUS_NAME || 'default',
             },
           ],
         })
