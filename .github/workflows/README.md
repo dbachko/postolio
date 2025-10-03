@@ -152,6 +152,7 @@ Services are deployed based on change detection (including transitive dependents
 | Infrastructure | `packages/infra/**`                  | All Stacks        |
 
 Dependent rollout rules:
+
 - `foundation` → redeploys all stacks (everything depends on it)
 - `auth` → also redeploys `scheduling`, `publishing`, `api`
 - `scheduling` → also redeploys `publishing`, `api`
