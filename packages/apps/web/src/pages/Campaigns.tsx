@@ -19,7 +19,11 @@ import type { CampaignFormData, CampaignErrors } from '../types/campaign';
 import { frequencyOptions, styleOptions } from '../constants/campaign';
 import { useCampaignEdit } from '../hooks/useCampaignEdit';
 import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket';
-import type { CampaignStatusUpdateData, CampaignErrorData, StatusUpdateEvent } from '../types/websocket';
+import type {
+  CampaignStatusUpdateData,
+  CampaignErrorData,
+  StatusUpdateEvent,
+} from '../types/websocket';
 import {
   Loader2,
   Edit,
@@ -282,7 +286,14 @@ export function Campaigns() {
         campaignDetailsQuery.refetch();
       }
     },
-    [queryClient, selectedBrand?.id, campaignsQuery.data?.campaigns, currentView, selectedCampaignId, campaignDetailsQuery]
+    [
+      queryClient,
+      selectedBrand?.id,
+      campaignsQuery.data?.campaigns,
+      currentView,
+      selectedCampaignId,
+      campaignDetailsQuery,
+    ]
   );
 
   // Removed campaign progress handler; we no longer track campaign-level percent

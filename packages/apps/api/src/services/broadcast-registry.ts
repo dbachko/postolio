@@ -9,4 +9,3 @@ export function setStatusBroadcaster(b: StatusBroadcaster) {
 export function getStatusBroadcaster(): StatusBroadcaster | null {
   return broadcasterRef;
 }
-

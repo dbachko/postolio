@@ -12,4 +12,3 @@ const Skeleton = memo(({ className = '' }: SkeletonProps) => {
 Skeleton.displayName = 'Skeleton';
 
 export { Skeleton };
-

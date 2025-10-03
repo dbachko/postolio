@@ -55,7 +55,6 @@ class CampaignJobService {
         },
       });
 
-
       // Get campaign and validate ownership
       const campaign = await prisma.campaign.findFirst({
         where: {
@@ -148,8 +147,6 @@ class CampaignJobService {
       // Trim to exact count requested
       examplePosts = examplePosts.slice(0, exampleCount);
 
-      
-
       // Check if preview posts already exist for this campaign
       const existingPreviews = await prisma.content.findMany({
         where: {
@@ -204,17 +201,11 @@ class CampaignJobService {
         try {
           const b = getStatusBroadcaster();
           if (b) {
-            await b.broadcastStatusChange(
-              created.id,
-              campaign.brandId,
-              'draft',
-              'draft',
-              {
-                isNew: true,
-                isPreview: true,
-                campaignId: campaign.id,
-              } as unknown as Record<string, unknown>
-            );
+            await b.broadcastStatusChange(created.id, campaign.brandId, 'draft', 'draft', {
+              isNew: true,
+              isPreview: true,
+              campaignId: campaign.id,
+            } as unknown as Record<string, unknown>);
           }
         } catch (e) {
           console.warn('Broadcast content-created (draft) failed or skipped:', e);
@@ -261,13 +252,9 @@ class CampaignJobService {
       try {
         const b = getStatusBroadcaster();
         if (b) {
-          await b.broadcastCampaignStatusChange(
-            campaignId,
-            failed.brandId,
-            'creating',
-            'failed',
-            { errorMessage: failed.errorMessage ?? 'Campaign preview generation failed' }
-          );
+          await b.broadcastCampaignStatusChange(campaignId, failed.brandId, 'creating', 'failed', {
+            errorMessage: failed.errorMessage ?? 'Campaign preview generation failed',
+          });
         }
       } catch (e) {
         console.warn('Failed to broadcast campaign failed status; continuing', e);

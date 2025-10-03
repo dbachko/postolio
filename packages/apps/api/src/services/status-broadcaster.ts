@@ -38,7 +38,6 @@ export interface CampaignStatusUpdateEvent {
   timestamp: string;
 }
 
-
 export interface CampaignErrorEvent {
   type: 'campaign_error';
   campaignId: string;
@@ -372,7 +371,6 @@ export class StatusBroadcaster {
       this.fastify.log.error({ error, campaignId }, 'Failed to broadcast to campaign room');
     }
   }
-
 
   /**
    * Broadcast campaign error event

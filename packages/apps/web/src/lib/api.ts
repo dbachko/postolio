@@ -96,7 +96,6 @@ export interface Campaign {
   lastModifiedBy?: string;
 }
 
-
 // API base URL configuration
 // Empty string means use relative URLs (for development with proxy)
 // Full URL for production or explicit configuration

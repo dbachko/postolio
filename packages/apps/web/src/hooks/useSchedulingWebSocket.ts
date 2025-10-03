@@ -430,7 +430,6 @@ export function useSchedulingWebSocket({
             }
           }
 
-
           if (message.type === 'campaign_error') {
             console.log('Campaign error received:', message.data);
             if (onCampaignError && message.data) {

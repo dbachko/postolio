@@ -51,7 +51,6 @@ export interface CampaignStatusUpdateData {
   timestamp: string;
 }
 
-
 export interface CampaignErrorData {
   campaignId: string;
   brandId: string;
@@ -90,11 +89,7 @@ export interface WebSocketMessage {
   campaignId?: string;
   rooms?: string[];
   error?: string;
-  data?:
-    | StatusUpdateData
-    | StatusUpdateData[]
-    | CampaignStatusUpdateData
-    | CampaignErrorData;
+  data?: StatusUpdateData | StatusUpdateData[] | CampaignStatusUpdateData | CampaignErrorData;
   timestamp?: number; // For latency measurement in ping/pong
 }
 
