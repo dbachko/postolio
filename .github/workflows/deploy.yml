@@ -139,10 +139,49 @@ jobs:
             [[ "${{ steps.changes.outputs.api }}" == "true" ]] && STACKS+=("\"api\"")
             [[ "${{ steps.changes.outputs.web }}" == "true" ]] && STACKS+=("\"web\"")
 
-            # If infra changed or pushing to main, deploy all stacks
-            if [[ "${{ steps.changes.outputs.infra }}" == "true" || "${{ github.ref }}" == "refs/heads/main" ]]; then
+            # If infra changed, deploy all stacks
+            if [[ "${{ steps.changes.outputs.infra }}" == "true" ]]; then
               STACKS=()
               for s in "${ALL_STACKS[@]}"; do STACKS+=("\"$s\""); done
+            fi
+          fi
+
+          # Expand to include transitive dependents so that changes in a base stack
+          # also redeploy stacks that depend on it (scheduler -> publishing, api, etc.)
+          if [ ${#STACKS[@]} -gt 0 ]; then
+            # Convert to simple comma string for membership checks
+            STACKS_STR=$(IFS=,; echo "${STACKS[*]}")
+            add_unique() {
+              local name="$1"
+              if [[ ",$STACKS_STR," != *",\"$name\","* ]]; then
+                STACKS+=("\"$name\"")
+                STACKS_STR=$(IFS=,; echo "${STACKS[*]}")
+              fi
+            }
+
+            # If foundation changed -> everything depends on it
+            if [[ "$STACKS_STR" == *"\"foundation\""* ]]; then
+              for s in "${ALL_STACKS[@]}"; do
+                add_unique "$s"
+              done
+            fi
+
+            # If auth changed -> scheduling, publishing, api depend on it
+            if [[ "$STACKS_STR" == *"\"auth\""* ]]; then
+              add_unique "scheduling"
+              add_unique "publishing"
+              add_unique "api"
+            fi
+
+            # If scheduling changed -> publishing and api depend on it
+            if [[ "$STACKS_STR" == *"\"scheduling\""* ]]; then
+              add_unique "publishing"
+              add_unique "api"
+            fi
+
+            # If publishing changed -> api depends on it
+            if [[ "$STACKS_STR" == *"\"publishing\""* ]]; then
+              add_unique "api"
             fi
           fi
 
@@ -208,10 +247,11 @@ jobs:
     timeout-minutes: 30 # Add timeout for image builds
     needs: detect-changes
     if: |
-      github.event_name != 'pull_request' &&
-      (needs.detect-changes.outputs.api-changed == 'true' ||
-       github.event_name == 'workflow_dispatch' ||
-       github.ref == 'refs/heads/main')
+      github.event_name != 'pull_request' && (
+        needs.detect-changes.outputs.api-changed == 'true' ||
+        contains(needs.detect-changes.outputs.stack-matrix, 'api') ||
+        github.event_name == 'workflow_dispatch'
+      )
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:
       - name: Checkout code
@@ -513,10 +553,10 @@ jobs:
     needs: [detect-changes, deploy-stacks]
     if: |
       github.event_name != 'pull_request' &&
-      (needs.detect-changes.outputs.web-changed == 'true' ||
-       github.event_name == 'workflow_dispatch' ||
-       github.ref == 'refs/heads/main') &&
-      contains(needs.detect-changes.outputs.stack-matrix, 'web')
+      (
+        (needs.detect-changes.outputs.web-changed == 'true' && contains(needs.detect-changes.outputs.stack-matrix, 'web')) ||
+        github.event_name == 'workflow_dispatch'
+      )
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:
       - name: Checkout code
