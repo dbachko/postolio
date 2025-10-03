@@ -290,6 +290,21 @@ export class PublishingStack extends cdk.Stack {
               actions: ['events:PutEvents'],
               resources: [publishingEventBus.eventBusArn],
             }),
+            // EventBridge Scheduler permissions for retry scheduling and cleanup
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'scheduler:CreateSchedule',
+                'scheduler:UpdateSchedule',
+                'scheduler:DeleteSchedule',
+                'scheduler:GetSchedule',
+                'scheduler:ListSchedules',
+              ],
+              resources: [
+                `arn:aws:scheduler:${this.region}:${this.account}:schedule/*`,
+                `arn:aws:scheduler:${this.region}:${this.account}:schedule-group/*`,
+              ],
+            }),
             // KMS permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -315,6 +330,15 @@ export class PublishingStack extends cdk.Stack {
               effect: iam.Effect.ALLOW,
               actions: ['sns:Publish'],
               resources: [alertTopic.topicArn],
+            }),
+            // CloudWatch custom metrics for DLQ Processor
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['cloudwatch:PutMetricData'],
+              resources: ['*'],
+              conditions: {
+                StringEquals: { 'cloudwatch:namespace': 'Postolio/DLQ' },
+              },
             }),
           ],
         }),

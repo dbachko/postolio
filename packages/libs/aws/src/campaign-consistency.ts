@@ -285,6 +285,7 @@ export class CampaignConsistencyHandler {
                 reconciledAt: new Date().toISOString(),
                 resolvedBy: 'campaign-consistency-handler',
               }),
+              EventBusName: process.env.EVENT_BUS_NAME || 'default',
             },
           ],
         })

@@ -452,6 +452,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
                 reason: blockReason || 'Campaign not active',
                 skippedAt: new Date().toISOString(),
               }),
+              EventBusName: process.env.EVENT_BUS_NAME || 'default',
             },
           ],
         });
@@ -578,6 +579,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
               permalink: publishResult.platformUrl,
               publishedAt: new Date().toISOString(),
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       });
@@ -619,6 +621,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
               error: (error as Error)?.message || 'Unknown error',
               attemptNumber: 1,
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       });

@@ -179,6 +179,7 @@ async function emitReconciliationEvent(
               },
               severity: 'info',
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       })
@@ -226,6 +227,7 @@ async function emitManualInterventionEvent(
               requiresManualReview: true,
               alertOpsTeam: true,
             }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
           },
         ],
       })
