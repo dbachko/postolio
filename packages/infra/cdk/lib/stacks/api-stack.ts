@@ -331,6 +331,14 @@ export class ApiStack extends cdk.Stack {
               ],
               resources: [`arn:aws:s3:::${imagesBucketName}`, `arn:aws:s3:::${imagesBucketName}/*`],
             }),
+            // EventBridge permissions to emit domain events to the default bus
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['events:PutEvents'],
+              resources: [
+                `arn:aws:events:${this.region}:${this.account}:event-bus/default`,
+              ],
+            }),
           ],
         }),
       },
