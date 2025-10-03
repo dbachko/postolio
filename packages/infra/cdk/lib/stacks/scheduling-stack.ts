@@ -351,6 +351,21 @@ export class SchedulingStack extends cdk.Stack {
               actions: ['events:PutEvents'],
               resources: [this.eventBus.eventBusArn],
             }),
+            // EventBridge Scheduler permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'scheduler:CreateSchedule',
+                'scheduler:UpdateSchedule',
+                'scheduler:DeleteSchedule',
+                'scheduler:GetSchedule',
+                'scheduler:ListSchedules',
+              ],
+              resources: [
+                `arn:aws:scheduler:${this.region}:${this.account}:schedule/*`,
+                `arn:aws:scheduler:${this.region}:${this.account}:schedule-group/*`,
+              ],
+            }),
             // SQS permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
