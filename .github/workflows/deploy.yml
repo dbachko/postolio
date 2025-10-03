@@ -297,7 +297,8 @@ jobs:
     timeout-minutes: 60 # Increase timeout for CDK deployments
     if: |
       github.event_name != 'pull_request' &&
-      needs.detect-changes.outputs.stack-matrix != '[]'
+      needs.detect-changes.outputs.stack-matrix != '[]' &&
+      (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
     environment: ${{ needs.detect-changes.outputs.environment }}
     env:
       IMAGE_TAG: api-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
@@ -553,6 +554,7 @@ jobs:
     needs: [detect-changes, deploy-stacks]
     if: |
       github.event_name != 'pull_request' &&
+      (needs.deploy-stacks.result == 'success' || needs.deploy-stacks.result == 'skipped') &&
       (
         (needs.detect-changes.outputs.web-changed == 'true' && contains(needs.detect-changes.outputs.stack-matrix, 'web')) ||
         github.event_name == 'workflow_dispatch'
