@@ -601,6 +601,34 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         const originalScheduledTime = content.scheduledAt?.toISOString();
         const newScheduledTime = updateData.scheduledAt?.toISOString();
 
+        // For new scheduling (wasn't scheduled, now is), perform AWS scheduling BEFORE DB update to avoid inconsistent state
+        // Skip AWS operations if content belongs to a draft campaign
+        let scheduledInAwsBeforeUpdate = false;
+        if (!isInDraftCampaign && !originalScheduledTime && newScheduledTime) {
+          try {
+            console.log(
+              `Attempting to create new AWS schedule for content ${contentId} at ${newScheduledTime} before DB update`
+            );
+            // Pass the requested time directly; adapter will convert timezone appropriately
+            const scheduleResult = await schedulerService.scheduleContent(
+              contentId,
+              updateData.scheduledAt!
+            );
+
+            if (!scheduleResult.success) {
+              console.error('AWS new schedule failed (pre-DB update):', scheduleResult.error);
+              // Degrade gracefully: continue with DB update so user sees scheduled time
+              // Adapter already records schedulingError in DB when possible
+            } else {
+              scheduledInAwsBeforeUpdate = true;
+              console.log(`AWS new schedule created for content ${contentId}`);
+            }
+          } catch (preScheduleError) {
+            console.error('Error during AWS new schedule (pre-DB update):', preScheduleError);
+            // Degrade gracefully: continue with DB update
+          }
+        }
+
         // Check if this is a reschedule operation (time changed)
         // Skip AWS operations if content belongs to a draft campaign
         let needsNewSchedule = false;
@@ -696,7 +724,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Handle scheduling changes with AWS ContentScheduler
         // Skip AWS operations if content belongs to a draft campaign
-        if (scheduledAt !== undefined && !isInDraftCampaign) {
+        if (scheduledAt !== undefined && !isInDraftCampaign && !scheduledInAwsBeforeUpdate) {
           const originalScheduledTime = content.scheduledAt?.toISOString();
           const newScheduledTime = updatedContent.scheduledAt?.toISOString();
 
@@ -711,13 +739,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
                 // If this is auto-recovery from failed reschedule and scheduling still fails,
                 // return error to user with helpful message
-                if (needsNewSchedule) {
-                  return reply.code(500).send({
-                    success: false,
-                    error: `Failed to schedule content: ${scheduleResult.error}. Please ensure the campaign is active.`,
-                    data: null,
-                  });
-                }
+                // Do NOT return 500 here; degrade gracefully like initial scheduling
+                // The DB reflects the requested scheduled time; adapter stored schedulingError
               } else {
                 console.log(`Content ${contentId} scheduled successfully in AWS`);
                 if (needsNewSchedule) {
@@ -728,15 +751,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
               }
             } catch (scheduleError) {
               console.error('Error creating schedule:', scheduleError);
-
-              // If this is auto-recovery from failed reschedule, return error
-              if (needsNewSchedule) {
-                return reply.code(500).send({
-                  success: false,
-                  error: `Failed to schedule content: ${scheduleError instanceof Error ? scheduleError.message : 'Unknown error'}`,
-                  data: null,
-                });
-              }
+              // Degrade gracefully: do not fail the request
             }
           }
           // Case 2: Cancel schedule (was scheduled, now isn't)
