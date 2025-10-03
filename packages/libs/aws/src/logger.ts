@@ -47,7 +47,6 @@ export class ServiceLogger {
    */
   info(message: string, context?: LogContext): void {
     this.logger.info(message, {
-      service: this.serviceName,
       ...context,
     });
   }
@@ -57,7 +56,6 @@ export class ServiceLogger {
    */
   warn(message: string, context?: LogContext): void {
     this.logger.warn(message, {
-      service: this.serviceName,
       ...context,
     });
   }
@@ -69,7 +67,6 @@ export class ServiceLogger {
     const errorInfo = this.extractErrorInfo(context.error);
 
     this.logger.error(message, {
-      service: this.serviceName,
       operation: context.operation,
       userId: context.userId,
       brandId: context.brandId,
@@ -91,7 +88,6 @@ export class ServiceLogger {
    */
   debug(message: string, context?: LogContext): void {
     this.logger.debug(message, {
-      service: this.serviceName,
       ...context,
     });
   }
