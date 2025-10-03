@@ -335,9 +335,7 @@ export class ApiStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['events:PutEvents'],
-              resources: [
-                `arn:aws:events:${this.region}:${this.account}:event-bus/default`,
-              ],
+              resources: [`arn:aws:events:${this.region}:${this.account}:event-bus/default`],
             }),
           ],
         }),
