@@ -24,7 +24,11 @@ import {
   UpdateScheduleCommand,
 } from '@aws-sdk/client-scheduler';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { getCampaignById, canCampaignSchedule, getCampaignScheduleBlockReason } from '@postolio/aws';
+import {
+  getCampaignById,
+  canCampaignSchedule,
+  getCampaignScheduleBlockReason,
+} from '@postolio/aws';
 import { randomUUID } from 'crypto';
 import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from '../config';
 
