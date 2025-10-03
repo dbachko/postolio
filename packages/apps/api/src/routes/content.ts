@@ -640,7 +640,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
               ) {
                 return reply.code(503).send({
                   success: false,
-                  error: 'Scheduling service is temporarily unavailable. Please try again in a few moments.',
+                  error:
+                    'Scheduling service is temporarily unavailable. Please try again in a few moments.',
                   data: null,
                 });
               } else {
@@ -720,7 +721,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
               } else {
                 console.log(`Content ${contentId} scheduled successfully in AWS`);
                 if (needsNewSchedule) {
-                  console.log(`Auto-recovery successful - created new schedule after failed reschedule`);
+                  console.log(
+                    `Auto-recovery successful - created new schedule after failed reschedule`
+                  );
                 }
               }
             } catch (scheduleError) {
