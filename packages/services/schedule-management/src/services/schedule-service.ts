@@ -24,11 +24,7 @@ import {
   UpdateScheduleCommand,
 } from '@aws-sdk/client-scheduler';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import {
-  getCampaignByContentId,
-  canCampaignSchedule,
-  getCampaignScheduleBlockReason,
-} from '@postolio/aws';
+import { getCampaignById, canCampaignSchedule, getCampaignScheduleBlockReason } from '@postolio/aws';
 import { randomUUID } from 'crypto';
 import { getDynamoDBConfig, SCHEDULE_STATUS, formatEventBridgeScheduleTime } from '../config';
 
@@ -112,7 +108,8 @@ export class ScheduleService {
     try {
       // 1. Validate campaign if specified
       if (request.campaignId) {
-        const campaign = await getCampaignByContentId(request.contentId);
+        // Validate directly by campaignId; contentId has no schedule yet at creation time
+        const campaign = await getCampaignById(request.campaignId);
         if (!canCampaignSchedule(campaign)) {
           const blockReason = getCampaignScheduleBlockReason(campaign);
           return {
@@ -342,13 +339,16 @@ export class ScheduleService {
 
       // Validate campaign if being updated
       if (updateRequest.campaignId || existingSchedule.campaignId) {
-        const campaign = await getCampaignByContentId(existingSchedule.contentId);
-        if (!canCampaignSchedule(campaign)) {
-          const blockReason = getCampaignScheduleBlockReason(campaign);
-          return {
-            success: false,
-            error: blockReason || 'Campaign does not allow scheduling updates',
-          };
+        const campaignIdToValidate = updateRequest.campaignId || existingSchedule.campaignId;
+        if (campaignIdToValidate) {
+          const campaign = await getCampaignById(campaignIdToValidate);
+          if (!canCampaignSchedule(campaign)) {
+            const blockReason = getCampaignScheduleBlockReason(campaign);
+            return {
+              success: false,
+              error: blockReason || 'Campaign does not allow scheduling updates',
+            };
+          }
         }
       }
 
