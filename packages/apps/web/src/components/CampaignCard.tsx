@@ -287,20 +287,12 @@ const CampaignCard = memo(
               </div>
             </div>
 
-            {/* Progress bar for creating campaigns */}
+            {/* Indeterminate state for creating/processing campaigns (no percentage) */}
             {(campaign.status === 'creating' || campaign.status === 'processing') && (
               <div className="mb-4">
                 <div className="mb-2 flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                  <span className="text-sm text-gray-600">
-                    Generating content... {campaign.progress || 0}%
-                  </span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-gray-200">
-                  <div
-                    className="h-2 rounded-full bg-blue-600 transition-all duration-300"
-                    style={{ width: `${campaign.progress || 0}%` }}
-                  ></div>
+                  <span className="text-sm text-gray-600">Generating content…</span>
                 </div>
               </div>
             )}

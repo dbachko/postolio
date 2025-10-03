@@ -108,7 +108,6 @@ class CampaignService {
     brandId: string,
     oldStatus: StatusBroadcasterCampaignStatus,
     newStatus: StatusBroadcasterCampaignStatus,
-    progress: number,
     options?: {
       errorMessage?: string | null;
       previewGenerated?: boolean;
@@ -123,7 +122,6 @@ class CampaignService {
           brandId,
           oldStatus,
           newStatus,
-          progress,
           options
         );
       } catch (error) {
@@ -240,7 +238,6 @@ class CampaignService {
           brandId: config.brandId,
           status: 'creating',
           priority: config.priority || 5,
-          progress: 0,
           previewGenerated: false,
           config: {
             duration: {
@@ -1865,7 +1862,6 @@ class CampaignService {
           where: { id: campaignId },
           data: {
             previewGenerated: false,
-            progress: 0,
           },
         });
       }

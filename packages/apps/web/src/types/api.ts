@@ -33,7 +33,6 @@ export interface CampaignData {
   status: string;
   config: CampaignConfig;
   priority: number;
-  progress: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,7 +65,6 @@ export interface CampaignPreview {
 export interface CampaignStatus {
   id: string;
   status: string;
-  progress: number;
   totalPosts?: number;
   completedPosts?: number;
   errorMessage?: string;

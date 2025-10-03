@@ -16,7 +16,6 @@ export function useSchedulingWebSocket({
   enabled = true,
   onStatusUpdate,
   onCampaignStatusUpdate,
-  onCampaignProgressUpdate,
   onCampaignError,
   onConnectionChange,
   onError,
@@ -427,15 +426,6 @@ export function useSchedulingWebSocket({
             if (onCampaignStatusUpdate && message.data) {
               onCampaignStatusUpdate(
                 message.data as import('../types/websocket').CampaignStatusUpdateData
-              );
-            }
-          }
-
-          if (message.type === 'campaign_progress_update') {
-            console.log('Campaign progress update received:', message.data);
-            if (onCampaignProgressUpdate && message.data) {
-              onCampaignProgressUpdate(
-                message.data as import('../types/websocket').CampaignProgressUpdateData
               );
             }
           }

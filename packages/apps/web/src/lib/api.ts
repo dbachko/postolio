@@ -85,7 +85,6 @@ export interface Campaign {
     priority?: number;
   };
   content: Content[];
-  progress?: number;
   errorMessage?: string | null;
   previewGenerated?: boolean;
   priority: number;
@@ -95,16 +94,6 @@ export interface Campaign {
   completedAt?: string | null;
   lastModifiedAt?: string;
   lastModifiedBy?: string;
-}
-
-export interface CampaignStatusResponse {
-  success: boolean;
-  status: {
-    status: Campaign['status'];
-    progress?: number;
-    previewGenerated?: boolean;
-    errorMessage?: string | null;
-  };
 }
 
 // API base URL configuration
@@ -704,10 +693,6 @@ class ApiClient {
     return this.request(`/api/campaign/${campaignId}`, {
       method: 'DELETE',
     });
-  }
-
-  async getCampaignStatus(campaignId: string): Promise<CampaignStatusResponse> {
-    return this.request(`/api/campaign/status/${campaignId}`);
   }
 
   async updateCampaign(

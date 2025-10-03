@@ -39,7 +39,6 @@ export interface CampaignStatusUpdateData {
   brandId: string;
   oldStatus: CampaignStatus;
   newStatus: CampaignStatus;
-  progress: number;
   errorMessage?: string | null;
   previewGenerated?: boolean;
   isRunning: boolean;
@@ -49,16 +48,6 @@ export interface CampaignStatusUpdateData {
     estimatedTimeRemaining?: number;
     lastActivity?: string;
   };
-  timestamp: string;
-}
-
-export interface CampaignProgressUpdateData {
-  campaignId: string;
-  brandId: string;
-  progress: number;
-  currentStep?: string;
-  totalSteps?: number;
-  estimatedTimeRemaining?: number;
   timestamp: string;
 }
 
@@ -93,7 +82,6 @@ export interface WebSocketMessage {
     | 'status_update'
     | 'batch_status_update'
     | 'campaign_status_update'
-    | 'campaign_progress_update'
     | 'campaign_error';
   token?: string;
   room?: string;
@@ -101,12 +89,7 @@ export interface WebSocketMessage {
   campaignId?: string;
   rooms?: string[];
   error?: string;
-  data?:
-    | StatusUpdateData
-    | StatusUpdateData[]
-    | CampaignStatusUpdateData
-    | CampaignProgressUpdateData
-    | CampaignErrorData;
+  data?: StatusUpdateData | StatusUpdateData[] | CampaignStatusUpdateData | CampaignErrorData;
   timestamp?: number; // For latency measurement in ping/pong
 }
 
@@ -114,7 +97,6 @@ export interface UseSchedulingWebSocketOptions {
   enabled?: boolean;
   onStatusUpdate?: (event: StatusUpdateEvent) => void;
   onCampaignStatusUpdate?: (data: CampaignStatusUpdateData) => void;
-  onCampaignProgressUpdate?: (data: CampaignProgressUpdateData) => void;
   onCampaignError?: (data: CampaignErrorData) => void;
   onConnectionChange?: (status: ConnectionStatus) => void;
   onError?: (error: WebSocketError) => void;
