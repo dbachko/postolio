@@ -112,6 +112,15 @@ export function useSchedulingWebSocket({
         queryClient.invalidateQueries({ queryKey });
       });
 
+      // If this update is related to a campaign, invalidate the campaign query
+      if (event.type === 'status_update' && 'contentId' in event.data) {
+        const metadata = event.data.metadata as { campaignId?: string } | undefined;
+        if (metadata?.campaignId) {
+          console.log('Invalidating campaign query for campaign:', metadata.campaignId);
+          queryClient.invalidateQueries({ queryKey: ['campaign', metadata.campaignId] });
+        }
+      }
+
       // Update cache optimistically if we have the data
       if (event.type === 'status_update' && 'contentId' in event.data) {
         const contentId = event.data.contentId;
