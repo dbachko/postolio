@@ -26,7 +26,6 @@ export interface CampaignStatusUpdateEvent {
   brandId: string;
   oldStatus: CampaignStatus;
   newStatus: CampaignStatus;
-  progress: number;
   errorMessage?: string | null;
   previewGenerated?: boolean;
   isRunning: boolean;
@@ -39,16 +38,6 @@ export interface CampaignStatusUpdateEvent {
   timestamp: string;
 }
 
-export interface CampaignProgressUpdateEvent {
-  type: 'campaign_progress_update';
-  campaignId: string;
-  brandId: string;
-  progress: number;
-  currentStep?: string;
-  totalSteps?: number;
-  estimatedTimeRemaining?: number;
-  timestamp: string;
-}
 
 export interface CampaignErrorEvent {
   type: 'campaign_error';
@@ -308,7 +297,6 @@ export class StatusBroadcaster {
     brandId: string,
     oldStatus: CampaignStatus,
     newStatus: CampaignStatus,
-    progress: number,
     options?: {
       errorMessage?: string | null;
       previewGenerated?: boolean;
@@ -323,7 +311,6 @@ export class StatusBroadcaster {
       brandId,
       oldStatus,
       newStatus,
-      progress,
       errorMessage: options?.errorMessage,
       previewGenerated: options?.previewGenerated ?? false,
       isRunning: options?.isRunning ?? false,
@@ -347,8 +334,6 @@ export class StatusBroadcaster {
         oldStatus,
         'newStatus',
         newStatus,
-        'progress',
-        progress.toString(),
         'errorMessage',
         options?.errorMessage || '',
         'previewGenerated',
@@ -388,67 +373,6 @@ export class StatusBroadcaster {
     }
   }
 
-  /**
-   * Broadcast campaign progress update
-   */
-  async broadcastCampaignProgress(
-    campaignId: string,
-    brandId: string,
-    progress: number,
-    options?: {
-      currentStep?: string;
-      totalSteps?: number;
-      estimatedTimeRemaining?: number;
-    }
-  ): Promise<void> {
-    const timestamp = Date.now();
-    const event: CampaignProgressUpdateEvent = {
-      type: 'campaign_progress_update',
-      campaignId,
-      brandId,
-      progress,
-      currentStep: options?.currentStep,
-      totalSteps: options?.totalSteps,
-      estimatedTimeRemaining: options?.estimatedTimeRemaining,
-      timestamp: new Date(timestamp).toISOString(),
-    };
-
-    // Store in Redis Stream (lighter weight for progress updates)
-    try {
-      await this.redis.xadd(
-        `campaign_progress:${campaignId}`,
-        'MAXLEN',
-        '~',
-        '100', // Keep only last 100 progress updates per campaign
-        '*',
-        'type',
-        'campaign_progress_update',
-        'progress',
-        progress.toString(),
-        'currentStep',
-        options?.currentStep || '',
-        'totalSteps',
-        (options?.totalSteps || 0).toString(),
-        'estimatedTimeRemaining',
-        (options?.estimatedTimeRemaining || 0).toString(),
-        'timestamp',
-        timestamp.toString()
-      );
-    } catch (error) {
-      this.fastify.log.error({ error, campaignId }, 'Failed to store progress event in Redis');
-    }
-
-    // Broadcast to both rooms
-    try {
-      this.fastify.broadcastToRoom(`brand:${brandId}`, event as unknown as Record<string, unknown>);
-      this.fastify.broadcastToRoom(
-        `campaign:${campaignId}`,
-        event as unknown as Record<string, unknown>
-      );
-    } catch (error) {
-      this.fastify.log.error({ error, brandId, campaignId }, 'Failed to broadcast progress update');
-    }
-  }
 
   /**
    * Broadcast campaign error event
@@ -523,7 +447,7 @@ export class StatusBroadcaster {
   async getRecentCampaignEvents(
     brandId: string,
     limit: number = 50
-  ): Promise<(CampaignStatusUpdateEvent | CampaignProgressUpdateEvent | CampaignErrorEvent)[]> {
+  ): Promise<(CampaignStatusUpdateEvent | CampaignErrorEvent)[]> {
     try {
       const events = await this.redis.xrevrange(
         `campaign_events:${brandId}`,
@@ -543,7 +467,6 @@ export class StatusBroadcaster {
               brandId,
               oldStatus: (data.oldStatus || 'draft') as CampaignStatus,
               newStatus: (data.newStatus || 'draft') as CampaignStatus,
-              progress: parseInt(data.progress || '0'),
               errorMessage: data.errorMessage || null,
               previewGenerated: data.previewGenerated === 'true',
               isRunning: data.isRunning === 'true',

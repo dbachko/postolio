@@ -333,6 +333,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       const { campaignService } = await import('./services/campaign.js');
       campaignService.setStatusBroadcaster(statusBroadcaster);
 
+      // Make broadcaster available to background jobs
+      const { setStatusBroadcaster } = await import('./services/broadcast-registry.js');
+      setStatusBroadcaster(statusBroadcaster);
+
       app.log.info('✅ WebSocket real-time updates initialized');
 
       // Initialize retention manager

@@ -85,7 +85,6 @@ export interface Campaign {
     priority?: number;
   };
   content: Content[];
-  progress?: number;
   errorMessage?: string | null;
   previewGenerated?: boolean;
   priority: number;
@@ -97,15 +96,6 @@ export interface Campaign {
   lastModifiedBy?: string;
 }
 
-export interface CampaignStatusResponse {
-  success: boolean;
-  status: {
-    status: Campaign['status'];
-    progress?: number;
-    previewGenerated?: boolean;
-    errorMessage?: string | null;
-  };
-}
 
 // API base URL configuration
 // Empty string means use relative URLs (for development with proxy)
@@ -706,9 +696,7 @@ class ApiClient {
     });
   }
 
-  async getCampaignStatus(campaignId: string): Promise<CampaignStatusResponse> {
-    return this.request(`/api/campaign/status/${campaignId}`);
-  }
+  // Removed getCampaignStatus — replaced by WebSocket updates
 
   async updateCampaign(
     campaignId: string,

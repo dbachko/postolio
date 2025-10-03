@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 
 import { campaignService, type CampaignConfig } from '../services/campaign.js';
 import { CampaignStatus } from '@postolio/database';
-import { campaignJobService } from '../services/campaign-jobs.js';
+// import { campaignJobService } from '../services/campaign-jobs.js'; // legacy polling removed
 import { pauseResumeRateLimiter, campaignRateLimiter } from '../services/rate-limiter.js';
 import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js';
 import { regenerationService } from '../services/regeneration-queue.js';
@@ -150,66 +150,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Get campaign status (for polling)
-  fastify.get<{ Params: { id: string } }>(
-    '/status/:id',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        const userId = request.user!.id;
-        const { id } = request.params;
-
-        if (!id) {
-          return reply.code(400).send({ error: 'Campaign ID is required' });
-        }
-
-        // Get campaign status from job service
-        const status = await campaignJobService.getCampaignStatus(id);
-
-        if (!status) {
-          return reply.code(404).send({ error: 'Campaign not found' });
-        }
-
-        // Verify ownership by checking the campaign
-        const campaign = await prisma.campaign.findFirst({
-          where: {
-            id,
-            brand: {
-              userId,
-            },
-          },
-        });
-
-        if (!campaign) {
-          return reply.code(404).send({ error: 'Campaign not found or access denied' });
-        }
-
-        return reply.send({
-          success: true,
-          status: {
-            id: status.id,
-            status: status.status,
-            progress: status.progress,
-            errorMessage: status.errorMessage,
-            previewGenerated: status.previewGenerated,
-            isRunning: campaignJobService.isJobRunning(id),
-          },
-        });
-      } catch (error) {
-        console.error('Get campaign status error:', error);
-
-        if (error instanceof Error) {
-          if (error.message.includes('Authentication')) {
-            return reply.code(401).send({ error: error.message });
-          }
-        }
-
-        return reply.code(500).send({
-          error: 'Failed to get campaign status. Please try again.',
-        });
-      }
-    }
-  );
+  // Removed legacy polling endpoint /status/:id — WebSocket updates replace it
 
   // Generate campaign preview
   fastify.post<{ Body: PreviewCampaignBody }>(

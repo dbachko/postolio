@@ -4,6 +4,7 @@ import {
   type ContentGenerationRequest,
   type GeneratedContent,
 } from './content-generator.js';
+import { getStatusBroadcaster } from './broadcast-registry.js';
 import type { StyleProfile } from './ai.js';
 import { analyzeBrandStyle } from './ai.js';
 
@@ -50,10 +51,11 @@ class CampaignJobService {
         where: { id: campaignId },
         data: {
           status: 'creating',
-          progress: 10,
           errorMessage: null,
         },
       });
+
+      // No campaign progress broadcast — intentionally removed
 
       // Get campaign and validate ownership
       const campaign = await prisma.campaign.findFirst({
@@ -97,10 +99,8 @@ class CampaignJobService {
         });
       }
 
-      await prisma.campaign.update({
-        where: { id: campaignId },
-        data: { progress: 30 },
-      });
+      // No numeric progress updates stored in DB
+      // No campaign progress broadcast — intentionally removed
 
       // Generate preview content using themes from campaign config
       const contentRequests: ContentGenerationRequest[] = config.themes.map((theme: string) => ({
@@ -119,11 +119,9 @@ class CampaignJobService {
       for (let i = 0; i < previewRequests.length; i++) {
         const request = previewRequests[i];
 
-        // Update progress
-        await prisma.campaign.update({
-          where: { id: campaignId },
-          data: { progress: 30 + (i + 1) * 20 }, // 30, 50, 70
-        });
+        // Update progress per generated example
+        // No numeric progress updates stored in DB
+        // No campaign progress broadcast — intentionally removed
 
         if (request) {
           const content = await generateInstagramContent(
@@ -153,10 +151,8 @@ class CampaignJobService {
       // Trim to exact count requested
       examplePosts = examplePosts.slice(0, exampleCount);
 
-      await prisma.campaign.update({
-        where: { id: campaignId },
-        data: { progress: 80 },
-      });
+      // No numeric progress updates stored in DB
+      // No campaign progress broadcast — intentionally removed
 
       // Check if preview posts already exist for this campaign
       const existingPreviews = await prisma.content.findMany({
@@ -189,7 +185,7 @@ class CampaignJobService {
           })
         );
 
-        await prisma.content.create({
+        const created = await prisma.content.create({
           data: {
             caption: post.caption,
             hashtags: post.hashtags,
@@ -207,31 +203,79 @@ class CampaignJobService {
             },
           },
         });
+
+        // Broadcast content created as draft
+        try {
+          const b = getStatusBroadcaster();
+          if (b) {
+            await b.broadcastStatusChange(
+              created.id,
+              campaign.brandId,
+              'draft',
+              'draft',
+              {
+                isNew: true,
+                isPreview: true,
+                campaignId: campaign.id,
+              } as unknown as Record<string, unknown>
+            );
+          }
+        } catch (e) {
+          console.warn('Broadcast content-created (draft) failed or skipped:', e);
+        }
       }
 
       // Mark campaign as ready for preview
-      await prisma.campaign.update({
+      const updated = await prisma.campaign.update({
         where: { id: campaignId },
         data: {
           status: 'preview',
-          progress: 100,
           previewGenerated: true,
           errorMessage: null,
         },
       });
+      // Broadcast final status change creating -> preview
+      try {
+        const b = getStatusBroadcaster();
+        if (b) {
+          await b.broadcastCampaignStatusChange(
+            campaignId,
+            updated.brandId,
+            'creating',
+            'preview',
+            { previewGenerated: true }
+          );
+        }
+      } catch (e) {
+        console.warn('Failed to broadcast campaign preview-ready status; continuing', e);
+      }
 
       console.log(`Campaign preview generation completed for ${campaignId}`);
     } catch (error) {
       console.error(`Campaign preview generation failed for ${campaignId}:`, error);
 
-      await prisma.campaign.update({
+      const failed = await prisma.campaign.update({
         where: { id: campaignId },
         data: {
           status: 'failed',
           errorMessage: error instanceof Error ? error.message : 'Unknown error occurred',
-          progress: 0,
         },
       });
+      // Broadcast failure (status change is still useful)
+      try {
+        const b = getStatusBroadcaster();
+        if (b) {
+          await b.broadcastCampaignStatusChange(
+            campaignId,
+            failed.brandId,
+            'creating',
+            'failed',
+            { errorMessage: failed.errorMessage ?? 'Campaign preview generation failed' }
+          );
+        }
+      } catch (e) {
+        console.warn('Failed to broadcast campaign failed status; continuing', e);
+      }
     }
   }
 
@@ -242,38 +286,7 @@ class CampaignJobService {
     return this.runningJobs.has(campaignId);
   }
 
-  /**
-   * Get current job status
-   */
-  async getCampaignStatus(campaignId: string): Promise<{
-    id: string;
-    status: string;
-    progress: number;
-    errorMessage: string | null;
-    previewGenerated: boolean;
-  }> {
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: {
-        id: true,
-        status: true,
-        progress: true,
-        errorMessage: true,
-        previewGenerated: true,
-      },
-    });
-
-    if (!campaign) {
-      throw new Error('Campaign not found');
-    }
-    return {
-      id: campaign.id,
-      status: campaign.status,
-      progress: campaign.progress,
-      errorMessage: campaign.errorMessage,
-      previewGenerated: campaign.previewGenerated,
-    };
-  }
+  // Removed getCampaignStatus — use WebSocket events for realtime updates
 }
 
 export const campaignJobService = new CampaignJobService();

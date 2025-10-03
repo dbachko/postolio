@@ -19,11 +19,7 @@ import type { CampaignFormData, CampaignErrors } from '../types/campaign';
 import { frequencyOptions, styleOptions } from '../constants/campaign';
 import { useCampaignEdit } from '../hooks/useCampaignEdit';
 import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket';
-import type {
-  CampaignStatusUpdateData,
-  CampaignProgressUpdateData,
-  CampaignErrorData,
-} from '../types/websocket';
+import type { CampaignStatusUpdateData, CampaignErrorData, StatusUpdateEvent } from '../types/websocket';
 import {
   Loader2,
   Edit,
@@ -109,7 +105,7 @@ export function Campaigns() {
   const configureMutation = useMutation({
     mutationFn: (config: CampaignConfig) => apiClient.configureCampaign(config),
     onSuccess: () => {
-      toast.success('Campaign creation started! You can see the progress in the campaign list.');
+      toast.success('Campaign created. Generating posts in the background.');
       setCurrentView('dashboard');
       setFormData(initialFormData);
       setErrors({});
@@ -260,7 +256,6 @@ export function Campaigns() {
               ? {
                   ...campaign,
                   status: data.newStatus,
-                  progress: data.progress,
                   previewGenerated: data.previewGenerated,
                   errorMessage: data.errorMessage,
                 }
@@ -281,30 +276,16 @@ export function Campaigns() {
       } else if (data.newStatus === 'failed') {
         toast.error(`${campaignName} generation failed: ${data.errorMessage}`);
       }
+
+      // If viewing this campaign's details, refetch to populate content as it arrives
+      if (currentView === 'details' && selectedCampaignId === data.campaignId) {
+        campaignDetailsQuery.refetch();
+      }
     },
-    [queryClient, selectedBrand?.id, campaignsQuery.data?.campaigns]
+    [queryClient, selectedBrand?.id, campaignsQuery.data?.campaigns, currentView, selectedCampaignId, campaignDetailsQuery]
   );
 
-  const handleCampaignProgressUpdate = useCallback(
-    (data: CampaignProgressUpdateData) => {
-      console.log('Campaign progress update:', data);
-
-      // Update progress in campaigns query
-      queryClient.setQueryData(
-        ['campaigns', selectedBrand?.id],
-        (oldData: { campaigns: Campaign[] } | undefined) => {
-          if (!oldData) return oldData;
-
-          const updatedCampaigns = oldData.campaigns.map((campaign: Campaign) =>
-            campaign.id === data.campaignId ? { ...campaign, progress: data.progress } : campaign
-          );
-
-          return { ...oldData, campaigns: updatedCampaigns };
-        }
-      );
-    },
-    [queryClient, selectedBrand?.id]
-  );
+  // Removed campaign progress handler; we no longer track campaign-level percent
 
   const handleCampaignError = useCallback(
     (data: CampaignErrorData) => {
@@ -320,11 +301,26 @@ export function Campaigns() {
     [campaignsQuery.data?.campaigns]
   );
 
+  // Handle content-level status updates: if they belong to the selected campaign in details view, refetch
+  const handleStatusUpdateWS = useCallback(
+    (event: StatusUpdateEvent) => {
+      const items = Array.isArray(event.data) ? event.data : [event.data];
+      const hasSelectedCampaignContent = items.some((d) => {
+        const meta = d?.metadata as { campaignId?: string } | undefined;
+        return meta?.campaignId && meta.campaignId === selectedCampaignId;
+      });
+      if (currentView === 'details' && hasSelectedCampaignContent) {
+        campaignDetailsQuery.refetch();
+      }
+    },
+    [currentView, selectedCampaignId, campaignDetailsQuery]
+  );
+
   // Initialize WebSocket connection for real-time updates
   useSchedulingWebSocket({
     enabled: !!selectedBrand,
+    onStatusUpdate: handleStatusUpdateWS,
     onCampaignStatusUpdate: handleCampaignStatusUpdate,
-    onCampaignProgressUpdate: handleCampaignProgressUpdate,
     onCampaignError: handleCampaignError,
   });
 
@@ -998,19 +994,38 @@ export function Campaigns() {
                   </CardHeader>
                   <CardContent>
                     {!campaign.content || campaign.content.length === 0 ? (
-                      <div className="py-8 text-center">
-                        <div className="mb-4">
-                          <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-                        </div>
-                        <h3 className="mb-2 text-lg font-medium text-gray-900">
-                          No content generated yet
-                        </h3>
-                        <p className="text-gray-600">
-                          {campaign.status === 'preview'
-                            ? 'Start this campaign to begin automated content posting.'
-                            : 'Content will appear here as it gets generated.'}
-                        </p>
-                      </div>
+                      <>
+                        {['creating', 'processing'].includes(campaign.status) ? (
+                          // Show skeletons while content is being generated
+                          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                            {[...Array(6)].map((_, i) => (
+                              <div key={i} className="overflow-hidden rounded-lg border bg-white">
+                                <Skeleton className="h-48 w-full" />
+                                <div className="space-y-3 p-4">
+                                  <Skeleton className="h-5 w-24" />
+                                  <Skeleton className="h-4 w-full" />
+                                  <Skeleton className="h-4 w-5/6" />
+                                  <Skeleton className="h-8 w-full" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-8 text-center">
+                            <div className="mb-4">
+                              <Calendar className="mx-auto h-12 w-12 text-gray-400" />
+                            </div>
+                            <h3 className="mb-2 text-lg font-medium text-gray-900">
+                              No content generated yet
+                            </h3>
+                            <p className="text-gray-600">
+                              {campaign.status === 'preview'
+                                ? 'Start this campaign to begin automated content posting.'
+                                : 'Content will appear here as it gets generated.'}
+                            </p>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {campaign.content.map((post: Content) => (
@@ -1146,3 +1161,4 @@ export function Campaigns() {
     </div>
   );
 }
+import { Skeleton } from '../components/ui/skeleton';
