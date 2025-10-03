@@ -666,8 +666,56 @@ export class SchedulerAdapter {
               error: `Failed to create schedule: ${scheduleResult.error}`,
             };
           }
+        } else if (content.campaignId) {
+          // NEW: Handle draft posts from campaigns that failed to start properly
+          // When a campaign fails to start, posts are created as drafts with campaignId but no scheduleId
+          // User is trying to "reschedule" (set a time) on these drafts - treat as initial schedule
+          console.warn(
+            `[AUTO-RECOVERY] Draft content ${contentId} from campaign ${content.campaignId} has no schedule - creating new schedule`
+          );
+
+          const newTimeLocal = isLocalTime
+            ? newTime
+            : TimezoneService.toLocal(newTimeUTC, brandTimezone);
+
+          // First update the content with the new scheduled time
+          await prisma.content.update({
+            where: { id: contentId },
+            data: {
+              scheduledAt: newTimeUTC,
+              status: 'scheduled' as ContentStatus,
+            },
+          });
+
+          // Then create the AWS schedule
+          const scheduleResult = await this.scheduleContent(
+            contentId,
+            newTimeLocal,
+            content.brand.userId
+          );
+
+          if (scheduleResult.success) {
+            console.log(
+              `[AUTO-RECOVERY SUCCESS] Draft content ${contentId} scheduled at ${newTimeUTC.toISOString()}`
+            );
+            return { success: true };
+          } else {
+            // Rollback the status change if scheduling failed
+            await prisma.content.update({
+              where: { id: contentId },
+              data: {
+                scheduledAt: null,
+                status: 'draft' as ContentStatus,
+                schedulingError: scheduleResult.error,
+              },
+            });
+            return {
+              success: false,
+              error: `Failed to schedule content: ${scheduleResult.error}`,
+            };
+          }
         } else {
-          // Content is truly not scheduled (draft with no scheduledAt)
+          // Content is truly not scheduled (draft with no scheduledAt and no campaign)
           return {
             success: false,
             error:
