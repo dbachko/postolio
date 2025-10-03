@@ -214,8 +214,9 @@ export class SchedulerAdapter {
         };
       }
 
-      // Only allow scheduling for active campaigns
-      if (content.campaign.status !== 'active') {
+      // Only allow scheduling for active campaigns, UNLESS this is a draft post
+      // (which indicates auto-recovery from a failed campaign start)
+      if (content.campaign.status !== 'active' && content.status !== 'draft') {
         console.warn(
           `Scheduling blocked: Campaign ${content.campaignId} is ${content.campaign.status}, not ACTIVE`
         );
@@ -223,6 +224,24 @@ export class SchedulerAdapter {
           success: false,
           error: `Cannot schedule content for ${content.campaign.status.toLowerCase()} campaign`,
         };
+      }
+
+      // Auto-activate campaign if scheduling a draft post from a non-active campaign
+      // This handles auto-recovery when a campaign failed to start properly
+      if (content.campaign.status !== 'active' && content.status === 'draft') {
+        console.log(
+          `[AUTO-RECOVERY] Activating campaign ${content.campaignId} to allow scheduling of draft content ${contentId}`
+        );
+        try {
+          await prisma.campaign.update({
+            where: { id: content.campaignId },
+            data: { status: 'active' },
+          });
+          console.log(`Campaign ${content.campaignId} activated for auto-recovery`);
+        } catch (campaignUpdateError) {
+          console.error('Failed to activate campaign during auto-recovery:', campaignUpdateError);
+          // Don't fail the scheduling - continue with scheduling anyway
+        }
       }
 
       // Store original state for potential rollback

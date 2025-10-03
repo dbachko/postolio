@@ -603,6 +603,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Check if this is a reschedule operation (time changed)
         // Skip AWS operations if content belongs to a draft campaign
+        let needsNewSchedule = false;
         if (
           !isInDraftCampaign &&
           originalScheduledTime &&
@@ -623,26 +624,36 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             if (!rescheduleResult.success) {
               console.error('AWS reschedule failed:', rescheduleResult.error);
 
-              // Provide more helpful error messages based on the error type
-              let userFriendlyError = rescheduleResult.error;
-              if (rescheduleResult.error?.includes('not scheduled')) {
-                userFriendlyError =
-                  'Unable to update schedule. The system will attempt to create a new schedule automatically.';
+              // Check if reschedule failed because content was never scheduled
+              // In this case, we'll create a new schedule instead of erroring
+              if (
+                rescheduleResult.error?.includes('not scheduled') ||
+                rescheduleResult.error?.includes('Content is not scheduled')
+              ) {
+                console.log(
+                  `Content ${contentId} was never scheduled in AWS - will create new schedule instead`
+                );
+                needsNewSchedule = true;
+                // Don't return error - fall through to create new schedule
               } else if (
                 rescheduleResult.error?.includes('AWS scheduler temporarily unavailable')
               ) {
-                userFriendlyError =
-                  'Scheduling service is temporarily unavailable. Please try again in a few moments.';
+                return reply.code(503).send({
+                  success: false,
+                  error: 'Scheduling service is temporarily unavailable. Please try again in a few moments.',
+                  data: null,
+                });
+              } else {
+                // Other errors should still fail
+                return reply.code(500).send({
+                  success: false,
+                  error: rescheduleResult.error,
+                  data: null,
+                });
               }
-
-              return reply.code(500).send({
-                success: false,
-                error: userFriendlyError,
-                data: null,
-              });
+            } else {
+              console.log(`AWS reschedule succeeded for content ${contentId}`);
             }
-
-            console.log(`AWS reschedule succeeded for content ${contentId}`);
           } catch (rescheduleError) {
             console.error('Error during AWS reschedule:', rescheduleError);
             return reply.code(500).send({
@@ -688,19 +699,41 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           const originalScheduledTime = content.scheduledAt?.toISOString();
           const newScheduledTime = updatedContent.scheduledAt?.toISOString();
 
-          // Case 1: New schedule (wasn't scheduled before, now is)
-          if (!originalScheduledTime && newScheduledTime) {
+          // Case 1: New schedule (wasn't scheduled before, now is) OR reschedule that failed due to missing AWS schedule
+          if ((!originalScheduledTime && newScheduledTime) || needsNewSchedule) {
             try {
               // Don't pass customTime - scheduler-adapter will read from DB (UTC)
               const scheduleResult = await schedulerService.scheduleContent(contentId);
 
               if (!scheduleResult.success) {
                 console.error('Failed to create AWS schedule:', scheduleResult.error);
+
+                // If this is auto-recovery from failed reschedule and scheduling still fails,
+                // return error to user with helpful message
+                if (needsNewSchedule) {
+                  return reply.code(500).send({
+                    success: false,
+                    error: `Failed to schedule content: ${scheduleResult.error}. Please ensure the campaign is active.`,
+                    data: null,
+                  });
+                }
               } else {
                 console.log(`Content ${contentId} scheduled successfully in AWS`);
+                if (needsNewSchedule) {
+                  console.log(`Auto-recovery successful - created new schedule after failed reschedule`);
+                }
               }
             } catch (scheduleError) {
               console.error('Error creating schedule:', scheduleError);
+
+              // If this is auto-recovery from failed reschedule, return error
+              if (needsNewSchedule) {
+                return reply.code(500).send({
+                  success: false,
+                  error: `Failed to schedule content: ${scheduleError instanceof Error ? scheduleError.message : 'Unknown error'}`,
+                  data: null,
+                });
+              }
             }
           }
           // Case 2: Cancel schedule (was scheduled, now isn't)
