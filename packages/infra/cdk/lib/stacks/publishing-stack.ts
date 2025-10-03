@@ -331,6 +331,15 @@ export class PublishingStack extends cdk.Stack {
               actions: ['sns:Publish'],
               resources: [alertTopic.topicArn],
             }),
+            // CloudWatch custom metrics for DLQ Processor
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['cloudwatch:PutMetricData'],
+              resources: ['*'],
+              conditions: {
+                StringEquals: { 'cloudwatch:namespace': 'Postolio/DLQ' },
+              },
+            }),
           ],
         }),
       },
