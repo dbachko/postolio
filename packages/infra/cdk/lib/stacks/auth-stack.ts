@@ -243,11 +243,11 @@ export class AuthStack extends cdk.Stack {
         GOOGLE_CLIENT_ID: props.googleClientId || '',
         GOOGLE_CLIENT_SECRET: props.googleClientSecret || '',
       },
-      logGroup: new logs.LogGroup(this, 'TokenServiceLogGroup', {
-        logGroupName: `/aws/lambda/${prefix}-token-service`,
-        retention: logs.RetentionDays.TWO_WEEKS,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }),
+      logGroup: logs.LogGroup.fromLogGroupName(
+        this,
+        'TokenServiceLogGroup',
+        `/aws/lambda/${prefix}-token-service`
+      ),
       tracing: lambda.Tracing.ACTIVE,
     });
 

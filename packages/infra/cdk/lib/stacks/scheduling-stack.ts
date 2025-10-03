@@ -418,11 +418,11 @@ export class SchedulingStack extends cdk.Stack {
           PROCESSING_QUEUE_URL: scheduleProcessingQueue.queueUrl,
           KMS_KEY_ID: encryptionKey.keyId,
         },
-        logGroup: new logs.LogGroup(this, 'ScheduleManagementLogGroup', {
-          logGroupName: `/aws/lambda/${prefix}-schedule-management`,
-          retention: logs.RetentionDays.TWO_WEEKS,
-          removalPolicy: cdk.RemovalPolicy.DESTROY,
-        }),
+        logGroup: logs.LogGroup.fromLogGroupName(
+          this,
+          'ScheduleManagementLogGroup',
+          `/aws/lambda/${prefix}-schedule-management`
+        ),
         tracing: lambda.Tracing.ACTIVE,
       }
     );
@@ -452,11 +452,11 @@ export class SchedulingStack extends cdk.Stack {
           VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
           KMS_KEY_ID: encryptionKey.keyId,
         },
-        logGroup: new logs.LogGroup(this, 'ScheduleCleanupLogGroup', {
-          logGroupName: `/aws/lambda/${prefix}-schedule-cleanup`,
-          retention: logs.RetentionDays.TWO_WEEKS,
-          removalPolicy: cdk.RemovalPolicy.DESTROY,
-        }),
+        logGroup: logs.LogGroup.fromLogGroupName(
+          this,
+          'ScheduleCleanupLogGroup',
+          `/aws/lambda/${prefix}-schedule-cleanup`
+        ),
         tracing: lambda.Tracing.ACTIVE,
       }
     );
@@ -482,11 +482,11 @@ export class SchedulingStack extends cdk.Stack {
         EVENT_BUS_NAME: this.eventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
       },
-      logGroup: new logs.LogGroup(this, 'StatusSyncLogGroup', {
-        logGroupName: `/aws/lambda/${prefix}-status-sync`,
-        retention: logs.RetentionDays.TWO_WEEKS,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }),
+      logGroup: logs.LogGroup.fromLogGroupName(
+        this,
+        'StatusSyncLogGroup',
+        `/aws/lambda/${prefix}-status-sync`
+      ),
       tracing: lambda.Tracing.ACTIVE,
     });
 
