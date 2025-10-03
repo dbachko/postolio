@@ -55,7 +55,6 @@ class CampaignJobService {
         },
       });
 
-      // No campaign progress broadcast — intentionally removed
 
       // Get campaign and validate ownership
       const campaign = await prisma.campaign.findFirst({
@@ -100,7 +99,6 @@ class CampaignJobService {
       }
 
       // No numeric progress updates stored in DB
-      // No campaign progress broadcast — intentionally removed
 
       // Generate preview content using themes from campaign config
       const contentRequests: ContentGenerationRequest[] = config.themes.map((theme: string) => ({
@@ -121,7 +119,6 @@ class CampaignJobService {
 
         // Update progress per generated example
         // No numeric progress updates stored in DB
-        // No campaign progress broadcast — intentionally removed
 
         if (request) {
           const content = await generateInstagramContent(
@@ -151,8 +148,7 @@ class CampaignJobService {
       // Trim to exact count requested
       examplePosts = examplePosts.slice(0, exampleCount);
 
-      // No numeric progress updates stored in DB
-      // No campaign progress broadcast — intentionally removed
+      
 
       // Check if preview posts already exist for this campaign
       const existingPreviews = await prisma.content.findMany({
@@ -286,7 +282,7 @@ class CampaignJobService {
     return this.runningJobs.has(campaignId);
   }
 
-  // Removed getCampaignStatus — use WebSocket events for realtime updates
+  // WebSocket events handle realtime updates
 }
 
 export const campaignJobService = new CampaignJobService();

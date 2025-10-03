@@ -696,8 +696,6 @@ class ApiClient {
     });
   }
 
-  // Removed getCampaignStatus — replaced by WebSocket updates
-
   async updateCampaign(
     campaignId: string,
     updates: {

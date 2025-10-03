@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 
 import { campaignService, type CampaignConfig } from '../services/campaign.js';
 import { CampaignStatus } from '@postolio/database';
-// import { campaignJobService } from '../services/campaign-jobs.js'; // legacy polling removed
+// import { campaignJobService } from '../services/campaign-jobs.js';
 import { pauseResumeRateLimiter, campaignRateLimiter } from '../services/rate-limiter.js';
 import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js';
 import { regenerationService } from '../services/regeneration-queue.js';
@@ -149,9 +149,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
-
-  // Removed legacy polling endpoint /status/:id — WebSocket updates replace it
-
   // Generate campaign preview
   fastify.post<{ Body: PreviewCampaignBody }>(
     '/preview',
