@@ -85,6 +85,13 @@ export class ApiStack extends cdk.Stack {
       `/postolio/${environment}/cdn/images-distribution-id`
     );
 
+    // Optional: Scheduling EventBridge bus name used by API to emit domain events
+    const schedulingEventBusNameParam = ssm.StringParameter.fromStringParameterName(
+      this,
+      'SchedulingEventBusNameParam',
+      `/postolio/${environment}/scheduling/event-bus-name`
+    );
+
     // ==================== Import Foundation Resources ====================
     // Import VPC from Foundation stack (for CDK lookup, must use valueFromLookup)
     const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
@@ -331,11 +338,14 @@ export class ApiStack extends cdk.Stack {
               ],
               resources: [`arn:aws:s3:::${imagesBucketName}`, `arn:aws:s3:::${imagesBucketName}/*`],
             }),
-            // EventBridge permissions to emit domain events to the default bus
+            // EventBridge permissions for domain events (default and scheduling bus)
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['events:PutEvents'],
-              resources: [`arn:aws:events:${this.region}:${this.account}:event-bus/default`],
+              resources: [
+                `arn:aws:events:${this.region}:${this.account}:event-bus/default`,
+                `arn:aws:events:${this.region}:${this.account}:event-bus/${schedulingEventBusNameParam.stringValue}`,
+              ],
             }),
           ],
         }),
@@ -414,6 +424,8 @@ export class ApiStack extends cdk.Stack {
             S3_IMAGES_BUCKET: imagesBucketName,
             CLOUDFRONT_DOMAIN: imagesCdnDomain,
             CLOUDFRONT_DISTRIBUTION_ID: imagesCdnDistributionId,
+            // EventBridge bus for platform events; API code falls back to 'default' if unset
+            EVENT_BUS_NAME: schedulingEventBusNameParam.stringValue,
             ...(redisEndpointParam && { REDIS_HOST: redisEndpointParam.stringValue }),
             ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
