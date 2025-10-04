@@ -334,6 +334,23 @@ export class SchedulingStack extends cdk.Stack {
       alertTopic.addSubscription(new snsSubscriptions.EmailSubscription(alertEmail));
     }
 
+    // ==================== Cross-Stack Parameters (from Publishing) ====================
+    // These parameters are created by the Publishing stack and are used at runtime to create schedules
+    let publisherLambdaArnParam: string | undefined;
+    let schedulerRoleArnParam: string | undefined;
+    try {
+      publisherLambdaArnParam = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/publishing/publisher-lambda-arn`
+      );
+      schedulerRoleArnParam = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/publishing/scheduler-role-arn`
+      );
+    } catch (e) {
+      console.log('Publishing SSM parameters not found at synth time; proceeding without env injection');
+    }
+
     // ==================== Lambda Function Shared Role ====================
     const schedulingLambdaRole = new iam.Role(this, 'SchedulingLambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -454,6 +471,8 @@ export class SchedulingStack extends cdk.Stack {
           KMS_KEY_ID: encryptionKey.keyId,
           // Use default scheduler group unless overridden at runtime
           SCHEDULER_GROUP_NAME: 'default',
+          ...(publisherLambdaArnParam ? { PUBLISHER_LAMBDA_ARN: publisherLambdaArnParam } : {}),
+          ...(schedulerRoleArnParam ? { SCHEDULER_ROLE_ARN: schedulerRoleArnParam } : {}),
         },
         logGroup: logs.LogGroup.fromLogGroupName(
           this,
