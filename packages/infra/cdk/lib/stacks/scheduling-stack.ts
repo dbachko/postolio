@@ -170,6 +170,8 @@ export class SchedulingStack extends cdk.Stack {
       },
     });
 
+    // (No additional status-related GSI; standardized on StatusIndex)
+
     // Add GSI for brand-based queries
     this.schedulesTable.addGlobalSecondaryIndex({
       indexName: 'BrandIndex',
@@ -442,6 +444,7 @@ export class SchedulingStack extends cdk.Stack {
           LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
           // AWS_REGION is automatically provided by Lambda runtime
           SCHEDULES_TABLE: this.schedulesTable.tableName,
+          // Use standardized StatusIndex (status + scheduledAt)
           SCHEDULES_TABLE_STATUS_INDEX: 'StatusIndex',
           SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
           SCHEDULES_TABLE_BRAND_INDEX: 'BrandIndex',
