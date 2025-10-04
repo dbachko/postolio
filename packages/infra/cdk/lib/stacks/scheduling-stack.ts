@@ -584,6 +584,18 @@ export class SchedulingStack extends cdk.Stack {
 
     cleanupRule.addTarget(new targets.LambdaFunction(scheduleCleanupFunction));
 
+    // Route platform publishing events to Status Sync
+    const publishingEventsRule = new events.Rule(this, 'PublishingEventsRule', {
+      ruleName: `${prefix}-publishing-events-rule`,
+      description: 'Forward publishing outcomes to status-sync for DB updates',
+      eventBus: this.eventBus,
+      eventPattern: {
+        source: ['postolio.platform'],
+        detailType: ['post.published', 'post.failed', 'post.skipped'],
+      },
+    });
+    publishingEventsRule.addTarget(new targets.LambdaFunction(statusSyncFunction));
+
     // ==================== Function URLs ====================
     const scheduleManagementUrl = scheduleManagementFunction.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,

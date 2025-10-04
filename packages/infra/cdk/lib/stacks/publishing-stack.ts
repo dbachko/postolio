@@ -276,7 +276,18 @@ export class PublishingStack extends cdk.Stack {
       })
     );
 
-    // ==================== EventBridge Custom Bus ====================
+    // ==================== EventBridge Buses ====================
+    // Use Scheduling EventBus for cross-service status events (status-sync listens there)
+    const schedulingEventBusName = ssm.StringParameter.valueFromLookup(
+      this,
+      `/postolio/${environment}/scheduling/event-bus-name`
+    );
+    const schedulingEventBusArn = cdk.Stack.of(this).formatArn({
+      service: 'events',
+      resource: 'event-bus',
+      resourceName: schedulingEventBusName,
+    });
+    // Retain local publishing bus (optional) for future use
     const publishingEventBus = new events.EventBus(this, 'PublishingEventBus', {
       eventBusName: `${prefix}-events`,
     });
@@ -369,11 +380,11 @@ export class PublishingStack extends cdk.Stack {
                 campaignDLQ.queueArn,
               ],
             }),
-            // EventBridge permissions
+            // EventBridge permissions (allow put to Scheduling bus for status events)
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['events:PutEvents'],
-              resources: [publishingEventBus.eventBusArn],
+              resources: [schedulingEventBusArn],
             }),
             // EventBridge Scheduler permissions for retry scheduling and cleanup
             new iam.PolicyStatement({
@@ -467,7 +478,7 @@ export class PublishingStack extends cdk.Stack {
         PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         RETRY_QUEUE_URL: this.retryQueue.queueUrl,
         DLQ_URL: this.deadLetterQueue.queueUrl,
-        EVENT_BUS_NAME: publishingEventBus.eventBusName,
+        EVENT_BUS_NAME: schedulingEventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
         // OAuth configuration
@@ -545,7 +556,7 @@ export class PublishingStack extends cdk.Stack {
         PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         RETRY_QUEUE_URL: this.retryQueue.queueUrl,
         DLQ_URL: this.deadLetterQueue.queueUrl,
-        EVENT_BUS_NAME: publishingEventBus.eventBusName,
+        EVENT_BUS_NAME: schedulingEventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
         // Scheduler integration for retries
@@ -583,7 +594,7 @@ export class PublishingStack extends cdk.Stack {
         SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
         DLQ_STATE_TABLE_NAME: dlqStateTable.tableName,
         DLQ_URL: this.deadLetterQueue.queueUrl,
-        EVENT_BUS_NAME: publishingEventBus.eventBusName,
+        EVENT_BUS_NAME: schedulingEventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
       },
