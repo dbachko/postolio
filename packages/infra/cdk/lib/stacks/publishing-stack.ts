@@ -405,18 +405,21 @@ export class PublishingStack extends cdk.Stack {
     publisherFunction.grantInvoke(schedulerInvocationRole);
 
     // cdk-nag: The grant adds a wildcard to support versions/aliases. Suppress with rationale.
-    NagSuppressions.addResourceSuppressions(
-      schedulerInvocationRole,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'Scheduler target role must allow invoking Lambda across versions/aliases; grantInvoke adds wildcard resource.',
-          appliesTo: ['Resource::*'],
-        },
-      ],
-      true
-    );
+    const schedulerDefaultPolicy = schedulerInvocationRole.node.tryFindChild('DefaultPolicy');
+    if (schedulerDefaultPolicy) {
+      NagSuppressions.addResourceSuppressions(
+        schedulerDefaultPolicy,
+        [
+          {
+            id: 'AwsSolutions-IAM5',
+            reason:
+              'Scheduler target role must allow invoking Lambda across versions/aliases; grantInvoke adds wildcard resource.',
+            appliesTo: ['Resource::*'],
+          },
+        ],
+        true
+      );
+    }
 
     // Expose key ARNs via SSM for cross-stack/runtime discovery
     new ssm.StringParameter(this, 'PublisherLambdaArnParameter', {
