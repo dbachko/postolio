@@ -46,6 +46,11 @@ export class PublishingStack extends cdk.Stack {
       this,
       `/postolio/${environment}/scheduling/schedules-table-name`
     );
+    const schedulesTableArn = cdk.Stack.of(this).formatArn({
+      service: 'dynamodb',
+      resource: 'table',
+      resourceName: schedulesTableName,
+    });
 
     // ==================== VPC Configuration ====================
     // Import VPC and security groups from Foundation stack
@@ -273,6 +278,18 @@ export class PublishingStack extends cdk.Stack {
       inlinePolicies: {
         PublishingPolicy: new iam.PolicyDocument({
           statements: [
+            // DynamoDB access to Schedules table
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'dynamodb:GetItem',
+                'dynamodb:PutItem',
+                'dynamodb:UpdateItem',
+                'dynamodb:Query',
+                'dynamodb:Scan',
+              ],
+              resources: [schedulesTableArn, `${schedulesTableArn}/index/*`],
+            }),
             // SQS permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
