@@ -19,6 +19,14 @@ const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const eventBridge = new EventBridge({});
 
+function getSchedulesTableName(): string {
+  const table = process.env.SCHEDULES_TABLE;
+  if (!table) {
+    throw new Error('Schedules table not configured');
+  }
+  return table;
+}
+
 export interface ConsistencyCheckResult {
   isConsistent: boolean;
   pgCampaign: PrismaCampaign | null;
@@ -220,7 +228,7 @@ export class CampaignConsistencyHandler {
 
     await docClient.send(
       new PutCommand({
-        TableName: process.env.CAMPAIGNS_TABLE || process.env.SCHEDULES_TABLE!,
+        TableName: getSchedulesTableName(),
         Item: dynamoCampaign,
       })
     );
@@ -359,7 +367,7 @@ export class CampaignConsistencyHandler {
       // Test DynamoDB connection
       await docClient.send(
         new GetCommand({
-          TableName: process.env.CAMPAIGNS_TABLE || process.env.SCHEDULES_TABLE!,
+          TableName: getSchedulesTableName(),
           Key: { pk: 'HEALTH_CHECK', sk: 'TEST' },
         })
       );

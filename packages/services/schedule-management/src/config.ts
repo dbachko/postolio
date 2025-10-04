@@ -1,16 +1,20 @@
 export const getDynamoDBConfig = () => ({
   schedulesTable: process.env.SCHEDULES_TABLE!,
-  campaignsTable: process.env.CAMPAIGNS_TABLE!,
   scheduleGroupName: process.env.SCHEDULER_GROUP_NAME || 'default',
   indexes: {
     brand: {
-      name: process.env.SCHEDULES_TABLE_BRAND_INDEX!,
+      name: process.env.SCHEDULES_TABLE_BRAND_INDEX,
       partitionKey: 'gsi1pk',
       sortKey: 'gsi1sk',
     },
     status: {
-      name: process.env.SCHEDULES_TABLE_STATUS_INDEX!,
+      name: process.env.SCHEDULES_TABLE_STATUS_INDEX,
       partitionKey: 'status',
+      sortKey: 'scheduledAt',
+    },
+    schedule: {
+      name: process.env.SCHEDULES_TABLE_SCHEDULE_INDEX || 'GSI-ScheduleId',
+      partitionKey: 'scheduleId',
       sortKey: 'scheduledAt',
     },
     content: {

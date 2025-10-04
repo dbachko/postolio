@@ -12,12 +12,14 @@ const logger = createServiceLogger('campaign-utils');
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-function requireEnv(name: string): string | undefined {
-  const val = process.env[name];
-  if (!val) {
-    logger.warn(`Missing required environment variable`, { variable: name });
+function getSchedulesTableName(): string | undefined {
+  const table = process.env.SCHEDULES_TABLE;
+  if (!table) {
+    logger.warn('Missing schedules table configuration', {
+      variable: 'SCHEDULES_TABLE',
+    });
   }
-  return val;
+  return table;
 }
 
 export interface DynamoCampaign {
@@ -50,7 +52,7 @@ export interface Schedule {
 export async function getCampaignByContentId(contentId: string): Promise<DynamoCampaign | null> {
   try {
     // Get the schedule record to find the campaignId
-    const schedulesTable = requireEnv('SCHEDULES_TABLE');
+    const schedulesTable = getSchedulesTableName();
     if (!schedulesTable) {
       // Fail-open: cannot determine campaign without table; allow caller to proceed
       return null;
@@ -94,9 +96,9 @@ export async function getCampaignById(
   validateConsistency: boolean = false
 ): Promise<DynamoCampaign | null> {
   try {
-    const campaignsTable = process.env.CAMPAIGNS_TABLE || process.env.SCHEDULES_TABLE;
+    const campaignsTable = getSchedulesTableName();
     if (!campaignsTable) {
-      logger.warn('Missing campaign table configuration; skipping DynamoDB read', {
+      logger.warn('Missing schedules table configuration; skipping DynamoDB read', {
         operation: 'getCampaignById',
         campaignId,
       });
@@ -258,9 +260,9 @@ export async function createCampaign(
     updatedAt: now,
   };
 
-  const campaignsTable = process.env.CAMPAIGNS_TABLE || process.env.SCHEDULES_TABLE;
+  const campaignsTable = getSchedulesTableName();
   if (!campaignsTable) {
-    throw new Error('Campaigns table not configured');
+    throw new Error('Schedules table not configured');
   }
 
   await docClient.send(
@@ -280,9 +282,9 @@ export async function updateCampaignStatus(
   campaignId: string,
   status: DynamoCampaign['status']
 ): Promise<void> {
-  const campaignsTable = process.env.CAMPAIGNS_TABLE || process.env.SCHEDULES_TABLE;
+  const campaignsTable = getSchedulesTableName();
   if (!campaignsTable) {
-    throw new Error('Campaigns table not configured');
+    throw new Error('Schedules table not configured');
   }
 
   await docClient.send(

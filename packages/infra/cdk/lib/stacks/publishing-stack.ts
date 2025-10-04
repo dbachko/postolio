@@ -41,6 +41,12 @@ export class PublishingStack extends cdk.Stack {
     const { environment, alertEmail } = props;
     const prefix = `postolio-${environment}-publishing`;
 
+    // Import schedules table name from Scheduling stack via SSM Parameter Store
+    const schedulesTableName = ssm.StringParameter.valueFromLookup(
+      this,
+      `/postolio/${environment}/scheduling/schedules-table-name`
+    );
+
     // ==================== VPC Configuration ====================
     // Import VPC and security groups from Foundation stack
     let vpc: ec2.IVpc | undefined;
@@ -365,6 +371,7 @@ export class PublishingStack extends cdk.Stack {
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
         // AWS_REGION is automatically provided by Lambda runtime
+        SCHEDULES_TABLE: schedulesTableName,
         PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         RETRY_QUEUE_URL: this.retryQueue.queueUrl,
         DLQ_URL: this.deadLetterQueue.queueUrl,
@@ -407,6 +414,7 @@ export class PublishingStack extends cdk.Stack {
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
         // AWS_REGION is automatically provided by Lambda runtime
+        SCHEDULES_TABLE: schedulesTableName,
         PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         RETRY_QUEUE_URL: this.retryQueue.queueUrl,
         DLQ_URL: this.deadLetterQueue.queueUrl,
@@ -440,6 +448,7 @@ export class PublishingStack extends cdk.Stack {
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
         // AWS_REGION is automatically provided by Lambda runtime
+        SCHEDULES_TABLE: schedulesTableName,
         DLQ_URL: this.deadLetterQueue.queueUrl,
         EVENT_BUS_NAME: publishingEventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
@@ -476,6 +485,7 @@ export class PublishingStack extends cdk.Stack {
           ENVIRONMENT: environment,
           LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
           // AWS_REGION is automatically provided by Lambda runtime
+          SCHEDULES_TABLE: schedulesTableName,
           CAMPAIGN_DLQ_URL: campaignDLQ.queueUrl,
           EVENT_BUS_NAME: publishingEventBus.eventBusName,
           KMS_KEY_ID: encryptionKey.keyId,
