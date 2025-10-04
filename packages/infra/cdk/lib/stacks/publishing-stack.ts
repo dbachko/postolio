@@ -53,6 +53,17 @@ export class PublishingStack extends cdk.Stack {
       resourceName: schedulesTableName,
     });
 
+    // Import Token Service ARN for Function URL IAM auth
+    let tokenServiceArn: string | undefined;
+    try {
+      tokenServiceArn = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/auth/token-service-arn`
+      );
+    } catch {
+      // Optional: continue without explicit permission if not found
+    }
+
     // ==================== Internal DynamoDB Tables ====================
     // Retry attempts tracking table (per schedule)
     const retryTable = new dynamodb.Table(this, 'RetryQueueTable', {
@@ -399,6 +410,16 @@ export class PublishingStack extends cdk.Stack {
                 `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
               ],
             }),
+            // Allow invoking Token Service Function URL if ARN is available
+            ...(tokenServiceArn
+              ? [
+                  new iam.PolicyStatement({
+                    effect: iam.Effect.ALLOW,
+                    actions: ['lambda:InvokeFunctionUrl'],
+                    resources: [tokenServiceArn],
+                  }),
+                ]
+              : []),
             // SNS permissions for notifications
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,

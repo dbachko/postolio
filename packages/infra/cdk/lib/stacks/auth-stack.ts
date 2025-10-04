@@ -329,6 +329,13 @@ export class AuthStack extends cdk.Stack {
       description: 'Token Service Function URL',
     });
 
+    // Expose Token Service Function ARN for IAM-based callers (Function URL with AWS_IAM)
+    new ssm.StringParameter(this, 'TokenServiceArnParameter', {
+      parameterName: `/postolio/${environment}/auth/token-service-arn`,
+      stringValue: tokenServiceFunction.functionArn,
+      description: 'Token Service Lambda Function ARN',
+    });
+
     new ssm.StringParameter(this, 'TokenTableNameParameter', {
       parameterName: `/postolio/${environment}/auth/token-table-name`,
       stringValue: this.tokenTable.tableName,
