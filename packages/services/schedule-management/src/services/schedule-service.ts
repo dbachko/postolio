@@ -98,6 +98,7 @@ export interface Schedule {
   scheduleId: string;
   contentId: string;
   brandId: string;
+  userId: string;
   campaignId?: string;
   status: string;
   scheduledAt: string;
@@ -169,6 +170,7 @@ export class ScheduleService {
         scheduleId,
         contentId: request.contentId,
         brandId: request.brandId,
+        userId: request.userId,
         campaignId: request.campaignId,
         status: SCHEDULE_STATUS.SCHEDULED,
         scheduledAt: request.scheduledAt,
@@ -244,6 +246,7 @@ export class ScheduleService {
                 contentId: request.contentId,
                 brandId: request.brandId,
                 campaignId: request.campaignId,
+                userId: request.userId,
               }),
             },
             FlexibleTimeWindow: {
@@ -455,8 +458,15 @@ export class ScheduleService {
         updateExpressions.push('gsi1sk = :gsi1sk');
         expressionAttributeValues[':gsi1sk'] = updateRequest.scheduledAt;
 
+        // If userId provided on update, persist it
+        if (updateRequest.userId && updateRequest.userId !== (existingSchedule as any).userId) {
+          updateExpressions.push('userId = :userId');
+          expressionAttributeValues[':userId'] = updateRequest.userId;
+        }
+
         // Update EventBridge schedule
         const eventBridgeTime = formatEventBridgeScheduleTime(new Date(updateRequest.scheduledAt));
+        const userIdForTarget = updateRequest.userId ?? (existingSchedule as any).userId;
         try {
           const targetCfg2 = await getSchedulerTargetConfig();
           await schedulerClient.send(
@@ -467,12 +477,13 @@ export class ScheduleService {
               Target: {
                 Arn: targetCfg2.publisherArn,
                 RoleArn: targetCfg2.schedulerRoleArn,
-                Input: JSON.stringify({
-                  scheduleId,
-                  contentId: existingSchedule.contentId,
-                  brandId: existingSchedule.brandId,
-                  campaignId: updateRequest.campaignId || existingSchedule.campaignId,
-                }),
+              Input: JSON.stringify({
+                scheduleId,
+                contentId: existingSchedule.contentId,
+                brandId: existingSchedule.brandId,
+                campaignId: updateRequest.campaignId || existingSchedule.campaignId,
+                userId: userIdForTarget,
+              }),
               },
               FlexibleTimeWindow: { Mode: 'OFF' },
             })
@@ -488,12 +499,13 @@ export class ScheduleService {
                 Target: {
                   Arn: targetCfg2.publisherArn,
                   RoleArn: targetCfg2.schedulerRoleArn,
-                  Input: JSON.stringify({
-                    scheduleId,
-                    contentId: existingSchedule.contentId,
-                    brandId: existingSchedule.brandId,
-                    campaignId: updateRequest.campaignId || existingSchedule.campaignId,
-                  }),
+              Input: JSON.stringify({
+                scheduleId,
+                contentId: existingSchedule.contentId,
+                brandId: existingSchedule.brandId,
+                campaignId: updateRequest.campaignId || existingSchedule.campaignId,
+                userId: userIdForTarget,
+              }),
                 },
                 FlexibleTimeWindow: { Mode: 'OFF' },
               })
