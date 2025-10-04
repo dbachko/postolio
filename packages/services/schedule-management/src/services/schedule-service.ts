@@ -189,38 +189,78 @@ export class ScheduleService {
         ),
       };
 
-      await docClient.send(
-        new PutCommand({
-          TableName: this.config.schedulesTable,
-          Item: schedule,
-          ConditionExpression: 'attribute_not_exists(pk)', // Prevent overwrites
-        })
-      );
+      // Try to insert; if a schedule for this content already exists, treat as idempotent and update
+      try {
+        await docClient.send(
+          new PutCommand({
+            TableName: this.config.schedulesTable,
+            Item: schedule,
+            ConditionExpression: 'attribute_not_exists(pk)', // Prevent overwrites
+          })
+        );
+      } catch (putErr) {
+        if ((putErr as Error)?.name === 'ConditionalCheckFailedException') {
+          // Existing schedule — update time instead of failing
+          const existingRes = await docClient.send(
+            new GetCommand({
+              TableName: this.config.schedulesTable,
+              Key: { pk: `SCHEDULE#${request.contentId}`, sk: 'METADATA' },
+            })
+          );
+          const existing = existingRes.Item as Schedule | undefined;
+          if (existing) {
+            // If same time, return existing idempotently
+            if (existing.scheduledAt === request.scheduledAt) {
+              logger.info('Idempotent create: schedule already exists with same time', {
+                scheduleId: existing.scheduleId,
+              });
+              return { success: true, schedule: existing };
+            }
+
+            // Use updateSchedule to update time and EB schedule
+            return await this.updateSchedule(existing.scheduleId, {
+              scheduledAt: request.scheduledAt,
+            });
+          }
+        }
+        throw putErr;
+      }
 
       // 3. Create EventBridge schedule
       const eventBridgeTime = formatEventBridgeScheduleTime(new Date(request.scheduledAt));
 
-      const targetCfg = await getSchedulerTargetConfig();
-      await schedulerClient.send(
-        new CreateScheduleCommand({
-          Name: scheduleId,
-          GroupName: targetCfg.groupName,
-          ScheduleExpression: `at(${eventBridgeTime})`,
-          Target: {
-            Arn: targetCfg.publisherArn,
-            RoleArn: targetCfg.schedulerRoleArn,
-            Input: JSON.stringify({
-              scheduleId,
-              contentId: request.contentId,
-              brandId: request.brandId,
-              campaignId: request.campaignId,
-            }),
-          },
-          FlexibleTimeWindow: {
-            Mode: 'OFF',
-          },
-        })
-      );
+      try {
+        const targetCfg = await getSchedulerTargetConfig();
+        await schedulerClient.send(
+          new CreateScheduleCommand({
+            Name: scheduleId,
+            GroupName: targetCfg.groupName,
+            ScheduleExpression: `at(${eventBridgeTime})`,
+            Target: {
+              Arn: targetCfg.publisherArn,
+              RoleArn: targetCfg.schedulerRoleArn,
+              Input: JSON.stringify({
+                scheduleId,
+                contentId: request.contentId,
+                brandId: request.brandId,
+                campaignId: request.campaignId,
+              }),
+            },
+            FlexibleTimeWindow: {
+              Mode: 'OFF',
+            },
+          })
+        );
+      } catch (schedulerError) {
+        // Roll back the DynamoDB item to allow clean retry
+        await docClient.send(
+          new DeleteCommand({
+            TableName: this.config.schedulesTable,
+            Key: { pk: `SCHEDULE#${request.contentId}`, sk: 'METADATA' },
+          })
+        );
+        throw schedulerError;
+      }
 
       // 4. Emit schedule created event
       await this.emitScheduleEvent('schedule.created', schedule);
