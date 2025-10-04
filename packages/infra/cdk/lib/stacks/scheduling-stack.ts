@@ -452,6 +452,8 @@ export class SchedulingStack extends cdk.Stack {
           EVENT_BUS_NAME: this.eventBus.eventBusName,
           PROCESSING_QUEUE_URL: scheduleProcessingQueue.queueUrl,
           KMS_KEY_ID: encryptionKey.keyId,
+          // Use default scheduler group unless overridden at runtime
+          SCHEDULER_GROUP_NAME: 'default',
         },
         logGroup: logs.LogGroup.fromLogGroupName(
           this,
@@ -487,6 +489,7 @@ export class SchedulingStack extends cdk.Stack {
           SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
           VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
           KMS_KEY_ID: encryptionKey.keyId,
+          SCHEDULER_GROUP_NAME: 'default',
         },
         logGroup: logs.LogGroup.fromLogGroupName(
           this,

@@ -396,6 +396,27 @@ export class PublishingStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
     });
 
+    // Role assumed by EventBridge Scheduler to invoke the Publisher Lambda
+    const schedulerInvocationRole = new iam.Role(this, 'PublishingSchedulerInvocationRole', {
+      assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
+      description: 'Allows EventBridge Scheduler to invoke the Publisher Lambda',
+    });
+    // Grant invoke permissions to the scheduler role
+    publisherFunction.grantInvoke(schedulerInvocationRole);
+
+    // Expose key ARNs via SSM for cross-stack/runtime discovery
+    new ssm.StringParameter(this, 'PublisherLambdaArnParameter', {
+      parameterName: `/postolio/${environment}/publishing/publisher-lambda-arn`,
+      stringValue: publisherFunction.functionArn,
+      description: 'Publisher Lambda ARN',
+    });
+
+    new ssm.StringParameter(this, 'PublishingSchedulerRoleArnParameter', {
+      parameterName: `/postolio/${environment}/publishing/scheduler-role-arn`,
+      stringValue: schedulerInvocationRole.roleArn,
+      description: 'EventBridge Scheduler target role ARN for invoking Publisher Lambda',
+    });
+
     // 2. Retry Handler Function
     const retryHandlerFunction = new lambdaNodejs.NodejsFunction(this, 'RetryHandlerFunction', {
       functionName: `${prefix}-retry-handler`,
@@ -421,6 +442,10 @@ export class PublishingStack extends cdk.Stack {
         EVENT_BUS_NAME: publishingEventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
+        // Scheduler integration for retries
+        SCHEDULER_GROUP_NAME: 'default',
+        PUBLISHER_LAMBDA_ARN: publisherFunction.functionArn,
+        SCHEDULER_ROLE_ARN: schedulerInvocationRole.roleArn,
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,

@@ -24,6 +24,7 @@ import {
   UpdateScheduleCommand,
 } from '@aws-sdk/client-scheduler';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import {
   getCampaignById,
   canCampaignSchedule,
@@ -44,6 +45,38 @@ const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 const eventBridge = tracer.captureAWSv3Client(new EventBridgeClient({}));
+const ssmClient = tracer.captureAWSv3Client(new SSMClient({}));
+
+async function getSchedulerTargetConfig() {
+  const environment = process.env.ENVIRONMENT || 'dev';
+  let publisherArn = process.env.PUBLISHER_LAMBDA_ARN;
+  let schedulerRoleArn = process.env.SCHEDULER_ROLE_ARN;
+  const groupName = process.env.SCHEDULER_GROUP_NAME || 'default';
+
+  if (!publisherArn) {
+    const param = await ssmClient.send(
+      new GetParameterCommand({
+        Name: `/postolio/${environment}/publishing/publisher-lambda-arn`,
+      })
+    );
+    publisherArn = param.Parameter?.Value;
+  }
+
+  if (!schedulerRoleArn) {
+    const param = await ssmClient.send(
+      new GetParameterCommand({
+        Name: `/postolio/${environment}/publishing/scheduler-role-arn`,
+      })
+    );
+    schedulerRoleArn = param.Parameter?.Value;
+  }
+
+  if (!publisherArn || !schedulerRoleArn) {
+    throw new Error('Missing scheduler target configuration (publisherArn or schedulerRoleArn)');
+  }
+
+  return { publisherArn, schedulerRoleArn, groupName } as const;
+}
 
 export interface ScheduleRequest {
   contentId: string;
@@ -167,14 +200,15 @@ export class ScheduleService {
       // 3. Create EventBridge schedule
       const eventBridgeTime = formatEventBridgeScheduleTime(new Date(request.scheduledAt));
 
+      const targetCfg = await getSchedulerTargetConfig();
       await schedulerClient.send(
         new CreateScheduleCommand({
           Name: scheduleId,
-          GroupName: this.config.scheduleGroupName,
+          GroupName: targetCfg.groupName,
           ScheduleExpression: `at(${eventBridgeTime})`,
           Target: {
-            Arn: process.env.PUBLISHER_LAMBDA_ARN!,
-            RoleArn: process.env.SCHEDULER_ROLE_ARN!,
+            Arn: targetCfg.publisherArn,
+            RoleArn: targetCfg.schedulerRoleArn,
             Input: JSON.stringify({
               scheduleId,
               contentId: request.contentId,
@@ -384,14 +418,15 @@ export class ScheduleService {
         // Update EventBridge schedule
         const eventBridgeTime = formatEventBridgeScheduleTime(new Date(updateRequest.scheduledAt));
 
+        const targetCfg2 = await getSchedulerTargetConfig();
         await schedulerClient.send(
           new UpdateScheduleCommand({
             Name: scheduleId,
-            GroupName: this.config.scheduleGroupName,
+            GroupName: targetCfg2.groupName,
             ScheduleExpression: `at(${eventBridgeTime})`,
             Target: {
-              Arn: process.env.PUBLISHER_LAMBDA_ARN!,
-              RoleArn: process.env.SCHEDULER_ROLE_ARN!,
+              Arn: targetCfg2.publisherArn,
+              RoleArn: targetCfg2.schedulerRoleArn,
               Input: JSON.stringify({
                 scheduleId,
                 contentId: existingSchedule.contentId,
@@ -502,7 +537,7 @@ export class ScheduleService {
         await schedulerClient.send(
           new DeleteScheduleCommand({
             Name: scheduleId,
-            GroupName: this.config.scheduleGroupName,
+            GroupName: (await getSchedulerTargetConfig()).groupName,
           })
         );
       } catch (schedulerError) {
@@ -601,14 +636,15 @@ export class ScheduleService {
       );
 
       // Test EventBridge connectivity
+      const targetCfg = await getSchedulerTargetConfig();
       await schedulerClient.send(
         new CreateScheduleCommand({
           Name: 'health-check-test',
-          GroupName: this.config.scheduleGroupName,
+          GroupName: targetCfg.groupName,
           ScheduleExpression: 'at(2030-01-01T00:00:00)',
           Target: {
-            Arn: process.env.PUBLISHER_LAMBDA_ARN!,
-            RoleArn: process.env.SCHEDULER_ROLE_ARN!,
+            Arn: targetCfg.publisherArn,
+            RoleArn: targetCfg.schedulerRoleArn,
             Input: JSON.stringify({ test: true }),
           },
           FlexibleTimeWindow: { Mode: 'OFF' },
@@ -619,7 +655,7 @@ export class ScheduleService {
       await schedulerClient.send(
         new DeleteScheduleCommand({
           Name: 'health-check-test',
-          GroupName: this.config.scheduleGroupName,
+          GroupName: targetCfg.groupName,
         })
       );
 
