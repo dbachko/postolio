@@ -457,28 +457,51 @@ export class ScheduleService {
 
         // Update EventBridge schedule
         const eventBridgeTime = formatEventBridgeScheduleTime(new Date(updateRequest.scheduledAt));
-
-        const targetCfg2 = await getSchedulerTargetConfig();
-        await schedulerClient.send(
-          new UpdateScheduleCommand({
-            Name: scheduleId,
-            GroupName: targetCfg2.groupName,
-            ScheduleExpression: `at(${eventBridgeTime})`,
-            Target: {
-              Arn: targetCfg2.publisherArn,
-              RoleArn: targetCfg2.schedulerRoleArn,
-              Input: JSON.stringify({
-                scheduleId,
-                contentId: existingSchedule.contentId,
-                brandId: existingSchedule.brandId,
-                campaignId: updateRequest.campaignId || existingSchedule.campaignId,
-              }),
-            },
-            FlexibleTimeWindow: {
-              Mode: 'OFF',
-            },
-          })
-        );
+        try {
+          const targetCfg2 = await getSchedulerTargetConfig();
+          await schedulerClient.send(
+            new UpdateScheduleCommand({
+              Name: scheduleId,
+              GroupName: targetCfg2.groupName,
+              ScheduleExpression: `at(${eventBridgeTime})`,
+              Target: {
+                Arn: targetCfg2.publisherArn,
+                RoleArn: targetCfg2.schedulerRoleArn,
+                Input: JSON.stringify({
+                  scheduleId,
+                  contentId: existingSchedule.contentId,
+                  brandId: existingSchedule.brandId,
+                  campaignId: updateRequest.campaignId || existingSchedule.campaignId,
+                }),
+              },
+              FlexibleTimeWindow: { Mode: 'OFF' },
+            })
+          );
+        } catch (err) {
+          if ((err as Error)?.name === 'ResourceNotFoundException') {
+            const targetCfg2 = await getSchedulerTargetConfig();
+            await schedulerClient.send(
+              new CreateScheduleCommand({
+                Name: scheduleId,
+                GroupName: targetCfg2.groupName,
+                ScheduleExpression: `at(${eventBridgeTime})`,
+                Target: {
+                  Arn: targetCfg2.publisherArn,
+                  RoleArn: targetCfg2.schedulerRoleArn,
+                  Input: JSON.stringify({
+                    scheduleId,
+                    contentId: existingSchedule.contentId,
+                    brandId: existingSchedule.brandId,
+                    campaignId: updateRequest.campaignId || existingSchedule.campaignId,
+                  }),
+                },
+                FlexibleTimeWindow: { Mode: 'OFF' },
+              })
+            );
+          } else {
+            throw err;
+          }
+        }
       }
 
       if (updateRequest.caption !== undefined) {
