@@ -220,18 +220,25 @@ interface ScheduleRecord {
 async function getScheduleData(scheduleId: string): Promise<ScheduleRecord | null> {
   try {
     const result = await docClient.send(
-      new GetCommand({
+      new QueryCommand({
         TableName: process.env.SCHEDULES_TABLE!,
-        Key: {
-          pk: `SCHEDULE#${scheduleId}`,
-          sk: 'METADATA',
+        IndexName: process.env.SCHEDULES_TABLE_SCHEDULE_INDEX || 'ScheduleIdIndex',
+        KeyConditionExpression: 'scheduleId = :sid',
+        ExpressionAttributeValues: {
+          ':sid': scheduleId,
         },
+        Limit: 1,
       })
     );
 
-    return (result.Item as ScheduleRecord) || null;
-  } catch {
-    logger.warn('No schedule data found', { scheduleId });
+    const item = (result.Items && result.Items[0]) as ScheduleRecord | undefined;
+    if (!item) {
+      logger.warn('No schedule data found via GSI', { scheduleId });
+      return null;
+    }
+    return item;
+  } catch (err) {
+    logger.warn('Failed to read schedule via GSI', { scheduleId, error: (err as Error).message });
     return null;
   }
 }
@@ -332,25 +339,30 @@ async function recordRetryAttempt(
     })
   );
 
-  // Also update the main schedule record
-  await docClient.send(
-    new UpdateCommand({
-      TableName: process.env.SCHEDULES_TABLE!,
-      Key: {
-        pk: `SCHEDULE#${scheduleId}`,
-        sk: 'METADATA',
-      },
-      UpdateExpression: 'SET #retryCount = :count, #lastRetry = :timestamp',
-      ExpressionAttributeNames: {
-        '#retryCount': 'retryCount',
-        '#lastRetry': 'lastRetryAt',
-      },
-      ExpressionAttributeValues: {
-        ':count': attemptNumber,
-        ':timestamp': new Date().toISOString(),
-      },
-    })
-  );
+  // Also update the main schedule record (lookup keys via GSI)
+  const sched = await getScheduleData(scheduleId);
+  if (sched && sched.pk && sched.sk) {
+    await docClient.send(
+      new UpdateCommand({
+        TableName: process.env.SCHEDULES_TABLE!,
+        Key: {
+          pk: sched.pk,
+          sk: sched.sk,
+        },
+        UpdateExpression: 'SET #retryCount = :count, #lastRetry = :timestamp',
+        ExpressionAttributeNames: {
+          '#retryCount': 'retryCount',
+          '#lastRetry': 'lastRetryAt',
+        },
+        ExpressionAttributeValues: {
+          ':count': attemptNumber,
+          ':timestamp': new Date().toISOString(),
+        },
+      })
+    );
+  } else {
+    logger.warn('Could not update schedule retry fields; schedule not found via GSI', { scheduleId });
+  }
 }
 
 async function markAsFailed(
@@ -362,29 +374,34 @@ async function markAsFailed(
     // Analyze error to get structured information
     const errorAnalysis = retryStrategy.analyzeError(originalError || reason);
 
-    await docClient.send(
-      new UpdateCommand({
-        TableName: process.env.SCHEDULES_TABLE!,
-        Key: {
-          pk: `SCHEDULE#${scheduleId}`,
-          sk: 'METADATA',
-        },
-        UpdateExpression:
-          'SET #status = :status, #error = :error, #errorType = :errorType, #updatedAt = :updatedAt',
-        ExpressionAttributeNames: {
-          '#status': 'status',
-          '#error': 'schedulingError',
-          '#errorType': 'errorType',
-          '#updatedAt': 'updatedAt',
-        },
-        ExpressionAttributeValues: {
-          ':status': 'failed',
-          ':error': reason,
-          ':errorType': errorAnalysis.errorType,
-          ':updatedAt': new Date().toISOString(),
-        },
-      })
-    );
+    const sched = await getScheduleData(scheduleId);
+    if (sched && sched.pk && sched.sk) {
+      await docClient.send(
+        new UpdateCommand({
+          TableName: process.env.SCHEDULES_TABLE!,
+          Key: {
+            pk: sched.pk,
+            sk: sched.sk,
+          },
+          UpdateExpression:
+            'SET #status = :status, #error = :error, #errorType = :errorType, #updatedAt = :updatedAt',
+          ExpressionAttributeNames: {
+            '#status': 'status',
+            '#error': 'schedulingError',
+            '#errorType': 'errorType',
+            '#updatedAt': 'updatedAt',
+          },
+          ExpressionAttributeValues: {
+            ':status': 'failed',
+            ':error': reason,
+            ':errorType': errorAnalysis.errorType,
+            ':updatedAt': new Date().toISOString(),
+          },
+        })
+      );
+    } else {
+      logger.warn('Could not mark schedule as failed; schedule not found via GSI', { scheduleId, reason });
+    }
 
     // Log to audit table - wrapped in try/catch to prevent audit logging failures from causing recursion
     try {
