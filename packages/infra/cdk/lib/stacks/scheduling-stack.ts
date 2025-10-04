@@ -432,6 +432,16 @@ export class SchedulingStack extends cdk.Stack {
                 `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
               ],
             }),
+            // Allow passing the Scheduler target role (from Publishing stack) if available
+            ...(schedulerRoleArnParam
+              ? [
+                  new iam.PolicyStatement({
+                    effect: iam.Effect.ALLOW,
+                    actions: ['iam:PassRole'],
+                    resources: [schedulerRoleArnParam],
+                  }),
+                ]
+              : []),
           ],
         }),
       },
