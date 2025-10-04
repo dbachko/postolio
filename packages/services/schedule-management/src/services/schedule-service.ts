@@ -449,8 +449,14 @@ export class ScheduleService {
       const updateExpressions: string[] = [];
       const expressionAttributeNames: Record<string, string> = {};
       const expressionAttributeValues: Record<string, unknown> = {};
+      const hasTimeChange = !!(
+        updateRequest.scheduledAt && updateRequest.scheduledAt !== existingSchedule.scheduledAt
+      );
+      const wantsUserIdUpdate = !!(
+        updateRequest.userId && updateRequest.userId !== (existingSchedule as any).userId
+      );
 
-      if (updateRequest.scheduledAt && updateRequest.scheduledAt !== existingSchedule.scheduledAt) {
+      if (hasTimeChange) {
         updateExpressions.push('scheduledAt = :scheduledAt');
         expressionAttributeValues[':scheduledAt'] = updateRequest.scheduledAt;
 
@@ -459,7 +465,7 @@ export class ScheduleService {
         expressionAttributeValues[':gsi1sk'] = updateRequest.scheduledAt;
 
         // If userId provided on update, persist it
-        if (updateRequest.userId && updateRequest.userId !== (existingSchedule as any).userId) {
+        if (wantsUserIdUpdate) {
           updateExpressions.push('userId = :userId');
           expressionAttributeValues[':userId'] = updateRequest.userId;
         }
@@ -513,6 +519,45 @@ export class ScheduleService {
           } else {
             throw err;
           }
+        }
+      }
+
+      // If only userId changed (time stayed the same), update userId in Dynamo and
+      // also update the EventBridge schedule Target input so publisher receives userId
+      if (!hasTimeChange && wantsUserIdUpdate) {
+        updateExpressions.push('userId = :userId');
+        expressionAttributeValues[':userId'] = updateRequest.userId;
+
+        try {
+          const targetCfg = await getSchedulerTargetConfig();
+          const eventBridgeTime = formatEventBridgeScheduleTime(
+            new Date(existingSchedule.scheduledAt)
+          );
+          await schedulerClient.send(
+            new UpdateScheduleCommand({
+              Name: scheduleId,
+              GroupName: targetCfg.groupName,
+              ScheduleExpression: `at(${eventBridgeTime})`,
+              Target: {
+                Arn: targetCfg.publisherArn,
+                RoleArn: targetCfg.schedulerRoleArn,
+                Input: JSON.stringify({
+                  scheduleId,
+                  contentId: existingSchedule.contentId,
+                  brandId: existingSchedule.brandId,
+                  campaignId: updateRequest.campaignId || existingSchedule.campaignId,
+                  userId: updateRequest.userId,
+                }),
+              },
+              FlexibleTimeWindow: { Mode: 'OFF' },
+            })
+          );
+        } catch (err) {
+          logger.warn('Failed to update Scheduler target with new userId', {
+            scheduleId,
+            error: err,
+          });
+          // Continue with DynamoDB update even if Scheduler target update fails
         }
       }
 
