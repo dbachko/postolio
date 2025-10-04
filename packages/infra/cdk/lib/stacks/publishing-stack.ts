@@ -401,25 +401,20 @@ export class PublishingStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
       description: 'Allows EventBridge Scheduler to invoke the Publisher Lambda',
     });
-    // Grant invoke permissions to the scheduler role
-    publisherFunction.grantInvoke(schedulerInvocationRole);
+    // Grant invoke permissions to the scheduler role without wildcards
+    schedulerInvocationRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunction'],
+        resources: [
+          publisherFunction.functionArn,
+          `${publisherFunction.functionArn}:$LATEST`,
+        ],
+      })
+    );
 
     // cdk-nag: The grant adds a wildcard to support versions/aliases. Suppress with rationale.
-    const schedulerDefaultPolicy = schedulerInvocationRole.node.tryFindChild('DefaultPolicy');
-    if (schedulerDefaultPolicy) {
-      NagSuppressions.addResourceSuppressions(
-        schedulerDefaultPolicy,
-        [
-          {
-            id: 'AwsSolutions-IAM5',
-            reason:
-              'Scheduler target role must allow invoking Lambda across versions/aliases; grantInvoke adds wildcard resource.',
-            appliesTo: ['Resource::*'],
-          },
-        ],
-        true
-      );
-    }
+    // No wildcard permissions are used; no IAM5 suppression required.
 
     // Expose key ARNs via SSM for cross-stack/runtime discovery
     new ssm.StringParameter(this, 'PublisherLambdaArnParameter', {
