@@ -68,6 +68,9 @@ export interface Schedule {
   campaignId?: string;
   status: string;
   scheduledAt: string;
+  // Keys for Brand GSI
+  gsi1pk?: string;
+  gsi1sk?: string;
   platform: string;
   contentType: string;
   caption?: string;
@@ -136,6 +139,9 @@ export class ScheduleService {
         campaignId: request.campaignId,
         status: SCHEDULE_STATUS.SCHEDULED,
         scheduledAt: request.scheduledAt,
+        // Brand GSI keys for brand-based listing
+        gsi1pk: `BRAND#${request.brandId}`,
+        gsi1sk: request.scheduledAt,
         platform: request.platform,
         contentType: request.contentType,
         caption: request.caption,
@@ -221,7 +227,7 @@ export class ScheduleService {
       const result = await docClient.send(
         new QueryCommand({
           TableName: this.config.schedulesTable,
-          IndexName: 'GSI-ScheduleId',
+          IndexName: this.config.indexes.schedule.name,
           KeyConditionExpression: 'scheduleId = :scheduleId',
           ExpressionAttributeValues: {
             ':scheduleId': scheduleId,
@@ -263,9 +269,12 @@ export class ScheduleService {
 
       if (brandId) {
         // Query by brand using GSI
+        if (!this.config.indexes.brand.name) {
+          throw new Error('Brand index not configured');
+        }
         command = new QueryCommand({
           TableName: this.config.schedulesTable,
-          IndexName: 'GSI1',
+          IndexName: this.config.indexes.brand.name,
           KeyConditionExpression: 'gsi1pk = :brandKey',
           ExpressionAttributeValues: {
             ':brandKey': `BRAND#${brandId}`,
@@ -275,9 +284,12 @@ export class ScheduleService {
         });
       } else if (status) {
         // Query by status using GSI
+        if (!this.config.indexes.status.name) {
+          throw new Error('Status index not configured');
+        }
         command = new QueryCommand({
           TableName: this.config.schedulesTable,
-          IndexName: 'GSI2',
+          IndexName: this.config.indexes.status.name,
           KeyConditionExpression: 'status = :status',
           ExpressionAttributeValues: {
             ':status': status,
@@ -364,6 +376,10 @@ export class ScheduleService {
       if (updateRequest.scheduledAt && updateRequest.scheduledAt !== existingSchedule.scheduledAt) {
         updateExpressions.push('scheduledAt = :scheduledAt');
         expressionAttributeValues[':scheduledAt'] = updateRequest.scheduledAt;
+
+        // Maintain Brand GSI sort key alongside scheduledAt
+        updateExpressions.push('gsi1sk = :gsi1sk');
+        expressionAttributeValues[':gsi1sk'] = updateRequest.scheduledAt;
 
         // Update EventBridge schedule
         const eventBridgeTime = formatEventBridgeScheduleTime(new Date(updateRequest.scheduledAt));

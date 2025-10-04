@@ -144,7 +144,7 @@ export class SchedulingStack extends cdk.Stack {
       timeToLiveAttribute: 'ttl',
     });
 
-    // Add GSI for status and time-based queries
+    // Add GSI for status queries (status + scheduledAt)
     this.schedulesTable.addGlobalSecondaryIndex({
       indexName: 'StatusIndex',
       partitionKey: {
@@ -152,19 +152,33 @@ export class SchedulingStack extends cdk.Stack {
         type: dynamodb.AttributeType.STRING,
       },
       sortKey: {
-        name: 'scheduledTime',
+        name: 'scheduledAt',
         type: dynamodb.AttributeType.STRING,
       },
     });
 
+    // Add GSI for scheduleId lookups
     this.schedulesTable.addGlobalSecondaryIndex({
-      indexName: 'TimeIndex',
+      indexName: 'ScheduleIdIndex',
       partitionKey: {
-        name: 'datePartition',
+        name: 'scheduleId',
         type: dynamodb.AttributeType.STRING,
       },
       sortKey: {
-        name: 'scheduledTime',
+        name: 'scheduledAt',
+        type: dynamodb.AttributeType.STRING,
+      },
+    });
+
+    // Add GSI for brand-based queries
+    this.schedulesTable.addGlobalSecondaryIndex({
+      indexName: 'BrandIndex',
+      partitionKey: {
+        name: 'gsi1pk',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'gsi1sk',
         type: dynamodb.AttributeType.STRING,
       },
     });
@@ -427,7 +441,10 @@ export class SchedulingStack extends cdk.Stack {
           ENVIRONMENT: environment,
           LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
           // AWS_REGION is automatically provided by Lambda runtime
-          SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
+          SCHEDULES_TABLE: this.schedulesTable.tableName,
+          SCHEDULES_TABLE_STATUS_INDEX: 'StatusIndex',
+          SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
+          SCHEDULES_TABLE_BRAND_INDEX: 'BrandIndex',
           VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
           EVENT_BUS_NAME: this.eventBus.eventBusName,
           PROCESSING_QUEUE_URL: scheduleProcessingQueue.queueUrl,
@@ -463,7 +480,8 @@ export class SchedulingStack extends cdk.Stack {
           ENVIRONMENT: environment,
           LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
           // AWS_REGION is automatically provided by Lambda runtime
-          SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
+          SCHEDULES_TABLE: this.schedulesTable.tableName,
+          SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
           VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
           KMS_KEY_ID: encryptionKey.keyId,
         },
@@ -493,7 +511,10 @@ export class SchedulingStack extends cdk.Stack {
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
         // AWS_REGION is automatically provided by Lambda runtime
-        SCHEDULES_TABLE_NAME: this.schedulesTable.tableName,
+        SCHEDULES_TABLE: this.schedulesTable.tableName,
+        SCHEDULES_TABLE_STATUS_INDEX: 'StatusIndex',
+        SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
+        SCHEDULES_TABLE_BRAND_INDEX: 'BrandIndex',
         EVENT_BUS_NAME: this.eventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
       },
