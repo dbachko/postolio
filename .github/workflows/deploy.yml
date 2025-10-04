@@ -124,12 +124,16 @@ jobs:
           STACKS=()
           ALL_STACKS=("foundation" "auth" "scheduling" "publishing" "api" "web")
 
-          # Check if manual deployment with specific stacks
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.stacks }}" != "all" ]]; then
-            IFS=',' read -ra REQUESTED_STACKS <<< "${{ github.event.inputs.stacks }}"
-            for stack in "${REQUESTED_STACKS[@]}"; do
-              STACKS+=("\"$stack\"")
-            done
+          # Manual runs from the UI: deploy all stacks by default (or a specific list if provided)
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -n "${{ github.event.inputs.stacks }}" && "${{ github.event.inputs.stacks }}" != "all" ]]; then
+              IFS=',' read -ra REQUESTED_STACKS <<< "${{ github.event.inputs.stacks }}"
+              for stack in "${REQUESTED_STACKS[@]}"; do
+                STACKS+=("\"$stack\"")
+              done
+            else
+              for s in "${ALL_STACKS[@]}"; do STACKS+=("\"$s\""); done
+            fi
           else
             # Auto-detect changed stacks
             [[ "${{ steps.changes.outputs.foundation }}" == "true" ]] && STACKS+=("\"foundation\"")
@@ -194,49 +198,7 @@ jobs:
 
           echo "Stacks to deploy: $MATRIX"
 
-  # ============================================
-  # STEP 2: Run Tests (if PR)
-  # ============================================
-  test:
-    name: Test Changed Packages
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Fetch git references
-        run: |
-          git fetch origin ${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run linting
-        run: npx turbo lint --filter='...[origin/${{ github.base_ref || github.event.before }}]'
-
-      - name: Run type checking
-        run: |
-          npx turbo typecheck --filter='...[origin/${{ github.base_ref || github.event.before }}]' || \
-          npx turbo build --filter='...[origin/${{ github.base_ref || github.event.before }}]'
-
-      - name: Run tests
-        run: npx turbo test --filter='...[origin/${{ github.base_ref || github.event.before }}]'
+  # (PR tests are handled in .github/workflows/pr-checks.yml. Removed duplicate test job from deploy.)
 
   # ============================================
   # STEP 3: Build Docker Images (API only)
