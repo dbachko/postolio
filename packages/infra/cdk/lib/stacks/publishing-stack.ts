@@ -389,6 +389,7 @@ export class PublishingStack extends cdk.Stack {
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
         // AWS_REGION is automatically provided by Lambda runtime
         SCHEDULES_TABLE: schedulesTableName,
+        SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
         PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         RETRY_QUEUE_URL: this.retryQueue.queueUrl,
         DLQ_URL: this.deadLetterQueue.queueUrl,
@@ -465,6 +466,7 @@ export class PublishingStack extends cdk.Stack {
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
         // AWS_REGION is automatically provided by Lambda runtime
         SCHEDULES_TABLE: schedulesTableName,
+        SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
         PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         RETRY_QUEUE_URL: this.retryQueue.queueUrl,
         DLQ_URL: this.deadLetterQueue.queueUrl,
@@ -503,6 +505,7 @@ export class PublishingStack extends cdk.Stack {
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
         // AWS_REGION is automatically provided by Lambda runtime
         SCHEDULES_TABLE: schedulesTableName,
+        SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
         DLQ_URL: this.deadLetterQueue.queueUrl,
         EVENT_BUS_NAME: publishingEventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,

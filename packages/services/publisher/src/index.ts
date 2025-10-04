@@ -7,6 +7,7 @@ import {
   GetCommand,
   UpdateCommand,
   PutCommand,
+  QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -672,16 +673,18 @@ export const handler = async (event: PublishEvent): Promise<void> => {
 
 async function getSchedule(scheduleId: string): Promise<Schedule | undefined> {
   const result = await docClient.send(
-    new GetCommand({
+    new QueryCommand({
       TableName: process.env.SCHEDULES_TABLE!,
-      Key: {
-        pk: `SCHEDULE#${scheduleId}`,
-        sk: 'METADATA',
+      IndexName: process.env.SCHEDULES_TABLE_SCHEDULE_INDEX || 'ScheduleIdIndex',
+      KeyConditionExpression: 'scheduleId = :sid',
+      ExpressionAttributeValues: {
+        ':sid': scheduleId,
       },
+      Limit: 1,
     })
   );
 
-  const item = result.Item as Record<string, unknown> | undefined;
+  const item = (result.Items && result.Items[0]) as Record<string, unknown> | undefined;
   if (!item) return undefined;
   if (typeof item.platform !== 'string') {
     logger.warn('Schedule item missing platform field', { scheduleId });
@@ -888,23 +891,13 @@ async function createFailedScheduleEntry(
   userId: string,
   errorMessage: string
 ): Promise<void> {
-  await docClient.send(
-    new PutCommand({
-      TableName: process.env.SCHEDULES_TABLE!,
-      Item: {
-        pk: `SCHEDULE#${scheduleId}`,
-        sk: 'METADATA',
-        scheduleId,
-        brandId,
-        userId,
-        status: 'failed',
-        schedulingError: errorMessage,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        ttl: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60, // 7 days
-      },
-    })
-  );
+  // Avoid writing inconsistent records if the schedule does not exist
+  logger.warn('Not creating failed schedule entry because schedule not found', {
+    scheduleId,
+    brandId,
+    userId,
+    errorMessage,
+  });
 }
 
 async function updateScheduleStatus(
@@ -914,6 +907,12 @@ async function updateScheduleStatus(
   platformPostId?: string,
   platformUrl?: string
 ): Promise<void> {
+  // Find the schedule item via GSI to get the actual PK/SK
+  const schedule = await getSchedule(scheduleId);
+  if (!schedule || !('pk' in schedule) || !('sk' in schedule)) {
+    logger.warn('Cannot update schedule status; schedule not found or missing keys', { scheduleId, status });
+    return;
+  }
   let updateExpression = 'SET #status = :status, #updatedAt = :updatedAt';
 
   if (errorMessage) {
@@ -956,8 +955,9 @@ async function updateScheduleStatus(
     new UpdateCommand({
       TableName: process.env.SCHEDULES_TABLE!,
       Key: {
-        pk: `SCHEDULE#${scheduleId}`,
-        sk: 'METADATA',
+        // Use the real keys from the schedule item
+        pk: (schedule as any).pk,
+        sk: (schedule as any).sk,
       },
       UpdateExpression: updateExpression,
       ExpressionAttributeNames: expressionAttributeNames,
