@@ -17,6 +17,7 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
@@ -50,6 +51,33 @@ export class PublishingStack extends cdk.Stack {
       service: 'dynamodb',
       resource: 'table',
       resourceName: schedulesTableName,
+    });
+
+    // ==================== Internal DynamoDB Tables ====================
+    // Retry attempts tracking table (per schedule)
+    const retryTable = new dynamodb.Table(this, 'RetryQueueTable', {
+      tableName: `${prefix}-retry-info`,
+      partitionKey: { name: 'scheduleId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'attemptNumber', type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      timeToLiveAttribute: 'ttl',
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // DLQ processing state table
+    const dlqStateTable = new dynamodb.Table(this, 'DlqStateTable', {
+      tableName: `${prefix}-dlq-state`,
+      partitionKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      timeToLiveAttribute: 'ttl',
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+    dlqStateTable.addGlobalSecondaryIndex({
+      indexName: 'by-dlq-status',
+      partitionKey: { name: 'dlqName', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'status', type: dynamodb.AttributeType.STRING },
     });
 
     // ==================== VPC Configuration ====================
@@ -290,6 +318,29 @@ export class PublishingStack extends cdk.Stack {
               ],
               resources: [schedulesTableArn, `${schedulesTableArn}/index/*`],
             }),
+            // DynamoDB access to Retry info table
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'dynamodb:GetItem',
+                'dynamodb:PutItem',
+                'dynamodb:UpdateItem',
+                'dynamodb:Query',
+              ],
+              resources: [retryTable.tableArn],
+            }),
+            // DynamoDB access to DLQ state table (with GSI)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'dynamodb:GetItem',
+                'dynamodb:BatchGetItem',
+                'dynamodb:PutItem',
+                'dynamodb:UpdateItem',
+                'dynamodb:Query',
+              ],
+              resources: [dlqStateTable.tableArn, `${dlqStateTable.tableArn}/index/*`],
+            }),
             // SQS permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -390,6 +441,8 @@ export class PublishingStack extends cdk.Stack {
         // AWS_REGION is automatically provided by Lambda runtime
         SCHEDULES_TABLE: schedulesTableName,
         SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
+        RETRY_QUEUE_TABLE: retryTable.tableName,
+        DLQ_STATE_TABLE_NAME: dlqStateTable.tableName,
         PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         RETRY_QUEUE_URL: this.retryQueue.queueUrl,
         DLQ_URL: this.deadLetterQueue.queueUrl,
@@ -467,6 +520,7 @@ export class PublishingStack extends cdk.Stack {
         // AWS_REGION is automatically provided by Lambda runtime
         SCHEDULES_TABLE: schedulesTableName,
         SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
+        RETRY_QUEUE_TABLE: retryTable.tableName,
         PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         RETRY_QUEUE_URL: this.retryQueue.queueUrl,
         DLQ_URL: this.deadLetterQueue.queueUrl,
@@ -506,6 +560,7 @@ export class PublishingStack extends cdk.Stack {
         // AWS_REGION is automatically provided by Lambda runtime
         SCHEDULES_TABLE: schedulesTableName,
         SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
+        DLQ_STATE_TABLE_NAME: dlqStateTable.tableName,
         DLQ_URL: this.deadLetterQueue.queueUrl,
         EVENT_BUS_NAME: publishingEventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
