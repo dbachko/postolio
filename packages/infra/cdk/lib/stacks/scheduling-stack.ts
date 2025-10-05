@@ -569,6 +569,7 @@ export class SchedulingStack extends cdk.Stack {
         SCHEDULES_TABLE_BRAND_INDEX: 'BrandIndex',
         EVENT_BUS_NAME: this.eventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
+        ...(databaseSecretArnParam ? { DB_SECRET_ARN: databaseSecretArnParam } : {}),
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,
@@ -576,43 +577,6 @@ export class SchedulingStack extends cdk.Stack {
         `/aws/lambda/${prefix}-status-sync`
       ),
       tracing: lambda.Tracing.ACTIVE,
-    });
-
-    // 4. DB Inspector (dev-only helper)
-    const dbInspectorFunction = new lambdaNodejs.NodejsFunction(this, 'DBInspectorFunction', {
-      functionName: `${prefix}-db-inspector`,
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.handler',
-      entry: path.join(__dirname, '../../../../services/db-inspector/src/index.ts'),
-      timeout: cdk.Duration.minutes(1),
-      memorySize: 256,
-      role: schedulingLambdaRole,
-      vpc: vpc,
-      vpcSubnets: vpcConfig,
-      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
-      environment: {
-        NODE_ENV: environment,
-        SERVICE_NAME: 'db-inspector',
-        ENVIRONMENT: environment,
-        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-      },
-      logGroup: logs.LogGroup.fromLogGroupName(
-        this,
-        'DBInspectorLogGroup',
-        `/aws/lambda/${prefix}-db-inspector`
-      ),
-      tracing: lambda.Tracing.ACTIVE,
-    });
-
-    const inspectorUrl = dbInspectorFunction.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE,
-      cors: { allowedOrigins: ['*'] },
-    });
-
-    new cdk.CfnOutput(this, 'DBInspectorUrl', {
-      value: inspectorUrl.url,
-      description: 'Dev-only DB inspector URL',
-      exportName: `${prefix}-db-inspector-url`,
     });
 
     // ==================== Event Sources ====================
