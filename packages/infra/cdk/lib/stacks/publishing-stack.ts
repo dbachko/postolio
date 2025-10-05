@@ -303,6 +303,20 @@ export class PublishingStack extends cdk.Stack {
       this,
       `/postolio/${environment}/scheduling/video-bucket-name`
     );
+    // Import Auth stack Audit Logs table name for audit logging
+    let auditTableName: string | undefined;
+    try {
+      auditTableName = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/auth/audit-table-name`
+      );
+    } catch {
+      // Optional - publisher will skip audit if not set
+      auditTableName = undefined;
+    }
+    const auditTableArn = auditTableName
+      ? cdk.Stack.of(this).formatArn({ service: 'dynamodb', resource: 'table', resourceName: auditTableName })
+      : undefined;
     // Retain local publishing bus (optional) for future use
     const publishingEventBus = new events.EventBus(this, 'PublishingEventBus', {
       eventBusName: `${prefix}-events`,
@@ -354,7 +368,11 @@ export class PublishingStack extends cdk.Stack {
                 'dynamodb:Query',
                 'dynamodb:Scan',
               ],
-              resources: [schedulesTableArn, `${schedulesTableArn}/index/*`],
+              resources: [
+                schedulesTableArn,
+                `${schedulesTableArn}/index/*`,
+                ...(auditTableArn ? [auditTableArn] : []),
+              ],
             }),
             // DynamoDB access to Retry info table
             new iam.PolicyStatement({
@@ -417,6 +435,7 @@ export class PublishingStack extends cdk.Stack {
                 `arn:aws:scheduler:${this.region}:${this.account}:schedule-group/*`,
               ],
             }),
+            // Allow passing the Scheduler target role when creating schedules
             // KMS permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -502,6 +521,7 @@ export class PublishingStack extends cdk.Stack {
         VIDEO_BUCKET: videoBucketName,
         // Public CDN domain used for image URLs (no auth)
         IMAGES_CDN_DOMAIN: imagesCdnDomain,
+        ...(auditTableName ? { AUDIT_LOG_TABLE: auditTableName } : {}),
         // OAuth configuration
         FACEBOOK_APP_ID: props.facebookAppId || '',
         FACEBOOK_APP_SECRET: props.facebookAppSecret || '',
@@ -534,6 +554,19 @@ export class PublishingStack extends cdk.Stack {
           publisherFunction.functionArn,
           `${publisherFunction.functionArn}:$LATEST`,
         ],
+      })
+    );
+
+    // Allow the Publishing Lambda role (publisher/retry/dlq functions) to pass
+    // the scheduler invocation role when creating schedules
+    publishingLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['iam:PassRole'],
+        resources: [schedulerInvocationRole.roleArn],
+        conditions: {
+          StringEquals: { 'iam:PassedToService': 'scheduler.amazonaws.com' },
+        },
       })
     );
 
@@ -580,6 +613,7 @@ export class PublishingStack extends cdk.Stack {
         EVENT_BUS_NAME: schedulingEventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
+        ...(auditTableName ? { AUDIT_LOG_TABLE: auditTableName } : {}),
         // Scheduler integration for retries
         SCHEDULER_GROUP_NAME: 'default',
         PUBLISHER_LAMBDA_ARN: publisherFunction.functionArn,
@@ -618,6 +652,7 @@ export class PublishingStack extends cdk.Stack {
         EVENT_BUS_NAME: schedulingEventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
+        ...(auditTableName ? { AUDIT_LOG_TABLE: auditTableName } : {}),
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,

@@ -502,11 +502,11 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       hasHashtags: !!schedule.hashtags,
     });
 
-    // Prepare content with proper media URL
-    const publishableSchedule: Schedule = {
-      ...schedule,
-      mediaKeys: (schedule as any).mediaKeys || schedule.mediaKeys,
-    };
+  // Prepare content with proper media URL
+  const publishableSchedule: Schedule = {
+    ...schedule,
+    mediaKeys: (schedule as any).mediaKeys || schedule.mediaKeys,
+  };
 
     // Get user and brand IDs for token retrieval - prefer schedule data over event
     const userId = schedule.userId || event.userId;
@@ -558,11 +558,59 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       throw new Error(`Invalid credentials for platform: ${schedule.platform}`);
     }
 
+    // Idempotency check: skip if already published (marker in retry table)
+    try {
+      const existing = await getPublishMarker(event.scheduleId);
+      if (existing && (existing as any).platformPostId) {
+        logger.warn('Idempotency marker found; skipping re-publish', {
+          scheduleId: event.scheduleId,
+          platformPostId: (existing as any).platformPostId,
+          permalink: (existing as any).permalink,
+        });
+        // Ensure schedule marked as published
+        await updateScheduleStatus(
+          event.scheduleId,
+          'published',
+          undefined,
+          (existing as any).platformPostId,
+          (existing as any).permalink
+        );
+
+        // Attempt to delete EventBridge schedule to avoid further triggers
+        try {
+          await schedulerClient.send(
+            new DeleteScheduleCommand({
+              Name: event.scheduleId,
+              GroupName: process.env.SCHEDULE_GROUP_NAME || 'default',
+            })
+          );
+        } catch {
+          // ignore
+        }
+        return;
+      }
+    } catch (idemErr) {
+      logger.warn('Idempotency check failed; proceeding with publish', {
+        scheduleId: event.scheduleId,
+        error: (idemErr as Error).message,
+      });
+    }
+
     // Publish to platform using adapter
     const publishResult = await adapter.publish(publishableSchedule, credentials, mediaUrl);
 
     if (!publishResult.success) {
       throw new Error(publishResult.error || 'Publishing failed');
+    }
+
+    // Write idempotency marker (best-effort)
+    try {
+      await writePublishMarker(event.scheduleId, publishResult.platformPostId, publishResult.platformUrl);
+    } catch (markerErr) {
+      logger.warn('Failed to write idempotency marker (ignored)', {
+        scheduleId: event.scheduleId,
+        error: (markerErr as Error).message,
+      });
     }
 
     // Update schedule status with platform info
@@ -917,28 +965,41 @@ function extractS3Key(urlStr: string): string | null {
 }
 
 
-// Audit log helper
+// Audit log helper (best-effort, never throws)
 async function logAudit(
   scheduleId: string,
   action: string,
   result: 'success' | 'failure',
   details?: Record<string, unknown>
 ): Promise<void> {
-  await docClient.send(
-    new PutCommand({
-      TableName: process.env.AUDIT_LOG_TABLE!,
-      Item: {
-        pk: `AUDIT#${scheduleId}`,
-        sk: `${Date.now()}#${action}`,
-        scheduleId,
-        action,
-        result,
-        details,
-        timestamp: new Date().toISOString(),
-        ttl: Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60, // 90 days
-      },
-    })
-  );
+  const tableName = process.env.AUDIT_LOG_TABLE;
+  if (!tableName) {
+    logger.debug('Audit log table not configured; skipping audit', { action, scheduleId });
+    return;
+  }
+  try {
+    await docClient.send(
+      new PutCommand({
+        TableName: tableName,
+        Item: {
+          pk: `AUDIT#${scheduleId}`,
+          sk: `${Date.now()}#${action}`,
+          scheduleId,
+          action,
+          result,
+          details,
+          timestamp: new Date().toISOString(),
+          ttl: Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60, // 90 days
+        },
+      })
+    );
+  } catch (auditError) {
+    logger.warn('Failed to write to audit log (ignored)', {
+      scheduleId,
+      action,
+      error: (auditError as Error).message,
+    });
+  }
 }
 
 async function createFailedScheduleEntry(
@@ -963,68 +1024,112 @@ async function updateScheduleStatus(
   platformPostId?: string,
   platformUrl?: string
 ): Promise<void> {
-  // Find the schedule item via GSI to get the actual PK/SK
-  const schedule = await getSchedule(scheduleId);
-  if (!schedule || !('pk' in schedule) || !('sk' in schedule)) {
-    logger.warn('Cannot update schedule status; schedule not found or missing keys', { scheduleId, status });
-    return;
-  }
-  let updateExpression = 'SET #status = :status, #updatedAt = :updatedAt';
+  try {
+    // Find the schedule item via GSI to get the actual PK/SK
+    const schedule = await getSchedule(scheduleId);
+    if (!schedule || !('pk' in schedule) || !('sk' in schedule)) {
+      logger.warn('Cannot update schedule status; schedule not found or missing keys', { scheduleId, status });
+      return;
+    }
+    let updateExpression = 'SET #status = :status, #updatedAt = :updatedAt';
 
-  if (errorMessage) {
-    updateExpression += ', #error = :error';
-  } else if (status === 'published') {
-    updateExpression += ', #publishedAt = :publishedAt';
-    if (platformPostId) updateExpression += ', #platformPostId = :platformPostId';
-    if (platformUrl) updateExpression += ', #platformUrl = :platformUrl';
-  }
-
-  const expressionAttributeNames: Record<string, string> = {
-    '#status': 'status',
-    '#updatedAt': 'updatedAt',
-  };
-
-  const expressionAttributeValues: Record<string, string> = {
-    ':status': status,
-    ':updatedAt': new Date().toISOString(),
-  };
-
-  if (errorMessage) {
-    expressionAttributeNames['#error'] = 'schedulingError';
-    expressionAttributeValues[':error'] = errorMessage;
-  } else if (status === 'published') {
-    expressionAttributeNames['#publishedAt'] = 'publishedAt';
-    expressionAttributeValues[':publishedAt'] = new Date().toISOString();
-
-    if (platformPostId) {
-      expressionAttributeNames['#platformPostId'] = 'platformPostId';
-      expressionAttributeValues[':platformPostId'] = platformPostId;
+    if (errorMessage) {
+      updateExpression += ', #error = :error';
+    } else if (status === 'published') {
+      updateExpression += ', #publishedAt = :publishedAt';
+      if (platformPostId) updateExpression += ', #platformPostId = :platformPostId';
+      if (platformUrl) updateExpression += ', #platformUrl = :platformUrl';
     }
 
-    if (platformUrl) {
-      expressionAttributeNames['#platformUrl'] = 'platformUrl';
-      expressionAttributeValues[':platformUrl'] = platformUrl;
-    }
-  }
+    const expressionAttributeNames: Record<string, string> = {
+      '#status': 'status',
+      '#updatedAt': 'updatedAt',
+    };
 
-  await docClient.send(
-    new UpdateCommand({
-      TableName: process.env.SCHEDULES_TABLE!,
-      Key: {
-        // Use the real keys from the schedule item
-        pk: (schedule as any).pk,
-        sk: (schedule as any).sk,
-      },
-      UpdateExpression: updateExpression,
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues,
+    const expressionAttributeValues: Record<string, string> = {
+      ':status': status,
+      ':updatedAt': new Date().toISOString(),
+    };
+
+    if (errorMessage) {
+      expressionAttributeNames['#error'] = 'schedulingError';
+      expressionAttributeValues[':error'] = errorMessage;
+    } else if (status === 'published') {
+      expressionAttributeNames['#publishedAt'] = 'publishedAt';
+      expressionAttributeValues[':publishedAt'] = new Date().toISOString();
+
+      if (platformPostId) {
+        expressionAttributeNames['#platformPostId'] = 'platformPostId';
+        expressionAttributeValues[':platformPostId'] = platformPostId;
+      }
+
+      if (platformUrl) {
+        expressionAttributeNames['#platformUrl'] = 'platformUrl';
+        expressionAttributeValues[':platformUrl'] = platformUrl;
+      }
+    }
+
+    await docClient.send(
+      new UpdateCommand({
+        TableName: process.env.SCHEDULES_TABLE!,
+        Key: {
+          // Use the real keys from the schedule item
+          pk: (schedule as any).pk,
+          sk: (schedule as any).sk,
+        },
+        UpdateExpression: updateExpression,
+        ExpressionAttributeNames: expressionAttributeNames,
+        ExpressionAttributeValues: expressionAttributeValues,
+      })
+    );
+
+    // Log audit (best-effort)
+    await logAudit(scheduleId, `status_update_${status}`, 'success', {
+      errorMessage,
+      platformPostId,
+      platformUrl,
+    });
+  } catch (e) {
+    logger.warn('Failed to update schedule status (ignored)', {
+      scheduleId,
+      status,
+      error: (e as Error).message,
+    });
+  }
+}
+// Idempotency helpers using RetryQueueTable (attemptNumber=0 as published marker)
+async function getPublishMarker(scheduleId: string): Promise<Record<string, unknown> | null> {
+  const table = process.env.RETRY_QUEUE_TABLE;
+  if (!table) return null;
+  const res = await docClient.send(
+    new GetCommand({
+      TableName: table,
+      Key: { scheduleId, attemptNumber: 0 },
     })
   );
+  return (res.Item as Record<string, unknown> | undefined) || null;
+}
 
-  // Log audit
-  await logAudit(scheduleId, `status_update_${status}`, 'success', {
-    errorMessage,
-    platformPostId,
-    platformUrl,
-  });
+async function writePublishMarker(
+  scheduleId: string,
+  platformPostId?: string,
+  permalink?: string
+): Promise<void> {
+  const table = process.env.RETRY_QUEUE_TABLE;
+  if (!table) return;
+  await docClient.send(
+    new PutCommand({
+      TableName: table,
+      Item: {
+        scheduleId,
+        attemptNumber: 0,
+        type: 'published',
+        platformPostId,
+        permalink,
+        timestamp: new Date().toISOString(),
+        ttl: Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60, // 90 days
+      },
+      ConditionExpression: 'attribute_not_exists(scheduleId) AND attribute_not_exists(attemptNumber)',
+    })
+  );
 }

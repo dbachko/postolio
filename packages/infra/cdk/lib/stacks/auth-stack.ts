@@ -342,6 +342,13 @@ export class AuthStack extends cdk.Stack {
       description: 'Token Service DynamoDB Table Name',
     });
 
+    // Expose Audit Logs table name for cross-stack use (e.g., publisher)
+    new ssm.StringParameter(this, 'AuditTableNameParameter', {
+      parameterName: `/postolio/${environment}/auth/audit-table-name`,
+      stringValue: auditTable.tableName,
+      description: 'Audit Logs DynamoDB Table Name',
+    });
+
     new ssm.StringParameter(this, 'AuthEncryptionKeyParameter', {
       parameterName: `/postolio/${environment}/auth/encryption-key-id`,
       stringValue: this.encryptionKey.keyId,
