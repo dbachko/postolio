@@ -35,26 +35,39 @@ const retryStrategy = new RetryStrategy(metrics);
 // Legacy constant kept for backward compatibility in logs
 const MAX_RETRY_ATTEMPTS = 5; // Increased to match industry standard
 
-export const handler = async (event: SQSEvent): Promise<void> => {
+export const handler = async (event: SQSEvent | Record<string, unknown> | undefined): Promise<void> => {
   // 🚨 RECURSIVE LOOP PREVENTION: Add circuit breaker with timestamp tracking
   const processingStartTime = Date.now();
   const maxProcessingTime = 45000; // 45 seconds max processing time
 
+  const records: SQSRecord[] = Array.isArray((event as any)?.Records)
+    ? ((event as any).Records as SQSRecord[])
+    : [];
+
+  // Handle non-SQS invocations gracefully (e.g., EventBridge schedule rule)
+  if (records.length === 0) {
+    logger.info('Non-SQS invocation or empty batch; skipping processing', {
+      trigger: (event as any)?.['detail-type'] || (event as any)?.source || 'unknown',
+    });
+    metrics.publishStoredMetrics();
+    return;
+  }
+
   logger.info('Processing retry messages', {
-    messageCount: event.Records.length,
+    messageCount: records.length,
     processingStartTime,
   });
 
   // 🚨 PREVENT RECURSIVE LOOPS: Validate message count is reasonable
-  if (event.Records.length > 50) {
+  if (records.length > 50) {
     logger.error('Received too many messages in single batch - potential recursive loop detected', {
-      messageCount: event.Records.length,
+      messageCount: records.length,
     });
     metrics.addMetric('RecursiveLoopPrevented', MetricUnit.Count, 1);
     return; // Exit early to prevent processing potentially malformed batch
   }
 
-  for (const record of event.Records) {
+  for (const record of records) {
     // 🚨 TIMEOUT PROTECTION: Check if we're approaching timeout
     if (Date.now() - processingStartTime > maxProcessingTime) {
       logger.warn('Approaching timeout - stopping message processing to prevent incomplete work', {
