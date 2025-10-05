@@ -38,7 +38,7 @@ const CreateScheduleInputSchema = z.object({
   videoUrl: z.string().url().nullish(),
   caption: z.string().optional(),
   hashtags: z.array(z.string()).optional(),
-  mediaUrls: z.array(z.string().url()).optional(), // Array of URLs for carousel/multiple images
+  mediaKeys: z.array(z.string()).optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -47,7 +47,7 @@ const UpdateScheduleInputSchema = z
     scheduledAt: z.string().datetime().optional(), // Changed from scheduledTime
     caption: z.string().optional(),
     hashtags: z.array(z.string()).optional(),
-    mediaUrls: z.array(z.string().url()).optional(),
+    mediaKeys: z.array(z.string()).optional(),
     status: ScheduleStatusSchema.optional(),
     metadata: z.record(z.unknown()).optional(),
     // API Gateway validation fields (required when performing reschedule)
@@ -83,7 +83,7 @@ const ScheduleSchema = z.object({
   videoUrl: z.string().url().nullish(),
   caption: z.string().nullish(),
   hashtags: z.array(z.string()).nullish(),
-  mediaUrls: z.array(z.string().url()).nullish(),
+  mediaKeys: z.array(z.string()).nullish(),
   status: ScheduleStatusSchema,
   retryCount: z.number().default(0),
   metadata: z.record(z.unknown()).nullish(),

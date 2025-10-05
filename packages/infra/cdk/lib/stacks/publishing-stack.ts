@@ -287,6 +287,17 @@ export class PublishingStack extends cdk.Stack {
       resource: 'event-bus',
       resourceName: schedulingEventBusName,
     });
+
+    // Import images bucket and CDN domain for generating media URLs
+    const imagesBucketName = ssm.StringParameter.valueFromLookup(
+      this,
+      `/postolio/${environment}/s3/images-bucket`
+    );
+    // Import video bucket name for presigning video URLs
+    const videoBucketName = ssm.StringParameter.valueFromLookup(
+      this,
+      `/postolio/${environment}/scheduling/video-bucket-name`
+    );
     // Retain local publishing bus (optional) for future use
     const publishingEventBus = new events.EventBus(this, 'PublishingEventBus', {
       eventBusName: `${prefix}-events`,
@@ -481,6 +492,9 @@ export class PublishingStack extends cdk.Stack {
         EVENT_BUS_NAME: schedulingEventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
+        // Buckets for generating pre-signed URLs
+        S3_IMAGES_BUCKET: imagesBucketName,
+        VIDEO_BUCKET: videoBucketName,
         // OAuth configuration
         FACEBOOK_APP_ID: props.facebookAppId || '',
         FACEBOOK_APP_SECRET: props.facebookAppSecret || '',

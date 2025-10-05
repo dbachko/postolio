@@ -20,7 +20,7 @@ export interface ScheduleRequest {
   contentType: string;
   caption?: string;
   hashtags?: string[];
-  mediaUrls?: string[];
+  mediaKeys?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -86,13 +86,13 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
     }
   }
 
-  if (request.mediaUrls !== undefined) {
-    if (!Array.isArray(request.mediaUrls)) {
-      errors.push('mediaUrls must be an array if provided');
+  if (request.mediaKeys !== undefined) {
+    if (!Array.isArray(request.mediaKeys)) {
+      errors.push('mediaKeys must be an array if provided');
     } else {
-      const invalidUrls = request.mediaUrls.filter((url: unknown) => typeof url !== 'string');
-      if (invalidUrls.length > 0) {
-        errors.push('all mediaUrls must be strings');
+      const invalidKeys = request.mediaKeys.filter((k: unknown) => typeof k !== 'string');
+      if (invalidKeys.length > 0) {
+        errors.push('all mediaKeys must be strings');
       }
     }
   }
@@ -114,6 +114,15 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
     !validContentTypes.includes((request.contentType as string).toLowerCase())
   ) {
     errors.push(`contentType must be one of: ${validContentTypes.join(', ')}`);
+  }
+
+  // Strict requirement: for image content, mediaKeys must be non-empty
+  const ct = (request.contentType as string | undefined)?.toLowerCase();
+  if (ct === 'image') {
+    const mk = request.mediaKeys as unknown;
+    if (!Array.isArray(mk) || mk.length === 0 || mk.some((k) => typeof k !== 'string' || k.length === 0)) {
+      errors.push('mediaKeys must be a non-empty array of strings for image content');
+    }
   }
 
   return {

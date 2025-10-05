@@ -47,6 +47,8 @@ const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 const eventBridge = tracer.captureAWSv3Client(new EventBridgeClient({}));
 const ssmClient = tracer.captureAWSv3Client(new SSMClient({}));
 
+// No legacy derivation: mediaKeys must be supplied by caller
+
 async function getSchedulerTargetConfig() {
   const environment = process.env.ENVIRONMENT || 'dev';
   let publisherArn = process.env.PUBLISHER_LAMBDA_ARN;
@@ -88,7 +90,7 @@ export interface ScheduleRequest {
   contentType: string;
   caption?: string;
   hashtags?: string[];
-  mediaUrls?: string[];
+  mediaKeys?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -109,7 +111,7 @@ export interface Schedule {
   contentType: string;
   caption?: string;
   hashtags?: string[];
-  mediaUrls?: string[];
+  mediaKeys?: string[];
   metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -181,7 +183,7 @@ export class ScheduleService {
         contentType: request.contentType,
         caption: request.caption,
         hashtags: request.hashtags || [],
-        mediaUrls: request.mediaUrls || [],
+        mediaKeys: request.mediaKeys || [],
         metadata: request.metadata,
         createdAt: now,
         updatedAt: now,
@@ -569,6 +571,11 @@ export class ScheduleService {
       if (updateRequest.hashtags !== undefined) {
         updateExpressions.push('hashtags = :hashtags');
         expressionAttributeValues[':hashtags'] = updateRequest.hashtags;
+      }
+
+      if (updateRequest.mediaKeys !== undefined) {
+        updateExpressions.push('mediaKeys = :mediaKeys');
+        expressionAttributeValues[':mediaKeys'] = updateRequest.mediaKeys || [];
       }
 
       if (updateRequest.metadata !== undefined) {

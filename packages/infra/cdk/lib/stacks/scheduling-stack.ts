@@ -338,6 +338,7 @@ export class SchedulingStack extends cdk.Stack {
     // These parameters are created by the Publishing stack and are used at runtime to create schedules
     let publisherLambdaArnParam: string | undefined;
     let schedulerRoleArnParam: string | undefined;
+    let databaseSecretArnParam: string | undefined;
     try {
       publisherLambdaArnParam = ssm.StringParameter.valueFromLookup(
         this,
@@ -346,6 +347,10 @@ export class SchedulingStack extends cdk.Stack {
       schedulerRoleArnParam = ssm.StringParameter.valueFromLookup(
         this,
         `/postolio/${environment}/publishing/scheduler-role-arn`
+      );
+      databaseSecretArnParam = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/database/secret-arn`
       );
     } catch (e) {
       console.log('Publishing SSM parameters not found at synth time; proceeding without env injection');
@@ -432,6 +437,16 @@ export class SchedulingStack extends cdk.Stack {
                 `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
               ],
             }),
+            // Secrets Manager permission to read DB credentials
+            ...(databaseSecretArnParam
+              ? [
+                  new iam.PolicyStatement({
+                    effect: iam.Effect.ALLOW,
+                    actions: ['secretsmanager:GetSecretValue'],
+                    resources: [databaseSecretArnParam],
+                  }),
+                ]
+              : []),
             // Allow passing the Scheduler target role (from Publishing stack) if available
             ...(schedulerRoleArnParam
               ? [
@@ -559,6 +574,43 @@ export class SchedulingStack extends cdk.Stack {
         `/aws/lambda/${prefix}-status-sync`
       ),
       tracing: lambda.Tracing.ACTIVE,
+    });
+
+    // 4. DB Inspector (dev-only helper)
+    const dbInspectorFunction = new lambdaNodejs.NodejsFunction(this, 'DBInspectorFunction', {
+      functionName: `${prefix}-db-inspector`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      entry: path.join(__dirname, '../../../../services/db-inspector/src/index.ts'),
+      timeout: cdk.Duration.minutes(1),
+      memorySize: 256,
+      role: schedulingLambdaRole,
+      vpc: vpc,
+      vpcSubnets: vpcConfig,
+      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+      environment: {
+        NODE_ENV: environment,
+        SERVICE_NAME: 'db-inspector',
+        ENVIRONMENT: environment,
+        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+      },
+      logGroup: logs.LogGroup.fromLogGroupName(
+        this,
+        'DBInspectorLogGroup',
+        `/aws/lambda/${prefix}-db-inspector`
+      ),
+      tracing: lambda.Tracing.ACTIVE,
+    });
+
+    const inspectorUrl = dbInspectorFunction.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+      cors: { allowedOrigins: ['*'] },
+    });
+
+    new cdk.CfnOutput(this, 'DBInspectorUrl', {
+      value: inspectorUrl.url,
+      description: 'Dev-only DB inspector URL',
+      exportName: `${prefix}-db-inspector-url`,
     });
 
     // ==================== Event Sources ====================

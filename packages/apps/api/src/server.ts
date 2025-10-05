@@ -25,6 +25,7 @@ import brandsRoutes from './routes/brands.js';
 import contentRoutes from './routes/content.js';
 import instagramRoutes from './routes/instagram.js';
 import analyticsRoutes from './routes/analytics.js';
+import adminRoutes from './routes/admin.js';
 import instagramAnalyticsRoutes from './routes/instagram-analytics.js';
 import engagementRoutes from './routes/engagement.js';
 import growthRoutes from './routes/growth.js';
@@ -203,6 +204,8 @@ export function buildFastify(): FastifyInstance {
   app.register(instagramOAuthRoutes, { prefix: '/api/auth/instagram' });
   app.register(brandsRoutes, { prefix: '/api/brands' });
   app.register(contentRoutes, { prefix: '/api/content' });
+  // Dev-only admin routes (no auth, but disabled in production)
+  app.register(adminRoutes, { prefix: '/api/admin' });
   app.register(instagramRoutes, { prefix: '/api/instagram' });
   app.register(analyticsRoutes, { prefix: '/api/analytics' });
   app.register(instagramAnalyticsRoutes, {

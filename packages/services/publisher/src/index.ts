@@ -72,7 +72,7 @@ interface Schedule {
   hashtags?: string[];
   contentType?: 'video' | 'image' | 'text' | string;
   imageUrl?: string;
-  mediaUrls?: string[];
+  mediaKeys?: string[];
   videoUrl?: string;
   platform: PlatformName;
   [key: string]: unknown; // allow additional persisted attributes
@@ -138,18 +138,24 @@ class InstagramAdapter implements PlatformAdapter {
       }
 
       const formattedCaption = this.formatCaption(schedule.caption, schedule.hashtags);
+      const isVideo = (schedule.contentType || '').toLowerCase() === 'video';
 
       // Step 1: Create media container
       const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
       const createMediaParams = new URLSearchParams({
-        image_url: mediaUrl,
         caption: formattedCaption,
         access_token: credentials.accessToken,
       });
+      if (isVideo) {
+        createMediaParams.set('video_url', mediaUrl);
+      } else {
+        createMediaParams.set('image_url', mediaUrl);
+      }
 
       logger.info('Creating Instagram media container', {
         accountId: credentials.accountId,
         hasMediaUrl: !!mediaUrl,
+        mediaKind: isVideo ? 'video' : 'image',
       });
 
       const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {
@@ -157,14 +163,23 @@ class InstagramAdapter implements PlatformAdapter {
       });
 
       if (!createResponse.ok) {
-        const errorText = await createResponse.text();
+        const raw = await createResponse.text();
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          // ignore parse error
+        }
+        const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
+        const igTitle = parsed?.error?.error_user_title;
         logger.error('Failed to create Instagram media container', {
           status: createResponse.status,
-          error: errorText,
+          error: igMsg,
+          title: igTitle,
         });
         return {
           success: false,
-          error: `Failed to create media: ${errorText}`,
+          error: `Failed to create media: ${igMsg}`,
         };
       }
 
@@ -192,12 +207,21 @@ class InstagramAdapter implements PlatformAdapter {
       });
 
       if (!publishResponse.ok) {
-        const errorText = await publishResponse.text();
+        const raw = await publishResponse.text();
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          // ignore parse error
+        }
+        const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
+        const igTitle = parsed?.error?.error_user_title;
         logger.error('Failed to publish Instagram media', {
           status: publishResponse.status,
-          error: errorText,
+          error: igMsg,
+          title: igTitle,
         });
-        return { success: false, error: `Failed to publish: ${errorText}` };
+        return { success: false, error: `Failed to publish: ${igMsg}` };
       }
 
       const publishResult = await publishResponse.json();
@@ -481,7 +505,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     // Prepare content with proper media URL
     const publishableSchedule: Schedule = {
       ...schedule,
-      imageUrl: schedule.mediaUrls?.[0] || schedule.imageUrl,
+      mediaKeys: (schedule as any).mediaKeys || schedule.mediaKeys,
     };
 
     // Get user and brand IDs for token retrieval - prefer schedule data over event
@@ -516,8 +540,14 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     let mediaUrl = null;
     if (schedule.contentType === 'video' && schedule.videoUrl) {
       mediaUrl = await getSignedVideoUrl(schedule.videoUrl);
+    } else if (publishableSchedule.mediaKeys?.[0]) {
+      mediaUrl = await getSignedImageUrlFromKey(publishableSchedule.mediaKeys[0]);
     } else if (publishableSchedule.imageUrl) {
-      mediaUrl = publishableSchedule.imageUrl;
+      // Backward compatibility: derive key from URL
+      const key = extractS3Key(publishableSchedule.imageUrl);
+      mediaUrl = key
+        ? await getSignedImageUrlFromKey(key)
+        : publishableSchedule.imageUrl;
     }
 
     // Get platform adapter
@@ -860,6 +890,30 @@ async function getSignedVideoUrl(videoKey: string): Promise<string> {
 
   return await getSignedUrl(s3Client, command, { expiresIn: 3600 });
 }
+
+// Generate a presigned S3 URL for an image by key
+async function getSignedImageUrlFromKey(key: string): Promise<string> {
+  const bucket = process.env.S3_IMAGES_BUCKET!;
+  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  return await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+}
+
+function extractS3Key(urlStr: string): string | null {
+  try {
+    const u = new URL(urlStr);
+    // URL paths are like "/images/yyyy-mm-dd/brandId/contentId-hash.jpg"
+    const p = u.pathname.startsWith('/') ? u.pathname.slice(1) : u.pathname;
+    // Guard: expect keys under images/
+    if (!p || (!p.startsWith('images/') && !p.startsWith('uploads/') && !p.includes('.'))) {
+      return null;
+    }
+    // Remove potential trailing slashes
+    return p.replace(/^\/+/, '');
+  } catch {
+    return null;
+  }
+}
+
 
 // Audit log helper
 async function logAudit(

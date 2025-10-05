@@ -15,7 +15,7 @@ import { TimezoneService } from './timezone.js';
 import type { StatusBroadcaster } from './status-broadcaster.js';
 import type { GenerationParams } from '../types/scheduler.js';
 import { eventEmitter } from './event-emitter.js';
-import { buildCdnUrl } from './s3-image.js';
+// We now pass S3 object keys directly to Scheduler; CDN URLs no longer required
 
 const prisma = getDatabaseClient();
 
@@ -331,9 +331,14 @@ export class SchedulerAdapter {
         });
       } else {
         try {
-          const schedule = await (
-            await this.client
-          ).createSchedule({
+          // Enforce presence of media key for image content
+          if ((!content.s3ImageKey || content.s3ImageKey.length === 0) && 'image' === 'image') {
+            return {
+              success: false,
+              error: 'Missing S3 image key for scheduling. Please re-upload or regenerate the image.',
+            };
+          }
+          const schedulePayload: any = {
             contentId: content.id,
             brandId: content.brandId,
             campaignId: content.campaignId!, // 🔥 CRITICAL: Always include campaignId for validation
@@ -345,13 +350,19 @@ export class SchedulerAdapter {
             // When content is edited, EventBridge events will update this
             caption: content.caption || '',
             hashtags: content.hashtags || [],
-            mediaUrls: content.s3ImageKey ? [buildCdnUrl(content.s3ImageKey) || ''] : [],
             metadata: {
               timezone: brandTimezone,
               localTime: customTime ? customTime.toISOString() : undefined,
               campaignName: content.campaign?.name, // Include campaign context for debugging
             },
-          });
+          };
+          if (content.s3ImageKey) {
+            schedulePayload.mediaKeys = [content.s3ImageKey];
+          }
+
+          const schedule = await (
+            await this.client
+          ).createSchedule(schedulePayload);
 
           scheduleId = schedule?.scheduleId;
           awsScheduleCreated = true;
@@ -746,9 +757,7 @@ export class SchedulerAdapter {
       // Reschedule in AWS FIRST - only update local DB if this succeeds
       // Use updateSchedule directly to include content updates
       try {
-        await (
-          await this.client
-        ).updateSchedule(scheduleId, {
+        const updatePayload: any = {
           scheduledAt: newTimeUTC.toISOString(),
           // Include required fields for API Gateway validation
           brandId: content.brandId,
@@ -758,8 +767,14 @@ export class SchedulerAdapter {
           // Include content details in case they were edited
           caption: content.caption || '',
           hashtags: content.hashtags || [],
-          mediaUrls: content.s3ImageKey ? [buildCdnUrl(content.s3ImageKey) || ''] : [],
-        });
+          // No legacy or metadata fallback for mediaKeys; upstream must supply keys
+        };
+        if (content.s3ImageKey) {
+          updatePayload.mediaKeys = [content.s3ImageKey];
+        }
+        await (
+          await this.client
+        ).updateSchedule(scheduleId, updatePayload);
         awsRescheduleSuccess = true;
         console.log(`AWS schedule ${scheduleId} rescheduled successfully with updated content`);
       } catch (error: unknown) {
