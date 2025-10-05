@@ -891,11 +891,13 @@ async function getSignedVideoUrl(videoKey: string): Promise<string> {
   return await getSignedUrl(s3Client, command, { expiresIn: 3600 });
 }
 
-// Generate a presigned S3 URL for an image by key
+// Build a CDN URL for an image by key (no auth)
 async function getSignedImageUrlFromKey(key: string): Promise<string> {
-  const bucket = process.env.S3_IMAGES_BUCKET!;
-  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
-  return await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+  const cdnDomain = process.env.IMAGES_CDN_DOMAIN;
+  if (!cdnDomain) {
+    throw new Error('IMAGES_CDN_DOMAIN not configured for publisher');
+  }
+  return `https://${cdnDomain}/${key.replace(/^\/+/, '')}`;
 }
 
 function extractS3Key(urlStr: string): string | null {

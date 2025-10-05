@@ -1,11 +1,5 @@
-import {
-  S3Client,
-  PutObjectCommand,
-  DeleteObjectCommand,
-  GetObjectCommand,
-} from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import sharp from 'sharp';
 import { createHash } from 'crypto';
 
@@ -404,20 +398,7 @@ export async function uploadImageBufferToS3(
   }
 }
 
-/**
- * Generate presigned URL for temporary access
- */
-export async function generatePresignedUrl(
-  s3Key: string,
-  expiresIn: number = 3600
-): Promise<string> {
-  const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: s3Key,
-  });
 
-  return getSignedUrl(s3Client, command, { expiresIn });
-}
 
 /**
  * Migrate existing external image URL to S3

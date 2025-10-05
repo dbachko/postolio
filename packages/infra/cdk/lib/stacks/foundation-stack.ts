@@ -434,7 +434,8 @@ export class FoundationStack extends cdk.Stack {
         environment === 'prod'
           ? cloudfront.PriceClass.PRICE_CLASS_ALL
           : cloudfront.PriceClass.PRICE_CLASS_100, // Use only North America and Europe for dev
-      enableLogging: false, // Enable logging in production if needed
+      // Logging disabled by default; enable later with a bucket allowing ACL log delivery
+      enableLogging: false,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
     });
 
@@ -445,6 +446,13 @@ export class FoundationStack extends cdk.Stack {
         recordName: cdnDomainName,
         target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(imagesDistribution)),
         comment: `CloudFront CDN for AI-generated images (${environment})`,
+      });
+      // Add IPv6 AAAA alias record to ensure dual-stack reachability
+      new route53.AaaaRecord(this, 'CdnAliasRecordAAAA', {
+        zone: hostedZone,
+        recordName: cdnDomainName,
+        target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(imagesDistribution)),
+        comment: `CloudFront CDN (AAAA) for AI-generated images (${environment})`,
       });
     }
 
