@@ -733,16 +733,10 @@ export class PublishingStack extends cdk.Stack {
       })
     );
 
-    // ==================== EventBridge Rules ====================
-    // Scheduled retry processing
-    const retryRule = new events.Rule(this, 'RetryProcessingRule', {
-      ruleName: `${prefix}-retry-rule`,
-      description: 'Trigger retry processing periodically',
-      schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
-      // Note: Scheduled rules use default EventBridge bus, not custom eventBus
-    });
-
-    retryRule.addTarget(new targets.LambdaFunction(retryHandlerFunction));
+    // (Removed) Periodic EventBridge rule for retry processing.
+    // The retry-handler is triggered directly by SQS; a periodic rule is unnecessary
+    // and caused non-SQS invocations. The handler now safely ignores non-SQS triggers,
+    // but we remove the rule to reduce noise and costs.
 
     // ==================== CloudWatch Monitoring ====================
     const functions = [
