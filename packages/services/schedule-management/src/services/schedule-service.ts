@@ -455,7 +455,7 @@ export class ScheduleService {
         updateRequest.scheduledAt && updateRequest.scheduledAt !== existingSchedule.scheduledAt
       );
       const wantsUserIdUpdate = !!(
-        updateRequest.userId && updateRequest.userId !== (existingSchedule as any).userId
+        updateRequest.userId && updateRequest.userId !== existingSchedule.userId
       );
 
       if (hasTimeChange) {
@@ -474,7 +474,7 @@ export class ScheduleService {
 
         // Update EventBridge schedule
         const eventBridgeTime = formatEventBridgeScheduleTime(new Date(updateRequest.scheduledAt));
-        const userIdForTarget = updateRequest.userId ?? (existingSchedule as any).userId;
+        const userIdForTarget = updateRequest.userId ?? existingSchedule.userId;
         try {
           const targetCfg2 = await getSchedulerTargetConfig();
           await schedulerClient.send(
