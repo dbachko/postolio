@@ -8,6 +8,8 @@ import { ContentStatus } from '@postolio/database';
 import {
   ContentSchedulerClient,
   ContentSchedulerConfig,
+  type CreateScheduleInput,
+  type UpdateScheduleInput,
 } from '../clients/content-scheduler-client.js';
 import { SCHEDULER_TIME_INTERVALS, SYNC_TOLERANCE } from '../constants/scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
@@ -339,7 +341,7 @@ export class SchedulerAdapter {
                 'Missing S3 image key for scheduling. Please re-upload or regenerate the image.',
             };
           }
-          const schedulePayload: any = {
+          const schedulePayload: CreateScheduleInput = {
             contentId: content.id,
             brandId: content.brandId,
             campaignId: content.campaignId!, // 🔥 CRITICAL: Always include campaignId for validation
@@ -756,7 +758,7 @@ export class SchedulerAdapter {
       // Reschedule in AWS FIRST - only update local DB if this succeeds
       // Use updateSchedule directly to include content updates
       try {
-        const updatePayload: any = {
+        const updatePayload: UpdateScheduleInput = {
           scheduledAt: newTimeUTC.toISOString(),
           // Include required fields for API Gateway validation
           brandId: content.brandId,
