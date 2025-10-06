@@ -2,15 +2,10 @@ import { Logger } from '@aws-lambda-powertools/logger';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  PutCommand,
-  GetCommand,
-  QueryCommand,
-  UpdateCommand,
-} from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 // import { LambdaClient } from '@aws-sdk/client-lambda';
 import { SchedulerClient, CreateScheduleCommand } from '@aws-sdk/client-scheduler';
+import type { ScheduledEvent } from 'aws-lambda';
 import { SQSEvent, SQSRecord } from 'aws-lambda';
 import { RetryStrategy } from './retry-strategy';
 
@@ -35,22 +30,20 @@ const retryStrategy = new RetryStrategy(metrics);
 // Legacy constant kept for backward compatibility in logs
 const MAX_RETRY_ATTEMPTS = 5; // Increased to match industry standard
 
-export const handler = async (
-  event: SQSEvent | Record<string, unknown> | undefined
-): Promise<void> => {
+function isSQSEvent(e: unknown): e is SQSEvent {
+  return !!e && typeof e === 'object' && Array.isArray((e as { Records?: unknown }).Records);
+}
+
+export const handler = async (event: SQSEvent | ScheduledEvent | undefined): Promise<void> => {
   // 🚨 RECURSIVE LOOP PREVENTION: Add circuit breaker with timestamp tracking
   const processingStartTime = Date.now();
   const maxProcessingTime = 45000; // 45 seconds max processing time
 
-  const records: SQSRecord[] = Array.isArray((event as any)?.Records)
-    ? ((event as any).Records as SQSRecord[])
-    : [];
+  const records: SQSRecord[] = isSQSEvent(event) ? event.Records : [];
 
   // Handle non-SQS invocations gracefully (e.g., EventBridge schedule rule)
   if (records.length === 0) {
-    logger.info('Non-SQS invocation or empty batch; skipping processing', {
-      trigger: (event as any)?.['detail-type'] || (event as any)?.source || 'unknown',
-    });
+    logger.info('Non-SQS invocation or empty batch; skipping processing');
     metrics.publishStoredMetrics();
     return;
   }
