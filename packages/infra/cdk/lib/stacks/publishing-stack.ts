@@ -315,7 +315,11 @@ export class PublishingStack extends cdk.Stack {
       auditTableName = undefined;
     }
     const auditTableArn = auditTableName
-      ? cdk.Stack.of(this).formatArn({ service: 'dynamodb', resource: 'table', resourceName: auditTableName })
+      ? cdk.Stack.of(this).formatArn({
+          service: 'dynamodb',
+          resource: 'table',
+          resourceName: auditTableName,
+        })
       : undefined;
     // Retain local publishing bus (optional) for future use
     const publishingEventBus = new events.EventBus(this, 'PublishingEventBus', {
@@ -550,10 +554,7 @@ export class PublishingStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['lambda:InvokeFunction'],
-        resources: [
-          publisherFunction.functionArn,
-          `${publisherFunction.functionArn}:$LATEST`,
-        ],
+        resources: [publisherFunction.functionArn, `${publisherFunction.functionArn}:$LATEST`],
       })
     );
 
@@ -732,11 +733,6 @@ export class PublishingStack extends cdk.Stack {
         maxBatchingWindow: cdk.Duration.seconds(30),
       })
     );
-
-    // (Removed) Periodic EventBridge rule for retry processing.
-    // The retry-handler is triggered directly by SQS; a periodic rule is unnecessary
-    // and caused non-SQS invocations. The handler now safely ignores non-SQS triggers,
-    // but we remove the rule to reduce noise and costs.
 
     // ==================== CloudWatch Monitoring ====================
     const functions = [

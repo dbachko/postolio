@@ -7,9 +7,13 @@ const ssm = new SSMClient({});
 const secrets = new SecretsManagerClient({});
 
 let pool: Pool | null = null;
-let cachedDbConfig:
-  | { host: string; port: number; user: string; password: string; database: string }
-  | null = null;
+let cachedDbConfig: {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+} | null = null;
 
 async function getParam(name: string): Promise<string> {
   const res = await ssm.send(new GetParameterCommand({ Name: name }));
@@ -56,12 +60,12 @@ async function getPool() {
   const cfg = await getDbConfig();
   const region = process.env.AWS_REGION || 'us-east-1';
   // Fetch RDS CA bundle for proper TLS verification
-  const caPem = await fetch(`https://truststore.pki.rds.amazonaws.com/${region}/${region}-bundle.pem`).then(
-    async (r) => {
-      if (!r.ok) throw new Error(`Failed to fetch RDS CA bundle: ${r.status}`);
-      return await r.text();
-    }
-  );
+  const caPem = await fetch(
+    `https://truststore.pki.rds.amazonaws.com/${region}/${region}-bundle.pem`
+  ).then(async (r) => {
+    if (!r.ok) throw new Error(`Failed to fetch RDS CA bundle: ${r.status}`);
+    return await r.text();
+  });
 
   pool = new Pool({
     host: cfg.host,

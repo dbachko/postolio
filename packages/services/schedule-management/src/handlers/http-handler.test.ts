@@ -76,6 +76,7 @@ describe('HttpHandler', () => {
           platform: 'instagram',
           contentType: 'image',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+          mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
         }),
         headers: {},
       };
@@ -110,6 +111,7 @@ describe('HttpHandler', () => {
         platform: 'instagram',
         contentType: 'image',
         scheduledAt: expect.any(String),
+        mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
       });
     });
 

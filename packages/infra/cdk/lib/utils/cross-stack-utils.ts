@@ -366,7 +366,6 @@ export class EnvironmentConfigHelper {
 /**
  * Generate a secure API key based on stack information
  */
-// (Removed) generateApiKey utility – API keys deprecated in favor of SigV4 IAM auth
 
 /**
  * Create consistent export names across stacks

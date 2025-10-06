@@ -8,6 +8,8 @@ import { ContentStatus } from '@postolio/database';
 import {
   ContentSchedulerClient,
   ContentSchedulerConfig,
+  type CreateScheduleInput,
+  type UpdateScheduleInput,
 } from '../clients/content-scheduler-client.js';
 import { SCHEDULER_TIME_INTERVALS, SYNC_TOLERANCE } from '../constants/scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
@@ -335,10 +337,11 @@ export class SchedulerAdapter {
           if ((!content.s3ImageKey || content.s3ImageKey.length === 0) && 'image' === 'image') {
             return {
               success: false,
-              error: 'Missing S3 image key for scheduling. Please re-upload or regenerate the image.',
+              error:
+                'Missing S3 image key for scheduling. Please re-upload or regenerate the image.',
             };
           }
-          const schedulePayload: any = {
+          const schedulePayload: CreateScheduleInput = {
             contentId: content.id,
             brandId: content.brandId,
             campaignId: content.campaignId!, // 🔥 CRITICAL: Always include campaignId for validation
@@ -360,9 +363,7 @@ export class SchedulerAdapter {
             schedulePayload.mediaKeys = [content.s3ImageKey];
           }
 
-          const schedule = await (
-            await this.client
-          ).createSchedule(schedulePayload);
+          const schedule = await (await this.client).createSchedule(schedulePayload);
 
           scheduleId = schedule?.scheduleId;
           awsScheduleCreated = true;
@@ -757,7 +758,7 @@ export class SchedulerAdapter {
       // Reschedule in AWS FIRST - only update local DB if this succeeds
       // Use updateSchedule directly to include content updates
       try {
-        const updatePayload: any = {
+        const updatePayload: UpdateScheduleInput = {
           scheduledAt: newTimeUTC.toISOString(),
           // Include required fields for API Gateway validation
           brandId: content.brandId,
@@ -772,9 +773,7 @@ export class SchedulerAdapter {
         if (content.s3ImageKey) {
           updatePayload.mediaKeys = [content.s3ImageKey];
         }
-        await (
-          await this.client
-        ).updateSchedule(scheduleId, updatePayload);
+        await (await this.client).updateSchedule(scheduleId, updatePayload);
         awsRescheduleSuccess = true;
         console.log(`AWS schedule ${scheduleId} rescheduled successfully with updated content`);
       } catch (error: unknown) {
