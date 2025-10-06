@@ -30,6 +30,7 @@ describe('Schedule Validator', () => {
         platform: 'instagram',
         contentType: 'image',
         scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+        mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
       };
 
       const result = validateScheduleRequest(minimalRequest);
@@ -109,6 +110,7 @@ describe('Schedule Validator', () => {
           platform,
           contentType: 'image',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+          mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
         };
 
         const result = validateScheduleRequest(request);
@@ -162,6 +164,9 @@ describe('Schedule Validator', () => {
           platform: 'instagram',
           contentType,
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+          ...(contentType === 'image' && {
+            mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'],
+          }), // Required only for image content
         };
 
         const result = validateScheduleRequest(request);
