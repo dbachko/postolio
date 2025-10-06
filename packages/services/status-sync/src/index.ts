@@ -81,6 +81,28 @@ async function getDatabaseProxyEndpoint(): Promise<string> {
   throw new Error('RDS Proxy endpoint not configured');
 }
 
+async function getSecretArn(): Promise<string> {
+  // Prefer explicit env var if provided and not a dummy placeholder
+  const envArn = process.env.DB_SECRET_ARN;
+  if (envArn && !envArn.startsWith('dummy-value-for-')) {
+    return envArn;
+  }
+
+  // Fallback to SSM parameter to discover the secret ARN at runtime
+  const environment = process.env.ENVIRONMENT || 'dev';
+  try {
+    const param = await ssm.send(
+      new GetParameterCommand({ Name: `/postolio/${environment}/database/secret-arn` })
+    );
+    const value = param.Parameter?.Value;
+    if (!value) throw new Error('Database secret ARN parameter is empty');
+    return value;
+  } catch (err) {
+    console.warn('Failed to resolve DB secret ARN from SSM:', err);
+    throw new Error('DB secret ARN not available');
+  }
+}
+
 async function getDatabaseUrl(): Promise<string> {
   if (cachedDbUrl) return cachedDbUrl;
 
@@ -91,15 +113,12 @@ async function getDatabaseUrl(): Promise<string> {
     return cachedDbUrl;
   }
 
-  // Production: Use RDS Proxy with IAM authentication
+  // Production: Use RDS Proxy with secret-based authentication
   const proxyEndpoint = await getDatabaseProxyEndpoint();
   const dbName = process.env.DB_NAME || 'postolio';
 
   // Get credentials from secret for RDS Proxy IAM auth
-  const secretId = process.env.DB_SECRET_ARN;
-  if (!secretId) {
-    throw new Error('DB_SECRET_ARN required for RDS Proxy authentication');
-  }
+  const secretId = await getSecretArn();
 
   try {
     const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
