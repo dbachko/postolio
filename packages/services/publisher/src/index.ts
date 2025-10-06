@@ -164,12 +164,7 @@ class InstagramAdapter implements PlatformAdapter {
 
       if (!createResponse.ok) {
         const raw = await createResponse.text();
-        let parsed: any = null;
-        try {
-          parsed = JSON.parse(raw);
-        } catch {
-          // ignore parse error
-        }
+        const parsed = asIGErrorPayload(safeParseJson(raw));
         const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
         const igTitle = parsed?.error?.error_user_title;
         logger.error('Failed to create Instagram media container', {
@@ -208,12 +203,7 @@ class InstagramAdapter implements PlatformAdapter {
 
       if (!publishResponse.ok) {
         const raw = await publishResponse.text();
-        let parsed: any = null;
-        try {
-          parsed = JSON.parse(raw);
-        } catch {
-          // ignore parse error
-        }
+        const parsed = asIGErrorPayload(safeParseJson(raw));
         const igMsg = parsed?.error?.error_user_msg || parsed?.error?.message || raw;
         const igTitle = parsed?.error?.error_user_title;
         logger.error('Failed to publish Instagram media', {
@@ -505,7 +495,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     // Prepare content with proper media URL
     const publishableSchedule: Schedule = {
       ...schedule,
-      mediaKeys: (schedule as any).mediaKeys || schedule.mediaKeys,
+      mediaKeys: schedule.mediaKeys,
     };
 
     // Get user and brand IDs for token retrieval - prefer schedule data over event
@@ -559,19 +549,19 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     // Idempotency check: skip if already published (marker in retry table)
     try {
       const existing = await getPublishMarker(event.scheduleId);
-      if (existing && (existing as any).platformPostId) {
+      if (existing && existing.platformPostId) {
         logger.warn('Idempotency marker found; skipping re-publish', {
           scheduleId: event.scheduleId,
-          platformPostId: (existing as any).platformPostId,
-          permalink: (existing as any).permalink,
+          platformPostId: existing.platformPostId,
+          permalink: existing.permalink,
         });
         // Ensure schedule marked as published
         await updateScheduleStatus(
           event.scheduleId,
           'published',
           undefined,
-          (existing as any).platformPostId,
-          (existing as any).permalink
+          existing.platformPostId,
+          existing.permalink
         );
 
         // Attempt to delete EventBridge schedule to avoid further triggers
@@ -751,7 +741,12 @@ export const handler = async (event: PublishEvent): Promise<void> => {
   }
 };
 
-async function getSchedule(scheduleId: string): Promise<Schedule | undefined> {
+interface ScheduleRecord extends Schedule {
+  pk: string;
+  sk: string;
+}
+
+async function getSchedule(scheduleId: string): Promise<ScheduleRecord | undefined> {
   const result = await docClient.send(
     new QueryCommand({
       TableName: process.env.SCHEDULES_TABLE!,
@@ -770,7 +765,7 @@ async function getSchedule(scheduleId: string): Promise<Schedule | undefined> {
     logger.warn('Schedule item missing platform field', { scheduleId });
     return undefined;
   }
-  return item as Schedule;
+  return item as ScheduleRecord;
 }
 
 interface TokenServiceResponse {
@@ -1078,8 +1073,8 @@ async function updateScheduleStatus(
         TableName: process.env.SCHEDULES_TABLE!,
         Key: {
           // Use the real keys from the schedule item
-          pk: (schedule as any).pk,
-          sk: (schedule as any).sk,
+          pk: schedule.pk,
+          sk: schedule.sk,
         },
         UpdateExpression: updateExpression,
         ExpressionAttributeNames: expressionAttributeNames,
@@ -1102,7 +1097,9 @@ async function updateScheduleStatus(
   }
 }
 // Idempotency helpers using RetryQueueTable (attemptNumber=0 as published marker)
-async function getPublishMarker(scheduleId: string): Promise<Record<string, unknown> | null> {
+type PublishMarker = { platformPostId?: string; permalink?: string };
+
+async function getPublishMarker(scheduleId: string): Promise<PublishMarker | null> {
   const table = process.env.RETRY_QUEUE_TABLE;
   if (!table) return null;
   const res = await docClient.send(
@@ -1111,7 +1108,7 @@ async function getPublishMarker(scheduleId: string): Promise<Record<string, unkn
       Key: { scheduleId, attemptNumber: 0 },
     })
   );
-  return (res.Item as Record<string, unknown> | undefined) || null;
+  return (res.Item as PublishMarker | undefined) || null;
 }
 
 async function writePublishMarker(
@@ -1137,4 +1134,27 @@ async function writePublishMarker(
         'attribute_not_exists(scheduleId) AND attribute_not_exists(attemptNumber)',
     })
   );
+}
+// Safe JSON parse helpers for IG error payloads
+interface IGErrorPayload {
+  error?: {
+    error_user_msg?: string;
+    message?: string;
+    error_user_title?: string;
+  };
+}
+
+function safeParseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function asIGErrorPayload(u: unknown): IGErrorPayload | null {
+  if (!u || typeof u !== 'object') return null;
+  // Minimal structural check
+  if ('error' in u) return u as IGErrorPayload;
+  return null;
 }
