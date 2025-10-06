@@ -35,7 +35,9 @@ const retryStrategy = new RetryStrategy(metrics);
 // Legacy constant kept for backward compatibility in logs
 const MAX_RETRY_ATTEMPTS = 5; // Increased to match industry standard
 
-export const handler = async (event: SQSEvent | Record<string, unknown> | undefined): Promise<void> => {
+export const handler = async (
+  event: SQSEvent | Record<string, unknown> | undefined
+): Promise<void> => {
   // 🚨 RECURSIVE LOOP PREVENTION: Add circuit breaker with timestamp tracking
   const processingStartTime = Date.now();
   const maxProcessingTime = 45000; // 45 seconds max processing time
@@ -374,7 +376,9 @@ async function recordRetryAttempt(
       })
     );
   } else {
-    logger.warn('Could not update schedule retry fields; schedule not found via GSI', { scheduleId });
+    logger.warn('Could not update schedule retry fields; schedule not found via GSI', {
+      scheduleId,
+    });
   }
 }
 
@@ -413,7 +417,10 @@ async function markAsFailed(
         })
       );
     } else {
-      logger.warn('Could not mark schedule as failed; schedule not found via GSI', { scheduleId, reason });
+      logger.warn('Could not mark schedule as failed; schedule not found via GSI', {
+        scheduleId,
+        reason,
+      });
     }
 
     // Log to audit table - wrapped in try/catch to prevent audit logging failures from causing recursion

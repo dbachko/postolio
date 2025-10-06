@@ -353,7 +353,9 @@ export class SchedulingStack extends cdk.Stack {
         `/postolio/${environment}/database/secret-arn`
       );
     } catch (e) {
-      console.log('Publishing SSM parameters not found at synth time; proceeding without env injection');
+      console.log(
+        'Publishing SSM parameters not found at synth time; proceeding without env injection'
+      );
     }
 
     // ==================== Lambda Function Shared Role ====================

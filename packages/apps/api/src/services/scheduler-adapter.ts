@@ -335,7 +335,8 @@ export class SchedulerAdapter {
           if ((!content.s3ImageKey || content.s3ImageKey.length === 0) && 'image' === 'image') {
             return {
               success: false,
-              error: 'Missing S3 image key for scheduling. Please re-upload or regenerate the image.',
+              error:
+                'Missing S3 image key for scheduling. Please re-upload or regenerate the image.',
             };
           }
           const schedulePayload: any = {
@@ -360,9 +361,7 @@ export class SchedulerAdapter {
             schedulePayload.mediaKeys = [content.s3ImageKey];
           }
 
-          const schedule = await (
-            await this.client
-          ).createSchedule(schedulePayload);
+          const schedule = await (await this.client).createSchedule(schedulePayload);
 
           scheduleId = schedule?.scheduleId;
           awsScheduleCreated = true;
@@ -772,9 +771,7 @@ export class SchedulerAdapter {
         if (content.s3ImageKey) {
           updatePayload.mediaKeys = [content.s3ImageKey];
         }
-        await (
-          await this.client
-        ).updateSchedule(scheduleId, updatePayload);
+        await (await this.client).updateSchedule(scheduleId, updatePayload);
         awsRescheduleSuccess = true;
         console.log(`AWS schedule ${scheduleId} rescheduled successfully with updated content`);
       } catch (error: unknown) {

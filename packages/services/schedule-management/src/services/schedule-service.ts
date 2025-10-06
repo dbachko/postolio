@@ -485,13 +485,13 @@ export class ScheduleService {
               Target: {
                 Arn: targetCfg2.publisherArn,
                 RoleArn: targetCfg2.schedulerRoleArn,
-              Input: JSON.stringify({
-                scheduleId,
-                contentId: existingSchedule.contentId,
-                brandId: existingSchedule.brandId,
-                campaignId: updateRequest.campaignId || existingSchedule.campaignId,
-                userId: userIdForTarget,
-              }),
+                Input: JSON.stringify({
+                  scheduleId,
+                  contentId: existingSchedule.contentId,
+                  brandId: existingSchedule.brandId,
+                  campaignId: updateRequest.campaignId || existingSchedule.campaignId,
+                  userId: userIdForTarget,
+                }),
               },
               FlexibleTimeWindow: { Mode: 'OFF' },
             })
@@ -507,13 +507,13 @@ export class ScheduleService {
                 Target: {
                   Arn: targetCfg2.publisherArn,
                   RoleArn: targetCfg2.schedulerRoleArn,
-              Input: JSON.stringify({
-                scheduleId,
-                contentId: existingSchedule.contentId,
-                brandId: existingSchedule.brandId,
-                campaignId: updateRequest.campaignId || existingSchedule.campaignId,
-                userId: userIdForTarget,
-              }),
+                  Input: JSON.stringify({
+                    scheduleId,
+                    contentId: existingSchedule.contentId,
+                    brandId: existingSchedule.brandId,
+                    campaignId: updateRequest.campaignId || existingSchedule.campaignId,
+                    userId: userIdForTarget,
+                  }),
                 },
                 FlexibleTimeWindow: { Mode: 'OFF' },
               })

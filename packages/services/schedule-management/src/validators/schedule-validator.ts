@@ -120,7 +120,11 @@ export function validateScheduleRequest(request: Record<string, unknown>): Valid
   const ct = (request.contentType as string | undefined)?.toLowerCase();
   if (ct === 'image') {
     const mk = request.mediaKeys as unknown;
-    if (!Array.isArray(mk) || mk.length === 0 || mk.some((k) => typeof k !== 'string' || k.length === 0)) {
+    if (
+      !Array.isArray(mk) ||
+      mk.length === 0 ||
+      mk.some((k) => typeof k !== 'string' || k.length === 0)
+    ) {
       errors.push('mediaKeys must be a non-empty array of strings for image content');
     }
   }

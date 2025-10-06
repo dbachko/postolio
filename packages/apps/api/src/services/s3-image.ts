@@ -398,8 +398,6 @@ export async function uploadImageBufferToS3(
   }
 }
 
-
-
 /**
  * Migrate existing external image URL to S3
  */

@@ -502,11 +502,11 @@ export const handler = async (event: PublishEvent): Promise<void> => {
       hasHashtags: !!schedule.hashtags,
     });
 
-  // Prepare content with proper media URL
-  const publishableSchedule: Schedule = {
-    ...schedule,
-    mediaKeys: (schedule as any).mediaKeys || schedule.mediaKeys,
-  };
+    // Prepare content with proper media URL
+    const publishableSchedule: Schedule = {
+      ...schedule,
+      mediaKeys: (schedule as any).mediaKeys || schedule.mediaKeys,
+    };
 
     // Get user and brand IDs for token retrieval - prefer schedule data over event
     const userId = schedule.userId || event.userId;
@@ -545,9 +545,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
     } else if (publishableSchedule.imageUrl) {
       // Backward compatibility: derive key from URL
       const key = extractS3Key(publishableSchedule.imageUrl);
-      mediaUrl = key
-        ? await getSignedImageUrlFromKey(key)
-        : publishableSchedule.imageUrl;
+      mediaUrl = key ? await getSignedImageUrlFromKey(key) : publishableSchedule.imageUrl;
     }
 
     // Get platform adapter
@@ -605,7 +603,11 @@ export const handler = async (event: PublishEvent): Promise<void> => {
 
     // Write idempotency marker (best-effort)
     try {
-      await writePublishMarker(event.scheduleId, publishResult.platformPostId, publishResult.platformUrl);
+      await writePublishMarker(
+        event.scheduleId,
+        publishResult.platformPostId,
+        publishResult.platformUrl
+      );
     } catch (markerErr) {
       logger.warn('Failed to write idempotency marker (ignored)', {
         scheduleId: event.scheduleId,
@@ -964,7 +966,6 @@ function extractS3Key(urlStr: string): string | null {
   }
 }
 
-
 // Audit log helper (best-effort, never throws)
 async function logAudit(
   scheduleId: string,
@@ -1028,7 +1029,10 @@ async function updateScheduleStatus(
     // Find the schedule item via GSI to get the actual PK/SK
     const schedule = await getSchedule(scheduleId);
     if (!schedule || !('pk' in schedule) || !('sk' in schedule)) {
-      logger.warn('Cannot update schedule status; schedule not found or missing keys', { scheduleId, status });
+      logger.warn('Cannot update schedule status; schedule not found or missing keys', {
+        scheduleId,
+        status,
+      });
       return;
     }
     let updateExpression = 'SET #status = :status, #updatedAt = :updatedAt';
@@ -1129,7 +1133,8 @@ async function writePublishMarker(
         timestamp: new Date().toISOString(),
         ttl: Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60, // 90 days
       },
-      ConditionExpression: 'attribute_not_exists(scheduleId) AND attribute_not_exists(attemptNumber)',
+      ConditionExpression:
+        'attribute_not_exists(scheduleId) AND attribute_not_exists(attemptNumber)',
     })
   );
 }
