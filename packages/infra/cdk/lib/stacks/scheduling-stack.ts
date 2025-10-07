@@ -712,7 +712,12 @@ export class SchedulingStack extends cdk.Stack {
       eventBus: this.eventBus,
       eventPattern: {
         source: ['postolio.scheduler'],
-        detailType: ['schedule.created', 'schedule.updated', 'schedule.canceled', 'schedule.failed'],
+        detailType: [
+          'schedule.created',
+          'schedule.updated',
+          'schedule.canceled',
+          'schedule.failed',
+        ],
       },
     });
     schedulerEventsRule.addTarget(new targets.LambdaFunction(statusSyncFunction));

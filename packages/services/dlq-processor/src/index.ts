@@ -802,7 +802,9 @@ export const handler = async (
           QueueUrl: queueUrl,
           MessageBody: record.body,
           // Forward message attributes if present
-          MessageAttributes: record.messageAttributes as Record<string, MessageAttributeValue> | undefined,
+          MessageAttributes: record.messageAttributes as
+            | Record<string, MessageAttributeValue>
+            | undefined,
         })
       );
 
