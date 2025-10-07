@@ -558,6 +558,27 @@ export class SchedulingStack extends cdk.Stack {
       role: schedulingLambdaRole,
       vpc: vpc,
       securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
+      bundling: {
+        // Ensure Prisma wasm/compiler assets are available at runtime
+        commandHooks: {
+          beforeBundling(): string[] {
+            return [];
+          },
+          beforeInstall(): string[] {
+            return [];
+          },
+          afterBundling(inputDir: string, outputDir: string): string[] {
+            const dbLambdaClientPath = 'packages/libs/database/lambda-client';
+            return [
+              `mkdir -p ${outputDir}/lambda-client`,
+              // Copy everything under lambda-client to preserve relative paths expected by Prisma
+              `cp -vr ${inputDir}/${dbLambdaClientPath}/. ${outputDir}/lambda-client/ 2>/dev/null || true`,
+            ];
+          },
+        },
+        // Include pg + adapter into the bundle so Lambda has them at runtime
+        nodeModules: ['pg', '@prisma/adapter-pg'],
+      },
       environment: {
         NODE_ENV: environment,
         SERVICE_NAME: 'status-sync',
