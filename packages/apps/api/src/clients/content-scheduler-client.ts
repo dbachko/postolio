@@ -13,6 +13,7 @@ import type { Options as CircuitBreakerOptions } from 'opossum';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { ParameterManager, getCurrentEnvironment } from '@postolio/service-parameters';
 import { resolveAwsServiceTarget } from '@postolio/aws';
+import { logger as baseLogger } from '@postolio/logger';
 
 // ==================== Validation Schemas ====================
 
@@ -201,6 +202,7 @@ export class ContentSchedulerClient {
   private cache: Map<string, { data: CacheValue; timestamp: number; etag?: string }>;
   private debug: boolean;
   private region: string;
+  private logger = baseLogger.child({ module: 'ContentSchedulerClient' });
 
   constructor(config: ContentSchedulerConfig) {
     this.config = {
@@ -297,7 +299,9 @@ export class ContentSchedulerClient {
           }
           return creds;
         } catch (error) {
-          console.error('[ContentSchedulerClient] Failed to get AWS credentials:', error);
+          this.log('error', 'scheduler.auth.credentials_error', {
+            message: error instanceof Error ? error.message : String(error),
+          });
           return undefined;
         }
       },
@@ -314,18 +318,14 @@ export class ContentSchedulerClient {
 
     // Add debug logging for SigV4 signing
     if (this.debug) {
-      console.log(
-        '[ContentSchedulerClient] Configuring SigV4 signing:',
-        JSON.stringify({
-          region: inferredRegion,
-          service: inferredService,
-          baseURL: normalizedBaseURL,
-          AWS_REGION: process.env.AWS_REGION,
-          AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION,
-          // Check if we're running in ECS by looking for task metadata endpoint
-          isECS: !!process.env.ECS_CONTAINER_METADATA_URI_V4,
-        })
-      );
+      this.log('info', 'scheduler.sigv4.config', {
+        region: inferredRegion,
+        service: inferredService,
+        baseURL: normalizedBaseURL,
+        AWS_REGION: process.env.AWS_REGION,
+        AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION,
+        isECS: !!process.env.ECS_CONTAINER_METADATA_URI_V4,
+      });
     }
 
     this.client.interceptors.request.use(sigv4Interceptor);
@@ -342,6 +342,15 @@ export class ContentSchedulerClient {
         rollingCountTimeout: 10000,
         rollingCountBuckets: 10,
         name: 'ContentSchedulerClient',
+        // Do not trip the breaker on client errors (non-429 4xx)
+        errorFilter: (err: unknown) => {
+          if (axios.isAxiosError(err) && err.response) {
+            const status = err.response.status;
+            // Treat <500 (except 429) as filtered (won't count as failure)
+            return status < 500 && status !== 429;
+          }
+          return false;
+        },
         ...this.config.circuitBreakerOptions,
       }
     );
@@ -368,12 +377,14 @@ export class ContentSchedulerClient {
           'CONTENT_SCHEDULER_URL',
           environment
         );
-        console.log(
-          '✅ Content Scheduler URL retrieved from SSM Parameter Store via centralized manager:',
-          finalConfig.baseURL
-        );
+        baseLogger.info('Content Scheduler URL retrieved from SSM', {
+          baseURL: finalConfig.baseURL,
+          source: 'ssm',
+        });
       } catch (ssmError) {
-        console.warn('⚠️  Content Scheduler SSM lookup failed, trying fallback URLs:', ssmError);
+        baseLogger.warn('Content Scheduler SSM lookup failed, trying fallback URLs', {
+          error: ssmError instanceof Error ? ssmError.message : String(ssmError),
+        });
 
         // Fall back to environment variable
         const fallbackUrl =
@@ -382,9 +393,9 @@ export class ContentSchedulerClient {
           process.env.CONTENT_SCHEDULER_URL;
         if (fallbackUrl) {
           finalConfig.baseURL = fallbackUrl;
-          console.warn('⚠️  Using Content Scheduler fallback URL:', fallbackUrl);
+          baseLogger.warn('Using Content Scheduler fallback URL', { baseURL: fallbackUrl });
         } else {
-          console.error('❌ Content Scheduler URL not found in SSM or environment variables');
+          baseLogger.error('Content Scheduler URL not found in SSM or environment variables');
           throw new Error('Unable to resolve Content Scheduler service URL');
         }
       }
@@ -417,25 +428,34 @@ export class ContentSchedulerClient {
 
       // Log the raw response for debugging
       if (this.debug) {
-        console.log('Raw schedule creation response:', JSON.stringify(response.data, null, 2));
+        const size = this.safeSize(response.data);
+        this.log('info', 'scheduler.http.create.response', {
+          status: response.status,
+          size,
+          body: size < 2048 ? response.data : undefined,
+        });
       }
 
       // Validate and return response
       try {
         return ScheduleSchema.parse(response.data);
       } catch (parseError) {
-        console.error('Failed to parse schedule response:', parseError);
-        console.error('Response data:', JSON.stringify(response.data, null, 2));
-        console.error(
-          'Schema validation error details:',
-          parseError instanceof Error ? parseError.message : String(parseError)
-        );
+        const size = this.safeSize(response.data);
+        this.log('error', 'scheduler.response.parse_failed', {
+          baseURL: this.config.baseURL,
+          path: 'schedules',
+          status: response.status,
+          size,
+          body: size < 2048 ? response.data : undefined,
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+          zodErrors: parseError instanceof z.ZodError ? parseError.errors : undefined,
+        });
 
         // If the response has scheduleId, try to return it anyway for backward compatibility
         if (response.data && response.data.scheduleId) {
-          console.warn(
-            'Schema validation failed but scheduleId exists, returning partial response'
-          );
+          this.log('warn', 'scheduler.response.schema_mismatch_with_id', {
+            scheduleId: response.data.scheduleId,
+          });
           return {
             ...response.data,
             scheduleId: response.data.scheduleId,
@@ -444,9 +464,13 @@ export class ContentSchedulerClient {
 
         // If the response doesn't have scheduleId, use the contentId as a fallback
         if (response.data && !response.data.scheduleId) {
+          const fallbackId = response.data.id || response.data.contentId || randomUUID();
+          this.log('warn', 'scheduler.response.schema_mismatch_without_id', {
+            fallbackScheduleId: fallbackId,
+          });
           return {
             ...response.data,
-            scheduleId: response.data.id || response.data.contentId || randomUUID(),
+            scheduleId: fallbackId,
           } as Schedule;
         }
         throw parseError;
@@ -635,29 +659,37 @@ export class ContentSchedulerClient {
     try {
       return (await this.circuitBreaker.fire(fn)) as T;
     } catch (error) {
-      // Check if circuit breaker is open
-      if (error && typeof error === 'object' && 'name' in error) {
-        const errorObj = error as { name?: string };
+      // Map opossum (circuit breaker) error codes properly
+      const code = (error as { code?: string } | undefined)?.code;
 
-        // Handle circuit breaker specific errors
-        if (errorObj.name === 'OpenCircuitError') {
-          throw new SchedulerError(
-            'Scheduler service is temporarily unavailable due to repeated failures',
-            'CIRCUIT_BREAKER_OPEN',
-            503,
-            {
-              message: 'Circuit breaker is open. Service will retry after cooldown period.',
-              stats: this.getCircuitBreakerStats(),
-            }
-          );
-        }
+      if (code === 'EOPENBREAKER') {
+        throw new SchedulerError(
+          'Scheduler service is temporarily unavailable due to repeated failures',
+          'CIRCUIT_BREAKER_OPEN',
+          503,
+          {
+            message: 'Circuit breaker is open. Service will retry after cooldown period.',
+            stats: this.getCircuitBreakerStats(),
+          }
+        );
+      }
 
-        if (errorObj.name === 'TimeoutError') {
-          throw new SchedulerError('Request to scheduler service timed out', 'TIMEOUT', 504, {
-            timeout: this.config.timeout,
-            message: 'The operation took too long to complete',
-          });
-        }
+      if (code === 'ETIMEDOUT') {
+        throw new SchedulerError('Request to scheduler service timed out', 'TIMEOUT', 504, {
+          timeout: this.config.timeout,
+          message:
+            error instanceof Error && error.message ? error.message : 'Operation timed out',
+        });
+      }
+
+      if (code === 'ESEMLOCKED') {
+        // Concurrency limit reached for the breaker; treat as retryable/service busy
+        throw new SchedulerError(
+          'Scheduler service is busy. Please retry shortly.',
+          'SERVICE_BUSY',
+          429,
+          { stats: this.getCircuitBreakerStats() }
+        );
       }
 
       // Handle known error types
@@ -676,7 +708,7 @@ export class ContentSchedulerClient {
       }
 
       // Log unexpected errors for debugging
-      console.error('Unexpected error in circuit breaker:', error);
+      this.log('error', 'scheduler.circuit.unexpected_error', this.summarizeError(error));
 
       throw new SchedulerError(
         'Unexpected error occurred in scheduler client',
@@ -876,14 +908,11 @@ export class ContentSchedulerClient {
           // Log Authorization header to verify SigV4 signing
           const hasAuth = !!(config.headers['Authorization'] || config.headers['authorization']);
           if (!hasAuth && (config.method || 'get').toUpperCase() !== 'OPTIONS') {
-            console.warn(
-              '[ContentSchedulerClient] Warning: No Authorization header present before request',
-              JSON.stringify({
-                url: config.url,
-                fullUrl,
-                headers: Object.keys(config.headers || {}),
-              })
-            );
+            this.log('warn', 'scheduler.auth.no_authorization_header', {
+              url: config.url,
+              fullUrl,
+              headers: Object.keys(config.headers || {}),
+            });
           }
 
           this.log('info', 'scheduler.http.request', {
@@ -930,18 +959,15 @@ export class ContentSchedulerClient {
             error.response?.status === 403 &&
             error.response?.data?.message === 'Missing Authentication Token'
           ) {
-            console.error(
-              '[ContentSchedulerClient] Authentication Error - Missing or invalid SigV4 signature:',
-              JSON.stringify({
-                url: cfg.url,
-                baseURL: cfg.baseURL,
-                fullURL: this.composeFullUrl(cfg.baseURL || this.config.baseURL, cfg.url || ''),
-                headers: cfg.headers,
-                AWS_REGION: process.env.AWS_REGION,
-                isECS: !!process.env.ECS_CONTAINER_METADATA_URI_V4,
-                errorData: error.response?.data,
-              })
-            );
+            this.log('error', 'scheduler.auth.missing_auth_token', {
+              url: cfg.url,
+              baseURL: cfg.baseURL,
+              fullURL: this.composeFullUrl(cfg.baseURL || this.config.baseURL, cfg.url || ''),
+              headers: cfg.headers,
+              AWS_REGION: process.env.AWS_REGION,
+              isECS: !!process.env.ECS_CONTAINER_METADATA_URI_V4,
+              errorData: error.response?.data,
+            });
           }
 
           this.log('error', 'scheduler.http.error', {
@@ -964,73 +990,54 @@ export class ContentSchedulerClient {
    */
   private setupCircuitBreakerEvents(): void {
     this.circuitBreaker.on('open', () => {
-      console.warn(
-        'Circuit breaker opened - requests will fail fast',
-        JSON.stringify({
-          baseURL: this.config.baseURL,
-          timestamp: new Date().toISOString(),
-          stats: this.circuitBreaker.stats,
-        })
-      );
+      this.log('warn', 'scheduler.circuit.open', {
+        baseURL: this.config.baseURL,
+        timestamp: new Date().toISOString(),
+        stats: this.circuitBreaker.stats,
+      });
     });
 
     this.circuitBreaker.on('halfOpen', () => {
-      console.info(
-        'Circuit breaker half-open - testing service availability',
-        JSON.stringify({
-          baseURL: this.config.baseURL,
-          timestamp: new Date().toISOString(),
-          stats: this.circuitBreaker.stats,
-        })
-      );
+      this.log('info', 'scheduler.circuit.half_open', {
+        baseURL: this.config.baseURL,
+        timestamp: new Date().toISOString(),
+        stats: this.circuitBreaker.stats,
+      });
     });
 
     this.circuitBreaker.on('close', () => {
-      console.info(
-        'Circuit breaker closed - service recovered',
-        JSON.stringify({
-          baseURL: this.config.baseURL,
-          timestamp: new Date().toISOString(),
-          stats: this.circuitBreaker.stats,
-        })
-      );
+      this.log('info', 'scheduler.circuit.close', {
+        baseURL: this.config.baseURL,
+        timestamp: new Date().toISOString(),
+        stats: this.circuitBreaker.stats,
+      });
     });
 
     this.circuitBreaker.on('timeout', () => {
-      console.error(
-        'Circuit breaker timeout',
-        JSON.stringify({
-          baseURL: this.config.baseURL,
-          timeout: this.config.timeout,
-          timestamp: new Date().toISOString(),
-          stats: this.circuitBreaker.stats,
-        })
-      );
+      this.log('error', 'scheduler.circuit.timeout', {
+        baseURL: this.config.baseURL,
+        timeout: this.config.timeout,
+        timestamp: new Date().toISOString(),
+        stats: this.circuitBreaker.stats,
+      });
     });
 
     this.circuitBreaker.on('failure', (error: Error) => {
-      console.error(
-        'Circuit breaker failure detected',
-        JSON.stringify({
-          baseURL: this.config.baseURL,
-          error: error.message,
-          timestamp: new Date().toISOString(),
-          stats: this.circuitBreaker.stats,
-        })
-      );
+      this.log('error', 'scheduler.circuit.failure', {
+        baseURL: this.config.baseURL,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        stats: this.circuitBreaker.stats,
+      });
     });
 
     this.circuitBreaker.on('success', () => {
-      // Only log on debug level to avoid spam
       if (process.env.NODE_ENV === 'dev') {
-        console.debug(
-          'Circuit breaker success',
-          JSON.stringify({
-            baseURL: this.config.baseURL,
-            timestamp: new Date().toISOString(),
-            stats: this.circuitBreaker.stats,
-          })
-        );
+        this.log('debug', 'scheduler.circuit.success', {
+          baseURL: this.config.baseURL,
+          timestamp: new Date().toISOString(),
+          stats: this.circuitBreaker.stats,
+        });
       }
     });
   }
@@ -1051,17 +1058,11 @@ export class ContentSchedulerClient {
     event: string,
     details: ErrorDetails
   ): void {
-    // Simple structured logger; could later integrate with pino
-    const payload = {
-      level,
-      time: new Date().toISOString(),
-      event,
-      ...details,
-    };
-    if (level === 'error') console.error(JSON.stringify(payload));
-    else if (level === 'warn') console.warn(JSON.stringify(payload));
-    else if (level === 'debug') console.debug(JSON.stringify(payload));
-    else console.log(JSON.stringify(payload));
+    const message = String(event);
+    if (level === 'error') this.logger.error(message, details as any);
+    else if (level === 'warn') this.logger.warn(message, details as any);
+    else if (level === 'debug') this.logger.debug(message, details as any);
+    else this.logger.info(message, details as any);
   }
 
   private summarizeError(err: unknown): Record<string, unknown> {

@@ -17,6 +17,7 @@ import { TimezoneService } from './timezone.js';
 import type { StatusBroadcaster } from './status-broadcaster.js';
 import type { GenerationParams } from '../types/scheduler.js';
 import { eventEmitter } from './event-emitter.js';
+import { logger } from '@postolio/logger';
 // We now pass S3 object keys directly to Scheduler; CDN URLs no longer required
 
 const prisma = getDatabaseClient();
@@ -59,12 +60,12 @@ export class SchedulerAdapter {
         ...this.config,
       });
 
-      console.log('✅ ContentSchedulerClient initialized with service discovery');
+      logger.info('ContentSchedulerClient initialized with service discovery');
       this.schedulerEnabled = true;
       this._client = client;
       return client;
     } catch (error) {
-      console.error('❌ Failed to initialize ContentSchedulerClient:', error);
+      logger.error('Failed to initialize ContentSchedulerClient', { error });
 
       // Fallback: try with legacy environment variable
       const fallbackUrl = process.env.SCHEDULER_API_URL || 'http://localhost:4000';
@@ -76,14 +77,9 @@ export class SchedulerAdapter {
         fallbackUrl.includes('example.com');
 
       if (isPlaceholderUrl) {
-        console.warn('⚠️  AWS Content Scheduler is not configured properly.');
-        console.warn(`⚠️  Current URL: ${fallbackUrl}`);
-        console.warn(
-          '⚠️  Running in degraded mode - content will be saved but not scheduled for automatic publishing.'
-        );
-        console.warn(
-          '⚠️  To enable scheduling, deploy the ContentScheduler stack or set SCHEDULER_API_URL to a valid endpoint.'
-        );
+        logger.warn('AWS Content Scheduler is not configured properly', { baseURL: fallbackUrl });
+        logger.warn('Running in degraded mode - content will be saved but not scheduled for automatic publishing.');
+        logger.warn('To enable scheduling, deploy the ContentScheduler stack or set SCHEDULER_API_URL to a valid endpoint.');
         this.schedulerEnabled = false;
         throw new Error('Scheduler not configured - degraded mode');
       } else {
@@ -95,15 +91,12 @@ export class SchedulerAdapter {
             maxRetries: 3,
             ...this.config,
           });
-          console.warn('⚠️  Using fallback ContentScheduler URL:', fallbackUrl);
+          logger.warn('Using fallback ContentScheduler URL', { baseURL: fallbackUrl });
           this.schedulerEnabled = true;
           this._client = client;
           return client;
         } catch (fallbackError) {
-          console.error(
-            '❌ Failed to initialize ContentScheduler with fallback URL:',
-            fallbackError
-          );
+          logger.error('Failed to initialize ContentScheduler with fallback URL', { error: fallbackError });
           this.schedulerEnabled = false;
           throw fallbackError;
         }
@@ -133,13 +126,7 @@ export class SchedulerAdapter {
   static getInstance(config?: Partial<ContentSchedulerConfig>): SchedulerAdapter {
     if (!SchedulerAdapter.instance) {
       // This is problematic but kept for backward compatibility
-      console.warn(
-        '⚠️ Using deprecated getInstance(). Migrate to SchedulerAdapter.create() for proper async initialization.\n' +
-          'Migration guide:\n' +
-          '  Before: const adapter = SchedulerAdapter.getInstance(config);\n' +
-          '  After:  const adapter = await SchedulerAdapter.create(config);\n' +
-          'This ensures proper service discovery and prevents race conditions. getInstance() will be removed in v3.0.0.'
-      );
+      logger.warn('Using deprecated getInstance(). Migrate to SchedulerAdapter.create() for proper async initialization.');
       SchedulerAdapter.instance = new SchedulerAdapter(config);
     }
     return SchedulerAdapter.instance;
@@ -195,10 +182,7 @@ export class SchedulerAdapter {
 
       // 🔥 CRITICAL: Validate campaign association to prevent validation bypass
       if (!content.campaignId) {
-        console.error(
-          `Scheduling blocked: Content ${contentId} is not associated with a campaign. ` +
-            `All scheduled content must be part of a campaign for proper state management.`
-        );
+        logger.error('Scheduling blocked: content has no campaign', { contentId });
         return {
           success: false,
           error: 'Content must be associated with a campaign before scheduling',
@@ -207,9 +191,7 @@ export class SchedulerAdapter {
 
       // Validate campaign exists and is in a valid state
       if (!content.campaign) {
-        console.error(
-          `Scheduling blocked: Campaign ${content.campaignId} not found for content ${contentId}`
-        );
+        logger.error('Scheduling blocked: campaign not found for content', { campaignId: content.campaignId, contentId });
         return {
           success: false,
           error: 'Associated campaign not found',
@@ -219,9 +201,7 @@ export class SchedulerAdapter {
       // Only allow scheduling for active campaigns, UNLESS this is a draft post
       // (which indicates auto-recovery from a failed campaign start)
       if (content.campaign.status !== 'active' && content.status !== 'draft') {
-        console.warn(
-          `Scheduling blocked: Campaign ${content.campaignId} is ${content.campaign.status}, not ACTIVE`
-        );
+        logger.warn('Scheduling blocked: campaign not active', { campaignId: content.campaignId, status: content.campaign.status });
         return {
           success: false,
           error: `Cannot schedule content for ${content.campaign.status.toLowerCase()} campaign`,
@@ -231,17 +211,15 @@ export class SchedulerAdapter {
       // Auto-activate campaign if scheduling a draft post from a non-active campaign
       // This handles auto-recovery when a campaign failed to start properly
       if (content.campaign.status !== 'active' && content.status === 'draft') {
-        console.log(
-          `[AUTO-RECOVERY] Activating campaign ${content.campaignId} to allow scheduling of draft content ${contentId}`
-        );
+        logger.info('AUTO-RECOVERY: Activating campaign to allow scheduling of draft content', { campaignId: content.campaignId, contentId });
         try {
           await prisma.campaign.update({
             where: { id: content.campaignId },
             data: { status: 'active' },
           });
-          console.log(`Campaign ${content.campaignId} activated for auto-recovery`);
+          logger.info('Campaign activated for auto-recovery', { campaignId: content.campaignId });
         } catch (campaignUpdateError) {
-          console.error('Failed to activate campaign during auto-recovery:', campaignUpdateError);
+          logger.error('Failed to activate campaign during auto-recovery', { error: campaignUpdateError });
           // Don't fail the scheduling - continue with scheduling anyway
         }
       }
@@ -252,7 +230,7 @@ export class SchedulerAdapter {
 
       // 2. Get the brand's timezone for proper scheduling
       const brandTimezone = await TimezoneService.getBrandTimezone(content.brandId);
-      console.log(`Scheduling for brand ${content.brandId} in timezone: ${brandTimezone}`);
+      logger.info('Scheduling with brand timezone', { brandId: content.brandId, timezone: brandTimezone });
 
       // 3. Determine the scheduled time
       let scheduledTimeUTC: Date;
@@ -260,9 +238,7 @@ export class SchedulerAdapter {
       if (customTime) {
         // If customTime is provided, assume it's in the brand's timezone and convert to UTC
         scheduledTimeUTC = TimezoneService.toUTC(customTime, brandTimezone);
-        console.log(
-          `Custom time ${customTime.toISOString()} in ${brandTimezone} converted to UTC: ${scheduledTimeUTC.toISOString()}`
-        );
+        logger.info('Custom time converted to UTC', { brandId: content.brandId, timezone: brandTimezone, scheduledAtUTC: scheduledTimeUTC.toISOString() });
       } else if (content.scheduledAt) {
         // If content already has a scheduled time, use it (assume it's already in UTC)
         scheduledTimeUTC = new Date(content.scheduledAt);
@@ -280,18 +256,15 @@ export class SchedulerAdapter {
 
       // Check if another operation is in progress
       if (currentParams.processing?.active) {
-        console.log(`Canceling existing operation for content ${contentId}`);
+        logger.info('Canceling existing operation for content', { contentId });
 
         // Cancel existing AWS schedule if it exists
         if (currentParams.scheduleId) {
           try {
             await (await this.client).cancelSchedule(currentParams.scheduleId);
-            console.log(`Canceled existing AWS schedule ${currentParams.scheduleId}`);
+            logger.info('Canceled existing AWS schedule', { scheduleId: currentParams.scheduleId });
           } catch (cancelError) {
-            console.warn(
-              `Failed to cancel existing schedule ${currentParams.scheduleId}:`,
-              cancelError
-            );
+            logger.warn('Failed to cancel existing schedule', { scheduleId: currentParams.scheduleId, error: cancelError });
             // Continue with new operation anyway
           }
         }
@@ -319,7 +292,7 @@ export class SchedulerAdapter {
 
       // Skip AWS scheduling if scheduler is not enabled
       if (!this.schedulerEnabled) {
-        console.info('Scheduler is disabled - saving content locally without AWS scheduling');
+        logger.info('Scheduler is disabled - saving content locally without AWS scheduling');
         // Clear processing state since we're not actually scheduling
         await prisma.content.update({
           where: { id: contentId },
@@ -374,15 +347,13 @@ export class SchedulerAdapter {
               ? (awsError as { code?: string }).code
               : undefined;
           if (code === 'CIRCUIT_BREAKER_OPEN' || code === 'EOPENBREAKER') {
-            console.warn(
-              'Circuit breaker is open - AWS scheduler temporarily unavailable. Content will be saved locally but not scheduled for publishing.'
-            );
-          } else if (code === 'NETWORK_ERROR') {
-            console.warn(
-              'Network error connecting to AWS scheduler. Content will be saved locally but not scheduled for publishing.'
-            );
+            logger.warn('Circuit breaker open - saving locally without scheduling');
+          } else if (code === 'NETWORK_ERROR' || code === 'TIMEOUT') {
+            logger.warn('Network or timeout error connecting to scheduler - saving locally');
+          } else if (code === 'SERVICE_BUSY') {
+            logger.warn('Scheduler service busy - saving locally');
           } else {
-            console.error('Failed to create schedule in AWS:', awsError);
+            logger.error('Failed to create schedule in AWS', { error: awsError });
           }
           // AWS scheduling failed - we'll handle this below by updating local DB with error
         }
@@ -406,7 +377,7 @@ export class SchedulerAdapter {
             },
           });
         } catch (dbError) {
-          console.error('Failed to update local database with scheduling error:', dbError);
+          logger.error('Failed to update local database with scheduling error', { error: dbError });
           throw dbError;
         }
       }
@@ -446,7 +417,7 @@ export class SchedulerAdapter {
           scheduledTimeUTC,
           brandTimezone
         );
-        console.log(`Content ${contentId} scheduled successfully for ${localTimeDisplay}`);
+        logger.info('Content scheduled successfully', { contentId, scheduledFor: localTimeDisplay });
       }
 
       return awsScheduleCreated
@@ -461,7 +432,7 @@ export class SchedulerAdapter {
             error: 'AWS Scheduler unavailable - content not scheduled',
           };
     } catch (error) {
-      console.error('Error scheduling content:', error);
+      logger.error('Error scheduling content', { error });
 
       // Attempt to restore original state in database
       if (originalStatus !== null && contentId) {
@@ -475,7 +446,7 @@ export class SchedulerAdapter {
             },
           });
         } catch (restoreError) {
-          console.error('Failed to restore original state:', restoreError);
+          logger.error('Failed to restore original state', { error: restoreError });
         }
       }
 
@@ -512,20 +483,18 @@ export class SchedulerAdapter {
         try {
           await (await this.client).cancelSchedule(scheduleId);
           awsCancelled = true;
-          console.log(`AWS schedule ${scheduleId} cancelled successfully`);
+          logger.info('AWS schedule cancelled successfully', { scheduleId });
         } catch (error: unknown) {
           // Handle circuit breaker errors gracefully
           const errObj = error as { code?: string } | undefined;
           if (errObj?.code === 'CIRCUIT_BREAKER_OPEN' || errObj?.code === 'EOPENBREAKER') {
-            console.warn(
-              'Circuit breaker is open - AWS scheduler temporarily unavailable. Continuing with local cancellation only.'
-            );
-          } else if (errObj?.code === 'NETWORK_ERROR') {
-            console.warn(
-              'Network error connecting to AWS scheduler. Continuing with local cancellation only.'
-            );
+            logger.warn('Circuit breaker open - continuing with local cancellation only');
+          } else if (errObj?.code === 'NETWORK_ERROR' || errObj?.code === 'TIMEOUT') {
+            logger.warn('Network or timeout error - continuing with local cancellation only');
+          } else if (errObj?.code === 'SERVICE_BUSY') {
+            logger.warn('Scheduler service busy - continuing with local cancellation only');
           } else {
-            console.error('Failed to cancel in AWS:', error);
+            logger.error('Failed to cancel in AWS', { error });
             // Log inconsistency but continue with local update
             await this.logInconsistency(contentId, 'AWS_CANCEL_FAILED', {
               scheduleId,
@@ -567,7 +536,7 @@ export class SchedulerAdapter {
 
       return { success: true };
     } catch (error) {
-      console.error('Error canceling schedule:', error);
+      logger.error('Error canceling schedule', { error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -608,9 +577,7 @@ export class SchedulerAdapter {
       // Convert new time to UTC if it's provided in local time
       const newTimeUTC = isLocalTime ? TimezoneService.toUTC(newTime, brandTimezone) : newTime;
 
-      console.log(
-        `Rescheduling content ${contentId} from ${content.scheduledAt} to ${newTimeUTC.toISOString()} (${brandTimezone})`
-      );
+      logger.info('Rescheduling content', { contentId, from: content.scheduledAt, to: newTimeUTC.toISOString(), timezone: brandTimezone });
 
       // Type-safe access to generationParams
       const generationParams = (content.generationParams as GenerationParams | null) || {};
@@ -627,9 +594,7 @@ export class SchedulerAdapter {
           // 2. Campaign started but scheduling failed
           // 3. Manual scheduling attempt failed
 
-          console.warn(
-            `[AUTO-RECOVERY] Content ${contentId} (status: ${content.status}) has scheduledAt but no AWS schedule ID - treating as new schedule attempt`
-          );
+          logger.warn('AUTO-RECOVERY: scheduledAt present but no scheduleId - treating as new schedule', { contentId, status: content.status });
 
           // Create a new schedule instead of failing
           // This provides auto-recovery for failed scheduling attempts
@@ -637,9 +602,7 @@ export class SchedulerAdapter {
             ? newTime
             : TimezoneService.toLocal(newTimeUTC, brandTimezone);
 
-          console.log(
-            `Attempting to schedule content ${contentId} at ${newTimeUTC.toISOString()} (${brandTimezone})`
-          );
+          logger.info('Attempting to schedule content after recovery', { contentId, scheduledAt: newTimeUTC.toISOString(), timezone: brandTimezone });
 
           const scheduleResult = await this.scheduleContent(
             contentId,
@@ -648,9 +611,7 @@ export class SchedulerAdapter {
           );
 
           if (scheduleResult.success) {
-            console.log(
-              `[AUTO-RECOVERY SUCCESS] Content ${contentId} scheduled at ${newTimeUTC.toISOString()} after recovery`
-            );
+            logger.info('AUTO-RECOVERY SUCCESS: Content scheduled after recovery', { contentId, scheduledAt: newTimeUTC.toISOString() });
 
             // Also update the scheduled time if it's different
             if (content.scheduledAt.getTime() !== newTimeUTC.getTime()) {
@@ -673,9 +634,7 @@ export class SchedulerAdapter {
         } else if (content.status === 'scheduled') {
           // Edge case: Content is marked as scheduled but has no scheduledAt or scheduleId
           // This shouldn't happen but handle it gracefully
-          console.error(
-            `Data inconsistency: Content ${contentId} is marked as scheduled but has no scheduledAt or scheduleId`
-          );
+          logger.error('Data inconsistency: content marked as scheduled but missing scheduledAt or scheduleId', { contentId });
 
           // Try to schedule it at the requested time
           const newTimeLocal = isLocalTime
@@ -689,7 +648,7 @@ export class SchedulerAdapter {
           );
 
           if (scheduleResult.success) {
-            console.log(`Successfully created schedule for inconsistent content ${contentId}`);
+            logger.info('Successfully created schedule for inconsistent content', { contentId });
             return { success: true };
           } else {
             return {
@@ -701,9 +660,7 @@ export class SchedulerAdapter {
           // NEW: Handle draft posts from campaigns that failed to start properly
           // When a campaign fails to start, posts are created as drafts with campaignId but no scheduleId
           // User is trying to "reschedule" (set a time) on these drafts - treat as initial schedule
-          console.warn(
-            `[AUTO-RECOVERY] Draft content ${contentId} from campaign ${content.campaignId} has no schedule - creating new schedule`
-          );
+          logger.warn('AUTO-RECOVERY: Draft content with campaign has no schedule - creating new schedule', { contentId, campaignId: content.campaignId });
 
           const newTimeLocal = isLocalTime
             ? newTime
@@ -726,9 +683,7 @@ export class SchedulerAdapter {
           );
 
           if (scheduleResult.success) {
-            console.log(
-              `[AUTO-RECOVERY SUCCESS] Draft content ${contentId} scheduled at ${newTimeUTC.toISOString()}`
-            );
+            logger.info('AUTO-RECOVERY SUCCESS: Draft content scheduled', { contentId, scheduledAt: newTimeUTC.toISOString() });
             return { success: true };
           } else {
             // Rollback the status change if scheduling failed
@@ -775,27 +730,31 @@ export class SchedulerAdapter {
         }
         await (await this.client).updateSchedule(scheduleId, updatePayload);
         awsRescheduleSuccess = true;
-        console.log(`AWS schedule ${scheduleId} rescheduled successfully with updated content`);
+        logger.info('AWS schedule rescheduled successfully with updated content', { scheduleId });
       } catch (error: unknown) {
         // Handle circuit breaker errors with more specific messaging
         const errObj = error as { code?: string; message?: string } | undefined;
         if (errObj?.code === 'CIRCUIT_BREAKER_OPEN' || errObj?.code === 'EOPENBREAKER') {
-          console.error(
-            'Circuit breaker is open - AWS scheduler temporarily unavailable. Reschedule failed.'
-          );
+          logger.error('Circuit breaker is open - AWS scheduler temporarily unavailable. Reschedule failed.');
           return {
             success: false,
             error: 'AWS scheduler temporarily unavailable. Please try again in a few minutes.',
           };
-        } else if (errObj?.code === 'NETWORK_ERROR') {
-          console.error('Network error connecting to AWS scheduler. Reschedule failed.');
+        } else if (errObj?.code === 'NETWORK_ERROR' || errObj?.code === 'TIMEOUT') {
+          logger.error('Network or timeout error connecting to AWS scheduler. Reschedule failed.');
           return {
             success: false,
             error:
               'Network error connecting to scheduler service. Please check your connection and try again.',
           };
+        } else if (errObj?.code === 'SERVICE_BUSY') {
+          logger.error('Scheduler service busy. Reschedule failed.');
+          return {
+            success: false,
+            error: 'Scheduler service is busy. Please retry shortly.',
+          };
         } else {
-          console.error('Failed to reschedule in AWS:', error);
+          logger.error('Failed to reschedule in AWS', { error });
           return {
             success: false,
             error: `Failed to reschedule: ${errObj?.message || 'Unknown AWS scheduler error'}`,
@@ -824,12 +783,12 @@ export class SchedulerAdapter {
 
           // Log with timezone context
           const localTimeDisplay = TimezoneService.formatWithTimezone(newTimeUTC, brandTimezone);
-          console.log(`Content ${contentId} rescheduled successfully for ${localTimeDisplay}`);
+          logger.info('Content rescheduled successfully', { contentId, scheduledFor: localTimeDisplay });
 
           return { success: true };
         } catch (dbError) {
           // AWS succeeded but local DB failed - this is a serious consistency issue
-          console.error('CRITICAL: AWS reschedule succeeded but local DB update failed:', dbError);
+          logger.error('CRITICAL: AWS reschedule succeeded but local DB update failed', { error: dbError });
           await this.logInconsistency(contentId, 'LOCAL_DB_UPDATE_FAILED_AFTER_AWS_SUCCESS', {
             awsScheduleId: scheduleId,
             newTime: newTimeUTC.toISOString(),
@@ -850,7 +809,7 @@ export class SchedulerAdapter {
         error: 'Unknown error during reschedule operation',
       };
     } catch (error) {
-      console.error('Error rescheduling content:', error);
+      logger.error('Error rescheduling content', { error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -895,7 +854,7 @@ export class SchedulerAdapter {
       const mergedContent = this.mergeScheduledContent(schedules, localContent);
       return mergedContent;
     } catch (error) {
-      console.error('Error getting scheduled content:', error);
+      logger.error('Error getting scheduled content', { error });
 
       // Fallback to local database
       const content = await prisma.content.findMany({
@@ -955,7 +914,7 @@ export class SchedulerAdapter {
         synced: this.areStatsSynced(awsStats, localStats),
       };
     } catch (error) {
-      console.error('Error getting scheduling stats:', error);
+      logger.error('Error getting scheduling stats', { error });
 
       // Fallback to local stats
       return {
@@ -973,7 +932,7 @@ export class SchedulerAdapter {
     try {
       return await (await this.client).healthCheck();
     } catch (error) {
-      console.error('Scheduler health check failed:', error);
+      logger.error('Scheduler health check failed', { error });
       return false;
     }
   }
@@ -1023,15 +982,12 @@ export class SchedulerAdapter {
     details: Record<string, unknown>
   ): Promise<void> {
     try {
-      // Log to console for immediate visibility
-      console.error(
-        `DATA INCONSISTENCY [${type}]:`,
-        JSON.stringify({
-          contentId,
-          timestamp: new Date().toISOString(),
-          ...details,
-        })
-      );
+      logger.error('DATA INCONSISTENCY', {
+        type,
+        contentId,
+        timestamp: new Date().toISOString(),
+        ...details,
+      });
 
       // Store in database for reconciliation (using generationParams as audit trail)
       const content = await prisma.content.findUnique({
@@ -1067,7 +1023,7 @@ export class SchedulerAdapter {
       // TODO: Trigger reconciliation job if critical inconsistency
     } catch (error) {
       // Don't let logging failures break the main flow
-      console.error('Failed to log inconsistency:', error);
+      logger.error('Failed to log inconsistency', { error });
     }
   }
 

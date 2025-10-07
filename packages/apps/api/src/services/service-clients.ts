@@ -5,6 +5,7 @@
 
 import { TokenServiceClient } from '../clients/token-service-client.js';
 import { ContentSchedulerClient } from '../clients/content-scheduler-client.js';
+import { logger } from '@postolio/logger';
 
 export class ServiceClients {
   private static instance: ServiceClients | null = null;
@@ -25,6 +26,9 @@ export class ServiceClients {
   private constructor() {
     // Private constructor for singleton
   }
+  
+  // Optional: eager child logger for this module
+  // Using default logger is fine; child can add module context if needed
 
   /**
    * Get Token Service client
@@ -34,11 +38,9 @@ export class ServiceClients {
       try {
         // TokenServiceClient with RESTful endpoints and enhanced features
         this._tokenService = new TokenServiceClient();
-        console.log(
-          '✅ Token Service client initialized with RESTful endpoints and enhanced features'
-        );
+        logger.info('Token Service client initialized with RESTful endpoints and enhanced features');
       } catch (error) {
-        console.error('❌ Failed to initialize Token Service client:', error);
+        logger.error('Failed to initialize Token Service client', { error });
         throw error;
       }
     }
@@ -55,9 +57,9 @@ export class ServiceClients {
         this._schedulerService = await ContentSchedulerClient.create({
           debugLogging: process.env.NODE_ENV === 'dev',
         });
-        console.log('✅ Content Scheduler client initialized');
+        logger.info('Content Scheduler client initialized');
       } catch (error) {
-        console.error('❌ Failed to initialize Content Scheduler client:', error);
+        logger.error('Failed to initialize Content Scheduler client', { error });
         throw error;
       }
     }
@@ -141,13 +143,13 @@ export async function getSchedulerService(): Promise<ContentSchedulerClient> {
  * Initialize all service clients (optional, for eager initialization)
  */
 export async function initializeAllServices(): Promise<void> {
-  console.log('🚀 Initializing all service clients...');
+  logger.info('Initializing all service clients...');
 
   try {
     await Promise.all([serviceClients.getTokenService(), serviceClients.getSchedulerService()]);
-    console.log('✅ All service clients initialized successfully');
+    logger.info('All service clients initialized successfully');
   } catch (error) {
-    console.error('❌ Failed to initialize some service clients:', error);
+    logger.error('Failed to initialize some service clients', { error });
     throw error;
   }
 }
