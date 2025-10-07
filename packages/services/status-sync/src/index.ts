@@ -82,9 +82,9 @@ async function getDatabaseProxyEndpoint(): Promise<string> {
 }
 
 async function getSecretArn(): Promise<string> {
-  // Prefer explicit env var if provided and not a dummy placeholder
+  // Prefer explicit env var if provided
   const envArn = process.env.DB_SECRET_ARN;
-  if (envArn && !envArn.startsWith('dummy-value-for-')) {
+  if (envArn) {
     return envArn;
   }
 
