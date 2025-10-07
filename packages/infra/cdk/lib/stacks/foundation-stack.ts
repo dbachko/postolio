@@ -30,6 +30,10 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as cr from 'aws-cdk-lib/custom-resources';
+import * as path from 'path';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
 
@@ -517,6 +521,58 @@ export class FoundationStack extends cdk.Stack {
         description: 'RDS Proxy resource ID (prx-...) for IAM scoping',
       });
     }
+
+    // ==================== DB Grants: Ensure IAM auth on target user ====================
+    // Runs during deploy to grant rds_iam to the target DB user (default: postgres)
+    const dbGrantsFn = new lambdaNodejs.NodejsFunction(this, 'DbIamGrantFunction', {
+      functionName: `${prefix}-db-iam-grant`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambdas/db-grants/index.ts'),
+      memorySize: 256,
+      timeout: cdk.Duration.minutes(1),
+      vpc: this.vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      securityGroups: [this.lambdaSecurityGroup],
+      environment: {
+        ENVIRONMENT: environment,
+        DB_NAME: 'postolio',
+        TARGET_DB_USER: 'postgres',
+        DB_SECRET_ARN: databaseSecret.secretArn,
+      },
+      bundling: {
+        nodeModules: ['pg', '@aws-sdk/client-secrets-manager', '@aws-sdk/client-ssm'],
+      },
+    });
+
+    // Permissions to read DB secret and SSM
+    dbGrantsFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['secretsmanager:GetSecretValue'],
+        resources: [databaseSecret.secretArn],
+      })
+    );
+    dbGrantsFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
+        ],
+      })
+    );
+
+    const dbGrantsProvider = new cr.Provider(this, 'DbIamGrantProvider', {
+      onEventHandler: dbGrantsFn,
+      logRetention: logs.RetentionDays.ONE_WEEK,
+    });
+
+    const dbGrants = new cdk.CustomResource(this, 'DbIamGrant', {
+      serviceToken: dbGrantsProvider.serviceToken,
+    });
+    dbGrants.node.addDependency(this.database);
+    if (this.databaseProxy) dbGrants.node.addDependency(this.databaseProxy);
 
     // Cache Parameters
     new ssm.StringParameter(this, 'CacheEndpointParameter', {
