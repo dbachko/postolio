@@ -10,6 +10,7 @@ import type { Context, EventBridgeEvent } from 'aws-lambda';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { Signer } from '@aws-sdk/rds-signer';
+import { Pool } from 'pg';
 
 // EventBridge event detail structure matching what publisher/scheduler services emit
 interface EventDetail {
@@ -34,8 +35,10 @@ type DbConnParams = {
   host: string;
   port: number;
   dbName: string;
-  username: string;
+  username: string; // username from secret (static password user)
+  iamUsername: string; // username for IAM auth (can differ)
   region: string;
+  // No static password fallback: IAM-only per requirements
 };
 let cachedDbParams: DbConnParams | null = null; // for RDS Proxy IAM connections
 
@@ -108,6 +111,24 @@ async function getSecretArn(): Promise<string> {
   }
 }
 
+async function getIamDbUsername(): Promise<string | undefined> {
+  // Priority: explicit env → SSM parameter → undefined
+  if (process.env.DB_IAM_USER && process.env.DB_IAM_USER.trim().length > 0) {
+    return process.env.DB_IAM_USER.trim();
+  }
+  const environment = process.env.ENVIRONMENT || 'dev';
+  try {
+    const param = await ssm.send(
+      new GetParameterCommand({ Name: `/postolio/${environment}/database/iam-username` })
+    );
+    const value = param.Parameter?.Value?.trim();
+    if (value) return value;
+  } catch {
+    // Optional parameter; ignore if not present
+  }
+  return undefined;
+}
+
 async function getDatabaseUrl(): Promise<string> {
   if (cachedDbUrl) return cachedDbUrl;
 
@@ -136,11 +157,12 @@ async function getDbConnectionParams(): Promise<DbConnParams> {
   const credentials = JSON.parse(res.SecretString);
   const username: string | undefined = credentials.username;
   if (!username) throw new Error('Missing username in database secret');
+  const iamUsername = (await getIamDbUsername()) || username;
 
   const [host, portStr] = proxy.split(':');
   const port = parseInt(portStr || '5432', 10);
   const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
-  cachedDbParams = { host, port, dbName, username, region };
+  cachedDbParams = { host, port, dbName, username, iamUsername, region };
   console.log('Using RDS Proxy IAM-auth connection', {
     proxy: `${host}:${port}`,
     database: dbName,
@@ -169,25 +191,44 @@ async function getClient(): Promise<LambdaPrismaClient> {
   }
 
   // AWS path: create Pool with dynamic IAM token provider to avoid token expiry
-  const { host, port, dbName, username, region } = await getDbConnectionParams();
-  const signer = new Signer({ hostname: host, port, region, username });
-  const { client } = createLambdaPrismaClient({
-    poolConfig: {
-      host,
-      port,
-      database: dbName,
-      user: username,
-      ssl: { rejectUnauthorized: false },
-      max: 1,
-      connectionTimeoutMillis: 15000,
-      idleTimeoutMillis: 10000,
-      query_timeout: 30000,
-      // pg supports async password provider; this will be called per new connection
-      password: async () => signer.getAuthToken(),
-    },
+  const { host, port, dbName, iamUsername, region } =
+    await getDbConnectionParams();
+
+  const iamSigner = new Signer({ hostname: host, port, region, username: iamUsername });
+  const iamPool = new Pool({
+    host,
+    port,
+    database: dbName,
+    user: iamUsername,
+    ssl: { rejectUnauthorized: false },
+    max: 1,
+    connectionTimeoutMillis: 15000,
+    idleTimeoutMillis: 10000,
+    // Called on connect
+    password: async () => iamSigner.getAuthToken(),
   });
-  prisma = client;
-  return prisma;
+
+  try {
+    // Validate the IAM connection quickly
+    await iamPool.query('SELECT 1');
+    const { client } = createLambdaPrismaClient({ pool: iamPool });
+    prisma = client;
+    return prisma;
+  } catch (err: unknown) {
+    // Surface clear guidance for IAM-only configuration
+    const e = err as { message?: string; code?: string } | undefined;
+    const msg = e?.message || 'unknown error';
+    const code = e?.code || 'unknown';
+    console.error('IAM authentication to RDS Proxy failed', {
+      userTried: iamUsername,
+      errorCode: code,
+      message: msg,
+      hint:
+        'Ensure the DB user has rds_iam granted and the Lambda role has rds-db:connect to that user. Example: GRANT rds_iam TO ' +
+        iamUsername,
+    });
+    throw err;
+  }
 }
 
 async function handlePostPublished(detail: EventDetail) {
