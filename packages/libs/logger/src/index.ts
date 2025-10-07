@@ -18,7 +18,7 @@ export interface LoggerConfig {
   service: string;
   environment: string;
   version?: string;
-  enablePrettyPrint?: boolean;
+  enablePrettyPrint?: boolean; // pretty output intended only for local TTY
 }
 
 class Logger {
@@ -43,8 +43,8 @@ class Logger {
       },
     };
 
-    // Enable pretty printing in development
-    if (config.enablePrettyPrint || config.environment === 'development') {
+    // Enable pretty printing only when explicitly requested AND running in a TTY (never in AWS)
+    if (config.enablePrettyPrint) {
       pinoOptions.transport = {
         target: 'pino-pretty',
         options: {
@@ -52,6 +52,7 @@ class Logger {
           translateTime: 'SYS:standard',
           ignore: 'pid,hostname',
           messageFormat: '[{service}] {msg}',
+          singleLine: true, // ensure each log record is a single line
         },
       };
     }
@@ -62,10 +63,12 @@ class Logger {
   private getDefaultLogLevel(environment: string): LogLevel {
     switch (environment) {
       case 'development':
+      case 'dev':
         return 'debug';
       case 'staging':
         return 'info';
       case 'production':
+      case 'prod':
         return 'warn';
       default:
         return 'info';
@@ -164,10 +167,10 @@ class Logger {
     const childLogger = new Logger({
       service: this.service,
       environment: process.env.NODE_ENV || 'dev',
-      enablePrettyPrint: process.env.NODE_ENV === 'dev',
+      enablePrettyPrint: false, // inherit from parent via child pino instance
     });
 
-    // Override the pino instance with a child
+    // Override the pino instance with a child to inherit transports/level
     (childLogger as any).pino = this.pino.child(context);
     return childLogger;
   }
@@ -179,11 +182,22 @@ export function createLogger(config: LoggerConfig): Logger {
 }
 
 // Default logger for the current service
+const wantsPretty = (process.env.LOG_PRETTY || '').toLowerCase();
+const prettyRequested = wantsPretty === '1' || wantsPretty === 'true' || wantsPretty === 'yes';
+// Only allow pretty when writing to an interactive terminal and not in common AWS runtimes
+const runningInAws = !!(
+  process.env.AWS_EXECUTION_ENV ||
+  process.env.ECS_CONTAINER_METADATA_URI_V4 ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME
+);
+const prettyAllowed = !!process.stdout.isTTY && !runningInAws;
+
 const defaultConfig: LoggerConfig = {
   service: process.env.SERVICE_NAME || 'postolio',
   environment: process.env.NODE_ENV || 'dev',
   version: process.env.SERVICE_VERSION || '1.0.0',
-  enablePrettyPrint: process.env.NODE_ENV === 'dev',
+  level: (process.env.LOG_LEVEL as LogLevel) || undefined,
+  enablePrettyPrint: prettyRequested && prettyAllowed,
 };
 
 export const logger = createLogger(defaultConfig);

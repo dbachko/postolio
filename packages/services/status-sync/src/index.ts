@@ -29,7 +29,15 @@ interface EventDetail {
 }
 
 let prisma: LambdaPrismaClient | null = null;
-let cachedDbUrl: string | null = null;
+let cachedDbUrl: string | null = null; // kept for local/dev connection string
+type DbConnParams = {
+  host: string;
+  port: number;
+  dbName: string;
+  username: string;
+  region: string;
+};
+let cachedDbParams: DbConnParams | null = null; // for RDS Proxy IAM connections
 
 function ensureProxyParams(urlString: string): string {
   try {
@@ -110,60 +118,75 @@ async function getDatabaseUrl(): Promise<string> {
     return cachedDbUrl;
   }
 
-  // Enforce RDS Proxy + IAM auth
+  // In AWS, we don't return a URL with IAM token because tokens expire.
+  // Use getDbConnectionParams() instead to create a pool with dynamic password provider.
+  throw new Error('In AWS, use dynamic IAM auth via getDbConnectionParams()');
+}
+
+async function getDbConnectionParams(): Promise<DbConnParams> {
+  if (cachedDbParams) return cachedDbParams;
+
   const { proxy } = await getDatabaseEndpoints();
   if (!proxy) throw new Error('RDS Proxy endpoint not available');
   const dbName = process.env.DB_NAME || 'postolio';
 
-  // Get credentials from secret for RDS Proxy IAM auth
   const secretId = await getSecretArn();
+  const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
+  if (!res.SecretString) throw new Error('Empty database secret');
+  const credentials = JSON.parse(res.SecretString);
+  const username: string | undefined = credentials.username;
+  if (!username) throw new Error('Missing username in database secret');
 
-  try {
-    const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
-    if (!res.SecretString) {
-      throw new Error('Empty database secret');
-    }
-
-    const credentials = JSON.parse(res.SecretString);
-    const username: string | undefined = credentials.username;
-    if (!username) {
-      throw new Error('Missing username in database secret');
-    }
-
-    // Build IAM auth token for RDS Proxy
-    const [host, portStr] = proxy.split(':');
-    const port = parseInt(portStr || '5432', 10);
-    const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
-
-    const signer = new Signer({ hostname: host, port, region, username });
-    const token = await signer.getAuthToken();
-
-    const hostPort = `${host}:${port}`;
-    const connectionUrl = `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(token)}@${hostPort}/${dbName}`;
-    cachedDbUrl = ensureProxyParams(connectionUrl);
-    console.log('Using RDS Proxy IAM-auth connection', { proxy: hostPort, database: dbName });
-    return cachedDbUrl;
-  } catch (error) {
-    console.error('Failed to prepare IAM-auth DB connection:', error);
-    throw new Error('Cannot authenticate with RDS Proxy (IAM)');
-  }
+  const [host, portStr] = proxy.split(':');
+  const port = parseInt(portStr || '5432', 10);
+  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+  cachedDbParams = { host, port, dbName, username, region };
+  console.log('Using RDS Proxy IAM-auth connection', {
+    proxy: `${host}:${port}`,
+    database: dbName,
+  });
+  return cachedDbParams;
 }
 
 async function getClient(): Promise<LambdaPrismaClient> {
-  if (!prisma) {
+  if (prisma) return prisma;
+
+  // Local/dev path uses DATABASE_URL with static credentials
+  if (process.env.DATABASE_URL) {
     const url = await getDatabaseUrl();
     const { client } = createLambdaPrismaClient({
       connectionString: url,
       poolConfig: {
         connectionString: url,
-        max: 1, // Single connection for Lambda
-        connectionTimeoutMillis: 15000, // 15 seconds for Lambda cold starts with RDS Proxy
-        idleTimeoutMillis: 10000, // 10 seconds with RDS Proxy
-        query_timeout: 30000, // 30 seconds for query execution
+        max: 1,
+        connectionTimeoutMillis: 15000,
+        idleTimeoutMillis: 10000,
+        query_timeout: 30000,
       },
     });
     prisma = client;
+    return prisma;
   }
+
+  // AWS path: create Pool with dynamic IAM token provider to avoid token expiry
+  const { host, port, dbName, username, region } = await getDbConnectionParams();
+  const signer = new Signer({ hostname: host, port, region, username });
+  const { client } = createLambdaPrismaClient({
+    poolConfig: {
+      host,
+      port,
+      database: dbName,
+      user: username,
+      ssl: { rejectUnauthorized: false },
+      max: 1,
+      connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 10000,
+      query_timeout: 30000,
+      // pg supports async password provider; this will be called per new connection
+      password: async () => signer.getAuthToken(),
+    },
+  });
+  prisma = client;
   return prisma;
 }
 
