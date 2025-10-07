@@ -580,43 +580,6 @@ export class SchedulingStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
     });
 
-    // 4. DB Inspector (dev-only helper)
-    const dbInspectorFunction = new lambdaNodejs.NodejsFunction(this, 'DBInspectorFunction', {
-      functionName: `${prefix}-db-inspector`,
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.handler',
-      entry: path.join(__dirname, '../../../../services/db-inspector/src/index.ts'),
-      timeout: cdk.Duration.minutes(1),
-      memorySize: 256,
-      role: schedulingLambdaRole,
-      vpc: vpc,
-      vpcSubnets: vpcConfig,
-      securityGroups: lambdaSecurityGroup ? [lambdaSecurityGroup] : undefined,
-      environment: {
-        NODE_ENV: environment,
-        SERVICE_NAME: 'db-inspector',
-        ENVIRONMENT: environment,
-        LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
-      },
-      logGroup: logs.LogGroup.fromLogGroupName(
-        this,
-        'DBInspectorLogGroup',
-        `/aws/lambda/${prefix}-db-inspector`
-      ),
-      tracing: lambda.Tracing.ACTIVE,
-    });
-
-    const inspectorUrl = dbInspectorFunction.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE,
-      cors: { allowedOrigins: ['*'] },
-    });
-
-    new cdk.CfnOutput(this, 'DBInspectorUrl', {
-      value: inspectorUrl.url,
-      description: 'Dev-only DB inspector URL',
-      exportName: `${prefix}-db-inspector-url`,
-    });
-
     // ==================== Event Sources ====================
     // Connect status sync to SQS queue
     statusSyncFunction.addEventSource(

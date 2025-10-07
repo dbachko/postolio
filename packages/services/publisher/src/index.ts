@@ -4,7 +4,6 @@ import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
-  GetCommand,
   UpdateCommand,
   PutCommand,
   QueryCommand,
