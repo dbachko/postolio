@@ -42,24 +42,17 @@ export class SchedulingStack extends cdk.Stack {
 
     const { environment, alertEmail } = props;
     const prefix = `postolio-${environment}-scheduling`;
-    // Import exact RDS Proxy resource ID from SSM to compute precise rds-db resource ARN
-    let rdsDbUserArnForPostgres: string | undefined;
-    try {
-      const proxyResourceId = ssm.StringParameter.valueFromLookup(
-        this,
-        `/postolio/${environment}/database/proxy-resource-id`
-      );
-      if (proxyResourceId && !proxyResourceId.startsWith('dummy-value-for-')) {
-        rdsDbUserArnForPostgres = cdk.Stack.of(this).formatArn({
-          service: 'rds-db',
-          resource: 'dbuser',
-          resourceName: `${proxyResourceId}/postgres`,
-          arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
-        });
-      }
-    } catch {
-      // Leave undefined; will fallback to wildcard scoping below
-    }
+    // Import exact RDS Proxy resource ID and optional IAM DB username via deploy-time tokens
+    const proxyResourceIdToken = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/database/proxy-resource-id`
+    );
+    const rdsDbUserArnForPostgres = cdk.Stack.of(this).formatArn({
+      service: 'rds-db',
+      resource: 'dbuser',
+      resourceName: `${proxyResourceIdToken}/postgres`,
+      arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+    });
 
     // ==================== VPC Configuration ====================
     // Import VPC and security groups from Foundation stack
@@ -78,11 +71,7 @@ export class SchedulingStack extends cdk.Stack {
       );
 
       // Check if Foundation resources are available (not dummy values)
-      const hasFoundationResources =
-        vpcId &&
-        lambdaSecurityGroupId &&
-        !vpcId.startsWith('dummy-value-for-') &&
-        !lambdaSecurityGroupId.startsWith('dummy-value-for-');
+      const hasFoundationResources = vpcId && lambdaSecurityGroupId;
 
       if (hasFoundationResources) {
         vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', {
@@ -114,19 +103,15 @@ export class SchedulingStack extends cdk.Stack {
     let encryptionKey: kms.IKey;
 
     try {
-      const kmsKeyArn = ssm.StringParameter.valueFromLookup(
+      const kmsKeyArn = ssm.StringParameter.valueForStringParameter(
         this,
         `/postolio/${environment}/kms/key-arn`
       );
 
-      if (kmsKeyArn && !kmsKeyArn.startsWith('dummy-value-for-')) {
-        encryptionKey = kms.Key.fromKeyArn(this, 'FoundationEncryptionKey', kmsKeyArn);
-        console.log(
-          `Using shared encryption key from Foundation stack for environment ${environment}`
-        );
-      } else {
-        throw new Error('Foundation encryption key not available');
-      }
+      encryptionKey = kms.Key.fromKeyArn(this, 'FoundationEncryptionKey', kmsKeyArn);
+      console.log(
+        `Using shared encryption key from Foundation stack for environment ${environment}`
+      );
     } catch (error) {
       // Fallback to creating own key if Foundation key not available
       encryptionKey = new kms.Key(this, 'SchedulingEncryptionKey', {
@@ -468,18 +453,13 @@ export class SchedulingStack extends cdk.Stack {
                   }),
                 ]
               : []),
-            // Allow IAM-auth connections to RDS Proxy (scope with proxy ARN in follow-up)
+            // Allow IAM-auth connections to RDS Proxy (scope with proxy ARN)
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['rds-db:connect'],
               resources: [
-                rdsDbUserArnForPostgres ||
-                  cdk.Stack.of(this).formatArn({
-                    service: 'rds-db',
-                    resource: 'dbuser',
-                    resourceName: '*/postgres',
-                    arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
-                  }),
+                // Specific proxy resource + postgres (deploy-time token)
+                rdsDbUserArnForPostgres,
               ],
             }),
             // Allow passing the Scheduler target role (from Publishing stack) if available
@@ -624,6 +604,7 @@ export class SchedulingStack extends cdk.Stack {
         EVENT_BUS_NAME: this.eventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
         ...(databaseSecretArnParam ? { DB_SECRET_ARN: databaseSecretArnParam } : {}),
+        // DB_IAM_USER can be set via environment overrides or SSM the service reads at runtime
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,

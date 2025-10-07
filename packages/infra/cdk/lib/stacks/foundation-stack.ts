@@ -30,6 +30,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+// (No custom DB-grant Lambda; RDS Proxy uses Secrets to connect DB)
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
 
@@ -517,6 +518,8 @@ export class FoundationStack extends cdk.Stack {
         description: 'RDS Proxy resource ID (prx-...) for IAM scoping',
       });
     }
+
+    // RDS Proxy uses Secrets Manager to connect to the database in this configuration
 
     // Cache Parameters
     new ssm.StringParameter(this, 'CacheEndpointParameter', {
