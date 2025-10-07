@@ -519,7 +519,7 @@ export class FoundationStack extends cdk.Stack {
       });
     }
 
-    // No DB grants custom resource required: client→proxy uses IAM; proxy→DB uses Secrets Manager
+    // RDS Proxy uses Secrets Manager to connect to the database in this configuration
 
     // Cache Parameters
     new ssm.StringParameter(this, 'CacheEndpointParameter', {

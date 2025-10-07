@@ -460,7 +460,6 @@ export class SchedulingStack extends cdk.Stack {
               resources: [
                 // Specific proxy resource + postgres (deploy-time token)
                 rdsDbUserArnForPostgres,
-                // Add additional users as needed in future updates
               ],
             }),
             // Allow passing the Scheduler target role (from Publishing stack) if available

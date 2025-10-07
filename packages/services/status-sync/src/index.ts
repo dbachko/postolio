@@ -38,7 +38,6 @@ type DbConnParams = {
   username: string; // username from secret (static password user)
   iamUsername: string; // username for IAM auth (can differ)
   region: string;
-  // No static password fallback: IAM-only per requirements
 };
 let cachedDbParams: DbConnParams | null = null; // for RDS Proxy IAM connections
 
@@ -214,7 +213,6 @@ async function getClient(): Promise<LambdaPrismaClient> {
     prisma = client;
     return prisma;
   } catch (err: unknown) {
-    // Surface clear guidance for IAM-only configuration
     const e = err as { message?: string; code?: string } | undefined;
     const msg = e?.message || 'unknown error';
     const code = e?.code || 'unknown';
@@ -222,9 +220,7 @@ async function getClient(): Promise<LambdaPrismaClient> {
       userTried: iamUsername,
       errorCode: code,
       message: msg,
-      hint:
-        'Ensure the DB user has rds_iam granted and the Lambda role has rds-db:connect to that user. Example: GRANT rds_iam TO ' +
-        iamUsername,
+      hint: 'Verify rds-db:connect permission to the proxy dbuser ARN (…/postgres), correct proxy endpoint/region in signer, and that the proxy has a Secrets Manager credential for this database user. End-to-end IAM (rds_iam) is not required in hybrid mode.',
     });
     throw err;
   }
