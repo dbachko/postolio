@@ -827,7 +827,8 @@ export const handler = async (
       const originalQueueName = configuredTarget
         ? configuredTarget.split('/').pop() || ''
         : queueName.replace(/-dlq$/i, '');
-      const queueUrl = configuredTarget || `https://sqs.${region}.amazonaws.com/${accountId}/${originalQueueName}`;
+      const queueUrl =
+        configuredTarget || `https://sqs.${region}.amazonaws.com/${accountId}/${originalQueueName}`;
 
       await sqsClient.send(
         new SendMessageCommand({
