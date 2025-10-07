@@ -7,6 +7,7 @@ import {
   UpdateCommand,
   PutCommand,
   QueryCommand,
+  GetCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -126,6 +127,53 @@ class PlatformAdapterFactory {
 
 // Instagram adapter implementation
 class InstagramAdapter implements PlatformAdapter {
+  private async waitForMediaReady(
+    creationId: string,
+    accessToken: string,
+    isVideo: boolean
+  ): Promise<void> {
+    const statusUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${creationId}`;
+    const maxWaitMs = isVideo ? 120_000 : 30_000;
+    const started = Date.now();
+    let attempt = 0;
+
+    while (Date.now() - started < maxWaitMs) {
+      try {
+        const params = new URLSearchParams({
+          fields: 'status_code,status',
+          access_token: accessToken,
+        });
+        const resp = await fetch(`${statusUrl}?${params}`);
+        const body = resp.ok ? await resp.json() : undefined;
+        const codeRaw = (body?.status_code || body?.status || '').toString();
+        const code = codeRaw.toUpperCase();
+
+        logger.info('Instagram media status check', {
+          creationId,
+          attempt,
+          status_code: code || 'UNKNOWN',
+        });
+
+        if (code === 'FINISHED' || code === 'PUBLISHED') return; // Ready
+        if (code === 'ERROR') throw new Error('Instagram media processing error');
+      } catch (e) {
+        // Log and continue until timeout; transient errors are common
+        logger.warn('Failed to check Instagram media status', {
+          creationId,
+          attempt,
+          error: (e as Error).message,
+        });
+      }
+
+      // Backoff: start small for images, longer for videos
+      const base = isVideo ? 1200 : 400;
+      const delay = Math.min(base * Math.pow(1.6, attempt), isVideo ? 5000 : 1500);
+      attempt += 1;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    throw new Error('Media is not ready for publishing after waiting');
+  }
   async publish(
     schedule: Schedule,
     credentials: Credentials,
@@ -187,7 +235,10 @@ class InstagramAdapter implements PlatformAdapter {
         };
       }
 
-      // Step 2: Publish the media
+      // Step 2: Wait for the media container to be ready (prevents "The media is not ready" errors)
+      await this.waitForMediaReady(creationId, credentials.accessToken, isVideo);
+
+      // Step 3: Publish the media
       const publishUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media_publish`;
       const publishParams = new URLSearchParams({
         creation_id: creationId,
@@ -216,7 +267,7 @@ class InstagramAdapter implements PlatformAdapter {
       const publishResult = await publishResponse.json();
       const postId = publishResult.id;
 
-      // Step 3: Get the permalink
+      // Step 4: Get the permalink
       const permalinkUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${postId}`;
       const permalinkParams = new URLSearchParams({
         fields: 'permalink',
@@ -871,8 +922,9 @@ async function sendToRetryQueue(
   error: Error,
   originalEvent: PublishEvent
 ): Promise<void> {
-  if (!process.env.DLQ_URL) {
-    logger.warn('DLQ_URL not configured - cannot send to retry queue');
+  const queueUrl = process.env.RETRY_QUEUE_URL || process.env.DLQ_URL;
+  if (!queueUrl) {
+    logger.warn('Neither RETRY_QUEUE_URL nor DLQ_URL configured - cannot send to retry queue');
     return;
   }
 
@@ -893,7 +945,7 @@ async function sendToRetryQueue(
 
   await sqsClient.send(
     new SendMessageCommand({
-      QueueUrl: process.env.DLQ_URL,
+      QueueUrl: queueUrl,
       MessageBody: JSON.stringify(retryMessage),
       MessageAttributes: {
         ErrorType: {
@@ -916,6 +968,7 @@ async function sendToRetryQueue(
     scheduleId,
     errorType: error.name,
     messageSize: JSON.stringify(retryMessage).length,
+    targetQueueUrl: queueUrl,
   });
 }
 
@@ -1029,19 +1082,27 @@ async function updateScheduleStatus(
       });
       return;
     }
-    let updateExpression = 'SET #status = :status, #updatedAt = :updatedAt';
+    const setParts: string[] = ['#status = :status', '#updatedAt = :updatedAt'];
+    const removeParts: string[] = [];
 
     if (errorMessage) {
-      updateExpression += ', #error = :error';
-    } else if (status === 'published') {
-      updateExpression += ', #publishedAt = :publishedAt';
-      if (platformPostId) updateExpression += ', #platformPostId = :platformPostId';
-      if (platformUrl) updateExpression += ', #platformUrl = :platformUrl';
+      setParts.push('#error = :error');
+    } else {
+      // Success path: clear any stale errors
+      removeParts.push('#error', '#errorType');
+
+      if (status === 'published') {
+        setParts.push('#publishedAt = :publishedAt');
+        if (platformPostId) setParts.push('#platformPostId = :platformPostId');
+        if (platformUrl) setParts.push('#platformUrl = :platformUrl');
+      }
     }
 
     const expressionAttributeNames: Record<string, string> = {
       '#status': 'status',
       '#updatedAt': 'updatedAt',
+      '#error': 'schedulingError',
+      '#errorType': 'errorType',
     };
 
     const expressionAttributeValues: Record<string, string> = {
@@ -1050,21 +1111,11 @@ async function updateScheduleStatus(
     };
 
     if (errorMessage) {
-      expressionAttributeNames['#error'] = 'schedulingError';
       expressionAttributeValues[':error'] = errorMessage;
     } else if (status === 'published') {
-      expressionAttributeNames['#publishedAt'] = 'publishedAt';
       expressionAttributeValues[':publishedAt'] = new Date().toISOString();
-
-      if (platformPostId) {
-        expressionAttributeNames['#platformPostId'] = 'platformPostId';
-        expressionAttributeValues[':platformPostId'] = platformPostId;
-      }
-
-      if (platformUrl) {
-        expressionAttributeNames['#platformUrl'] = 'platformUrl';
-        expressionAttributeValues[':platformUrl'] = platformUrl;
-      }
+      if (platformPostId) expressionAttributeValues[':platformPostId'] = platformPostId;
+      if (platformUrl) expressionAttributeValues[':platformUrl'] = platformUrl;
     }
 
     await docClient.send(
@@ -1075,7 +1126,9 @@ async function updateScheduleStatus(
           pk: schedule.pk,
           sk: schedule.sk,
         },
-        UpdateExpression: updateExpression,
+        UpdateExpression: `SET ${setParts.join(', ')}${
+          removeParts.length ? ' REMOVE ' + removeParts.join(', ') : ''
+        }`,
         ExpressionAttributeNames: expressionAttributeNames,
         ExpressionAttributeValues: expressionAttributeValues,
       })
