@@ -42,6 +42,24 @@ export class SchedulingStack extends cdk.Stack {
 
     const { environment, alertEmail } = props;
     const prefix = `postolio-${environment}-scheduling`;
+    // Import exact RDS Proxy resource ID from SSM to compute precise rds-db resource ARN
+    let rdsDbUserArnForPostgres: string | undefined;
+    try {
+      const proxyResourceId = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/database/proxy-resource-id`
+      );
+      if (proxyResourceId && !proxyResourceId.startsWith('dummy-value-for-')) {
+        rdsDbUserArnForPostgres = cdk.Stack.of(this).formatArn({
+          service: 'rds-db',
+          resource: 'dbuser',
+          resourceName: `${proxyResourceId}/postgres`,
+          arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+        });
+      }
+    } catch {
+      // Leave undefined; will fallback to wildcard scoping below
+    }
 
     // ==================== VPC Configuration ====================
     // Import VPC and security groups from Foundation stack
@@ -450,6 +468,20 @@ export class SchedulingStack extends cdk.Stack {
                   }),
                 ]
               : []),
+            // Allow IAM-auth connections to RDS Proxy (scope with proxy ARN in follow-up)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['rds-db:connect'],
+              resources: [
+                rdsDbUserArnForPostgres ||
+                  cdk.Stack.of(this).formatArn({
+                    service: 'rds-db',
+                    resource: 'dbuser',
+                    resourceName: '*/postgres',
+                    arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+                  }),
+              ],
+            }),
             // Allow passing the Scheduler target role (from Publishing stack) if available
             ...(schedulerRoleArnParam
               ? [
@@ -672,6 +704,18 @@ export class SchedulingStack extends cdk.Stack {
       },
     });
     publishingEventsRule.addTarget(new targets.LambdaFunction(statusSyncFunction));
+
+    // Route scheduler lifecycle events to Status Sync
+    const schedulerEventsRule = new events.Rule(this, 'SchedulerEventsRule', {
+      ruleName: `${prefix}-scheduler-events-rule`,
+      description: 'Forward schedule lifecycle events to status-sync for DB updates',
+      eventBus: this.eventBus,
+      eventPattern: {
+        source: ['postolio.scheduler'],
+        detailType: ['schedule.created', 'schedule.updated', 'schedule.canceled', 'schedule.failed'],
+      },
+    });
+    schedulerEventsRule.addTarget(new targets.LambdaFunction(statusSyncFunction));
 
     // ==================== Function URLs ====================
     const scheduleManagementUrl = scheduleManagementFunction.addFunctionUrl({

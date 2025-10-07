@@ -326,7 +326,7 @@ export default function PostDetail() {
         scheduledAt: debouncedFormData.scheduledAt,
       });
     }
-  }, [debouncedFormData, post, isEditing, postId]);
+  }, [debouncedFormData, post, isEditing, postId, updateContentMutation]);
 
   const handleCaptionChange = (value: string) => {
     setFormData((prev) => ({ ...prev, caption: value }));

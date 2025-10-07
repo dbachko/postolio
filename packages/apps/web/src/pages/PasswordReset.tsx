@@ -35,10 +35,12 @@ export function PasswordReset() {
   });
 
   // Validate token on mount if present
+  // Validate token on change (ignore validateToken dependency intentionally)
   useEffect(() => {
     if (token) {
       validateToken();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   // Update password strength as user types

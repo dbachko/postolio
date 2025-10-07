@@ -28,10 +28,14 @@ export default function Engagement() {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Initial brands load on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadBrands();
   }, []);
 
+  // Load engagement data when brand changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedBrandId) {
       loadEngagementData();

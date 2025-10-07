@@ -507,6 +507,15 @@ export class FoundationStack extends cdk.Stack {
         stringValue: this.databaseProxy.endpoint,
         description: 'RDS Proxy endpoint for Lambda connections',
       });
+
+      // Export the exact RDS Proxy resource ID via SSM for precise IAM scoping
+      const proxyArn = (this.databaseProxy as any).dbProxyArn as string;
+      const proxyResourceId = cdk.Fn.select(6, cdk.Fn.split(':', proxyArn));
+      new ssm.StringParameter(this, 'DatabaseProxyResourceIdParameter', {
+        parameterName: `/postolio/${environment}/database/proxy-resource-id`,
+        stringValue: proxyResourceId,
+        description: 'RDS Proxy resource ID (prx-...) for IAM scoping',
+      });
     }
 
     // Cache Parameters

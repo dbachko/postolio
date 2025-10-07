@@ -9,6 +9,7 @@ import { createLambdaPrismaClient, ContentStatus } from '@postolio/database/lamb
 import type { Context, EventBridgeEvent } from 'aws-lambda';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { Signer } from '@aws-sdk/rds-signer';
 
 // EventBridge event detail structure matching what publisher/scheduler services emit
 interface EventDetail {
@@ -29,7 +30,6 @@ interface EventDetail {
 
 let prisma: LambdaPrismaClient | null = null;
 let cachedDbUrl: string | null = null;
-let cachedProxyEndpoint: string | null = null;
 
 function ensureProxyParams(urlString: string): string {
   try {
@@ -56,29 +56,26 @@ function ensureProxyParams(urlString: string): string {
 const secrets = new SecretsManagerClient({});
 const ssm = new SSMClient({});
 
-async function getDatabaseProxyEndpoint(): Promise<string> {
-  if (cachedProxyEndpoint) return cachedProxyEndpoint;
-
+async function getDatabaseEndpoints(): Promise<{ endpoint?: string; proxy?: string }> {
   const environment = process.env.ENVIRONMENT || 'dev';
-
+  const result: { endpoint?: string; proxy?: string } = {};
   try {
-    const parameter = await ssm.send(
-      new GetParameterCommand({
-        Name: `/postolio/${environment}/database/proxy-endpoint`,
-      })
+    const ep = await ssm.send(
+      new GetParameterCommand({ Name: `/postolio/${environment}/database/endpoint` })
     );
-
-    if (parameter.Parameter?.Value) {
-      cachedProxyEndpoint = parameter.Parameter.Value;
-      console.log('Using RDS Proxy endpoint for database connection');
-      return cachedProxyEndpoint;
-    }
-  } catch (error) {
-    console.warn('Failed to get RDS Proxy endpoint from SSM:', error);
-    throw new Error('RDS Proxy endpoint not available - cannot connect to database');
+    if (ep.Parameter?.Value) result.endpoint = ep.Parameter.Value; // host:port
+  } catch (e) {
+    console.warn('Could not read DB endpoint from SSM', e);
   }
-
-  throw new Error('RDS Proxy endpoint not configured');
+  try {
+    const px = await ssm.send(
+      new GetParameterCommand({ Name: `/postolio/${environment}/database/proxy-endpoint` })
+    );
+    if (px.Parameter?.Value) result.proxy = px.Parameter.Value; // host:port
+  } catch (e) {
+    console.warn('Could not read DB proxy endpoint from SSM', e);
+  }
+  return result;
 }
 
 async function getSecretArn(): Promise<string> {
@@ -113,8 +110,9 @@ async function getDatabaseUrl(): Promise<string> {
     return cachedDbUrl;
   }
 
-  // Production: Use RDS Proxy with secret-based authentication
-  const proxyEndpoint = await getDatabaseProxyEndpoint();
+  // Enforce RDS Proxy + IAM auth
+  const { proxy } = await getDatabaseEndpoints();
+  if (!proxy) throw new Error('RDS Proxy endpoint not available');
   const dbName = process.env.DB_NAME || 'postolio';
 
   // Get credentials from secret for RDS Proxy IAM auth
@@ -127,20 +125,27 @@ async function getDatabaseUrl(): Promise<string> {
     }
 
     const credentials = JSON.parse(res.SecretString);
-    const username = credentials.username;
-    const password = credentials.password;
-
-    if (!username || !password) {
-      throw new Error('Missing username or password in database secret');
+    const username: string | undefined = credentials.username;
+    if (!username) {
+      throw new Error('Missing username in database secret');
     }
 
-    const connectionUrl = `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${proxyEndpoint}:5432/${dbName}`;
+    // Build IAM auth token for RDS Proxy
+    const [host, portStr] = proxy.split(':');
+    const port = parseInt(portStr || '5432', 10);
+    const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+
+    const signer = new Signer({ hostname: host, port, region, username });
+    const token = await signer.getAuthToken();
+
+    const hostPort = `${host}:${port}`;
+    const connectionUrl = `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(token)}@${hostPort}/${dbName}`;
     cachedDbUrl = ensureProxyParams(connectionUrl);
-    console.log('Using RDS Proxy connection:', { endpoint: proxyEndpoint, database: dbName });
+    console.log('Using RDS Proxy IAM-auth connection', { proxy: hostPort, database: dbName });
     return cachedDbUrl;
   } catch (error) {
-    console.error('Failed to read database secret:', error);
-    throw new Error('Cannot authenticate with RDS Proxy');
+    console.error('Failed to prepare IAM-auth DB connection:', error);
+    throw new Error('Cannot authenticate with RDS Proxy (IAM)');
   }
 }
 

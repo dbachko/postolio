@@ -16,6 +16,7 @@ export function EmailVerify() {
 
   const token = searchParams.get('token');
 
+  // Verify on token change (ignore verifyEmail dependency to avoid re-creation churn)
   useEffect(() => {
     if (!token) {
       setStatus('error');
@@ -24,6 +25,7 @@ export function EmailVerify() {
     }
 
     verifyEmail(token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const verifyEmail = async (token: string) => {
