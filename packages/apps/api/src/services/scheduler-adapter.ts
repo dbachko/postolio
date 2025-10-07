@@ -78,8 +78,12 @@ export class SchedulerAdapter {
 
       if (isPlaceholderUrl) {
         logger.warn('AWS Content Scheduler is not configured properly', { baseURL: fallbackUrl });
-        logger.warn('Running in degraded mode - content will be saved but not scheduled for automatic publishing.');
-        logger.warn('To enable scheduling, deploy the ContentScheduler stack or set SCHEDULER_API_URL to a valid endpoint.');
+        logger.warn(
+          'Running in degraded mode - content will be saved but not scheduled for automatic publishing.'
+        );
+        logger.warn(
+          'To enable scheduling, deploy the ContentScheduler stack or set SCHEDULER_API_URL to a valid endpoint.'
+        );
         this.schedulerEnabled = false;
         throw new Error('Scheduler not configured - degraded mode');
       } else {
@@ -96,7 +100,9 @@ export class SchedulerAdapter {
           this._client = client;
           return client;
         } catch (fallbackError) {
-          logger.error('Failed to initialize ContentScheduler with fallback URL', { error: fallbackError });
+          logger.error('Failed to initialize ContentScheduler with fallback URL', {
+            error: fallbackError,
+          });
           this.schedulerEnabled = false;
           throw fallbackError;
         }
@@ -126,7 +132,9 @@ export class SchedulerAdapter {
   static getInstance(config?: Partial<ContentSchedulerConfig>): SchedulerAdapter {
     if (!SchedulerAdapter.instance) {
       // This is problematic but kept for backward compatibility
-      logger.warn('Using deprecated getInstance(). Migrate to SchedulerAdapter.create() for proper async initialization.');
+      logger.warn(
+        'Using deprecated getInstance(). Migrate to SchedulerAdapter.create() for proper async initialization.'
+      );
       SchedulerAdapter.instance = new SchedulerAdapter(config);
     }
     return SchedulerAdapter.instance;
@@ -191,7 +199,10 @@ export class SchedulerAdapter {
 
       // Validate campaign exists and is in a valid state
       if (!content.campaign) {
-        logger.error('Scheduling blocked: campaign not found for content', { campaignId: content.campaignId, contentId });
+        logger.error('Scheduling blocked: campaign not found for content', {
+          campaignId: content.campaignId,
+          contentId,
+        });
         return {
           success: false,
           error: 'Associated campaign not found',
@@ -201,7 +212,10 @@ export class SchedulerAdapter {
       // Only allow scheduling for active campaigns, UNLESS this is a draft post
       // (which indicates auto-recovery from a failed campaign start)
       if (content.campaign.status !== 'active' && content.status !== 'draft') {
-        logger.warn('Scheduling blocked: campaign not active', { campaignId: content.campaignId, status: content.campaign.status });
+        logger.warn('Scheduling blocked: campaign not active', {
+          campaignId: content.campaignId,
+          status: content.campaign.status,
+        });
         return {
           success: false,
           error: `Cannot schedule content for ${content.campaign.status.toLowerCase()} campaign`,
@@ -211,7 +225,10 @@ export class SchedulerAdapter {
       // Auto-activate campaign if scheduling a draft post from a non-active campaign
       // This handles auto-recovery when a campaign failed to start properly
       if (content.campaign.status !== 'active' && content.status === 'draft') {
-        logger.info('AUTO-RECOVERY: Activating campaign to allow scheduling of draft content', { campaignId: content.campaignId, contentId });
+        logger.info('AUTO-RECOVERY: Activating campaign to allow scheduling of draft content', {
+          campaignId: content.campaignId,
+          contentId,
+        });
         try {
           await prisma.campaign.update({
             where: { id: content.campaignId },
@@ -219,7 +236,9 @@ export class SchedulerAdapter {
           });
           logger.info('Campaign activated for auto-recovery', { campaignId: content.campaignId });
         } catch (campaignUpdateError) {
-          logger.error('Failed to activate campaign during auto-recovery', { error: campaignUpdateError });
+          logger.error('Failed to activate campaign during auto-recovery', {
+            error: campaignUpdateError,
+          });
           // Don't fail the scheduling - continue with scheduling anyway
         }
       }
@@ -230,7 +249,10 @@ export class SchedulerAdapter {
 
       // 2. Get the brand's timezone for proper scheduling
       const brandTimezone = await TimezoneService.getBrandTimezone(content.brandId);
-      logger.info('Scheduling with brand timezone', { brandId: content.brandId, timezone: brandTimezone });
+      logger.info('Scheduling with brand timezone', {
+        brandId: content.brandId,
+        timezone: brandTimezone,
+      });
 
       // 3. Determine the scheduled time
       let scheduledTimeUTC: Date;
@@ -238,7 +260,11 @@ export class SchedulerAdapter {
       if (customTime) {
         // If customTime is provided, assume it's in the brand's timezone and convert to UTC
         scheduledTimeUTC = TimezoneService.toUTC(customTime, brandTimezone);
-        logger.info('Custom time converted to UTC', { brandId: content.brandId, timezone: brandTimezone, scheduledAtUTC: scheduledTimeUTC.toISOString() });
+        logger.info('Custom time converted to UTC', {
+          brandId: content.brandId,
+          timezone: brandTimezone,
+          scheduledAtUTC: scheduledTimeUTC.toISOString(),
+        });
       } else if (content.scheduledAt) {
         // If content already has a scheduled time, use it (assume it's already in UTC)
         scheduledTimeUTC = new Date(content.scheduledAt);
@@ -264,7 +290,10 @@ export class SchedulerAdapter {
             await (await this.client).cancelSchedule(currentParams.scheduleId);
             logger.info('Canceled existing AWS schedule', { scheduleId: currentParams.scheduleId });
           } catch (cancelError) {
-            logger.warn('Failed to cancel existing schedule', { scheduleId: currentParams.scheduleId, error: cancelError });
+            logger.warn('Failed to cancel existing schedule', {
+              scheduleId: currentParams.scheduleId,
+              error: cancelError,
+            });
             // Continue with new operation anyway
           }
         }
@@ -417,7 +446,10 @@ export class SchedulerAdapter {
           scheduledTimeUTC,
           brandTimezone
         );
-        logger.info('Content scheduled successfully', { contentId, scheduledFor: localTimeDisplay });
+        logger.info('Content scheduled successfully', {
+          contentId,
+          scheduledFor: localTimeDisplay,
+        });
       }
 
       return awsScheduleCreated
@@ -577,7 +609,12 @@ export class SchedulerAdapter {
       // Convert new time to UTC if it's provided in local time
       const newTimeUTC = isLocalTime ? TimezoneService.toUTC(newTime, brandTimezone) : newTime;
 
-      logger.info('Rescheduling content', { contentId, from: content.scheduledAt, to: newTimeUTC.toISOString(), timezone: brandTimezone });
+      logger.info('Rescheduling content', {
+        contentId,
+        from: content.scheduledAt,
+        to: newTimeUTC.toISOString(),
+        timezone: brandTimezone,
+      });
 
       // Type-safe access to generationParams
       const generationParams = (content.generationParams as GenerationParams | null) || {};
@@ -594,7 +631,10 @@ export class SchedulerAdapter {
           // 2. Campaign started but scheduling failed
           // 3. Manual scheduling attempt failed
 
-          logger.warn('AUTO-RECOVERY: scheduledAt present but no scheduleId - treating as new schedule', { contentId, status: content.status });
+          logger.warn(
+            'AUTO-RECOVERY: scheduledAt present but no scheduleId - treating as new schedule',
+            { contentId, status: content.status }
+          );
 
           // Create a new schedule instead of failing
           // This provides auto-recovery for failed scheduling attempts
@@ -602,7 +642,11 @@ export class SchedulerAdapter {
             ? newTime
             : TimezoneService.toLocal(newTimeUTC, brandTimezone);
 
-          logger.info('Attempting to schedule content after recovery', { contentId, scheduledAt: newTimeUTC.toISOString(), timezone: brandTimezone });
+          logger.info('Attempting to schedule content after recovery', {
+            contentId,
+            scheduledAt: newTimeUTC.toISOString(),
+            timezone: brandTimezone,
+          });
 
           const scheduleResult = await this.scheduleContent(
             contentId,
@@ -611,7 +655,10 @@ export class SchedulerAdapter {
           );
 
           if (scheduleResult.success) {
-            logger.info('AUTO-RECOVERY SUCCESS: Content scheduled after recovery', { contentId, scheduledAt: newTimeUTC.toISOString() });
+            logger.info('AUTO-RECOVERY SUCCESS: Content scheduled after recovery', {
+              contentId,
+              scheduledAt: newTimeUTC.toISOString(),
+            });
 
             // Also update the scheduled time if it's different
             if (content.scheduledAt.getTime() !== newTimeUTC.getTime()) {
@@ -634,7 +681,10 @@ export class SchedulerAdapter {
         } else if (content.status === 'scheduled') {
           // Edge case: Content is marked as scheduled but has no scheduledAt or scheduleId
           // This shouldn't happen but handle it gracefully
-          logger.error('Data inconsistency: content marked as scheduled but missing scheduledAt or scheduleId', { contentId });
+          logger.error(
+            'Data inconsistency: content marked as scheduled but missing scheduledAt or scheduleId',
+            { contentId }
+          );
 
           // Try to schedule it at the requested time
           const newTimeLocal = isLocalTime
@@ -660,7 +710,10 @@ export class SchedulerAdapter {
           // NEW: Handle draft posts from campaigns that failed to start properly
           // When a campaign fails to start, posts are created as drafts with campaignId but no scheduleId
           // User is trying to "reschedule" (set a time) on these drafts - treat as initial schedule
-          logger.warn('AUTO-RECOVERY: Draft content with campaign has no schedule - creating new schedule', { contentId, campaignId: content.campaignId });
+          logger.warn(
+            'AUTO-RECOVERY: Draft content with campaign has no schedule - creating new schedule',
+            { contentId, campaignId: content.campaignId }
+          );
 
           const newTimeLocal = isLocalTime
             ? newTime
@@ -683,7 +736,10 @@ export class SchedulerAdapter {
           );
 
           if (scheduleResult.success) {
-            logger.info('AUTO-RECOVERY SUCCESS: Draft content scheduled', { contentId, scheduledAt: newTimeUTC.toISOString() });
+            logger.info('AUTO-RECOVERY SUCCESS: Draft content scheduled', {
+              contentId,
+              scheduledAt: newTimeUTC.toISOString(),
+            });
             return { success: true };
           } else {
             // Rollback the status change if scheduling failed
@@ -735,7 +791,9 @@ export class SchedulerAdapter {
         // Handle circuit breaker errors with more specific messaging
         const errObj = error as { code?: string; message?: string } | undefined;
         if (errObj?.code === 'CIRCUIT_BREAKER_OPEN' || errObj?.code === 'EOPENBREAKER') {
-          logger.error('Circuit breaker is open - AWS scheduler temporarily unavailable. Reschedule failed.');
+          logger.error(
+            'Circuit breaker is open - AWS scheduler temporarily unavailable. Reschedule failed.'
+          );
           return {
             success: false,
             error: 'AWS scheduler temporarily unavailable. Please try again in a few minutes.',
@@ -783,12 +841,17 @@ export class SchedulerAdapter {
 
           // Log with timezone context
           const localTimeDisplay = TimezoneService.formatWithTimezone(newTimeUTC, brandTimezone);
-          logger.info('Content rescheduled successfully', { contentId, scheduledFor: localTimeDisplay });
+          logger.info('Content rescheduled successfully', {
+            contentId,
+            scheduledFor: localTimeDisplay,
+          });
 
           return { success: true };
         } catch (dbError) {
           // AWS succeeded but local DB failed - this is a serious consistency issue
-          logger.error('CRITICAL: AWS reschedule succeeded but local DB update failed', { error: dbError });
+          logger.error('CRITICAL: AWS reschedule succeeded but local DB update failed', {
+            error: dbError,
+          });
           await this.logInconsistency(contentId, 'LOCAL_DB_UPDATE_FAILED_AFTER_AWS_SUCCESS', {
             awsScheduleId: scheduleId,
             newTime: newTimeUTC.toISOString(),

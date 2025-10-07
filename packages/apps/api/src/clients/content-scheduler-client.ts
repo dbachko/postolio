@@ -677,8 +677,7 @@ export class ContentSchedulerClient {
       if (code === 'ETIMEDOUT') {
         throw new SchedulerError('Request to scheduler service timed out', 'TIMEOUT', 504, {
           timeout: this.config.timeout,
-          message:
-            error instanceof Error && error.message ? error.message : 'Operation timed out',
+          message: error instanceof Error && error.message ? error.message : 'Operation timed out',
         });
       }
 

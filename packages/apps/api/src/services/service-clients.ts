@@ -26,7 +26,7 @@ export class ServiceClients {
   private constructor() {
     // Private constructor for singleton
   }
-  
+
   // Optional: eager child logger for this module
   // Using default logger is fine; child can add module context if needed
 
@@ -38,7 +38,9 @@ export class ServiceClients {
       try {
         // TokenServiceClient with RESTful endpoints and enhanced features
         this._tokenService = new TokenServiceClient();
-        logger.info('Token Service client initialized with RESTful endpoints and enhanced features');
+        logger.info(
+          'Token Service client initialized with RESTful endpoints and enhanced features'
+        );
       } catch (error) {
         logger.error('Failed to initialize Token Service client', { error });
         throw error;
