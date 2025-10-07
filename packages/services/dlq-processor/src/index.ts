@@ -12,6 +12,7 @@ import {
   MessageAttributeValue,
 } from '@aws-sdk/client-sqs';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -31,6 +32,7 @@ const snsClient = new SNSClient({});
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const cloudWatchClient = new CloudWatchClient({});
+const ssmClient = new SSMClient({});
 // const tracingService = new TracingService(); // Temporarily disabled
 // const eventBus = EventBusService.getInstance(); // Temporarily disabled
 
@@ -794,8 +796,38 @@ export const handler = async (
         continue;
       }
 
-      const originalQueueName = queueName.replace(/-dlq$/i, '');
-      const queueUrl = `https://sqs.${region}.amazonaws.com/${accountId}/${originalQueueName}`;
+      // Prefer explicit mapping via environment or SSM Parameter Store
+      let configuredTarget = process.env.RETRY_QUEUE_URL || process.env.PUBLISHING_QUEUE_URL;
+      if (!configuredTarget) {
+        try {
+          const env = process.env.ENVIRONMENT || 'dev';
+          const retryParam = await ssmClient.send(
+            new GetParameterCommand({
+              Name: `/postolio/${env}/publishing/retry-queue-url`,
+            })
+          );
+          configuredTarget = retryParam.Parameter?.Value || undefined;
+        } catch {
+          // ignore and try publishing queue
+        }
+      }
+      if (!configuredTarget) {
+        try {
+          const env = process.env.ENVIRONMENT || 'dev';
+          const pubParam = await ssmClient.send(
+            new GetParameterCommand({
+              Name: `/postolio/${env}/publishing/queue-url`,
+            })
+          );
+          configuredTarget = pubParam.Parameter?.Value || undefined;
+        } catch {
+          // ignore and fall back to heuristic
+        }
+      }
+      const originalQueueName = configuredTarget
+        ? configuredTarget.split('/').pop() || ''
+        : queueName.replace(/-dlq$/i, '');
+      const queueUrl = configuredTarget || `https://sqs.${region}.amazonaws.com/${accountId}/${originalQueueName}`;
 
       await sqsClient.send(
         new SendMessageCommand({
@@ -812,11 +844,14 @@ export const handler = async (
       console.log('Forwarded DLQ message to original queue', {
         messageId: record.messageId,
         originalQueueName,
+        targetQueueUrl: queueUrl,
       });
     } catch (error) {
       console.error('Failed to forward DLQ message', {
         messageId: record.messageId,
         error: error instanceof Error ? error.message : String(error),
+        configuredRetryQueue: process.env.RETRY_QUEUE_URL,
+        configuredPublishingQueue: process.env.PUBLISHING_QUEUE_URL,
       });
       // Throwing will cause Lambda to report a failure and DLQ message to remain for retry/visibility timeout
       throw error;

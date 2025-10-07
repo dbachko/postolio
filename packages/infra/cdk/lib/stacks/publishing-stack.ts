@@ -650,6 +650,8 @@ export class PublishingStack extends cdk.Stack {
         SCHEDULES_TABLE_SCHEDULE_INDEX: 'ScheduleIdIndex',
         DLQ_STATE_TABLE_NAME: dlqStateTable.tableName,
         DLQ_URL: this.deadLetterQueue.queueUrl,
+        RETRY_QUEUE_URL: this.retryQueue.queueUrl,
+        PUBLISHING_QUEUE_URL: this.publishingQueue.queueUrl,
         EVENT_BUS_NAME: schedulingEventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,

@@ -213,12 +213,40 @@ export class ScheduleService {
           );
           const existing = existingRes.Item as Schedule | undefined;
           if (existing) {
-            // If same time, return existing idempotently
+            // If same time, clear any previous schedulingError and return existing idempotently
             if (existing.scheduledAt === request.scheduledAt) {
               logger.info('Idempotent create: schedule already exists with same time', {
                 scheduleId: existing.scheduleId,
               });
-              return { success: true, schedule: existing };
+
+              // Proactively clear stale schedulingError from previous attempts
+              try {
+                const nowTs = new Date().toISOString();
+                const updated = await docClient.send(
+                  new UpdateCommand({
+                    TableName: this.config.schedulesTable,
+                    Key: { pk: existing.pk, sk: existing.sk },
+                    UpdateExpression: 'SET updatedAt = :now REMOVE #error',
+                    ExpressionAttributeNames: {
+                      '#error': 'schedulingError',
+                    },
+                    ExpressionAttributeValues: {
+                      ':now': nowTs,
+                    },
+                    ReturnValues: 'ALL_NEW',
+                  })
+                );
+
+                const updatedSchedule = (updated.Attributes || existing) as Schedule;
+                return { success: true, schedule: updatedSchedule };
+              } catch (ignoreUpdateError) {
+                // If we cannot update, return the existing item as-is (non-fatal)
+                logger.warn('Failed to clear stale schedulingError on idempotent create', {
+                  scheduleId: existing.scheduleId,
+                  error: ignoreUpdateError,
+                });
+                return { success: true, schedule: existing };
+              }
             }
 
             // Use updateSchedule to update time and EB schedule
@@ -449,6 +477,7 @@ export class ScheduleService {
 
       // Build update expression
       const updateExpressions: string[] = [];
+      const removeExpressions: string[] = [];
       const expressionAttributeNames: Record<string, string> = {};
       const expressionAttributeValues: Record<string, unknown> = {};
       const hasTimeChange = !!(
@@ -587,13 +616,22 @@ export class ScheduleService {
       updateExpressions.push('updatedAt = :updatedAt');
       expressionAttributeValues[':updatedAt'] = new Date().toISOString();
 
-      if (updateExpressions.length === 1) {
+      // On any successful update, clear any previous schedulingError
+      expressionAttributeNames['#error'] = 'schedulingError';
+      removeExpressions.push('#error');
+
+      if (updateExpressions.length === 1 && removeExpressions.length === 0) {
         // Only updatedAt changed, nothing to update
         return {
           success: true,
           schedule: existingSchedule,
         };
       }
+
+      // Build UpdateExpression supporting SET ... and conditional REMOVE ...
+      const updateExpression = `SET ${updateExpressions.join(', ')}${
+        removeExpressions.length > 0 ? ' REMOVE ' + removeExpressions.join(', ') : ''
+      }`;
 
       // Update DynamoDB record
       await docClient.send(
@@ -603,7 +641,7 @@ export class ScheduleService {
             pk: existingSchedule.pk,
             sk: existingSchedule.sk,
           },
-          UpdateExpression: `SET ${updateExpressions.join(', ')}`,
+          UpdateExpression: updateExpression,
           ExpressionAttributeNames:
             Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
           ExpressionAttributeValues: expressionAttributeValues,
