@@ -348,7 +348,8 @@ export class SchedulingStack extends cdk.Stack {
         this,
         `/postolio/${environment}/publishing/scheduler-role-arn`
       );
-      databaseSecretArnParam = ssm.StringParameter.valueFromLookup(
+      // Use deploy-time resolution to avoid dummy placeholder values
+      databaseSecretArnParam = ssm.StringParameter.valueForStringParameter(
         this,
         `/postolio/${environment}/database/secret-arn`
       );
@@ -440,8 +441,7 @@ export class SchedulingStack extends cdk.Stack {
               ],
             }),
             // Secrets Manager permission to read DB credentials
-            ...(databaseSecretArnParam &&
-            !databaseSecretArnParam.startsWith('dummy-value-for-')
+            ...(databaseSecretArnParam
               ? [
                   new iam.PolicyStatement({
                     effect: iam.Effect.ALLOW,
@@ -570,10 +570,7 @@ export class SchedulingStack extends cdk.Stack {
         SCHEDULES_TABLE_BRAND_INDEX: 'BrandIndex',
         EVENT_BUS_NAME: this.eventBus.eventBusName,
         KMS_KEY_ID: encryptionKey.keyId,
-        ...(databaseSecretArnParam &&
-        !databaseSecretArnParam.startsWith('dummy-value-for-')
-          ? { DB_SECRET_ARN: databaseSecretArnParam }
-          : {}),
+        ...(databaseSecretArnParam ? { DB_SECRET_ARN: databaseSecretArnParam } : {}),
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,
