@@ -1059,10 +1059,10 @@ export class ContentSchedulerClient {
     details: ErrorDetails
   ): void {
     const message = String(event);
-    if (level === 'error') this.logger.error(message, details as any);
-    else if (level === 'warn') this.logger.warn(message, details as any);
-    else if (level === 'debug') this.logger.debug(message, details as any);
-    else this.logger.info(message, details as any);
+    if (level === 'error') this.logger.error(message, details);
+    else if (level === 'warn') this.logger.warn(message, details);
+    else if (level === 'debug') this.logger.debug(message, details);
+    else this.logger.info(message, details);
   }
 
   private summarizeError(err: unknown): Record<string, unknown> {
