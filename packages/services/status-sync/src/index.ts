@@ -191,8 +191,7 @@ async function getClient(): Promise<LambdaPrismaClient> {
   }
 
   // AWS path: create Pool with dynamic IAM token provider to avoid token expiry
-  const { host, port, dbName, iamUsername, region } =
-    await getDbConnectionParams();
+  const { host, port, dbName, iamUsername, region } = await getDbConnectionParams();
 
   const iamSigner = new Signer({ hostname: host, port, region, username: iamUsername });
   const iamPool = new Pool({
