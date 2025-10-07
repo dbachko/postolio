@@ -30,7 +30,13 @@ interface EventDetail {
 
 let prisma: LambdaPrismaClient | null = null;
 let cachedDbUrl: string | null = null; // kept for local/dev connection string
-type DbConnParams = { host: string; port: number; dbName: string; username: string; region: string };
+type DbConnParams = {
+  host: string;
+  port: number;
+  dbName: string;
+  username: string;
+  region: string;
+};
 let cachedDbParams: DbConnParams | null = null; // for RDS Proxy IAM connections
 
 function ensureProxyParams(urlString: string): string {
@@ -135,7 +141,10 @@ async function getDbConnectionParams(): Promise<DbConnParams> {
   const port = parseInt(portStr || '5432', 10);
   const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
   cachedDbParams = { host, port, dbName, username, region };
-  console.log('Using RDS Proxy IAM-auth connection', { proxy: `${host}:${port}`, database: dbName });
+  console.log('Using RDS Proxy IAM-auth connection', {
+    proxy: `${host}:${port}`,
+    database: dbName,
+  });
   return cachedDbParams;
 }
 
