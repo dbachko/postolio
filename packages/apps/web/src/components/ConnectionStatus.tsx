@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -152,3 +153,4 @@ export function AutoConnectionStatus({ className }: { className?: string }) {
     />
   );
 }
+/* eslint-disable react-refresh/only-export-components */

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
@@ -97,3 +98,4 @@ export {
   CardContent,
   cardVariants,
 };
+/* eslint-disable react-refresh/only-export-components */

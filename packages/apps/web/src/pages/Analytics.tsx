@@ -61,15 +61,20 @@ export default function Analytics() {
   const [error, setError] = useState('');
   const [daysPeriod, setDaysPeriod] = useState(30);
 
+  // Initial brands load on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadBrands();
   }, []);
 
+  // Fetch analytics when brand or period changes
   useEffect(() => {
     if (selectedBrand?.id) {
       loadAnalytics();
       loadSchedulingData();
     }
+    // Intentionally omit function deps to avoid re-creating callbacks each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBrand?.id, daysPeriod]);
 
   const loadBrands = async () => {

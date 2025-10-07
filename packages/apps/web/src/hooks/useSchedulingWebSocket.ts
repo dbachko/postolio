@@ -559,6 +559,8 @@ export function useSchedulingWebSocket({
     selectedBrand,
     enabled,
     handleStatusUpdate,
+    onCampaignStatusUpdate,
+    onCampaignError,
     calculateReconnectDelay,
     maxReconnectAttempts,
     heartbeatInterval,
