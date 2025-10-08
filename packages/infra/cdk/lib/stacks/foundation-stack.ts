@@ -252,6 +252,9 @@ export class FoundationStack extends cdk.Stack {
         securityGroups: [this.databaseSecurityGroup],
         requireTLS: true,
       });
+
+      // Grant the proxy's default IAM role access to the database secret
+      databaseSecret.grantRead(this.databaseProxy.grantee);
     }
 
     // ==================== Cache Configuration ====================
