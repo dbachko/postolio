@@ -235,6 +235,7 @@ export class FoundationStack extends cdk.Stack {
       deleteAutomatedBackups: environment !== 'prod',
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       enablePerformanceInsights: environment === 'prod',
+      iamAuthentication: true,
     });
 
     // RDS Proxy for better Lambda connection management
@@ -252,9 +253,6 @@ export class FoundationStack extends cdk.Stack {
         securityGroups: [this.databaseSecurityGroup],
         requireTLS: true,
       });
-
-      // Grant the proxy's default IAM role access to the database secret
-      databaseSecret.grantRead(this.databaseProxy.grantee);
     }
 
     // ==================== Cache Configuration ====================
