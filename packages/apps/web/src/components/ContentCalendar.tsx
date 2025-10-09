@@ -353,6 +353,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             hashtags: i.hashtags,
             imageUrl: i.imageUrl || undefined,
             campaignName: i.campaignName || i.campaign?.name,
+            processing: Boolean(i?.generationParams?.processing?.active),
           }))}
           currentDate={currentDate}
         />
@@ -372,6 +373,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             imageUrl: i.imageUrl || undefined,
             campaignName: i.campaignName || i.campaign?.name,
             campaignId: i.campaignId || i.campaign?.id,
+            processing: Boolean(i?.generationParams?.processing?.active),
           }))}
           currentDate={currentDate}
         />

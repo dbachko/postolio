@@ -6,7 +6,15 @@ import { format, parse, startOfWeek, getDay, addDays, subDays, isToday } from 'd
 import { enUS } from 'date-fns/locale';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type Content } from '../lib/api';
-import { ChevronLeft, ChevronRight, Play, CheckCircle, XCircle, Globe } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Play,
+  CheckCircle,
+  XCircle,
+  Globe,
+  Loader2,
+} from 'lucide-react';
 import { useTimezone } from '../contexts/TimezoneContext';
 import {
   formatInUserTimezone,
@@ -187,8 +195,9 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     const contentEvents = content
       .filter((item) => item.scheduledAt || item.postedAt)
       .map((item) => {
-        // Convert UTC timestamp to user's local timezone for display
-        const utcDate = item.scheduledAt || item.postedAt!;
+        // Prefer actual posted time for published items; otherwise use scheduled time
+        const utcDate =
+          (item.status === 'published' && item.postedAt) || item.scheduledAt || item.postedAt!;
         const localDate = convertUTCToLocal(utcDate, timezone);
         return {
           id: item.id,
@@ -292,6 +301,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     const calendarEvent = event;
     const content = calendarEvent.resource;
     const isPlaceholder = 'isPlaceholder' in content && content.isPlaceholder;
+    const isProcessing = Boolean((content as any)?.generationParams?.processing?.active);
     const isDraggable =
       !isPlaceholder &&
       content.status !== 'published' &&
@@ -316,21 +326,25 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
       placeholder: null, // No icon for placeholders
     };
 
-    const StatusIcon = statusIcons[content.status as keyof typeof statusIcons];
+    const StatusIcon = isProcessing
+      ? Loader2
+      : statusIcons[content.status as keyof typeof statusIcons];
 
     return (
       <div
-        className={`rounded p-1 ${isPlaceholder ? 'border border-dashed' : 'border-l-2'} ${statusColors[content.status as keyof typeof statusColors] || statusColors.draft} ${isDraggable ? 'cursor-move' : isPlaceholder ? '' : 'cursor-pointer'} transition-opacity hover:opacity-80`}
+        className={`rounded p-1 ${isPlaceholder ? 'border border-dashed' : 'border-l-2'} ${isProcessing ? statusColors.scheduled : statusColors[content.status as keyof typeof statusColors] || statusColors.draft} ${isDraggable ? 'cursor-move' : isPlaceholder ? '' : 'cursor-pointer'} transition-opacity hover:opacity-80`}
         onClick={() => {
           if (!isPlaceholder && 'id' in content) {
             onContentClick?.(content as Content);
           }
         }}
-        title={isDraggable ? 'Drag to reschedule' : ''}
+        title={isProcessing ? 'Scheduling...' : isDraggable ? 'Drag to reschedule' : ''}
       >
         <div className="flex items-center gap-1 text-xs">
-          {StatusIcon && <StatusIcon className="h-3 w-3 flex-shrink-0" />}
-          <span className="truncate">{calendarEvent.title}</span>
+          {StatusIcon && (
+            <StatusIcon className={`h-3 w-3 flex-shrink-0 ${isProcessing ? 'animate-spin' : ''}`} />
+          )}
+          <span className="truncate">{isProcessing ? 'Scheduling…' : calendarEvent.title}</span>
         </div>
         {isPlaceholder && <div className="mt-0.5 text-[10px] opacity-60">Will generate</div>}
       </div>

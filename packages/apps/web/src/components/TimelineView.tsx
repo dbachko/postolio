@@ -4,7 +4,7 @@ import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'da
 import { formatInTimeZone } from 'date-fns-tz';
 import { useTimezone } from '../contexts/TimezoneContext';
 import { Card, CardContent } from './ui/card';
-import { Clock, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
+import { Clock, Calendar, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 interface TimelineItem {
   id: string;
@@ -16,6 +16,7 @@ interface TimelineItem {
   hashtags?: string[];
   imageUrl?: string;
   campaignName?: string;
+  processing?: boolean;
 }
 
 interface TimelineViewProps {
@@ -55,8 +56,9 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
     return grouped;
   }, [items, weekDays]);
 
-  const getStatusColor = (status: string, type: string) => {
+  const getStatusColor = (status: string, type: string, processing?: boolean) => {
     if (type === 'placeholder') return 'bg-gray-100 text-gray-600 border-gray-300';
+    if (processing) return 'bg-blue-100 text-blue-800 border-blue-300';
     switch (status) {
       case 'published':
         return 'bg-green-100 text-green-800 border-green-300';
@@ -73,8 +75,9 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
     }
   };
 
-  const getStatusIcon = (status: string, type: string) => {
+  const getStatusIcon = (status: string, type: string, processing?: boolean) => {
     if (type === 'placeholder') return <Clock className="h-4 w-4" />;
+    if (processing) return <Loader2 className="h-4 w-4 animate-spin" />;
     switch (status) {
       case 'published':
         return <CheckCircle className="h-4 w-4" />;
@@ -129,7 +132,7 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
                           item.type === 'placeholder'
                             ? 'border border-dashed'
                             : 'cursor-pointer border transition-shadow hover:shadow-md'
-                        } ${getStatusColor(item.status, item.type)}`}
+                        } ${getStatusColor(item.status, item.type, item.processing)}`}
                         style={{ top: `${idx * 25}px` }}
                         onClick={() => {
                           if (item.type === 'content') {
@@ -138,7 +141,7 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
                         }}
                       >
                         <div className="flex items-start gap-1">
-                          {getStatusIcon(item.status, item.type)}
+                          {getStatusIcon(item.status, item.type, item.processing)}
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-medium">
                               {item.type === 'placeholder'
@@ -146,6 +149,9 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
                                 : item.caption.substring(0, 30) +
                                   (item.caption.length > 30 ? '...' : '')}
                             </div>
+                            {item.processing && (
+                              <div className="text-[10px] opacity-75">Scheduling...</div>
+                            )}
                             {item.type === 'placeholder' && item.campaignName && (
                               <div className="text-[10px] opacity-75">{item.campaignName}</div>
                             )}

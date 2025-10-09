@@ -18,6 +18,7 @@ import {
   ChevronUp,
   ChevronDown,
   Image as ImageIcon,
+  Loader2,
 } from 'lucide-react';
 
 interface ListItem {
@@ -32,6 +33,7 @@ interface ListItem {
   imageUrl?: string;
   campaignName?: string;
   campaignId?: string;
+  processing?: boolean;
 }
 
 interface ContentListViewProps {
@@ -133,12 +135,20 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
     });
   };
 
-  const getStatusBadge = (status: string, type: string) => {
+  const getStatusBadge = (status: string, type: string, processing?: boolean) => {
     if (type === 'placeholder') {
       return (
         <Badge variant="outline" className="gap-1">
           <Clock className="h-3 w-3" />
           Future AI
+        </Badge>
+      );
+    }
+    if (processing) {
+      return (
+        <Badge variant="secondary" className="gap-1">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Scheduling...
         </Badge>
       );
     }
@@ -319,7 +329,9 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
                     </div>
                   </div>
 
-                  <div className="col-span-2">{getStatusBadge(item.status, item.type)}</div>
+                  <div className="col-span-2">
+                    {getStatusBadge(item.status, item.type, item.processing)}
+                  </div>
 
                   <div className="col-span-5">
                     <button

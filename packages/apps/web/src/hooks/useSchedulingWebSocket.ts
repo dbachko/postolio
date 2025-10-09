@@ -177,6 +177,22 @@ export function useSchedulingWebSocket({
             return oldData;
           }
         );
+
+        // Also update individual post detail cache and clear any processing flags
+        queryClient.setQueryData(['post', contentId], (old: any) => {
+          if (!old) return old;
+          return {
+            ...old,
+            status: newStatus,
+            generationParams: {
+              ...(old.generationParams || {}),
+              processing: {
+                ...(old.generationParams?.processing || {}),
+                active: false,
+              },
+            },
+          };
+        });
       }
     },
     [queryKeys, queryClient, onStatusUpdate]

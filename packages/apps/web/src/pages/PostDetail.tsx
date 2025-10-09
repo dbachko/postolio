@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useMemo, memo, useEffect, useRef } from 'react';
+import { useState, memo, useEffect, useRef } from 'react';
 import { apiClient } from '../lib/api';
 import { useDebounce } from '../hooks/useDebounce';
 import { Card } from '../components/ui/card';
@@ -27,6 +27,8 @@ import { format } from 'date-fns';
 import { useTimezone } from '../contexts/TimezoneContext';
 import { formatInUserTimezone, convertLocalToUTC } from '../lib/timezone';
 import { toast } from 'sonner';
+import { getContentDisplayStatus } from '../utils/content-status';
+import { Loader2 } from 'lucide-react';
 
 // Import our new reusable components
 import { PostCaptionEditor } from '../components/PostCaptionEditor';
@@ -57,7 +59,14 @@ interface PostDetailData {
     theme?: string;
     style?: string;
     scheduleId?: string;
+    processing?: {
+      active: boolean;
+      operation: 'scheduling';
+      startedAt: string;
+      operationId?: string;
+    };
   };
+  schedulingError?: string | null;
   brand: {
     id: string;
     name: string;
@@ -156,18 +165,7 @@ export default function PostDetail() {
     appliedToFuturePosts?: number;
   }>({ isVisible: false, message: '' });
 
-  // Memoize status color calculation
-  const getStatusColor = useMemo(() => {
-    return (status: string) => {
-      const colors: Record<string, string> = {
-        draft: 'bg-gray-100 text-gray-700',
-        scheduled: 'bg-blue-100 text-blue-700',
-        published: 'bg-green-100 text-green-700',
-        failed: 'bg-red-100 text-red-700',
-      };
-      return colors[status] || 'bg-gray-100 text-gray-700';
-    };
-  }, []);
+  // Status color handled by getContentDisplayStatus
 
   // Fetch post details with auto-refresh
   const {
@@ -188,6 +186,7 @@ export default function PostDetail() {
         instagramPermalink: raw.instagramPermalink || undefined,
         imageUrl: raw.imageUrl || undefined,
         generationParams: raw.generationParams ? { ...raw.generationParams } : undefined,
+        schedulingError: raw.schedulingError || undefined,
         campaign: raw.campaign ? { ...raw.campaign } : undefined,
       };
     },
@@ -437,9 +436,24 @@ export default function PostDetail() {
       }
       return apiClient.schedulePost(postId!, payload);
     },
-    onSuccess: () => {
-      toast.success('Post scheduled successfully');
-      queryClient.invalidateQueries({ queryKey: ['post', postId] });
+    onSuccess: (resp) => {
+      toast.success('Post scheduling started');
+      // Optimistically mark as processing until scheduler confirms status
+      queryClient.setQueryData(['post', postId], (oldData: PostDetailData | undefined) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          generationParams: {
+            ...(oldData.generationParams || {}),
+            processing: {
+              active: true,
+              operation: 'scheduling',
+              startedAt: new Date().toISOString(),
+              operationId: (resp as any)?.content?.generationParams?.processing?.operationId,
+            },
+          },
+        };
+      });
     },
     onError: () => {
       toast.error('Failed to schedule post');
@@ -519,7 +533,21 @@ export default function PostDetail() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Badge className={getStatusColor(post.status)}>{post.status}</Badge>
+            {(() => {
+              const display = getContentDisplayStatus({
+                id: post.id,
+                status: post.status as any,
+                generationParams: post.generationParams as any,
+                schedulingError: post.schedulingError || null,
+                scheduledAt: post.scheduledAt || undefined,
+              });
+              return (
+                <Badge variant={display.variant || 'default'} className="gap-1">
+                  {display.showSpinner && <Loader2 className="h-3 w-3 animate-spin" />}
+                  {display.label}
+                </Badge>
+              );
+            })()}
             {post.instagramPermalink && (
               <Button
                 variant="outline"
@@ -621,6 +649,7 @@ export default function PostDetail() {
                 <PostStatusCard
                   status={post.status as 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'}
                   createdAt={post.createdAt}
+                  processing={Boolean((post as any)?.generationParams?.processing?.active)}
                 />
               </div>
             )}

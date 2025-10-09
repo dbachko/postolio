@@ -81,6 +81,20 @@ export function Campaigns() {
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
 
+  // Status badge colors for generated content cards
+  const getContentStatusBadgeClass = useMemo(() => {
+    return (status: string) => {
+      const classes: Record<string, string> = {
+        draft: 'bg-gray-100 text-gray-700',
+        scheduled: 'bg-blue-100 text-blue-700',
+        published: 'bg-green-100 text-green-700',
+        failed: 'bg-red-100 text-red-700',
+        skipped: 'bg-gray-100 text-gray-700',
+      };
+      return classes[status] || 'bg-gray-100 text-gray-700';
+    };
+  }, []);
+
   // Campaign list query
   const campaignsQuery = useQuery<{ success: boolean; campaigns: Campaign[] }>({
     queryKey: ['campaigns', selectedBrand?.id],
@@ -1054,28 +1068,27 @@ export function Campaigns() {
                             <CardContent className="p-4">
                               <div className="mb-3">
                                 <div className="mb-2 flex items-center gap-2">
-                                  <Badge
-                                    variant={
-                                      post.status === 'scheduled'
-                                        ? 'default'
-                                        : post.status === 'draft'
-                                          ? 'secondary'
-                                          : post.status === 'published'
-                                            ? 'default'
-                                            : post.status === 'failed'
-                                              ? 'destructive'
-                                              : post.status === 'skipped'
-                                                ? 'outline'
-                                                : 'outline'
-                                    }
-                                  >
-                                    {post.status}
-                                  </Badge>
-                                  {post.scheduledAt && (
-                                    <span className="text-muted-foreground text-xs">
-                                      {formatCompact(post.scheduledAt, 'MMM d, h:mm a')}
-                                    </span>
+                                  {(post as any)?.generationParams?.processing?.active ? (
+                                    <Badge variant="secondary" className="gap-1">
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                      Scheduling...
+                                    </Badge>
+                                  ) : (
+                                    <Badge className={getContentStatusBadgeClass(post.status)}>
+                                      {post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+                                    </Badge>
                                   )}
+                                  {(() => {
+                                    const displayTime =
+                                      post.status === 'published'
+                                        ? post.postedAt
+                                        : post.scheduledAt;
+                                    return displayTime ? (
+                                      <span className="text-muted-foreground text-xs">
+                                        {formatCompact(displayTime, 'MMM d, h:mm a')}
+                                      </span>
+                                    ) : null;
+                                  })()}
                                 </div>
                                 <p
                                   className="overflow-hidden text-sm leading-relaxed"
