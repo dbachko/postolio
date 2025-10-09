@@ -326,12 +326,15 @@ export function CreatePost() {
               <Calendar className="h-4 w-4" />
               Campaign (Optional)
             </Label>
-            <Select value={campaignId} onValueChange={setCampaignId}>
+            <Select
+              value={campaignId || 'none'}
+              onValueChange={(value) => setCampaignId(value === 'none' ? '' : value)}
+            >
               <SelectTrigger id="campaign" aria-label="Select campaign">
                 <SelectValue placeholder="Select a campaign (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No Campaign</SelectItem>
+                <SelectItem value="none">No Campaign</SelectItem>
                 {campaignsQuery.data?.campaigns
                   ?.filter((c) => ['active', 'preview'].includes(c.status))
                   .map((campaign) => (
