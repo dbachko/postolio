@@ -9,7 +9,6 @@ import { createLambdaPrismaClient, ContentStatus } from '@postolio/database/lamb
 import type { Context, EventBridgeEvent } from 'aws-lambda';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
-import { Signer } from '@aws-sdk/rds-signer';
 import { Pool } from 'pg';
 
 // EventBridge event detail structure matching what publisher/scheduler services emit
@@ -31,15 +30,6 @@ interface EventDetail {
 
 let prisma: LambdaPrismaClient | null = null;
 let cachedDbUrl: string | null = null; // kept for local/dev connection string
-type DbConnParams = {
-  host: string;
-  port: number;
-  dbName: string;
-  username: string; // username from secret (static password user)
-  iamUsername: string; // username for IAM auth (can differ)
-  region: string;
-};
-let cachedDbParams: DbConnParams | null = null; // for RDS Proxy IAM connections
 
 function ensureProxyParams(urlString: string): string {
   try {
@@ -110,24 +100,6 @@ async function getSecretArn(): Promise<string> {
   }
 }
 
-async function getIamDbUsername(): Promise<string | undefined> {
-  // Priority: explicit env → SSM parameter → undefined
-  if (process.env.DB_IAM_USER && process.env.DB_IAM_USER.trim().length > 0) {
-    return process.env.DB_IAM_USER.trim();
-  }
-  const environment = process.env.ENVIRONMENT || 'dev';
-  try {
-    const param = await ssm.send(
-      new GetParameterCommand({ Name: `/postolio/${environment}/database/iam-username` })
-    );
-    const value = param.Parameter?.Value?.trim();
-    if (value) return value;
-  } catch {
-    // Optional parameter; ignore if not present
-  }
-  return undefined;
-}
-
 async function getDatabaseUrl(): Promise<string> {
   if (cachedDbUrl) return cachedDbUrl;
 
@@ -138,35 +110,8 @@ async function getDatabaseUrl(): Promise<string> {
     return cachedDbUrl;
   }
 
-  // In AWS, we don't return a URL with IAM token because tokens expire.
-  // Use getDbConnectionParams() instead to create a pool with dynamic password provider.
-  throw new Error('In AWS, use dynamic IAM auth via getDbConnectionParams()');
-}
-
-async function getDbConnectionParams(): Promise<DbConnParams> {
-  if (cachedDbParams) return cachedDbParams;
-
-  const { proxy } = await getDatabaseEndpoints();
-  if (!proxy) throw new Error('RDS Proxy endpoint not available');
-  const dbName = process.env.DB_NAME || 'postolio';
-
-  const secretId = await getSecretArn();
-  const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
-  if (!res.SecretString) throw new Error('Empty database secret');
-  const credentials = JSON.parse(res.SecretString);
-  const username: string | undefined = credentials.username;
-  if (!username) throw new Error('Missing username in database secret');
-  const iamUsername = (await getIamDbUsername()) || username;
-
-  const [host, portStr] = proxy.split(':');
-  const port = parseInt(portStr || '5432', 10);
-  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
-  cachedDbParams = { host, port, dbName, username, iamUsername, region };
-  console.log('Using RDS Proxy IAM-auth connection', {
-    proxy: `${host}:${port}`,
-    database: dbName,
-  });
-  return cachedDbParams;
+  // In AWS, DATABASE_URL is not used; connection is created via getClient() with password auth
+  throw new Error('DATABASE_URL not available; use getClient() for AWS connections');
 }
 
 async function getClient(): Promise<LambdaPrismaClient> {
