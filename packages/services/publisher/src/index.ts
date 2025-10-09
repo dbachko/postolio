@@ -1103,6 +1103,10 @@ async function updateScheduleStatus(
       '#updatedAt': 'updatedAt',
       '#error': 'schedulingError',
       '#errorType': 'errorType',
+      // Include names used in SET/REMOVE clauses when status === 'published'
+      '#publishedAt': 'publishedAt',
+      '#platformPostId': 'platformPostId',
+      '#platformUrl': 'platformUrl',
     };
 
     const expressionAttributeValues: Record<string, string> = {
