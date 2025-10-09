@@ -41,7 +41,9 @@ jobs:
         with:
           filters: |
             api: packages/apps/api/**
-            web: packages/apps/web/**
+            web:
+              - packages/apps/web/**
+              - packages/libs/**
             token-service: packages/services/token-service/**
             publisher: packages/services/publisher/**
             retry-handler: packages/services/retry-handler/**
