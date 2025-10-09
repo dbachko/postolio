@@ -61,21 +61,56 @@ IMPORTANT: This brand profile has been refined through AI learning from user edi
 Generate ${count} unique Instagram posts that:
 1. STRICTLY match the learned brand style and tone preferences
 2. Appeal to the specified target audience
-3. Include engaging captions that reflect the learned tone (adjust length and style based on tone)
-4. Use hashtags aligned with the refined content themes
+3. Include engaging captions WITHOUT hashtags (hashtags go in separate field)
+4. Use relevant hashtags WITHOUT the # symbol (just the word)
 5. Include image generation prompts that reflect the brand's aesthetic preferences
 
 ${theme ? `Focus on theme: ${theme}` : ''}
 ${style ? `Use style: ${style}` : ''}
 
-Content Guidelines:
-
-Return a JSON array with objects containing:
+IMPORTANT OUTPUT REQUIREMENTS:
+- caption: Clean text WITHOUT any hashtags
+- hashtags: Array of hashtag words WITHOUT # symbols
+- imagePrompt: Detailed prompt for image generation
 
 Ensure content reflects the AI-learned user preferences and is Instagram-optimized.`;
 
+  // Define JSON Schema for structured output
+  const responseSchema = {
+    type: 'object',
+    properties: {
+      posts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            caption: {
+              type: 'string',
+              description: 'Instagram caption without hashtags',
+            },
+            hashtags: {
+              type: 'array',
+              items: {
+                type: 'string',
+              },
+              description: 'Array of hashtags without # symbols',
+            },
+            imagePrompt: {
+              type: 'string',
+              description: 'Detailed prompt for image generation',
+            },
+          },
+          required: ['caption', 'hashtags', 'imagePrompt'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['posts'],
+    additionalProperties: false,
+  };
+
   try {
-    console.log('Making OpenAI API call...');
+    console.log('Making OpenAI API call with structured output...');
 
     // Create a timeout promise
     const timeoutPromise = new Promise((_, reject) => {
@@ -83,7 +118,7 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
     });
 
     const completionPromise = openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4o-2024-08-06', // Model that supports structured outputs
       messages: [
         {
           role: 'system',
@@ -95,7 +130,15 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
         },
       ],
       temperature: 0.8,
-      max_tokens: 1500, // Reduced to make it faster
+      max_tokens: 1500,
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'instagram_posts',
+          strict: true,
+          schema: responseSchema,
+        },
+      },
     });
 
     type OpenAIChatChoice = { message?: { content?: string } };
@@ -111,36 +154,47 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
       throw new Error('No content received from OpenAI');
     }
 
-    // Clean and parse the JSON response (remove markdown code blocks if present)
-    let cleanContent = content
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*$/gi, '')
-      .trim();
-
-    // Try to extract JSON if it's embedded in other text
-    const jsonMatch = cleanContent.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      cleanContent = jsonMatch[0];
+    // Parse the structured JSON response (guaranteed to be valid JSON with strict mode)
+    interface StructuredResponse {
+      posts: Array<{
+        caption: string;
+        hashtags: string[];
+        imagePrompt: string;
+      }>;
     }
 
-    console.log('Cleaned content for parsing:', cleanContent.substring(0, 200) + '...');
-    const generatedContent = JSON.parse(cleanContent) as GeneratedContent[];
+    const structuredResponse = JSON.parse(content) as StructuredResponse;
+    console.log(
+      `Received ${structuredResponse.posts.length} posts from structured output (expected ${count})`
+    );
 
     // Validate structure
-    if (!Array.isArray(generatedContent) || generatedContent.length !== count) {
-      throw new Error('Invalid content structure received');
+    if (!structuredResponse.posts || !Array.isArray(structuredResponse.posts)) {
+      throw new Error('Invalid response structure: missing posts array');
     }
 
-    // Validate that each item has required fields
+    if (structuredResponse.posts.length !== count) {
+      console.warn(
+        `Received ${structuredResponse.posts.length} posts, expected ${count}. Using what was received.`
+      );
+    }
+
+    // Map structured response to GeneratedContent format
+    // No need to clean hashtags - they're already in correct format from schema
+    const generatedContent: GeneratedContent[] = structuredResponse.posts.map((post) => ({
+      caption: post.caption.trim(),
+      hashtags: post.hashtags,
+      imagePrompt: post.imagePrompt,
+    }));
+
+    // Basic validation that content exists
     for (let i = 0; i < generatedContent.length; i++) {
       const item = generatedContent[i];
-      if (!item?.caption || typeof item.caption !== 'string' || item.caption.trim().length === 0) {
-        console.error(`Item ${i} has invalid caption:`, item);
-        throw new Error(`Generated content item ${i + 1} has missing or empty caption`);
+      if (!item.caption || item.caption.length === 0) {
+        throw new Error(`Generated content item ${i + 1} has empty caption`);
       }
-      if (!item?.hashtags || !Array.isArray(item.hashtags)) {
-        console.error(`Item ${i} has invalid hashtags:`, item);
-        throw new Error(`Generated content item ${i + 1} has missing or invalid hashtags`);
+      if (!item.hashtags || item.hashtags.length === 0) {
+        console.warn(`Generated content item ${i + 1} has no hashtags`);
       }
     }
 
@@ -234,11 +288,12 @@ function buildFallbackGeneratedContent(
 ): GeneratedContent[] {
   const { count } = request;
 
+  // Fallback content already has hashtags separated, so just ensure no # symbols
   return Array.from({ length: count }, (_, i) => ({
     caption: `Generated content ${
       i + 1
     } for ${brandName}. This engaging post captures the essence of your brand while connecting with your audience. Share your story and inspire your followers! 🌟`,
-    hashtags: ['inspiration', 'lifestyle', 'authentic', 'community', 'brand'],
+    hashtags: ['inspiration', 'lifestyle', 'authentic', 'community', 'brand'], // No # symbols
     imagePrompt: `A beautiful ${(styleProfile.aestheticStyle || 'modern').toLowerCase()} image featuring ${
       Array.isArray(styleProfile.colorPalette) && styleProfile.colorPalette.length >= 2
         ? `${styleProfile.colorPalette[0]} and ${styleProfile.colorPalette[1]}`

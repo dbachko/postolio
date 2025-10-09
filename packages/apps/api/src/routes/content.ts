@@ -15,6 +15,14 @@ import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
 
+/**
+ * Normalize hashtags by stripping # symbols
+ * This ensures consistency across manual and AI-generated content
+ */
+function normalizeHashtags(hashtags: string[]): string[] {
+  return hashtags.map((tag) => tag.replace(/^#+/, '').trim()).filter((tag) => tag.length > 0);
+}
+
 type GenerateContentBody = ContentGenerationRequest;
 
 interface ApproveContentBody {
@@ -203,6 +211,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send({ error: 'Maximum 30 hashtags allowed' });
         }
 
+        // Normalize hashtags (strip # symbols for consistency)
+        const normalizedHashtags = normalizeHashtags(hashtags);
+
         // Verify user owns the brand
         const brand = await prisma.brand.findFirst({
           where: {
@@ -256,7 +267,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         const content = await prisma.content.create({
           data: {
             caption,
-            hashtags,
+            hashtags: normalizedHashtags,
             s3ImageKey,
             imageRegion,
             retentionExpiresAt,
@@ -521,6 +532,13 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: 'Content not found' });
         }
 
+        // Prevent editing published content
+        if (content.status === 'published') {
+          return reply.code(400).send({
+            error: 'Cannot edit published content. Published posts are immutable.',
+          });
+        }
+
         // Store original content for learning analysis
         const originalContent: {
           caption: string;
@@ -556,12 +574,13 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           }
           updateData.caption = caption.trim(); // Ensure we store trimmed caption
         }
-        if (hashtags !== undefined) updateData.hashtags = hashtags;
+        if (hashtags !== undefined) {
+          updateData.hashtags = normalizeHashtags(hashtags);
+        }
         if (scheduledAt !== undefined) {
           updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
           // When setting a scheduledAt date, ensure proper status
-          // Don't change status if content is already published
-          if (scheduledAt && content.status !== 'published') {
+          if (scheduledAt) {
             // Set to scheduled when adding a scheduled time
             if (content.status === 'draft') {
               updateData.status = 'scheduled';
@@ -961,6 +980,13 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!content || content.brand.userId !== userId) {
         return reply.code(404).send({ error: 'Content not found' });
+      }
+
+      // Prevent editing published content
+      if (content.status === 'published') {
+        return reply.code(400).send({
+          error: 'Cannot edit published content. Published posts are immutable.',
+        });
       }
 
       try {

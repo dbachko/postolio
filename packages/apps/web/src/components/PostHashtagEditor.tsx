@@ -26,12 +26,12 @@ export function PostHashtagEditor({
   const handleInputChange = (value: string) => {
     setInput(value);
 
-    // Parse hashtags from input
+    // Parse hashtags from input and strip # symbols
     const parsedHashtags = value
       .split(/\s+/)
       .filter((tag) => tag.trim().length > 0)
-      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
-      .filter((tag) => tag.length > 1);
+      .map((tag) => tag.replace(/^#+/, '')) // Strip leading # symbols
+      .filter((tag) => tag.length > 0); // Remove empty tags after stripping
 
     onChange(parsedHashtags);
   };
@@ -61,7 +61,7 @@ export function PostHashtagEditor({
               className={`${!disabled ? 'cursor-pointer hover:bg-red-100 hover:text-red-800' : ''}`}
               onClick={!disabled ? () => removeHashtag(index) : undefined}
             >
-              {hashtag} {!disabled && '×'}
+              #{hashtag} {!disabled && '×'}
             </Badge>
           ))}
         </div>

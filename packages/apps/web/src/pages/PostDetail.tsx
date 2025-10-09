@@ -580,7 +580,15 @@ export default function PostDetail() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold md:text-xl">Content</h2>
               {!isEditing ? (
-                <Button variant="outline" size="sm" onClick={handleEdit}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEdit}
+                  disabled={post.status === 'published'}
+                  title={
+                    post.status === 'published' ? 'Cannot edit published content' : 'Edit this post'
+                  }
+                >
                   <Edit className="mr-2 h-4 w-4" />
                   Edit
                 </Button>
@@ -635,7 +643,7 @@ export default function PostDetail() {
                   <div className="flex flex-wrap gap-2">
                     {post.hashtags.map((tag, index) => (
                       <span key={index} className="text-blue-600">
-                        {tag}
+                        #{tag}
                       </span>
                     ))}
                   </div>

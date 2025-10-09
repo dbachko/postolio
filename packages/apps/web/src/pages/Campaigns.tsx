@@ -1130,6 +1130,12 @@ export function Campaigns() {
                                   variant="outline"
                                   size="sm"
                                   onClick={() => handleEditPost(post)}
+                                  disabled={post.status === 'published'}
+                                  title={
+                                    post.status === 'published'
+                                      ? 'Cannot edit published content'
+                                      : 'Edit this post'
+                                  }
                                   className="flex-1"
                                 >
                                   <Edit className="mr-1 h-3 w-3" />
