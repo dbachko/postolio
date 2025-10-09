@@ -66,6 +66,8 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
   const handleCampaignChange = (value: string) => {
     if (value === 'all') {
       filters.setCampaigns([]);
+    } else if (value === 'none') {
+      filters.setCampaigns(['none']); // Special value to show posts without campaigns
     } else {
       const selectedCampaigns = value ? value.split(',') : [];
       filters.setCampaigns(selectedCampaigns);
@@ -103,14 +105,21 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
         <div>
           <Label className="mb-1 text-xs text-gray-600">Campaigns</Label>
           <Select
-            value={filters.campaigns.length === 0 ? 'all' : filters.campaigns.join(',')}
+            value={
+              filters.campaigns.length === 0
+                ? 'all'
+                : filters.campaigns.includes('none')
+                  ? 'none'
+                  : filters.campaigns.join(',')
+            }
             onValueChange={handleCampaignChange}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="All campaigns" />
+              <SelectValue placeholder="All posts" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All campaigns</SelectItem>
+              <SelectItem value="all">All posts</SelectItem>
+              <SelectItem value="none">No campaign (manual posts)</SelectItem>
               {campaigns.map((campaign) => (
                 <SelectItem key={campaign.id} value={campaign.id}>
                   {campaign.name}
@@ -305,6 +314,16 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
       {filters.hasActiveFilters() && (
         <div className="flex flex-wrap gap-2 border-t pt-2">
           {filters.campaigns.map((campaignId) => {
+            if (campaignId === 'none') {
+              return (
+                <Badge key="none" variant="secondary">
+                  No Campaign (manual posts)
+                  <button onClick={() => filters.setCampaigns([])} className="ml-1">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              );
+            }
             const campaign = campaigns.find((c) => c.id === campaignId);
             return campaign ? (
               <Badge key={campaignId} variant="secondary">

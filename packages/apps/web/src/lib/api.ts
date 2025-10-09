@@ -427,33 +427,36 @@ class ApiClient {
     caption: string;
     hashtags: string[];
     imageFile?: File;
+    campaignId?: string;
+    scheduledAt?: string;
   }): Promise<{
     content: Content;
     metadata: { brandId: string; source: string };
   }> {
+    const requestBody: Record<string, unknown> = {
+      brandId: data.brandId,
+      caption: data.caption,
+      hashtags: data.hashtags,
+    };
+
+    // Add optional fields if provided
+    if (data.campaignId) {
+      requestBody.campaignId = data.campaignId;
+    }
+    if (data.scheduledAt) {
+      requestBody.scheduledAt = data.scheduledAt;
+    }
+
     if (data.imageFile) {
       // Convert File to base64 for upload (matching existing pattern)
       const imageData = await convertFileToBase64(data.imageFile);
-
-      return this.request('/api/content/create', {
-        method: 'POST',
-        body: JSON.stringify({
-          brandId: data.brandId,
-          caption: data.caption,
-          hashtags: data.hashtags,
-          imageData,
-          mimeType: data.imageFile.type,
-        }),
-      });
+      requestBody.imageData = imageData;
+      requestBody.mimeType = data.imageFile.type;
     }
 
     return this.request('/api/content/create', {
       method: 'POST',
-      body: JSON.stringify({
-        brandId: data.brandId,
-        caption: data.caption,
-        hashtags: data.hashtags,
-      }),
+      body: JSON.stringify(requestBody),
     });
   }
 

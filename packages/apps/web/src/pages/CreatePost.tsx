@@ -1,16 +1,24 @@
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { apiClient } from '../lib/api';
 import { useBrandStore } from '../stores/brandStore';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { ArrowLeft, Upload, Hash, Type, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Upload, Hash, Type, AlertCircle, Calendar, Clock } from 'lucide-react';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { validateImageFile } from '../lib/fileUtils';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 
 export function CreatePost() {
   const navigate = useNavigate();
@@ -21,6 +29,8 @@ export function CreatePost() {
   const [hashtags, setHashtags] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [campaignId, setCampaignId] = useState<string>('');
+  const [scheduledAt, setScheduledAt] = useState<string>('');
   const [errors, setErrors] = useState<{
     caption?: string;
     hashtags?: string;
@@ -28,17 +38,48 @@ export function CreatePost() {
   }>({});
   const [mutationError, setMutationError] = useState<string | null>(null);
 
+  // Fetch campaigns for the dropdown
+  const campaignsQuery = useQuery({
+    queryKey: ['campaigns', selectedBrand?.id],
+    queryFn: () => apiClient.listCampaigns(selectedBrand?.id),
+    enabled: !!selectedBrand,
+  });
+
   const createPostMutation = useMutation({
     mutationFn: async (data: {
       brandId: string;
       caption: string;
       hashtags: string[];
       imageFile?: File;
+      campaignId?: string;
+      scheduledAt?: string;
     }) => {
       return apiClient.createManualContent(data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['content'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+
+      // Show success toast with context
+      const isScheduled = !!scheduledAt;
+      const hasCampaign = !!campaignId;
+
+      let message = 'Post created successfully!';
+      if (isScheduled && hasCampaign) {
+        message = 'Post scheduled and added to campaign!';
+      } else if (isScheduled) {
+        message = 'Post created and scheduled!';
+      } else if (hasCampaign) {
+        message = 'Post created and added to campaign!';
+      }
+
+      toast.success(message, {
+        description: isScheduled
+          ? 'You can view it in the content calendar'
+          : 'You can find it in the content calendar as a draft',
+      });
+
+      // Navigate to content calendar where they can see the post
       navigate('/content');
     },
     onError: (error: Error) => {
@@ -132,6 +173,8 @@ export function CreatePost() {
       caption,
       hashtags: hashtagArray,
       imageFile: imageFile || undefined,
+      campaignId: campaignId || undefined,
+      scheduledAt: scheduledAt || undefined,
     });
   };
 
@@ -156,7 +199,6 @@ export function CreatePost() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold">Create New Post</h1>
-          <p className="text-muted-foreground">for {selectedBrand.name}</p>
         </div>
       </div>
 
@@ -275,6 +317,51 @@ export function CreatePost() {
             )}
             <p id="hashtags-help" className="text-muted-foreground text-sm">
               Separate hashtags with spaces or commas (max 30)
+            </p>
+          </div>
+
+          {/* Campaign (Optional) */}
+          <div className="space-y-2">
+            <Label htmlFor="campaign" className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Campaign (Optional)
+            </Label>
+            <Select value={campaignId} onValueChange={setCampaignId}>
+              <SelectTrigger id="campaign" aria-label="Select campaign">
+                <SelectValue placeholder="Select a campaign (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">No Campaign</SelectItem>
+                {campaignsQuery.data?.campaigns
+                  ?.filter((c) => ['active', 'preview'].includes(c.status))
+                  .map((campaign) => (
+                    <SelectItem key={campaign.id} value={campaign.id}>
+                      {campaign.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-sm">
+              Optionally assign this post to a campaign
+            </p>
+          </div>
+
+          {/* Scheduled Time (Optional) */}
+          <div className="space-y-2">
+            <Label htmlFor="scheduledAt" className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Schedule Time (Optional)
+            </Label>
+            <Input
+              id="scheduledAt"
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              aria-label="Schedule post time"
+              aria-describedby="schedule-help"
+            />
+            <p id="schedule-help" className="text-muted-foreground text-sm">
+              Leave empty to save as draft, or set a time to schedule the post
             </p>
           </div>
 

@@ -25,9 +25,14 @@ export function useFilteredContent(items: ContentItem[]) {
 
     // Filter by campaigns
     if (filters.campaigns.length > 0) {
-      filtered = filtered.filter(
-        (item) => item.campaignId && filters.campaigns.includes(item.campaignId)
-      );
+      // Special case: 'none' means show only posts without campaigns
+      if (filters.campaigns.includes('none')) {
+        filtered = filtered.filter((item) => !item.campaignId);
+      } else {
+        filtered = filtered.filter(
+          (item) => item.campaignId && filters.campaigns.includes(item.campaignId)
+        );
+      }
     }
 
     // Filter by status

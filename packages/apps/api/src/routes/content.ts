@@ -36,6 +36,8 @@ interface CreateManualContentBody {
   hashtags: string[];
   imageData?: string;
   mimeType?: string;
+  campaignId?: string;
+  scheduledAt?: string;
 }
 
 interface UpdateContentBody {
@@ -190,7 +192,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const userId = request.user!.id;
 
-        const { brandId, caption, hashtags, imageData } = request.body;
+        const { brandId, caption, hashtags, imageData, campaignId, scheduledAt } = request.body;
 
         // Validate input
         if (!caption || caption.trim().length === 0) {
@@ -263,6 +265,25 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        // Validate campaignId if provided
+        if (campaignId) {
+          const campaign = await prisma.campaign.findFirst({
+            where: {
+              id: campaignId,
+              brandId,
+            },
+          });
+
+          if (!campaign) {
+            return reply
+              .code(400)
+              .send({ error: 'Campaign not found or does not belong to this brand' });
+          }
+        }
+
+        // Determine status based on scheduledAt
+        const status = scheduledAt ? 'scheduled' : 'draft';
+
         // Create content record
         const content = await prisma.content.create({
           data: {
@@ -271,8 +292,10 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             s3ImageKey,
             imageRegion,
             retentionExpiresAt,
-            status: 'draft',
+            status,
             brandId,
+            campaignId: campaignId || null,
+            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
             generationParams: Prisma.JsonNull, // null indicates manual creation
           },
           select: {
@@ -288,6 +311,23 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             createdAt: true,
           },
         });
+
+        // If scheduled time is provided, create AWS schedule
+        if (scheduledAt) {
+          try {
+            const scheduleResult = await schedulerService.scheduleContent(content.id);
+
+            if (!scheduleResult.success) {
+              console.error('Failed to create AWS schedule:', scheduleResult.error);
+              // Note: We don't fail the request as the content is already created locally
+            } else {
+              console.log(`Content ${content.id} scheduled successfully in AWS`);
+            }
+          } catch (scheduleError) {
+            console.error('Error calling scheduler service:', scheduleError);
+            // Continue - content is created, scheduling failure is non-critical
+          }
+        }
 
         // Build CDN URL from S3 key and map to public response format
         const contentWithUrl = {
