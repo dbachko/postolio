@@ -189,38 +189,53 @@ async function getClient(): Promise<LambdaPrismaClient> {
     return prisma;
   }
 
-  // AWS path: create Pool with dynamic IAM token provider to avoid token expiry
-  const { host, port, dbName, iamUsername, region } = await getDbConnectionParams();
+  // AWS path: create Pool with password auth from Secrets Manager
+  const { proxy } = await getDatabaseEndpoints();
+  if (!proxy) throw new Error('RDS Proxy endpoint not available');
+  const dbName = process.env.DB_NAME || 'postolio';
 
-  const iamSigner = new Signer({ hostname: host, port, region, username: iamUsername });
-  const iamPool = new Pool({
+  const secretId = await getSecretArn();
+  const res = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
+  if (!res.SecretString) throw new Error('Empty database secret');
+  const credentials = JSON.parse(res.SecretString);
+
+  const username: string = credentials.username;
+  const password: string = credentials.password;
+  if (!username || !password) throw new Error('Missing credentials in database secret');
+
+  const [host, portStr] = proxy.split(':');
+  const port = parseInt(portStr || '5432', 10);
+
+  const passwordPool = new Pool({
     host,
     port,
     database: dbName,
-    user: iamUsername,
+    user: username,
+    password,
     ssl: { rejectUnauthorized: false },
     max: 1,
     connectionTimeoutMillis: 15000,
     idleTimeoutMillis: 10000,
-    // Called on connect
-    password: async () => iamSigner.getAuthToken(),
   });
 
   try {
-    // Validate the IAM connection quickly
-    await iamPool.query('SELECT 1');
-    const { client } = createLambdaPrismaClient({ pool: iamPool });
+    // Validate the connection quickly
+    await passwordPool.query('SELECT 1');
+    const { client } = createLambdaPrismaClient({ pool: passwordPool });
     prisma = client;
+    console.log('Connected to database via RDS Proxy with password auth', {
+      proxy: `${host}:${port}`,
+      database: dbName,
+    });
     return prisma;
   } catch (err: unknown) {
     const e = err as { message?: string; code?: string } | undefined;
     const msg = e?.message || 'unknown error';
     const code = e?.code || 'unknown';
-    console.error('IAM authentication to RDS Proxy failed', {
-      userTried: iamUsername,
+    console.error('Password authentication to RDS Proxy failed', {
+      userTried: username,
       errorCode: code,
       message: msg,
-      hint: 'Verify rds-db:connect permission to the proxy dbuser ARN (…/postgres), correct proxy endpoint/region in signer, and that the proxy has a Secrets Manager credential for this database user. End-to-end IAM (rds_iam) is not required in hybrid mode.',
     });
     throw err;
   }

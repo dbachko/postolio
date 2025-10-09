@@ -235,7 +235,7 @@ export class FoundationStack extends cdk.Stack {
       deleteAutomatedBackups: environment !== 'prod',
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       enablePerformanceInsights: environment === 'prod',
-      iamAuthentication: true,
+      iamAuthentication: false, // Use password auth through proxy
     });
 
     // RDS Proxy for better Lambda connection management
@@ -246,7 +246,7 @@ export class FoundationStack extends cdk.Stack {
         vpc: this.vpc,
         dbProxyName: `${prefix}-db-proxy`,
         debugLogging: environment !== 'prod',
-        iamAuth: true,
+        iamAuth: false, // Use password auth for all clients; simpler and works for ECS + Lambda
         maxConnectionsPercent: 100,
         maxIdleConnectionsPercent: 50,
         initQuery: 'SET search_path TO public',

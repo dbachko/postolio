@@ -186,6 +186,9 @@ export class ApiStack extends cdk.Stack {
         'RedisPortParameter',
         `/postolio/${environment}/cache/port`
       );
+
+      // Database endpoint comes from Secrets Manager (no need for SSM parameter)
+      // API service (ECS) maintains persistent connections, doesn't need proxy
     } else {
       // Create placeholder resources for synthesis
       ecsSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderEcsSecurityGroup', {
@@ -434,10 +437,10 @@ export class ApiStack extends cdk.Stack {
           },
           secrets: databaseSecret
             ? {
-                // Database credentials from RDS-managed secret - get individual components
+                // Database credentials and endpoint from RDS-managed secret
+                DB_HOST: ecs.Secret.fromSecretsManager(databaseSecret, 'host'),
                 DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),
                 DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, 'password'),
-                DB_HOST: ecs.Secret.fromSecretsManager(databaseSecret, 'host'),
                 DB_PORT: ecs.Secret.fromSecretsManager(databaseSecret, 'port'),
                 // JWT secret from dedicated secret
                 JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret, 'secret'),
