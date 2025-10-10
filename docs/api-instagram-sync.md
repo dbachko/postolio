@@ -215,6 +215,18 @@ LIMIT 1
 
 If found, the post is skipped and counted in `results.skipped`.
 
+Additionally, when an imported Instagram post does not yet exist by `instagramPostId`,
+the sync attempts to detect and update an existing draft/scheduled post for the same
+brand to avoid duplicates. Matching uses:
+
+- Scheduled time proximity (±2 hours compared to the Instagram `timestamp`), and
+- Caption similarity (normalized exact match or prefix match)
+
+When a match is found, the existing content is updated to `status='published'`, and
+`instagramPostId`, `instagramPermalink`, `postedAt`, and `analytics` are set. Existing
+image data is preserved if present; otherwise the imported image (if downloaded) is set.
+Import metadata is added to `generationParams` with `source='instagram_import'`.
+
 ### Rate Limiting
 
 Implemented with Redis:

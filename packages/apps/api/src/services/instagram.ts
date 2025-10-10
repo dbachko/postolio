@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import { analyticsCache } from './analytics-cache.js';
 import { PublisherCredentialsService } from './publisher-credentials.js';
 import { prisma } from '../config/database.js';
+import type { Prisma } from '@postolio/database';
 import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
 
 export interface InstagramPost {
@@ -1007,7 +1008,8 @@ class InstagramService {
     post: InstagramPost,
     skipExisting: boolean
   ): Promise<void> {
-    // Check if post already exists
+    // Check if this Instagram post was already imported (by instagramPostId)
+    // If found, treat as duplicate and skip (maintains current metrics behavior)
     if (skipExisting) {
       const existing = await prisma.content.findFirst({
         where: {
@@ -1017,9 +1019,96 @@ class InstagramService {
       });
 
       if (existing) {
+        // Optional enhancement: update analytics for freshness
+        try {
+          await prisma.content.update({
+            where: { id: existing.id },
+            data: {
+              analytics: {
+                like_count: post.like_count || 0,
+                comments_count: post.comments_count || 0,
+              },
+              // Keep postedAt/permalink if missing
+              postedAt:
+                existing.postedAt ?? (post.timestamp ? new Date(post.timestamp) : undefined),
+              instagramPermalink: existing.instagramPermalink ?? post.permalink ?? undefined,
+            },
+          });
+        } catch {
+          // Best effort; ignore analytics update failures
+        }
         throw new Error('Post already exists');
       }
     }
+
+    // Helper: attempt to find an existing draft/scheduled item that likely represents this IG post
+    const findMatchingDraft = async () => {
+      const postedAt = post.timestamp ? new Date(post.timestamp) : null;
+      const twoHoursMs = 2 * 60 * 60 * 1000;
+      const lower = postedAt ? new Date(postedAt.getTime() - twoHoursMs) : undefined;
+      const upper = postedAt ? new Date(postedAt.getTime() + twoHoursMs) : undefined;
+      const caption = (post.caption || '').trim();
+      const captionPrefix = caption.slice(0, 64);
+
+      // Prefer scheduled time proximity; fall back to caption similarity
+      // Limit search scope for performance
+      const orFilters: Prisma.ContentWhereInput[] = [];
+      if (postedAt && lower && upper) {
+        orFilters.push({ scheduledAt: { gte: lower, lte: upper } });
+      }
+      if (captionPrefix) {
+        orFilters.push({ caption: { contains: captionPrefix, mode: 'insensitive' } });
+      }
+
+      const candidates = await prisma.content.findMany({
+        where: {
+          brandId: brand.id!,
+          instagramPostId: null,
+          status: { in: ['draft', 'scheduled', 'failed', 'skipped'] },
+          ...(orFilters.length ? { OR: orFilters } : {}),
+        },
+        orderBy: [{ scheduledAt: 'desc' }, { updatedAt: 'desc' }],
+        take: 25,
+      });
+
+      if (!candidates.length) return null;
+
+      // Rank candidates: 1) closest scheduledAt to postedAt 2) exact caption match after normalization
+      const normalize = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+      const normTarget = normalize(caption);
+
+      let best: { id: string; score: number } | null = null;
+      for (const c of candidates) {
+        let score = 0;
+        if (postedAt && c.scheduledAt) {
+          const diff = Math.abs(c.scheduledAt.getTime() - postedAt.getTime());
+          // Strong score for within 2h window; higher score if closer
+          const timeScore = Math.max(0, (twoHoursMs - diff) / twoHoursMs);
+          score += timeScore * 0.7; // weight time proximity higher
+        }
+        if (c.caption) {
+          const norm = normalize(c.caption);
+          if (norm && norm === normTarget && norm.length > 0) {
+            score += 0.5; // bonus for exact normalized caption match
+          } else if (
+            norm &&
+            normTarget &&
+            norm.includes(normTarget.slice(0, Math.min(32, normTarget.length)))
+          ) {
+            score += 0.2; // weak bonus for partial prefix match
+          }
+        }
+        if (!best || score > best.score) {
+          best = { id: c.id, score };
+        }
+      }
+
+      // Require a minimum confidence to avoid accidental merges
+      if (best && best.score >= 0.3) {
+        return candidates.find((c) => c.id === best!.id) || null;
+      }
+      return null;
+    };
 
     // Skip non-image posts
     if (post.media_type !== 'IMAGE' && post.media_type !== 'CAROUSEL_ALBUM') {
@@ -1073,7 +1162,7 @@ class InstagramService {
       imageDownloadFailed = true;
     }
 
-    // Create content record
+    // Create content record payload (used for create or patch existing)
     const contentData = {
       brandId: brand.id!,
       caption: post.caption,
@@ -1099,9 +1188,59 @@ class InstagramService {
       },
     };
 
-    await prisma.content.create({
-      data: contentData,
-    });
+    // Try to merge into an existing draft/scheduled content to avoid duplicates
+    const matchingDraft = await findMatchingDraft();
+    if (matchingDraft) {
+      // Merge generationParams non-destructively
+      const current = await prisma.content.findUnique({
+        where: { id: matchingDraft.id },
+        select: {
+          generationParams: true,
+          s3ImageKey: true,
+          imageRegion: true,
+          retentionExpiresAt: true,
+        },
+      });
+      const existingParams = (current?.generationParams as Record<string, unknown>) || {};
+
+      const finalHasImage = Boolean(current?.s3ImageKey || s3ImageKey);
+      await prisma.content.update({
+        where: { id: matchingDraft.id },
+        data: {
+          status: 'published',
+          postedAt: contentData.postedAt,
+          instagramPostId: contentData.instagramPostId,
+          instagramPermalink: contentData.instagramPermalink,
+          schedulingError: null,
+          // Only set S3 fields if the existing draft doesn't have them
+          s3ImageKey: current?.s3ImageKey || s3ImageKey || undefined,
+          imageRegion: current?.imageRegion || imageRegion || undefined,
+          retentionExpiresAt: current?.retentionExpiresAt || retentionExpiresAt || undefined,
+          analytics: contentData.analytics,
+          generationParams: {
+            ...existingParams,
+            // Preserve existing, add import details
+            source: 'instagram_import',
+            importedAt: new Date().toISOString(),
+            originalPostDate: post.timestamp,
+            mediaType: post.media_type,
+            hasImage: finalHasImage,
+            imageDownloadFailed,
+          },
+        },
+      });
+
+      console.log(`[Instagram Sync] 🔄 Updated existing content with IG data`, {
+        postId: post.id,
+        brandId: brand.id,
+        mergedInto: matchingDraft.id,
+        reason: 'matched draft/scheduled by time/caption',
+      });
+      return;
+    }
+
+    // No matching draft found; create a new content record
+    await prisma.content.create({ data: contentData });
 
     console.log(`[Instagram Sync] ✨ Synced post ${post.id}`, {
       postId: post.id,
