@@ -36,6 +36,18 @@ const hostedZoneId = resolveContext<string>('hostedZoneId', 'HOSTED_ZONE_ID');
 const hostedZoneName = resolveContext<string>('hostedZoneName', 'HOSTED_ZONE_NAME');
 const webCertificateArn = resolveContext<string>('webCertificateArn', 'WEB_CERTIFICATE_ARN');
 
+// Optional Brand Analysis integration overrides for API stack
+const brandProfilesTableName = resolveContext<string>('brandProfilesTableName', 'BRAND_PROFILES_TABLE_NAME');
+const brandJobsTableName = resolveContext<string>('brandJobsTableName', 'BRAND_JOBS_TABLE_NAME');
+const brandProfilesTableParamPath = resolveContext<string>(
+  'brandProfilesTableParamPath',
+  'BRAND_PROFILES_TABLE_PARAM_PATH'
+);
+const brandJobsTableParamPath = resolveContext<string>(
+  'brandJobsTableParamPath',
+  'BRAND_JOBS_TABLE_PARAM_PATH'
+);
+
 const useExternalDnsContext = resolveContext<string | boolean>(
   'useExternalDns',
   'USE_EXTERNAL_DNS'
@@ -89,6 +101,7 @@ const foundationStack = new FoundationStack(app, `Postolio-Foundation-${environm
 
 // 2. Auth Stack - token-service microservice
 let schedulingStackRef: SchedulingStack | undefined;
+let apiStackRef: ApiStack | undefined;
 if (!onlyStack) {
   const authStack = new AuthStack(app, `Postolio-Auth-${environment}`, {
     env: stackEnv,
@@ -129,7 +142,7 @@ if (!onlyStack) {
   });
 
   // 5. API Stack - Backend API (ECS)
-  const apiStack = new ApiStack(app, `Postolio-API-${environment}`, {
+  apiStackRef = new ApiStack(app, `Postolio-API-${environment}`, {
     env: stackEnv,
     environment,
     domainName,
@@ -138,6 +151,10 @@ if (!onlyStack) {
     useExternalDns,
     openaiApiKey: app.node.tryGetContext('openaiApiKey'),
     imageTag,
+    ...(brandProfilesTableName ? { brandProfilesTableName } : {}),
+    ...(brandJobsTableName ? { brandJobsTableName } : {}),
+    ...(brandProfilesTableParamPath ? { brandProfilesTableParamPath } : {}),
+    ...(brandJobsTableParamPath ? { brandJobsTableParamPath } : {}),
     ...oauthConfig,
     description: `Postolio Backend API - ${environment} environment`,
     tags: {
@@ -166,12 +183,12 @@ if (!onlyStack) {
   authStack.addDependency(foundationStack);
   schedulingStackRef.addDependency(foundationStack);
   publishingStack.addDependency(foundationStack);
-  apiStack.addDependency(foundationStack);
+  apiStackRef.addDependency(foundationStack);
   webStack.addDependency(foundationStack);
   schedulingStackRef.addDependency(authStack);
   publishingStack.addDependency(authStack);
   publishingStack.addDependency(schedulingStackRef);
-  webStack.addDependency(apiStack);
+  webStack.addDependency(apiStackRef);
 }
 
 // 7. Brand Analysis Stack - Profiles + Jobs + Lambda
@@ -190,6 +207,8 @@ brandAnalysisStack.addDependency(foundationStack);
 if (schedulingStackRef) {
   brandAnalysisStack.addDependency(schedulingStackRef);
 }
+
+// API stack is intentionally decoupled from Brand Analysis; no dependency here.
 
 // Apply CDK Nag security checks
 cdk.Aspects.of(app).add(

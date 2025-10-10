@@ -224,6 +224,17 @@ The script maps `.env` variables to CDK context parameters as follows:
 | `DOMAIN_NAME`            | `domainName`           | API, Web  |
 | `VITE_API_URL`           | `corsOrigin`           | API       |
 
+#### Optional Brand Analysis Wiring
+
+If you want the API stack to deploy without depending on the Brand Analysis stack, you can explicitly provide table names or SSM parameter paths. If neither is provided, the API uses deterministic names: `postolio-<env>-brand-analysis-profiles` and `postolio-<env>-brand-analysis-jobs`.
+
+| .env Variable                        | CDK Context Parameter           | Used By |
+| ------------------------------------ | -------------------------------- | ------- |
+| `BRAND_PROFILES_TABLE_NAME`          | `brandProfilesTableName`         | API     |
+| `BRAND_JOBS_TABLE_NAME`              | `brandJobsTableName`             | API     |
+| `BRAND_PROFILES_TABLE_PARAM_PATH`    | `brandProfilesTableParamPath`    | API     |
+| `BRAND_JOBS_TABLE_PARAM_PATH`        | `brandJobsTableParamPath`        | API     |
+
 ### Troubleshooting
 
 #### Stack in ROLLBACK_COMPLETE state

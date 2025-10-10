@@ -29,6 +29,13 @@ export interface ApiStackProps extends cdk.StackProps, OAuthConfig {
   useExternalDns?: boolean;
   openaiApiKey?: string;
   imageTag?: string;
+  // Optional overrides for Brand Analysis DynamoDB integration (to avoid stack coupling)
+  // Option 1: Direct table names
+  brandProfilesTableName?: string;
+  brandJobsTableName?: string;
+  // Option 2: SSM parameter paths (use dynamic references only if explicitly provided)
+  brandProfilesTableParamPath?: string;
+  brandJobsTableParamPath?: string;
 }
 
 function deriveHostedZoneName(domainName: string): string {
@@ -86,16 +93,29 @@ export class ApiStack extends cdk.Stack {
     );
 
     // Brand Analysis table names (for Dynamo-backed read endpoints)
-    const brandProfilesTableParam = ssm.StringParameter.fromStringParameterName(
-      this,
-      'BrandProfilesTableParam',
-      `/postolio/${environment}/brand-analysis/profiles-table`
-    );
-    const brandJobsTableParam = ssm.StringParameter.fromStringParameterName(
-      this,
-      'BrandJobsTableParam',
-      `/postolio/${environment}/brand-analysis/jobs-table`
-    );
+    // Decoupled approach with three options in priority order:
+    // 1) Explicit table names via context/props
+    // 2) Explicit SSM parameter paths via context/props (dynamic reference)
+    // 3) Deterministic naming convention (no SSM dependency)
+    const brandProfilesTableName =
+      props.brandProfilesTableName ??
+      (props.brandProfilesTableParamPath
+        ? ssm.StringParameter.fromStringParameterName(
+            this,
+            'BrandProfilesTableParam',
+            props.brandProfilesTableParamPath
+          ).stringValue
+        : `postolio-${environment}-brand-analysis-profiles`);
+
+    const brandJobsTableName =
+      props.brandJobsTableName ??
+      (props.brandJobsTableParamPath
+        ? ssm.StringParameter.fromStringParameterName(
+            this,
+            'BrandJobsTableParam',
+            props.brandJobsTableParamPath
+          ).stringValue
+        : `postolio-${environment}-brand-analysis-jobs`);
 
     // Optional: Scheduling EventBridge bus name used by API to emit domain events
     const schedulingEventBusNameParam = ssm.StringParameter.fromStringParameterName(
@@ -370,15 +390,15 @@ export class ApiStack extends cdk.Stack {
                 cdk.Stack.of(this).formatArn({
                   service: 'dynamodb',
                   resource: 'table',
-                  resourceName: brandProfilesTableParam.stringValue,
+                  resourceName: brandProfilesTableName,
                 }),
-                `${cdk.Stack.of(this).formatArn({ service: 'dynamodb', resource: 'table', resourceName: brandProfilesTableParam.stringValue })}/index/*`,
+                `${cdk.Stack.of(this).formatArn({ service: 'dynamodb', resource: 'table', resourceName: brandProfilesTableName })}/index/*`,
                 cdk.Stack.of(this).formatArn({
                   service: 'dynamodb',
                   resource: 'table',
-                  resourceName: brandJobsTableParam.stringValue,
+                  resourceName: brandJobsTableName,
                 }),
-                `${cdk.Stack.of(this).formatArn({ service: 'dynamodb', resource: 'table', resourceName: brandJobsTableParam.stringValue })}/index/*`,
+                `${cdk.Stack.of(this).formatArn({ service: 'dynamodb', resource: 'table', resourceName: brandJobsTableName })}/index/*`,
               ],
             }),
           ],
@@ -460,8 +480,8 @@ export class ApiStack extends cdk.Stack {
             CLOUDFRONT_DISTRIBUTION_ID: imagesCdnDistributionId,
             // EventBridge bus for platform events; API code falls back to 'default' if unset
             EVENT_BUS_NAME: schedulingEventBusNameParam.stringValue,
-            BRAND_STYLE_PROFILES_TABLE: brandProfilesTableParam.stringValue,
-            BRAND_ANALYSIS_JOBS_TABLE: brandJobsTableParam.stringValue,
+            BRAND_STYLE_PROFILES_TABLE: brandProfilesTableName,
+            BRAND_ANALYSIS_JOBS_TABLE: brandJobsTableName,
             ...(redisEndpointParam && { REDIS_HOST: redisEndpointParam.stringValue }),
             ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
