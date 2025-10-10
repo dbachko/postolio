@@ -1,14 +1,13 @@
 import { FastifyPluginAsync } from 'fastify';
-import { analyzeBrandStyle, type PostAnalysis } from '../services/ai.js';
+import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+// Legacy AI analyze endpoint removed
 
 import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
+const eventBridge = new EventBridge({});
 
-interface BrandAnalysisBody {
-  brandName: string;
-  posts: PostAnalysis[];
-}
+// interface BrandAnalysisBody removed with legacy endpoint
 
 interface CreateBrandBody {
   name: string;
@@ -53,7 +52,27 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             createdAt: true,
           },
         });
-
+        // Optionally auto-start brand analysis via EventBridge
+        if (
+          ['true', '1', 'yes'].includes((process.env.BRAND_ANALYSIS_AUTO_START || '').toLowerCase())
+        ) {
+          try {
+            await eventBridge.send(
+              new PutEventsCommand({
+                Entries: [
+                  {
+                    DetailType: 'brand.analysis.requested',
+                    Source: 'postolio.brand',
+                    EventBusName: process.env.EVENT_BUS_NAME || 'default',
+                    Detail: JSON.stringify({ brandId: brand.id, requestedBy: request.user.id }),
+                  },
+                ],
+              })
+            );
+          } catch (e) {
+            request.log.warn({ err: e }, 'Failed to emit brand.analysis.requested event');
+          }
+        }
         return reply.code(201).send({ brand });
       } catch (error) {
         console.error('Brand creation error:', error);
@@ -68,54 +87,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Analyze brand from Instagram posts
-  fastify.post<{ Body: BrandAnalysisBody }>(
-    '/analyze',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        const userId = request.user!.id;
-
-        const { brandName, posts } = request.body;
-
-        if (!posts || posts.length === 0) {
-          return reply.code(400).send({ error: 'At least one post is required for analysis' });
-        }
-
-        // Perform AI analysis
-        const analysis = await analyzeBrandStyle(posts, brandName);
-
-        // Create brand with analysis results
-        const brand = await prisma.brand.create({
-          data: {
-            name: brandName,
-            // Store analysis outputs as JSON (Prisma.JsonValue)
-            styleProfile: JSON.parse(JSON.stringify(analysis.styleProfile)),
-            preferences: JSON.parse(
-              JSON.stringify({
-                recommendations: analysis.recommendations,
-                confidence: analysis.confidence,
-                analysisDate: new Date().toISOString(),
-              })
-            ),
-            userId,
-          },
-          select: {
-            id: true,
-            name: true,
-            styleProfile: true,
-            preferences: true,
-            createdAt: true,
-          },
-        });
-
-        return reply.code(201).send({ brand, analysis });
-      } catch (error) {
-        console.error('Brand analysis error:', error);
-        return reply.code(500).send({ error: 'Failed to analyze brand' });
-      }
-    }
-  );
+  // Legacy /analyze endpoint removed in favor of /api/brand-analysis routes
 
   // Get user's brands
   fastify.get('/list', { preHandler: fastify.authenticate }, async (request, reply) => {

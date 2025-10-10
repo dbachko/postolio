@@ -30,3 +30,7 @@ export function getOpenAIClient(): OpenAI | null {
 export function resetOpenAIClientCache(): void {
   cachedClient = undefined;
 }
+
+export function getDefaultOpenAIModel(): string {
+  return process.env.LLM_DEFAULT_MODEL || 'gpt-5-mini-2025-08-07';
+}

@@ -328,8 +328,9 @@ Return a JSON object with:
 Focus on significant changes only. Return only JSON.`;
 
       const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: (await import('./openai-client.js')).getDefaultOpenAIModel(),
         messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
         temperature: 0.1,
         max_tokens: 300,
       });
@@ -469,8 +470,9 @@ Return a JSON array of theme categories (e.g., ["lifestyle", "business", "fashio
 Focus on the primary theme each hashtag represents. Return only the JSON array.`;
 
       const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: (await import('./openai-client.js')).getDefaultOpenAIModel(),
         messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
         temperature: 0.1,
         max_tokens: 200,
       });

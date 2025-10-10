@@ -85,6 +85,18 @@ export class ApiStack extends cdk.Stack {
       `/postolio/${environment}/cdn/images-distribution-id`
     );
 
+    // Brand Analysis table names (for Dynamo-backed read endpoints)
+    const brandProfilesTableParam = ssm.StringParameter.fromStringParameterName(
+      this,
+      'BrandProfilesTableParam',
+      `/postolio/${environment}/brand-analysis/profiles-table`
+    );
+    const brandJobsTableParam = ssm.StringParameter.fromStringParameterName(
+      this,
+      'BrandJobsTableParam',
+      `/postolio/${environment}/brand-analysis/jobs-table`
+    );
+
     // Optional: Scheduling EventBridge bus name used by API to emit domain events
     const schedulingEventBusNameParam = ssm.StringParameter.fromStringParameterName(
       this,
@@ -350,6 +362,25 @@ export class ApiStack extends cdk.Stack {
                 `arn:aws:events:${this.region}:${this.account}:event-bus/${schedulingEventBusNameParam.stringValue}`,
               ],
             }),
+            // DynamoDB permissions for Brand Analysis tables (read-only for API routes)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['dynamodb:GetItem', 'dynamodb:Query', 'dynamodb:Scan'],
+              resources: [
+                cdk.Stack.of(this).formatArn({
+                  service: 'dynamodb',
+                  resource: 'table',
+                  resourceName: brandProfilesTableParam.stringValue,
+                }),
+                `${cdk.Stack.of(this).formatArn({ service: 'dynamodb', resource: 'table', resourceName: brandProfilesTableParam.stringValue })}/index/*`,
+                cdk.Stack.of(this).formatArn({
+                  service: 'dynamodb',
+                  resource: 'table',
+                  resourceName: brandJobsTableParam.stringValue,
+                }),
+                `${cdk.Stack.of(this).formatArn({ service: 'dynamodb', resource: 'table', resourceName: brandJobsTableParam.stringValue })}/index/*`,
+              ],
+            }),
           ],
         }),
       },
@@ -429,6 +460,8 @@ export class ApiStack extends cdk.Stack {
             CLOUDFRONT_DISTRIBUTION_ID: imagesCdnDistributionId,
             // EventBridge bus for platform events; API code falls back to 'default' if unset
             EVENT_BUS_NAME: schedulingEventBusNameParam.stringValue,
+            BRAND_STYLE_PROFILES_TABLE: brandProfilesTableParam.stringValue,
+            BRAND_ANALYSIS_JOBS_TABLE: brandJobsTableParam.stringValue,
             ...(redisEndpointParam && { REDIS_HOST: redisEndpointParam.stringValue }),
             ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
             // OpenAI API Key from GitHub secrets (passed via CI/CD)

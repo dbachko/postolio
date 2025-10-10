@@ -40,6 +40,7 @@ import { complianceRoutes } from './routes/compliance.js';
 import postDetailRoutes from './routes/post-detail.js';
 import configRoutes from './routes/config.js';
 import backgroundJobsRoutes from './routes/background-jobs.js';
+import brandAnalysisRoutes from './routes/brand-analysis.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import Redis from 'ioredis';
@@ -221,6 +222,7 @@ export function buildFastify(): FastifyInstance {
   app.register(postDetailRoutes); // Post detail routes don't need prefix, they include /api
   app.register(configRoutes); // Config routes include their own /api prefix
   app.register(backgroundJobsRoutes); // Background job monitoring routes
+  app.register(brandAnalysisRoutes, { prefix: '/api/brand-analysis' });
 
   const registerHealthRoute = (path: string) => {
     // GET handler - returns JSON status payload

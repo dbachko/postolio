@@ -7,10 +7,12 @@ import { AuthStack } from '../lib/stacks/auth-stack';
 import { SchedulingStack } from '../lib/stacks/scheduling-stack';
 import { PublishingStack } from '../lib/stacks/publishing-stack';
 import { ApiStack } from '../lib/stacks/api-stack';
+import { BrandAnalysisStack } from '../lib/stacks/brand-analysis-stack';
 import { WebStack } from '../lib/stacks/web-stack';
 import { getOAuthConfig } from '../lib/utils/oauth-config';
 
 const app = new cdk.App();
+const onlyStack = app.node.tryGetContext('onlyStack');
 
 // Get environment from context or default to 'dev'
 const environment = app.node.tryGetContext('environment') || 'dev';
@@ -86,93 +88,108 @@ const foundationStack = new FoundationStack(app, `Postolio-Foundation-${environm
 });
 
 // 2. Auth Stack - token-service microservice
-const authStack = new AuthStack(app, `Postolio-Auth-${environment}`, {
+let schedulingStackRef: SchedulingStack | undefined;
+if (!onlyStack) {
+  const authStack = new AuthStack(app, `Postolio-Auth-${environment}`, {
+    env: stackEnv,
+    environment: environment as 'dev' | 'staging' | 'prod',
+    alertEmail: alertEmail,
+    domainName,
+    ...oauthConfig,
+    description: `Postolio Authentication services - ${environment} environment`,
+    tags: {
+      ...stackTags,
+      Service: 'Auth',
+    },
+  });
+
+  // 3. Scheduling Stack - schedule-management, schedule-cleanup, status-sync
+  schedulingStackRef = new SchedulingStack(app, `Postolio-Scheduling-${environment}`, {
+    env: stackEnv,
+    environment: environment as 'dev' | 'staging' | 'prod',
+    alertEmail: alertEmail,
+    description: `Postolio Content scheduling services - ${environment} environment`,
+    tags: {
+      ...stackTags,
+      Service: 'Scheduling',
+    },
+  });
+
+  // 4. Publishing Stack - publisher, retry-handler, dlq-processor, campaign-event-dlq-processor
+  const publishingStack = new PublishingStack(app, `Postolio-Publishing-${environment}`, {
+    env: stackEnv,
+    environment: environment as 'dev' | 'staging' | 'prod',
+    alertEmail: alertEmail,
+    ...oauthConfig,
+    description: `Postolio Content publishing services - ${environment} environment`,
+    tags: {
+      ...stackTags,
+      Service: 'Publishing',
+    },
+  });
+
+  // 5. API Stack - Backend API (ECS)
+  const apiStack = new ApiStack(app, `Postolio-API-${environment}`, {
+    env: stackEnv,
+    environment,
+    domainName,
+    hostedZoneId,
+    hostedZoneName,
+    useExternalDns,
+    openaiApiKey: app.node.tryGetContext('openaiApiKey'),
+    imageTag,
+    ...oauthConfig,
+    description: `Postolio Backend API - ${environment} environment`,
+    tags: {
+      ...stackTags,
+      Service: 'API',
+    },
+  });
+
+  // 6. Web Stack - Frontend (React)
+  const webStack = new WebStack(app, `Postolio-Web-${environment}`, {
+    env: stackEnv,
+    environment,
+    domainName,
+    hostedZoneId,
+    hostedZoneName,
+    useExternalDns,
+    certificateArn: webCertificateArn,
+    description: `Postolio Frontend application - ${environment} environment`,
+    tags: {
+      ...stackTags,
+      Service: 'Web',
+    },
+  });
+
+  // Dependencies for full app
+  authStack.addDependency(foundationStack);
+  schedulingStackRef.addDependency(foundationStack);
+  publishingStack.addDependency(foundationStack);
+  apiStack.addDependency(foundationStack);
+  webStack.addDependency(foundationStack);
+  schedulingStackRef.addDependency(authStack);
+  publishingStack.addDependency(authStack);
+  publishingStack.addDependency(schedulingStackRef);
+  webStack.addDependency(apiStack);
+}
+
+// 7. Brand Analysis Stack - Profiles + Jobs + Lambda
+const brandAnalysisStack = new BrandAnalysisStack(app, `Postolio-BrandAnalysis-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
-  alertEmail: alertEmail,
-  domainName,
-  ...oauthConfig,
-  description: `Postolio Authentication services - ${environment} environment`,
+  description: `Postolio Brand Analysis services - ${environment} environment`,
   tags: {
     ...stackTags,
-    Service: 'Auth',
+    Service: 'BrandAnalysis',
   },
 });
 
-// 3. Scheduling Stack - schedule-management, schedule-cleanup, status-sync
-const schedulingStack = new SchedulingStack(app, `Postolio-Scheduling-${environment}`, {
-  env: stackEnv,
-  environment: environment as 'dev' | 'staging' | 'prod',
-  alertEmail: alertEmail,
-  description: `Postolio Content scheduling services - ${environment} environment`,
-  tags: {
-    ...stackTags,
-    Service: 'Scheduling',
-  },
-});
-
-// 4. Publishing Stack - publisher, retry-handler, dlq-processor, campaign-event-dlq-processor
-const publishingStack = new PublishingStack(app, `Postolio-Publishing-${environment}`, {
-  env: stackEnv,
-  environment: environment as 'dev' | 'staging' | 'prod',
-  alertEmail: alertEmail,
-  ...oauthConfig,
-  description: `Postolio Content publishing services - ${environment} environment`,
-  tags: {
-    ...stackTags,
-    Service: 'Publishing',
-  },
-});
-
-// 5. API Stack - Backend API (ECS)
-const apiStack = new ApiStack(app, `Postolio-API-${environment}`, {
-  env: stackEnv,
-  environment,
-  domainName,
-  hostedZoneId,
-  hostedZoneName,
-  useExternalDns,
-  openaiApiKey: app.node.tryGetContext('openaiApiKey'),
-  imageTag,
-  ...oauthConfig,
-  description: `Postolio Backend API - ${environment} environment`,
-  tags: {
-    ...stackTags,
-    Service: 'API',
-  },
-});
-
-// 6. Web Stack - Frontend (React)
-const webStack = new WebStack(app, `Postolio-Web-${environment}`, {
-  env: stackEnv,
-  environment,
-  domainName,
-  hostedZoneId,
-  hostedZoneName,
-  useExternalDns,
-  certificateArn: webCertificateArn,
-  description: `Postolio Frontend application - ${environment} environment`,
-  tags: {
-    ...stackTags,
-    Service: 'Web',
-  },
-});
-
-// Stack Dependencies - Optimized for parallel deployment with Foundation as base
-// All stacks depend on Foundation for shared infrastructure
-authStack.addDependency(foundationStack);
-schedulingStack.addDependency(foundationStack);
-publishingStack.addDependency(foundationStack);
-apiStack.addDependency(foundationStack);
-webStack.addDependency(foundationStack);
-
-// Service-specific dependencies
-schedulingStack.addDependency(authStack);
-publishingStack.addDependency(authStack);
-publishingStack.addDependency(schedulingStack);
-
-// Web needs API for the load balancer URL (for CloudFront API proxy)
-webStack.addDependency(apiStack);
+// Brand analysis depends on foundation always; on scheduling when present
+brandAnalysisStack.addDependency(foundationStack);
+if (schedulingStackRef) {
+  brandAnalysisStack.addDependency(schedulingStackRef);
+}
 
 // Apply CDK Nag security checks
 cdk.Aspects.of(app).add(
@@ -183,36 +200,7 @@ cdk.Aspects.of(app).add(
   })
 );
 
-// Output stack references for cross-stack communication
-new cdk.CfnOutput(authStack, 'AuthStackReference', {
-  value: authStack.stackName,
-  description: 'Postolio Auth stack reference for cross-stack dependencies',
-  exportName: `Postolio-Auth-${environment}-StackRef`,
-});
-
-new cdk.CfnOutput(schedulingStack, 'SchedulingStackReference', {
-  value: schedulingStack.stackName,
-  description: 'Postolio Scheduling stack reference for cross-stack dependencies',
-  exportName: `Postolio-Scheduling-${environment}-StackRef`,
-});
-
-new cdk.CfnOutput(publishingStack, 'PublishingStackReference', {
-  value: publishingStack.stackName,
-  description: 'Postolio Publishing stack reference for cross-stack dependencies',
-  exportName: `Postolio-Publishing-${environment}-StackRef`,
-});
-
-new cdk.CfnOutput(apiStack, 'ApiStackReference', {
-  value: apiStack.stackName,
-  description: 'Postolio API stack reference for cross-stack dependencies',
-  exportName: `Postolio-API-${environment}-StackRef`,
-});
-
-new cdk.CfnOutput(webStack, 'WebStackReference', {
-  value: webStack.stackName,
-  description: 'Postolio Web stack reference for cross-stack dependencies',
-  exportName: `Postolio-Web-${environment}-StackRef`,
-});
+// Outputs: omitted in synth-only mode
 
 console.log(`Optimized stack-based deployment configured for ${environment} environment`);
 

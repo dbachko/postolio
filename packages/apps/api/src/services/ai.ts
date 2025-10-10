@@ -1,4 +1,4 @@
-import { getOpenAIClient } from './openai-client.js';
+import { getOpenAIClient, getDefaultOpenAIModel } from './openai-client.js';
 
 export interface PostAnalysis {
   imageUrl: string;
@@ -55,7 +55,7 @@ Return only valid JSON without any additional text or formatting.`;
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: getDefaultOpenAIModel(),
       messages: [
         {
           role: 'system',
@@ -67,6 +67,7 @@ Return only valid JSON without any additional text or formatting.`;
           content: prompt,
         },
       ],
+      response_format: { type: 'json_object' },
       temperature: 0.7,
       max_tokens: 1500,
     });
@@ -110,7 +111,7 @@ export async function analyzeImageStyle(imageUrl: string): Promise<{
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: getDefaultOpenAIModel(),
       messages: [
         {
           role: 'user',
@@ -126,6 +127,7 @@ export async function analyzeImageStyle(imageUrl: string): Promise<{
           ],
         },
       ],
+      response_format: { type: 'json_object' },
       max_tokens: 500,
     });
 

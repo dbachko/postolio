@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { getOpenAIClient } from './openai-client.js';
+import { getOpenAIClient, getDefaultOpenAIModel } from './openai-client.js';
 import type { StyleProfile } from './ai.js';
 import { generateMidjourneyImage } from './midjourney.js';
 import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
@@ -118,7 +118,7 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
     });
 
     const completionPromise = openai.chat.completions.create({
-      model: 'gpt-4o-2024-08-06', // Model that supports structured outputs
+      model: getDefaultOpenAIModel(),
       messages: [
         {
           role: 'system',

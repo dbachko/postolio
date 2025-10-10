@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postolio.example/schemas/brand-analysis-completed.schema.json",
+  "title": "Brand Analysis Completed Event",
+  "type": "object",
+  "properties": {
+    "detail-type": { "const": "brand.analysis.completed" },
+    "source": { "const": "postolio.brand" },
+    "detail": {
+      "type": "object",
+      "properties": {
+        "brandId": { "type": "string" },
+        "profileId": { "type": "string" },
+        "profileVersion": { "type": "integer", "minimum": 1 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["brandId", "profileId", "profileVersion", "createdAt"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["detail-type", "source", "detail"],
+  "additionalProperties": false
+}
+

@@ -174,3 +174,24 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+/// Projection of latest brand style profile for fast reads
+model BrandStyleProfileProjection {
+  brandId          String   @id @map("brand_id")
+  profileVersion   Int      @map("profile_version")
+  promptSetVersion String?  @map("prompt_set_version")
+  createdAt        DateTime @map("created_at")
+  hasRecentDrift   Boolean  @default(false) @map("has_recent_drift")
+  lastDriftAt      DateTime? @map("last_drift_at")
+  archetype        String?
+  primaryTones     String[] @db.Text
+  primaryPalette   String[] @db.Text
+  topicsTop        Json?    @map("topics_top")
+  summaryProjection Json?   @map("summary_projection")
+  checksum         String?
+  updatedAt        DateTime @default(now()) @map("updated_at")
+
+  @@index([profileVersion])
+  @@index([archetype])
+  @@map("brand_style_profile_projection")
+}
