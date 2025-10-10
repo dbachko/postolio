@@ -3,6 +3,8 @@ import { redisService } from './redis.js';
 import * as crypto from 'crypto';
 import { analyticsCache } from './analytics-cache.js';
 import { PublisherCredentialsService } from './publisher-credentials.js';
+import { prisma } from '../config/database.js';
+import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
 
 export interface InstagramPost {
   id: string;
@@ -781,6 +783,336 @@ class InstagramService {
         JSON.stringify(error, Object.getOwnPropertyNames(error as object))
       );
     }
+  }
+
+  /**
+   * Sync published Instagram posts to database
+   * Fetches recent posts and stores them as published content
+   *
+   * @param brand - Brand to sync for
+   * @param options - Sync configuration
+   * @returns Summary of sync results
+   */
+  async syncPublishedPosts(
+    brand: BrandData,
+    options: {
+      maxPosts?: number;
+      maxDays?: number;
+      skipExisting?: boolean;
+    } = {}
+  ): Promise<{
+    synced: number;
+    skipped: number;
+    failed: number;
+    errors: string[];
+  }> {
+    const { maxPosts = 100, maxDays = 30, skipExisting = true } = options;
+
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not connected for this brand');
+    }
+
+    // Check rate limit
+    await this.checkRateLimit(brand.instagramAccountId!);
+
+    const results = {
+      synced: 0,
+      skipped: 0,
+      failed: 0,
+      errors: [] as string[],
+    };
+
+    try {
+      const startTime = Date.now();
+      console.log(`[Instagram Sync] Started for brand ${brand.id}`, {
+        brandId: brand.id,
+        maxPosts,
+        maxDays,
+      });
+
+      // Calculate date threshold
+      const dateThreshold = new Date();
+      dateThreshold.setDate(dateThreshold.getDate() - maxDays);
+
+      // Fetch posts with pagination
+      const posts: InstagramPost[] = [];
+      let cursor: string | null = null;
+      let hasMore = true;
+
+      while (hasMore && posts.length < maxPosts) {
+        const batchSize = Math.min(100, maxPosts - posts.length);
+        const batch = await this.getRecentPostsPaginated(brand, batchSize, cursor);
+
+        // Filter by date threshold
+        const recentPosts = batch.data.filter((post) => {
+          if (!post.timestamp) return true;
+          return new Date(post.timestamp) >= dateThreshold;
+        });
+
+        posts.push(...recentPosts);
+
+        // Check if we should continue
+        hasMore = batch.hasMore && posts.length < maxPosts;
+        cursor = batch.cursor;
+
+        // Stop if we've gone past the date threshold
+        if (recentPosts.length < batch.data.length) {
+          hasMore = false;
+        }
+      }
+
+      console.log(`[Instagram Sync] 📥 Fetched ${posts.length} posts for brand ${brand.id}`, {
+        brandId: brand.id,
+        totalPosts: posts.length,
+        dateThreshold: dateThreshold.toISOString(),
+      });
+
+      // Process each post
+      for (const post of posts) {
+        try {
+          await this.syncSinglePost(brand, post, skipExisting);
+          results.synced++;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          if (message.includes('already exists')) {
+            results.skipped++;
+          } else {
+            results.failed++;
+            results.errors.push(`Post ${post.id}: ${message}`);
+            console.error(`[Instagram Sync] ❌ Failed to sync post ${post.id}:`, {
+              postId: post.id,
+              brandId: brand.id,
+              error: message,
+            });
+          }
+        }
+      }
+
+      const duration = Date.now() - startTime;
+
+      // Store sync metadata in Redis for status endpoint
+      const syncMetadata = {
+        brandId: brand.id,
+        timestamp: new Date().toISOString(),
+        duration,
+        results,
+        options: { maxPosts, maxDays },
+      };
+
+      await redisService.set(
+        `instagram_sync_metadata:${brand.id}`,
+        JSON.stringify(syncMetadata),
+        86400 // 24 hour TTL
+      );
+
+      console.log(`[Instagram Sync] ✅ Completed for brand ${brand.id}`, {
+        brandId: brand.id,
+        duration: `${duration}ms`,
+        durationSeconds: (duration / 1000).toFixed(2),
+        results,
+        successRate: `${((results.synced / (results.synced + results.failed + results.skipped)) * 100).toFixed(1)}%`,
+        postsPerSecond: (posts.length / (duration / 1000)).toFixed(2),
+      });
+
+      return results;
+    } catch (error) {
+      console.error('Failed to sync Instagram posts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get recent posts with pagination support
+   *
+   * @param brand - Brand to fetch for
+   * @param limit - Number of posts per request (max 100)
+   * @param cursor - Pagination cursor
+   * @returns Posts data with pagination info
+   */
+  async getRecentPostsPaginated(
+    brand: BrandData,
+    limit: number = 25,
+    cursor?: string | null
+  ): Promise<{
+    data: InstagramPost[];
+    hasMore: boolean;
+    cursor: string | null;
+  }> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not connected for this brand');
+    }
+
+    const credentials = await this.getCredentials(brand);
+    if (!credentials) {
+      throw new Error('Failed to get Instagram credentials');
+    }
+
+    const fields = 'id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count';
+    let url = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media?fields=${fields}&limit=${limit}&access_token=${credentials.accessToken}`;
+
+    if (cursor) {
+      url += `&after=${cursor}`;
+    }
+
+    const response = await axios.get(url);
+    const mediaData = response.data.data || [];
+    const paging = response.data.paging || {};
+
+    interface InstagramMediaResponse {
+      id: string;
+      caption?: string;
+      media_type?: string;
+      media_url?: string;
+      permalink?: string;
+      timestamp?: string;
+      like_count?: number;
+      comments_count?: number;
+    }
+
+    const posts: InstagramPost[] = mediaData.map((media: InstagramMediaResponse) => {
+      // Extract hashtags from caption
+      const caption = media.caption || '';
+      const hashtagMatches = caption.match(/#\w+/g) || [];
+      const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
+
+      return {
+        id: media.id,
+        caption: caption,
+        media_type: media.media_type || 'IMAGE',
+        media_url: media.media_url || '',
+        permalink: media.permalink || '',
+        timestamp: media.timestamp || '',
+        hashtags: hashtags,
+        like_count: media.like_count,
+        comments_count: media.comments_count,
+      };
+    });
+
+    return {
+      data: posts,
+      hasMore: !!paging.next,
+      cursor: paging.cursors?.after || null,
+    };
+  }
+
+  /**
+   * Sync a single post to database (Phase 2: with image download)
+   *
+   * @param brand - Brand to sync for
+   * @param post - Instagram post data
+   * @param skipExisting - Whether to skip existing posts
+   */
+  private async syncSinglePost(
+    brand: BrandData,
+    post: InstagramPost,
+    skipExisting: boolean
+  ): Promise<void> {
+    // Check if post already exists
+    if (skipExisting) {
+      const existing = await prisma.content.findFirst({
+        where: {
+          brandId: brand.id,
+          instagramPostId: post.id,
+        },
+      });
+
+      if (existing) {
+        throw new Error('Post already exists');
+      }
+    }
+
+    // Skip non-image posts
+    if (post.media_type !== 'IMAGE' && post.media_type !== 'CAROUSEL_ALBUM') {
+      console.log(`Skipping ${post.media_type} post ${post.id}`);
+      throw new Error(`Unsupported media type: ${post.media_type}`);
+    }
+
+    // Download image to S3
+    let s3ImageKey: string | null = null;
+    let imageRegion: string | null = null;
+    let retentionExpiresAt: Date | null = null;
+    let imageDownloadFailed = false;
+
+    if (post.media_url) {
+      try {
+        const tempContentId = `import-${post.id}`;
+        const imageMetadata: ImageMetadata = {
+          contentId: tempContentId,
+          brandId: brand.id!,
+          generatedAt: post.timestamp ? new Date(post.timestamp) : new Date(),
+          source: 'dalle3', // Generic source indicator for imported images
+          originalPrompt: post.caption || 'Imported from Instagram',
+        };
+
+        const imageStartTime = Date.now();
+        const uploadResult = await uploadImageToS3(post.media_url, imageMetadata);
+
+        s3ImageKey = uploadResult.s3Key;
+        imageRegion = uploadResult.region;
+        retentionExpiresAt = uploadResult.retentionExpiresAt;
+
+        const imageDuration = Date.now() - imageStartTime;
+        console.log(`[Instagram Sync] 🖼️  Image uploaded to S3: ${s3ImageKey}`, {
+          postId: post.id,
+          s3Key: s3ImageKey,
+          region: imageRegion,
+          duration: `${imageDuration}ms`,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[Instagram Sync] ⚠️  Failed to download image for post ${post.id}:`, {
+          postId: post.id,
+          mediaUrl: post.media_url,
+          error: message,
+        });
+        imageDownloadFailed = true;
+        // Continue without image - store post metadata only
+      }
+    } else {
+      console.log(`[Instagram Sync] ℹ️  No media URL for post ${post.id}`);
+      imageDownloadFailed = true;
+    }
+
+    // Create content record
+    const contentData = {
+      brandId: brand.id!,
+      caption: post.caption,
+      hashtags: post.hashtags || [],
+      status: 'published' as const,
+      instagramPostId: post.id,
+      instagramPermalink: post.permalink,
+      postedAt: post.timestamp ? new Date(post.timestamp) : new Date(),
+      s3ImageKey,
+      imageRegion,
+      retentionExpiresAt,
+      generationParams: {
+        source: 'instagram_import',
+        importedAt: new Date().toISOString(),
+        originalPostDate: post.timestamp,
+        mediaType: post.media_type,
+        hasImage: !!s3ImageKey,
+        imageDownloadFailed,
+      },
+      analytics: {
+        like_count: post.like_count || 0,
+        comments_count: post.comments_count || 0,
+      },
+    };
+
+    await prisma.content.create({
+      data: contentData,
+    });
+
+    console.log(`[Instagram Sync] ✨ Synced post ${post.id}`, {
+      postId: post.id,
+      brandId: brand.id,
+      hasImage: !!s3ImageKey,
+      hasHashtags: (post.hashtags?.length || 0) > 0,
+      engagement: {
+        likes: post.like_count || 0,
+        comments: post.comments_count || 0,
+      },
+    });
   }
 }
 

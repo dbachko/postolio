@@ -6,6 +6,7 @@ import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { apiClient } from '../lib/api';
 import type { Brand } from '../lib/api';
+import { InstagramSyncButton } from './InstagramSyncButton';
 
 interface InstagramProfile {
   id: string;
@@ -249,6 +250,16 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
           </Alert>
         )}
 
+        {/* Sync Info Alert */}
+        {isConnected && (
+          <Alert>
+            <AlertDescription className="text-sm">
+              <strong>Sync your posts:</strong> Import your recent Instagram posts to view them in
+              Timeline and Calendar. Syncs up to 100 posts or 30 days of history.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Action Buttons */}
         <div className="flex justify-end space-x-2">
           {isConnected ? (
@@ -260,6 +271,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
               >
                 {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
               </Button>
+              <InstagramSyncButton brandId={brand.id} variant="outline" />
               <Button
                 onClick={() => refreshStatusMutation.mutate()}
                 variant="secondary"

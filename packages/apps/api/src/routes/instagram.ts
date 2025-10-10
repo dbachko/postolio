@@ -3,6 +3,7 @@ import { Prisma } from '@postolio/database';
 import { instagramService, InstagramWebhookEvent } from '../services/instagram.js';
 import crypto from 'crypto';
 import { buildCdnUrl } from '../services/s3-image.js';
+import { redisService } from '../services/redis.js';
 
 import { getDatabaseClient } from '../config/database.js';
 
@@ -342,6 +343,161 @@ const instagram: FastifyPluginAsync = async function (fastify) {
       } catch (error) {
         reply.status(500).send({
           error: 'Failed to fetch Instagram insights',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+  );
+
+  // Get sync status for a brand
+  fastify.get(
+    '/sync-status/:brandId',
+    { preHandler: fastify.authenticate },
+    async function (request, reply) {
+      try {
+        if (!ensureAuth(request, reply)) return;
+
+        const { brandId } = request.params as { brandId: string };
+
+        // Validate brand ownership
+        const brand = await prisma.brand.findFirst({
+          where: {
+            id: brandId,
+            userId: request.user.id,
+          },
+        });
+
+        if (!brand) {
+          return reply.status(404).send({
+            error: 'Brand not found or access denied',
+          });
+        }
+
+        // Check cooldown status
+        const cooldownKey = `instagram_sync:${brandId}`;
+        const lastSyncTime = await redisService.get(cooldownKey);
+
+        let cooldownRemaining = 0;
+        let canSync = true;
+
+        if (lastSyncTime) {
+          const timeSinceSync = Date.now() - parseInt(lastSyncTime);
+          const cooldownMs = 15 * 60 * 1000; // 15 minutes
+
+          if (timeSinceSync < cooldownMs) {
+            cooldownRemaining = Math.ceil((cooldownMs - timeSinceSync) / 1000);
+            canSync = false;
+          }
+        }
+
+        // Get last sync metadata
+        const metadataKey = `instagram_sync_metadata:${brandId}`;
+        const metadataJson = await redisService.get(metadataKey);
+        let lastSync = null;
+
+        if (metadataJson) {
+          try {
+            const metadata = JSON.parse(metadataJson);
+            lastSync = {
+              timestamp: metadata.timestamp,
+              duration: metadata.duration,
+              results: metadata.results,
+              options: metadata.options,
+            };
+          } catch (error) {
+            console.error('Failed to parse sync metadata:', error);
+          }
+        }
+
+        reply.send({
+          canSync,
+          cooldownRemaining,
+          lastSync,
+          instagram: {
+            connected: instagramService.isConfigured(brand),
+            accountId: brand.instagramAccountId,
+          },
+        });
+      } catch (error) {
+        console.error('Sync status endpoint error:', error);
+        reply.status(500).send({
+          error: 'Failed to retrieve sync status',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+  );
+
+  // Sync published Instagram posts
+  fastify.post(
+    '/sync-posts/:brandId',
+    { preHandler: fastify.authenticate },
+    async function (request, reply) {
+      try {
+        if (!ensureAuth(request, reply)) return;
+
+        const { brandId } = request.params as { brandId: string };
+        const { maxPosts, maxDays } = request.body as {
+          maxPosts?: number;
+          maxDays?: number;
+        };
+
+        // Validate brand ownership
+        const brand = await prisma.brand.findFirst({
+          where: {
+            id: brandId,
+            userId: request.user.id,
+          },
+        });
+
+        if (!brand) {
+          return reply.status(404).send({
+            error: 'Brand not found or access denied',
+          });
+        }
+
+        if (!instagramService.isConfigured(brand)) {
+          return reply.status(400).send({
+            error: 'Instagram not connected for this brand',
+          });
+        }
+
+        // Check sync cooldown using Redis
+        const cooldownKey = `instagram_sync:${brandId}`;
+        const lastSync = await redisService.get(cooldownKey);
+        if (lastSync) {
+          const timeSinceSync = Date.now() - parseInt(lastSync);
+          const cooldownMs = 15 * 60 * 1000; // 15 minutes
+
+          if (timeSinceSync < cooldownMs) {
+            const remainingMinutes = Math.ceil((cooldownMs - timeSinceSync) / 60000);
+            return reply.status(429).send({
+              error: 'Sync already in progress or completed recently',
+              message: `Please wait ${remainingMinutes} more minutes before syncing again`,
+              retryAfter: new Date(parseInt(lastSync) + cooldownMs).toISOString(),
+            });
+          }
+        }
+
+        // Set sync timestamp
+        await redisService.set(cooldownKey, Date.now().toString(), 900); // 15 min TTL
+
+        // Perform sync
+        const results = await instagramService.syncPublishedPosts(brand, {
+          maxPosts: maxPosts || 100,
+          maxDays: maxDays || 30,
+        });
+
+        // Return results
+        reply.send({
+          success: true,
+          results,
+          message: `Synced ${results.synced} posts, skipped ${results.skipped}, failed ${results.failed}`,
+        });
+      } catch (error) {
+        console.error('Sync posts endpoint error:', error);
+        reply.status(500).send({
+          error: 'Failed to sync Instagram posts',
           message: error instanceof Error ? error.message : 'Unknown error',
         });
       }

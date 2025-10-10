@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { getDatabaseClient } from '../config/database.js';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
 import { TokenServiceClient } from '../clients/token-service-client.js';
+import { instagramService } from '../services/instagram.js';
 
 const prisma = getDatabaseClient();
 const tokenServiceClient = new TokenServiceClient();
@@ -380,6 +381,20 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
 
       // Invalidate cached credentials since user reconnected
       await PublisherCredentialsService.invalidateCredentialsCache(brand.id);
+
+      // Trigger initial sync in background (non-blocking)
+      console.log(`[Instagram OAuth] Triggering initial sync for brand ${brand.id}`);
+      instagramService
+        .syncPublishedPosts(brand, {
+          maxPosts: 100,
+          maxDays: 30,
+        })
+        .then((results) => {
+          console.log(`[Instagram OAuth] Initial sync completed for brand ${brand.id}:`, results);
+        })
+        .catch((error) => {
+          console.error(`[Instagram OAuth] Initial sync failed for brand ${brand.id}:`, error);
+        });
 
       // Return HTML that closes the popup and notifies the parent
       const html = `

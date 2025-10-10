@@ -409,6 +409,25 @@ class ApiClient {
     });
   }
 
+  async syncInstagramPosts(
+    brandId: string,
+    options: { maxPosts?: number; maxDays?: number }
+  ): Promise<{
+    success: boolean;
+    results: {
+      synced: number;
+      skipped: number;
+      failed: number;
+      errors?: string[];
+    };
+    message: string;
+  }> {
+    return this.request(`/api/instagram/sync-posts/${brandId}`, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  }
+
   // Content endpoints
   async generateContent(data: {
     brandId: string;
