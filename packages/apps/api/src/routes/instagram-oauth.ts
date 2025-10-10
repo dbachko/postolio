@@ -363,7 +363,8 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       });
 
       // Update brand with UI metadata only (no sensitive token)
-      await prisma.brand.update({
+      // Capture the updated brand so we pass fresh IDs to the initial sync
+      const updatedBrand = await prisma.brand.update({
         where: { id: brand.id },
         data: {
           // Remove instagramAccessToken - now stored in Token Service
@@ -385,10 +386,17 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       // Trigger initial sync in background (non-blocking)
       console.log(`[Instagram OAuth] Triggering initial sync for brand ${brand.id}`);
       instagramService
-        .syncPublishedPosts(brand, {
-          maxPosts: 100,
-          maxDays: 30,
-        })
+        .syncPublishedPosts(
+          {
+            id: updatedBrand.id,
+            instagramAccountId: updatedBrand.instagramAccountId,
+            instagramPageId: updatedBrand.instagramPageId,
+          },
+          {
+            maxPosts: 100,
+            maxDays: 30,
+          }
+        )
         .then((results) => {
           console.log(`[Instagram OAuth] Initial sync completed for brand ${brand.id}:`, results);
         })
