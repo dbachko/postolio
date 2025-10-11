@@ -91,6 +91,7 @@ export class BrandAnalysisStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
       ],
     });
     lambdaRole.addToPolicy(
@@ -114,6 +115,9 @@ export class BrandAnalysisStack extends cdk.Stack {
       })
     );
 
+    const openaiApiKey =
+      (this.node.tryGetContext('openaiApiKey') as string | undefined) || undefined;
+
     const fn = new lambdaNodejs.NodejsFunction(this, 'BrandAnalysisFunction', {
       functionName: `${prefix}-service`,
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -122,6 +126,14 @@ export class BrandAnalysisStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
       role: lambdaRole,
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        nodeModules: [
+          '@aws-lambda-powertools/logger',
+          '@aws-lambda-powertools/metrics',
+          '@aws-lambda-powertools/tracer',
+        ],
+      },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,
         'BrandAnalysisLogGroup',
@@ -135,6 +147,11 @@ export class BrandAnalysisStack extends cdk.Stack {
         BRAND_STYLE_PROFILES_TABLE: profilesTable.tableName,
         BRAND_ANALYSIS_JOBS_TABLE: jobsTable.tableName,
         EVENT_BUS_NAME: schedulingEventBusNameParam.stringValue,
+        ...(openaiApiKey ? { OPENAI_API_KEY: openaiApiKey } : {}),
+        // Default models (override via env if needed)
+        LLM_DEFAULT_MODEL: 'gpt-5-mini-2025-08-07',
+        BRAND_ANALYSIS_VISION_MODEL: 'gpt-4o-mini',
+        BRAND_ANALYSIS_DEBUG: 'true',
         // LLM tuning knobs (non-sensitive)
         BRAND_ANALYSIS_LLM_TIMEOUT_MS: '30000',
         BRAND_ANALYSIS_LLM_MAX_RETRIES: '3',
@@ -157,6 +174,7 @@ export class BrandAnalysisStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
       ],
       inlinePolicies: {
         ProjectionPolicy: new iam.PolicyDocument({
@@ -405,6 +423,7 @@ export class BrandAnalysisStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
       ],
     });
     // Allow read brands via RDS Proxy (SSM + Secrets) and query jobs table; put events
@@ -494,5 +513,18 @@ export class BrandAnalysisStack extends cdk.Stack {
       schedule: events.Schedule.rate(cdk.Duration.days(7)),
       targets: [new targets.LambdaFunction(schedulerFn)],
     });
+
+    // ==================== CDK-Nag Suppressions ====================
+    // Allow AWS managed basic execution policy for Lambda roles (logs only)
+    NagSuppressions.addResourceSuppressions(
+      schedulerRole,
+      [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'AWSLambdaBasicExecutionRole acceptable for Lambda execution; logs only',
+        },
+      ],
+      true
+    );
   }
 }

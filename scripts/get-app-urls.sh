@@ -42,6 +42,7 @@ check_stack() {
 FOUNDATION_STACK="Postolio-Foundation-$ENVIRONMENT"
 API_STACK="Postolio-API-$ENVIRONMENT"
 WEB_STACK="Postolio-Web-$ENVIRONMENT"
+BRAND_ANALYSIS_STACK="Postolio-BrandAnalysis-$ENVIRONMENT"
 
 # Check Foundation stack
 FOUNDATION_STATUS=$(check_stack "$FOUNDATION_STACK")
@@ -137,6 +138,7 @@ echo
 echo -e "${GREEN}📦 STACK STATUS${NC}"
 echo "==============="
 echo "Foundation:         $FOUNDATION_STATUS"
+echo "Brand Analysis:     $BRAND_ANALYSIS_STATUS"
 echo "API:                $API_STATUS"
 echo "Web:                $WEB_STATUS"
 
@@ -152,3 +154,7 @@ else
 fi
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+BRAND_ANALYSIS_STATUS=$(check_stack "$BRAND_ANALYSIS_STACK")
+if [[ "$BRAND_ANALYSIS_STATUS" == "NOT_FOUND" ]]; then
+    echo -e "${YELLOW}⚠️  Brand Analysis stack not found${NC}"
+fi

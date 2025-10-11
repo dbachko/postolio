@@ -32,13 +32,14 @@ Local Stack Deployment Script
 Usage: $0 [OPTIONS] <stack>
 
 Stacks:
-  foundation    - ECR Registry and Foundation infrastructure
-  auth          - Token Service (OAuth and JWT management)
-  scheduling    - Schedule Management services
-  publishing    - Publisher and retry handlers
-  api           - Backend API (ECS Fargate)
-  web           - Frontend (S3 + CloudFront)
-  all           - Deploy all stacks in dependency order
+  foundation      - ECR Registry and Foundation infrastructure
+  auth            - Token Service (OAuth and JWT management)
+  scheduling      - Schedule Management services
+  brand-analysis  - Brand Analysis services (profiles/jobs + lambdas)
+  publishing      - Publisher and retry handlers
+  api             - Backend API (ECS Fargate)
+  web             - Frontend (S3 + CloudFront)
+  all             - Deploy all stacks in dependency order
 
 Options:
   -e, --env ENV          Environment (dev|staging|prod) [default: dev]
@@ -103,7 +104,7 @@ while [[ $# -gt 0 ]]; do
             show_help
             exit 0
             ;;
-        foundation|auth|scheduling|publishing|api|web|all)
+        foundation|auth|scheduling|brand-analysis|publishing|api|web|all)
             STACK_NAME="$1"
             shift
             ;;
@@ -158,7 +159,36 @@ fi
 # Function to deploy a single stack
 deploy_stack() {
     local stack="$1"
-    local cdk_stack_name="Postolio-$(echo ${stack:0:1} | tr '[:lower:]' '[:upper:]')${stack:1}-${ENVIRONMENT}"
+    local cdk_stack_name
+
+    # Map friendly stack name to CDK stack name
+    case "$stack" in
+        foundation)
+            cdk_stack_name="Postolio-Foundation-$ENVIRONMENT"
+            ;;
+        auth)
+            cdk_stack_name="Postolio-Auth-$ENVIRONMENT"
+            ;;
+        scheduling)
+            cdk_stack_name="Postolio-Scheduling-$ENVIRONMENT"
+            ;;
+        brand-analysis)
+            cdk_stack_name="Postolio-BrandAnalysis-$ENVIRONMENT"
+            ;;
+        publishing)
+            cdk_stack_name="Postolio-Publishing-$ENVIRONMENT"
+            ;;
+        api)
+            cdk_stack_name="Postolio-API-$ENVIRONMENT"
+            ;;
+        web)
+            cdk_stack_name="Postolio-Web-$ENVIRONMENT"
+            ;;
+        *)
+            echo -e "${RED}Unknown stack: $stack${NC}"
+            exit 1
+            ;;
+    esac
 
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${GREEN}Deploying: $cdk_stack_name${NC}"
@@ -166,7 +196,7 @@ deploy_stack() {
 
     # Build dependencies based on stack
     case "$stack" in
-        auth|scheduling|publishing)
+        auth|scheduling|publishing|brand-analysis)
             echo -e "${BLUE}Building shared libraries...${NC}"
             pnpm --filter=@postolio/database build || true
             pnpm --filter=@postolio/errors build || true
@@ -282,7 +312,7 @@ fi
 # Deploy stack(s)
 if [[ "$STACK_NAME" == "all" ]]; then
     # Deploy all stacks in dependency order
-    STACKS=("foundation" "auth" "scheduling" "publishing" "api" "web")
+    STACKS=("foundation" "auth" "scheduling" "brand-analysis" "publishing" "api" "web")
     for stack in "${STACKS[@]}"; do
         deploy_stack "$stack"
         echo

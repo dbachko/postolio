@@ -90,6 +90,16 @@ export async function invokeLLM<T = unknown>(opts: LlmInvocationOptions): Promis
   const { maxResponseChars = 20_000 } = opts;
   const timeoutMs = opts.timeoutMs || Number(process.env.BRAND_ANALYSIS_LLM_TIMEOUT_MS || 30000);
   const maxRetries = Number(process.env.BRAND_ANALYSIS_LLM_MAX_RETRIES || 3);
+  const DEBUG = (process.env.BRAND_ANALYSIS_DEBUG || '').toLowerCase() === 'true';
+  const dbg = (...args: unknown[]) => {
+    if (DEBUG) {
+      try {
+        console.debug('[LLM]', ...args);
+      } catch {
+        return;
+      }
+    }
+  };
 
   // Test hook with single retry on validation error
   if (__testResponder) {
@@ -117,36 +127,118 @@ export async function invokeLLM<T = unknown>(opts: LlmInvocationOptions): Promis
       return { data: {} as unknown as T };
     }
     if (opts.mode === 'vision' && opts.images && opts.images.length > 0) {
-      const content: Array<
-        { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
-      > = [{ type: 'text', text: opts.prompt }];
-      for (const url of opts.images) content.push({ type: 'image_url', image_url: { url } });
-      const body = {
+      dbg('vision request', {
         model: opts.model,
-        messages: [{ role: 'user', content }],
-        response_format: { type: 'json_object' },
-        temperature: 0,
-      } as const;
-      const resp = await fetchWithTimeout(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        images: opts.images.slice(0, 3),
+        imagesCount: opts.images.length,
+      });
+      const isGpt5 = /gpt-5/i.test(opts.model);
+      if (isGpt5) {
+        // Use Responses API for GPT-5 series vision
+        const input = [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_text', text: opts.prompt },
+              ...opts.images.map((url) => ({ type: 'input_image', image_url: url })),
+            ],
           },
-          body: JSON.stringify(body),
-        },
-        timeoutMs
-      );
-      if (!resp.ok) throw new Error(`OpenAI HTTP ${resp.status}`);
-      const json = await resp.json();
-      const contentOut = json?.choices?.[0]?.message?.content ?? '';
-      const parsed = contentOut && typeof contentOut === 'string' ? JSON.parse(contentOut) : {};
-      const resultStr = JSON.stringify(parsed);
-      if (resultStr.length > maxResponseChars)
-        throw new LlmValidationError('Response exceeds size guard');
-      return { data: parsed as T, usage: json?.usage };
+        ];
+        const body = {
+          model: opts.model,
+          input,
+          // For GPT-5 Responses API, JSON mode requires a structured text.format object
+          text: { format: { type: 'json_object' } },
+        } as const;
+        const contentBlocks = (input?.[0] as { content?: unknown[] } | undefined)?.content?.length;
+        dbg('responses body preview', { keys: Object.keys(body), contentBlocks });
+        const resp = await fetchWithTimeout(
+          'https://api.openai.com/v1/responses',
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify(body),
+          },
+          timeoutMs
+        );
+        if (!resp.ok) {
+          const text = await resp.text();
+          console.error('[LLM] OpenAI Responses error', {
+            status: resp.status,
+            model: opts.model,
+            body: text?.slice(0, 2000),
+          });
+          throw new Error(`OpenAI HTTP ${resp.status}`);
+        }
+        const json = await resp.json();
+        dbg(
+          'responses json keys',
+          json && typeof json === 'object' ? Object.keys(json) : typeof json
+        );
+        // Try common fields from Responses API
+        const outText =
+          json?.output?.[0]?.content?.[0]?.text ??
+          json?.output_text ??
+          json?.choices?.[0]?.message?.content ??
+          '';
+        dbg(
+          'responses outText preview',
+          typeof outText === 'string' ? outText.slice(0, 200) : typeof outText
+        );
+        const parsed = outText && typeof outText === 'string' ? JSON.parse(outText) : {};
+        const resultStr = JSON.stringify(parsed);
+        if (resultStr.length > maxResponseChars)
+          throw new LlmValidationError('Response exceeds size guard');
+        return { data: parsed as T, usage: json?.usage };
+      } else {
+        // Chat Completions for legacy/4o models
+        const content: Array<
+          { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
+        > = [{ type: 'text', text: opts.prompt }];
+        for (const url of opts.images) content.push({ type: 'image_url', image_url: { url } });
+        const body = {
+          model: opts.model,
+          messages: [{ role: 'user', content }],
+          response_format: { type: 'json_object' },
+          temperature: 0,
+        } as const;
+        dbg('chat body preview', { model: opts.model, blocks: content.length });
+        const resp = await fetchWithTimeout(
+          'https://api.openai.com/v1/chat/completions',
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify(body),
+          },
+          timeoutMs
+        );
+        if (!resp.ok) {
+          const text = await resp.text();
+          console.error('[LLM] OpenAI Chat error', {
+            status: resp.status,
+            model: opts.model,
+            body: text?.slice(0, 2000),
+          });
+          throw new Error(`OpenAI HTTP ${resp.status}`);
+        }
+        const json = await resp.json();
+        const contentOut = json?.choices?.[0]?.message?.content ?? '';
+        dbg(
+          'chat contentOut preview',
+          typeof contentOut === 'string' ? contentOut.slice(0, 200) : typeof contentOut
+        );
+        const parsed = contentOut && typeof contentOut === 'string' ? JSON.parse(contentOut) : {};
+        const resultStr = JSON.stringify(parsed);
+        if (resultStr.length > maxResponseChars)
+          throw new LlmValidationError('Response exceeds size guard');
+        return { data: parsed as T, usage: json?.usage };
+      }
     }
     const body = {
       model: opts.model,

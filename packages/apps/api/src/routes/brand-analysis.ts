@@ -4,6 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import { getDatabaseClient } from '../config/database.js';
 import { instagramService } from '../services/instagram.js';
+import { uploadImageToS3, buildCdnUrl } from '../services/s3-image.js';
 
 const eventBridge = new EventBridge({});
 const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || 'default';
@@ -51,16 +52,45 @@ const brandAnalysisRoutes: FastifyPluginAsync = async (fastify) => {
       }
       // Fetch recent posts and minimize payload to fit EventBridge limits
       const postsRaw = await instagramService.getRecentPosts(igBrand, Math.min(maxPosts, 25));
-      const posts = postsRaw.map((p) => ({
-        id: p.id,
-        caption: p.caption,
-        hashtags: p.hashtags,
-        timestamp: p.timestamp,
-        like_count: p.like_count,
-        comments_count: p.comments_count,
-        media_type: p.media_type,
-        media_url: p.media_url,
-      }));
+      // Pre-warm CDN URLs for image posts so vision stage can fetch publicly
+      const posts = await Promise.all(
+        postsRaw.map(async (p) => {
+          let mediaUrl = p.media_url;
+          if (
+            p.media_type?.toUpperCase() !== 'VIDEO' &&
+            typeof p.media_url === 'string' &&
+            p.media_url
+          ) {
+            try {
+              const uploaded = await uploadImageToS3(p.media_url, {
+                // Reuse existing allowed sources; this is a cache warm for analysis
+                source: 'midjourney',
+                brandId: brand.id,
+                contentId: p.id,
+                generatedAt: new Date(),
+                originalPrompt: 'brand-analysis cache',
+              });
+              const cdn = buildCdnUrl(uploaded.s3Key);
+              if (cdn) mediaUrl = cdn;
+            } catch (e) {
+              request.log.warn(
+                { err: e, postId: p.id },
+                'Failed to cache image to S3; falling back to original URL'
+              );
+            }
+          }
+          return {
+            id: p.id,
+            caption: p.caption,
+            hashtags: p.hashtags,
+            timestamp: p.timestamp,
+            like_count: p.like_count,
+            comments_count: p.comments_count,
+            media_type: p.media_type,
+            media_url: mediaUrl,
+          };
+        })
+      );
 
       await eventBridge.send(
         new PutEventsCommand({

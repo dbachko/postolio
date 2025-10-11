@@ -1,13 +1,13 @@
 import { Logger } from '@aws-lambda-powertools/logger';
-import { Metrics } from '@aws-lambda-powertools/metrics';
-import { Tracer } from '@aws-lambda-powertools/tracer';
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
+// Tracer temporarily disabled to simplify runtime path
 import type { EventBridgeEvent } from 'aws-lambda';
 import { BrandAnalysisOrchestrator } from './orchestrator';
 import { publishCompleted, publishFailed } from './events/publish';
 
 const logger = new Logger({ serviceName: 'brand-analysis' });
 const metrics = new Metrics({ namespace: 'BrandAnalysis', serviceName: 'brand-analysis' });
-const tracer = new Tracer({ serviceName: 'brand-analysis' });
+// const tracer = new Tracer({ serviceName: 'brand-analysis' });
 
 export interface BrandAnalysisRequestedEvent {
   'detail-type': 'brand.analysis.requested';
@@ -37,12 +37,14 @@ type RequestDetail = {
 export async function handler(
   event: EventBridgeEvent<'brand.analysis.requested', RequestDetail>
 ): Promise<void> {
+  // Fallback console for environments where logger output is muted
+  console.log('Brand Analysis service invoked');
   logger.info('Brand Analysis service invoked', {
     detailType: event['detail-type'],
     source: event.source,
   });
-  metrics.addMetric('Invocations', 1);
-  tracer.putAnnotation('handler', 'brand-analysis');
+  metrics.addMetric('Invocations', MetricUnit.Count, 1);
+  // Tracer annotation disabled
 
   if (event['detail-type'] !== 'brand.analysis.requested' || event.source !== 'postolio.brand') {
     logger.warn('Ignoring unsupported event', {
@@ -76,10 +78,10 @@ export async function handler(
       createdAt: profile.createdAt,
     });
     logger.info('Brand analysis completed', { brandId, jobId, version: profile.version });
-    metrics.addMetric('ProfilesGenerated', 1);
+    metrics.addMetric('ProfilesGenerated', MetricUnit.Count, 1);
   } catch (err) {
     logger.error('Brand analysis failed', { brandId, err });
-    metrics.addMetric('AnalysisFailures', 1);
+    metrics.addMetric('AnalysisFailures', MetricUnit.Count, 1);
     await publishFailed({ brandId, jobId: 'unknown', errorMessage: (err as Error).message });
   }
 }

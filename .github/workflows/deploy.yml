@@ -50,6 +50,7 @@ jobs:
       foundation-changed: ${{ steps.changes.outputs.foundation }}
       auth-changed: ${{ steps.changes.outputs.auth }}
       scheduling-changed: ${{ steps.changes.outputs.scheduling }}
+      brand-analysis-changed: ${{ steps.changes.outputs.brand-analysis }}
       publishing-changed: ${{ steps.changes.outputs.publishing }}
       api-changed: ${{ steps.changes.outputs.api }}
       web-changed: ${{ steps.changes.outputs.web }}
@@ -95,6 +96,12 @@ jobs:
               - 'packages/services/status-sync/**'
               - 'packages/infra/cdk/lib/stacks/scheduling-stack.ts'
               - 'packages/libs/**'
+            brand-analysis:
+              - 'packages/services/brand-analysis/**'
+              - 'packages/services/brand-analysis-projection/**'
+              - 'packages/services/brand-analysis-scheduler/**'
+              - 'packages/infra/cdk/lib/stacks/brand-analysis-stack.ts'
+              - 'packages/libs/**'
             publishing:
               - 'packages/services/publisher/**'
               - 'packages/services/retry-handler/**'
@@ -123,7 +130,7 @@ jobs:
         id: matrix
         run: |
           STACKS=()
-          ALL_STACKS=("foundation" "auth" "scheduling" "publishing" "api" "web")
+          ALL_STACKS=("foundation" "auth" "scheduling" "brand-analysis" "publishing" "api" "web")
 
           # Manual runs from the UI: deploy all stacks by default (or a specific list if provided)
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -141,6 +148,7 @@ jobs:
             [[ "${{ steps.changes.outputs.auth }}" == "true" ]] && STACKS+=("\"auth\"")
             [[ "${{ steps.changes.outputs.scheduling }}" == "true" ]] && STACKS+=("\"scheduling\"")
             [[ "${{ steps.changes.outputs.publishing }}" == "true" ]] && STACKS+=("\"publishing\"")
+            [[ "${{ steps.changes.outputs.brand-analysis }}" == "true" ]] && STACKS+=("\"brand-analysis\"")
             [[ "${{ steps.changes.outputs.api }}" == "true" ]] && STACKS+=("\"api\"")
             [[ "${{ steps.changes.outputs.web }}" == "true" ]] && STACKS+=("\"web\"")
 
@@ -314,6 +322,9 @@ jobs:
             "scheduling")
               DEPS=("Postolio-Auth-$ENV")
               ;;
+            "brand-analysis")
+              DEPS=("Postolio-Foundation-$ENV" "Postolio-Scheduling-$ENV")
+              ;;
             "publishing")
               DEPS=("Postolio-Auth-$ENV" "Postolio-Scheduling-$ENV")
               ;;
@@ -423,6 +434,10 @@ jobs:
               ;;
             "scheduling")
               CDK_STACK="Postolio-Scheduling-$ENV"
+              CDK_APP="bin/app.ts"
+              ;;
+            "brand-analysis")
+              CDK_STACK="Postolio-BrandAnalysis-$ENV"
               CDK_APP="bin/app.ts"
               ;;
             "publishing")

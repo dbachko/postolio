@@ -102,15 +102,16 @@ The `deploy-stack.sh` script allows you to deploy individual CDK stacks locally 
 
 ### Available Stacks
 
-| Stack        | Description                               | Dependencies                             |
-| ------------ | ----------------------------------------- | ---------------------------------------- |
-| `foundation` | ECR Registry, VPC, Database, Redis        | None                                     |
-| `auth`       | Token Service (OAuth, JWT)                | Foundation                               |
-| `scheduling` | Schedule Management, Cleanup, Status Sync | Auth                                     |
-| `publishing` | Publisher, Retry Handler, DLQ Processors  | Auth, Scheduling                         |
-| `api`        | Backend API (ECS Fargate)                 | Foundation, Auth, Scheduling, Publishing |
-| `web`        | Frontend (S3 + CloudFront)                | API                                      |
-| `all`        | Deploy all stacks in order                | -                                        |
+| Stack            | Description                                                         | Dependencies                             |
+| ---------------- | ------------------------------------------------------------------- | ---------------------------------------- |
+| `foundation`     | ECR Registry, VPC, Database, Redis                                  | None                                     |
+| `auth`           | Token Service (OAuth, JWT)                                          | Foundation                               |
+| `scheduling`     | Schedule Management, Cleanup, Status Sync                           | Auth                                     |
+| `brand-analysis` | Brand Analysis (DynamoDB + Lambdas: service, projection, scheduler) | Foundation, Scheduling                   |
+| `publishing`     | Publisher, Retry Handler, DLQ Processors                            | Auth, Scheduling                         |
+| `api`            | Backend API (ECS Fargate)                                           | Foundation, Auth, Scheduling, Publishing |
+| `web`            | Frontend (S3 + CloudFront)                                          | API                                      |
+| `all`            | Deploy all stacks in order                                          | -                                        |
 
 ### Options
 
@@ -148,10 +149,18 @@ The `deploy-stack.sh` script allows you to deploy individual CDK stacks locally 
 
 #### Deploy Foundation
 
-```bash
+````bash
 # Deploy foundation stack
 ./scripts/deploy-stack.sh foundation
-```
+
+#### Deploy Brand Analysis
+
+```bash
+# Deploy Brand Analysis stack (requires Foundation + Scheduling)
+./scripts/deploy-stack.sh brand-analysis
+````
+
+````
 
 ### Environment Variables
 
@@ -181,7 +190,7 @@ LINKEDIN_CLIENT_SECRET=...
 # TikTok OAuth
 TIKTOK_CLIENT_KEY=...
 TIKTOK_CLIENT_SECRET=...
-```
+````
 
 #### Optional Variables
 

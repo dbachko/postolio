@@ -9,6 +9,8 @@ import { synthesizeProfile } from './pipeline/synthesis';
 import { validateProfile, type BrandStyleProfile } from './models/profile-schema';
 import { getAndResetLlmUsage } from './llm/llm-client';
 import { PROMPT_SET_VERSION } from './prompts/prompt-set';
+import { runToneExtractor } from './pipeline/tone-extractor';
+import { computeHashtagMetrics } from './preprocessing/hashtag-metrics';
 
 export interface RunOptions {
   maxPosts?: number;
@@ -96,6 +98,14 @@ export class BrandAnalysisOrchestrator {
         : [];
       const textOut = runTextExtractor({ captions });
       const topicOut = runTopicEntityExtractor({ captions });
+      const hashtagCounts = computeHashtagMetrics(captions).counts;
+      const toneOut = await runToneExtractor({
+        captions,
+        hashtags: Object.entries(hashtagCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 25)
+          .map(([k]) => k.replace(/^#/, '')),
+      });
       const corrOut = runEngagementCorrelationFromPosts(posts || []);
       const mediaUrls = (posts || [])
         .filter((p) => (p.media_type || '').toUpperCase() !== 'VIDEO')
@@ -113,6 +123,7 @@ export class BrandAnalysisOrchestrator {
         version: nextVersion,
         promptSetVersion: PROMPT_SET_VERSION,
         textExtract: textOut,
+        textTone: toneOut.tone,
         topics: topicOut.topics,
         correlations: corrOut,
       };
@@ -121,6 +132,12 @@ export class BrandAnalysisOrchestrator {
       // enrich with optional sections
       if (topicOut.topics && topicOut.topics.length) {
         profile.topics = topicOut.topics;
+      }
+      if (toneOut.tone && toneOut.tone.length) {
+        profile.text = profile.text || { tone: [] };
+        profile.text.tone = Array.from(new Set([...(profile.text.tone || []), ...toneOut.tone]))
+          .filter(Boolean)
+          .slice(0, 10);
       }
       if (corrOut && corrOut.length) {
         // ensure types align
