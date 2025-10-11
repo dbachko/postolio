@@ -8,7 +8,8 @@ import { BrandAnalysisPanel } from '@/components/BrandAnalysisPanel';
 
 export function Brands() {
   const [isCreating, setIsCreating] = useState(false);
-  const [analysisTrigger, setAnalysisTrigger] = useState(0);
+  // Start undefined to avoid auto-triggering analysis on initial mount
+  const [analysisTrigger, setAnalysisTrigger] = useState<number | null>(null);
   const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<{
     [key: string]: { name: string; description: string };
@@ -154,7 +155,7 @@ export function Brands() {
                   // Reveal analysis panel and trigger run
                   const el = document.getElementById('brand-analysis-panel');
                   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  setAnalysisTrigger((n) => n + 1);
+                  setAnalysisTrigger((n) => (n ?? 0) + 1);
                 }}
                 className="inline-flex items-center rounded-md border border-transparent bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
               >
@@ -392,7 +393,10 @@ export function Brands() {
 
                 {/* Brand Analysis Section */}
                 <div id="brand-analysis-panel" className="mt-6">
-                  <BrandAnalysisPanel brandId={selectedBrand.id} triggerKey={analysisTrigger} />
+                  <BrandAnalysisPanel
+                    brandId={selectedBrand.id}
+                    triggerKey={analysisTrigger ?? undefined}
+                  />
                 </div>
               </div>
             )}
