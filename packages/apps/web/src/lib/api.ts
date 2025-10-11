@@ -120,6 +120,42 @@ class ApiClient {
     this.token = localStorage.getItem('auth_token');
   }
 
+  // Brand Analysis endpoints
+  async startBrandAnalysis(
+    brandId: string,
+    options: { force?: boolean; maxPosts?: number } = {}
+  ): Promise<{ status: 'accepted'; jobId?: string | null }> {
+    return this.request(`/api/brand-analysis/${brandId}/start`, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  }
+
+  async getBrandAnalysisStatus(brandId: string): Promise<{
+    jobId: string | null;
+    status: string;
+    startedAt?: string;
+    completedAt?: string;
+    error?: string;
+  }> {
+    return this.request(`/api/brand-analysis/${brandId}/status`);
+  }
+
+  async getBrandAnalysisProfile(brandId: string): Promise<
+    | {
+        brandId: string;
+        version: number;
+        createdAt: string;
+        promptSetVersion?: string;
+        text?: { tone?: string[] };
+        topics?: Array<{ value: string; count: number }>;
+        visual?: { palette?: string[]; motifs?: string[]; composition?: string[] };
+      }
+    | { error: string }
+  > {
+    return this.request(`/api/brand-analysis/${brandId}/profile`);
+  }
+
   setToken(token: string) {
     this.token = token;
     localStorage.setItem('auth_token', token);

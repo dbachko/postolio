@@ -4,9 +4,11 @@ import { apiClient, type Brand } from '../lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { InstagramConnect } from '../components/InstagramConnect';
+import { BrandAnalysisPanel } from '@/components/BrandAnalysisPanel';
 
 export function Brands() {
   const [isCreating, setIsCreating] = useState(false);
+  const [analysisTrigger, setAnalysisTrigger] = useState(0);
   const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<{
     [key: string]: { name: string; description: string };
@@ -145,12 +147,27 @@ export function Brands() {
         title="Brand Management"
         description="Create and manage your brand profiles for AI content generation"
         actions={
-          <button
-            onClick={() => setIsCreating(!isCreating)}
-            className="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            {isCreating ? 'Cancel' : 'Create Brand'}
-          </button>
+          <div className="flex items-center gap-2">
+            {selectedBrand && (
+              <button
+                onClick={() => {
+                  // Reveal analysis panel and trigger run
+                  const el = document.getElementById('brand-analysis-panel');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  setAnalysisTrigger((n) => n + 1);
+                }}
+                className="inline-flex items-center rounded-md border border-transparent bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+              >
+                Run Analysis
+              </button>
+            )}
+            <button
+              onClick={() => setIsCreating(!isCreating)}
+              className="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              {isCreating ? 'Cancel' : 'Create Brand'}
+            </button>
+          </div>
         }
       />
 
@@ -371,6 +388,11 @@ export function Brands() {
                 {/* Instagram Connection Section */}
                 <div className="mt-4 border-t border-blue-200 pt-4">
                   <InstagramConnect brand={selectedBrand} />
+                </div>
+
+                {/* Brand Analysis Section */}
+                <div id="brand-analysis-panel" className="mt-6">
+                  <BrandAnalysisPanel brandId={selectedBrand.id} triggerKey={analysisTrigger} />
                 </div>
               </div>
             )}
