@@ -589,7 +589,7 @@ jobs:
       github.event_name != 'pull_request' &&
       (needs.deploy-stacks.result == 'success' || needs.deploy-stacks.result == 'skipped') &&
       (
-        (needs.detect-changes.outputs.web-changed == 'true' && contains(needs.detect-changes.outputs.stack-matrix, 'web')) ||
+        contains(needs.detect-changes.outputs.stack-matrix, 'web') ||
         github.event_name == 'workflow_dispatch'
       )
     environment: ${{ needs.detect-changes.outputs.environment }}
