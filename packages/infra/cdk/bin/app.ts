@@ -37,7 +37,10 @@ const hostedZoneName = resolveContext<string>('hostedZoneName', 'HOSTED_ZONE_NAM
 const webCertificateArn = resolveContext<string>('webCertificateArn', 'WEB_CERTIFICATE_ARN');
 
 // Optional Brand Analysis integration overrides for API stack
-const brandProfilesTableName = resolveContext<string>('brandProfilesTableName', 'BRAND_PROFILES_TABLE_NAME');
+const brandProfilesTableName = resolveContext<string>(
+  'brandProfilesTableName',
+  'BRAND_PROFILES_TABLE_NAME'
+);
 const brandJobsTableName = resolveContext<string>('brandJobsTableName', 'BRAND_JOBS_TABLE_NAME');
 const brandProfilesTableParamPath = resolveContext<string>(
   'brandProfilesTableParamPath',

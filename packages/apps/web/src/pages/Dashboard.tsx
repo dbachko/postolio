@@ -7,15 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
-import { useConnectionStatus, ConnectionStatus } from '../components/ConnectionStatus';
 
 export function Dashboard() {
   const navigate = useNavigate();
   const { brands, selectedBrand, setBrands, initializeSelectedBrand, setSelectedBrand } =
     useBrandStore();
 
-  // Use shared WebSocket connection from context
-  const { connectionStatus, lastUpdate, reconnect, queueSize } = useConnectionStatus();
+  // WebSocket connection active in background for real-time updates
 
   const { data: brandsData, isLoading: brandsLoading } = useQuery({
     queryKey: ['brands'],
@@ -114,22 +112,7 @@ export function Dashboard() {
       <PageHeader
         title="Dashboard"
         description={
-          <div className="flex items-center gap-4">
-            <span>
-              {activeBrand
-                ? `Managing content for ${activeBrand.name}`
-                : 'No active brand selected'}
-            </span>
-            {activeBrand && (
-              <ConnectionStatus
-                status={connectionStatus}
-                lastUpdate={lastUpdate}
-                onReconnect={reconnect}
-                queueSize={queueSize}
-                compact={false}
-              />
-            )}
-          </div>
+          activeBrand ? `Managing content for ${activeBrand.name}` : 'No active brand selected'
         }
         actions={
           <>

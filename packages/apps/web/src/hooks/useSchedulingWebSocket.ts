@@ -3,7 +3,6 @@ import { useAuthStore } from '../stores/authStore';
 import { useBrandStore } from '../stores/brandStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOfflineQueue } from './useOfflineQueue';
-import { toast } from 'sonner';
 import type {
   ConnectionStatus,
   StatusUpdateEvent,
@@ -125,31 +124,6 @@ export function useSchedulingWebSocket({
       if (event.type === 'status_update' && 'contentId' in event.data) {
         const contentId = event.data.contentId;
         const newStatus = event.data.newStatus;
-        const metadata = event.data.metadata;
-
-        // Show toast notifications for important status changes
-        if (newStatus === 'published') {
-          toast.success('Content published successfully!', {
-            description: 'Your content is now live on Instagram',
-            duration: 5000,
-          });
-        } else if (newStatus === 'failed') {
-          toast.error('Publishing failed', {
-            description:
-              (metadata?.error as string) || 'Content could not be published to Instagram',
-            duration: 8000,
-          });
-        } else if (newStatus === 'scheduled' && !metadata?.isOptimistic) {
-          toast.success('Content scheduled!', {
-            description: 'Your content has been scheduled for posting',
-            duration: 3000,
-          });
-        } else if (newStatus === 'draft' && metadata?.isRollback) {
-          toast.warning('Scheduling failed', {
-            description: (metadata?.error as string) || 'Content has been returned to draft status',
-            duration: 5000,
-          });
-        }
 
         // Update content in cache
         queryClient.setQueriesData(
@@ -460,13 +434,6 @@ export function useSchedulingWebSocket({
             if (onCampaignError && message.data) {
               onCampaignError(message.data as import('../types/websocket').CampaignErrorData);
             }
-            // Also show error toast
-            toast.error('Campaign Error', {
-              description:
-                (message.data as import('../types/websocket').CampaignErrorData)?.errorMessage ||
-                'An error occurred with your campaign',
-              duration: 8000,
-            });
           }
         } catch (error) {
           const parseError =
