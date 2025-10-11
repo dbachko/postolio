@@ -17,6 +17,12 @@ export function computePlaceholders(
   monthEnd: Date
 ): CalendarPlaceholder[] {
   const placeholders: CalendarPlaceholder[] = [];
+  const now = new Date(); // Cache current time for consistent comparisons
+
+  console.log(
+    `[Placeholders] Computing for month ${monthStart.toISOString()} to ${monthEnd.toISOString()}`
+  );
+  console.log(`[Placeholders] Processing ${campaigns.length} campaigns`);
 
   campaigns.forEach((campaign) => {
     const raw = campaign.config as unknown;
@@ -28,10 +34,20 @@ export function computePlaceholders(
             postingTime?: string;
           })
         : {};
-    if (!config?.frequency || !config?.duration) return;
+
+    if (!config?.frequency || !config?.duration) {
+      console.log(
+        `[Placeholders] Skipping campaign ${campaign.name} - missing frequency or duration`
+      );
+      return;
+    }
 
     const { frequency, duration, postingTime = '12:00' } = config;
-    if (!duration?.start || !duration?.end) return;
+    if (!duration?.start || !duration?.end) {
+      console.log(`[Placeholders] Skipping campaign ${campaign.name} - invalid duration`);
+      return;
+    }
+
     const campaignStart = new Date(duration.start);
     const campaignEnd = new Date(duration.end);
 
@@ -40,7 +56,10 @@ export function computePlaceholders(
     const scheduleEnd = new Date(Math.min(monthEnd.getTime(), campaignEnd.getTime()));
 
     // Skip if campaign doesn't overlap with this month
-    if (scheduleStart > scheduleEnd) return;
+    if (scheduleStart > scheduleEnd) {
+      console.log(`[Placeholders] Skipping campaign ${campaign.name} - doesn't overlap with month`);
+      return;
+    }
 
     // Generate placeholder dates based on frequency
     const intervalDays =
@@ -49,14 +68,33 @@ export function computePlaceholders(
         : frequency === 'every2days'
           ? 2
           : frequency === '3weekly'
-            ? 2.33
+            ? 7 / 3 // Post every ~2.33 days for 3 times per week
             : 7;
 
+    // Validate posting time format
+    const timeParts = postingTime.split(':');
+    if (timeParts.length !== 2) {
+      console.error(
+        `[Placeholders] Invalid posting time format for campaign ${campaign.name}: ${postingTime}`
+      );
+      return;
+    }
+
+    const hours = parseInt(timeParts[0], 10);
+    const minutes = parseInt(timeParts[1], 10);
+
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      console.error(
+        `[Placeholders] Invalid hours/minutes for campaign ${campaign.name}: ${hours}:${minutes}`
+      );
+      return;
+    }
+
     const currentDate = new Date(scheduleStart);
-    const [hours, minutes] = postingTime.split(':').map(Number);
+    let generatedCount = 0;
 
     while (currentDate <= scheduleEnd) {
-      // Set the posting time
+      // Create a new date for the scheduled time to avoid mutation issues
       const scheduledAt = new Date(currentDate);
       scheduledAt.setHours(hours, minutes, 0, 0);
 
@@ -68,9 +106,8 @@ export function computePlaceholders(
         return Math.abs(contentTime - slotTime) < 2 * 60 * 60 * 1000; // 2 hour window
       });
 
-      // Only add placeholder if no content exists for this slot
-      if (!hasContent && scheduledAt >= new Date()) {
-        // Only show future placeholders
+      // Only add placeholder if no content exists for this slot and it's in the future
+      if (!hasContent && scheduledAt > now) {
         placeholders.push({
           id: `placeholder-${campaign.id}-${scheduledAt.toISOString()}`,
           type: 'placeholder',
@@ -80,17 +117,28 @@ export function computePlaceholders(
           status: 'placeholder',
           message: 'Content will be generated closer to scheduled date',
         });
+        generatedCount++;
       }
 
-      // Move to next posting date
-      currentDate.setDate(currentDate.getDate() + Math.floor(intervalDays));
-      if (intervalDays % 1 !== 0) {
-        // Handle fractional days (e.g., 3 times per week)
-        const fractionalHours = (intervalDays % 1) * 24;
-        currentDate.setHours(currentDate.getHours() + fractionalHours);
+      // Move to next posting date - add the full interval in days
+      // Don't adjust hours separately to keep posting time consistent
+      currentDate.setDate(currentDate.getDate() + Math.ceil(intervalDays));
+
+      // Safety check to prevent infinite loops
+      if (generatedCount > 100) {
+        console.warn(
+          `[Placeholders] Generated over 100 placeholders for campaign ${campaign.name}, stopping`
+        );
+        break;
       }
     }
+
+    console.log(
+      `[Placeholders] Generated ${generatedCount} placeholders for campaign ${campaign.name}`
+    );
   });
+
+  console.log(`[Placeholders] Total placeholders generated: ${placeholders.length}`);
 
   // Sort by scheduled time
   return placeholders.sort(
