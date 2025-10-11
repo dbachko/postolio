@@ -78,6 +78,7 @@ jobs:
           fi
 
       - name: Determine diff base for change detection
+        if: github.event_name != 'workflow_dispatch'
         id: diffbase
         shell: bash
         run: |
@@ -97,13 +98,29 @@ jobs:
             BASE="HEAD^"
           fi
 
+          # Ensure BASE resolves; if HEAD has no parent (e.g., first commit),
+          # fall back to the initial commit so paths-filter can compute a diff.
+          if ! git rev-parse --verify -q "$BASE" >/dev/null; then
+            ROOT_COMMIT=$(git rev-list --max-parents=0 HEAD | tail -n1)
+            if [[ -n "$ROOT_COMMIT" ]]; then
+              BASE="$ROOT_COMMIT"
+            else
+              # As a last resort, use HEAD itself to avoid failure (yields empty diff)
+              BASE="HEAD"
+            fi
+          fi
+
           echo "Using diff base: $BASE"
           echo "base=$BASE" >> "$GITHUB_OUTPUT"
 
       - name: Setup change detection
+        if: github.event_name != 'workflow_dispatch'
         uses: dorny/paths-filter@v3
         id: changes
         with:
+          # Ensure ref resolves to a concrete commit (not branch name)
+          # This prevents git errors like: merge-base HEAD^...main (exit code 128)
+          ref: ${{ github.sha }}
           base: ${{ steps.diffbase.outputs.base }}
           filters: |
             foundation:
