@@ -19,9 +19,19 @@ interface AnalyticsChartProps {
 }
 
 export default function AnalyticsChart({ title, data, type }: AnalyticsChartProps) {
+  // Add null/undefined checks for data
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    return (
+      <div className="rounded-lg bg-white p-6 shadow-md">
+        <h3 className="mb-4 text-lg font-semibold">{title}</h3>
+        <div className="py-8 text-center text-gray-500">No data available for this period</div>
+      </div>
+    );
+  }
+
   if (type === 'engagement') {
     const engagementData = data as EngagementTrend[];
-    const maxRate = Math.max(...engagementData.map((d) => d.engagementRate));
+    const maxRate = Math.max(...engagementData.map((d) => d.engagementRate), 1);
 
     return (
       <div className="rounded-lg bg-white p-6 shadow-md">

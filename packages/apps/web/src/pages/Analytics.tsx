@@ -256,13 +256,13 @@ export default function Analytics() {
             <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
               <AnalyticsChart
                 title="Engagement Trends"
-                data={report.engagementTrends}
+                data={report.engagementTrends || []}
                 type="engagement"
               />
 
               <AnalyticsChart
                 title="Optimal Posting Times"
-                data={report.optimalTimes}
+                data={report.optimalTimes || []}
                 type="optimal-times"
               />
             </div>
@@ -270,42 +270,52 @@ export default function Analytics() {
             {/* Top Performing Posts */}
             <div className="mb-8 rounded-lg bg-white p-6 shadow-md">
               <h3 className="mb-4 text-lg font-semibold">Top Performing Posts</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Post ID</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Impressions</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Reach</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Engagement</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">
-                        Engagement Rate
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.topPerformingPosts.slice(0, 5).map((post, index) => (
-                      <tr key={index} className="border-b">
-                        <td className="max-w-32 truncate px-4 py-3 text-sm text-gray-900">
-                          {post.postId}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {formatNumber(post.impressions)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {formatNumber(post.reach)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {formatNumber(post.likes + post.comments + post.saves + post.shares)}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-green-600">
-                          {post.engagementRate.toFixed(1)}%
-                        </td>
+              {report.topPerformingPosts && report.topPerformingPosts.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="px-4 py-3 text-left font-medium text-gray-500">Post ID</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-500">
+                          Impressions
+                        </th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-500">Reach</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-500">
+                          Engagement
+                        </th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-500">
+                          Engagement Rate
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {report.topPerformingPosts.slice(0, 5).map((post, index) => (
+                        <tr key={index} className="border-b">
+                          <td className="max-w-32 truncate px-4 py-3 text-sm text-gray-900">
+                            {post.postId}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {formatNumber(post.impressions)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {formatNumber(post.reach)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {formatNumber(post.likes + post.comments + post.saves + post.shares)}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-green-600">
+                            {post.engagementRate.toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-8 text-center text-gray-500">
+                  No top performing posts available for this period
+                </div>
+              )}
             </div>
 
             {/* Scheduled Posts Panel */}
