@@ -1,5 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+import { uploadImageToS3, buildCdnUrl } from '../services/s3-image.js';
+import { instagramService } from '../services/instagram.js';
 // Legacy AI analyze endpoint removed
 
 import { getDatabaseClient } from '../config/database.js';
@@ -52,27 +54,8 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             createdAt: true,
           },
         });
-        // Optionally auto-start brand analysis via EventBridge
-        if (
-          ['true', '1', 'yes'].includes((process.env.BRAND_ANALYSIS_AUTO_START || '').toLowerCase())
-        ) {
-          try {
-            await eventBridge.send(
-              new PutEventsCommand({
-                Entries: [
-                  {
-                    DetailType: 'brand.analysis.requested',
-                    Source: 'postolio.brand',
-                    EventBusName: process.env.EVENT_BUS_NAME || 'default',
-                    Detail: JSON.stringify({ brandId: brand.id, requestedBy: request.user.id }),
-                  },
-                ],
-              })
-            );
-          } catch (e) {
-            request.log.warn({ err: e }, 'Failed to emit brand.analysis.requested event');
-          }
-        }
+        // Note: do not auto-start brand analysis on creation.
+        // Analysis runs only on IG connect, brand updates, or manual trigger.
         return reply.code(201).send({ brand });
       } catch (error) {
         console.error('Brand creation error:', error);
@@ -209,8 +192,88 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             styleProfile: true,
             createdAt: true,
             updatedAt: true,
+            instagramAccountId: true,
+            instagramPageId: true,
           },
         });
+
+        // If brand name or description changed, trigger a new brand analysis (fire-and-forget)
+        const nameChanged =
+          typeof name === 'string' && name.trim() !== (existingBrand.name || '').trim();
+        const descChanged =
+          typeof description === 'string' &&
+          (existingBrand.description || '') !== (description?.trim() || '');
+        if ((nameChanged || descChanged) && instagramService.isConfigured(updatedBrand)) {
+          // Fire-and-forget background job to include a small recent-post sample (with CDN URLs)
+          (async () => {
+            try {
+              const postsRaw = await instagramService.getRecentPosts(
+                {
+                  id: updatedBrand.id,
+                  instagramAccountId: updatedBrand.instagramAccountId,
+                  instagramPageId: updatedBrand.instagramPageId,
+                },
+                20
+              );
+              const posts = await Promise.all(
+                postsRaw.map(async (p) => {
+                  let mediaUrl = p.media_url;
+                  if (
+                    p.media_type?.toUpperCase() !== 'VIDEO' &&
+                    typeof p.media_url === 'string' &&
+                    p.media_url
+                  ) {
+                    try {
+                      const uploaded = await uploadImageToS3(p.media_url, {
+                        source: 'midjourney',
+                        brandId: updatedBrand.id,
+                        contentId: p.id,
+                        generatedAt: new Date(),
+                        originalPrompt: 'brand-analysis cache',
+                      });
+                      const cdn = buildCdnUrl(uploaded.s3Key);
+                      if (cdn) mediaUrl = cdn;
+                    } catch (e) {
+                      request.log.warn(
+                        { err: e, postId: p.id },
+                        'Failed to cache image to S3 for analysis; using original URL'
+                      );
+                    }
+                  }
+                  return {
+                    id: p.id,
+                    caption: p.caption,
+                    hashtags: p.hashtags,
+                    timestamp: p.timestamp,
+                    like_count: p.like_count,
+                    comments_count: p.comments_count,
+                    media_type: p.media_type,
+                    media_url: mediaUrl,
+                  };
+                })
+              );
+              await eventBridge.send(
+                new PutEventsCommand({
+                  Entries: [
+                    {
+                      DetailType: 'brand.analysis.requested',
+                      Source: 'postolio.brand',
+                      EventBusName: process.env.EVENT_BUS_NAME || 'default',
+                      Detail: JSON.stringify({
+                        brandId: updatedBrand.id,
+                        requestedBy: request.user.id,
+                        options: { reason: 'brand-updated', maxPosts: 20 },
+                        posts,
+                      }),
+                    },
+                  ],
+                })
+              );
+            } catch (e) {
+              request.log.warn({ err: e }, 'Failed to emit brand.analysis.requested on update');
+            }
+          })();
+        }
 
         return reply.code(200).send({
           message: 'Brand updated successfully',

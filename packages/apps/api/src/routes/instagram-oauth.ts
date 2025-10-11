@@ -1,13 +1,17 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import crypto from 'crypto';
 
 import { getDatabaseClient } from '../config/database.js';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
 import { TokenServiceClient } from '../clients/token-service-client.js';
 import { instagramService } from '../services/instagram.js';
+import { uploadImageToS3, buildCdnUrl } from '../services/s3-image.js';
 
 const prisma = getDatabaseClient();
 const tokenServiceClient = new TokenServiceClient();
+const eventBridge = new EventBridge({});
+const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || 'default';
 
 interface AuthorizeQuery {
   brandId: string;
@@ -403,6 +407,81 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         .catch((error) => {
           console.error(`[Instagram OAuth] Initial sync failed for brand ${brand.id}:`, error);
         });
+
+      // Fire-and-forget: trigger Brand Analysis now that Instagram is connected
+      // Includes a small sample of recent posts with pre-warmed CDN URLs for image analysis
+      (async () => {
+        try {
+          const postsRaw = await instagramService.getRecentPosts(
+            {
+              id: updatedBrand.id,
+              instagramAccountId: updatedBrand.instagramAccountId,
+              instagramPageId: updatedBrand.instagramPageId,
+            },
+            20
+          );
+          const posts = await Promise.all(
+            postsRaw.map(async (p) => {
+              let mediaUrl = p.media_url;
+              if (
+                p.media_type?.toUpperCase() !== 'VIDEO' &&
+                typeof p.media_url === 'string' &&
+                p.media_url
+              ) {
+                try {
+                  const uploaded = await uploadImageToS3(p.media_url, {
+                    source: 'midjourney',
+                    brandId: updatedBrand.id,
+                    contentId: p.id,
+                    generatedAt: new Date(),
+                    originalPrompt: 'brand-analysis cache',
+                  });
+                  const cdn = buildCdnUrl(uploaded.s3Key);
+                  if (cdn) mediaUrl = cdn;
+                } catch (e) {
+                  fastify.log.warn(
+                    { err: e, postId: p.id },
+                    'Failed to cache image to S3 for analysis; using original URL'
+                  );
+                }
+              }
+              return {
+                id: p.id,
+                caption: p.caption,
+                hashtags: p.hashtags,
+                timestamp: p.timestamp,
+                like_count: p.like_count,
+                comments_count: p.comments_count,
+                media_type: p.media_type,
+                media_url: mediaUrl,
+              };
+            })
+          );
+          await eventBridge.send(
+            new PutEventsCommand({
+              Entries: [
+                {
+                  DetailType: 'brand.analysis.requested',
+                  Source: 'postolio.brand',
+                  EventBusName: EVENT_BUS_NAME,
+                  Detail: JSON.stringify({
+                    brandId: updatedBrand.id,
+                    requestedBy: brand.userId,
+                    options: { reason: 'on-connect', maxPosts: 20 },
+                    posts,
+                  }),
+                },
+              ],
+            })
+          );
+          fastify.log.info({ brandId: updatedBrand.id }, 'Triggered brand analysis on connect');
+        } catch (e) {
+          fastify.log.warn(
+            { err: e, brandId: updatedBrand.id },
+            'Failed to trigger brand analysis'
+          );
+        }
+      })();
 
       // Return HTML that closes the popup and notifies the parent
       const html = `

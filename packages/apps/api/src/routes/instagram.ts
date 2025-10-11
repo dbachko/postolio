@@ -1,7 +1,5 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+// import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { Prisma } from '@postolio/database';
 import { instagramService, InstagramWebhookEvent } from '../services/instagram.js';
 import crypto from 'crypto';
@@ -11,18 +9,7 @@ import { redisService } from '../services/redis.js';
 import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
-const eventBridge = new EventBridge({});
-const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || 'default';
-const JOBS_TABLE = process.env.BRAND_ANALYSIS_JOBS_TABLE;
-const AUTO_ON_CONNECT = ['true', '1', 'yes'].includes(
-  (process.env.BRAND_ANALYSIS_ON_CONNECT || '').toLowerCase()
-);
-const DEBOUNCE_MS = (() => {
-  const n = Number(process.env.BRAND_ANALYSIS_ON_CONNECT_DEBOUNCE_MS);
-  return Number.isNaN(n) || !Number.isFinite(n) ? 24 * 60 * 60 * 1000 : n; // default 24h
-})();
-const ddb = new DynamoDBClient({});
-const doc = DynamoDBDocumentClient.from(ddb, { marshallOptions: { removeUndefinedValues: true } });
+// Auto analysis on status refresh has been disabled; any prior DDB debouncing is no longer used here.
 
 function ensureAuth(
   request: FastifyRequest,
@@ -109,65 +96,10 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           connected,
           profile,
         });
-
-        // Auto-trigger on connect with debounce (fire-and-forget; response already sent)
-        if (connected && AUTO_ON_CONNECT) {
-          try {
-            const brandId = (request.params as { brandId: string }).brandId;
-            // Debounce via Jobs table if available
-            let shouldTrigger = true;
-            if (JOBS_TABLE) {
-              const res = await doc.send(
-                new QueryCommand({
-                  TableName: JOBS_TABLE,
-                  IndexName: 'GSI1',
-                  KeyConditionExpression: 'brandId = :bid',
-                  ExpressionAttributeValues: { ':bid': brandId },
-                  ScanIndexForward: false,
-                  Limit: 1,
-                })
-              );
-              const last = res.Items?.[0] as { requestedAt?: string; status?: string } | undefined;
-              if (last?.status === 'running') shouldTrigger = false;
-              const lastTs = last?.requestedAt ? Date.parse(last.requestedAt) : NaN;
-              if (!Number.isNaN(lastTs) && Date.now() - lastTs < DEBOUNCE_MS) shouldTrigger = false;
-            }
-            if (shouldTrigger) {
-              // Fetch a small sample of posts to include in the event detail
-              const postsRaw = await instagramService.getRecentPosts(brand, 20);
-              const posts = postsRaw.map((p) => ({
-                id: p.id,
-                caption: p.caption,
-                hashtags: p.hashtags,
-                timestamp: p.timestamp,
-                like_count: p.like_count,
-                comments_count: p.comments_count,
-                media_type: p.media_type,
-                media_url: p.media_url,
-              }));
-              await eventBridge.send(
-                new PutEventsCommand({
-                  Entries: [
-                    {
-                      DetailType: 'brand.analysis.requested',
-                      Source: 'postolio.brand',
-                      EventBusName: EVENT_BUS_NAME,
-                      Detail: JSON.stringify({
-                        brandId,
-                        requestedBy: request.user.id,
-                        options: { reason: 'on-connect', maxPosts: 20 },
-                        posts,
-                      }),
-                    },
-                  ],
-                })
-              );
-              request.log.info({ brandId }, 'Auto-triggered brand analysis on connect');
-            }
-          } catch (e) {
-            request.log.warn({ err: e }, 'Failed auto on-connect brand analysis trigger');
-          }
-        }
+        // Note: Auto-triggering analysis on status refresh caused unintended runs.
+        // As of now, we intentionally DO NOT trigger brand analysis here.
+        // Brand analysis is triggered on explicit actions: Instagram connect (OAuth callback),
+        // brand metadata updates (name/description), or manual "Run Analysis" button.
       } catch (error) {
         reply.status(500).send({
           error: 'Failed to fetch Instagram profile',
