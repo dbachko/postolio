@@ -77,11 +77,34 @@ jobs:
             echo "environment=dev" >> $GITHUB_OUTPUT
           fi
 
+      - name: Determine diff base for change detection
+        id: diffbase
+        shell: bash
+        run: |
+          # Default to previous commit on the same ref for push/manual, PR uses PR base
+          EVENT="${{ github.event_name }}"
+          if [[ "$EVENT" == "pull_request" ]]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          elif [[ "$EVENT" == "push" ]]; then
+            BASE="${{ github.event.before }}"
+          else
+            # workflow_dispatch or other: compare with previous commit
+            BASE="HEAD^"
+          fi
+
+          # Fallback if BASE is empty or all zeros
+          if [[ -z "$BASE" || "$BASE" == "0000000000000000000000000000000000000000" ]]; then
+            BASE="HEAD^"
+          fi
+
+          echo "Using diff base: $BASE"
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+
       - name: Setup change detection
         uses: dorny/paths-filter@v3
         id: changes
         with:
-          base: ${{ github.event.pull_request.base.sha || github.event.before }}
+          base: ${{ steps.diffbase.outputs.base }}
           filters: |
             foundation:
               - 'packages/infra/cdk/lib/stacks/ecr-registry-stack.ts'
@@ -206,6 +229,21 @@ jobs:
           fi
 
           echo "Stacks to deploy: $MATRIX"
+
+      - name: Debug change detection outputs
+        if: always()
+        run: |
+          echo "environment=${{ steps.env.outputs.environment }}"
+          echo "foundation=${{ steps.changes.outputs.foundation }}"
+          echo "auth=${{ steps.changes.outputs.auth }}"
+          echo "scheduling=${{ steps.changes.outputs.scheduling }}"
+          echo "brand-analysis=${{ steps.changes.outputs.brand-analysis }}"
+          echo "publishing=${{ steps.changes.outputs.publishing }}"
+          echo "api=${{ steps.changes.outputs.api }}"
+          echo "web=${{ steps.changes.outputs.web }}"
+          echo "infra=${{ steps.changes.outputs.infra }}"
+          echo "any-stack=${{ steps.changes.outputs.any-stack }}"
+          echo "stack-matrix=${{ steps.matrix.outputs.stack-matrix }}"
 
   # (PR tests are handled in .github/workflows/pr-checks.yml. Removed duplicate test job from deploy.)
 
