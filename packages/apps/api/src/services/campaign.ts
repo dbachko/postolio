@@ -9,8 +9,7 @@ import {
   campaignCoordinationService,
   type CampaignConfigWithPriority,
 } from './campaign-coordination.js';
-import type { StyleProfile } from './ai.js';
-import { analyzeBrandStyle } from './ai.js';
+// Legacy StyleProfile removed; generation uses brand profile projection internally
 import { TimezoneService } from './timezone.js';
 import { DEFAULT_TIMEZONE } from '../constants/timezone.js';
 import { schedulerService } from './scheduler.js';
@@ -258,6 +257,7 @@ class CampaignService {
             select: {
               id: true,
               name: true,
+              // styleProfile no longer required for generation
               styleProfile: true,
             },
           },
@@ -316,21 +316,7 @@ class CampaignService {
         postingTime?: string;
         [k: string]: unknown;
       };
-      let styleProfile = campaign.brand.styleProfile as unknown as StyleProfile;
-
-      if (!styleProfile) {
-        // Generate style profile if missing (similar to autopilot service)
-        console.log(`Generating style profile for brand: ${campaign.brand.name}`);
-        const analysisResult = await analyzeBrandStyle([], campaign.brand.name);
-        styleProfile = analysisResult.styleProfile;
-
-        await prisma.brand.update({
-          where: { id: campaign.brandId },
-          data: {
-            styleProfile: styleProfile as unknown as Prisma.InputJsonValue,
-          },
-        });
-      }
+      // Brand profile projection is fetched in generators; no legacy style profile required
 
       // Generate example content using themes from campaign config
       const contentRequests: ContentGenerationRequest[] = (config.themes || []).map(
@@ -348,22 +334,18 @@ class CampaignService {
       let examplePosts: GeneratedContent[] = [];
 
       for (const request of previewRequests) {
-        const content = await generateInstagramContent(styleProfile, campaign.brand.name, request);
+        const content = await generateInstagramContent(campaign.brand.name, request);
         examplePosts.push(...content);
       }
 
       // If we have fewer posts than requested, generate more with the first theme
       while (examplePosts.length < exampleCount && (config.themes?.length || 0) > 0) {
-        const additionalContent = await generateInstagramContent(
-          styleProfile,
-          campaign.brand.name,
-          {
-            brandId: campaign.brandId,
-            count: 1,
-            theme: (config.themes || [])[0],
-            style: config.style,
-          }
-        );
+        const additionalContent = await generateInstagramContent(campaign.brand.name, {
+          brandId: campaign.brandId,
+          count: 1,
+          theme: (config.themes || [])[0],
+          style: config.style,
+        });
         examplePosts.push(...additionalContent);
       }
 
@@ -464,6 +446,7 @@ class CampaignService {
             select: {
               id: true,
               name: true,
+              // styleProfile no longer required for generation
               styleProfile: true,
             },
           },
@@ -488,19 +471,7 @@ class CampaignService {
               style?: string;
             })
           : {};
-      const styleProfile = campaign.brand.styleProfile as unknown as StyleProfile;
-
-      if (!styleProfile) {
-        // Style profile should have been generated during preview creation
-        // Don't generate it here as it's too slow for the critical campaign start path
-        console.error(
-          `Brand ${campaign.brand.name} missing style profile - should have been generated during preview`
-        );
-        return {
-          success: false,
-          error: 'Brand style profile missing. Please regenerate campaign preview first.',
-        };
-      }
+      // Brand profile projection is used by downstream generators; no legacy style profile check here
 
       // Generate posting schedule (now timezone-aware)
       if (

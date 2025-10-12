@@ -136,3 +136,31 @@ The following scripts in the root `package.json` are the most common entry point
 | `pnpm build`   | Builds all applications, services, and libraries.       |
 | `pnpm lint`    | Lints the entire codebase.                              |
 | `pnpm test`    | Runs all tests across the monorepo.                     |
+
+---
+
+## 6. Brand Analysis Overview (Profiles, Learning, Generation)
+
+Postolio includes a dedicated Brand Analysis microservice that produces a versioned Brand Style Profile used by the API/content generator and the Web UI.
+
+- Event-driven flow:
+  - `brand.analysis.requested` → microservice runs multi-stage analysis → writes profile to DynamoDB → emits `brand.analysis.completed`.
+  - A projection Lambda upserts the latest profile into Postgres table `brand_style_profile_projection` for fast reads by API/WEB.
+  - The API’s learning service emits `brand.learning.applied` on user edits; the microservice stores learning signals and biases synthesis on re-analysis.
+
+- Generation uses the projection row to build brand-aware prompts (tones, topics, palette, motifs, composition) for both text and images.
+
+### Tunable Environment Variables
+
+The learning-informed synthesis supports simple tuning via environment variables:
+
+- `BRAND_ANALYSIS_STOPWORDS` (comma-separated): extend tokenization stopwords used for learning hints.
+- `BRAND_ANALYSIS_DECAY_DAYS` (default 30): recency decay constant in days for learning signals.
+- `BRAND_ANALYSIS_TOPIC_HINT_SCALE` (default 5): converts topic hint weight into count increments.
+
+These can be set in `.env` for dev, and configured per-environment in production (e.g., Lambda env or ECS task env).
+
+### UI
+
+- Brands page shows tones + top 3 palette swatches and includes a “View Profile” drawer.
+- Drawer provides a “Re-run Analysis” button to manually request a refresh.

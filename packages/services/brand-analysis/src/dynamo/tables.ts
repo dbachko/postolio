@@ -3,6 +3,16 @@ export const BRAND_STYLE_PROFILES_TABLE =
 export const BRAND_ANALYSIS_JOBS_TABLE =
   process.env.BRAND_ANALYSIS_JOBS_TABLE || 'BrandAnalysisJobs';
 
+export const BRAND_LEARNING_SIGNALS_TABLE =
+  process.env.BRAND_LEARNING_SIGNALS_TABLE || 'BrandLearningSignals';
+
+export function learningPk(brandId: string): string {
+  return `BRAND#${brandId}`;
+}
+export function learningSk(timestamp: string, id?: string): string {
+  return `LEARN#${timestamp}${id ? `#${id}` : ''}`;
+}
+
 export function profilePk(brandId: string): string {
   return `BRAND#${brandId}`;
 }

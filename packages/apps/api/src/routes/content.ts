@@ -5,7 +5,6 @@ import {
   generateInstagramContent,
   type ContentGenerationRequest,
 } from '../services/content-generator.js';
-import type { StyleProfile } from '../services/ai.js';
 import learningService from '../services/learning.js';
 import { uploadImageBufferToS3, buildCdnUrl, type ImageMetadata } from '../services/s3-image.js';
 import { computePlaceholders } from '../services/placeholderService.js';
@@ -75,23 +74,15 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: 'Brand not found' });
         }
 
-        if (!brand.styleProfile) {
-          return reply.code(400).send({
-            error: 'Brand must have a style profile to generate content',
-          });
-        }
+        // Brand analysis profile is now read from the projection table by the generator
 
-        // Generate content using AI
-        const generatedContent = await generateInstagramContent(
-          brand.styleProfile as unknown as StyleProfile,
-          brand.name,
-          {
-            brandId,
-            count,
-            theme: theme || undefined,
-            style: style || undefined,
-          }
-        );
+        // Generate content using AI (brand profile projection)
+        const generatedContent = await generateInstagramContent(brand.name, {
+          brandId,
+          count,
+          theme: theme || undefined,
+          style: style || undefined,
+        });
 
         // Save generated content to database
         const contentRecords = await Promise.all(

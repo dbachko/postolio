@@ -4,8 +4,6 @@
  */
 
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
-import type { StyleProfile } from './ai.js';
-import { analyzeBrandStyle } from './ai.js';
 import { schedulerService } from './scheduler.js';
 import {
   SCHEDULER_TIME_INTERVALS,
@@ -269,26 +267,7 @@ class AutopilotService {
         throw new Error(`Brand not found: ${gap.brandId}`);
       }
 
-      // Get brand's style profile
-      const rawStyle = brand.styleProfile as unknown;
-      let styleProfile: StyleProfile | undefined;
-      if (rawStyle && typeof rawStyle === 'object') {
-        const possible = rawStyle as Record<string, unknown>;
-        if (Array.isArray(possible.colorPalette) && typeof possible.aestheticStyle === 'string') {
-          styleProfile = possible as unknown as StyleProfile;
-        }
-      }
-      if (!styleProfile) {
-        // Generate style profile if missing
-        console.log(`Generating style profile for brand: ${brand.name}`);
-        const analysisResult = await analyzeBrandStyle([], brand.name);
-        styleProfile = analysisResult.styleProfile;
-
-        await prisma.brand.update({
-          where: { id: brand.id },
-          data: { styleProfile: JSON.parse(JSON.stringify(styleProfile)) },
-        });
-      }
+      // Brand profile projection will be used inside content generation; no legacy style profile required
 
       // Get content strategy
       const prefs = brand.preferences as Record<string, unknown> | null | undefined;
@@ -308,15 +287,7 @@ class AutopilotService {
         postingFrequency: 'daily',
       };
 
-      // Ensure styleProfile is a full StyleProfile (fallback values)
-      const fullStyleProfile: StyleProfile = {
-        colorPalette: styleProfile?.colorPalette || ['#000000', '#FFFFFF'],
-        aestheticStyle: styleProfile?.aestheticStyle || 'modern',
-        contentThemes: styleProfile?.contentThemes || ['lifestyle'],
-        toneOfVoice: styleProfile?.toneOfVoice || 'Friendly and professional',
-        targetAudience: styleProfile?.targetAudience || 'General audience',
-        brandPersonality: styleProfile?.brandPersonality || ['authentic'],
-      };
+      // Generation uses brand profile projection context internally
 
       // Generate content requests
       const contentRequests: ContentGenerationRequest[] = [];
@@ -327,23 +298,14 @@ class AutopilotService {
 
       for (let i = 0; i < postsToGenerate; i++) {
         const theme = strategy.themes?.[i % strategy.themes.length] || 'lifestyle';
-        contentRequests.push({
-          brandId: gap.brandId,
-          count: 1,
-          theme,
-          style: styleProfile.aestheticStyle || 'modern',
-        });
+        contentRequests.push({ brandId: gap.brandId, count: 1, theme });
       }
 
       // Generate content
       let totalGenerated = 0;
       for (const request of contentRequests) {
         try {
-          const generatedContent = await generateInstagramContent(
-            fullStyleProfile,
-            brand.name,
-            request
-          );
+          const generatedContent = await generateInstagramContent(brand.name, request);
 
           // Save generated content to database
           for (const content of generatedContent) {

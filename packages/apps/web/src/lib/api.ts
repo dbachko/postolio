@@ -17,7 +17,6 @@ export interface Brand {
   id: string;
   name: string;
   description: string | null;
-  styleProfile: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -118,6 +117,24 @@ class ApiClient {
 
   constructor() {
     this.token = localStorage.getItem('auth_token');
+  }
+
+  async hasBrandProfileProjection(brandId: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/brand-analysis/${brandId}/profile`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+        },
+        credentials: 'include',
+      });
+      if (res.status === 404) return false;
+      if (!res.ok) return false;
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // Brand Analysis endpoints

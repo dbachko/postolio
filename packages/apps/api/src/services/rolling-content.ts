@@ -1,7 +1,5 @@
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
 import { schedulerService } from './scheduler.js';
-import { analyzeBrandStyle } from './ai.js';
-import type { StyleProfile } from './ai.js';
 import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
@@ -216,17 +214,7 @@ class RollingContentService {
       }
 
       // Get or generate style profile
-      let styleProfile = brand.styleProfile as unknown as StyleProfile;
-      if (!styleProfile) {
-        console.log(`Generating style profile for brand: ${brand.name}`);
-        const analysisResult = await analyzeBrandStyle([], brand.name);
-        styleProfile = analysisResult.styleProfile;
-
-        await prisma.brand.update({
-          where: { id: brandId },
-          data: { styleProfile: styleProfile as unknown as object },
-        });
-      }
+      // Brand profile projection is used by the generator; no legacy style profile needed
 
       // Calculate how many posts to generate
       const postsNeeded = Math.min(
@@ -248,7 +236,7 @@ class RollingContentService {
           style,
         };
 
-        const content = await generateInstagramContent(styleProfile, brand.name, contentRequest);
+        const content = await generateInstagramContent(brand.name, contentRequest);
         generatedContent.push(...content);
       }
 

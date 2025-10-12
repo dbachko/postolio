@@ -2,7 +2,6 @@ import { Queue, Worker, Job } from 'bullmq';
 import Redis from 'ioredis';
 import { prisma } from '../config/database.js';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
-import type { StyleProfile } from './ai.js';
 import { getRedisUrl } from '../utils/redis-url.js';
 
 // Fixed batch size as per product decision
@@ -85,16 +84,6 @@ const regenerationWorker = new Worker(
             throw new Error(`Content ${contentId} not found`);
           }
 
-          // Create a basic StyleProfile for regeneration
-          const brandProfile: StyleProfile = {
-            colorPalette: ['#333333', '#ffffff'],
-            aestheticStyle: regenerationParams.style || 'modern',
-            contentThemes: regenerationParams.themes || ['lifestyle'],
-            toneOfVoice: 'engaging',
-            targetAudience: 'general',
-            brandPersonality: ['professional', 'engaging'],
-          };
-
           // Generate new content with regeneration parameters
           const contentRequest: ContentGenerationRequest = {
             brandId: existingContent.brandId,
@@ -104,7 +93,6 @@ const regenerationWorker = new Worker(
           };
 
           const newContentArray = await generateInstagramContent(
-            brandProfile,
             existingContent.brand.name,
             contentRequest
           );

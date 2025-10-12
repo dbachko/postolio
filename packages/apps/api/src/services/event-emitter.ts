@@ -18,6 +18,55 @@ export class EventEmitter {
   }
 
   /**
+   * Emit brand learning applied event to be consumed by brand-analysis pipeline
+   */
+  async emitBrandLearningApplied(
+    brandId: string,
+    payload: {
+      insights: Array<{
+        pattern: string;
+        confidence: number;
+        category: string;
+        recommendation?: string;
+      }>;
+      profileUpdates: Array<{
+        field: string;
+        newValue: unknown;
+        confidence?: number;
+        reasoning?: string;
+      }>;
+      appliedToFuturePosts?: number;
+      editAnalysis?: unknown;
+      triggeredBy?: { userId?: string; contentId?: string };
+    }
+  ): Promise<void> {
+    try {
+      const result = await this.eventBridge.putEvents({
+        Entries: [
+          {
+            Source: 'postolio.brand',
+            DetailType: 'brand.learning.applied',
+            Detail: JSON.stringify({
+              brandId,
+              ...payload,
+              timestamp: new Date().toISOString(),
+            }),
+            EventBusName: process.env.EVENT_BUS_NAME || 'default',
+          },
+        ],
+      });
+
+      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
+        console.error('Failed to emit brand learning applied event:', result.Entries);
+      } else {
+        console.log(`🧠 Brand learning event emitted for ${brandId}`);
+      }
+    } catch (error) {
+      console.error('Error emitting brand learning applied event:', error);
+    }
+  }
+
+  /**
    * Get singleton instance
    */
   static getInstance(): EventEmitter {

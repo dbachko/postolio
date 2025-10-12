@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto';
 import { getOpenAIClient, getDefaultOpenAIModel } from './openai-client.js';
-import type { StyleProfile } from './ai.js';
 import { generateMidjourneyImage } from './midjourney.js';
 import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
+import { getBrandProfileContext, type BrandProfileContext } from './brand-profile.js';
 
 export interface ContentGenerationRequest {
   brandId: string;
@@ -40,40 +40,54 @@ export interface ContentBatch {
 }
 
 export async function generateInstagramContent(
-  styleProfile: StyleProfile,
   brandName: string,
   request: ContentGenerationRequest
 ): Promise<GeneratedContent[]> {
   const openai = getOpenAIClient();
   if (!openai) {
     console.warn('OpenAI client is not configured. Returning fallback content batch.');
-    return buildFallbackGeneratedContent(styleProfile, brandName, request);
+    const ctx = (await getBrandProfileContext(request.brandId)) || {
+      brandId: request.brandId,
+      profileVersion: 0,
+      tones: [],
+      palette: [],
+      topicsTop: null,
+      createdAt: new Date().toISOString(),
+    };
+    return buildFallbackGeneratedContent(ctx, brandName, request);
   }
 
   const { count, theme, style } = request;
+  const brandContext = await getBrandProfileContext(request.brandId);
 
-  const systemPrompt = `You are an expert Instagram content creator specializing in high-quality, engaging posts. You adapt your content creation based on learned user preferences.
+  const tones = brandContext?.tones?.slice(0, 6) || [];
+  const palette = brandContext?.palette?.slice(0, 5) || [];
+  const motifs = brandContext?.motifs?.slice(0, 6) || [];
+  const composition = brandContext?.composition?.slice(0, 5) || [];
+  const topTopics = Array.isArray(brandContext?.topicsTop)
+    ? brandContext!.topicsTop!.slice(0, 5).map((t) => t.value)
+    : [];
 
-Brand Profile:
+  const systemPrompt = `You are an expert Instagram content creator for the brand "${brandName}".
 
-IMPORTANT: This brand profile has been refined through AI learning from user edits. Pay special attention to:
+Brand Context:
+- Voice/Tone: ${tones.join(', ') || 'n/a'}
+- Archetype: ${brandContext?.archetype || 'n/a'}
+- Top Topics: ${topTopics.join(', ') || 'n/a'}
+- Visual Identity:
+  - Palette (hex): ${palette.join(', ') || 'n/a'}
+  - Motifs: ${motifs.join(', ') || 'n/a'}
+  - Composition: ${composition.join(', ') || 'n/a'}
 
-Generate ${count} unique Instagram posts that:
-1. STRICTLY match the learned brand style and tone preferences
-2. Appeal to the specified target audience
-3. Include engaging captions WITHOUT hashtags (hashtags go in separate field)
-4. Use relevant hashtags WITHOUT the # symbol (just the word)
-5. Include image generation prompts that reflect the brand's aesthetic preferences
+Generation Requirements:
+- Generate ${count} unique Instagram posts.
+${theme ? `- Theme to reflect: "${theme}".` : ''}
+${style ? `- Additional style note: "${style}".` : ''}
+- Caption: 120–220 chars, conversational, include a subtle CTA, NO hashtags in the caption.
+- Hashtags: 5–10 relevant tokens (no #), bias to brand topics and audience.
+- imagePrompt: include 1–2 motifs, 1–2 composition cues, and 2–4 brand palette hex codes (hex only), 1:1 framing, Instagram-ready, no text/watermarks.
 
-${theme ? `Focus on theme: ${theme}` : ''}
-${style ? `Use style: ${style}` : ''}
-
-IMPORTANT OUTPUT REQUIREMENTS:
-- caption: Clean text WITHOUT any hashtags
-- hashtags: Array of hashtag words WITHOUT # symbols
-- imagePrompt: Detailed prompt for image generation
-
-Ensure content reflects the AI-learned user preferences and is Instagram-optimized.`;
+Output JSON only with fields: caption, hashtags (array of strings with no #), imagePrompt.`;
 
   // Define JSON Schema for structured output
   const responseSchema = {
@@ -126,7 +140,9 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
         },
         {
           role: 'user',
-          content: `Generate ${count} Instagram posts for ${brandName}.`,
+          content: `Generate ${count} Instagram posts for ${brandName}. ${
+            theme ? `Theme: ${theme}.` : ''
+          } ${style ? `Style: ${style}.` : ''}`.trim(),
         },
       ],
       temperature: 0.8,
@@ -202,15 +218,23 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
     const contentWithImages = await Promise.all(
       generatedContent.map(async (item, index) => {
         try {
-          const imageUrl = await generateBrandContentImage(
-            item.imagePrompt || item.caption,
-            styleProfile,
-            brandName
-          );
+          // If model did not include strong brand cues in imagePrompt, augment with brand context
+          let finalPrompt = item.imagePrompt || item.caption;
+          if (brandContext) {
+            const cueMotif = motifs[0] || '';
+            const cueComp = composition[0] || '';
+            const usePalette = palette.slice(0, 3);
+            const paletteText = usePalette.length > 0 ? `, colors: ${usePalette.join(', ')}` : '';
+            const motifText = cueMotif ? `, motif: ${cueMotif}` : '';
+            const compText = cueComp ? `, composition: ${cueComp}` : '';
+            finalPrompt = `${finalPrompt}${motifText}${compText}${paletteText}, 1:1, Instagram-ready, no text, no watermark`;
+          }
+
+          const imageUrl = await generateBrandContentImage(finalPrompt, brandContext, brandName);
           console.log(
             'Generated image for post:',
             JSON.stringify({
-              prompt: (item.imagePrompt || item.caption)?.substring(0, 50) + '...',
+              prompt: finalPrompt?.substring(0, 50) + '...',
               imageUrl: imageUrl?.substring(0, 80) + '...' || 'Failed to generate',
               urlLength: imageUrl?.length || 0,
             })
@@ -225,7 +249,7 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
                 campaignId: undefined as string | undefined, // Will be set when content is saved
                 generatedAt: new Date(),
                 source: imageUrl.includes('dalle') ? 'dalle3' : 'midjourney',
-                originalPrompt: item.imagePrompt || item.caption,
+                originalPrompt: finalPrompt,
               };
 
               const s3Result = await uploadImageToS3(imageUrl, metadata);
@@ -277,12 +301,20 @@ Ensure content reflects the AI-learned user preferences and is Instagram-optimiz
 
     // Return fallback content for other errors
     console.warn('Falling back to template content due to OpenAI error');
-    return buildFallbackGeneratedContent(styleProfile, brandName, request);
+    const ctx = (await getBrandProfileContext(request.brandId)) || {
+      brandId: request.brandId,
+      profileVersion: 0,
+      tones: [],
+      palette: [],
+      topicsTop: null,
+      createdAt: new Date().toISOString(),
+    };
+    return buildFallbackGeneratedContent(ctx, brandName, request);
   }
 }
 
 function buildFallbackGeneratedContent(
-  styleProfile: StyleProfile,
+  brandContext: Pick<BrandProfileContext, 'palette'>,
   brandName: string,
   request: ContentGenerationRequest
 ): GeneratedContent[] {
@@ -294,11 +326,11 @@ function buildFallbackGeneratedContent(
       i + 1
     } for ${brandName}. This engaging post captures the essence of your brand while connecting with your audience. Share your story and inspire your followers! 🌟`,
     hashtags: ['inspiration', 'lifestyle', 'authentic', 'community', 'brand'], // No # symbols
-    imagePrompt: `A beautiful ${(styleProfile.aestheticStyle || 'modern').toLowerCase()} image featuring ${
-      Array.isArray(styleProfile.colorPalette) && styleProfile.colorPalette.length >= 2
-        ? `${styleProfile.colorPalette[0]} and ${styleProfile.colorPalette[1]}`
+    imagePrompt: `A beautiful modern image featuring ${
+      Array.isArray(brandContext.palette) && brandContext.palette.length >= 2
+        ? `${brandContext.palette[0]} and ${brandContext.palette[1]}`
         : 'vibrant'
-    } colors`,
+    } colors, 1:1, Instagram-ready, no text, no watermark`,
   }));
 }
 
@@ -334,13 +366,13 @@ export async function generateContentImage(prompt: string): Promise<string> {
 
 export async function generateBrandContentImage(
   prompt: string,
-  styleProfile: StyleProfile,
+  brandContext: BrandProfileContext | null,
   brandName: string
 ): Promise<string> {
   try {
     // Try Midjourney first for higher quality, brand-consistent images
     console.log('Attempting Midjourney generation for brand content...');
-    const imageUrl = await generateMidjourneyImage(prompt, styleProfile, brandName);
+    const imageUrl = await generateMidjourneyImage(prompt, brandContext, brandName);
     console.log('Midjourney generation successful');
     return imageUrl;
   } catch (error) {
@@ -355,23 +387,19 @@ export async function generateBrandContentImage(
         throw new Error('OpenAI API key configuration error');
       }
 
-      const { aestheticStyle, colorPalette, brandPersonality } = styleProfile;
+      const tones = brandContext?.tones?.slice(0, 2) || [];
+      const palette = brandContext?.palette?.slice(0, 2) || [];
 
       let enhancedPrompt = `Create a high-quality Instagram-worthy image: ${prompt}`;
 
       // Add brand characteristics to DALL-E prompt
-      if (aestheticStyle) {
-        enhancedPrompt += `, ${aestheticStyle.toLowerCase()} aesthetic`;
+      if (tones.length > 0) {
+        enhancedPrompt += `, ${tones.join(' and ')} style`;
       }
 
-      if (colorPalette && colorPalette.length > 0) {
-        const colors = colorPalette.slice(0, 2).join(' and ');
+      if (palette.length > 0) {
+        const colors = palette.join(' and ');
         enhancedPrompt += `, featuring ${colors} colors`;
-      }
-
-      if (brandPersonality && brandPersonality.length > 0) {
-        const personality = brandPersonality[0];
-        enhancedPrompt += `, ${personality} style`;
       }
 
       enhancedPrompt +=
@@ -403,13 +431,12 @@ export async function generateBrandContentImage(
 
 export async function generateContentBatch(
   brandId: string,
-  styleProfile: StyleProfile,
   brandName: string,
   requests: ContentGenerationRequest[]
 ): Promise<ContentBatch[]> {
   const batches = await Promise.all(
     requests.map(async (request) => {
-      const content = await generateInstagramContent(styleProfile, brandName, request);
+      const content = await generateInstagramContent(brandName, request);
 
       return {
         id: `batch_${Date.now()}_${randomUUID()}`,

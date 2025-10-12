@@ -6,6 +6,7 @@ import { runTopicEntityExtractor } from './pipeline/topic-entity-extractor';
 import { runEngagementCorrelationFromPosts } from './pipeline/engagement-correlation';
 import { runVisualExtractor } from './pipeline/visual-extractor';
 import { synthesizeProfile } from './pipeline/synthesis';
+import { LearningRepository } from './dynamo/learning-repo';
 import { validateProfile, type BrandStyleProfile } from './models/profile-schema';
 import { getAndResetLlmUsage } from './llm/llm-client';
 import { PROMPT_SET_VERSION } from './prompts/prompt-set';
@@ -118,24 +119,144 @@ export class BrandAnalysisOrchestrator {
       const latestProfile = await this.profiles.getLatest(brandId);
       const nextVersion = (latestProfile?.version || 0) + 1;
 
+      // Bias tones and topics using recent learning signals (confidence + recency aware)
+      const learningRepo = new LearningRepository();
+      const recentSignals = await learningRepo.listRecentSignals(brandId, 20);
+
+      // Base stopwords for tone/topic tokenization (can be extended via env)
+      const STOPWORDS_BASE = [
+        'user',
+        'prefers',
+        'adds',
+        'popular',
+        'niche-specific',
+        'niche',
+        'hashtags',
+        'focus',
+        'on',
+        'style',
+        'towards',
+        'brand',
+        'personality',
+        'tone',
+        'more',
+        'less',
+        'and',
+        'or',
+      ];
+      const extraStopwords = (process.env.BRAND_ANALYSIS_STOPWORDS || '')
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const STOPWORDS = new Set<string>([...STOPWORDS_BASE, ...extraStopwords]);
+
+      // Weighting constants (tunable via env)
+      const DECAY_DAYS = Number(process.env.BRAND_ANALYSIS_DECAY_DAYS || 30); // recency decay time constant
+      const TOPIC_HINT_SCALE = Number(process.env.BRAND_ANALYSIS_TOPIC_HINT_SCALE || 5); // converts hint weight to count increment
+
+      const nowMs = Date.now();
+      const toneWeights = new Map<string, number>();
+      const topicWeights = new Map<string, number>();
+
+      function addToneToken(token: string, weight: number) {
+        const key = token.trim().toLowerCase();
+        if (!key || key.length < 3 || STOPWORDS.has(key)) return;
+        toneWeights.set(key, (toneWeights.get(key) || 0) + weight);
+      }
+      function addTopicToken(token: string, weight: number) {
+        const key = token.trim().toLowerCase();
+        if (!key || key.length < 2 || STOPWORDS.has(key)) return;
+        topicWeights.set(key, (topicWeights.get(key) || 0) + weight);
+      }
+
+      for (const sig of recentSignals) {
+        const createdAt = Date.parse(sig.createdAt || new Date().toISOString());
+        const ageDays = Math.max(0, (nowMs - createdAt) / (1000 * 60 * 60 * 24));
+        const recency = Math.exp(-ageDays / Math.max(1, DECAY_DAYS));
+
+        // profileUpdates
+        for (const upd of sig.profileUpdates || []) {
+          const conf = typeof upd.confidence === 'number' ? upd.confidence : 0.6;
+          const weight = recency * conf;
+          if (upd.field === 'toneOfVoice' && typeof upd.newValue === 'string') {
+            const parts = (upd.newValue as string)
+              .split(/[^a-z0-9]+/i)
+              .map((s) => s.trim().toLowerCase())
+              .filter(Boolean);
+            for (const p of parts) addToneToken(p, weight);
+          }
+          if (upd.field === 'contentThemes' && Array.isArray(upd.newValue)) {
+            for (const t of upd.newValue as unknown[]) {
+              if (typeof t === 'string' && t.length > 0) addTopicToken(t, 2 * weight); // topics slightly higher
+            }
+          }
+        }
+        // insights
+        for (const ins of sig.insights || []) {
+          const conf = typeof ins.confidence === 'number' ? ins.confidence : 0.6;
+          const weight = recency * conf;
+          if (ins.category === 'caption_style' && typeof ins.pattern === 'string') {
+            const tokens = ins.pattern
+              .toLowerCase()
+              .split(/[^a-z0-9]+/)
+              .filter((x) => x.length > 2);
+            for (const t of tokens.slice(0, 5)) addToneToken(t, 0.5 * weight);
+          }
+          if (ins.category === 'hashtag_preference' && typeof ins.recommendation === 'string') {
+            const rec = ins.recommendation.toLowerCase();
+            const match = rec.match(/focus on\s+(.+)/);
+            if (match) {
+              const parts = match[1]
+                .split(/\s+and\s+|,\s*/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+              for (const p of parts) addTopicToken(p, 1.5 * weight);
+            }
+          }
+        }
+      }
+
+      // Build biased tones: start with model tones, add top weighted tokens
+      const modelTones = (toneOut.tone || []).map((t) => t.toLowerCase());
+      const extraTones = Array.from(toneWeights.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([k]) => k)
+        .filter((k) => !modelTones.includes(k))
+        .slice(0, 5);
+      const biasedTones = Array.from(new Set([...modelTones, ...extraTones])).slice(0, 10);
+
+      // Build biased topics: start with extracted counts, add weighted hints (scale weight into counts)
+      const topicMap = new Map<string, number>();
+      for (const t of topicOut.topics || []) {
+        if (t && typeof t.value === 'string') topicMap.set(t.value.toLowerCase(), t.count);
+      }
+      for (const [k, w] of topicWeights.entries()) {
+        const inc = Math.max(1, Math.round(w * TOPIC_HINT_SCALE));
+        topicMap.set(k, (topicMap.get(k) || 0) + inc);
+      }
+      const biasedTopics = Array.from(topicMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 25)
+        .map(([value, count]) => ({ value, count }));
+
       const draft: Record<string, unknown> = {
         brandId,
         version: nextVersion,
         promptSetVersion: PROMPT_SET_VERSION,
         textExtract: textOut,
-        textTone: toneOut.tone,
-        topics: topicOut.topics,
+        textTone: biasedTones,
+        topics: biasedTopics,
         correlations: corrOut,
       };
 
       let profile = synthesizeProfile(draft) as unknown as BrandStyleProfile;
       // enrich with optional sections
-      if (topicOut.topics && topicOut.topics.length) {
-        profile.topics = topicOut.topics;
+      if (biasedTopics && biasedTopics.length) {
+        profile.topics = biasedTopics as any;
       }
-      if (toneOut.tone && toneOut.tone.length) {
+      if (biasedTones && biasedTones.length) {
         profile.text = profile.text || { tone: [] };
-        profile.text.tone = Array.from(new Set([...(profile.text.tone || []), ...toneOut.tone]))
+        profile.text.tone = Array.from(new Set([...(profile.text.tone || []), ...biasedTones]))
           .filter(Boolean)
           .slice(0, 10);
       }

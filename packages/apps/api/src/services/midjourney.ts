@@ -1,6 +1,6 @@
 import { Midjourney } from 'midjourney';
-import type { StyleProfile } from './ai.js';
 import { getOpenAIClient } from './openai-client.js';
+import type { BrandProfileContext } from './brand-profile.js';
 
 // Midjourney client configuration
 interface MidjourneyConfig {
@@ -83,7 +83,7 @@ export class MidjourneyService {
    */
   private async generateDalleImage(
     prompt: string,
-    styleProfile: StyleProfile,
+    brandContext: BrandProfileContext | null,
     _brandName: string
   ): Promise<string> {
     void _brandName;
@@ -95,23 +95,25 @@ export class MidjourneyService {
         throw new Error('OpenAI API key configuration error');
       }
 
-      const { aestheticStyle, colorPalette, brandPersonality } = styleProfile;
-
       let enhancedPrompt = `Create a high-quality Instagram-worthy image: ${prompt}`;
+      // Add brand characteristics to DALL-E prompt from projection
+      const tones = brandContext?.tones?.slice(0, 2) || [];
+      const palette = brandContext?.palette?.slice(0, 2) || [];
+      const motifs = brandContext?.motifs?.slice(0, 1) || [];
+      const composition = brandContext?.composition?.slice(0, 1) || [];
 
-      // Add brand characteristics to DALL-E prompt
-      if (aestheticStyle) {
-        enhancedPrompt += `, ${aestheticStyle.toLowerCase()} aesthetic`;
+      if (tones.length > 0) {
+        enhancedPrompt += `, ${tones.join(' and ')} style`;
       }
-
-      if (colorPalette && colorPalette.length > 0) {
-        const colors = colorPalette.slice(0, 2).join(' and ');
+      if (palette.length > 0) {
+        const colors = palette.join(' and ');
         enhancedPrompt += `, featuring ${colors} colors`;
       }
-
-      if (brandPersonality && brandPersonality.length > 0) {
-        const personality = brandPersonality[0];
-        enhancedPrompt += `, ${personality} style`;
+      if (motifs.length > 0) {
+        enhancedPrompt += `, motif: ${motifs[0]}`;
+      }
+      if (composition.length > 0) {
+        enhancedPrompt += `, composition: ${composition[0]}`;
       }
 
       enhancedPrompt +=
@@ -145,41 +147,24 @@ export class MidjourneyService {
    */
   private generateBrandPrompt(
     basePrompt: string,
-    styleProfile: StyleProfile,
+    brandContext: BrandProfileContext | null,
     brandName: string
   ): string {
-    const {
-      aestheticStyle = 'modern',
-      colorPalette = [],
-      contentThemes = [],
-      brandPersonality = [],
-    } = styleProfile;
+    const tones = brandContext?.tones?.slice(0, 2) || [];
+    const palette = brandContext?.palette?.slice(0, 3) || [];
+    const motifs = brandContext?.motifs?.slice(0, 1) || [];
+    const composition = brandContext?.composition?.slice(0, 1) || [];
+    const topics = Array.isArray(brandContext?.topicsTop)
+      ? brandContext!.topicsTop!.slice(0, 1).map((t) => t.value)
+      : [];
 
-    // Build enhanced prompt with brand characteristics
     let enhancedPrompt = basePrompt;
+    if (tones.length > 0) enhancedPrompt += `, ${tones.join(' and ')} style`;
+    if (palette.length > 0) enhancedPrompt += `, featuring ${palette.join(' and ')} color scheme`;
+    if (motifs.length > 0) enhancedPrompt += `, motif: ${motifs[0]}`;
+    if (composition.length > 0) enhancedPrompt += `, composition: ${composition[0]}`;
+    if (topics.length > 0) enhancedPrompt += `, ${topics[0]} context`;
 
-    // Add aesthetic style
-    enhancedPrompt += `, ${aestheticStyle.toLowerCase()} aesthetic`;
-
-    // Add color palette if available
-    if (colorPalette.length > 0) {
-      const colorText = colorPalette.slice(0, 3).join(' and ');
-      enhancedPrompt += `, featuring ${colorText} color scheme`;
-    }
-
-    // Add brand personality elements
-    if (brandPersonality.length > 0) {
-      const personalityText = brandPersonality.slice(0, 2).join(' and ');
-      enhancedPrompt += `, ${personalityText} style`;
-    }
-
-    // Add content themes context
-    if (contentThemes.length > 0) {
-      const themeContext = contentThemes[0];
-      enhancedPrompt += `, ${themeContext} context`;
-    }
-
-    // Add professional quality modifiers for Midjourney
     enhancedPrompt += ' --ar 1:1 --style raw --quality 2';
 
     console.log(`Generated Midjourney prompt for ${brandName}:`, enhancedPrompt);
@@ -191,7 +176,7 @@ export class MidjourneyService {
    */
   async generateBrandImage(
     prompt: string,
-    styleProfile: StyleProfile,
+    brandContext: BrandProfileContext | null,
     brandName: string
   ): Promise<MidjourneyImageResult> {
     // Always try to initialize if not already done
@@ -203,7 +188,7 @@ export class MidjourneyService {
     if (!this.initialized || !this.client || this.fallbackToDallE) {
       console.log('Falling back to DALL-E for image generation');
       try {
-        const dalleUrl = await this.generateDalleImage(prompt, styleProfile, brandName);
+        const dalleUrl = await this.generateDalleImage(prompt, brandContext, brandName);
         return {
           imageUrl: dalleUrl,
           id: `dalle_${Date.now()}`,
@@ -217,7 +202,7 @@ export class MidjourneyService {
 
     try {
       // Generate brand-consistent prompt
-      const brandPrompt = this.generateBrandPrompt(prompt, styleProfile, brandName);
+      const brandPrompt = this.generateBrandPrompt(prompt, brandContext, brandName);
 
       console.log('Generating image with Midjourney...');
 
@@ -250,7 +235,7 @@ export class MidjourneyService {
       // Fallback to DALL-E on any error
       console.log('Falling back to DALL-E due to Midjourney error');
       try {
-        const dalleUrl = await this.generateDalleImage(prompt, styleProfile, brandName);
+        const dalleUrl = await this.generateDalleImage(prompt, brandContext, brandName);
         return {
           imageUrl: dalleUrl,
           id: `dalle_fallback_${Date.now()}`,
@@ -269,7 +254,7 @@ export class MidjourneyService {
    */
   async generateImageVariations(
     prompt: string,
-    styleProfile: StyleProfile,
+    brandContext: BrandProfileContext | null,
     brandName: string,
     count: number = 1
   ): Promise<MidjourneyImageResult[]> {
@@ -281,7 +266,7 @@ export class MidjourneyService {
         const variationPrompt =
           i === 0 ? prompt : `${prompt}, variation ${i + 1}, different perspective`;
 
-        const result = await this.generateBrandImage(variationPrompt, styleProfile, brandName);
+        const result = await this.generateBrandImage(variationPrompt, brandContext, brandName);
         results.push(result);
 
         // Add delay between generations to avoid rate limits
@@ -349,10 +334,10 @@ if (process.env.MIDJOURNEY_SALAI_TOKEN) {
  */
 export async function generateMidjourneyImage(
   prompt: string,
-  styleProfile: StyleProfile,
+  brandContext: BrandProfileContext | null,
   brandName: string
 ): Promise<string> {
-  const result = await midjourneyService.generateBrandImage(prompt, styleProfile, brandName);
+  const result = await midjourneyService.generateBrandImage(prompt, brandContext, brandName);
   return result.imageUrl;
 }
 
@@ -361,13 +346,13 @@ export async function generateMidjourneyImage(
  */
 export async function generateImageVariations(
   prompt: string,
-  styleProfile: StyleProfile,
+  brandContext: BrandProfileContext | null,
   brandName: string,
   count: number = 1
 ): Promise<string[]> {
   const results = await midjourneyService.generateImageVariations(
     prompt,
-    styleProfile,
+    brandContext,
     brandName,
     count
   );

@@ -5,8 +5,7 @@ import {
   type GeneratedContent,
 } from './content-generator.js';
 import { getStatusBroadcaster } from './broadcast-registry.js';
-import type { StyleProfile } from './ai.js';
-import { analyzeBrandStyle } from './ai.js';
+// Legacy StyleProfile removed; generators use brand profile projection
 
 const prisma = getDatabaseClient();
 
@@ -64,13 +63,7 @@ class CampaignJobService {
           },
         },
         include: {
-          brand: {
-            select: {
-              id: true,
-              name: true,
-              styleProfile: true,
-            },
-          },
+          brand: { select: { id: true, name: true, styleProfile: true } },
         },
       });
 
@@ -83,19 +76,7 @@ class CampaignJobService {
         configRaw && typeof configRaw === 'object'
           ? (configRaw as { themes: string[]; style?: string })
           : { themes: [] as string[], style: undefined };
-      let styleProfile = campaign.brand.styleProfile as unknown as StyleProfile;
-
-      if (!styleProfile) {
-        // Generate style profile if missing (similar to autopilot service)
-        console.log(`Generating style profile for brand: ${campaign.brand.name}`);
-        const analysisResult = await analyzeBrandStyle([], campaign.brand.name);
-        styleProfile = analysisResult.styleProfile;
-
-        await prisma.brand.update({
-          where: { id: campaign.brandId },
-          data: { styleProfile: styleProfile as unknown as object },
-        });
-      }
+      // Brand profile projection is used in the generator; no legacy style profile required
 
       // No numeric progress updates stored in DB
 
@@ -120,27 +101,19 @@ class CampaignJobService {
         // No numeric progress updates stored in DB
 
         if (request) {
-          const content = await generateInstagramContent(
-            styleProfile,
-            campaign.brand.name,
-            request
-          );
+          const content = await generateInstagramContent(campaign.brand.name, request);
           examplePosts.push(...content);
         }
       }
 
       // If we have fewer posts than requested, generate more with the first theme
       while (examplePosts.length < exampleCount && config.themes.length > 0) {
-        const additionalContent = await generateInstagramContent(
-          styleProfile,
-          campaign.brand.name,
-          {
-            brandId: campaign.brandId,
-            count: 1,
-            theme: config.themes[0],
-            style: config.style,
-          }
-        );
+        const additionalContent = await generateInstagramContent(campaign.brand.name, {
+          brandId: campaign.brandId,
+          count: 1,
+          theme: config.themes[0],
+          style: config.style,
+        });
         examplePosts.push(...additionalContent);
       }
 

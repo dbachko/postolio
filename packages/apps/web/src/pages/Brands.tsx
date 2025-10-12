@@ -5,11 +5,16 @@ import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { InstagramConnect } from '../components/InstagramConnect';
 import { BrandAnalysisPanel } from '@/components/BrandAnalysisPanel';
+import { BrandProfileDrawer } from '@/components/BrandProfileDrawer';
 
 export function Brands() {
   const [isCreating, setIsCreating] = useState(false);
   // Start undefined to avoid auto-triggering analysis on initial mount
   const [analysisTrigger, setAnalysisTrigger] = useState<number | null>(null);
+  const [profileAvailable, setProfileAvailable] = useState<Record<string, boolean>>({});
+  const [profileSummaries, setProfileSummaries] = useState<
+    Record<string, { tones: string[]; palette: string[] }>
+  >({});
   const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<{
     [key: string]: { name: string; description: string };
@@ -18,6 +23,7 @@ export function Brands() {
     name: '',
     description: '',
   });
+  const [viewProfileBrandId, setViewProfileBrandId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const {
@@ -41,6 +47,48 @@ export function Brands() {
       initializeSelectedBrand(brandsData.brands);
     }
   }, [brandsData, setBrands, initializeSelectedBrand]);
+
+  // Determine whether a brand has an analysis profile projection
+  useEffect(() => {
+    const load = async () => {
+      const entries = await Promise.all(
+        (brands || []).map(
+          async (b) => [b.id, await apiClient.hasBrandProfileProjection(b.id)] as const
+        )
+      );
+      setProfileAvailable(Object.fromEntries(entries));
+    };
+    if (brands.length > 0) void load();
+  }, [brands]);
+
+  // Fetch compact profile summaries (tones + palette) for brands with available projection
+  useEffect(() => {
+    const fetchSummaries = async () => {
+      const toFetch = brands.filter((b) => profileAvailable[b.id] && !profileSummaries[b.id]);
+      if (toFetch.length === 0) return;
+      const results = await Promise.all(
+        toFetch.map(async (b) => {
+          try {
+            const prof = await apiClient.getBrandAnalysisProfile(b.id);
+            if ('error' in prof) return [b.id, null] as const;
+            const tones = Array.isArray(prof.text?.tone) ? prof.text!.tone.slice(0, 3) : [];
+            const palette = Array.isArray(prof.visual?.palette)
+              ? prof.visual!.palette.slice(0, 3)
+              : [];
+            return [b.id, { tones, palette }] as const;
+          } catch {
+            return [b.id, null] as const;
+          }
+        })
+      );
+      const map: Record<string, { tones: string[]; palette: string[] }> = {};
+      for (const [id, data] of results) {
+        if (data) map[id] = data;
+      }
+      if (Object.keys(map).length > 0) setProfileSummaries((s) => ({ ...s, ...map }));
+    };
+    if (brands.length > 0) void fetchSummaries();
+  }, [brands, profileAvailable, profileSummaries]);
 
   const createBrandMutation = useMutation({
     mutationFn: (data: typeof createFormData) => apiClient.createBrand(data),
@@ -160,6 +208,14 @@ export function Brands() {
                 className="inline-flex items-center rounded-md border border-transparent bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
               >
                 Run Analysis
+              </button>
+            )}
+            {selectedBrand && profileAvailable[selectedBrand.id] && (
+              <button
+                onClick={() => setViewProfileBrandId(selectedBrand.id)}
+                className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                View Profile
               </button>
             )}
             <button
@@ -361,11 +417,28 @@ export function Brands() {
                         </p>
                       </div>
                       <div className="flex items-center space-x-3">
-                        {selectedBrand.styleProfile && (
-                          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                            Analyzed
-                          </span>
-                        )}
+                        {profileAvailable[selectedBrand.id] &&
+                          (profileSummaries[selectedBrand.id] ? (
+                            <div className="flex items-center gap-3">
+                              <div className="text-xs text-gray-600">
+                                Tones: {profileSummaries[selectedBrand.id].tones.join(', ') || '—'}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {profileSummaries[selectedBrand.id].palette.map((hex) => (
+                                  <span
+                                    key={hex}
+                                    title={hex}
+                                    className="inline-block h-3 w-3 rounded-full border border-gray-200"
+                                    style={{ backgroundColor: hex }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                              Analyzed
+                            </span>
+                          ))}
                         <div className="flex space-x-2">
                           <button
                             onClick={() => handleEditStart(selectedBrand)}
@@ -478,11 +551,28 @@ export function Brands() {
                           </p>
                         </div>
                         <div className="flex items-center space-x-3">
-                          {brand.styleProfile && (
-                            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                              Analyzed
-                            </span>
-                          )}
+                          {profileAvailable[brand.id] &&
+                            (profileSummaries[brand.id] ? (
+                              <div className="flex items-center gap-2">
+                                <div className="text-xs text-gray-600">
+                                  {profileSummaries[brand.id].tones.join(', ') || '—'}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {profileSummaries[brand.id].palette.map((hex) => (
+                                    <span
+                                      key={hex}
+                                      title={hex}
+                                      className="inline-block h-3 w-3 rounded-full border border-gray-200"
+                                      style={{ backgroundColor: hex }}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                                Analyzed
+                              </span>
+                            ))}
                           <div className="flex space-x-2">
                             <button
                               onClick={() => handleSelectBrand(brand)}
@@ -522,6 +612,10 @@ export function Brands() {
           </div>
         )}
       </div>
+      <BrandProfileDrawer
+        brandId={viewProfileBrandId}
+        onClose={() => setViewProfileBrandId(null)}
+      />
     </div>
   );
 }

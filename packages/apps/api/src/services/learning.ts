@@ -1,7 +1,7 @@
-import { Prisma } from '@postolio/database';
 import type { StyleProfile } from './ai.js';
 import { getOpenAIClient } from './openai-client.js';
 import { getDatabaseClient } from '../config/database.js';
+import { eventEmitter } from './event-emitter.js';
 
 const prisma = getDatabaseClient();
 
@@ -94,25 +94,13 @@ export class AILearningService {
     brandId: string,
     editAnalysis: EditAnalysis
   ): Promise<{
-    updatedProfile: StyleProfile;
     insights: LearningInsight[];
     profileUpdates: StyleProfileUpdate[];
     appliedToFuturePosts: number;
   }> {
     console.log('Applying learning to style profile...');
-
-    // Get current brand and style profile
-    const brand = await prisma.brand.findUnique({
-      where: { id: brandId },
-      select: { id: true, name: true, styleProfile: true, userId: true },
-    });
-
-    if (!brand) {
-      throw new Error('Brand not found');
-    }
-
-    const currentProfile =
-      (brand.styleProfile as unknown as StyleProfile) || this.getDefaultStyleProfile();
+    // Use a default profile as baseline for suggestions (no DB dependency)
+    const currentProfile = this.getDefaultStyleProfile();
     const insights: LearningInsight[] = [];
     const profileUpdates: StyleProfileUpdate[] = [];
 
@@ -131,12 +119,11 @@ export class AILearningService {
         );
         profileUpdates.push({
           field: 'toneOfVoice',
-          oldValue: currentProfile.toneOfVoice,
+          oldValue: undefined,
           newValue: newToneOfVoice,
           confidence: toneInsight.confidence,
           reasoning: `User consistently edits content to be ${editAnalysis.captionChanges.toneChange.replace('_', ' ')}`,
         });
-        currentProfile.toneOfVoice = newToneOfVoice;
       }
     }
 
@@ -157,16 +144,13 @@ export class AILearningService {
           editAnalysis.hashtagChanges.addedCategories,
           editAnalysis.hashtagChanges.removedCategories
         );
-        if (JSON.stringify(updatedThemes) !== JSON.stringify(currentProfile.contentThemes)) {
-          profileUpdates.push({
-            field: 'contentThemes',
-            oldValue: currentProfile.contentThemes,
-            newValue: updatedThemes,
-            confidence: hashtagInsight.confidence,
-            reasoning: `User preferences detected: added ${editAnalysis.hashtagChanges.addedCategories.join(', ')}, removed ${editAnalysis.hashtagChanges.removedCategories.join(', ')}`,
-          });
-          currentProfile.contentThemes = updatedThemes;
-        }
+        profileUpdates.push({
+          field: 'contentThemes',
+          oldValue: undefined,
+          newValue: updatedThemes,
+          confidence: hashtagInsight.confidence,
+          reasoning: `User preferences detected: added ${editAnalysis.hashtagChanges.addedCategories.join(', ')}, removed ${editAnalysis.hashtagChanges.removedCategories.join(', ')}`,
+        });
       }
     }
 
@@ -183,27 +167,32 @@ export class AILearningService {
           currentProfile.brandPersonality,
           editAnalysis.captionChanges.personalityShift
         );
-        if (
-          JSON.stringify(updatedPersonality) !== JSON.stringify(currentProfile.brandPersonality)
-        ) {
-          profileUpdates.push({
-            field: 'brandPersonality',
-            oldValue: currentProfile.brandPersonality,
-            newValue: updatedPersonality,
-            confidence: personalityInsight.confidence,
-            reasoning: `Brand personality refined based on user edit patterns: ${editAnalysis.captionChanges.personalityShift.join(', ')}`,
-          });
-          currentProfile.brandPersonality = updatedPersonality;
-        }
+        profileUpdates.push({
+          field: 'brandPersonality',
+          oldValue: undefined,
+          newValue: updatedPersonality,
+          confidence: personalityInsight.confidence,
+          reasoning: `Brand personality refined based on user edit patterns: ${editAnalysis.captionChanges.personalityShift.join(', ')}`,
+        });
       }
     }
 
-    // Save updated profile to database
-    await prisma.brand.update({
-      where: { id: brandId },
-      data: {
-        styleProfile: JSON.parse(JSON.stringify(currentProfile)) as Prisma.InputJsonValue,
-      },
+    // Emit brand learning event for brand-analysis pipeline to consume
+    await eventEmitter.emitBrandLearningApplied(brandId, {
+      insights: insights.map((i) => ({
+        pattern: i.pattern,
+        confidence: i.confidence,
+        category: i.category,
+        recommendation: i.recommendation,
+      })),
+      profileUpdates: profileUpdates.map((u) => ({
+        field: String(u.field),
+        newValue: u.newValue,
+        confidence: u.confidence,
+        reasoning: u.reasoning,
+      })),
+      appliedToFuturePosts: 0, // computed below for feedback only
+      editAnalysis,
     });
 
     // Estimate how many future posts this will affect
@@ -213,12 +202,7 @@ export class AILearningService {
       `Learning applied: ${insights.length} insights, ${profileUpdates.length} profile updates, affecting ~${appliedToFuturePosts} future posts`
     );
 
-    return {
-      updatedProfile: currentProfile,
-      insights,
-      profileUpdates,
-      appliedToFuturePosts,
-    };
+    return { insights, profileUpdates, appliedToFuturePosts };
   }
 
   /**
