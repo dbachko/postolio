@@ -436,40 +436,42 @@ export class ContentSchedulerClient {
         });
       }
 
+      // Unwrap response: Lambda returns {success: true, data: schedule, timestamp}
+      const responseBody = response.data as { success: boolean; data: unknown; timestamp: string };
+      const scheduleData = responseBody.data;
+
       // Validate and return response
       try {
-        return ScheduleSchema.parse(response.data);
+        return ScheduleSchema.parse(scheduleData);
       } catch (parseError) {
-        const size = this.safeSize(response.data);
+        const size = this.safeSize(scheduleData);
         this.log('error', 'scheduler.response.parse_failed', {
           baseURL: this.config.baseURL,
           path: 'schedules',
           status: response.status,
           size,
-          body: size < 2048 ? response.data : undefined,
+          body: size < 2048 ? scheduleData : undefined,
           error: parseError instanceof Error ? parseError.message : String(parseError),
           zodErrors: parseError instanceof z.ZodError ? parseError.errors : undefined,
         });
 
         // If the response has scheduleId, try to return it anyway for backward compatibility
-        if (response.data && response.data.scheduleId) {
+        if (scheduleData && typeof scheduleData === 'object' && 'scheduleId' in scheduleData) {
           this.log('warn', 'scheduler.response.schema_mismatch_with_id', {
-            scheduleId: response.data.scheduleId,
+            scheduleId: (scheduleData as { scheduleId: string }).scheduleId,
           });
-          return {
-            ...response.data,
-            scheduleId: response.data.scheduleId,
-          } as Schedule;
+          return scheduleData as Schedule;
         }
 
         // If the response doesn't have scheduleId, use the contentId as a fallback
-        if (response.data && !response.data.scheduleId) {
-          const fallbackId = response.data.id || response.data.contentId || randomUUID();
+        if (scheduleData && typeof scheduleData === 'object' && !('scheduleId' in scheduleData)) {
+          const data = scheduleData as Record<string, unknown>;
+          const fallbackId = (data.id as string) || (data.contentId as string) || randomUUID();
           this.log('warn', 'scheduler.response.schema_mismatch_without_id', {
             fallbackScheduleId: fallbackId,
           });
           return {
-            ...response.data,
+            ...data,
             scheduleId: fallbackId,
           } as Schedule;
         }
@@ -492,8 +494,9 @@ export class ContentSchedulerClient {
         this.client.put(`schedules/${id}`, validatedData)
       );
 
-      // Validate and return response
-      return ScheduleSchema.parse(response.data);
+      // Unwrap response: Lambda returns {success: true, data: schedule, timestamp}
+      const responseBody = response.data as { success: boolean; data: unknown; timestamp: string };
+      return ScheduleSchema.parse(responseBody.data);
     });
   }
 
@@ -520,7 +523,9 @@ export class ContentSchedulerClient {
     return this.executeWithCircuitBreaker(async () => {
       const response = await this.retryWithBackoff(() => this.client.get(`schedules/${id}`));
 
-      const result = ScheduleSchema.parse(response.data);
+      // Unwrap response: Lambda returns {success: true, data: schedule, timestamp}
+      const responseBody = response.data as { success: boolean; data: unknown; timestamp: string };
+      const result = ScheduleSchema.parse(responseBody.data);
       this.setCachedResponse(cacheKey, result, response.headers.etag);
       return result;
     });
@@ -539,8 +544,9 @@ export class ContentSchedulerClient {
         this.client.get('schedules', { params: validatedParams })
       );
 
-      // Validate and return response
-      return ScheduleListSchema.parse(response.data);
+      // Unwrap response: Lambda returns {success: true, data: {schedules, pagination}, timestamp}
+      const responseBody = response.data as { success: boolean; data: unknown; timestamp: string };
+      return ScheduleListSchema.parse(responseBody.data);
     });
   }
 
