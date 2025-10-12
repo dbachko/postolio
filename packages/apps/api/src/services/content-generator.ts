@@ -46,7 +46,18 @@ export async function generateInstagramContent(
   const openai = getOpenAIClient();
   if (!openai) {
     console.warn('OpenAI client is not configured. Returning fallback content batch.');
-    const ctx = (await getBrandProfileContext(request.brandId)) || {
+    let ctx: BrandProfileContext | null = null;
+    try {
+      ctx = await getBrandProfileContext(request.brandId);
+    } catch (e) {
+      console.warn('Brand profile projection unavailable; using minimal context', e);
+    }
+    const safeCtx: Pick<BrandProfileContext, 'palette'> & {
+      brandId: string;
+      profileVersion: number;
+      topicsTop: Array<{ value: string; count: number }> | null;
+      createdAt: string;
+    } = ctx || {
       brandId: request.brandId,
       profileVersion: 0,
       tones: [],
@@ -54,11 +65,19 @@ export async function generateInstagramContent(
       topicsTop: null,
       createdAt: new Date().toISOString(),
     };
-    return buildFallbackGeneratedContent(ctx, brandName, request);
+    return buildFallbackGeneratedContent(safeCtx, brandName, request);
   }
 
   const { count, theme, style } = request;
-  const brandContext = await getBrandProfileContext(request.brandId);
+  let brandContext: BrandProfileContext | null = null;
+  try {
+    brandContext = await getBrandProfileContext(request.brandId);
+  } catch (e) {
+    console.warn(
+      'Brand profile projection unavailable during generation; proceeding without it',
+      e
+    );
+  }
 
   const tones = brandContext?.tones?.slice(0, 6) || [];
   const palette = brandContext?.palette?.slice(0, 5) || [];
@@ -301,7 +320,18 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
 
     // Return fallback content for other errors
     console.warn('Falling back to template content due to OpenAI error');
-    const ctx = (await getBrandProfileContext(request.brandId)) || {
+    let ctx: BrandProfileContext | null = null;
+    try {
+      ctx = await getBrandProfileContext(request.brandId);
+    } catch (e) {
+      console.warn('Brand profile projection unavailable in fallback; using minimal context', e);
+    }
+    const safeCtx: Pick<BrandProfileContext, 'palette'> & {
+      brandId: string;
+      profileVersion: number;
+      topicsTop: Array<{ value: string; count: number }> | null;
+      createdAt: string;
+    } = ctx || {
       brandId: request.brandId,
       profileVersion: 0,
       tones: [],
@@ -309,7 +339,7 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
       topicsTop: null,
       createdAt: new Date().toISOString(),
     };
-    return buildFallbackGeneratedContent(ctx, brandName, request);
+    return buildFallbackGeneratedContent(safeCtx, brandName, request);
   }
 }
 

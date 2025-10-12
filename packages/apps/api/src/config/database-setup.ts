@@ -16,13 +16,19 @@ export async function ensureDatabaseSchema(): Promise<void> {
       SELECT table_name 
       FROM information_schema.tables 
       WHERE table_schema = 'public' 
-      AND table_name IN ('users', 'brands', 'content', 'campaigns')
+      AND table_name IN ('users', 'brands', 'content', 'campaigns', 'brand_style_profile_projection')
     `;
 
     const tables: TableRow[] = Array.isArray(result)
       ? result.filter((r): r is TableRow => typeof (r as TableRow).table_name === 'string')
       : [];
-    const requiredTables = ['users', 'brands', 'content', 'campaigns'];
+    const requiredTables = [
+      'users',
+      'brands',
+      'content',
+      'campaigns',
+      'brand_style_profile_projection',
+    ];
     const existingTables = tables.map((row) => row.table_name);
     const missingTables = requiredTables.filter((table) => !existingTables.includes(table));
 
