@@ -1,0 +1,34 @@
+#!/usr/bin/env sh
+
+# Allow skipping locally with: SKIP_PREPUSH=1 git push
+if [ "$SKIP_PREPUSH" = "1" ]; then
+  echo "[pre-push] SKIP_PREPUSH=1 set, skipping checks."
+  exit 0
+fi
+
+echo "[pre-push] Running formatting, lint, and type checks..."
+
+# 1) Prettier check for TS/TSX/MD only, honoring gitignore to avoid dist artifacts
+pnpm prettier --check "**/*.{ts,tsx,md}" --ignore-path .gitignore
+if [ $? -ne 0 ]; then
+  echo "[pre-push] Prettier check failed. Run: pnpm prettier --write \"**/*.{ts,tsx,md}\" --ignore-path .gitignore"
+  exit 1
+fi
+
+# 2) ESLint (via turbo lint)
+pnpm lint
+if [ $? -ne 0 ]; then
+  echo "[pre-push] Lint failed. Please fix lint errors (pnpm lint)."
+  exit 1
+fi
+
+# 3) Optional typecheck (enable with PREPUSH_TYPECHECK=1)
+if [ "$PREPUSH_TYPECHECK" = "1" ]; then
+  pnpm -r --if-present run typecheck
+  if [ $? -ne 0 ]; then
+    echo "[pre-push] Typecheck failed. Please fix type errors."
+    exit 1
+  fi
+fi
+
+echo "[pre-push] All checks passed. Proceeding with push."

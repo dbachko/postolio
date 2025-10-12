@@ -56,7 +56,7 @@ export async function runVisualExtractor(
     process.env.BRAND_ANALYSIS_VISION_MODEL ||
     process.env.BRAND_ANALYSIS_LLM_MODEL ||
     process.env.LLM_DEFAULT_MODEL ||
-    'gpt-5-mini-2025-08-07';
+    'gpt-4o-mini';
 
   const singlePrompt = [
     'You are a visual analysis assistant for brand style mining.',

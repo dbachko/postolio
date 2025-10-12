@@ -68,7 +68,8 @@ function priceForModel(model: string): { inputPer1k: number; outputPer1k: number
     'o4-mini': { inputPer1k: 0.0002, outputPer1k: 0.0008 },
     'gpt-4o': { inputPer1k: 0.005, outputPer1k: 0.015 },
   };
-  return map[model] || map['gpt-5-mini-2025-08-07'];
+  // Default to a generally available model for cost estimation
+  return map[model] || map['gpt-4o-mini'];
 }
 
 async function fetchWithTimeout(

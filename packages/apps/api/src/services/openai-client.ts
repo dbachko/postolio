@@ -32,5 +32,14 @@ export function resetOpenAIClientCache(): void {
 }
 
 export function getDefaultOpenAIModel(): string {
-  return process.env.LLM_DEFAULT_MODEL || 'gpt-5-mini-2025-08-07';
+  const configured = (process.env.LLM_DEFAULT_MODEL || '').trim();
+  const model = configured || 'gpt-4o-mini';
+  // Avoid restricted GPT-5 preview models unless explicitly supported
+  if (/^gpt-5/i.test(model)) {
+    console.warn(
+      `LLM_DEFAULT_MODEL '${model}' is restricted or unavailable; using 'gpt-4o-mini' instead.`
+    );
+    return 'gpt-4o-mini';
+  }
+  return model;
 }

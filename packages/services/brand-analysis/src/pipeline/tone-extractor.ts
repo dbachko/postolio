@@ -16,9 +16,7 @@ function summarizeCaptions(captions: string[], maxChars = 4000): string {
 
 export async function runToneExtractor(input: ToneExtractorInput): Promise<ToneExtractorOutput> {
   const model =
-    process.env.BRAND_ANALYSIS_LLM_MODEL ||
-    process.env.LLM_DEFAULT_MODEL ||
-    'gpt-5-mini-2025-08-07';
+    process.env.BRAND_ANALYSIS_LLM_MODEL || process.env.LLM_DEFAULT_MODEL || 'gpt-4o-mini';
 
   const prompt = [
     'You are a brand voice analyst. Analyze the writing tone of Instagram captions.',

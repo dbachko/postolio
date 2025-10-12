@@ -149,7 +149,7 @@ export class BrandAnalysisStack extends cdk.Stack {
         EVENT_BUS_NAME: schedulingEventBusNameParam.stringValue,
         ...(openaiApiKey ? { OPENAI_API_KEY: openaiApiKey } : {}),
         // Default models (override via env if needed)
-        LLM_DEFAULT_MODEL: 'gpt-5-mini-2025-08-07',
+        LLM_DEFAULT_MODEL: 'gpt-4o-mini',
         BRAND_ANALYSIS_VISION_MODEL: 'gpt-4o-mini',
         BRAND_ANALYSIS_DEBUG: 'true',
         // LLM tuning knobs (non-sensitive)

@@ -478,7 +478,7 @@ export async function generateContentBatch(
           style: request.style || null,
           generationParams: {
             count: request.count,
-            model: 'gpt-4o',
+            model: getDefaultOpenAIModel(),
             imageModel: 'dall-e-3',
           },
         },
