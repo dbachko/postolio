@@ -1,13 +1,6 @@
 {
-  "extends": "@postolio/tsconfig/base.json",
+  "extends": "@postolio/tsconfig/node-library.json",
   "compilerOptions": {
-    "target": "esnext",
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "declaration": true,
-    "declarationMap": true,
     "outDir": "dist"
   },
   "include": ["src/**/*"],

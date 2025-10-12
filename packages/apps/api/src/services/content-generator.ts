@@ -3,6 +3,10 @@ import { getOpenAIClient, getDefaultOpenAIModel } from './openai-client.js';
 import { generateMidjourneyImage } from './midjourney.js';
 import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
 import { getBrandProfileContext, type BrandProfileContext } from './brand-profile.js';
+import { Prisma, type ContentStatus } from '@postolio/database';
+import { getDatabaseClient } from '../config/database.js';
+
+const prisma = getDatabaseClient();
 
 export interface ContentGenerationRequest {
   brandId: string;
@@ -87,6 +91,83 @@ export async function generateInstagramContent(
     ? brandContext!.topicsTop!.slice(0, 5).map((t) => t.value)
     : [];
 
+  // Rolling window: fetch recent brand content to avoid repetition
+  const windowCount = Number.isFinite(parseInt(process.env.ROLLING_WINDOW_POST_COUNT || ''))
+    ? Math.max(1, parseInt(process.env.ROLLING_WINDOW_POST_COUNT as string, 10))
+    : 20;
+  const windowDays = Number.isFinite(parseInt(process.env.ROLLING_WINDOW_DAYS || ''))
+    ? Math.max(0, parseInt(process.env.ROLLING_WINDOW_DAYS as string, 10))
+    : 0; // 0 means ignore day filter
+
+  type RecentItem = { caption: string | null; hashtags: string[] | null; createdAt: Date };
+  const recentWhere: Prisma.ContentWhereInput = {
+    brandId: request.brandId,
+    status: { in: ['draft', 'scheduled', 'published'] as ContentStatus[] },
+  };
+  if (windowDays > 0) {
+    recentWhere.createdAt = {
+      gte: new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000),
+    };
+  }
+  let recent: RecentItem[] = [];
+  try {
+    recent = await prisma.content.findMany({
+      where: recentWhere,
+      select: { caption: true, hashtags: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: windowCount,
+    });
+  } catch (e) {
+    console.warn('Failed to fetch recent content window; continuing without it', e);
+  }
+
+  function firstWords(text: string, n = 5): string {
+    const words = (text || '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s']/gu, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, n);
+    return words.join(' ');
+  }
+  function sanitizeTag(t: string): string {
+    return t.replace(/^#+/, '').trim().toLowerCase();
+  }
+
+  const priorOpeners = Array.from(
+    new Set(
+      recent
+        .map((r) => (r.caption ? firstWords(r.caption, 5) : ''))
+        .filter((s) => s && s.length > 0)
+    )
+  ).slice(0, 20);
+
+  const priorHashtagUsage = new Map<string, number>();
+  for (const r of recent) {
+    (r.hashtags || []).map(sanitizeTag).forEach((h) => {
+      if (!h) return;
+      priorHashtagUsage.set(h, (priorHashtagUsage.get(h) || 0) + 1);
+    });
+  }
+
+  // Allow runtime tuning of diversity without code changes
+  const bannedOpeners = (
+    process.env.LLM_BANNED_OPENERS ||
+    "Ready to,Let's,Let’s,Dive into,Explore,What’s your favorite,What's your favorite,Share in the comments"
+  )
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const dynamicBannedStarts = priorOpeners;
+
+  const diversityRules = [
+    `No two captions may start with the same first 5 words`,
+    `Do not begin a caption with any of: ${[...bannedOpeners, ...dynamicBannedStarts].join('; ')}`,
+    `Use varied hook styles across posts: bold statement, surprising fact, playful challenge, micro‑story, vivid analogy, and one rhetorical question at most`,
+    `Vary sentence length and rhythm; avoid repeating the same opener patterns like “Ready to…”, “Let’s…”, “Dive into…”, “Explore…”, or “What’s your favorite…?”`,
+    `Each caption must include a different subtle CTA (e.g., save for later, tag a friend, DM for tips, vote in comments, try this today)`,
+  ].join('\n- ');
+
   const systemPrompt = `You are an expert Instagram content creator for the brand "${brandName}".
 
 Brand Context:
@@ -102,9 +183,18 @@ Generation Requirements:
 - Generate ${count} unique Instagram posts.
 ${theme ? `- Theme to reflect: "${theme}".` : ''}
 ${style ? `- Additional style note: "${style}".` : ''}
-- Caption: 120–220 chars, conversational, include a subtle CTA, NO hashtags in the caption.
-- Hashtags: 5–10 relevant tokens (no #), bias to brand topics and audience.
+- Caption: 120–220 chars, conversational, include a subtle, brand‑appropriate CTA, NO hashtags in the caption.
+ - Diversity: ensure strong variety across posts.\n- ${diversityRules}
+ - Recent window awareness: do not repeat the first 5 words of any recent caption. Avoid recently used hashtags listed below when possible.
+ - Hashtags: 5–10 relevant tokens (no #), bias to brand topics and audience; mix broad and niche where appropriate.
+ - Hashtag diversity: across this batch, each post should include at least 3 hashtags not used in any other post; limit overlap between any two posts to at most 1 shared hashtag; avoid generic fillers like inspiration, community, brand, lifestyle, motivation.
 - imagePrompt: include 1–2 motifs, 1–2 composition cues, and 2–4 brand palette hex codes (hex only), 1:1 framing, Instagram-ready, no text/watermarks.
+
+Recent context (summarized):
+- Prior caption starts (avoid as openers): ${dynamicBannedStarts.slice(0, 15).join(' | ') || 'n/a'}
+- Recently used hashtags (avoid when possible): ${
+    Array.from(priorHashtagUsage.keys()).slice(0, 30).join(', ') || 'n/a'
+  }
 
 Output JSON only with fields: caption, hashtags (array of strings with no #), imagePrompt.`;
 
@@ -123,6 +213,8 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
             },
             hashtags: {
               type: 'array',
+              minItems: 5,
+              maxItems: 10,
               items: {
                 type: 'string',
               },
@@ -150,6 +242,22 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
       setTimeout(() => reject(new Error('OpenAI API call timeout')), 30000); // 30 second timeout
     });
 
+    // LLM sampling/diversity tuning (env-overridable)
+    const captionTemperature = Number.isFinite(
+      parseFloat(process.env.LLM_CAPTION_TEMPERATURE || '')
+    )
+      ? parseFloat(process.env.LLM_CAPTION_TEMPERATURE as string)
+      : 0.95;
+    const presencePenalty = Number.isFinite(parseFloat(process.env.LLM_PRESENCE_PENALTY || ''))
+      ? parseFloat(process.env.LLM_PRESENCE_PENALTY as string)
+      : 0.6;
+    const frequencyPenalty = Number.isFinite(parseFloat(process.env.LLM_FREQUENCY_PENALTY || ''))
+      ? parseFloat(process.env.LLM_FREQUENCY_PENALTY as string)
+      : 0.5;
+    const topP = Number.isFinite(parseFloat(process.env.LLM_TOP_P || ''))
+      ? parseFloat(process.env.LLM_TOP_P as string)
+      : 0.9;
+
     const completionPromise = openai.chat.completions.create({
       model: getDefaultOpenAIModel(),
       messages: [
@@ -164,7 +272,10 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
           } ${style ? `Style: ${style}.` : ''}`.trim(),
         },
       ],
-      temperature: 0.8,
+      temperature: captionTemperature,
+      top_p: topP,
+      presence_penalty: presencePenalty,
+      frequency_penalty: frequencyPenalty,
       max_tokens: 1500,
       response_format: {
         type: 'json_schema',
@@ -222,6 +333,33 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
       imagePrompt: post.imagePrompt,
     }));
 
+    // Post-process: enforce hashtag diversity and sanitize tokens
+    const bannedHashtags = (
+      process.env.LLM_BANNED_HASHTAGS || 'inspiration,community,brand,lifestyle,motivation'
+    )
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    const maxReuse = Number.isFinite(parseInt(process.env.HASHTAG_MAX_GLOBAL_REUSE || ''))
+      ? Math.max(0, parseInt(process.env.HASHTAG_MAX_GLOBAL_REUSE as string, 10))
+      : 1;
+    const minPerPost = Number.isFinite(parseInt(process.env.HASHTAG_MIN_PER_POST || ''))
+      ? Math.max(0, parseInt(process.env.HASHTAG_MIN_PER_POST as string, 10))
+      : 5;
+    const maxPerPost = Number.isFinite(parseInt(process.env.HASHTAG_MAX_PER_POST || ''))
+      ? Math.max(minPerPost, parseInt(process.env.HASHTAG_MAX_PER_POST as string, 10))
+      : 10;
+
+    const diversified = enforceHashtagDiversity(
+      generatedContent,
+      topTopics,
+      brandName,
+      bannedHashtags,
+      { maxReuse, minPerPost, maxPerPost, theme, style },
+      priorHashtagUsage
+    );
+
     // Basic validation that content exists
     for (let i = 0; i < generatedContent.length; i++) {
       const item = generatedContent[i];
@@ -235,7 +373,7 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
 
     // Generate images for each post using Midjourney (with DALL-E fallback)
     const contentWithImages = await Promise.all(
-      generatedContent.map(async (item, index) => {
+      diversified.map(async (item, index) => {
         try {
           // If model did not include strong brand cues in imagePrompt, augment with brand context
           let finalPrompt = item.imagePrompt || item.caption;
@@ -362,6 +500,143 @@ function buildFallbackGeneratedContent(
         : 'vibrant'
     } colors, 1:1, Instagram-ready, no text, no watermark`,
   }));
+}
+
+// Utilities: hashtag diversity and sanitization
+function sanitizeHashToken(token: string): string {
+  return token
+    .replace(/^#+/, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9_]/g, '')
+    .replace(/_{2,}/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+function slugifyWord(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, '');
+}
+
+function expandTopicHashtags(topic: string): string[] {
+  const t = slugifyWord(topic);
+  if (!t) return [];
+  const variants = [
+    t,
+    `${t}tips`,
+    `${t}guide`,
+    `${t}facts`,
+    `${t}101`,
+    `${t}daily`,
+    `${t}today`,
+    `${t}insights`,
+    `${t}ideas`,
+    `${t}explained`,
+    `learn${t}`,
+    `${t}community`,
+  ];
+  return Array.from(new Set(variants.map(sanitizeHashToken))).filter(Boolean);
+}
+
+function buildHashtagPool(
+  topics: string[],
+  brandName: string,
+  theme?: string,
+  style?: string
+): string[] {
+  const pool = new Set<string>();
+  const brand = slugifyWord(brandName);
+  if (brand) {
+    [brand, `${brand}life`, `${brand}stories`, `${brand}community`, `${brand}vibes`]
+      .map(sanitizeHashToken)
+      .forEach((t) => t && pool.add(t));
+  }
+  topics.forEach((tp) => expandTopicHashtags(tp).forEach((t) => pool.add(t)));
+  if (theme) expandTopicHashtags(theme).forEach((t) => pool.add(t));
+  if (style) expandTopicHashtags(style).forEach((t) => pool.add(t));
+  // Generic safe fillers (kept short and neutral)
+  ['howto', 'tips', 'guide', 'daily', 'today', 'facts', 'ideas', 'insights'].forEach((t) =>
+    pool.add(t)
+  );
+  return Array.from(pool);
+}
+
+function enforceHashtagDiversity(
+  content: GeneratedContent[],
+  topTopics: string[],
+  brandName: string,
+  banned: string[],
+  opts: {
+    maxReuse: number;
+    minPerPost: number;
+    maxPerPost: number;
+    theme?: string;
+    style?: string;
+  },
+  seedUsage?: Map<string, number>
+): GeneratedContent[] {
+  const usage = new Map<string, number>(seedUsage ? Array.from(seedUsage.entries()) : []);
+  const pool = buildHashtagPool(topTopics, brandName, opts.theme, opts.style);
+  const bannedSet = new Set(banned.map((b) => sanitizeHashToken(b)));
+
+  function nextCandidate(exclude: Set<string>): string | null {
+    for (const cand of pool) {
+      const used = usage.get(cand) || 0;
+      if (used < opts.maxReuse && !exclude.has(cand) && !bannedSet.has(cand)) {
+        return cand;
+      }
+    }
+    return null;
+  }
+
+  const result: GeneratedContent[] = content.map((item) => ({ ...item }));
+
+  for (const item of result) {
+    // sanitize and dedupe
+    const seen = new Set<string>();
+    let tags = (item.hashtags || [])
+      .map(sanitizeHashToken)
+      .filter((t) => t && !bannedSet.has(t))
+      .filter((t) => (seen.has(t) ? false : (seen.add(t), true)));
+
+    // enforce global reuse limit
+    const exclude = new Set<string>(tags);
+    tags = tags.map((t) => {
+      const used = usage.get(t) || 0;
+      if (used >= opts.maxReuse) {
+        const repl = nextCandidate(exclude);
+        if (repl) {
+          exclude.add(repl);
+          usage.set(repl, (usage.get(repl) || 0) + 1);
+          return repl;
+        }
+        return t; // fallback to original if no candidate
+      }
+      usage.set(t, used + 1);
+      return t;
+    });
+
+    // ensure min count
+    while (tags.length < opts.minPerPost) {
+      const cand = nextCandidate(new Set(tags));
+      if (!cand) break;
+      tags.push(cand);
+      usage.set(cand, (usage.get(cand) || 0) + 1);
+    }
+
+    // trim to max
+    if (tags.length > opts.maxPerPost) {
+      // Prefer keeping the earliest unique ones
+      tags = tags.slice(0, opts.maxPerPost);
+    }
+
+    item.hashtags = tags;
+  }
+
+  return result;
 }
 
 export async function generateContentImage(prompt: string): Promise<string> {

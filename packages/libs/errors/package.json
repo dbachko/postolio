@@ -10,6 +10,7 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@postolio/tsconfig": "workspace:*",
     "typescript": "^5.0.0"
   },
   "exports": {

@@ -1,8 +1,7 @@
 {
-  "extends": "@postolio/tsconfig/base.json",
+  "extends": "@postolio/tsconfig/node-library.json",
   "compilerOptions": {
     "outDir": "./dist"
   },
   "include": ["src"]
 }
-

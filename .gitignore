@@ -42,7 +42,12 @@ playwright-report/
 test-results/
 
 # AWS CDK
+# AWS CDK synth outputs (avoid committing generated artifacts)
 cdk.out/
+packages/**/cdk.out*/
+
+# Stray compiled artifacts (source is TypeScript; output should live in dist/)
+packages/libs/errors/index.js
 
 # Logs
 *.log

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "tsup src/index.ts --format esm --target node18 --out-dir dist",
+    "build": "tsup src/index.ts --format esm --target node22 --out-dir dist",
     "lint": "eslint src/**/*.ts",
     "test": "vitest run"
   },
@@ -25,4 +25,3 @@
     "vitest": "^3.2.4"
   }
 }
-

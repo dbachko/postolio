@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: ${{ github.event.inputs.environment }}
-    
+
     steps:
       - name: Validate confirmation
         run: |
@@ -55,14 +55,14 @@ jobs:
         run: |
           ENV="${{ github.event.inputs.environment }}"
           SPECIFIC_STACK="${{ github.event.inputs.stack_name }}"
-          
+
           echo "🔍 Scanning for failed stacks in environment: $ENV"
-          
+
           # Get all Postolio stacks in failed states
           FAILED_STACKS=$(aws cloudformation describe-stacks \
             --query "Stacks[?starts_with(StackName, 'Postolio-') && ends_with(StackName, '-$ENV') && (StackStatus == 'ROLLBACK_COMPLETE' || StackStatus == 'CREATE_FAILED' || StackStatus == 'UPDATE_ROLLBACK_COMPLETE')].StackName" \
             --output text)
-          
+
           if [ -n "$SPECIFIC_STACK" ]; then
             # Check if specific stack exists and is in failed state
             STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$SPECIFIC_STACK" --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "DOES_NOT_EXIST")
@@ -78,17 +78,17 @@ jobs:
               exit 1
             fi
           fi
-          
+
           if [ -z "$FAILED_STACKS" ]; then
             echo "✅ No failed stacks found in environment $ENV"
             exit 0
           fi
-          
+
           echo "🧹 Found failed stacks to cleanup:"
           for stack in $FAILED_STACKS; do
             echo "  - $stack"
           done
-          
+
           # Delete each failed stack
           for stack in $FAILED_STACKS; do
             echo ""
@@ -106,7 +106,7 @@ jobs:
             aws cloudformation delete-stack --stack-name "$stack"
             echo "✅ Deletion initiated for $stack"
           done
-          
+
           # Wait for all deletions to complete
           echo ""
           echo "⏳ Waiting for stack deletions to complete..."
@@ -119,19 +119,19 @@ jobs:
               echo "⚠️ Warning: Deletion wait failed or timed out for $stack"
             }
           done
-          
+
           echo ""
           echo "🎉 Cleanup completed!"
 
       - name: Verify cleanup
         run: |
           ENV="${{ github.event.inputs.environment }}"
-          
+
           echo "🔍 Verifying cleanup results..."
           REMAINING_FAILED=$(aws cloudformation describe-stacks \
             --query "Stacks[?starts_with(StackName, 'Postolio-') && ends_with(StackName, '-$ENV') && (StackStatus == 'ROLLBACK_COMPLETE' || StackStatus == 'CREATE_FAILED' || StackStatus == 'UPDATE_ROLLBACK_COMPLETE')].StackName" \
             --output text)
-          
+
           if [ -z "$REMAINING_FAILED" ]; then
             echo "✅ All failed stacks have been cleaned up successfully"
           else

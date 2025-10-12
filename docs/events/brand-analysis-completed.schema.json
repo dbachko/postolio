@@ -21,4 +21,3 @@
   "required": ["detail-type", "source", "detail"],
   "additionalProperties": false
 }
-

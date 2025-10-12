@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsup src/index.ts --format esm --target node18 --out-dir dist --dts",
+    "build": "tsup src/index.ts --format esm --target node22 --out-dir dist --dts",
     "lint": "eslint src/**/*.ts"
   },
   "devDependencies": {
