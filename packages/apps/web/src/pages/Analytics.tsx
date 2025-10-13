@@ -47,7 +47,8 @@ interface ScheduledPost {
   id: string;
   caption: string;
   imageUrl: string;
-  hashtags: string[];
+  // Some scheduled posts may not include hashtags
+  hashtags?: string[];
   scheduledTime: string;
   status: string;
 }
@@ -117,7 +118,13 @@ export default function Analytics() {
       const response = await apiClient.get<{ scheduledPosts: ScheduledPost[] }>(
         `/api/analytics/scheduled/${selectedBrand.id}`
       );
-      setScheduledPosts(response.scheduledPosts);
+      // Ensure hashtags is always an array to avoid runtime errors
+      setScheduledPosts(
+        (response.scheduledPosts || []).map((post) => ({
+          ...post,
+          hashtags: Array.isArray(post.hashtags) ? post.hashtags : [],
+        }))
+      );
     } catch (err) {
       console.error('Failed to load scheduled posts:', err);
     }

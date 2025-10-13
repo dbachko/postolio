@@ -4,7 +4,8 @@ interface ScheduledPost {
   id: string;
   caption: string;
   imageUrl: string;
-  hashtags: string[];
+  // Some scheduled posts may not include hashtags; handle as optional
+  hashtags?: string[];
   scheduledTime: string;
   status: string;
 }
@@ -77,15 +78,17 @@ export default function SchedulingPanel({
                   <p className="mb-2 line-clamp-2 text-sm text-gray-800">{post.caption}</p>
 
                   <div className="mb-2 flex flex-wrap gap-1">
-                    {post.hashtags.slice(0, 3).map((tag, index) => (
-                      <span
-                        key={index}
-                        className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                    {post.hashtags.length > 3 && (
+                    {(Array.isArray(post.hashtags) ? post.hashtags : [])
+                      .slice(0, 3)
+                      .map((tag, index) => (
+                        <span
+                          key={index}
+                          className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    {Array.isArray(post.hashtags) && post.hashtags.length > 3 && (
                       <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
                         +{post.hashtags.length - 3} more
                       </span>
