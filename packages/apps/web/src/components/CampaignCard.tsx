@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
-import { Loader2, Edit, Calendar, TrendingUp, Pause, Play, Trash2, Activity } from 'lucide-react';
+import { Loader2, Calendar, TrendingUp, Pause, Play, Trash2, Activity } from 'lucide-react';
 import { formatCompact } from '../lib/timezone';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { Campaign } from '../lib/api';
@@ -14,7 +14,6 @@ interface CampaignCardProps {
   onStartCampaign: (campaignId: string) => void;
   onPauseCampaign: (campaignId: string) => void;
   onDeleteCampaign: (campaignId: string, campaignName: string) => void;
-  onEditCampaign: (campaignId: string) => void;
   startCampaignLoading?: boolean;
   pauseCampaignLoading?: boolean;
   deleteCampaignLoading?: boolean;
@@ -27,7 +26,6 @@ const CampaignCard = memo(
     onStartCampaign,
     onPauseCampaign,
     onDeleteCampaign,
-    onEditCampaign,
     startCampaignLoading = false,
     pauseCampaignLoading = false,
     deleteCampaignLoading = false,
@@ -239,21 +237,7 @@ const CampaignCard = memo(
                   <Calendar className="h-3 w-3" />
                 </Button>
 
-                {/* Edit/Delete actions on hover */}
-                {['preview', 'creating', 'failed'].includes(campaign.status) && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEditCampaign(campaign.id);
-                    }}
-                    className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
-                  >
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                )}
-
+                {/* Delete action on hover */}
                 <div className="group/delete relative">
                   <Button
                     size="sm"

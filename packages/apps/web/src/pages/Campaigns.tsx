@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useBrandStore } from '../stores/brandStore';
-import { apiClient, type CampaignConfig, type Content, type Campaign } from '../lib/api';
+import { apiClient, type Content, type Campaign } from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -14,41 +14,21 @@ import { PostEditorModal } from '../components/PostEditorModal';
 import { CampaignAnalytics } from '../components/CampaignAnalytics';
 import { CampaignComparison } from '../components/CampaignComparison';
 import { CampaignsList } from '../components/CampaignsList';
-import { CampaignForm } from '../components/CampaignForm';
-import type { CampaignFormData, CampaignErrors } from '../types/campaign';
+import { CampaignWizard } from '../components/campaign-wizard/CampaignWizard';
+import { Skeleton } from '../components/ui/skeleton';
 import { frequencyOptions, styleOptions } from '../constants/campaign';
-import { useCampaignEdit } from '../hooks/useCampaignEdit';
 import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket';
+import { useCampaignWizard } from '../hooks/useCampaignWizard';
 import type {
   CampaignStatusUpdateData,
   CampaignErrorData,
   StatusUpdateEvent,
 } from '../types/websocket';
-import {
-  Loader2,
-  Edit,
-  Calendar,
-  Users,
-  TrendingUp,
-  AlertCircle,
-  Plus,
-  BarChart3,
-} from 'lucide-react';
+import { Loader2, Calendar, Users, TrendingUp, AlertCircle, Plus, BarChart3 } from 'lucide-react';
 
 // Helper function to check if campaign ID is valid (not 'create')
 const isRealCampaignId = (campaignId: string | undefined): boolean => {
   return !!campaignId && campaignId !== 'create';
-};
-
-const initialFormData: CampaignFormData = {
-  name: '',
-  startDate: '',
-  endDate: '',
-  frequency: '',
-  themes: [],
-  style: '',
-  postingTime: '12:00',
-  priority: 5,
 };
 
 export function Campaigns() {
@@ -56,25 +36,23 @@ export function Campaigns() {
   const navigate = useNavigate();
   const { selectedBrand, setSelectedBrand, brands } = useBrandStore();
   const queryClient = useQueryClient();
-  const [formData, setFormData] = useState<CampaignFormData>(initialFormData);
-  const [errors, setErrors] = useState<CampaignErrors>({});
+  const resetWizard = useCampaignWizard((s) => s.reset);
+  const setWizardBrandId = useCampaignWizard((s) => s.setBrandId);
 
   // Determine initial view based on URL
   const getInitialView = () => {
-    if (window.location.pathname.includes('/edit')) return 'edit';
     if (window.location.pathname === '/campaigns/create') return 'create';
     if (urlCampaignId && urlCampaignId !== 'create') return 'details';
     return 'dashboard';
   };
 
   // View state management
-  const [currentView, setCurrentView] = useState<'dashboard' | 'create' | 'details' | 'edit'>(
+  const [currentView, setCurrentView] = useState<'dashboard' | 'create' | 'details'>(
     getInitialView()
   );
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
     urlCampaignId || null
   );
-  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
 
   // Modal state
   const [selectedPost, setSelectedPost] = useState<Content | null>(null);
@@ -120,21 +98,6 @@ export function Campaigns() {
   });
 
   // Campaign mutations - moved here to avoid conditional hook calls
-  const configureMutation = useMutation({
-    mutationFn: (config: CampaignConfig) => apiClient.configureCampaign(config),
-    onSuccess: () => {
-      toast.success('Campaign created. Generating posts in the background.');
-      setCurrentView('dashboard');
-      setFormData(initialFormData);
-      setErrors({});
-      navigate('/campaigns', { replace: true });
-      campaignsQuery.refetch();
-    },
-    onError: (error) => {
-      console.error('Failed to configure campaign:', error);
-      toast.error('Failed to configure campaign. Please try again.');
-    },
-  });
 
   const startCampaignMutation = useMutation({
     mutationFn: (campaignId: string) => apiClient.startCampaign(campaignId),
@@ -173,30 +136,6 @@ export function Campaigns() {
   useEffect(() => {
     const pathname = location.pathname;
 
-    // Check for edit mode
-    if (pathname.includes('/edit')) {
-      const campaignId = pathname.split('/')[2];
-      if (campaignId && campaignId !== 'create') {
-        const campaign = campaignsQuery.data?.campaigns?.find((c: Campaign) => c.id === campaignId);
-        if (campaign) {
-          setEditingCampaign(campaign);
-          setSelectedCampaignId(campaignId);
-          setCurrentView('edit');
-          setFormData({
-            name: campaign.name,
-            startDate: campaign.config?.duration?.start || '',
-            endDate: campaign.config?.duration?.end || '',
-            frequency: (campaign.config?.frequency as any) || 'daily',
-            postingTime: campaign.config?.postingTime || '12:00',
-            style: campaign.config?.style || 'lifestyle',
-            themes: campaign.config?.themes || [],
-            priority: campaign.priority || 5,
-          });
-        }
-      }
-      return;
-    }
-
     // Check if we're at /campaigns (no specific campaign ID)
     if (pathname === '/campaigns' && !urlCampaignId) {
       setCurrentView('dashboard');
@@ -214,31 +153,7 @@ export function Campaigns() {
     }
   }, [location.pathname, urlCampaignId, campaignsQuery.data?.campaigns]);
 
-  // Handle initial edit mode setup when directly accessing edit URL
-  useEffect(() => {
-    if (
-      currentView === 'edit' &&
-      urlCampaignId &&
-      !editingCampaign &&
-      campaignsQuery.data?.campaigns
-    ) {
-      const campaign = campaignsQuery.data.campaigns.find((c: Campaign) => c.id === urlCampaignId);
-      if (campaign) {
-        setEditingCampaign(campaign);
-        setSelectedCampaignId(urlCampaignId);
-        setFormData({
-          name: campaign.name,
-          startDate: campaign.config?.duration?.start || '',
-          endDate: campaign.config?.duration?.end || '',
-          frequency: (campaign.config?.frequency as any) || 'daily',
-          postingTime: campaign.config?.postingTime || '12:00',
-          style: campaign.config?.style || 'lifestyle',
-          themes: campaign.config?.themes || [],
-          priority: campaign.priority || 5,
-        });
-      }
-    }
-  }, [currentView, urlCampaignId, editingCampaign, campaignsQuery.data?.campaigns]);
+  // Editing via legacy form removed
 
   // Auto brand-switching effect when accessing campaign via URL
   useEffect(() => {
@@ -407,28 +322,7 @@ export function Campaigns() {
     [deleteCampaignMutation]
   );
 
-  const handleEditCampaign = useCallback(
-    (campaignId: string) => {
-      const campaign = campaigns.find((c) => c.id === campaignId);
-      if (campaign) {
-        setEditingCampaign(campaign);
-        setSelectedCampaignId(campaignId);
-        setCurrentView('edit');
-        setFormData({
-          name: campaign.name,
-          startDate: campaign.config?.duration?.start || '',
-          endDate: campaign.config?.duration?.end || '',
-          frequency: (campaign.config?.frequency as any) || 'daily',
-          postingTime: campaign.config?.postingTime || '12:00',
-          style: campaign.config?.style || 'lifestyle',
-          themes: campaign.config?.themes || [],
-          priority: campaign.priority || 5,
-        });
-        navigate(`/campaigns/${campaignId}/edit`);
-      }
-    },
-    [campaigns, navigate]
-  );
+  // Editing disabled during wizard rollout
 
   const handleViewCampaignDetails = useCallback(
     (campaignId: string) => {
@@ -438,50 +332,14 @@ export function Campaigns() {
   );
 
   const handleCreateNewCampaign = useCallback(() => {
-    // Reset form data to initial state when creating new campaign
-    setFormData(initialFormData);
-    setErrors({});
+    resetWizard();
+    if (selectedBrand) setWizardBrandId(selectedBrand.id);
     setCurrentView('create');
     navigate('/campaigns/create');
-  }, [navigate]);
+  }, [navigate, resetWizard, selectedBrand, setWizardBrandId]);
 
   // Campaign edit hook
-  const {
-    isUpdating,
-    handleEditSubmit: submitEdit,
-    dialogs: editDialogs,
-  } = useCampaignEdit({
-    campaignId: editingCampaign?.id || '',
-    existingCampaign: editingCampaign,
-    onEditComplete: () => {
-      setCurrentView('dashboard');
-      setEditingCampaign(null);
-      navigate('/campaigns');
-      campaignsQuery.refetch();
-    },
-  });
-
-  // Wrapper for edit form submission
-  const handleEditFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm() || !selectedBrand) {
-      return;
-    }
-
-    // Prepare edit data
-    const editData = {
-      name: formData.name,
-      themes: formData.themes,
-      style: formData.style,
-      frequency: formData.frequency,
-      postingTime: formData.postingTime,
-      endDate: formData.endDate,
-      priority: formData.priority,
-    };
-
-    submitEdit(editData);
-  };
+  // Legacy edit flow removed
 
   if (!selectedBrand) {
     return (
@@ -492,47 +350,7 @@ export function Campaigns() {
     );
   }
 
-  // TODO: Add campaign editing functionality later
-
-  // Helper functions
-  const validateForm = (): boolean => {
-    const newErrors: CampaignErrors = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Campaign name is required';
-    }
-
-    if (!formData.startDate) {
-      newErrors.startDate = 'Start date is required';
-    }
-
-    if (!formData.endDate) {
-      newErrors.endDate = 'End date is required';
-    }
-
-    if (formData.startDate && formData.endDate) {
-      const startDate = new Date(formData.startDate);
-      const endDate = new Date(formData.endDate);
-      if (endDate <= startDate) {
-        newErrors.endDate = 'End date must be after start date';
-      }
-    }
-
-    if (!formData.frequency) {
-      newErrors.frequency = 'Posting frequency is required';
-    }
-
-    if (formData.themes.length === 0) {
-      newErrors.themes = ['At least one theme is required'];
-    }
-
-    if (!formData.style) {
-      newErrors.style = 'Style selection is required';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  // Helper functions for labels retained for details view only
 
   const getFrequencyLabel = (frequency: string) => {
     const option = frequencyOptions.find((opt) => opt.value === frequency);
@@ -563,55 +381,6 @@ export function Campaigns() {
   };
 
   // Event handlers
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm() || !selectedBrand) {
-      return;
-    }
-
-    const campaignConfig: CampaignConfig = {
-      name: formData.name,
-      brandId: selectedBrand.id,
-      duration: {
-        // Send date strings directly instead of converting to Date objects
-        // This prevents timezone issues with Date constructor
-        start: formData.startDate,
-        end: formData.endDate,
-      },
-      frequency: formData.frequency,
-      themes: formData.themes,
-      style: formData.style,
-      postingTime: formData.postingTime,
-      priority: formData.priority,
-    };
-
-    configureMutation.mutate(campaignConfig);
-  };
-
-  const handleInputChange = (field: keyof CampaignFormData, value: string | number) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
-  };
-
-  const addTheme = (theme: string) => {
-    if (theme && !formData.themes.includes(theme)) {
-      const updatedThemes = [...formData.themes, theme];
-      setFormData((prev) => ({ ...prev, themes: updatedThemes }));
-      // Clear themes error
-      if (errors.themes) {
-        setErrors((prev) => ({ ...prev, themes: undefined }));
-      }
-    }
-  };
-
-  const removeTheme = (themeToRemove: string) => {
-    const updatedThemes = formData.themes.filter((theme) => theme !== themeToRemove);
-    setFormData((prev) => ({ ...prev, themes: updatedThemes }));
-  };
 
   const handleEditPost = (post: Content) => {
     setSelectedPost(post);
@@ -628,9 +397,7 @@ export function Campaigns() {
             ? `Manage automated content campaigns for ${selectedBrand.name}`
             : currentView === 'create'
               ? `Create new automated content campaign for ${selectedBrand.name}`
-              : currentView === 'edit'
-                ? `Edit campaign for ${selectedBrand.name}`
-                : `View campaign details for ${selectedBrand.name}`}
+              : `View campaign details for ${selectedBrand.name}`}
         </p>
       </div>
 
@@ -704,7 +471,7 @@ export function Campaigns() {
               onStartCampaign={handleStartCampaign}
               onPauseCampaign={handlePauseCampaign}
               onDeleteCampaign={handleDeleteCampaign}
-              onEditCampaign={handleEditCampaign}
+              // onEditCampaign removed during wizard rollout
               startCampaignLoading={startCampaignMutation.isPending}
               pauseCampaignLoading={pauseCampaignMutation.isPending}
               deleteCampaignLoading={deleteCampaignMutation.isPending}
@@ -714,51 +481,9 @@ export function Campaigns() {
       )}
 
       {/* Create Campaign View */}
-      {currentView === 'create' && (
-        <CampaignForm
-          formData={formData}
-          errors={errors}
-          isSubmitting={configureMutation.isPending}
-          onSubmit={handleSubmit}
-          onInputChange={handleInputChange}
-          onAddTheme={addTheme}
-          onRemoveTheme={removeTheme}
-          onBackToDashboard={() => {
-            setCurrentView('dashboard');
-            setFormData(initialFormData);
-            setErrors({});
-            navigate('/campaigns', { replace: true });
-          }}
-        />
-      )}
+      {currentView === 'create' && <CampaignWizard />}
 
-      {/* Edit Campaign View */}
-      {currentView === 'edit' && editingCampaign && (
-        <>
-          <CampaignForm
-            mode="edit"
-            existingCampaign={editingCampaign}
-            formData={formData}
-            errors={errors}
-            isSubmitting={isUpdating}
-            onSubmit={handleEditFormSubmit}
-            onInputChange={handleInputChange}
-            onAddTheme={addTheme}
-            onRemoveTheme={removeTheme}
-            onBackToDashboard={() => {
-              setCurrentView('dashboard');
-              setEditingCampaign(null);
-              navigate('/campaigns', { replace: true });
-            }}
-            onCancel={() => {
-              setCurrentView('dashboard');
-              setEditingCampaign(null);
-              navigate('/campaigns', { replace: true });
-            }}
-          />
-          {editDialogs}
-        </>
-      )}
+      {/* Edit view removed */}
 
       {/* Campaign Details View */}
       {currentView === 'details' && campaignDetailsQuery.data?.campaign && (
@@ -784,20 +509,7 @@ export function Campaigns() {
                   >
                     ← All Campaigns
                   </Button>
-                  <div className="flex gap-2">
-                    {['preview', 'creating', 'failed'].includes(
-                      campaignDetailsQuery.data.campaign.status
-                    ) && (
-                      <Button
-                        variant="outline"
-                        onClick={() => handleEditCampaign(campaignDetailsQuery.data.campaign.id)}
-                        className="flex items-center gap-2"
-                      >
-                        <Edit className="h-4 w-4" />
-                        Edit Campaign
-                      </Button>
-                    )}
-                  </div>
+                  {/* Edit disabled during wizard rollout */}
                 </div>
               </div>
             </CardHeader>
@@ -1138,7 +850,6 @@ export function Campaigns() {
                                   }
                                   className="flex-1"
                                 >
-                                  <Edit className="mr-1 h-3 w-3" />
                                   Edit
                                 </Button>
                               </div>
@@ -1191,4 +902,4 @@ export function Campaigns() {
     </div>
   );
 }
-import { Skeleton } from '../components/ui/skeleton';
+//

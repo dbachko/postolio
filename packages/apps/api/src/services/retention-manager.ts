@@ -134,6 +134,13 @@ export class RetentionManager {
       }
 
       this.app.log.info(`Retention processing complete: ${expiredContent.length} items processed`);
+
+      // Purge stale campaign drafts (>30 days)
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const deletedDrafts = await prisma.campaignDraft.deleteMany({
+        where: { updatedAt: { lt: cutoff } },
+      });
+      this.app.log.info(`Purged ${deletedDrafts.count} stale campaign drafts (older than 30 days)`);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
       this.app.log.error({ error: message }, 'Error during retention processing');

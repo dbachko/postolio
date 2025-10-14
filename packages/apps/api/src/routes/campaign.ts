@@ -3,7 +3,14 @@ import { FastifyPluginAsync } from 'fastify';
 import { campaignService, type CampaignConfig } from '../services/campaign.js';
 import { CampaignStatus } from '@postolio/database';
 // import { campaignJobService } from '../services/campaign-jobs.js';
-import { pauseResumeRateLimiter, campaignRateLimiter } from '../services/rate-limiter.js';
+import {
+  pauseResumeRateLimiter,
+  campaignRateLimiter,
+  draftRateLimiter,
+  createRateLimitMiddleware,
+} from '../services/rate-limiter.js';
+import { validateBody, validateQuery } from '../middleware/validation.js';
+import { z } from 'zod';
 import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js';
 import { regenerationService } from '../services/regeneration-queue.js';
 import { TimezoneService } from '../services/timezone.js';
@@ -15,6 +22,8 @@ const prisma = getDatabaseClient();
 interface ConfigureCampaignBody {
   name: string;
   brandId: string;
+  // NEW: Campaign type selection (Step 1 of wizard)
+  campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
   duration: {
     start: string; // ISO date string
     end: string; // ISO date string
@@ -24,6 +33,12 @@ interface ConfigureCampaignBody {
   style: string;
   postingTime: string;
   priority?: number;
+  // NEW: Optional structured data from wizard
+  promotionDetails?: {
+    discountPercentage?: number;
+    promoCode?: string;
+    limitedQuantity?: boolean;
+  };
 }
 
 interface PreviewCampaignBody {
@@ -36,10 +51,31 @@ interface StartCampaignBody {
 }
 
 const campaignRoutes: FastifyPluginAsync = async (fastify) => {
+  const ConfigureSchema = z.object({
+    name: z.string().min(1),
+    brandId: z.string().min(1),
+    campaignType: z
+      .enum(['promotional', 'educational', 'seasonal', 'thought_leadership', 'custom'])
+      .optional(),
+    duration: z.object({ start: z.string().min(1), end: z.string().min(1) }),
+    frequency: z.string().min(1),
+    themes: z.array(z.string()).min(1),
+    style: z.string().min(1),
+    postingTime: z.string().regex(/^\d{2}:\d{2}$/),
+    priority: z.number().int().min(1).max(10).optional(),
+    promotionDetails: z
+      .object({
+        discountPercentage: z.number().int().min(0).max(100).optional(),
+        promoCode: z.string().max(64).optional(),
+        limitedQuantity: z.boolean().optional(),
+      })
+      .optional(),
+  });
+
   // Configure campaign
   fastify.post<{ Body: ConfigureCampaignBody }>(
     '/configure',
-    { preHandler: fastify.authenticate },
+    { preHandler: [fastify.authenticate, validateBody(ConfigureSchema)] },
     async (request, reply) => {
       try {
         const userId = request.user!.id;
@@ -98,6 +134,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           style: body.style,
           postingTime: body.postingTime,
           ...(body.priority !== undefined ? { priority: body.priority } : {}),
+          // Wizard-enhanced fields
+          ...(body.campaignType ? { campaignType: body.campaignType } : {}),
+          ...(body.promotionDetails ? { urgencyTactics: body.promotionDetails } : {}),
         };
 
         // Validate campaign configuration
@@ -194,6 +233,99 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(500).send({
           error: 'Failed to generate campaign preview. Please try again.',
         });
+      }
+    }
+  );
+
+  // Save campaign creation wizard draft
+  const DraftBodySchema = z.object({
+    brandId: z.string().min(1),
+    draftId: z.string().cuid().optional(),
+    wizardState: z.unknown().refine(
+      (val) => {
+        try {
+          const size = JSON.stringify(val).length; // chars ~ bytes
+          return size <= 250_000; // ~250KB
+        } catch {
+          return false;
+        }
+      },
+      { message: 'wizardState payload too large (limit ~250KB)' }
+    ),
+  });
+
+  fastify.post<{ Body: z.infer<typeof DraftBodySchema> }>(
+    '/draft',
+    {
+      preHandler: [
+        fastify.authenticate,
+        validateBody(DraftBodySchema),
+        createRateLimitMiddleware(draftRateLimiter),
+      ],
+    },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { wizardState, brandId } = request.body;
+
+        // Verify ownership of brand
+        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+        if (!brand) {
+          return reply.code(403).send({ error: 'Access denied' });
+        }
+
+        // Upsert by unique (userId, brandId) to keep a single latest draft per brand
+        const draft = await prisma.campaignDraft.upsert({
+          where: {
+            userId_brandId: { userId, brandId },
+          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          create: { userId, brandId, wizardState: wizardState as any },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          update: { wizardState: wizardState as any },
+        });
+
+        return reply.send({
+          success: true,
+          draftId: draft.id,
+          savedAt: draft.updatedAt,
+        });
+      } catch (error) {
+        console.error('Save draft error:', error);
+        return reply.code(500).send({ error: 'Failed to save draft' });
+      }
+    }
+  );
+
+  // Get latest campaign creation wizard draft for a brand
+  const DraftQuerySchema = z.object({ brandId: z.string().min(1) });
+  fastify.get<{ Querystring: z.infer<typeof DraftQuerySchema> }>(
+    '/draft',
+    { preHandler: [fastify.authenticate, validateQuery(DraftQuerySchema)] },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { brandId } = request.query;
+
+        // Verify ownership of brand
+        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+        if (!brand) {
+          return reply.code(403).send({ error: 'Access denied' });
+        }
+
+        const draft = await prisma.campaignDraft.findFirst({
+          where: { userId, brandId },
+          orderBy: { updatedAt: 'desc' },
+        });
+
+        if (!draft) {
+          return reply.code(404).send({ error: 'No draft found' });
+        }
+
+        return reply.send({ success: true, draft });
+      } catch (error) {
+        console.error('Get draft error:', error);
+        return reply.code(500).send({ error: 'Failed to load draft' });
       }
     }
   );

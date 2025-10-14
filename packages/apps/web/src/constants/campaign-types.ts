@@ -1,0 +1,50 @@
+import type { CampaignTypeConfig } from '../types/campaign-wizard';
+
+export const campaignTypes: CampaignTypeConfig[] = [
+  {
+    id: 'promotional',
+    name: 'Promotional Campaign',
+    icon: '⚡',
+    description: 'Perfect for: Flash sales, discounts, limited offers',
+    defaultFrequency: 'daily',
+    defaultDuration: { days: 14 },
+    urgencyEnabled: true,
+    commonThemes: ['product showcase', 'customer stories', 'seasonal content'],
+  },
+  {
+    id: 'educational',
+    name: 'Educational Campaign',
+    icon: '🎓',
+    description: 'Teach your audience with tips and tutorials',
+    defaultFrequency: 'every2days',
+    defaultDuration: { days: 21 },
+    commonThemes: ['tips & tutorials', 'industry insights', 'behind the scenes'],
+  },
+  {
+    id: 'seasonal',
+    name: 'Seasonal Campaign',
+    icon: '🍂',
+    description: 'Seasonal moments and holiday stories',
+    defaultFrequency: '3weekly',
+    defaultDuration: { days: 30 },
+    commonThemes: ['seasonal content', 'company culture', 'product showcase'],
+  },
+  {
+    id: 'thought_leadership',
+    name: 'Thought Leadership',
+    icon: '🧠',
+    description: 'Insights and opinion pieces to lead your niche',
+    defaultFrequency: '3weekly',
+    defaultDuration: { days: 28 },
+    commonThemes: ['industry insights', 'customer stories', 'tips & tutorials'],
+  },
+  {
+    id: 'custom',
+    name: 'Custom Campaign',
+    icon: '✨',
+    description: 'Start from scratch with full control',
+    defaultFrequency: 'every2days',
+    defaultDuration: { days: 14 },
+    commonThemes: ['product showcase', 'company culture'],
+  },
+];

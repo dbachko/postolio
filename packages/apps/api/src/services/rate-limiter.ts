@@ -80,6 +80,12 @@ export const pauseResumeRateLimiter = new RateLimiter({
   keyPrefix: 'pause_resume_rl',
 });
 
+export const draftRateLimiter = new RateLimiter({
+  windowMs: 30 * 1000, // 30 seconds
+  maxRequests: 10, // up to 10 autosaves per 30s
+  keyPrefix: 'draft_rl',
+});
+
 /**
  * Fastify middleware for rate limiting
  */

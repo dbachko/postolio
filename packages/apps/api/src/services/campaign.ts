@@ -38,6 +38,11 @@ export interface CampaignConfig {
   style: string;
   postingTime: string; // HH:MM format
   priority?: number; // 1=highest, 5=normal, 10=lowest
+  // Wizard-enhanced (Phase 1) optional fields
+  campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
+  contentPillars?: unknown; // Json structure { pillars: [{ name, percentage, themes }] }
+  urgencyTactics?: unknown; // Json structure { hasUrgency, discountPercentage, promoCode, limitedQuantity }
+  seasonalContext?: unknown; // Json structure { season, events, themes }
 }
 
 export interface CampaignPreview {
@@ -59,7 +64,6 @@ export interface CampaignStartResult {
 }
 
 // Detailed campaign type including selected relations used within this service
-import type { Prisma } from '@postolio/database';
 // Use broad record types to avoid deep structural coupling while removing explicit any usage
 type CampaignWithBrand = Record<string, unknown>;
 type CampaignWithContent = Record<string, unknown>;
@@ -238,6 +242,7 @@ class CampaignService {
           status: 'creating',
           priority: config.priority || 5,
           previewGenerated: false,
+          campaignType: config.campaignType || 'custom',
           config: {
             duration: {
               start: config.duration.start.toISOString(),
@@ -1758,7 +1763,8 @@ class CampaignService {
       }
 
       // Prepare update data with tracking fields
-      const updatePayload: Prisma.CampaignUpdateInput & {
+      const updatePayload: {
+        [k: string]: unknown;
         modificationCount?: { increment: number };
       } = {
         lastModifiedAt: new Date(),
@@ -1796,7 +1802,7 @@ class CampaignService {
             ...(currentConfig || {}),
             ...configUpdates,
           })
-        ) as Prisma.InputJsonValue;
+        );
       }
 
       // Handle non-config fields

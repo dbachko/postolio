@@ -49,6 +49,7 @@ model User {
   
   brands            Brand[]
   modifiedCampaigns Campaign[]
+  campaignDrafts    CampaignDraft[]
 
   @@index([email])
   @@index([accountLockedUntil])
@@ -75,6 +76,7 @@ model Brand {
   user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaigns            Campaign[]
   content              Content[]
+  campaignDrafts       CampaignDraft[]
 
   @@index([userId])
   @@index([createdAt])
@@ -111,6 +113,14 @@ model Content {
   @@map("content")
 }
 
+enum CampaignTypeEnum {
+  promotional
+  educational
+  seasonal
+  thought_leadership
+  custom
+}
+
 model Campaign {
   id                 String         @id @default(cuid())
   name               String
@@ -127,14 +137,38 @@ model Campaign {
   lastModifiedAt     DateTime       @default(now()) @updatedAt
   lastModifiedById   String?
   modificationCount  Int            @default(0)
+  // NEW: Campaign classification and structured metadata
+  campaignType       CampaignTypeEnum @default(custom)
+  contentPillars     Json?
+  urgencyTactics     Json?
+  seasonalContext    Json?
   brand              Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
   lastModifiedBy     User?          @relation(fields: [lastModifiedById], references: [id])
   content            Content[]
 
   @@index([priority])
   @@index([status])
+  @@index([campaignType])
   @@index([brandId, status])
   @@map("campaigns")
+}
+
+/// Stores server-side drafts of the campaign creation wizard for cross-device continuity
+model CampaignDraft {
+  id          String   @id @default(cuid())
+  userId      String
+  brandId     String
+  wizardState Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([brandId])
+  @@unique([userId, brandId])
+  @@map("campaign_drafts")
 }
 
 

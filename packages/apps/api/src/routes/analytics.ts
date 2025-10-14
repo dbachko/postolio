@@ -4,6 +4,9 @@ import { schedulerService } from '../services/scheduler.js';
 import { schedulerAdapter } from '../services/scheduler-adapter.js';
 
 import { getDatabaseClient } from '../config/database.js';
+import { z } from 'zod';
+import { validateBody } from '../middleware/validation.js';
+import type { preHandlerHookHandler } from 'fastify';
 
 const prisma = getDatabaseClient();
 
@@ -209,6 +212,54 @@ const analytics: FastifyPluginAsync = async function (fastify) {
       });
     }
   });
+
+  // Wizard funnel event logging
+  const WizardEventSchema = z.object({
+    eventName: z.enum(['wizard.step', 'wizard.reset', 'wizard.launch']),
+    step: z.number().int().min(1).max(5).optional(),
+    brandId: z.string().min(1).optional(),
+  });
+  fastify.post(
+    '/wizard-event',
+    {
+      preHandler: [
+        fastify.authenticate,
+        validateBody(WizardEventSchema) as unknown as preHandlerHookHandler,
+      ],
+    },
+    async (request, reply) => {
+      try {
+        if (!ensureAuth(request, reply)) return;
+        const userId = request.user.id;
+        const email = request.user.email;
+        const { eventName, step, brandId } = request.body as z.infer<typeof WizardEventSchema>;
+
+        // Persist as audit log for lightweight analytics
+        await prisma.auditLog.create({
+          data: {
+            userId,
+            email,
+            eventType: 'wizard.event',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'] || null,
+            metadata: {
+              eventName,
+              step,
+              brandId,
+              path: request.url,
+              timestamp: new Date().toISOString(),
+            },
+            success: true,
+          },
+        });
+
+        return reply.send({ success: true });
+      } catch (error) {
+        request.log.error({ error }, 'Failed to log wizard event');
+        return reply.code(500).send({ error: 'Failed to log wizard event' });
+      }
+    }
+  );
 
   // Get scheduled posts for a brand
   fastify.get(

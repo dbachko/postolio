@@ -1,1 +1,1 @@
-export * from './service-errors';
+export * from './service-errors.js';

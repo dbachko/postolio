@@ -53,6 +53,14 @@ export interface CampaignConfig {
   style: string;
   postingTime: string;
   priority?: number;
+  // Wizard-enhanced optional fields
+  campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
+  promotionDetails?: {
+    discountPercentage?: number;
+    promoCode?: string;
+    limitedQuantity?: boolean;
+  };
+  contentPillars?: { pillars: Array<{ name: string; percentage: number; themes: string[] }> };
 }
 
 export interface CampaignPreview {
@@ -462,6 +470,18 @@ class ApiClient {
     });
   }
 
+  // Campaign wizard draft endpoint
+  async saveCampaignDraft(data: {
+    brandId: string;
+    wizardState: Record<string, unknown>;
+    draftId?: string;
+  }): Promise<{ success: boolean; draftId: string; savedAt: string }> {
+    return this.request('/api/campaign/draft', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async syncInstagramPosts(
     brandId: string,
     options: { maxPosts?: number; maxDays?: number }
@@ -734,6 +754,9 @@ class ApiClient {
         style: config.style,
         postingTime: config.postingTime,
         priority: config.priority,
+        ...(config.campaignType ? { campaignType: config.campaignType } : {}),
+        ...(config.promotionDetails ? { promotionDetails: config.promotionDetails } : {}),
+        ...(config.contentPillars ? { contentPillars: config.contentPillars } : {}),
       }),
     });
   }
@@ -768,6 +791,13 @@ class ApiClient {
     return this.request(`/api/campaign/${campaignId}`, {
       method: 'DELETE',
     });
+  }
+
+  async getCampaignDraft(brandId: string): Promise<{
+    success: boolean;
+    draft: { id: string; brandId: string; userId: string; wizardState: any; updatedAt: string };
+  }> {
+    return this.request(`/api/campaign/draft?brandId=${encodeURIComponent(brandId)}`);
   }
 
   async updateCampaign(
