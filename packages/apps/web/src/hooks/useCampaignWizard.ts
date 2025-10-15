@@ -39,6 +39,7 @@ const initialState: CampaignWizardState = {
   priority: 5,
   promotionDetails: null,
   contentPillars: null,
+  acceptedRecommendations: [],
   saveStatus: 'idle',
   draftId: undefined,
 };
@@ -111,6 +112,7 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
             priority: state.priority,
             promotionDetails: state.promotionDetails,
             contentPillars: state.contentPillars,
+            acceptedRecommendations: state.acceptedRecommendations,
           } as const;
           const res = await apiClient.saveCampaignDraft({
             brandId: state.brandId,
@@ -140,6 +142,7 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
         priority: state.priority,
         promotionDetails: state.promotionDetails,
         contentPillars: state.contentPillars,
+        acceptedRecommendations: state.acceptedRecommendations,
         draftId: state.draftId,
       }),
     }

@@ -778,6 +778,72 @@ class ApiClient {
     });
   }
 
+  // Phase 2: AI goal analysis
+  async analyzeCampaignGoal(data: {
+    brandId: string;
+    goal: string;
+    themes?: string[];
+    campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
+  }): Promise<{
+    success: boolean;
+    analysis: {
+      objectives: string[];
+      keyMessages: string[];
+      audienceHints: string[];
+      riskFactors: string[];
+      suggestedPillars: Array<{ name: string; percentage: number; themes: string[] }>;
+      schedule: { frequency: 'daily' | 'every2days' | '3weekly'; rationale: string };
+    };
+  }> {
+    return this.request('/api/campaign/analyze-goal', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Phase 2: AI strategy generation
+  async generateCampaignStrategy(data: {
+    brandId: string;
+    name: string;
+    goals: string;
+    campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
+    timeline: { startDate: string; endDate: string };
+    themes: string[];
+    style: string;
+    frequency: 'daily' | 'every2days' | '3weekly';
+    postingTime: string;
+    promotionDetails?: {
+      discountPercentage?: number;
+      promoCode?: string;
+      limitedQuantity?: boolean;
+    };
+  }): Promise<{
+    success: boolean;
+    strategy: {
+      contentPillars: { pillars: Array<{ name: string; percentage: number; themes: string[] }> };
+      schedule: {
+        phases: Array<{
+          phase: string;
+          startOffsetDays: number;
+          frequency: 'daily' | 'every2days' | '3weekly';
+          rationale: string;
+        }>;
+        postingTime: string;
+      };
+      predictions: {
+        estimatedPosts: number;
+        reach: { low: number; high: number };
+        engagementRate: number;
+      };
+      recommendations?: string[];
+    };
+  }> {
+    return this.request('/api/campaign/generate-strategy', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async listCampaigns(brandId?: string): Promise<{ success: boolean; campaigns: Campaign[] }> {
     const url = brandId ? `/api/campaign/list?brandId=${brandId}` : '/api/campaign/list';
     return this.request(url);

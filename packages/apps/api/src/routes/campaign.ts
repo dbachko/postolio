@@ -14,6 +14,12 @@ import { z } from 'zod';
 import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js';
 import { regenerationService } from '../services/regeneration-queue.js';
 import { TimezoneService } from '../services/timezone.js';
+import {
+  AnalyzeGoalSchema,
+  GenerateStrategySchema,
+  analyzeGoal as analyzeGoalSvc,
+  generateStrategy as generateStrategySvc,
+} from '../services/campaign-strategy.js';
 
 import { getDatabaseClient } from '../config/database.js';
 
@@ -38,6 +44,14 @@ interface ConfigureCampaignBody {
     discountPercentage?: number;
     promoCode?: string;
     limitedQuantity?: boolean;
+  };
+  // NEW: Structured content pillars (manual in Phase 1; AI in Phase 2)
+  contentPillars?: {
+    pillars: Array<{
+      name: string;
+      percentage: number;
+      themes?: string[];
+    }>;
   };
 }
 
@@ -68,6 +82,20 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         discountPercentage: z.number().int().min(0).max(100).optional(),
         promoCode: z.string().max(64).optional(),
         limitedQuantity: z.boolean().optional(),
+      })
+      .optional(),
+    // Optional content pillars (manual input in Phase 1)
+    contentPillars: z
+      .object({
+        pillars: z
+          .array(
+            z.object({
+              name: z.string().min(1),
+              percentage: z.number().min(0).max(100),
+              themes: z.array(z.string()).optional(),
+            })
+          )
+          .min(1),
       })
       .optional(),
   });
@@ -137,6 +165,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           // Wizard-enhanced fields
           ...(body.campaignType ? { campaignType: body.campaignType } : {}),
           ...(body.promotionDetails ? { urgencyTactics: body.promotionDetails } : {}),
+          ...(body.contentPillars ? { contentPillars: body.contentPillars } : {}),
         };
 
         // Validate campaign configuration
@@ -233,6 +262,50 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(500).send({
           error: 'Failed to generate campaign preview. Please try again.',
         });
+      }
+    }
+  );
+
+  // Analyze natural-language campaign goal (Phase 2)
+  fastify.post<{ Body: z.infer<typeof AnalyzeGoalSchema> }>(
+    '/analyze-goal',
+    { preHandler: [fastify.authenticate, validateBody(AnalyzeGoalSchema)] },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const body = request.body;
+
+        // Verify brand ownership
+        const brand = await prisma.brand.findFirst({ where: { id: body.brandId, userId } });
+        if (!brand) return reply.code(403).send({ error: 'Access denied' });
+
+        const result = await analyzeGoalSvc(body);
+        return reply.send({ success: true, analysis: result });
+      } catch (error) {
+        request.log.error({ error }, 'analyze-goal failed');
+        return reply.code(500).send({ error: 'Failed to analyze goal' });
+      }
+    }
+  );
+
+  // Generate AI strategy (Phase 2)
+  fastify.post<{ Body: z.infer<typeof GenerateStrategySchema> }>(
+    '/generate-strategy',
+    { preHandler: [fastify.authenticate, validateBody(GenerateStrategySchema)] },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const body = request.body;
+
+        // Verify brand ownership
+        const brand = await prisma.brand.findFirst({ where: { id: body.brandId, userId } });
+        if (!brand) return reply.code(403).send({ error: 'Access denied' });
+
+        const strategy = await generateStrategySvc(body);
+        return reply.send({ success: true, strategy });
+      } catch (error) {
+        request.log.error({ error }, 'generate-strategy failed');
+        return reply.code(500).send({ error: 'Failed to generate strategy' });
       }
     }
   );

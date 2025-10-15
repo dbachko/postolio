@@ -32,6 +32,7 @@ export interface CampaignWizardState {
   contentPillars?: {
     pillars: Array<{ name: string; percentage: number; themes?: string[] }>;
   } | null;
+  acceptedRecommendations?: string[];
   saveStatus: 'saved' | 'saving' | 'error' | 'idle';
   draftId?: string;
 }

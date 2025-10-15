@@ -1,4 +1,4 @@
-import { CampaignStatus } from '@postolio/database';
+import { CampaignStatus, Prisma, CampaignTypeEnum } from '@postolio/database';
 import {
   generateInstagramContent,
   type ContentGenerationRequest,
@@ -242,7 +242,17 @@ class CampaignService {
           status: 'creating',
           priority: config.priority || 5,
           previewGenerated: false,
-          campaignType: config.campaignType || 'custom',
+          campaignType: (config.campaignType as CampaignTypeEnum) ?? CampaignTypeEnum.custom,
+          // Persist structured metadata (Phase 1 manual, Phase 2 AI-generated)
+          ...(config.contentPillars
+            ? { contentPillars: config.contentPillars as Prisma.InputJsonValue }
+            : {}),
+          ...(config.urgencyTactics
+            ? { urgencyTactics: config.urgencyTactics as Prisma.InputJsonValue }
+            : {}),
+          ...(config.seasonalContext
+            ? { seasonalContext: config.seasonalContext as Prisma.InputJsonValue }
+            : {}),
           config: {
             duration: {
               start: config.duration.start.toISOString(),
