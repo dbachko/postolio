@@ -19,6 +19,11 @@ on:
         description: 'Stacks to deploy (comma-separated, or "all")'
         required: false
         default: 'all'
+      forceRebuild:
+        description: 'Force rebuild API Docker image'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-stack-${{ github.ref }}-${{ github.event.inputs.environment || 'dev' }}
@@ -265,7 +270,7 @@ jobs:
   # (PR tests are handled in .github/workflows/pr-checks.yml. Removed duplicate test job from deploy.)
 
   # ============================================
-  # STEP 3: Build Docker Images (API only)
+  # STEP 3: Build Docker Image (API on change)
   # ============================================
   build-images:
     name: Build Docker Images
@@ -275,8 +280,8 @@ jobs:
     if: |
       github.event_name != 'pull_request' && (
         needs.detect-changes.outputs.api-changed == 'true' ||
-        contains(needs.detect-changes.outputs.stack-matrix, 'api') ||
-        github.event_name == 'workflow_dispatch'
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.forceRebuild == 'true') ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/main')
       )
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:
@@ -326,8 +331,6 @@ jobs:
       needs.detect-changes.outputs.stack-matrix != '[]' &&
       (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
     environment: ${{ needs.detect-changes.outputs.environment }}
-    env:
-      IMAGE_TAG: api-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
     strategy:
       matrix:
         stack: ${{ fromJson(needs.detect-changes.outputs.stack-matrix) }}
@@ -476,6 +479,15 @@ jobs:
         run: |
           ENV="${{ needs.detect-changes.outputs.environment }}"
           STACK="${{ matrix.stack }}"
+
+          # Determine image tag strategy based on whether build-images ran
+          # - If build ran (success): use per-commit tag
+          # - If build skipped: reuse environment latest tag
+          if [[ "${{ needs.build-images.result }}" == "success" ]]; then
+            IMAGE_TAG="api-$ENV-${{ github.sha }}"
+          else
+            IMAGE_TAG="api-$ENV-latest"
+          fi
 
           # Map stack names to CDK stack names
           case $STACK in
