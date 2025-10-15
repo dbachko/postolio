@@ -179,7 +179,7 @@ aws lambda get-function-configuration \
 # Check Scheduler role ARN
 aws lambda get-function-configuration \
   --function-name postolio-scheduler-dev-retry-handler \
-  --query 'Environment.Variables.SCHEDULER_ROLE_ARN'
+  --query 'Environment.Variables.SCHEDULER_EVENTS_ROLE_ARN'
 ```
 
 ### **3. Test Scenarios:**

@@ -24,7 +24,6 @@ import {
   UpdateScheduleCommand,
 } from '@aws-sdk/client-scheduler';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import {
   getCampaignById,
   canCampaignSchedule,
@@ -45,39 +44,19 @@ const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 const eventBridge = tracer.captureAWSv3Client(new EventBridgeClient({}));
-const ssmClient = tracer.captureAWSv3Client(new SSMClient({}));
 
 // No legacy derivation: mediaKeys must be supplied by caller
 
-async function getSchedulerTargetConfig() {
-  const environment = process.env.ENVIRONMENT || 'dev';
-  let publisherArn = process.env.PUBLISHER_LAMBDA_ARN;
-  let schedulerRoleArn = process.env.SCHEDULER_ROLE_ARN;
+async function getSchedulerEventBusTargetConfig() {
   const groupName = process.env.SCHEDULER_GROUP_NAME || 'default';
+  const roleArn = process.env.SCHEDULER_EVENTS_ROLE_ARN;
+  const eventBusArn = process.env.SCHEDULING_EVENT_BUS_ARN;
 
-  if (!publisherArn) {
-    const param = await ssmClient.send(
-      new GetParameterCommand({
-        Name: `/postolio/${environment}/publishing/publisher-lambda-arn`,
-      })
-    );
-    publisherArn = param.Parameter?.Value;
+  if (!roleArn || !eventBusArn) {
+    throw new Error('Missing scheduler event bus configuration (roleArn or eventBusArn)');
   }
 
-  if (!schedulerRoleArn) {
-    const param = await ssmClient.send(
-      new GetParameterCommand({
-        Name: `/postolio/${environment}/publishing/scheduler-role-arn`,
-      })
-    );
-    schedulerRoleArn = param.Parameter?.Value;
-  }
-
-  if (!publisherArn || !schedulerRoleArn) {
-    throw new Error('Missing scheduler target configuration (publisherArn or schedulerRoleArn)');
-  }
-
-  return { publisherArn, schedulerRoleArn, groupName } as const;
+  return { roleArn, eventBusArn, groupName } as const;
 }
 
 export interface ScheduleRequest {
@@ -258,19 +237,19 @@ export class ScheduleService {
         throw putErr;
       }
 
-      // 3. Create EventBridge schedule
+      // 3. Create EventBridge schedule (target: EventBus)
       const eventBridgeTime = formatEventBridgeScheduleTime(new Date(request.scheduledAt));
 
       try {
-        const targetCfg = await getSchedulerTargetConfig();
+        const targetCfg = await getSchedulerEventBusTargetConfig();
         await schedulerClient.send(
           new CreateScheduleCommand({
             Name: scheduleId,
             GroupName: targetCfg.groupName,
             ScheduleExpression: `at(${eventBridgeTime})`,
             Target: {
-              Arn: targetCfg.publisherArn,
-              RoleArn: targetCfg.schedulerRoleArn,
+              Arn: targetCfg.eventBusArn,
+              RoleArn: targetCfg.roleArn,
               Input: JSON.stringify({
                 scheduleId,
                 contentId: request.contentId,
@@ -278,6 +257,10 @@ export class ScheduleService {
                 campaignId: request.campaignId,
                 userId: request.userId,
               }),
+              EventBridgeParameters: {
+                DetailType: 'schedule.due',
+                Source: 'postolio.scheduling',
+              },
             },
             FlexibleTimeWindow: {
               Mode: 'OFF',
@@ -505,15 +488,15 @@ export class ScheduleService {
         const eventBridgeTime = formatEventBridgeScheduleTime(new Date(updateRequest.scheduledAt));
         const userIdForTarget = updateRequest.userId ?? existingSchedule.userId;
         try {
-          const targetCfg2 = await getSchedulerTargetConfig();
+          const targetCfg2 = await getSchedulerEventBusTargetConfig();
           await schedulerClient.send(
             new UpdateScheduleCommand({
               Name: scheduleId,
               GroupName: targetCfg2.groupName,
               ScheduleExpression: `at(${eventBridgeTime})`,
               Target: {
-                Arn: targetCfg2.publisherArn,
-                RoleArn: targetCfg2.schedulerRoleArn,
+                Arn: targetCfg2.eventBusArn,
+                RoleArn: targetCfg2.roleArn,
                 Input: JSON.stringify({
                   scheduleId,
                   contentId: existingSchedule.contentId,
@@ -521,21 +504,25 @@ export class ScheduleService {
                   campaignId: updateRequest.campaignId || existingSchedule.campaignId,
                   userId: userIdForTarget,
                 }),
+                EventBridgeParameters: {
+                  DetailType: 'schedule.due',
+                  Source: 'postolio.scheduling',
+                },
               },
               FlexibleTimeWindow: { Mode: 'OFF' },
             })
           );
         } catch (err) {
           if ((err as Error)?.name === 'ResourceNotFoundException') {
-            const targetCfg2 = await getSchedulerTargetConfig();
+            const targetCfg2 = await getSchedulerEventBusTargetConfig();
             await schedulerClient.send(
               new CreateScheduleCommand({
                 Name: scheduleId,
                 GroupName: targetCfg2.groupName,
                 ScheduleExpression: `at(${eventBridgeTime})`,
                 Target: {
-                  Arn: targetCfg2.publisherArn,
-                  RoleArn: targetCfg2.schedulerRoleArn,
+                  Arn: targetCfg2.eventBusArn,
+                  RoleArn: targetCfg2.roleArn,
                   Input: JSON.stringify({
                     scheduleId,
                     contentId: existingSchedule.contentId,
@@ -543,6 +530,10 @@ export class ScheduleService {
                     campaignId: updateRequest.campaignId || existingSchedule.campaignId,
                     userId: userIdForTarget,
                   }),
+                  EventBridgeParameters: {
+                    DetailType: 'schedule.due',
+                    Source: 'postolio.scheduling',
+                  },
                 },
                 FlexibleTimeWindow: { Mode: 'OFF' },
               })
@@ -560,7 +551,7 @@ export class ScheduleService {
         expressionAttributeValues[':userId'] = updateRequest.userId;
 
         try {
-          const targetCfg = await getSchedulerTargetConfig();
+          const targetCfg = await getSchedulerEventBusTargetConfig();
           const eventBridgeTime = formatEventBridgeScheduleTime(
             new Date(existingSchedule.scheduledAt)
           );
@@ -570,8 +561,8 @@ export class ScheduleService {
               GroupName: targetCfg.groupName,
               ScheduleExpression: `at(${eventBridgeTime})`,
               Target: {
-                Arn: targetCfg.publisherArn,
-                RoleArn: targetCfg.schedulerRoleArn,
+                Arn: targetCfg.eventBusArn,
+                RoleArn: targetCfg.roleArn,
                 Input: JSON.stringify({
                   scheduleId,
                   contentId: existingSchedule.contentId,
@@ -579,6 +570,10 @@ export class ScheduleService {
                   campaignId: updateRequest.campaignId || existingSchedule.campaignId,
                   userId: updateRequest.userId,
                 }),
+                EventBridgeParameters: {
+                  DetailType: 'schedule.due',
+                  Source: 'postolio.scheduling',
+                },
               },
               FlexibleTimeWindow: { Mode: 'OFF' },
             })
@@ -702,7 +697,7 @@ export class ScheduleService {
         await schedulerClient.send(
           new DeleteScheduleCommand({
             Name: scheduleId,
-            GroupName: (await getSchedulerTargetConfig()).groupName,
+            GroupName: (await getSchedulerEventBusTargetConfig()).groupName,
           })
         );
       } catch (schedulerError) {
@@ -801,16 +796,17 @@ export class ScheduleService {
       );
 
       // Test EventBridge connectivity
-      const targetCfg = await getSchedulerTargetConfig();
+      const targetCfg = await getSchedulerEventBusTargetConfig();
       await schedulerClient.send(
         new CreateScheduleCommand({
           Name: 'health-check-test',
           GroupName: targetCfg.groupName,
           ScheduleExpression: 'at(2030-01-01T00:00:00)',
           Target: {
-            Arn: targetCfg.publisherArn,
-            RoleArn: targetCfg.schedulerRoleArn,
+            Arn: targetCfg.eventBusArn,
+            RoleArn: targetCfg.roleArn,
             Input: JSON.stringify({ test: true }),
+            EventBridgeParameters: { DetailType: 'schedule.due', Source: 'postolio.scheduling' },
           },
           FlexibleTimeWindow: { Mode: 'OFF' },
         })

@@ -61,41 +61,28 @@ export class SchedulingStack extends cdk.Stack {
     let vpcConfig: ec2.SubnetSelection | undefined;
 
     try {
-      // Import VPC from Foundation stack
+      // Import VPC from Foundation stack via context lookup (stable and synth-safe)
       const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
-
-      // Import Lambda security group from Foundation stack
       const lambdaSecurityGroupId = ssm.StringParameter.valueFromLookup(
         this,
         `/postolio/${environment}/security-groups/lambda`
       );
 
-      // Check if Foundation resources are available (not dummy values)
       const hasFoundationResources = vpcId && lambdaSecurityGroupId;
-
       if (hasFoundationResources) {
-        vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', {
-          vpcId: vpcId,
-        });
-
+        vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', { vpcId });
         lambdaSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
           this,
           'LambdaSecurityGroup',
           lambdaSecurityGroupId
         );
-
-        vpcConfig = {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        };
-
+        vpcConfig = { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS };
         console.log(`Using VPC configuration from Foundation stack for environment ${environment}`);
-      } else {
-        console.log(
-          `Foundation VPC not available for environment ${environment} - Lambda functions will run without VPC`
-        );
       }
     } catch (error) {
-      console.log(`Error accessing Foundation VPC configuration: ${error}`);
+      console.log(
+        `VPC import skipped or failed; Lambdas will run without VPC for ${environment}. Error: ${error}`
+      );
     }
 
     // ==================== KMS Encryption Key ====================
@@ -337,30 +324,33 @@ export class SchedulingStack extends cdk.Stack {
       alertTopic.addSubscription(new snsSubscriptions.EmailSubscription(alertEmail));
     }
 
-    // ==================== Cross-Stack Parameters (from Publishing) ====================
-    // These parameters are created by the Publishing stack and are used at runtime to create schedules
-    let publisherLambdaArnParam: string | undefined;
-    let schedulerRoleArnParam: string | undefined;
-    let databaseSecretArnParam: string | undefined;
-    try {
-      publisherLambdaArnParam = ssm.StringParameter.valueFromLookup(
-        this,
-        `/postolio/${environment}/publishing/publisher-lambda-arn`
-      );
-      schedulerRoleArnParam = ssm.StringParameter.valueFromLookup(
-        this,
-        `/postolio/${environment}/publishing/scheduler-role-arn`
-      );
-      // Use deploy-time resolution to avoid dummy placeholder values
-      databaseSecretArnParam = ssm.StringParameter.valueForStringParameter(
-        this,
-        `/postolio/${environment}/database/secret-arn`
-      );
-    } catch (e) {
-      console.log(
-        'Publishing SSM parameters not found at synth time; proceeding without env injection'
-      );
-    }
+    // ==================== Cross-Stack Parameters ====================
+    // Always use deploy-time token for database secret (from Foundation)
+    const databaseSecretArnParam = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/database/secret-arn`
+    );
+
+    // ==================== Scheduler Role for EventBus Target ====================
+    // Create a dedicated role that EventBridge Scheduler will assume at trigger time
+    // to put an event onto the Scheduling EventBus.
+    const schedulerPutEventsRole = new iam.Role(this, 'SchedulerPutEventsRole', {
+      assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
+      description: 'Role assumed by EventBridge Scheduler to PutEvents to the Scheduling bus',
+    });
+    schedulerPutEventsRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['events:PutEvents'],
+        resources: [this.eventBus.eventBusArn],
+      })
+    );
+    // Expose the role ARN via SSM for cross-stack discovery (used by Publishing retry handler)
+    new ssm.StringParameter(this, 'SchedulingSchedulerEventsRoleArnParameter', {
+      parameterName: `/postolio/${environment}/scheduling/scheduler-events-role-arn`,
+      stringValue: schedulerPutEventsRole.roleArn,
+      description: 'Role ARN that EventBridge Scheduler assumes to PutEvents to the Scheduling bus',
+    });
 
     // ==================== Lambda Function Shared Role ====================
     const schedulingLambdaRole = new iam.Role(this, 'SchedulingLambdaRole', {
@@ -443,6 +433,15 @@ export class SchedulingStack extends cdk.Stack {
                 `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
               ],
             }),
+            // Allow passing the Scheduler PutEvents role to EventBridge Scheduler
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['iam:PassRole'],
+              resources: [schedulerPutEventsRole.roleArn],
+              conditions: {
+                StringEquals: { 'iam:PassedToService': 'scheduler.amazonaws.com' },
+              },
+            }),
             // Secrets Manager permission to read DB credentials
             ...(databaseSecretArnParam
               ? [
@@ -462,16 +461,6 @@ export class SchedulingStack extends cdk.Stack {
                 rdsDbUserArnForPostgres,
               ],
             }),
-            // Allow passing the Scheduler target role (from Publishing stack) if available
-            ...(schedulerRoleArnParam
-              ? [
-                  new iam.PolicyStatement({
-                    effect: iam.Effect.ALLOW,
-                    actions: ['iam:PassRole'],
-                    resources: [schedulerRoleArnParam],
-                  }),
-                ]
-              : []),
           ],
         }),
       },
@@ -507,12 +496,12 @@ export class SchedulingStack extends cdk.Stack {
           SCHEDULES_TABLE_BRAND_INDEX: 'BrandIndex',
           VIDEO_BUCKET_NAME: this.videoBucket.bucketName,
           EVENT_BUS_NAME: this.eventBus.eventBusName,
+          SCHEDULING_EVENT_BUS_ARN: this.eventBus.eventBusArn,
           PROCESSING_QUEUE_URL: scheduleProcessingQueue.queueUrl,
           KMS_KEY_ID: encryptionKey.keyId,
           // Use default scheduler group unless overridden at runtime
           SCHEDULER_GROUP_NAME: 'default',
-          ...(publisherLambdaArnParam ? { PUBLISHER_LAMBDA_ARN: publisherLambdaArnParam } : {}),
-          ...(schedulerRoleArnParam ? { SCHEDULER_ROLE_ARN: schedulerRoleArnParam } : {}),
+          SCHEDULER_EVENTS_ROLE_ARN: schedulerPutEventsRole.roleArn,
         },
         logGroup: logs.LogGroup.fromLogGroupName(
           this,

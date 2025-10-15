@@ -126,3 +126,12 @@ ContentScheduler ──> SSM Lookup ──> Dynamic ARN (2wvb4zp8pk/*/GET/tokens
 - ✅ **Infrastructure as Code best practices** - Proper resource references
 - ✅ **Multi-environment support** - Environment-specific parameters
 - ✅ **Flexible deployment** - No dependency order requirements
+
+### Scheduling ↔ Publishing integration (EventBridge mode)
+
+- Scheduling now schedules events to the Scheduling EventBus using EventBridge Scheduler. No direct Lambda ARN or Publishing role is referenced.
+- Publishing adds a rule on the Scheduling EventBus to invoke the Publisher Lambda for events with:
+  - `source: postolio.scheduling`
+  - `detail-type: schedule.due`
+- Scheduling publishes the Scheduler execution role ARN via SSM for retry use:
+  - `/postolio/{environment}/scheduling/scheduler-events-role-arn`

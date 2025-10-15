@@ -23,6 +23,7 @@ import {
 import { EventBridge } from '@aws-sdk/client-eventbridge';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { SchedulerClient, DeleteScheduleCommand } from '@aws-sdk/client-scheduler';
+import type { EventBridgeEvent as AwsEventBridgeEvent } from 'aws-lambda';
 
 // Platform-specific character limits
 const PLATFORM_LIMITS = {
@@ -60,6 +61,13 @@ interface PublishEvent {
   brandId?: string;
   userId?: string;
 }
+
+type ScheduleDueDetail = {
+  scheduleId: string;
+  brandId?: string;
+  userId?: string;
+  retryAttempt?: number;
+};
 
 type PlatformName = 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'youtube';
 
@@ -412,7 +420,34 @@ class YouTubeAdapter implements PlatformAdapter {
   }
 }
 
-export const handler = async (event: PublishEvent): Promise<void> => {
+function toPublishEvent(
+  rawEvent: AwsEventBridgeEvent<'schedule.due', ScheduleDueDetail> | PublishEvent
+): PublishEvent {
+  if (typeof rawEvent === 'object' && rawEvent !== null && 'detail' in rawEvent) {
+    const rawDetail = (rawEvent as AwsEventBridgeEvent<'schedule.due', unknown>).detail;
+    let detail: Partial<ScheduleDueDetail> = {};
+    if (typeof rawDetail === 'string') {
+      try {
+        detail = JSON.parse(rawDetail);
+      } catch {
+        detail = {};
+      }
+    } else if (typeof rawDetail === 'object' && rawDetail !== null) {
+      detail = rawDetail as ScheduleDueDetail;
+    }
+    return {
+      scheduleId: detail.scheduleId || '',
+      brandId: detail.brandId,
+      userId: detail.userId,
+    };
+  }
+  return rawEvent as PublishEvent;
+}
+
+export const handler = async (
+  rawEvent: AwsEventBridgeEvent<'schedule.due', ScheduleDueDetail> | PublishEvent
+): Promise<void> => {
+  const event = toPublishEvent(rawEvent);
   logger.info('Publishing content', { scheduleId: event.scheduleId });
 
   try {
@@ -486,7 +521,7 @@ export const handler = async (event: PublishEvent): Promise<void> => {
         await schedulerClient.send(
           new DeleteScheduleCommand({
             Name: event.scheduleId,
-            GroupName: process.env.SCHEDULE_GROUP_NAME || 'default',
+            GroupName: process.env.SCHEDULER_GROUP_NAME || 'default',
           })
         );
         logger.info('Deleted EventBridge schedule for inactive campaign', {

@@ -87,7 +87,7 @@ export class CrossStackConfigManager {
    */
   retrieveParameter(key: string, sourceStackName?: string): string {
     const parameterName = this.buildParameterName(key, sourceStackName);
-    return ssm.StringParameter.valueFromLookup(this.stack, parameterName);
+    return ssm.StringParameter.valueForStringParameter(this.stack, parameterName);
   }
 
   /**

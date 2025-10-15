@@ -35,12 +35,7 @@ export class BrandAnalysisStack extends cdk.Stack {
         this,
         `/postolio/${environment}/security-groups/lambda`
       );
-      const hasVpc =
-        vpcId &&
-        !vpcId.startsWith('dummy-value-for-') &&
-        lambdaSgId &&
-        !lambdaSgId.startsWith('dummy-value-for-');
-      if (hasVpc) {
+      if (vpcId && lambdaSgId) {
         vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', { vpcId });
         lambdaSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
           this,

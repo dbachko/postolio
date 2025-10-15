@@ -43,7 +43,7 @@ export class PublishingStack extends cdk.Stack {
     const prefix = `postolio-${environment}-publishing`;
 
     // Import schedules table name from Scheduling stack via SSM Parameter Store
-    const schedulesTableName = ssm.StringParameter.valueFromLookup(
+    const schedulesTableName = ssm.StringParameter.valueForStringParameter(
       this,
       `/postolio/${environment}/scheduling/schedules-table-name`
     );
@@ -54,15 +54,10 @@ export class PublishingStack extends cdk.Stack {
     });
 
     // Import Token Service ARN for Function URL IAM auth
-    let tokenServiceArn: string | undefined;
-    try {
-      tokenServiceArn = ssm.StringParameter.valueFromLookup(
-        this,
-        `/postolio/${environment}/auth/token-service-arn`
-      );
-    } catch {
-      // Optional: continue without explicit permission if not found
-    }
+    const tokenServiceArn = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/auth/token-service-arn`
+    );
 
     // ==================== Internal DynamoDB Tables ====================
     // Retry attempts tracking table (per schedule)
@@ -98,78 +93,38 @@ export class PublishingStack extends cdk.Stack {
     let vpcConfig: ec2.SubnetSelection | undefined;
 
     try {
-      // Import VPC from Foundation stack
       const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
-
-      // Import Lambda security group from Foundation stack
       const lambdaSecurityGroupId = ssm.StringParameter.valueFromLookup(
         this,
         `/postolio/${environment}/security-groups/lambda`
       );
-
-      // Check if Foundation resources are available (not dummy values)
-      const hasFoundationResources =
-        vpcId &&
-        lambdaSecurityGroupId &&
-        !vpcId.startsWith('dummy-value-for-') &&
-        !lambdaSecurityGroupId.startsWith('dummy-value-for-');
-
-      if (hasFoundationResources) {
-        vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', {
-          vpcId: vpcId,
-        });
-
+      const hasFoundation = vpcId && lambdaSecurityGroupId;
+      if (hasFoundation) {
+        vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', { vpcId });
         lambdaSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
           this,
           'LambdaSecurityGroup',
           lambdaSecurityGroupId
         );
-
-        vpcConfig = {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        };
-
+        vpcConfig = { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS };
         console.log(`Using VPC configuration from Foundation stack for environment ${environment}`);
-      } else {
-        console.log(
-          `Foundation VPC not available for environment ${environment} - Lambda functions will run without VPC`
-        );
       }
     } catch (error) {
-      console.log(`Error accessing Foundation VPC configuration: ${error}`);
+      console.log(
+        `VPC import skipped or failed; Lambdas will run without VPC for ${environment}. Error: ${error}`
+      );
     }
 
     // ==================== KMS Encryption Key ====================
     // Try to import shared encryption key from Foundation stack
     let encryptionKey: kms.IKey;
 
-    try {
-      const kmsKeyArn = ssm.StringParameter.valueFromLookup(
-        this,
-        `/postolio/${environment}/kms/key-arn`
-      );
-
-      if (kmsKeyArn && !kmsKeyArn.startsWith('dummy-value-for-')) {
-        encryptionKey = kms.Key.fromKeyArn(this, 'FoundationEncryptionKey', kmsKeyArn);
-        console.log(
-          `Using shared encryption key from Foundation stack for environment ${environment}`
-        );
-      } else {
-        throw new Error('Foundation encryption key not available');
-      }
-    } catch (error) {
-      // Fallback to creating own key if Foundation key not available
-      encryptionKey = new kms.Key(this, 'PublishingEncryptionKey', {
-        alias: `alias/${prefix}-encryption`,
-        description: 'KMS key for Publishing services encryption',
-        enableKeyRotation: true,
-        removalPolicy:
-          environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      });
-      console.log(
-        `Created dedicated encryption key for Publishing stack in environment ${environment}`
-      );
-    }
+    const kmsKeyArn = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/kms/key-arn`
+    );
+    encryptionKey = kms.Key.fromKeyArn(this, 'FoundationEncryptionKey', kmsKeyArn);
+    console.log(`Using shared encryption key from Foundation stack for environment ${environment}`);
 
     // ==================== SQS Queues ====================
     // Main dead letter queue for all publishing failures
@@ -278,7 +233,7 @@ export class PublishingStack extends cdk.Stack {
 
     // ==================== EventBridge Buses ====================
     // Use Scheduling EventBus for cross-service status events (status-sync listens there)
-    const schedulingEventBusName = ssm.StringParameter.valueFromLookup(
+    const schedulingEventBusName = ssm.StringParameter.valueForStringParameter(
       this,
       `/postolio/${environment}/scheduling/event-bus-name`
     );
@@ -289,31 +244,25 @@ export class PublishingStack extends cdk.Stack {
     });
 
     // Import images bucket for generating media URLs
-    const imagesBucketName = ssm.StringParameter.valueFromLookup(
+    const imagesBucketName = ssm.StringParameter.valueForStringParameter(
       this,
       `/postolio/${environment}/s3/images-bucket`
     );
     // Import CDN domain (custom domain or default distribution domain)
-    const imagesCdnDomain = ssm.StringParameter.valueFromLookup(
+    const imagesCdnDomain = ssm.StringParameter.valueForStringParameter(
       this,
       `/postolio/${environment}/cdn/images-domain`
     );
     // Import video bucket name for presigning video URLs
-    const videoBucketName = ssm.StringParameter.valueFromLookup(
+    const videoBucketName = ssm.StringParameter.valueForStringParameter(
       this,
       `/postolio/${environment}/scheduling/video-bucket-name`
     );
     // Import Auth stack Audit Logs table name for audit logging
-    let auditTableName: string | undefined;
-    try {
-      auditTableName = ssm.StringParameter.valueFromLookup(
-        this,
-        `/postolio/${environment}/auth/audit-table-name`
-      );
-    } catch {
-      // Optional - publisher will skip audit if not set
-      auditTableName = undefined;
-    }
+    const auditTableName = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/auth/audit-table-name`
+    );
     const auditTableArn = auditTableName
       ? cdk.Stack.of(this).formatArn({
           service: 'dynamodb',
@@ -544,48 +493,33 @@ export class PublishingStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
     });
 
-    // Role assumed by EventBridge Scheduler to invoke the Publisher Lambda
-    const schedulerInvocationRole = new iam.Role(this, 'PublishingSchedulerInvocationRole', {
+    // Route schedule.due events from the Scheduling EventBus to the Publisher Lambda
+    const schedulingBusImport = events.EventBus.fromEventBusName(
+      this,
+      'SchedulingBusImport',
+      schedulingEventBusName
+    );
+    const scheduleDueRule = new events.Rule(this, 'ScheduleDueRule', {
+      eventBus: schedulingBusImport,
+      eventPattern: {
+        source: ['postolio.scheduling'],
+        detailType: ['schedule.due'],
+      },
+    });
+    scheduleDueRule.addTarget(new targets.LambdaFunction(publisherFunction));
+
+    // Role assumed by EventBridge Scheduler (used by Retry Handler) to PutEvents to Scheduling bus
+    const retrySchedulerPutEventsRole = new iam.Role(this, 'RetrySchedulerPutEventsRole', {
       assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
-      description: 'Allows EventBridge Scheduler to invoke the Publisher Lambda',
+      description: 'Role for EventBridge Scheduler (retries) to PutEvents to Scheduling bus',
     });
-    // Grant invoke permissions to the scheduler role without wildcards
-    schedulerInvocationRole.addToPolicy(
+    retrySchedulerPutEventsRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['lambda:InvokeFunction'],
-        resources: [publisherFunction.functionArn, `${publisherFunction.functionArn}:$LATEST`],
+        actions: ['events:PutEvents'],
+        resources: [schedulingEventBusArn],
       })
     );
-
-    // Allow the Publishing Lambda role (publisher/retry/dlq functions) to pass
-    // the scheduler invocation role when creating schedules
-    publishingLambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['iam:PassRole'],
-        resources: [schedulerInvocationRole.roleArn],
-        conditions: {
-          StringEquals: { 'iam:PassedToService': 'scheduler.amazonaws.com' },
-        },
-      })
-    );
-
-    // cdk-nag: The grant adds a wildcard to support versions/aliases. Suppress with rationale.
-    // No wildcard permissions are used; no IAM5 suppression required.
-
-    // Expose key ARNs via SSM for cross-stack/runtime discovery
-    new ssm.StringParameter(this, 'PublisherLambdaArnParameter', {
-      parameterName: `/postolio/${environment}/publishing/publisher-lambda-arn`,
-      stringValue: publisherFunction.functionArn,
-      description: 'Publisher Lambda ARN',
-    });
-
-    new ssm.StringParameter(this, 'PublishingSchedulerRoleArnParameter', {
-      parameterName: `/postolio/${environment}/publishing/scheduler-role-arn`,
-      stringValue: schedulerInvocationRole.roleArn,
-      description: 'EventBridge Scheduler target role ARN for invoking Publisher Lambda',
-    });
 
     // 2. Retry Handler Function
     const retryHandlerFunction = new lambdaNodejs.NodejsFunction(this, 'RetryHandlerFunction', {
@@ -615,10 +549,13 @@ export class PublishingStack extends cdk.Stack {
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
         ...(auditTableName ? { AUDIT_LOG_TABLE: auditTableName } : {}),
-        // Scheduler integration for retries
+        // Scheduler integration for retries (via EventBridge events)
         SCHEDULER_GROUP_NAME: 'default',
-        PUBLISHER_LAMBDA_ARN: publisherFunction.functionArn,
-        SCHEDULER_ROLE_ARN: schedulerInvocationRole.roleArn,
+        SCHEDULING_EVENT_BUS_ARN: schedulingEventBusArn,
+        // Use local role in this stack to PutEvents to Scheduling bus
+        // (created below as retrySchedulerPutEventsRole)
+        // NOTE: We avoid SSM lookups to keep first-time deploy order clean.
+        SCHEDULER_EVENTS_ROLE_ARN: '', // placeholder, set after role creation via override below
       },
       logGroup: logs.LogGroup.fromLogGroupName(
         this,
@@ -627,6 +564,11 @@ export class PublishingStack extends cdk.Stack {
       ),
       tracing: lambda.Tracing.ACTIVE,
     });
+    // Inject the role ARN now that it exists
+    retryHandlerFunction.addEnvironment(
+      'SCHEDULER_EVENTS_ROLE_ARN',
+      retrySchedulerPutEventsRole.roleArn
+    );
 
     // 3. DLQ Processor Function
     const dlqProcessorFunction = new lambdaNodejs.NodejsFunction(this, 'DLQProcessorFunction', {

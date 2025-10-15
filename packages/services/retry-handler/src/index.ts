@@ -308,14 +308,18 @@ async function scheduleRetryWithDelay(
       GroupName: process.env.SCHEDULER_GROUP_NAME!,
       ScheduleExpression: `at(${scheduleAt.toISOString().slice(0, -5)})`, // EventBridge format
       Target: {
-        Arn: process.env.PUBLISHER_LAMBDA_ARN!,
-        RoleArn: process.env.SCHEDULER_ROLE_ARN!,
+        Arn: process.env.SCHEDULING_EVENT_BUS_ARN!,
+        RoleArn: process.env.SCHEDULER_EVENTS_ROLE_ARN!,
         Input: JSON.stringify({
           scheduleId,
           brandId: scheduleData.brandId,
           userId: scheduleData.userId,
           retryAttempt: attemptNumber,
         }),
+        EventBridgeParameters: {
+          DetailType: 'schedule.due',
+          Source: 'postolio.scheduling',
+        },
       },
       FlexibleTimeWindow: {
         Mode: 'OFF',

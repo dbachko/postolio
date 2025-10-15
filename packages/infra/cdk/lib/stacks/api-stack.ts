@@ -77,17 +77,17 @@ export class ApiStack extends cdk.Stack {
     );
 
     // Import images bucket name and CDN domain from Foundation stack
-    const imagesBucketName = ssm.StringParameter.valueFromLookup(
+    const imagesBucketName = ssm.StringParameter.valueForStringParameter(
       this,
       `/postolio/${environment}/s3/images-bucket`
     );
 
-    const imagesCdnDomain = ssm.StringParameter.valueFromLookup(
+    const imagesCdnDomain = ssm.StringParameter.valueForStringParameter(
       this,
       `/postolio/${environment}/cdn/images-domain`
     );
 
-    const imagesCdnDistributionId = ssm.StringParameter.valueFromLookup(
+    const imagesCdnDistributionId = ssm.StringParameter.valueForStringParameter(
       this,
       `/postolio/${environment}/cdn/images-distribution-id`
     );
@@ -125,7 +125,7 @@ export class ApiStack extends cdk.Stack {
     );
 
     // ==================== Import Foundation Resources ====================
-    // Import VPC from Foundation stack (for CDK lookup, must use valueFromLookup)
+    // Import VPC from Foundation stack (for CDK lookup, synth-safe via context)
     const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
 
     // Check if Foundation resources are available
@@ -135,8 +135,6 @@ export class ApiStack extends cdk.Stack {
       console.log(
         `Foundation VPC not available for environment ${environment} - API stack will need Foundation deployed first`
       );
-      // During synthesis, we'll create a placeholder VPC reference
-      // This will fail at deployment time if Foundation isn't deployed first
     }
 
     // Only attempt VPC lookup if we have a valid VPC ID
@@ -146,8 +144,7 @@ export class ApiStack extends cdk.Stack {
         vpcId: vpcId,
       });
     } else {
-      // During synthesis without Foundation, create a default VPC
-      // This will require Foundation to be deployed before API stack
+      // During synthesis without Foundation, create a placeholder VPC to allow synth
       vpc = new ec2.Vpc(this, 'PlaceholderVpc', {
         maxAzs: 2,
         natGateways: 1,
@@ -176,7 +173,7 @@ export class ApiStack extends cdk.Stack {
 
       const databaseSecurityGroupId = ssm.StringParameter.valueForStringParameter(
         this,
-        `/postolio/${environment}/security-groups/database`
+        `/postolio/${environment}/database/security-group-id`
       );
 
       databaseSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
@@ -221,26 +218,6 @@ export class ApiStack extends cdk.Stack {
 
       // Database endpoint comes from Secrets Manager (no need for SSM parameter)
       // API service (ECS) maintains persistent connections, doesn't need proxy
-    } else {
-      // Create placeholder resources for synthesis
-      ecsSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderEcsSecurityGroup', {
-        vpc: vpc,
-        description: 'Placeholder security group - Foundation needed for production',
-      });
-
-      databaseSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderDatabaseSecurityGroup', {
-        vpc: vpc,
-        description: 'Placeholder database security group - Foundation needed for production',
-      });
-
-      cacheSecurityGroup = new ec2.SecurityGroup(this, 'PlaceholderCacheSecurityGroup', {
-        vpc: vpc,
-        description: 'Placeholder cache security group - Foundation needed for production',
-      });
-
-      databaseSecret = new secretsmanager.Secret(this, 'PlaceholderDatabaseSecret', {
-        description: 'Placeholder secret - Foundation needed for production',
-      });
     }
 
     // Create JWT Secret
