@@ -111,7 +111,7 @@ export const handler = async (event: SQSEvent | ScheduledEvent | undefined): Pro
 
 async function processRetryMessage(record: SQSRecord): Promise<void> {
   const message = JSON.parse(record.body);
-  const { scheduleId, originalError } = message;
+  const { scheduleId, originalError, errorMeta, httpStatus } = message;
 
   // 🚨 RECURSIVE LOOP PREVENTION: Validate scheduleId exists and is reasonable
   if (!scheduleId || typeof scheduleId !== 'string' || scheduleId.length > 100) {
@@ -147,15 +147,30 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
   }
 
   // Parse the original error from the message
-  let lastError: Error;
-  try {
-    lastError = originalError ? new Error(originalError) : new Error('Unknown publishing error');
-  } catch {
-    lastError = new Error('Failed to parse error from retry message');
+  let analysisInput: unknown;
+  if (errorMeta && typeof errorMeta === 'object') {
+    // Prefer structured metadata from publisher if available
+    analysisInput = {
+      ...(errorMeta as Record<string, unknown>),
+      httpStatusCode:
+        typeof (errorMeta as { httpStatus?: unknown }).httpStatus === 'number'
+          ? (errorMeta as { httpStatus: number }).httpStatus
+          : typeof httpStatus === 'number'
+            ? (httpStatus as number)
+            : undefined,
+    };
+  } else {
+    try {
+      analysisInput = originalError
+        ? new Error(originalError)
+        : new Error('Unknown publishing error');
+    } catch {
+      analysisInput = new Error('Failed to parse error from retry message');
+    }
   }
 
   // Use industry-standard retry strategy to determine if we should retry
-  const retryDecision = retryStrategy.shouldRetry(lastError, attemptNumber, scheduleId);
+  const retryDecision = retryStrategy.shouldRetry(analysisInput, attemptNumber, scheduleId);
 
   logger.info('Retry decision made', {
     scheduleId,
@@ -164,7 +179,7 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
     reason: retryDecision.reason,
     delayMs: retryDecision.delayMs,
     circuitBreakerOpen: retryDecision.circuitBreakerOpen,
-    errorAnalysis: retryStrategy.analyzeError(lastError),
+    errorAnalysis: retryStrategy.analyzeError(analysisInput),
   });
 
   // If we shouldn't retry, mark as failed
@@ -393,6 +408,26 @@ async function markAsFailed(
     // Analyze error to get structured information
     const errorAnalysis = retryStrategy.analyzeError(originalError || reason);
 
+    // Prefer a more user-friendly reason if the generic message is returned
+    const rawOriginalMsg =
+      originalError instanceof Error ? originalError.message : String(originalError || '');
+    const userReason = (() => {
+      if (reason === 'Non-retryable error type' && rawOriginalMsg) {
+        const lower = rawOriginalMsg.toLowerCase();
+        if (lower.includes('token not found')) {
+          return 'Account token not found. Please reconnect your account in Settings.';
+        }
+        if (
+          lower.includes('media could not be fetched') ||
+          lower.includes('failed to create media')
+        ) {
+          return 'Image URL not accessible by Instagram. Try again or regenerate the image.';
+        }
+        return rawOriginalMsg;
+      }
+      return reason;
+    })();
+
     const sched = await getScheduleData(scheduleId);
     if (sched && sched.pk && sched.sk) {
       await docClient.send(
@@ -412,7 +447,7 @@ async function markAsFailed(
           },
           ExpressionAttributeValues: {
             ':status': 'failed',
-            ':error': reason,
+            ':error': userReason,
             ':errorType': errorAnalysis.errorType,
             ':updatedAt': new Date().toISOString(),
           },

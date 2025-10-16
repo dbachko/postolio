@@ -111,6 +111,9 @@ interface PublishResult {
   platformPostId?: string;
   platformUrl?: string;
   error?: string;
+  // Structured error metadata for downstream retry logic
+  errorCode?: string;
+  httpStatus?: number;
 }
 
 // Platform adapter factory
@@ -230,6 +233,8 @@ class InstagramAdapter implements PlatformAdapter {
         return {
           success: false,
           error: `Failed to create media: ${igMsg}`,
+          errorCode: 'IG_MEDIA_CREATE_FAILED',
+          httpStatus: createResponse.status,
         };
       }
 
@@ -269,7 +274,12 @@ class InstagramAdapter implements PlatformAdapter {
           error: igMsg,
           title: igTitle,
         });
-        return { success: false, error: `Failed to publish: ${igMsg}` };
+        return {
+          success: false,
+          error: `Failed to publish: ${igMsg}`,
+          errorCode: 'IG_PUBLISH_FAILED',
+          httpStatus: publishResponse.status,
+        };
       }
 
       const publishResult = await publishResponse.json();
@@ -302,7 +312,11 @@ class InstagramAdapter implements PlatformAdapter {
       };
     } catch (error) {
       logger.error('Instagram publishing failed', error as Error);
-      return { success: false, error: (error as Error).message };
+      return {
+        success: false,
+        error: (error as Error).message,
+        errorCode: 'IG_PUBLISH_RUNTIME_ERROR',
+      };
     }
   }
 
@@ -673,7 +687,13 @@ export const handler = async (
     const publishResult = await adapter.publish(publishableSchedule, credentials, mediaUrl);
 
     if (!publishResult.success) {
-      throw new Error(publishResult.error || 'Publishing failed');
+      const err = new Error(publishResult.error || 'Publishing failed');
+      (err as unknown as { meta?: Record<string, unknown> }).meta = {
+        errorCode: publishResult.errorCode,
+        httpStatus: publishResult.httpStatus,
+        platform: schedule.platform,
+      };
+      throw err;
     }
 
     // Write idempotency marker (best-effort)
@@ -808,7 +828,15 @@ export const handler = async (
     // 🔥 CRITICAL FIX: Send structured error message to DLQ for intelligent retry handling
     // Instead of throwing error (which causes immediate AWS retry), manually send to DLQ
     try {
-      await sendToRetryQueue(event.scheduleId, error as Error, event);
+      const schedule = await getSchedule(event.scheduleId).catch(
+        () => null as unknown as Schedule | null
+      );
+      const meta = (error as unknown as { meta?: Record<string, unknown> }).meta || {};
+      const errorMeta = {
+        ...(meta as Record<string, unknown>),
+        platform: schedule?.platform,
+      } as { errorCode?: string; httpStatus?: number; retryable?: boolean; platform?: string };
+      await sendToRetryQueue(event.scheduleId, error as Error, event, errorMeta);
       logger.info('Sent failed publishing request to retry queue for intelligent handling', {
         scheduleId: event.scheduleId,
         error: (error as Error).message,
@@ -917,11 +945,27 @@ async function getTokenFromTokenService(
         body: errorBody,
       });
 
-      if (response.status === 404) {
-        throw new Error('Token not found');
-      }
-
-      throw new Error(`Token Service error: ${response.status} ${response.statusText}`);
+      const baseMessage =
+        response.status === 404
+          ? 'Token not found'
+          : `Token Service error: ${response.status} ${response.statusText}`;
+      const err = new Error(baseMessage) as Error & { meta?: Record<string, unknown> };
+      const retryable = response.status === 429 || response.status >= 500;
+      const errorCode =
+        response.status === 404
+          ? 'TOKEN_NOT_FOUND'
+          : response.status === 401 || response.status === 403
+            ? 'UNAUTHORIZED'
+            : retryable
+              ? 'SERVICE_UNAVAILABLE'
+              : 'REQUEST_FAILED';
+      err.meta = {
+        service: 'token-service',
+        httpStatus: response.status,
+        errorCode,
+        retryable,
+      };
+      throw err;
     }
 
     interface RawTokenResponse {
@@ -944,7 +988,21 @@ async function getTokenFromTokenService(
     };
   } catch (error) {
     logger.error('Failed to get token from Token Service', { error });
-    throw error;
+    // Attach structured metadata for retry analysis
+    const err = error as Error & { meta?: Record<string, unknown> };
+    if (!err.meta) {
+      // Try to derive meta from known error messages
+      const msg = (err?.message || '').toLowerCase();
+      if (msg.includes('token not found')) {
+        err.meta = {
+          errorCode: 'TOKEN_NOT_FOUND',
+          httpStatus: 404,
+          retryable: false,
+          service: 'token-service',
+        };
+      }
+    }
+    throw err;
   }
 }
 
@@ -955,7 +1013,14 @@ async function getTokenFromTokenService(
 async function sendToRetryQueue(
   scheduleId: string,
   error: Error,
-  originalEvent: PublishEvent
+  originalEvent: PublishEvent,
+  errorMeta?: {
+    errorCode?: string;
+    httpStatus?: number;
+    retryable?: boolean;
+    platform?: string;
+    service?: string;
+  }
 ): Promise<void> {
   const queueUrl = process.env.RETRY_QUEUE_URL || process.env.DLQ_URL;
   if (!queueUrl) {
@@ -964,6 +1029,12 @@ async function sendToRetryQueue(
   }
 
   // Create structured message for retry handler with error context
+  const metaFromError = (error as unknown as { meta?: Record<string, unknown> }).meta || {};
+  const mergedMeta = {
+    ...(metaFromError as Record<string, unknown>),
+    ...(errorMeta || {}),
+  } as Record<string, unknown>;
+
   const retryMessage = {
     scheduleId,
     originalEvent,
@@ -973,6 +1044,11 @@ async function sendToRetryQueue(
       message: error.message,
       stack: error.stack,
     },
+    errorMeta: mergedMeta,
+    httpStatus:
+      typeof (mergedMeta as { httpStatus?: unknown }).httpStatus === 'number'
+        ? (mergedMeta as { httpStatus: number }).httpStatus
+        : undefined,
     timestamp: new Date().toISOString(),
     source: 'publisher',
     attempt: 1, // This is the first failure

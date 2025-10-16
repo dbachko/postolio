@@ -143,9 +143,30 @@ export class RetryStrategy {
   analyzeError(error: Error | unknown): ErrorAnalysis {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Extract HTTP status code if available
-    const statusCodeMatch = errorMessage.match(/(\d{3})/);
-    const httpStatusCode = statusCodeMatch ? parseInt(statusCodeMatch[1]) : undefined;
+    // Prefer structured metadata if provided (from Publisher retry message)
+    let httpStatusCode: number | undefined;
+    let structuredCode: string | undefined;
+    if (error && typeof error === 'object') {
+      const obj = error as Record<string, unknown>;
+      const statusRaw = (obj.httpStatusCode || obj.httpStatus || obj.status) as unknown;
+      if (typeof statusRaw === 'number') {
+        httpStatusCode = statusRaw;
+      } else if (typeof statusRaw === 'string') {
+        const parsed = parseInt(statusRaw, 10);
+        if (!Number.isNaN(parsed)) httpStatusCode = parsed;
+      }
+      if (typeof obj.errorCode === 'string') {
+        structuredCode = obj.errorCode;
+      }
+    }
+
+    // Fallback: extract HTTP status code from message text if not provided
+    if (!httpStatusCode) {
+      const statusCodeMatch = errorMessage.match(/(?<!\d)(\d{3})(?!\d)/);
+      const parsedCode = statusCodeMatch ? parseInt(statusCodeMatch[1], 10) : undefined;
+      httpStatusCode =
+        parsedCode && parsedCode >= 400 && parsedCode <= 599 ? parsedCode : undefined;
+    }
 
     // AWS/Industry standard error classification
     if (httpStatusCode) {
@@ -213,6 +234,55 @@ export class RetryStrategy {
         isRetryable: true,
         errorMessage,
       };
+    }
+
+    // Structured error code handling (if provided)
+    if (structuredCode) {
+      const code = structuredCode.toUpperCase();
+      if (code === 'TOKEN_NOT_FOUND' || code === 'REQUEST_FAILED') {
+        return {
+          errorType: ErrorType.NON_TRANSIENT,
+          isRetryable: false,
+          httpStatusCode,
+          errorMessage,
+        };
+      }
+      if (code === 'UNAUTHORIZED') {
+        return {
+          errorType: ErrorType.AUTHENTICATION,
+          isRetryable: false,
+          httpStatusCode,
+          errorMessage,
+        };
+      }
+      if (code === 'RATE_LIMIT') {
+        return {
+          errorType: ErrorType.RATE_LIMITED,
+          isRetryable: true,
+          httpStatusCode,
+          errorMessage,
+        };
+      }
+      if (code === 'SERVICE_UNAVAILABLE' || code === 'NETWORK_ERROR') {
+        return { errorType: ErrorType.TRANSIENT, isRetryable: true, httpStatusCode, errorMessage };
+      }
+      if (code.startsWith('IG_')) {
+        // Default IG errors to non-transient unless status suggests retryable
+        if (httpStatusCode && [429, 500, 502, 503, 504].includes(httpStatusCode)) {
+          return {
+            errorType: ErrorType.TRANSIENT,
+            isRetryable: true,
+            httpStatusCode,
+            errorMessage,
+          };
+        }
+        return {
+          errorType: ErrorType.NON_TRANSIENT,
+          isRetryable: false,
+          httpStatusCode,
+          errorMessage,
+        };
+      }
     }
 
     // Default to non-transient for unknown errors
