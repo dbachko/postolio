@@ -36,7 +36,7 @@ interface ConfigureCampaignBody {
   };
   frequency: string;
   themes: string[];
-  style: string;
+  style?: string;
   postingTime: string;
   priority?: number;
   // NEW: Optional structured data from wizard
@@ -74,7 +74,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     duration: z.object({ start: z.string().min(1), end: z.string().min(1) }),
     frequency: z.string().min(1),
     themes: z.array(z.string()).min(1),
-    style: z.string().min(1),
+    // Style is optional; brand profile projection now drives tone/voice
+    style: z.string().optional(),
     postingTime: z.string().regex(/^\d{2}:\d{2}$/),
     priority: z.number().int().min(1).max(10).optional(),
     promotionDetails: z
@@ -159,7 +160,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           },
           frequency: body.frequency,
           themes: body.themes,
-          style: body.style,
+          ...(body.style && body.style.trim().length > 0 ? { style: body.style } : {}),
           postingTime: body.postingTime,
           ...(body.priority !== undefined ? { priority: body.priority } : {}),
           // Wizard-enhanced fields

@@ -63,6 +63,10 @@ export interface CampaignStrategy {
     reach: { low: number; high: number };
     engagementRate: number; // 0..1
   };
+  predictionsMeta?: {
+    basis: 'historical' | 'heuristic';
+    samples: { engagement: number; reach: number };
+  };
   recommendations?: string[];
 }
 
@@ -141,6 +145,7 @@ function normalizePillars<T extends { name: string; percentage: number; themes?:
 async function getBrandHistoricalMetrics(brandId: string): Promise<{
   avgEngagementRate: number; // 0..1
   medianReach: number;
+  samples: { engagement: number; reach: number };
 }> {
   // Pull recent content analytics if available
   const recent = await prisma.content.findMany({
@@ -172,7 +177,11 @@ async function getBrandHistoricalMetrics(brandId: string): Promise<{
   const sorted = reaches.sort((a, b) => a - b);
   const medianReach = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 1000; // default baseline
 
-  return { avgEngagementRate, medianReach };
+  return {
+    avgEngagementRate,
+    medianReach,
+    samples: { engagement: rates.length, reach: reaches.length },
+  };
 }
 
 export async function analyzeGoal(input: AnalyzeGoalInput): Promise<AnalyzeGoalResult> {
@@ -234,7 +243,9 @@ Themes: ${(input.themes || []).join(', ')}
 }
 
 export async function generateStrategy(input: GenerateStrategyInput): Promise<CampaignStrategy> {
-  const { avgEngagementRate, medianReach } = await getBrandHistoricalMetrics(input.brandId);
+  const { avgEngagementRate, medianReach, samples } = await getBrandHistoricalMetrics(
+    input.brandId
+  );
 
   // Baseline estimate of posts
   const start = new Date(input.timeline.startDate);
@@ -283,6 +294,10 @@ export async function generateStrategy(input: GenerateStrategyInput): Promise<Ca
         high: Math.round(medianReach * 1.4 * estimatedPosts),
       },
       engagementRate: avgEngagementRate,
+    },
+    predictionsMeta: {
+      basis: samples.engagement > 0 || samples.reach > 0 ? 'historical' : 'heuristic',
+      samples,
     },
     recommendations: [
       'A/B test caption tone (conversational vs. direct CTA)',
@@ -341,6 +356,10 @@ Posting time: ${input.postingTime}
       ...safe.data,
       contentPillars: {
         pillars: normalizePillars(safe.data.contentPillars.pillars),
+      },
+      predictionsMeta: {
+        basis: samples.engagement >= 5 || samples.reach >= 5 ? 'historical' : 'heuristic',
+        samples,
       },
     };
     return normalized;

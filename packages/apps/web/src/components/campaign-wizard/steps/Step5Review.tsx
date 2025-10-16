@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '../../ui/alert';
 import { apiClient } from '../../../lib/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function Step5Review() {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ export function Step5Review() {
   const state = useCampaignWizard();
   const { setStep, prevStep, reset } = useCampaignWizard();
   const [isSubmitting, setSubmitting] = useState(false);
+  const queryClient = useQueryClient();
 
   const summary = useMemo(() => {
     return {
@@ -55,6 +57,8 @@ export function Step5Review() {
         contentPillars: state.contentPillars || undefined,
       } as const;
       await apiClient.configureCampaign(payload as any);
+      // Invalidate campaigns list for this brand so the dashboard shows the new campaign immediately
+      queryClient.invalidateQueries({ queryKey: ['campaigns', brand.id] });
       // Log funnel event (fire-and-forget)
       try {
         await apiClient.post('/api/analytics/wizard-event', {

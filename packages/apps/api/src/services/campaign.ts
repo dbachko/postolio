@@ -35,7 +35,7 @@ export interface CampaignConfig {
   };
   frequency: string; // 'daily', 'every2days', '3weekly', etc.
   themes: string[];
-  style: string;
+  style?: string;
   postingTime: string; // HH:MM format
   priority?: number; // 1=highest, 5=normal, 10=lowest
   // Wizard-enhanced (Phase 1) optional fields
@@ -260,7 +260,7 @@ class CampaignService {
             },
             frequency: config.frequency,
             themes: config.themes,
-            style: config.style,
+            ...(config.style && config.style.trim().length > 0 ? { style: config.style } : {}),
             postingTime: config.postingTime,
             estimatedPosts,
             durationDays,

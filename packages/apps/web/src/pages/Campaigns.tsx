@@ -153,6 +153,13 @@ export function Campaigns() {
     }
   }, [location.pathname, urlCampaignId, campaignsQuery.data?.campaigns]);
 
+  // Ensure campaigns list refreshes when returning from the wizard to the dashboard
+  useEffect(() => {
+    if (currentView === 'dashboard' && selectedBrand) {
+      campaignsQuery.refetch();
+    }
+  }, [currentView, selectedBrand]);
+
   // Editing via legacy form removed
 
   // Auto brand-switching effect when accessing campaign via URL

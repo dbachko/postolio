@@ -835,6 +835,10 @@ class ApiClient {
         reach: { low: number; high: number };
         engagementRate: number;
       };
+      predictionsMeta?: {
+        basis: 'historical' | 'heuristic';
+        samples: { engagement: number; reach: number };
+      };
       recommendations?: string[];
     };
   }> {

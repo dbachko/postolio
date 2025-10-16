@@ -5,7 +5,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { useAuthStore } from './stores/authStore';
 import { TimezoneProvider } from './contexts/TimezoneContext';
 import { ConnectionStatusProvider } from './contexts/WebSocketContext';
-import { UltraThinLayout as Layout } from './components/UltraThinLayout';
+import { AppLayout as Layout } from './components/AppLayout';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';

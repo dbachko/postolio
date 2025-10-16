@@ -27,6 +27,7 @@ import {
   Check,
   Building2,
   Search,
+  HelpCircle,
   BarChart3,
   Instagram,
   TrendingUp,
@@ -39,6 +40,8 @@ import {
   Home,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
+import { RightHelpDrawer } from './help/RightHelpDrawer';
 
 interface LayoutProps {
   children: ReactNode;
@@ -117,7 +120,7 @@ const isRouteActive = (item: NavigationItem, currentPath: string): boolean => {
   return currentPath === item.path;
 };
 
-export function UltraThinLayout({ children }: LayoutProps) {
+export function AppLayout({ children }: LayoutProps) {
   const { user, logout } = useAuthStore();
   const { selectedBrand, brands, setSelectedBrand } = useBrandStore();
   const navigate = useNavigate();
@@ -125,6 +128,8 @@ export function UltraThinLayout({ children }: LayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpDrawerOpen, setHelpDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = () => {
@@ -258,6 +263,18 @@ export function UltraThinLayout({ children }: LayoutProps) {
                 </kbd>
               </Button>
 
+              {/* Help Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hidden h-9 items-center sm:flex"
+                onClick={() => setHelpOpen(true)}
+                aria-label="Open Help"
+              >
+                <HelpCircle className="h-4 w-4" aria-hidden="true" />
+                <span className="ml-2 hidden text-sm lg:inline">Help</span>
+              </Button>
+
               {/* Grid Menu Dropdown */}
               <div className="relative" ref={menuRef}>
                 <Button
@@ -338,6 +355,26 @@ export function UltraThinLayout({ children }: LayoutProps) {
 
                         {/* Quick Actions */}
                         <div className="mt-4 space-y-1 border-t pt-4">
+                          <button
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setHelpOpen(true);
+                            }}
+                            className="hover:bg-accent flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors"
+                          >
+                            <HelpCircle className="mr-3 h-4 w-4" aria-hidden="true" />
+                            Help & FAQ
+                          </button>
+                          <button
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setHelpDrawerOpen(true);
+                            }}
+                            className="hover:bg-accent flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors"
+                          >
+                            <Grid3X3 className="mr-3 h-4 w-4" aria-hidden="true" />
+                            Help Sidebar (beta)
+                          </button>
                           <Link
                             to="/dashboard"
                             onClick={() => setMenuOpen(false)}
@@ -480,6 +517,15 @@ export function UltraThinLayout({ children }: LayoutProps) {
           <CommandGroup heading="Quick Actions">
             <CommandItem
               onSelect={() => {
+                setHelpOpen(true);
+                setSearchOpen(false);
+              }}
+            >
+              <HelpCircle className="mr-3 h-4 w-4" aria-hidden="true" />
+              Open Help
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
                 navigate('/campaigns');
                 setSearchOpen(false);
               }}
@@ -508,6 +554,10 @@ export function UltraThinLayout({ children }: LayoutProps) {
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+
+      {/* Global Help Modal and Sidebar (scaffolded) */}
+      <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <RightHelpDrawer open={helpDrawerOpen} onOpenChange={setHelpDrawerOpen} />
 
       {/* Email Verification Banner */}
       <EmailVerificationBanner />

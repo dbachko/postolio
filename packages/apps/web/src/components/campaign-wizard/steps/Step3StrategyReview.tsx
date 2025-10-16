@@ -9,8 +9,13 @@ import { useBrandStore } from '../../../stores/brandStore';
 import { apiClient } from '../../../lib/api';
 import { Loader2, Lightbulb } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../ui/dialog';
+import { WizardHelpDialog } from '../shared/WizardHelpDialog';
+import { toast } from 'sonner';
+import { Badge } from '../../ui/badge';
+import { useNavigate } from 'react-router-dom';
 
 export function Step3StrategyReview() {
+  const navigate = useNavigate();
   const { prevStep, nextStep, contentPillars, updateField } = useCampaignWizard();
   const brand = useBrandStore((s) => s.selectedBrand);
   const wizard = useCampaignWizard();
@@ -20,6 +25,10 @@ export function Step3StrategyReview() {
     reach: { low: number; high: number };
     engagementRate: number;
   } | null>(null);
+  const [predictionsMeta, setPredictionsMeta] = useState<{
+    basis: 'historical' | 'heuristic';
+    samples: { engagement: number; reach: number };
+  } | null>(null);
   const [schedulePhases, setSchedulePhases] = useState<
     Array<{
       phase: string;
@@ -28,8 +37,18 @@ export function Step3StrategyReview() {
       rationale: string;
     }>
   >([]);
-  const [recommendations, setRecommendations] = useState<string[] | null>(null);
-  const [schedulePostingTime, setSchedulePostingTime] = useState<string | null>(null);
+  // Auto-apply optimizations instead of showing recommendations
+  const [optimizationNoteVisible, setOptimizationNoteVisible] = useState(false);
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [optChanges, setOptChanges] = useState<{
+    postingTime?: { prev: string | null; next: string | null };
+    frequency?: {
+      prev: 'daily' | 'every2days' | '3weekly' | '';
+      next: 'daily' | 'every2days' | '3weekly';
+    };
+    themes?: { prev: string[]; next: string[]; added: string[] };
+  } | null>(null);
+  const [_schedulePostingTime, setSchedulePostingTime] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [analysis, setAnalysis] = useState<{
@@ -38,6 +57,7 @@ export function Step3StrategyReview() {
     suggestedPillars: Array<{ name: string; percentage: number; themes: string[] }>;
     schedule: { frequency: 'daily' | 'every2days' | '3weekly'; rationale: string };
   } | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [pillars, setPillars] = useState<Array<{ name: string; percentage: number }>>(
     contentPillars?.pillars?.map((p) => ({ name: p.name, percentage: p.percentage })) || [
       { name: 'Pillar 1', percentage: 34 },
@@ -77,15 +97,14 @@ export function Step3StrategyReview() {
       wizard.frequency === '3weekly';
     const hasPostingTime =
       typeof wizard.postingTime === 'string' && /^\d{2}:\d{2}$/.test(wizard.postingTime);
-    const hasStyle = !!wizard.style;
-    return hasBrand && hasTimeline && hasFrequency && hasPostingTime && hasStyle;
+    // Style is optional for generation; we will default to 'modern' when absent
+    return hasBrand && hasTimeline && hasFrequency && hasPostingTime;
   }, [
     brand,
     wizard.timeline?.startDate,
     wizard.timeline?.endDate,
     wizard.frequency,
     wizard.postingTime,
-    wizard.style,
   ]);
 
   const onGenerate = async () => {
@@ -115,12 +134,62 @@ export function Step3StrategyReview() {
         setPillars(pillars);
         updateField('contentPillars', res.strategy.contentPillars);
         setPredictions(res.strategy.predictions);
+        setPredictionsMeta(res.strategy.predictionsMeta || null);
         setSchedulePhases(res.strategy.schedule.phases);
         setSchedulePostingTime(res.strategy.schedule.postingTime);
-        setRecommendations(res.strategy.recommendations || null);
+        // Auto-apply strategy optimizations (posting time, frequency, themes)
+        try {
+          const prevPosting = wizard.postingTime || null;
+          const nextPosting = res.strategy.schedule.postingTime || null;
+          if (nextPosting && nextPosting !== prevPosting) {
+            wizard.updateField('postingTime', nextPosting);
+          }
+
+          const f = res.strategy.schedule.phases?.[0]?.frequency as
+            | 'daily'
+            | 'every2days'
+            | '3weekly'
+            | undefined;
+          const prevFreq = wizard.frequency;
+          if (f && f !== prevFreq) {
+            wizard.updateField('frequency', f);
+          }
+
+          const prevThemes = Array.isArray(wizard.themes) ? wizard.themes : [];
+          const pillarThemes = (res.strategy.contentPillars?.pillars || [])
+            .flatMap((p) => p.themes || [])
+            .filter(Boolean) as string[];
+          const nextThemes = Array.from(new Set([...prevThemes, ...pillarThemes]));
+          if (nextThemes.length !== prevThemes.length) {
+            wizard.updateField('themes', nextThemes);
+          }
+
+          // Save accepted recommendations text if provided
+          if (Array.isArray(res.strategy.recommendations) && res.strategy.recommendations.length) {
+            wizard.updateField('acceptedRecommendations', res.strategy.recommendations);
+          }
+
+          setOptChanges({
+            postingTime:
+              nextPosting !== prevPosting ? { prev: prevPosting, next: nextPosting } : undefined,
+            frequency: f && f !== prevFreq ? { prev: prevFreq, next: f } : undefined,
+            themes:
+              nextThemes.length !== prevThemes.length
+                ? {
+                    prev: prevThemes,
+                    next: nextThemes,
+                    added: nextThemes.filter((t) => !prevThemes.includes(t)),
+                  }
+                : undefined,
+          });
+          setOptimizationNoteVisible(true);
+        } catch (applyErr) {
+          console.error('Failed to auto-apply optimizations', applyErr);
+        }
       }
     } catch (e) {
       console.error('generate strategy failed', e);
+      toast.error('Failed to generate strategy. Open Help for guidance.');
     } finally {
       setIsGenerating(false);
     }
@@ -172,7 +241,7 @@ export function Step3StrategyReview() {
       <div className="flex items-center justify-between">
         <Alert>
           <AlertDescription>
-            Use AI to propose content pillars and predictions. You can edit before continuing.
+            Use AI to propose content pillars and forecasts. You can edit before continuing.
           </AlertDescription>
         </Alert>
         <div className="flex gap-2">
@@ -196,6 +265,8 @@ export function Step3StrategyReview() {
           </Button>
         </div>
       </div>
+
+      <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -232,7 +303,16 @@ export function Step3StrategyReview() {
               <Button variant="outline" size="sm" onClick={addPillar}>
                 Add Pillar
               </Button>
-              <span className={total !== 100 ? 'text-red-600' : ''}>Total: {total}%</span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setHelpOpen(true)}
+                  className="text-blue-600 hover:underline"
+                >
+                  Learn more
+                </button>
+                <span className={total !== 100 ? 'text-red-600' : ''}>Total: {total}%</span>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -263,7 +343,12 @@ export function Step3StrategyReview() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Predictions</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Forecast</CardTitle>
+              <Badge variant={predictionsMeta?.basis === 'historical' ? 'default' : 'secondary'}>
+                {predictionsMeta?.basis === 'historical' ? 'From data' : 'Heuristic'}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-gray-600">
             {!predictions ? (
@@ -272,78 +357,149 @@ export function Step3StrategyReview() {
                 <div className="h-4 w-1/3 animate-pulse rounded bg-gray-200" />
               </>
             ) : (
-              <div className="text-sm">
+              <div className="space-y-2 text-sm">
                 <div>Estimated posts: {predictions.estimatedPosts}</div>
-                <div>
-                  Reach range: {predictions.reach.low.toLocaleString()} –{' '}
-                  {predictions.reach.high.toLocaleString()}
+                {predictionsMeta?.basis === 'historical' ? (
+                  <>
+                    <div>
+                      Reach range: {predictions.reach.low.toLocaleString()} –{' '}
+                      {predictions.reach.high.toLocaleString()}
+                    </div>
+                    <div>Engagement rate: {(predictions.engagementRate * 100).toFixed(2)}%</div>
+                    <div className="text-xs text-gray-500">
+                      Based on your recent brand performance (samples:{' '}
+                      {predictionsMeta.samples.reach} reach, {predictionsMeta.samples.engagement}{' '}
+                      engagement).
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-gray-500">
+                    We’ll calibrate reach and engagement after your first scheduled/published posts.
+                  </div>
+                )}
+
+                {/* Improve accuracy checklist */}
+                <div className="mt-3 space-y-2">
+                  <div className="text-xs font-medium text-gray-700">Improve accuracy</div>
+                  <ul className="list-disc space-y-1 pl-5 text-xs text-gray-700">
+                    <li>
+                      Connect Instagram for analytics{' '}
+                      <button
+                        type="button"
+                        className="text-blue-600 hover:underline"
+                        onClick={() => navigate('/instagram')}
+                      >
+                        Connect now
+                      </button>
+                    </li>
+                    <li>
+                      Run brand analysis to enrich context{' '}
+                      <button
+                        type="button"
+                        className="text-blue-600 hover:underline"
+                        onClick={async () => {
+                          if (!brand) return;
+                          try {
+                            await apiClient.startBrandAnalysis(brand.id, {
+                              force: true,
+                              maxPosts: 30,
+                            });
+                            toast.success('Brand analysis started');
+                          } catch (e) {
+                            console.error(e);
+                            toast.error('Failed to start brand analysis');
+                          }
+                        }}
+                      >
+                        Start
+                      </button>
+                    </li>
+                    <li>
+                      Schedule & publish a few posts to unlock data{' '}
+                      <button
+                        type="button"
+                        className="text-blue-600 hover:underline"
+                        onClick={() => navigate('/content')}
+                      >
+                        Go to content
+                      </button>
+                    </li>
+                  </ul>
                 </div>
-                <div>Engagement rate: {(predictions.engagementRate * 100).toFixed(2)}%</div>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Strategy Recommendations */}
-      <Card>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>Recommendations</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!recommendations || recommendations.length === 0}
-            onClick={() => {
-              // Apply all: accept recs, update themes/frequency/postingTime from strategy
-              if (!recommendations) return;
-              // Accept all recommendations
-              wizard.updateField('acceptedRecommendations', recommendations);
-              // Update posting time if provided
-              if (schedulePostingTime) {
-                wizard.updateField('postingTime', schedulePostingTime);
-              }
-              // Prefer first phase frequency if exists
-              if (schedulePhases.length > 0) {
-                const f = schedulePhases[0]?.frequency as
-                  | 'daily'
-                  | 'every2days'
-                  | '3weekly'
-                  | undefined;
-                if (f) wizard.updateField('frequency', f);
-              }
-              // Ensure wizard themes include all pillar themes
-              const pillarThemes = (wizard.contentPillars?.pillars || [])
-                .flatMap((p) => p.themes || [])
-                .filter(Boolean) as string[];
-              if (pillarThemes.length) {
-                const set = new Set([...(wizard.themes || []), ...pillarThemes]);
-                wizard.updateField('themes', Array.from(set));
-              }
-            }}
-          >
-            Apply All
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-gray-700">
-          {!recommendations ? (
-            <>
-              <div className="h-4 w-3/5 animate-pulse rounded bg-gray-200" />
-              <div className="h-4 w-2/5 animate-pulse rounded bg-gray-200" />
-              <div className="h-4 w-1/3 animate-pulse rounded bg-gray-200" />
-            </>
-          ) : recommendations.length === 0 ? (
-            <div className="text-gray-500">
-              No recommendations yet. Generate a strategy to see tips.
-            </div>
-          ) : (
-            <ul className="list-disc pl-5">
-              {recommendations.map((r, i) => (
-                <li key={i}>{r}</li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      {/* Strategy Optimization Note (replaces Recommendations card) */}
+      {optimizationNoteVisible && (
+        <Alert>
+          <AlertDescription className="flex w-full items-center justify-between">
+            <span>Strategy optimized automatically.</span>
+            <span className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setChangesOpen(true)}>
+                View changes
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (!optChanges) return;
+                  if (optChanges.postingTime)
+                    wizard.updateField('postingTime', optChanges.postingTime.prev || '');
+                  if (optChanges.frequency)
+                    wizard.updateField('frequency', optChanges.frequency.prev);
+                  if (optChanges.themes) wizard.updateField('themes', optChanges.themes.prev);
+                  setOptimizationNoteVisible(false);
+                  toast.success('Optimization undone');
+                }}
+              >
+                Undo
+              </Button>
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* View Changes Dialog */}
+      <Dialog open={changesOpen} onOpenChange={setChangesOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Applied changes</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-gray-700">
+            {!optChanges && <div>No changes were applied.</div>}
+            {optChanges?.postingTime && (
+              <div>
+                <div className="text-gray-600">Posting time</div>
+                <div>
+                  {optChanges.postingTime.prev || '—'} → {optChanges.postingTime.next || '—'}
+                </div>
+              </div>
+            )}
+            {optChanges?.frequency && (
+              <div>
+                <div className="text-gray-600">Frequency</div>
+                <div>
+                  {optChanges.frequency.prev || '—'} → {optChanges.frequency.next}
+                </div>
+              </div>
+            )}
+            {optChanges?.themes && (
+              <div>
+                <div className="text-gray-600">Themes</div>
+                <div className="text-xs">Added: {optChanges.themes.added.join(', ') || '—'}</div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangesOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Tips */}
       <Card>
@@ -353,8 +509,8 @@ export function Step3StrategyReview() {
             <div className="font-medium">Tips</div>
             <p>
               Analyze Goal will pre-fill content pillars and may suggest a cadence. Generate with AI
-              uses your current brief to build a schedule and predictions. If you change pillars or
-              frequency, click Generate again to update predictions.
+              uses your current brief to build a schedule and forecasts. If you change pillars or
+              frequency, click Generate again to update forecasts.
             </p>
           </div>
         </CardContent>

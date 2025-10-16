@@ -11,6 +11,8 @@ import { Step4Timeline } from './steps/Step4Timeline';
 import { Step5Review } from './steps/Step5Review';
 import { Alert, AlertDescription } from '../ui/alert';
 import { apiClient } from '../../lib/api';
+import { HelpCircle } from 'lucide-react';
+import { WizardHelpDialog } from './shared/WizardHelpDialog';
 
 export function CampaignWizard() {
   const currentStep = useCampaignWizard((s) => s.currentStep);
@@ -20,6 +22,7 @@ export function CampaignWizard() {
   const reset = useCampaignWizard((s) => s.reset);
   const setBrandId = useCampaignWizard((s) => s.setBrandId);
   const [skipHydration, setSkipHydration] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Keep auto-save active
   useWizardAutoSave();
@@ -74,12 +77,18 @@ export function CampaignWizard() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Create Campaign</CardTitle>
-            <Button variant="outline" size="sm" onClick={handleReset}>
-              Start Over
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)}>
+                <HelpCircle className="mr-2 h-4 w-4" /> Help
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleReset}>
+                Start Over
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
           <WizardProgress currentStep={currentStep} />
           {currentStep === 1 && <Step1TypeSelection />}
           {currentStep === 2 && <Step2CampaignBrief />}
