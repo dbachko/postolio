@@ -144,7 +144,7 @@ export function Dashboard() {
               <div className="py-8 text-center">
                 <p className="text-muted-foreground mb-4">No campaigns created yet.</p>
                 <Button asChild>
-                  <Link to="/campaigns/create">Create Campaign</Link>
+                  <Link to="/campaigns/create?fresh=1">Create Campaign</Link>
                 </Button>
               </div>
             ) : (

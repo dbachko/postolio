@@ -86,6 +86,7 @@ class CampaignJobService {
         count: 1,
         theme,
         style: config.style,
+        campaignId: campaign.id,
       }));
 
       // Generate preview posts (3 posts)
@@ -113,6 +114,7 @@ class CampaignJobService {
           count: 1,
           theme: config.themes[0],
           style: config.style,
+          campaignId: campaign.id,
         });
         examplePosts.push(...additionalContent);
       }
@@ -166,6 +168,9 @@ class CampaignJobService {
               style: config.style,
               campaignGenerated: true,
               isPreview: true,
+              imagePrompt: post.imagePrompt,
+              campaignType:
+                (campaign as unknown as { campaignType?: string | null }).campaignType || undefined,
             },
           },
         });

@@ -42,6 +42,7 @@ const initialState: CampaignWizardState = {
   acceptedRecommendations: [],
   saveStatus: 'idle',
   draftId: undefined,
+  seasonalityAssist: true,
 };
 
 export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
@@ -144,6 +145,7 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
         contentPillars: state.contentPillars,
         acceptedRecommendations: state.acceptedRecommendations,
         draftId: state.draftId,
+        seasonalityAssist: state.seasonalityAssist,
       }),
     }
   )

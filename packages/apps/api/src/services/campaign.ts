@@ -43,6 +43,8 @@ export interface CampaignConfig {
   contentPillars?: unknown; // Json structure { pillars: [{ name, percentage, themes }] }
   urgencyTactics?: unknown; // Json structure { hasUrgency, discountPercentage, promoCode, limitedQuantity }
   seasonalContext?: unknown; // Json structure { season, events, themes }
+  goals?: string; // High-level goals/intent captured in wizard
+  seasonalityAssist?: boolean; // Whether to include seasons/holidays in generation prompts
 }
 
 export interface CampaignPreview {
@@ -80,6 +82,8 @@ type EditableCampaignFields = Partial<{
   postingTime: string;
   startDate: string;
   endDate: string;
+  goals: string;
+  seasonalityAssist: boolean;
   // Nested config object (preferred)
   config: {
     themes?: string[];
@@ -265,6 +269,10 @@ class CampaignService {
             estimatedPosts,
             durationDays,
             conflicts: conflictSummary,
+            ...(config.goals ? { goals: config.goals } : {}),
+            ...(config.seasonalityAssist !== undefined
+              ? { seasonalityAssist: !!config.seasonalityAssist }
+              : { seasonalityAssist: true }),
           },
         },
         include: {
@@ -1796,6 +1804,12 @@ class CampaignService {
       }
       if (updateData.postingTime !== undefined) {
         configUpdates.postingTime = updateData.postingTime;
+      }
+      if (updateData.goals !== undefined) {
+        configUpdates.goals = updateData.goals;
+      }
+      if (updateData.seasonalityAssist !== undefined) {
+        configUpdates.seasonalityAssist = !!updateData.seasonalityAssist;
       }
       if (updateData.startDate !== undefined || updateData.endDate !== undefined) {
         configUpdates.duration = {

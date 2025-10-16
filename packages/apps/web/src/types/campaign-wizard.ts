@@ -35,6 +35,7 @@ export interface CampaignWizardState {
   acceptedRecommendations?: string[];
   saveStatus: 'saved' | 'saving' | 'error' | 'idle';
   draftId?: string;
+  seasonalityAssist: boolean;
 }
 
 export interface CampaignTypeConfig {

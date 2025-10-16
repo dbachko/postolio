@@ -4,6 +4,7 @@ import { generateMidjourneyImage } from './midjourney.js';
 import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
 import { getBrandProfileContext, type BrandProfileContext } from './brand-profile.js';
 import { Prisma, type ContentStatus } from '@postolio/database';
+import { SeasonalityService } from './seasonality.js';
 import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
@@ -13,6 +14,8 @@ export interface ContentGenerationRequest {
   count: number;
   theme?: string | undefined;
   style?: string | undefined;
+  // Optional: link generation to a specific campaign so we can include context
+  campaignId?: string | undefined;
 }
 
 export interface GeneratedContent {
@@ -73,6 +76,41 @@ export async function generateInstagramContent(
   }
 
   const { count, theme, style } = request;
+  // Optional campaign context (type, pillars, promotions, seasonality)
+  // Minimal campaign context shape to avoid heavy type coupling
+  type CampaignCtx = {
+    id: string;
+    name: string;
+    campaignType?: string | null;
+    contentPillars?: { pillars?: Array<{ name: string; percentage?: number }> } | null;
+    urgencyTactics?: {
+      discountPercentage?: number;
+      promoCode?: string;
+      limitedQuantity?: boolean;
+    } | null;
+    seasonalContext?: unknown;
+    config?: { themes?: string[] } | null;
+  };
+  let campaignCtx: CampaignCtx | null = null;
+  if (request.campaignId) {
+    try {
+      const raw = await prisma.campaign.findUnique({
+        where: { id: request.campaignId },
+        select: {
+          id: true,
+          name: true,
+          campaignType: true,
+          contentPillars: true,
+          urgencyTactics: true,
+          seasonalContext: true,
+          config: true,
+        },
+      });
+      campaignCtx = raw as unknown as CampaignCtx;
+    } catch (e) {
+      console.warn('Failed to load campaign context for generation; proceeding without it', e);
+    }
+  }
   let brandContext: BrandProfileContext | null = null;
   try {
     brandContext = await getBrandProfileContext(request.brandId);
@@ -168,6 +206,56 @@ export async function generateInstagramContent(
     `Each caption must include a different subtle CTA (e.g., save for later, tag a friend, DM for tips, vote in comments, try this today)`,
   ].join('\n- ');
 
+  // Campaign metadata
+  const campaignType = campaignCtx?.campaignType || undefined || undefined;
+  const allCampaignThemes: string[] = Array.isArray(campaignCtx?.config?.themes)
+    ? (campaignCtx!.config!.themes as string[]).slice(0, 6)
+    : [];
+  let pillarNames: string[] = [];
+  {
+    const cp = campaignCtx?.contentPillars as unknown;
+    if (cp && typeof cp === 'object' && 'pillars' in (cp as { [k: string]: unknown })) {
+      const pillars = (cp as { pillars?: Array<{ name: string; percentage?: number }> }).pillars;
+      pillarNames = Array.isArray(pillars) ? pillars.map((p) => p.name).slice(0, 6) : [];
+    }
+  }
+
+  // Seasonality (Phase 1): compute factual season/holidays if enabled
+  let seasonalityBlock = 'n/a';
+  let seasonalityAssist = true;
+  {
+    const cfg = (campaignCtx?.config || {}) as { seasonalityAssist?: boolean };
+    if (typeof cfg.seasonalityAssist === 'boolean') seasonalityAssist = cfg.seasonalityAssist;
+  }
+  if (request.campaignId && seasonalityAssist) {
+    try {
+      const sctx = await SeasonalityService.getSeasonalityForCampaign(request.campaignId);
+      const seasonsStr = sctx.seasons
+        .map((s: { name: string; start: string; end: string }) => `${s.name} (${s.start}→${s.end})`)
+        .join('; ');
+      const holidaysStr = sctx.holidays
+        .map((h: { name: string; date: string }) => `${h.name} (${h.date})`)
+        .join('; ');
+      seasonalityBlock = `Hemisphere: ${sctx.hemisphere}. Seasons: ${seasonsStr || 'n/a'}. Holidays: ${holidaysStr || 'n/a'}.`;
+    } catch {
+      seasonalityBlock = 'n/a';
+    }
+  }
+
+  const promoHint = (() => {
+    const u = campaignCtx?.urgencyTactics as
+      | { discountPercentage?: number; promoCode?: string; limitedQuantity?: boolean }
+      | undefined;
+    if (!u) return '';
+    const parts: string[] = [];
+    if (typeof u.discountPercentage === 'number') parts.push(`${u.discountPercentage}% discount`);
+    if (u.promoCode) parts.push(`promo code ${u.promoCode}`);
+    if (u.limitedQuantity) parts.push('limited quantity');
+    return parts.length > 0
+      ? `Promotion: ${parts.join(', ')}. Subtle CTA allowed (avoid sounding pushy).`
+      : '';
+  })();
+
   const systemPrompt = `You are an expert Instagram content creator for the brand "${brandName}".
 
 Brand Context:
@@ -179,16 +267,32 @@ Brand Context:
   - Motifs: ${motifs.join(', ') || 'n/a'}
   - Composition: ${composition.join(', ') || 'n/a'}
 
+Campaign Context:
+${
+  campaignCtx
+    ? `- Internal Name (do not mention): ${campaignCtx.name}
+- Type: ${campaignType || 'n/a'}
+- Themes: ${allCampaignThemes.join(', ') || 'n/a'}
+${pillarNames.length ? `- Pillars: ${pillarNames.join(', ')}` : ''}
+${promoHint ? `- ${promoHint}` : ''}`
+    : 'n/a'
+}
+
+Regional Seasonality (facts): ${seasonalityBlock}
+
 Generation Requirements:
 - Generate ${count} unique Instagram posts.
 ${theme ? `- Theme to reflect: "${theme}".` : ''}
 ${style ? `- Additional style note: "${style}".` : ''}
+${campaignType ? `- Align with campaign type: ${campaignType}.` : ''}
+- If seasons/holidays are listed above, subtly weave colors, motifs, or timing references where contextually appropriate. Do not invent holidays; do not overuse.
 - Caption: 120–220 chars, conversational, include a subtle, brand‑appropriate CTA, NO hashtags in the caption.
  - Diversity: ensure strong variety across posts.\n- ${diversityRules}
  - Recent window awareness: do not repeat the first 5 words of any recent caption. Avoid recently used hashtags listed below when possible.
  - Hashtags: 5–10 relevant tokens (no #), bias to brand topics and audience; mix broad and niche where appropriate.
  - Hashtag diversity: across this batch, each post should include at least 3 hashtags not used in any other post; limit overlap between any two posts to at most 1 shared hashtag; avoid generic fillers like inspiration, community, brand, lifestyle, motivation.
 - imagePrompt: include 1–2 motifs, 1–2 composition cues, and 2–4 brand palette hex codes (hex only), 1:1 framing, Instagram-ready, no text/watermarks.
+ - Do not mention the campaign name directly; reflect its mood/themes implicitly.
 
 Recent context (summarized):
 - Prior caption starts (avoid as openers): ${dynamicBannedStarts.slice(0, 15).join(' | ') || 'n/a'}
@@ -375,7 +479,7 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
     const contentWithImages = await Promise.all(
       diversified.map(async (item, index) => {
         try {
-          // If model did not include strong brand cues in imagePrompt, augment with brand context
+          // If model did not include strong brand/campaign cues in imagePrompt, augment with brand & campaign context
           let finalPrompt = item.imagePrompt || item.caption;
           if (brandContext) {
             const cueMotif = motifs[0] || '';

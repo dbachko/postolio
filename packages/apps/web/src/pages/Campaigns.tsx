@@ -12,6 +12,7 @@ import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { PostEditorModal } from '../components/PostEditorModal';
 import { CampaignAnalytics } from '../components/CampaignAnalytics';
+import { CampaignEditDialog } from '../components/CampaignEditDialog';
 import { CampaignComparison } from '../components/CampaignComparison';
 import { CampaignsList } from '../components/CampaignsList';
 import { CampaignWizard } from '../components/campaign-wizard/CampaignWizard';
@@ -58,6 +59,7 @@ export function Campaigns() {
   const [selectedPost, setSelectedPost] = useState<Content | null>(null);
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   // Status badge colors for generated content cards
   const getContentStatusBadgeClass = useMemo(() => {
@@ -339,10 +341,45 @@ export function Campaigns() {
   );
 
   const handleCreateNewCampaign = useCallback(() => {
+    // Clear local persisted wizard state so a fresh wizard loads
+    try {
+      localStorage.removeItem('campaign-wizard-storage');
+    } catch (_) {
+      /* noop */
+    }
+
+    // Overwrite server-side draft with initial state to avoid rehydration of old data
+    if (selectedBrand) {
+      void apiClient
+        .saveCampaignDraft({
+          brandId: selectedBrand.id,
+          wizardState: {
+            currentStep: 1,
+            brandId: selectedBrand.id,
+            name: '',
+            campaignType: null,
+            goals: '',
+            timeline: null,
+            themes: [],
+            style: '',
+            frequency: '',
+            postingTime: '12:00',
+            priority: 5,
+            promotionDetails: null,
+            contentPillars: null,
+            acceptedRecommendations: [],
+          },
+        })
+        .catch(() => {
+          /* noop */
+        });
+    }
+
+    // Reset in-memory wizard and navigate
     resetWizard();
     if (selectedBrand) setWizardBrandId(selectedBrand.id);
     setCurrentView('create');
-    navigate('/campaigns/create');
+    navigate('/campaigns/create?fresh=1');
   }, [navigate, resetWizard, selectedBrand, setWizardBrandId]);
 
   // Campaign edit hook
@@ -516,7 +553,23 @@ export function Campaigns() {
                   >
                     ← All Campaigns
                   </Button>
-                  {/* Edit disabled during wizard rollout */}
+                  <Button
+                    variant="default"
+                    onClick={() => setIsEditOpen(true)}
+                    disabled={
+                      campaignDetailsQuery.data?.campaign?.status === 'completed' ||
+                      campaignDetailsQuery.data?.campaign?.status === 'processing'
+                    }
+                    title={
+                      campaignDetailsQuery.data?.campaign?.status === 'completed'
+                        ? 'Completed campaigns are read-only'
+                        : campaignDetailsQuery.data?.campaign?.status === 'processing'
+                          ? 'Editing disabled while processing'
+                          : 'Edit campaign settings'
+                    }
+                  >
+                    Edit
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -873,6 +926,19 @@ export function Campaigns() {
         </>
       )}
 
+      {/* Edit Campaign Dialog */}
+      {campaignDetailsQuery.data?.campaign && (
+        <CampaignEditDialog
+          open={isEditOpen}
+          onOpenChange={setIsEditOpen}
+          campaign={campaignDetailsQuery.data.campaign}
+          onSaved={() => {
+            campaignsQuery.refetch();
+            campaignDetailsQuery.refetch();
+          }}
+        />
+      )}
+
       {/* Loading states */}
       {campaignDetailsQuery.isLoading && currentView === 'details' && (
         <Card>
@@ -888,6 +954,19 @@ export function Campaigns() {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>Failed to load campaign details. Please try again.</AlertDescription>
         </Alert>
+      )}
+
+      {/* Edit Campaign Dialog */}
+      {campaignDetailsQuery.data?.campaign && (
+        <CampaignEditDialog
+          open={isEditOpen}
+          onOpenChange={setIsEditOpen}
+          campaign={campaignDetailsQuery.data.campaign}
+          onSaved={() => {
+            campaignsQuery.refetch();
+            campaignDetailsQuery.refetch();
+          }}
+        />
       )}
 
       {/* Post Editor Modal */}

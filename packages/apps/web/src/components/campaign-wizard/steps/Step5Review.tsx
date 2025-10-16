@@ -3,6 +3,7 @@ import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
 import { useBrandStore } from '../../../stores/brandStore';
 import { Card, CardHeader, CardTitle, CardContent } from '../../ui/card';
 import { Button } from '../../ui/button';
+import { Switch } from '../../ui/switch';
 import { Badge } from '../../ui/badge';
 import { Alert, AlertDescription } from '../../ui/alert';
 import { apiClient } from '../../../lib/api';
@@ -29,6 +30,7 @@ export function Step5Review() {
       frequency: state.frequency,
       postingTime: state.postingTime,
       promotionDetails: state.promotionDetails,
+      seasonalityAssist: state.seasonalityAssist,
     };
   }, [state]);
 
@@ -55,6 +57,8 @@ export function Step5Review() {
         campaignType: state.campaignType || 'custom',
         promotionDetails: state.promotionDetails || undefined,
         contentPillars: state.contentPillars || undefined,
+        goals: state.goals || undefined,
+        seasonalityAssist: state.seasonalityAssist,
       } as const;
       await apiClient.configureCampaign(payload as any);
       // Invalidate campaigns list for this brand so the dashboard shows the new campaign immediately
@@ -70,6 +74,35 @@ export function Step5Review() {
         // ignore telemetry errors
       }
       toast.success('Campaign created. Generating preview posts...');
+      // Clear local and server drafts so next creation starts clean
+      try {
+        localStorage.removeItem('campaign-wizard-storage');
+      } catch (_) {
+        /* noop */
+      }
+      try {
+        void apiClient.saveCampaignDraft({
+          brandId: brand.id,
+          wizardState: {
+            currentStep: 1,
+            brandId: brand.id,
+            name: '',
+            campaignType: null,
+            goals: '',
+            timeline: null,
+            themes: [],
+            style: '',
+            frequency: '',
+            postingTime: '12:00',
+            priority: 5,
+            promotionDetails: null,
+            contentPillars: null,
+            acceptedRecommendations: [],
+          },
+        });
+      } catch (_) {
+        /* noop */
+      }
       reset();
       navigate('/campaigns');
     } catch (err) {
@@ -101,6 +134,17 @@ export function Step5Review() {
             <Button variant="outline" onClick={() => setStep(1)}>
               Edit
             </Button>
+          </div>
+          <div className="h-px w-full bg-gray-200" />
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-gray-600">Seasonality Assistance</div>
+              <div className="text-gray-600">Use seasons/holidays in content when relevant</div>
+            </div>
+            <Switch
+              checked={summary.seasonalityAssist}
+              onCheckedChange={(v) => useCampaignWizard.setState({ seasonalityAssist: v })}
+            />
           </div>
           <div className="h-px w-full bg-gray-200" />
           <div className="flex items-center justify-between">
@@ -153,7 +197,7 @@ export function Step5Review() {
           Back
         </Button>
         <Button onClick={handleLaunch} disabled={!canLaunch || isSubmitting}>
-          {isSubmitting ? 'Creating…' : 'Launch Campaign'}
+          {isSubmitting ? 'Creating…' : 'Create Campaign'}
         </Button>
       </div>
     </div>

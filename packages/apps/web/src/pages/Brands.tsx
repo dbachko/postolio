@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type Brand } from '../lib/api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { InstagramConnect } from '../components/InstagramConnect';
@@ -17,11 +24,12 @@ export function Brands() {
   >({});
   const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<{
-    [key: string]: { name: string; description: string };
+    [key: string]: { name: string; description: string; countryCode: string };
   }>({});
   const [createFormData, setCreateFormData] = useState({
     name: '',
     description: '',
+    countryCode: '',
   });
   const [viewProfileBrandId, setViewProfileBrandId] = useState<string | null>(null);
 
@@ -91,11 +99,16 @@ export function Brands() {
   }, [brands, profileAvailable, profileSummaries]);
 
   const createBrandMutation = useMutation({
-    mutationFn: (data: typeof createFormData) => apiClient.createBrand(data),
+    mutationFn: (data: typeof createFormData) =>
+      apiClient.createBrand({
+        name: data.name,
+        description: data.description,
+        countryCode: data.countryCode ? data.countryCode.toUpperCase() : null,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brands'] });
       setIsCreating(false);
-      setCreateFormData({ name: '', description: '' });
+      setCreateFormData({ name: '', description: '', countryCode: '' });
     },
     onError: (error) => {
       console.error('Brand creation error:', error);
@@ -119,7 +132,7 @@ export function Brands() {
       data,
     }: {
       brandId: string;
-      data: { name: string; description: string };
+      data: { name: string; description: string; countryCode?: string | null };
     }) => apiClient.updateBrand(brandId, data),
     onSuccess: (response) => {
       updateBrand(response.brand);
@@ -149,6 +162,7 @@ export function Brands() {
       [brand.id]: {
         name: brand.name,
         description: brand.description || '',
+        countryCode: (brand.countryCode || '') as string,
       },
     });
   };
@@ -166,7 +180,14 @@ export function Brands() {
     e.preventDefault();
     const data = editFormData[brandId];
     if (data) {
-      updateBrandMutation.mutate({ brandId, data });
+      updateBrandMutation.mutate({
+        brandId,
+        data: {
+          name: data.name,
+          description: data.description,
+          countryCode: data.countryCode ? data.countryCode.toUpperCase() : null,
+        },
+      });
     }
   };
 
@@ -279,6 +300,14 @@ export function Brands() {
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Country</label>
+              <CountrySelect
+                value={createFormData.countryCode}
+                onChange={(code) => setCreateFormData({ ...createFormData, countryCode: code })}
+              />
+            </div>
+
             <div className="flex justify-end space-x-3">
               <button
                 type="button"
@@ -373,6 +402,18 @@ export function Brands() {
 
                     <div>
                       <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Country
+                      </label>
+                      <CountrySelect
+                        value={editFormData[selectedBrand.id]?.countryCode || ''}
+                        onChange={(code) =>
+                          updateEditFormData(selectedBrand.id, 'countryCode', code)
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
                         Description
                       </label>
                       <textarea
@@ -383,6 +424,22 @@ export function Brands() {
                         }
                         className="block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
                         placeholder="Brief description of your brand..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Country Code (ISO‑2)
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={2}
+                        className="block w-32 rounded-md border border-gray-300 px-3 py-2 uppercase focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                        value={editFormData[selectedBrand.id]?.countryCode || ''}
+                        onChange={(e) =>
+                          updateEditFormData(selectedBrand.id, 'countryCode', e.target.value)
+                        }
+                        placeholder="US"
                       />
                     </div>
 
@@ -507,6 +564,16 @@ export function Brands() {
 
                       <div>
                         <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Country
+                        </label>
+                        <CountrySelect
+                          value={editFormData[brand.id]?.countryCode || ''}
+                          onChange={(code) => updateEditFormData(brand.id, 'countryCode', code)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
                           Description
                         </label>
                         <textarea
@@ -517,6 +584,22 @@ export function Brands() {
                           }
                           className="block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
                           placeholder="Brief description of your brand..."
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Country Code (ISO‑2)
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={2}
+                          className="block w-32 rounded-md border border-gray-300 px-3 py-2 uppercase focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                          value={editFormData[brand.id]?.countryCode || ''}
+                          onChange={(e) =>
+                            updateEditFormData(brand.id, 'countryCode', e.target.value)
+                          }
+                          placeholder="US"
                         />
                       </div>
 
@@ -549,6 +632,9 @@ export function Brands() {
                           <p className="mt-2 text-xs text-gray-500">
                             Created {new Date(brand.createdAt).toLocaleDateString()}
                           </p>
+                          {brand.countryCode && (
+                            <p className="text-xs text-gray-500">Country: {brand.countryCode}</p>
+                          )}
                         </div>
                         <div className="flex items-center space-x-3">
                           {profileAvailable[brand.id] &&
@@ -617,5 +703,84 @@ export function Brands() {
         onClose={() => setViewProfileBrandId(null)}
       />
     </div>
+  );
+}
+
+// Lightweight country select using our existing Select UI and emoji flags
+function CountrySelect({ value, onChange }: { value: string; onChange: (code: string) => void }) {
+  const countries: Array<{ code: string; name: string }> = [
+    { code: 'US', name: 'United States' },
+    { code: 'CA', name: 'Canada' },
+    { code: 'GB', name: 'United Kingdom' },
+    { code: 'IE', name: 'Ireland' },
+    { code: 'AU', name: 'Australia' },
+    { code: 'NZ', name: 'New Zealand' },
+    { code: 'DE', name: 'Germany' },
+    { code: 'FR', name: 'France' },
+    { code: 'ES', name: 'Spain' },
+    { code: 'IT', name: 'Italy' },
+    { code: 'NL', name: 'Netherlands' },
+    { code: 'SE', name: 'Sweden' },
+    { code: 'NO', name: 'Norway' },
+    { code: 'DK', name: 'Denmark' },
+    { code: 'FI', name: 'Finland' },
+    { code: 'PT', name: 'Portugal' },
+    { code: 'PL', name: 'Poland' },
+    { code: 'CZ', name: 'Czechia' },
+    { code: 'AT', name: 'Austria' },
+    { code: 'CH', name: 'Switzerland' },
+    { code: 'BE', name: 'Belgium' },
+    { code: 'JP', name: 'Japan' },
+    { code: 'KR', name: 'South Korea' },
+    { code: 'CN', name: 'China' },
+    { code: 'IN', name: 'India' },
+    { code: 'SG', name: 'Singapore' },
+    { code: 'HK', name: 'Hong Kong' },
+    { code: 'AE', name: 'United Arab Emirates' },
+    { code: 'SA', name: 'Saudi Arabia' },
+    { code: 'ZA', name: 'South Africa' },
+    { code: 'BR', name: 'Brazil' },
+    { code: 'AR', name: 'Argentina' },
+    { code: 'CL', name: 'Chile' },
+    { code: 'MX', name: 'Mexico' },
+  ];
+
+  const codeToFlag = (code: string) =>
+    code.toUpperCase().replace(/[A-Z]/g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));
+
+  const selected = countries.find((c) => c.code === (value || '').toUpperCase());
+
+  return (
+    <Select value={value || undefined} onValueChange={(v) => onChange(v)}>
+      <SelectTrigger className="w-60">
+        <SelectValue
+          placeholder="Select country"
+          aria-label={selected ? selected.name : 'Select country'}
+        >
+          {selected ? (
+            <span className="flex items-center gap-2">
+              <span>{codeToFlag(selected.code)}</span>
+              <span>
+                {selected.name} ({selected.code})
+              </span>
+            </span>
+          ) : (
+            'Select country'
+          )}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {countries.map((c) => (
+          <SelectItem key={c.code} value={c.code} aria-label={`${c.name} ${c.code}`}>
+            <span className="flex items-center gap-2">
+              <span>{codeToFlag(c.code)}</span>
+              <span>
+                {c.name} ({c.code})
+              </span>
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

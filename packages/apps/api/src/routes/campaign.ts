@@ -39,6 +39,8 @@ interface ConfigureCampaignBody {
   style?: string;
   postingTime: string;
   priority?: number;
+  goals?: string;
+  seasonalityAssist?: boolean;
   // NEW: Optional structured data from wizard
   promotionDetails?: {
     discountPercentage?: number;
@@ -78,6 +80,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     style: z.string().optional(),
     postingTime: z.string().regex(/^\d{2}:\d{2}$/),
     priority: z.number().int().min(1).max(10).optional(),
+    goals: z.string().max(2000).optional(),
+    seasonalityAssist: z.boolean().optional(),
     promotionDetails: z
       .object({
         discountPercentage: z.number().int().min(0).max(100).optional(),
@@ -167,6 +171,10 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           ...(body.campaignType ? { campaignType: body.campaignType } : {}),
           ...(body.promotionDetails ? { urgencyTactics: body.promotionDetails } : {}),
           ...(body.contentPillars ? { contentPillars: body.contentPillars } : {}),
+          ...(body.goals ? { goals: body.goals } : {}),
+          ...(body.seasonalityAssist !== undefined
+            ? { seasonalityAssist: body.seasonalityAssist }
+            : {}),
         };
 
         // Validate campaign configuration

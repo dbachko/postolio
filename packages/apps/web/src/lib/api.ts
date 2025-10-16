@@ -18,6 +18,7 @@ export interface Brand {
   name: string;
   description: string | null;
   createdAt: string;
+  countryCode?: string | null;
 }
 
 export interface Content {
@@ -61,6 +62,8 @@ export interface CampaignConfig {
     limitedQuantity?: boolean;
   };
   contentPillars?: { pillars: Array<{ name: string; percentage: number; themes: string[] }> };
+  goals?: string;
+  seasonalityAssist?: boolean;
 }
 
 export interface CampaignPreview {
@@ -403,7 +406,11 @@ class ApiClient {
     return this.request('/api/brands/list');
   }
 
-  async createBrand(data: { name: string; description?: string }): Promise<{ brand: Brand }> {
+  async createBrand(data: {
+    name: string;
+    description?: string;
+    countryCode?: string | null;
+  }): Promise<{ brand: Brand }> {
     return this.request('/api/brands/create', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -435,6 +442,7 @@ class ApiClient {
     data: {
       name?: string;
       description?: string;
+      countryCode?: string | null;
     }
   ): Promise<{ message: string; brand: Brand }> {
     return this.request(`/api/brands/brand/${brandId}`, {
@@ -754,6 +762,10 @@ class ApiClient {
         style: config.style,
         postingTime: config.postingTime,
         priority: config.priority,
+        ...((config as any).goals ? { goals: (config as any).goals } : {}),
+        ...((config as any).seasonalityAssist !== undefined
+          ? { seasonalityAssist: (config as any).seasonalityAssist }
+          : {}),
         ...(config.campaignType ? { campaignType: config.campaignType } : {}),
         ...(config.promotionDetails ? { promotionDetails: config.promotionDetails } : {}),
         ...(config.contentPillars ? { contentPillars: config.contentPillars } : {}),
@@ -882,6 +894,8 @@ class ApiClient {
       endDate?: string;
       status?: string;
       priority?: number;
+      goals?: string;
+      seasonalityAssist?: boolean;
     }
   ): Promise<{
     success: boolean;

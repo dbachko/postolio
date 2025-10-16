@@ -12,6 +12,8 @@ export interface CampaignUpdateRequest {
   endDate?: string;
   status?: string;
   priority?: number;
+  goals?: string;
+  seasonalityAssist?: boolean;
 }
 
 export interface ValidationError {
@@ -206,6 +208,30 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
     }
   }
 
+  // Validate goals (optional)
+  if (obj.goals !== undefined) {
+    if (typeof obj.goals !== 'string') {
+      errors.push({ field: 'goals', message: 'Goals must be a string', value: obj.goals });
+    } else if (obj.goals.length > 2000) {
+      errors.push({ field: 'goals', message: 'Goals must be under 2000 characters' });
+    } else {
+      sanitizedData.goals = obj.goals.trim();
+    }
+  }
+
+  // Validate seasonalityAssist (optional)
+  if (obj.seasonalityAssist !== undefined) {
+    if (typeof obj.seasonalityAssist !== 'boolean') {
+      errors.push({
+        field: 'seasonalityAssist',
+        message: 'seasonalityAssist must be a boolean',
+        value: obj.seasonalityAssist,
+      });
+    } else {
+      sanitizedData.seasonalityAssist = obj.seasonalityAssist;
+    }
+  }
+
   // Validate date relationship if both dates provided
   if (sanitizedData.startDate && sanitizedData.endDate) {
     const startDate = new Date(sanitizedData.startDate);
@@ -280,6 +306,8 @@ export function validateCampaignUpdateRequest(data: unknown): ValidationResult {
     'endDate',
     'status',
     'priority',
+    'goals',
+    'seasonalityAssist',
   ];
   const unknownFields = Object.keys(obj).filter((key) => !knownFields.includes(key));
   if (unknownFields.length > 0) {

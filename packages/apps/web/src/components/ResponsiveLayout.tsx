@@ -443,7 +443,7 @@ export function ResponsiveLayout({ children }: LayoutProps) {
             <CommandGroup heading="Quick Actions">
               <CommandItem
                 onSelect={() => {
-                  navigate('/campaigns');
+                  navigate('/campaigns/create?fresh=1');
                   setSearchOpen(false);
                 }}
               >

@@ -90,6 +90,7 @@ const regenerationWorker = new Worker(
             count: 1,
             theme: regenerationParams.themes?.[0] || 'lifestyle',
             style: regenerationParams.style,
+            campaignId,
           };
 
           const newContentArray = await generateInstagramContent(
@@ -126,6 +127,7 @@ const regenerationWorker = new Worker(
                 originalParams: existingContent.generationParams,
                 newTheme: regenerationParams.themes?.[0],
                 newStyle: regenerationParams.style,
+                imagePrompt: newContent.imagePrompt,
               },
             },
           });

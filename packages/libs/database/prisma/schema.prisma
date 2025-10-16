@@ -73,6 +73,7 @@ model Brand {
   engagementActive     Boolean            @default(false)
   engagementRules      Json?
   postingTimezone      String?            // Brand-specific posting timezone (null = use user's timezone)
+  countryCode          String?            // ISO 3166-1 alpha-2 country code for seasonality/holidays
   user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaigns            Campaign[]
   content              Content[]

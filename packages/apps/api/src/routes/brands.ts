@@ -14,11 +14,13 @@ const eventBridge = new EventBridge({});
 interface CreateBrandBody {
   name: string;
   description?: string;
+  countryCode?: string | null;
 }
 
 interface UpdateBrandBody {
   name?: string;
   description?: string;
+  countryCode?: string | null;
 }
 
 const brandsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -30,7 +32,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const userId = request.user!.id;
 
-        const { name, description } = request.body;
+        const { name, description, countryCode } = request.body;
 
         // Validate required fields
         if (!name || name.trim().length === 0) {
@@ -46,12 +48,21 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             name: name.trim(),
             description: description?.trim() || null,
             userId,
+            ...(countryCode
+              ? {
+                  countryCode:
+                    typeof countryCode === 'string' && countryCode.length === 2
+                      ? countryCode.toUpperCase()
+                      : null,
+                }
+              : {}),
           },
           select: {
             id: true,
             name: true,
             description: true,
             createdAt: true,
+            countryCode: true,
           },
         });
         // Note: do not auto-start brand analysis on creation.
@@ -85,6 +96,8 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           description: true,
           styleProfile: true,
           createdAt: true,
+          countryCode: true,
+          postingTimezone: true,
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -143,10 +156,10 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user!.id;
 
         const { id } = request.params;
-        const { name, description } = request.body;
+        const { name, description, countryCode } = request.body;
 
         // Validate at least one field is provided
-        if (!name && description === undefined) {
+        if (!name && description === undefined && countryCode === undefined) {
           return reply.code(400).send({ error: 'At least one field must be provided for update' });
         }
 
@@ -157,6 +170,13 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           }
           if (name.length > 100) {
             return reply.code(400).send({ error: 'Brand name must be less than 100 characters' });
+          }
+        }
+
+        // Basic validation for countryCode if provided
+        if (countryCode !== undefined && countryCode !== null) {
+          if (typeof countryCode !== 'string' || countryCode.length !== 2) {
+            return reply.code(400).send({ error: 'countryCode must be a 2-letter ISO code' });
           }
         }
 
@@ -176,10 +196,13 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         interface BrandUpdateData {
           name?: string;
           description?: string | null;
+          countryCode?: string | null;
         }
         const updateData: BrandUpdateData = {};
         if (name !== undefined) updateData.name = name.trim();
         if (description !== undefined) updateData.description = description?.trim() || null;
+        if (countryCode !== undefined)
+          updateData.countryCode = countryCode ? countryCode.toUpperCase() : null;
 
         // Update the brand
         const updatedBrand = await prisma.brand.update({
@@ -194,6 +217,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             updatedAt: true,
             instagramAccountId: true,
             instagramPageId: true,
+            countryCode: true,
           },
         });
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useCampaignWizard, useWizardAutoSave } from '../../hooks/useCampaignWizard';
 import { useBrandStore } from '../../stores/brandStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -15,6 +16,7 @@ import { HelpCircle } from 'lucide-react';
 import { WizardHelpDialog } from './shared/WizardHelpDialog';
 
 export function CampaignWizard() {
+  const location = useLocation();
   const currentStep = useCampaignWizard((s) => s.currentStep);
   const brand = useBrandStore((s) => s.selectedBrand);
   const hydrateFromDraft = useCampaignWizard((s) => s.hydrateFromDraft);
@@ -26,6 +28,18 @@ export function CampaignWizard() {
 
   // Keep auto-save active
   useWizardAutoSave();
+
+  // If URL contains fresh=1, skip server draft hydration for this session
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(location.search);
+      if (params.get('fresh') === '1') {
+        setSkipHydration(true);
+      }
+    } catch (_) {
+      // ignore URL parsing errors
+    }
+  }, [location.search]);
 
   // Ensure brand is selected
   useEffect(() => {
@@ -49,7 +63,36 @@ export function CampaignWizard() {
     setSkipHydration(true);
     reset();
     if (brand) setBrandId(brand.id);
-    // Fire-and-forget wizard.reset event
+    try {
+      localStorage.removeItem('campaign-wizard-storage');
+    } catch (_) {
+      /* noop */
+    }
+    try {
+      if (brand) {
+        void apiClient.saveCampaignDraft({
+          brandId: brand.id,
+          wizardState: {
+            currentStep: 1,
+            brandId: brand.id,
+            name: '',
+            campaignType: null,
+            goals: '',
+            timeline: null,
+            themes: [],
+            style: '',
+            frequency: '',
+            postingTime: '12:00',
+            priority: 5,
+            promotionDetails: null,
+            contentPillars: null,
+            acceptedRecommendations: [],
+          },
+        });
+      }
+    } catch (_) {
+      /* noop */
+    }
     try {
       if (brand) {
         apiClient.post('/api/analytics/wizard-event', {
@@ -58,8 +101,8 @@ export function CampaignWizard() {
           brandId: brand.id,
         });
       }
-    } catch (_e) {
-      // ignore telemetry errors
+    } catch (_) {
+      /* noop */
     }
   };
 

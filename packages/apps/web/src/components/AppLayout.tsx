@@ -263,17 +263,7 @@ export function AppLayout({ children }: LayoutProps) {
                 </kbd>
               </Button>
 
-              {/* Help Button */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hidden h-9 items-center sm:flex"
-                onClick={() => setHelpOpen(true)}
-                aria-label="Open Help"
-              >
-                <HelpCircle className="h-4 w-4" aria-hidden="true" />
-                <span className="ml-2 hidden text-sm lg:inline">Help</span>
-              </Button>
+              {/* Help Button removed from top navigation */}
 
               {/* Grid Menu Dropdown */}
               <div className="relative" ref={menuRef}>
@@ -526,7 +516,7 @@ export function AppLayout({ children }: LayoutProps) {
             </CommandItem>
             <CommandItem
               onSelect={() => {
-                navigate('/campaigns');
+                navigate('/campaigns/create?fresh=1');
                 setSearchOpen(false);
               }}
             >
