@@ -246,12 +246,10 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
       if (!isCalendarEvent(event)) return;
       const draggedContent = event.resource;
 
-      // Don't allow dragging of published posts, placeholders, failed, or skipped posts
+      // Don't allow dragging of published posts or placeholders
       if (
         draggedContent.status === 'published' ||
-        ('isPlaceholder' in draggedContent && draggedContent.isPlaceholder) ||
-        draggedContent.status === 'failed' ||
-        draggedContent.status === 'skipped'
+        ('isPlaceholder' in draggedContent && draggedContent.isPlaceholder)
       ) {
         toast.error('Cannot reschedule this post');
         return;
@@ -302,11 +300,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     const content = calendarEvent.resource;
     const isPlaceholder = 'isPlaceholder' in content && content.isPlaceholder;
     const isProcessing = Boolean((content as any)?.generationParams?.processing?.active);
-    const isDraggable =
-      !isPlaceholder &&
-      content.status !== 'published' &&
-      content.status !== 'failed' &&
-      content.status !== 'skipped';
+    const isDraggable = !isPlaceholder && content.status !== 'published';
 
     const statusColors = {
       draft: 'bg-gray-100 border-gray-400 text-gray-800',

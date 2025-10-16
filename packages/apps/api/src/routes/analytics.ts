@@ -180,9 +180,10 @@ const analytics: FastifyPluginAsync = async function (fastify) {
         return reply.status(404).send({ error: 'Content not found' });
       }
 
-      if (content.status !== 'draft') {
+      // Allow scheduling from draft, failed, or skipped states
+      if (!['draft', 'failed', 'skipped'].includes(content.status as string)) {
         return reply.status(400).send({
-          error: 'Content must be in draft status before scheduling',
+          error: 'Content must be draft, failed, or skipped to schedule',
         });
       }
 

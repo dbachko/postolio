@@ -612,13 +612,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
           // When setting a scheduledAt date, ensure proper status
           if (scheduledAt) {
-            // Set to scheduled when adding a scheduled time
-            if (content.status === 'draft') {
-              updateData.status = 'scheduled';
-            } else if (content.status === 'failed' || content.status === 'skipped') {
-              // Don't allow scheduling of failed/skipped content
-              return reply.code(400).send({ error: 'Cannot schedule failed or skipped content' });
-            }
+            // Set to scheduled when adding a scheduled time (allow from draft/failed/skipped)
+            updateData.status = 'scheduled';
           } else if (!scheduledAt && content.status === 'scheduled') {
             // If removing scheduledAt, revert to draft
             updateData.status = 'draft';
@@ -682,12 +677,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Check if this is a reschedule operation (time changed)
         // Skip AWS operations if content belongs to a draft campaign
         let needsNewSchedule = false;
-        if (
-          !isInDraftCampaign &&
-          originalScheduledTime &&
-          newScheduledTime &&
-          originalScheduledTime !== newScheduledTime
-        ) {
+        if (!isInDraftCampaign && originalScheduledTime && newScheduledTime) {
           try {
             console.log(
               `Attempting to reschedule content ${contentId} from ${originalScheduledTime} to ${newScheduledTime}`
@@ -705,8 +695,11 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
               // Check if reschedule failed because content was never scheduled
               // In this case, we'll create a new schedule instead of erroring
               if (
-                rescheduleResult.error?.includes('not scheduled') ||
-                rescheduleResult.error?.includes('Content is not scheduled')
+                rescheduleResult.error?.toLowerCase().includes('not scheduled') ||
+                rescheduleResult.error?.toLowerCase().includes('content is not scheduled') ||
+                rescheduleResult.error?.toLowerCase().includes('not found') ||
+                rescheduleResult.error?.toLowerCase().includes('missing') ||
+                rescheduleResult.error?.toLowerCase().includes('does not exist')
               ) {
                 console.log(
                   `Content ${contentId} was never scheduled in AWS - will create new schedule instead`

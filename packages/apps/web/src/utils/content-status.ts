@@ -119,8 +119,13 @@ export function canScheduleContent(content: Content): boolean {
     return false;
   }
 
-  // Can reschedule if already scheduled, or schedule if draft
-  return content.status === 'draft' || content.status === 'scheduled';
+  // Allow scheduling/rescheduling from draft, scheduled, failed, or skipped
+  return (
+    content.status === 'draft' ||
+    content.status === 'scheduled' ||
+    content.status === 'failed' ||
+    content.status === 'skipped'
+  );
 }
 
 /**

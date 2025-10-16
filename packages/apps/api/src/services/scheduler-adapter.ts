@@ -209,9 +209,12 @@ export class SchedulerAdapter {
         };
       }
 
-      // Only allow scheduling for active campaigns, UNLESS this is a draft post
-      // (which indicates auto-recovery from a failed campaign start)
-      if (content.campaign.status !== 'active' && content.status !== 'draft') {
+      // Only allow scheduling for active campaigns, UNLESS this is a draft/skipped/failed post
+      // (draft indicates auto-recovery from a failed campaign start; skipped/failed are user overrides)
+      if (
+        content.campaign.status !== 'active' &&
+        !['draft', 'skipped', 'failed'].includes(content.status as ContentStatus)
+      ) {
         logger.warn('Scheduling blocked: campaign not active', {
           campaignId: content.campaignId,
           status: content.campaign.status,
