@@ -82,6 +82,14 @@ export function Campaigns() {
     enabled: !!selectedBrand,
   });
 
+  // Instagram connection status for gating campaign creation
+  const instagramStatusQuery = useQuery({
+    queryKey: ['instagram-status', selectedBrand?.id],
+    queryFn: () => apiClient.getInstagramConnectionStatus(selectedBrand!.id),
+    enabled: !!selectedBrand,
+    refetchOnWindowFocus: true,
+  });
+
   // URL-accessed campaign query for auto brand-switching
   const urlCampaignQuery = useQuery<{ success: boolean; campaign: Campaign }>({
     queryKey: ['urlCampaign', urlCampaignId],
@@ -448,6 +456,22 @@ export function Campaigns() {
       {/* Dashboard View */}
       {currentView === 'dashboard' && (
         <>
+          {/* Instagram connection warning */}
+          {selectedBrand && instagramStatusQuery.data && !instagramStatusQuery.data.connected && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Instagram is not connected for this brand. Connect to enable campaign creation and
+                automated posting.{' '}
+                <a
+                  className="text-blue-600 underline hover:text-blue-800"
+                  href="/instagram-analytics"
+                >
+                  Manage Instagram Connection
+                </a>
+              </AlertDescription>
+            </Alert>
+          )}
           {/* Action Header */}
           <Card>
             <CardHeader>
@@ -472,7 +496,20 @@ export function Campaigns() {
                     <BarChart3 className="h-4 w-4" />
                     Compare Campaigns
                   </Button>
-                  <Button onClick={handleCreateNewCampaign} className="flex items-center gap-2">
+                  <Button
+                    onClick={handleCreateNewCampaign}
+                    className="flex items-center gap-2"
+                    disabled={
+                      !!selectedBrand &&
+                      !!instagramStatusQuery.data &&
+                      !instagramStatusQuery.data.connected
+                    }
+                    title={
+                      instagramStatusQuery.data && !instagramStatusQuery.data.connected
+                        ? 'Connect Instagram to create a campaign'
+                        : undefined
+                    }
+                  >
                     <Plus className="h-4 w-4" />
                     Create New Campaign
                   </Button>
@@ -501,11 +538,32 @@ export function Campaigns() {
               <p className="mb-4 text-gray-600">
                 Create your first automated content campaign to get started.
               </p>
-              <div className="flex justify-center gap-2">
-                <Button onClick={handleCreateNewCampaign} className="flex items-center gap-2">
+              <div className="flex flex-col items-center gap-2">
+                <Button
+                  onClick={handleCreateNewCampaign}
+                  className="flex items-center gap-2"
+                  disabled={
+                    !!selectedBrand &&
+                    !!instagramStatusQuery.data &&
+                    !instagramStatusQuery.data.connected
+                  }
+                  title={
+                    instagramStatusQuery.data && !instagramStatusQuery.data.connected
+                      ? 'Connect Instagram to create a campaign'
+                      : undefined
+                  }
+                >
                   <Plus className="h-4 w-4" />
                   Create New Campaign
                 </Button>
+                {instagramStatusQuery.data && !instagramStatusQuery.data.connected && (
+                  <p className="text-sm text-gray-600">
+                    Connect Instagram first to enable campaign creation.{' '}
+                    <a className="text-blue-600 underline" href="/instagram-analytics">
+                      Connect now
+                    </a>
+                  </p>
+                )}
               </div>
             </div>
           ) : (

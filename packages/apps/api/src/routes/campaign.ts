@@ -22,6 +22,7 @@ import {
 } from '../services/campaign-strategy.js';
 
 import { getDatabaseClient } from '../config/database.js';
+import { instagramService } from '../services/instagram.js';
 
 const prisma = getDatabaseClient();
 
@@ -113,6 +114,25 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const userId = request.user!.id;
         const body = request.body;
+
+        // Gate campaign creation until Instagram is connected
+        // 1) Verify brand ownership and read instagram connection fields
+        const brandForConnCheck = await prisma.brand.findFirst({
+          where: { id: body.brandId, userId },
+          select: { id: true, instagramAccountId: true, instagramPageId: true },
+        });
+        if (!brandForConnCheck) {
+          return reply.code(404).send({ error: 'Brand not found or access denied' });
+        }
+        if (!instagramService.isConfigured(brandForConnCheck)) {
+          return reply.code(400).send({
+            error: 'Instagram not connected for this brand',
+            code: 'INSTAGRAM_NOT_CONNECTED',
+            help: 'Connect an Instagram Business account to enable campaign creation.',
+          });
+        }
+
+        // Token validity checks intentionally omitted here; only connection presence is required
 
         // Get brand's timezone for proper date interpretation
         // If brand doesn't have a timezone set, fall back to user's detected timezone

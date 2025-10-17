@@ -62,6 +62,8 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         const connected = instagramService.isConfigured(brand);
         let profile = null;
 
+        // Token details are not included; we only care if Instagram is connected
+
         if (connected) {
           if (refresh === 'true') {
             // Fetch fresh profile data from Instagram API
