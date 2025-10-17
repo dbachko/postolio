@@ -306,6 +306,18 @@ export class ApiStack extends cdk.Stack {
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio/${environment}/*`,
               ],
             }),
+            // Allow sending emails via AWS SES (used for magic links, verification, etc.)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'ses:SendEmail',
+                'ses:SendRawEmail',
+                'ses:SendTemplatedEmail',
+                'ses:SendBulkTemplatedEmail',
+              ],
+              // SES send actions commonly use resource '*' (resource-level restrictions are limited)
+              resources: ['*'],
+            }),
             // SSM Parameter Store permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -452,6 +464,10 @@ export class ApiStack extends cdk.Stack {
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
             // Additional environment variables that don't need to be secrets
             AWS_REGION: this.region,
+            // Ensure SES is used outside of strictly 'prod' (e.g., staging/dev) when desired
+            // so magic link emails are actually sent instead of logged
+            USE_AWS_SES: 'true',
+            SES_FROM_EMAIL: 'noreply@postolio.example',
             S3_IMAGES_BUCKET: imagesBucketName,
             CLOUDFRONT_DOMAIN: imagesCdnDomain,
             CLOUDFRONT_DISTRIBUTION_ID: imagesCdnDistributionId,
