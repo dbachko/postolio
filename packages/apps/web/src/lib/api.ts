@@ -184,6 +184,32 @@ class ApiClient {
     return this.request(`/api/brand-analysis/${brandId}/profile`);
   }
 
+  async getThemeSuggestions(
+    brandId: string,
+    opts?: {
+      campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
+      goals?: string;
+      limit?: number;
+    }
+  ): Promise<{
+    suggestions: Array<{
+      value: string;
+      score: number;
+      source: 'profile' | 'heuristic' | 'fallback';
+      perfDelta?: number;
+      reasons?: string[];
+    }>;
+  }> {
+    const params = new URLSearchParams();
+    if (opts?.campaignType) params.set('campaignType', opts.campaignType);
+    if (opts?.goals) params.set('goals', opts.goals);
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    const qs = params.toString();
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/theme-suggestions${qs ? `?${qs}` : ''}`
+    );
+  }
+
   setToken(token: string) {
     this.token = token;
     localStorage.setItem('auth_token', token);

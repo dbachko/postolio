@@ -57,7 +57,7 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
 
       setCampaignType: (type) => set({ campaignType: type }),
       loadDefaultsFromType: (cfg) => {
-        const { timeline } = get();
+        const { timeline, brandId } = get();
         const now = new Date();
         const startISO = now.toISOString().split('T')[0]!;
         const end = new Date(now);
@@ -67,8 +67,22 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
           campaignType: cfg.id,
           frequency: cfg.defaultFrequency,
           timeline: timeline || { startDate: startISO, endDate: endISO },
-          themes: cfg.commonThemes || [],
+          // Do not preload static themes; we will fetch suggestions from API
+          themes: [],
         });
+
+        // Fire-and-forget: prefill themes from API suggestions if possible
+        if (brandId) {
+          apiClient
+            .getThemeSuggestions(brandId, { campaignType: cfg.id, limit: 6 })
+            .then((res) => {
+              const current = useCampaignWizard.getState().themes;
+              if (!Array.isArray(current) || current.length > 0) return;
+              const top = (res?.suggestions || []).map((s) => s.value).slice(0, 4);
+              if (top.length > 0) useCampaignWizard.setState({ themes: top });
+            })
+            .catch(() => {});
+        }
       },
 
       updateField: (key, value) => set({ [key]: value } as unknown as Partial<CampaignWizardState>),

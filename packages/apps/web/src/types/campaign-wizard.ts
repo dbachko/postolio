@@ -46,5 +46,4 @@ export interface CampaignTypeConfig {
   defaultFrequency: 'daily' | 'every2days' | '3weekly';
   defaultDuration: { days: number };
   urgencyEnabled?: boolean;
-  commonThemes?: string[];
 }

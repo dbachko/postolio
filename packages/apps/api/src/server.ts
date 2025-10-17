@@ -41,6 +41,7 @@ import postDetailRoutes from './routes/post-detail.js';
 import configRoutes from './routes/config.js';
 import backgroundJobsRoutes from './routes/background-jobs.js';
 import brandAnalysisRoutes from './routes/brand-analysis.js';
+import themeSuggestionRoutes from './routes/theme-suggestions.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import Redis from 'ioredis';
@@ -223,6 +224,7 @@ export function buildFastify(): FastifyInstance {
   app.register(configRoutes); // Config routes include their own /api prefix
   app.register(backgroundJobsRoutes); // Background job monitoring routes
   app.register(brandAnalysisRoutes, { prefix: '/api/brand-analysis' });
+  app.register(themeSuggestionRoutes, { prefix: '/api/brands' });
 
   const registerHealthRoute = (path: string) => {
     // GET handler - returns JSON status payload

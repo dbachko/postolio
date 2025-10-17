@@ -9,7 +9,6 @@ export const campaignTypes: CampaignTypeConfig[] = [
     defaultFrequency: 'daily',
     defaultDuration: { days: 14 },
     urgencyEnabled: true,
-    commonThemes: ['product showcase', 'customer stories', 'seasonal content'],
   },
   {
     id: 'educational',
@@ -18,7 +17,6 @@ export const campaignTypes: CampaignTypeConfig[] = [
     description: 'Teach your audience with tips and tutorials',
     defaultFrequency: 'every2days',
     defaultDuration: { days: 21 },
-    commonThemes: ['tips & tutorials', 'industry insights', 'behind the scenes'],
   },
   {
     id: 'seasonal',
@@ -27,7 +25,6 @@ export const campaignTypes: CampaignTypeConfig[] = [
     description: 'Seasonal moments and holiday stories',
     defaultFrequency: '3weekly',
     defaultDuration: { days: 30 },
-    commonThemes: ['seasonal content', 'company culture', 'product showcase'],
   },
   {
     id: 'thought_leadership',
@@ -36,7 +33,6 @@ export const campaignTypes: CampaignTypeConfig[] = [
     description: 'Insights and opinion pieces to lead your niche',
     defaultFrequency: '3weekly',
     defaultDuration: { days: 28 },
-    commonThemes: ['industry insights', 'customer stories', 'tips & tutorials'],
   },
   {
     id: 'custom',
@@ -45,6 +41,5 @@ export const campaignTypes: CampaignTypeConfig[] = [
     description: 'Start from scratch with full control',
     defaultFrequency: 'every2days',
     defaultDuration: { days: 14 },
-    commonThemes: ['product showcase', 'company culture'],
   },
 ];
