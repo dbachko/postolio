@@ -61,6 +61,10 @@ function MetricCard({ icon, label, value, description, variant = 'default' }: Me
 export function SecurityMetrics({ summary }: SecurityMetricsProps) {
   const getPasswordChangeStatus = () => {
     try {
+      if (!summary.lastPasswordChange) {
+        return { variant: 'default' as const, description: 'Unknown' };
+      }
+
       const daysSinceChange = Math.floor(
         (Date.now() - new Date(summary.lastPasswordChange).getTime()) / (1000 * 60 * 60 * 24)
       );
@@ -112,7 +116,11 @@ export function SecurityMetrics({ summary }: SecurityMetricsProps) {
       <MetricCard
         icon={<Key className="h-6 w-6" />}
         label="Password Age"
-        value={`${Math.floor((Date.now() - new Date(summary.lastPasswordChange).getTime()) / (1000 * 60 * 60 * 24))} days`}
+        value={
+          summary.lastPasswordChange
+            ? `${Math.floor((Date.now() - new Date(summary.lastPasswordChange).getTime()) / (1000 * 60 * 60 * 24))} days`
+            : '—'
+        }
         description={passwordStatus.description}
         variant={passwordStatus.variant}
       />

@@ -29,6 +29,23 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         currentSessionId = currentSession?.id || null;
       }
 
+      // Fallback: when refresh cookie is path-scoped to /api/auth/refresh, it won't be
+      // present on this endpoint. Try to infer current session by IP/User-Agent.
+      if (!currentSessionId && sessions.length > 0) {
+        const ua = request.headers['user-agent'];
+        const ip = request.ip;
+        const match = sessions
+          .filter(
+            (s: Session) => (ua ? s.userAgent === ua : true) && (ip ? s.ipAddress === ip : true)
+          )
+          .sort(
+            (a: Session, b: Session) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime()
+          )[0];
+        if (match) {
+          currentSessionId = match.id;
+        }
+      }
+
       // Format sessions for frontend
       const formattedSessions = sessions.map((session: Session) => ({
         id: session.id,
@@ -216,11 +233,30 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           (a: Session, b: Session) => b.createdAt.getTime() - a.createdAt.getTime()
         )[0];
 
+        // Determine last password change: prefer audit log events, fallback to account creation
+        const [passwordEvent, userForFallback] = await Promise.all([
+          prisma.auditLog.findFirst({
+            where: {
+              userId,
+              success: true,
+              eventType: { in: ['PASSWORD_CHANGED', 'PASSWORD_RESET_COMPLETED'] },
+            },
+            orderBy: { createdAt: 'desc' },
+          }),
+          prisma.user.findUnique({ where: { id: userId }, select: { createdAt: true } }),
+        ]);
+
+        const lastPasswordChange = (
+          passwordEvent?.createdAt ||
+          userForFallback?.createdAt ||
+          new Date()
+        ).toISOString();
+
         return reply.send({
           activeSessions: sessions.length,
-          lastPasswordChange: null, // TODO: Add password change tracking
+          lastPasswordChange,
           recentLogins: sessions.length,
-          suspiciousActivity: 0, // TODO: Add suspicious activity detection
+          suspiciousActivity: 0, // Placeholder for future detection
           lastLogin: mostRecentSession
             ? {
                 timestamp: mostRecentSession.createdAt,

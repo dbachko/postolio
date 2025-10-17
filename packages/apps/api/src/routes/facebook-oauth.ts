@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import axios from 'axios';
 import { isProductionEnv } from '../utils/env-mode.js';
+import { RefreshTokenService } from '../services/refresh-token.js';
+import { AuditLogger, AuditEventType } from '../services/audit-logger.js';
 
 const prisma = getDatabaseClient();
 
@@ -145,22 +147,36 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         isNewUser = true;
       }
 
-      // Generate JWT token
-      const token = fastify.jwt.sign({
-        id: user.id,
-        email: user.email,
-      });
+      // Issue refresh + access tokens and create session
+      const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+        fastify,
+        user.id,
+        request.ip,
+        request.headers['user-agent']
+      );
 
-      // Set HTTP-only cookie for enhanced security
-      reply.setCookie('auth_token', token, {
+      // Set access token cookie (short-lived)
+      reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
         secure: isProductionEnv(),
-        sameSite: 'lax',
+        sameSite: 'strict',
         path: '/',
-        maxAge: 7 * 24 * 60 * 60, // 7 days
+        maxAge: 15 * 60, // 15 minutes
       });
 
-      return reply.send({ token, user, isNewUser });
+      // Set refresh token cookie (path-scoped)
+      reply.setCookie('refresh_token', refreshToken, {
+        httpOnly: true,
+        secure: isProductionEnv(),
+        sameSite: 'strict',
+        path: '/api/auth/refresh',
+        maxAge: 30 * 24 * 60 * 60, // 30 days
+      });
+
+      // Log OAuth login
+      await AuditLogger.logAuth(AuditEventType.OAUTH_LOGIN, user.id, user.email, request);
+
+      return reply.send({ user, isNewUser, message: 'Signed in with Facebook' });
     } catch (error) {
       console.error('Facebook OAuth error:', error);
 

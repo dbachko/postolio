@@ -97,7 +97,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         httpOnly: true,
         secure: isProductionEnv(),
         sameSite: 'strict',
-        path: '/api/auth', // Sent to all /api/auth endpoints
+        path: '/api/auth/refresh', // Scoped strictly to refresh endpoint
         maxAge: 7 * 24 * 60 * 60, // 7 days for new users
       });
 
@@ -342,7 +342,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!result) {
       // Invalid or expired refresh token
-      reply.clearCookie('refresh_token', { path: '/api/auth' });
+      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
       reply.clearCookie('auth_token', { path: '/' });
       return reply.code(401).send({ error: 'Invalid or expired refresh token' });
     }
@@ -361,7 +361,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       httpOnly: true,
       secure: isProductionEnv(),
       sameSite: 'strict',
-      path: '/api/auth', // Sent to all /api/auth endpoints
+      path: '/api/auth/refresh', // Scoped strictly to refresh endpoint
       maxAge: 30 * 24 * 60 * 60, // 30 days
     });
 
@@ -406,7 +406,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     reply.clearCookie('refresh_token', {
-      path: '/api/auth',
+      path: '/api/auth/refresh',
       httpOnly: true,
       secure: isProductionEnv(),
       sameSite: 'strict',
