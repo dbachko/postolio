@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { useAuthStore } from '../stores/authStore';
 import { useBrandStore } from '../stores/brandStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOfflineQueue } from './useOfflineQueue';
@@ -9,7 +8,7 @@ import type {
   UseSchedulingWebSocketOptions,
   WebSocketMessage,
 } from '../types/websocket';
-import { WebSocketError, ConnectionError, AuthenticationError } from '../types/websocket';
+import { WebSocketError, ConnectionError } from '../types/websocket';
 
 export function useSchedulingWebSocket({
   enabled = true,
@@ -28,14 +27,12 @@ export function useSchedulingWebSocket({
   const isConnectingRef = useRef(false); // Guard against multiple simultaneous connections
   const countdownIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const lastConnectionAttemptRef = useRef<number>(0); // Track last connection attempt time
-  const tokenRefreshAttemptedRef = useRef(false); // Track if we've attempted token refresh
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [retryIn, setRetryIn] = useState<number>(0);
 
-  const getToken = useAuthStore((state) => state.getToken);
-  const token = getToken();
+  // WebSocket now uses cookie-based authentication (auth_token cookie sent automatically with handshake)
   const selectedBrand = useBrandStore((state) => state.selectedBrand);
   const queryClient = useQueryClient();
 
@@ -172,67 +169,6 @@ export function useSchedulingWebSocket({
     [queryKeys, queryClient, onStatusUpdate]
   );
 
-  // Helper function to check if JWT is expired
-  const isTokenExpired = useCallback((token: string): boolean => {
-    try {
-      // Validate JWT format: should have 3 parts separated by dots
-      if (typeof token !== 'string') {
-        console.error('JWT token is not a string');
-        return true;
-      }
-      const parts = token.split('.');
-      if (parts.length !== 3 || !parts[1]) {
-        console.error('JWT token is not properly formatted');
-        return true;
-      }
-      // Decode JWT without verification (just to check expiry)
-      const payload = JSON.parse(atob(parts[1]));
-      const expiryTime = payload.exp * 1000; // Convert to milliseconds
-      return Date.now() >= expiryTime;
-    } catch (error) {
-      console.error('Failed to decode JWT:', error);
-      return true; // Assume expired if we can't decode
-    }
-  }, []);
-
-  // Helper function to refresh token
-  const refreshAuthToken = useCallback(async (): Promise<string | null> => {
-    try {
-      const response = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.token) {
-          localStorage.setItem('auth_token', data.token);
-          return data.token;
-        }
-        console.error('Token refresh response missing token field:', data);
-      } else {
-        // Log detailed error information for non-2xx responses
-        const errorText = await response.text();
-        console.error(
-          `Token refresh failed with status ${response.status}: ${response.statusText}`,
-          errorText
-        );
-
-        // Handle specific error codes
-        if (response.status === 401) {
-          console.error('Authentication expired. User needs to log in again.');
-        } else if (response.status === 403) {
-          console.error('Token refresh forbidden. Invalid refresh token.');
-        } else if (response.status >= 500) {
-          console.error('Server error during token refresh. Will retry later.');
-        }
-      }
-    } catch (error) {
-      console.error('Network error during token refresh:', error);
-    }
-    return null;
-  }, []);
-
   // Exponential backoff calculation with jitter (react-use-websocket pattern)
   const calculateReconnectDelay = useCallback((attemptNumber: number) => {
     // Increase max delay to 30 seconds for JWT expiration scenarios
@@ -281,7 +217,7 @@ export function useSchedulingWebSocket({
       return;
     }
 
-    if (!token || !selectedBrand || !enabled) {
+    if (!selectedBrand || !enabled) {
       return;
     }
 
@@ -301,40 +237,9 @@ export function useSchedulingWebSocket({
     // Reset attempts counter if it's been more than 5 minutes since last attempt
     if (timeSinceLastAttempt > 5 * 60 * 1000) {
       reconnectAttemptsRef.current = 0;
-      tokenRefreshAttemptedRef.current = false;
     }
 
     lastConnectionAttemptRef.current = now;
-
-    // Check if token is expired and attempt refresh
-    let currentToken = token;
-    if (isTokenExpired(token)) {
-      console.log('JWT token expired, attempting refresh...');
-
-      // Only attempt token refresh once per connection cycle
-      if (!tokenRefreshAttemptedRef.current) {
-        tokenRefreshAttemptedRef.current = true;
-        const newToken = await refreshAuthToken();
-
-        if (newToken) {
-          console.log('Token refreshed successfully');
-          currentToken = newToken;
-          // Reset attempts since we have a fresh token
-          reconnectAttemptsRef.current = 0;
-        } else {
-          console.error('Failed to refresh token. User may need to re-authenticate.');
-          handleConnectionChange('error');
-          // Don't attempt further connections without valid token
-          isConnectingRef.current = false;
-          return;
-        }
-      } else {
-        console.log('Token refresh already attempted, skipping...');
-        isConnectingRef.current = false;
-        return;
-      }
-    }
-
     isConnectingRef.current = true;
 
     try {
@@ -358,7 +263,6 @@ export function useSchedulingWebSocket({
         isConnectingRef.current = false; // Reset connecting flag
         handleConnectionChange('connected');
         reconnectAttemptsRef.current = 0;
-        tokenRefreshAttemptedRef.current = false; // Reset token refresh flag on successful connection
         setRetryIn(0); // Clear retry countdown
 
         // Clear countdown interval if exists
@@ -367,14 +271,8 @@ export function useSchedulingWebSocket({
           countdownIntervalRef.current = undefined;
         }
 
-        // Authenticate and subscribe to brand room (use currentToken which may be refreshed)
-        ws.send(
-          JSON.stringify({
-            type: 'auth',
-            token: currentToken,
-            brandId: selectedBrand.id,
-          })
-        );
+        // Note: Authentication happens automatically via auth_token cookie during handshake
+        // Wait for 'authenticated' message from server before subscribing
 
         // Start heartbeat
         heartbeatIntervalRef.current = setInterval(() => {
@@ -399,20 +297,20 @@ export function useSchedulingWebSocket({
             return;
           }
 
-          if (message.type === 'auth_success') {
-            console.log('WebSocket authenticated');
-            return;
-          }
-
-          if (message.type === 'auth_error') {
-            const authError = new AuthenticationError(message.error || 'Authentication failed');
-            handleWebSocketError(authError);
-            ws.close();
+          if (message.type === 'authenticated') {
+            console.log('WebSocket authenticated via cookie');
+            // Subscribe to brand room after authentication
+            ws.send(
+              JSON.stringify({
+                type: 'subscribe',
+                brandId: selectedBrand.id,
+              })
+            );
             return;
           }
 
           if (message.type === 'subscribed') {
-            console.log('Subscribed to room:', message.room);
+            console.log('Subscribed to rooms:', message.rooms);
             return;
           }
 
@@ -513,8 +411,7 @@ export function useSchedulingWebSocket({
           reconnectTimeoutRef.current = setTimeout(
             () => {
               reconnectAttemptsRef.current = 0;
-              tokenRefreshAttemptedRef.current = false;
-              if (enabled && token && selectedBrand) {
+              if (enabled && selectedBrand) {
                 console.log('Retrying connection after cooldown period...');
                 connect();
               }
@@ -538,7 +435,6 @@ export function useSchedulingWebSocket({
       handleWebSocketError(connectionError);
     }
   }, [
-    token,
     selectedBrand,
     enabled,
     handleStatusUpdate,
@@ -551,8 +447,6 @@ export function useSchedulingWebSocket({
     handleWebSocketError,
     messageFilter,
     offlineQueue,
-    isTokenExpired,
-    refreshAuthToken,
   ]);
 
   // Disconnect from WebSocket
@@ -589,7 +483,7 @@ export function useSchedulingWebSocket({
       previousBrandRef.current !== undefined && previousBrandRef.current !== selectedBrand?.id;
 
     // Only connect/disconnect on initial mount or actual brand change
-    if (enabled && token && selectedBrand) {
+    if (enabled && selectedBrand) {
       // If brand actually changed, disconnect and reconnect
       if (brandChanged && wsRef.current) {
         console.log('Brand changed, reconnecting WebSocket...');
@@ -600,7 +494,7 @@ export function useSchedulingWebSocket({
         connect();
       }
       previousBrandRef.current = selectedBrand.id;
-    } else if (!enabled || !token || !selectedBrand) {
+    } else if (!enabled || !selectedBrand) {
       disconnect();
       previousBrandRef.current = undefined;
     }
@@ -634,7 +528,7 @@ export function useSchedulingWebSocket({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, token, selectedBrand?.id]); // Intentionally omit connect/disconnect to prevent loops
+  }, [enabled, selectedBrand?.id]); // Intentionally omit connect/disconnect to prevent loops
 
   // Manual reconnect function (stable reference using react-use-websocket pattern)
   const reconnect = useCallback(() => {
@@ -652,7 +546,6 @@ export function useSchedulingWebSocket({
     // Reset state
     isConnectingRef.current = false;
     reconnectAttemptsRef.current = 0;
-    tokenRefreshAttemptedRef.current = false; // Reset token refresh flag
     setRetryIn(0);
 
     // Close existing connection
@@ -671,12 +564,12 @@ export function useSchedulingWebSocket({
 
     // Reconnect after a short delay to ensure clean state
     setTimeout(() => {
-      if (enabled && token && selectedBrand) {
+      if (enabled && selectedBrand) {
         connect();
       }
     }, 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, token, selectedBrand?.id]); // Stable deps only
+  }, [enabled, selectedBrand?.id]); // Stable deps only
 
   // Helper function to queue action when offline
   const queueAction = useCallback(

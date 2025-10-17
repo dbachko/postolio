@@ -41,8 +41,64 @@ export interface Content {
 }
 
 export interface AuthResponse {
-  token: string;
   user: User;
+  message: string;
+}
+
+export interface Session {
+  id: string;
+  deviceName: string;
+  deviceFingerprint?: string | null;
+  ipAddress?: string | null;
+  location?: {
+    city?: string;
+    country?: string;
+    region?: string;
+  } | null;
+  userAgent?: string | null;
+  lastActivityAt: string;
+  createdAt: string;
+  expiresAt: string;
+  isCurrent: boolean;
+  trusted: boolean;
+  trustedUntil?: string | null;
+}
+
+export interface SessionsResponse {
+  sessions: Session[];
+  total: number;
+}
+
+export interface SecuritySummary {
+  activeSessions: number;
+  lastPasswordChange: string;
+  recentLogins: number;
+  suspiciousActivity: number;
+  lastLogin: {
+    timestamp: string;
+    location?: {
+      city?: string;
+      country?: string;
+    } | null;
+    device: string;
+  } | null;
+}
+
+export interface LoginHistoryItem {
+  timestamp: string;
+  device: string;
+  location?: {
+    city?: string;
+    country?: string;
+  } | null;
+  ipAddress?: string | null;
+  status: 'active' | 'revoked';
+  revokedReason?: string | null;
+}
+
+export interface LoginHistoryResponse {
+  history: LoginHistoryItem[];
+  total: number;
 }
 
 export interface CampaignConfig {
@@ -121,13 +177,12 @@ const csrfTokenManager = new CSRFTokenManager({
 });
 
 class ApiClient {
-  private token: string | null = null;
   private cachedTimezone: string | null = null;
   private timezoneLastUpdated = 0;
   private static TIMEZONE_CACHE_DURATION = 30 * 1000; // 30 seconds
 
   constructor() {
-    this.token = localStorage.getItem('auth_token');
+    // Tokens are managed via HttpOnly cookies - no localStorage needed
   }
 
   async hasBrandProfileProjection(brandId: string): Promise<boolean> {
@@ -136,9 +191,8 @@ class ApiClient {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
         },
-        credentials: 'include',
+        credentials: 'include', // Tokens sent automatically via cookies
       });
       if (res.status === 404) return false;
       if (!res.ok) return false;
@@ -210,16 +264,6 @@ class ApiClient {
     );
   }
 
-  setToken(token: string) {
-    this.token = token;
-    localStorage.setItem('auth_token', token);
-  }
-
-  removeToken() {
-    this.token = null;
-    localStorage.removeItem('auth_token');
-  }
-
   async ensureCSRFToken(): Promise<string | null> {
     // Use the modern library's ensureToken method
     return csrfTokenManager.ensureToken();
@@ -252,9 +296,7 @@ class ApiClient {
       headers['Content-Type'] = 'application/json';
     }
 
-    if (this.token) {
-      headers.Authorization = `Bearer ${this.token}`;
-    }
+    // Tokens are automatically sent via HttpOnly cookies - no Authorization header needed
 
     // Include CSRF token for state-changing requests
     if (options.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method)) {
@@ -318,10 +360,22 @@ class ApiClient {
       }
 
       // Handle 401 Unauthorized specifically
-      if (response.status === 401 && endpoint !== '/api/auth/me') {
-        // Clear the token and redirect to login
-        this.removeToken();
-        // Only redirect if not already on login/register page
+      if (
+        response.status === 401 &&
+        endpoint !== '/api/auth/me' &&
+        endpoint !== '/api/auth/refresh'
+      ) {
+        // Try to refresh the token and retry the request
+        const { AuthInterceptor } = await import('./auth-interceptor');
+        const retryResult = await AuthInterceptor.handleUnauthorized(() =>
+          this.request<T>(endpoint, options)
+        );
+
+        if (retryResult.shouldRetry && retryResult.result) {
+          return retryResult.result;
+        }
+
+        // Refresh failed, redirect to login
         const currentPath = window.location.pathname;
         if (currentPath !== '/login' && currentPath !== '/register') {
           window.location.href = '/login';
@@ -358,6 +412,8 @@ class ApiClient {
     password: string;
     name?: string;
     timezone?: string;
+    deviceFingerprint?: string;
+    deviceName?: string;
   }): Promise<AuthResponse> {
     return this.request('/api/auth/register', {
       method: 'POST',
@@ -369,6 +425,8 @@ class ApiClient {
     email: string;
     password: string;
     rememberMe?: boolean;
+    deviceFingerprint?: string;
+    deviceName?: string;
   }): Promise<AuthResponse> {
     return this.request('/api/auth/login', {
       method: 'POST',
@@ -381,16 +439,76 @@ class ApiClient {
   }
 
   async logout(): Promise<{ success: boolean; message: string }> {
-    const response = await this.request('/api/auth/logout', {
+    return this.request('/api/auth/logout', {
       method: 'POST',
-    });
-    this.removeToken();
-    return response as { success: boolean; message: string };
+    }) as Promise<{ success: boolean; message: string }>;
   }
 
-  async refreshToken(): Promise<{ token: string }> {
+  async refreshToken(): Promise<{ message: string }> {
     return this.request('/api/auth/refresh', {
       method: 'POST',
+    });
+  }
+
+  // Session management endpoints
+  async getSessions(): Promise<SessionsResponse> {
+    return this.request('/api/auth/sessions', {
+      method: 'GET',
+    });
+  }
+
+  async getSession(sessionId: string): Promise<{ session: Session }> {
+    return this.request(`/api/auth/sessions/${sessionId}`, {
+      method: 'GET',
+    });
+  }
+
+  async revokeSession(sessionId: string): Promise<{
+    success: boolean;
+    message: string;
+    sessionId: string;
+  }> {
+    return this.request(`/api/auth/sessions/${sessionId}/revoke`, {
+      method: 'POST',
+    });
+  }
+
+  async revokeAllSessions(): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    return this.request('/api/auth/sessions/revoke-all', {
+      method: 'POST',
+    });
+  }
+
+  async updateSessionDeviceName(
+    sessionId: string,
+    deviceName: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    session: {
+      id: string;
+      deviceName: string;
+    };
+  }> {
+    return this.request(`/api/auth/sessions/${sessionId}/device-name`, {
+      method: 'PATCH',
+      body: JSON.stringify({ deviceName }),
+    });
+  }
+
+  // Security dashboard endpoints
+  async getSecuritySummary(): Promise<SecuritySummary> {
+    return this.request('/api/auth/security/summary', {
+      method: 'GET',
+    });
+  }
+
+  async getLoginHistory(): Promise<LoginHistoryResponse> {
+    return this.request('/api/auth/security/login-history', {
+      method: 'GET',
     });
   }
 

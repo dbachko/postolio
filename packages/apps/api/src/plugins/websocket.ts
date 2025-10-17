@@ -2,14 +2,9 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import fastifyPlugin from 'fastify-plugin';
 import fastifyWebsocket from '@fastify/websocket';
 import { WebSocket } from 'ws';
-import jwt from 'jsonwebtoken';
 
 interface BaseMessage<T extends string> {
   type: T;
-}
-interface AuthMessage extends BaseMessage<'auth'> {
-  token?: string;
-  brandId?: string;
 }
 type PingMessage = BaseMessage<'ping'>;
 interface SubscribeMessage extends BaseMessage<'subscribe'> {
@@ -19,7 +14,7 @@ interface SubscribeMessage extends BaseMessage<'subscribe'> {
 }
 type UnsubscribeMessage = BaseMessage<'unsubscribe'>;
 
-type WebSocketMessage = AuthMessage | PingMessage | SubscribeMessage | UnsubscribeMessage;
+type WebSocketMessage = PingMessage | SubscribeMessage | UnsubscribeMessage;
 
 type OutboundPayload =
   | { type: 'error'; message: string }
@@ -47,6 +42,22 @@ const connections = new Map<string, Set<AuthenticatedSocket>>();
 
 // Heartbeat interval
 let heartbeatInterval: NodeJS.Timeout | null = null;
+
+/**
+ * Parse cookies from HTTP request header
+ */
+function parseCookies(cookieHeader: string | undefined): Record<string, string> {
+  if (!cookieHeader) return {};
+
+  return cookieHeader.split(';').reduce(
+    (cookies, cookie) => {
+      const [name, ...rest] = cookie.trim().split('=');
+      cookies[name] = rest.join('=');
+      return cookies;
+    },
+    {} as Record<string, string>
+  );
+}
 
 const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // Register the base WebSocket plugin
@@ -95,22 +106,42 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
   // WebSocket route handler
   // Always use /ws path for WebSocket connections through CloudFront
   const wsPath = '/ws';
-  fastify.get(wsPath, { websocket: true }, (connection) => {
+  fastify.get(wsPath, { websocket: true }, async (connection, request) => {
     const socket = connection as AuthenticatedSocket;
     socket.isAlive = true;
 
-    // Set a flag to track if the socket has been authenticated
-    let isAuthenticated = false;
-    let authTimeout: NodeJS.Timeout | null = null;
+    // Authenticate using cookie from handshake
+    const cookies = parseCookies(request.headers.cookie);
+    const authToken = cookies.auth_token;
 
-    // Set a timeout for authentication (10 seconds)
-    authTimeout = setTimeout(() => {
-      if (!isAuthenticated) {
-        fastify.log.info('WebSocket connection closed due to authentication timeout');
-        socket.send(JSON.stringify({ type: 'error', message: 'Authentication required' }));
-        socket.close(1008, 'Authentication timeout');
-      }
-    }, 10000);
+    if (!authToken) {
+      fastify.log.info('WebSocket connection rejected: No auth token in cookie');
+      socket.send(JSON.stringify({ type: 'error', message: 'Authentication required' }));
+      socket.close(1008, 'No authentication cookie');
+      return;
+    }
+
+    // Verify JWT token
+    try {
+      const decoded = (await fastify.jwt.verify(authToken)) as { id: string; email: string };
+      socket.userId = decoded.id;
+
+      // Send authenticated confirmation
+      socket.send(
+        JSON.stringify({
+          type: 'authenticated',
+          userId: socket.userId,
+          timestamp: new Date().toISOString(),
+        })
+      );
+
+      fastify.log.info({ userId: socket.userId }, 'WebSocket authenticated via cookie');
+    } catch (error) {
+      fastify.log.error({ error }, 'WebSocket authentication failed');
+      socket.send(JSON.stringify({ type: 'error', message: 'Invalid authentication token' }));
+      socket.close(1008, 'Authentication failed');
+      return;
+    }
 
     // Handle pong responses for heartbeat
     socket.on('pong', () => {
@@ -121,35 +152,13 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
       try {
         const message: WebSocketMessage = JSON.parse(data.toString());
 
-        // Only allow auth and ping messages before authentication
-        if (!isAuthenticated && message.type !== 'auth' && message.type !== 'ping') {
-          socket.send(
-            JSON.stringify({
-              type: 'error',
-              message: 'Authentication required',
-            })
-          );
-          return;
-        }
-
         switch (message.type) {
-          case 'auth': {
-            const authResult = await handleAuth(socket, message, fastify);
-            if (authResult) {
-              isAuthenticated = true;
-              if (authTimeout) {
-                clearTimeout(authTimeout);
-                authTimeout = null;
-              }
-            }
-            break;
-          }
           case 'ping':
             socket.send(JSON.stringify({ type: 'pong' }));
             break;
 
           case 'subscribe':
-            if (message.type === 'subscribe') handleSubscribe(socket, message);
+            handleSubscribe(socket, message);
             break;
 
           case 'unsubscribe':
@@ -171,19 +180,11 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
     });
 
     socket.on('close', () => {
-      if (authTimeout) {
-        clearTimeout(authTimeout);
-        authTimeout = null;
-      }
       cleanupSocket(socket);
     });
 
     socket.on('error', (error) => {
       fastify.log.error({ error }, 'WebSocket error');
-      if (authTimeout) {
-        clearTimeout(authTimeout);
-        authTimeout = null;
-      }
       cleanupSocket(socket);
     });
   });
@@ -220,87 +221,6 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
     connections.clear();
   });
 };
-
-async function handleAuth(
-  socket: AuthenticatedSocket,
-  message: AuthMessage,
-  fastify: FastifyInstance
-): Promise<boolean> {
-  if (!message.token) {
-    socket.send(
-      JSON.stringify({
-        type: 'error',
-        message: 'Token required for authentication',
-      })
-    );
-    socket.close(1008, 'Authentication failed');
-    return false;
-  }
-
-  // Validate JWT_SECRET is configured
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    fastify.log.error('JWT_SECRET environment variable is not configured');
-    socket.send(
-      JSON.stringify({
-        type: 'error',
-        message: 'Server configuration error',
-      })
-    );
-    socket.close(1011, 'Server configuration error');
-    return false;
-  }
-
-  try {
-    const decoded = jwt.verify(message.token, jwtSecret) as { userId: string };
-
-    socket.userId = decoded.userId;
-
-    // Subscribe to brand room if provided
-    if (message.brandId) {
-      socket.brandId = message.brandId;
-      const room = `brand:${message.brandId}`;
-
-      if (!connections.has(room)) {
-        connections.set(room, new Set());
-      }
-      connections.get(room)!.add(socket);
-
-      socket.send(
-        JSON.stringify({
-          type: 'connected',
-          brandId: message.brandId,
-          userId: decoded.userId,
-          timestamp: new Date().toISOString(),
-        })
-      );
-
-      fastify.log.info(
-        { userId: decoded.userId, brandId: message.brandId },
-        'WebSocket authenticated'
-      );
-    } else {
-      socket.send(
-        JSON.stringify({
-          type: 'authenticated',
-          userId: decoded.userId,
-          timestamp: new Date().toISOString(),
-        })
-      );
-    }
-    return true;
-  } catch (error) {
-    fastify.log.error({ error }, 'WebSocket authentication failed');
-    socket.send(
-      JSON.stringify({
-        type: 'error',
-        message: 'Authentication failed',
-      })
-    );
-    socket.close(1008, 'Authentication failed');
-    return false;
-  }
-}
 
 function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage) {
   if (!socket.userId) {

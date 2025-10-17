@@ -35,7 +35,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: [validateAndSanitize(registerSchema), enhancedRateLimiters.register()],
     },
     async (request, reply) => {
-      const { email, password, name, timezone } = request.body;
+      const { email, password, name, timezone, deviceFingerprint, deviceName } = request.body;
 
       // Check if user exists
       const existingUser = await prisma.user.findUnique({
@@ -68,19 +68,25 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      // Generate tokens with refresh token rotation
+      // Generate tokens with refresh token rotation and session tracking
       const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
         fastify,
         user.id,
         request.ip,
-        request.headers['user-agent']
+        request.headers['user-agent'],
+        {
+          deviceFingerprint,
+          deviceName,
+          ipAddress: request.ip,
+          userAgent: request.headers['user-agent'],
+        }
       );
 
       // Set access token in HTTP-only cookie
       reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'prod',
-        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
         path: '/',
         maxAge: 15 * 60, // 15 minutes for access token
       });
@@ -88,8 +94,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Set refresh token in separate HTTP-only cookie
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'prod',
-        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
         path: '/api/auth/refresh', // Only sent to refresh endpoint
         maxAge: 7 * 24 * 60 * 60, // 7 days for new users
       });
@@ -118,8 +124,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(201).send({
-        token: accessToken,
         user,
+        message: 'Registration successful',
       });
     }
   );
@@ -131,7 +137,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       preHandler: [validateAndSanitize(loginSchema), enhancedRateLimiters.login()],
     },
     async (request, reply) => {
-      const { email, password, rememberMe } = request.body;
+      const { email, password, rememberMe, deviceFingerprint, deviceName } = request.body;
 
       // Check if account is locked before proceeding
       const isLocked = await AuditLogger.isAccountLocked(email);
@@ -268,19 +274,25 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      // Generate tokens with refresh token rotation
+      // Generate tokens with refresh token rotation and session tracking
       const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
         fastify,
         user.id,
         request.ip,
-        request.headers['user-agent']
+        request.headers['user-agent'],
+        {
+          deviceFingerprint,
+          deviceName,
+          ipAddress: request.ip,
+          userAgent: request.headers['user-agent'],
+        }
       );
 
       // Set access token in HTTP-only cookie
       reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'prod',
-        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
         path: '/',
         maxAge: 15 * 60, // 15 minutes for access token
       });
@@ -288,8 +300,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Set refresh token in separate HTTP-only cookie
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'prod',
-        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
         path: '/api/auth/refresh', // Only sent to refresh endpoint
         maxAge: rememberMe
           ? 30 * 24 * 60 * 60 // 30 days if remember me
@@ -305,8 +317,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       void _password;
 
       return reply.send({
-        token: accessToken,
         user: userWithoutPassword,
+        message: 'Login successful',
       });
     }
   );
@@ -337,8 +349,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     // Set new access token
     reply.setCookie('auth_token', result.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'prod',
-      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
       path: '/',
       maxAge: 15 * 60, // 15 minutes
     });
@@ -346,14 +358,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     // Set new refresh token
     reply.setCookie('refresh_token', result.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'prod',
-      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
       path: '/api/auth/refresh',
       maxAge: 30 * 24 * 60 * 60, // 30 days
     });
 
     return reply.send({
-      token: result.accessToken,
       message: 'Token refreshed successfully',
     });
   });
@@ -389,15 +400,15 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     reply.clearCookie('auth_token', {
       path: '/',
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'prod',
-      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
     });
 
     reply.clearCookie('refresh_token', {
       path: '/api/auth/refresh',
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'prod',
-      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
     });
 
     // Log logout event if we have user info

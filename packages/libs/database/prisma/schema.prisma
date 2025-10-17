@@ -191,6 +191,31 @@ enum CampaignStatus {
   processing
 }
 
+model Session {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  refreshTokenHash  String    @unique @map("refresh_token_hash")
+  deviceFingerprint String?   @map("device_fingerprint")
+  deviceName        String?   @map("device_name")
+  ipAddress         String?   @map("ip_address")
+  userAgent         String?   @map("user_agent")
+  location          Json?
+  trusted           Boolean   @default(false)
+  trustedUntil      DateTime? @map("trusted_until")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  lastActivityAt    DateTime  @default(now()) @map("last_activity_at")
+  expiresAt         DateTime  @map("expires_at")
+  revokedAt         DateTime? @map("revoked_at")
+  revokedReason     String?   @map("revoked_reason")
+
+  @@index([userId])
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@index([lastActivityAt])
+  @@index([deviceFingerprint])
+  @@map("sessions")
+}
+
 model AuditLog {
   id           String   @id @default(cuid())
   userId       String?  @map("userid")

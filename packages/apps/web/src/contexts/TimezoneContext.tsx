@@ -32,8 +32,7 @@ interface TimezoneProviderProps {
 }
 
 export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) => {
-  const { user, getToken } = useAuthStore();
-  const token = getToken();
+  const { user } = useAuthStore();
   const [timezone, setTimezoneState] = useState<string>(getUserTimezone());
   const [isAutoDetected, setIsAutoDetected] = useState<boolean>(true);
   const [brandTimezones, setBrandTimezones] = useState<Map<string, string>>(new Map());
@@ -49,14 +48,9 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
       const detected = getUserTimezone();
       setTimezoneState(detected);
       setIsAutoDetected(true);
-
-      // Send detected timezone to backend via header
-      if (token) {
-        // This will be included in all API requests via our api client
-        window.localStorage.setItem('userTimezone', detected);
-      }
+      window.localStorage.setItem('userTimezone', detected);
     }
-  }, [user, token]);
+  }, [user]);
 
   // Validate timezone helper
   const isValidTimezone = (tz: string): boolean => {
@@ -85,26 +79,23 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     setIsAutoDetected(isAuto);
     window.localStorage.setItem('userTimezone', newTimezone);
 
-    // Update user settings on backend if token is present (sync both auto and manual timezones)
-    if (token) {
-      try {
-        await apiClient.updateUserTimezone({
-          timezone: newTimezone,
-          timezoneAutoDetected: isAuto,
-        });
-      } catch (error) {
-        // Rollback local state on failure
-        setTimezoneState(previousTimezone);
-        setIsAutoDetected(previousIsAutoDetected);
-        if (previousLocalStorage) {
-          window.localStorage.setItem('userTimezone', previousLocalStorage);
-        } else {
-          window.localStorage.removeItem('userTimezone');
-        }
-
-        // Re-throw error for caller to handle
-        throw error instanceof Error ? error : new Error('Failed to update timezone');
+    try {
+      await apiClient.updateUserTimezone({
+        timezone: newTimezone,
+        timezoneAutoDetected: isAuto,
+      });
+    } catch (error) {
+      // Rollback local state on failure
+      setTimezoneState(previousTimezone);
+      setIsAutoDetected(previousIsAutoDetected);
+      if (previousLocalStorage) {
+        window.localStorage.setItem('userTimezone', previousLocalStorage);
+      } else {
+        window.localStorage.removeItem('userTimezone');
       }
+
+      // Re-throw error for caller to handle
+      throw error instanceof Error ? error : new Error('Failed to update timezone');
     }
   };
 
@@ -115,43 +106,36 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
       return brandTimezones.get(brandId)!;
     }
 
-    // Fetch from backend
-    if (token) {
-      try {
-        const data = await apiClient.getBrandTimezone(brandId);
-        const brandTz = data.timezone || timezone;
+    try {
+      const data = await apiClient.getBrandTimezone(brandId);
+      const brandTz = data.timezone || timezone;
 
-        // Cache the result
-        setBrandTimezones((prev) => new Map(prev).set(brandId, brandTz));
-        return brandTz;
-      } catch (error) {
-        // Log error but don't throw - fallback to user timezone
-        console.warn(`Failed to fetch brand timezone for ${brandId}, using user timezone`, error);
-      }
+      // Cache the result
+      setBrandTimezones((prev) => new Map(prev).set(brandId, brandTz));
+      return brandTz;
+    } catch (error) {
+      // Log error but don't throw - fallback to user timezone
+      console.warn(`Failed to fetch brand timezone for ${brandId}, using user timezone`, error);
+      return timezone;
     }
-
-    // Fallback to user timezone
-    return timezone;
   };
 
   // Refresh timezone from user settings
   const refreshTimezone = async () => {
-    if (token) {
-      try {
-        const data = await apiClient.getProfile();
-        if (data.user) {
-          if (data.user.timezone && !data.user.timezoneAutoDetected) {
-            setTimezoneState(data.user.timezone);
-            setIsAutoDetected(false);
-          } else {
-            const detected = getUserTimezone();
-            setTimezoneState(detected);
-            setIsAutoDetected(true);
-          }
+    try {
+      const data = await apiClient.getProfile();
+      if (data.user) {
+        if (data.user.timezone && !data.user.timezoneAutoDetected) {
+          setTimezoneState(data.user.timezone);
+          setIsAutoDetected(false);
+        } else {
+          const detected = getUserTimezone();
+          setTimezoneState(detected);
+          setIsAutoDetected(true);
         }
-      } catch (error) {
-        console.error('Error refreshing timezone:', error);
       }
+    } catch (error) {
+      console.error('Error refreshing timezone:', error);
     }
   };
 

@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 import { getDatabaseClient } from '../config/database.js';
 import { AuditLogger, AuditEventType } from './audit-logger.js';
 import { RedisTokenStore } from './redis-token-store.js';
+import { SessionService, SessionMetadata } from './session.service.js';
 import { FastifyInstance } from 'fastify';
 
 const prisma = getDatabaseClient();
@@ -32,11 +33,13 @@ export class RefreshTokenService {
     fastify: FastifyInstance,
     userId: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    sessionMetadata?: SessionMetadata
   ): Promise<{
     refreshToken: string;
     accessToken: string;
     family: string;
+    sessionId: string;
   }> {
     // Generate token and family ID
     const token = randomBytes(this.TOKEN_LENGTH).toString('hex');
@@ -72,6 +75,18 @@ export class RefreshTokenService {
       this.FAMILY_EXPIRY_DAYS * 24 * 60 * 60
     );
 
+    // Create session in database
+    const session = await SessionService.createSession({
+      userId,
+      refreshToken: token,
+      metadata: {
+        ...sessionMetadata,
+        ipAddress,
+        userAgent,
+      },
+      refreshTokenExpiry: this.TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
+    });
+
     // Generate new access token
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -91,11 +106,11 @@ export class RefreshTokenService {
     await AuditLogger.log({
       userId,
       eventType: AuditEventType.REFRESH_TOKEN_GENERATED,
-      metadata: { family, generation: 1, ipAddress, userAgent },
+      metadata: { family, generation: 1, ipAddress, userAgent, sessionId: session.id },
       success: true,
     });
 
-    return { refreshToken: token, accessToken, family };
+    return { refreshToken: token, accessToken, family, sessionId: session.id };
   }
 
   /**
@@ -222,6 +237,15 @@ export class RefreshTokenService {
       // Token expiry is configured in auth plugin (default 1h)
     );
 
+    // Update session last activity and refresh token hash
+    // Find session using OLD token before it was rotated
+    const session = await SessionService.findSessionByToken(oldToken);
+    if (session) {
+      await SessionService.updateLastActivity(session.id);
+      // Update the stored refreshTokenHash to the new token's hash
+      await SessionService.updateRefreshTokenHash(session.id, newToken);
+    }
+
     // Log rotation
     await AuditLogger.log({
       userId: oldTokenParsed.userId,
@@ -232,6 +256,7 @@ export class RefreshTokenService {
         newGeneration,
         ipAddress,
         userAgent,
+        sessionId: session?.id,
       },
       success: true,
     });
@@ -256,6 +281,12 @@ export class RefreshTokenService {
     // Delete token
     await tokenStore.deleteToken(token);
 
+    // Revoke session
+    const session = await SessionService.findSessionByToken(token);
+    if (session) {
+      await SessionService.revokeSession(session.id, 'user_logout');
+    }
+
     // Log invalidation
     await AuditLogger.log({
       userId: parsed.userId,
@@ -263,6 +294,7 @@ export class RefreshTokenService {
       metadata: {
         family: parsed.family,
         generation: parsed.generation,
+        sessionId: session?.id,
       },
       success: true,
     });
@@ -292,6 +324,9 @@ export class RefreshTokenService {
   static async invalidateAllUserTokens(userId: string): Promise<void> {
     // Delete all user tokens using efficient Set operations
     await tokenStore.deleteUserTokens(userId);
+
+    // Revoke all user sessions
+    await SessionService.revokeAllUserSessions(userId);
 
     // Log invalidation
     await AuditLogger.log({

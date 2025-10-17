@@ -15,7 +15,7 @@ interface GoogleSignInIsolatedProps {
 export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInIsolatedProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const { setUser, setToken } = useAuthStore();
+  const { setUser } = useAuthStore();
   const navigate = useNavigate();
   const buttonRef = useRef<HTMLDivElement>(null);
 
@@ -44,9 +44,6 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(mode === 'link' && localStorage.getItem('token')
-              ? { Authorization: `Bearer ${localStorage.getItem('token')}` }
-              : {}),
           },
           credentials: 'include',
           body: JSON.stringify({
@@ -61,9 +58,7 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
         }
 
         if (mode !== 'link') {
-          setToken(data.token);
           setUser(data.user);
-          localStorage.setItem('token', data.token);
 
           const actionText = data.isNewUser ? 'Account created' : 'Signed in';
           toast.success(`${actionText} successfully!`, {
@@ -94,7 +89,7 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
         setIsLoading(false);
       }
     },
-    [mode, navigate, onError, onSuccess, setToken, setUser]
+    [mode, navigate, onError, onSuccess, setUser]
   );
 
   useEffect(() => {

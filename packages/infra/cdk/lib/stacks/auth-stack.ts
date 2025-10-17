@@ -15,6 +15,9 @@ import * as cwactions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as path from 'path';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { NagSuppressions } from 'cdk-nag';
@@ -321,6 +324,198 @@ export class AuthStack extends cdk.Stack {
     });
 
     durationAlarm.addAlarmAction(new cwactions.SnsAction(alertTopic));
+
+    // ==================== Import VPC Configuration from Foundation Stack ====================
+    let vpc: ec2.IVpc | undefined;
+    let lambdaSecurityGroup: ec2.ISecurityGroup | undefined;
+    let vpcConfig: ec2.SubnetSelection | undefined;
+    let databaseSecretArn: string | undefined;
+
+    try {
+      // Import VPC from Foundation stack via context lookup (stable and synth-safe)
+      const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
+      const lambdaSecurityGroupId = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/security-groups/lambda`
+      );
+      databaseSecretArn = ssm.StringParameter.valueFromLookup(
+        this,
+        `/postolio/${environment}/database/secret-arn`
+      );
+
+      const hasFoundationResources = vpcId && lambdaSecurityGroupId && databaseSecretArn;
+      if (hasFoundationResources) {
+        vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', { vpcId });
+        lambdaSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+          this,
+          'LambdaSecurityGroup',
+          lambdaSecurityGroupId
+        );
+        vpcConfig = { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS };
+        console.log(`Using VPC configuration from Foundation stack for environment ${environment}`);
+      }
+    } catch (error) {
+      console.log(
+        `VPC import skipped or failed; session-cleanup Lambda will not be created for ${environment}. Error: ${error}`
+      );
+    }
+
+    // ==================== Session Cleanup Lambda (Conditional on VPC) ====================
+    if (vpc && lambdaSecurityGroup && vpcConfig && databaseSecretArn) {
+      const sessionCleanupRole = new iam.Role(this, 'SessionCleanupRole', {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaVPCAccessExecutionRole'
+          ),
+        ],
+        inlinePolicies: {
+          SessionCleanupPolicy: new iam.PolicyDocument({
+            statements: [
+              // Secrets Manager permissions for database credentials
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: ['secretsmanager:GetSecretValue'],
+                resources: [databaseSecretArn],
+              }),
+              // CloudWatch Metrics permissions
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: ['cloudwatch:PutMetricData'],
+                resources: ['*'],
+                conditions: {
+                  StringEquals: {
+                    'cloudwatch:namespace': 'SessionManagement',
+                  },
+                },
+              }),
+              // X-Ray tracing permissions
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
+                resources: ['*'],
+              }),
+            ],
+          }),
+        },
+      });
+
+      const sessionCleanupFunction = new NodejsFunction(this, 'SessionCleanupFunction', {
+        functionName: `${prefix}-session-cleanup`,
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: 'index.handler',
+        entry: path.join(__dirname, '../../../../services/session-cleanup/src/index.ts'),
+        timeout: cdk.Duration.minutes(10),
+        memorySize: 512,
+        role: sessionCleanupRole,
+        vpc: vpc,
+        vpcSubnets: vpcConfig,
+        securityGroups: [lambdaSecurityGroup],
+        bundling: {
+          commandHooks: {
+            afterBundling(inputDir: string, outputDir: string): string[] {
+              return [
+                `mkdir -p ${outputDir}/lambda-client`,
+                `cp -vr ${inputDir}/packages/libs/database/lambda-client/. ${outputDir}/lambda-client/ || true`,
+              ];
+            },
+            beforeBundling(): string[] {
+              return [];
+            },
+            beforeInstall(): string[] {
+              return [];
+            },
+          },
+          nodeModules: ['pg', '@prisma/adapter-pg'],
+        },
+        environment: {
+          NODE_ENV: environment,
+          SERVICE_NAME: 'session-cleanup',
+          ENVIRONMENT: environment,
+          LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+          DB_SECRET_ARN: databaseSecretArn,
+        },
+        tracing: lambda.Tracing.ACTIVE,
+      });
+
+      // EventBridge schedule for daily cleanup at 2 AM
+      const sessionCleanupRule = new events.Rule(this, 'SessionCleanupRule', {
+        ruleName: `${prefix}-session-cleanup-rule`,
+        description: 'Trigger session cleanup daily at 2 AM',
+        schedule: events.Schedule.cron({
+          hour: '2',
+          minute: '0',
+        }),
+      });
+
+      sessionCleanupRule.addTarget(new targets.LambdaFunction(sessionCleanupFunction));
+
+      // CloudWatch monitoring - error rate alarm
+      const sessionCleanupErrorMetric = sessionCleanupFunction.metricErrors({
+        period: cdk.Duration.minutes(5),
+      });
+
+      const sessionCleanupErrorAlarm = new cloudwatch.Alarm(this, 'SessionCleanupErrorAlarm', {
+        alarmName: `${prefix}-session-cleanup-errors`,
+        metric: sessionCleanupErrorMetric,
+        threshold: 5,
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Session cleanup error rate too high',
+      });
+
+      sessionCleanupErrorAlarm.addAlarmAction(new cwactions.SnsAction(alertTopic));
+
+      // CloudWatch monitoring - duration alarm
+      const sessionCleanupDurationMetric = sessionCleanupFunction.metricDuration({
+        period: cdk.Duration.minutes(5),
+      });
+
+      const sessionCleanupDurationAlarm = new cloudwatch.Alarm(
+        this,
+        'SessionCleanupDurationAlarm',
+        {
+          alarmName: `${prefix}-session-cleanup-duration`,
+          metric: sessionCleanupDurationMetric,
+          threshold: 540000, // 9 minutes (timeout is 10 minutes)
+          evaluationPeriods: 2,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+          alarmDescription: 'Session cleanup duration approaching timeout',
+        }
+      );
+
+      sessionCleanupDurationAlarm.addAlarmAction(new cwactions.SnsAction(alertTopic));
+
+      // CDK NAG suppressions for session cleanup role
+      NagSuppressions.addResourceSuppressions(
+        sessionCleanupRole,
+        [
+          {
+            id: 'AwsSolutions-IAM4',
+            reason:
+              'AWS managed policies (AWSLambdaBasicExecutionRole, AWSLambdaVPCAccessExecutionRole) are standard for Lambda functions in VPC',
+            appliesTo: [
+              'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+              'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+            ],
+          },
+          {
+            id: 'AwsSolutions-IAM5',
+            reason:
+              'Wildcard permissions required for CloudWatch Metrics (scoped to namespace) and X-Ray tracing',
+            appliesTo: ['Resource::*'],
+          },
+        ],
+        true
+      );
+
+      console.log(`Session cleanup Lambda configured for environment ${environment}`);
+    } else {
+      console.log(
+        `Session cleanup Lambda skipped for ${environment} - Foundation stack resources not available`
+      );
+    }
 
     // ==================== SSM Parameters for Service Discovery ====================
     new ssm.StringParameter(this, 'TokenServiceUrlParameter', {

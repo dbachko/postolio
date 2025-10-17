@@ -86,8 +86,8 @@ export function useTokenRefresh() {
 
       const response = await apiClient.refreshToken();
 
-      if (response.token) {
-        localStorage.setItem('auth_token', response.token);
+      if (response.message) {
+        // Token is now in HttpOnly cookie - no manual storage needed
         lastRefreshRef.current = Date.now();
         refreshAttemptsRef.current = 0;
         console.log('Token refreshed successfully');

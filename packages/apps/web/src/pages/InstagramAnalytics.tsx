@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useAuthStore } from '../stores/authStore';
 import { useBrandStore } from '../stores/brandStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -45,7 +44,6 @@ interface CacheStatus {
 }
 
 export default function InstagramAnalytics() {
-  const { getToken } = useAuthStore();
   const { selectedBrand } = useBrandStore();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('7d');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -58,16 +56,12 @@ export default function InstagramAnalytics() {
   } = useQuery<AnalyticsOverview>({
     queryKey: ['instagram-analytics', 'overview', selectedBrand?.id, timeRange],
     queryFn: async () => {
-      const token = getToken();
-      if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth');
+      if (!selectedBrand?.id) throw new Error('Missing brand');
       return apiClient.get(
-        `/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=${timeRange}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        `/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=${timeRange}`
       );
     },
-    enabled: !!selectedBrand?.id && !!getToken(),
+    enabled: !!selectedBrand?.id,
     refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
   });
 
@@ -79,13 +73,10 @@ export default function InstagramAnalytics() {
   } = useQuery<PostPerformance>({
     queryKey: ['instagram-analytics', 'posts', selectedBrand?.id],
     queryFn: async () => {
-      const token = getToken();
-      if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth');
-      return apiClient.get(`/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      if (!selectedBrand?.id) throw new Error('Missing brand');
+      return apiClient.get(`/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`);
     },
-    enabled: !!selectedBrand?.id && !!getToken(),
+    enabled: !!selectedBrand?.id,
     refetchInterval: 10 * 60 * 1000, // Refetch every 10 minutes
   });
 
@@ -93,29 +84,19 @@ export default function InstagramAnalytics() {
   const { data: status, refetch: refetchStatus } = useQuery<CacheStatus>({
     queryKey: ['instagram-analytics', 'status', selectedBrand?.id],
     queryFn: async () => {
-      const token = getToken();
-      if (!selectedBrand?.id || !token) throw new Error('Missing brand or auth');
-      return apiClient.get(`/api/instagram-analytics/status/${selectedBrand.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      if (!selectedBrand?.id) throw new Error('Missing brand');
+      return apiClient.get(`/api/instagram-analytics/status/${selectedBrand.id}`);
     },
-    enabled: !!selectedBrand?.id && !!getToken(),
+    enabled: !!selectedBrand?.id,
     refetchInterval: 2 * 60 * 1000, // Refetch every 2 minutes
   });
 
   const handleRefresh = async () => {
-    const token = getToken();
-    if (!selectedBrand?.id || !token || isRefreshing) return;
+    if (!selectedBrand?.id || isRefreshing) return;
 
     setIsRefreshing(true);
     try {
-      await apiClient.post(
-        `/api/instagram-analytics/refresh/${selectedBrand.id}`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await apiClient.post(`/api/instagram-analytics/refresh/${selectedBrand.id}`, {});
 
       // Refetch all data after refresh
       await Promise.all([refetchOverview(), refetchPosts(), refetchStatus()]);

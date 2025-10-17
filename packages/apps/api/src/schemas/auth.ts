@@ -38,6 +38,8 @@ export const registerSchema = z.object({
     .max(100, 'Name must be less than 100 characters')
     .optional(),
   timezone: z.string().optional(), // Browser-detected timezone (e.g., 'America/New_York')
+  deviceFingerprint: z.string().optional(), // Device fingerprint for session tracking
+  deviceName: z.string().optional(), // Human-readable device name (e.g., 'Chrome on macOS')
 });
 
 /**
@@ -47,6 +49,8 @@ export const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1, 'Password is required'),
   rememberMe: z.boolean().optional(),
+  deviceFingerprint: z.string().optional(), // Device fingerprint for session tracking
+  deviceName: z.string().optional(), // Human-readable device name (e.g., 'Chrome on macOS')
 });
 
 /**

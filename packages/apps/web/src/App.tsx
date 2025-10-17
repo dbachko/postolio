@@ -18,6 +18,7 @@ import { AIFeatures } from './pages/AIFeatures';
 import { Campaigns } from './pages/Campaigns';
 import { Content } from './pages/Content';
 import { Settings } from './pages/Settings';
+import { SecuritySettings } from './pages/SecuritySettings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { TermsOfService } from './pages/TermsOfService';
 import { DataDeletion } from './pages/DataDeletion';
@@ -247,6 +248,16 @@ function App() {
                     <ProtectedRoute>
                       <Layout>
                         <Settings />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/security"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <SecuritySettings />
                       </Layout>
                     </ProtectedRoute>
                   }

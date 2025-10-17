@@ -12,6 +12,7 @@ import csrfAutoProtect from './plugins/csrf-auto-protect.js';
 import monitoringPlugin from './plugins/monitoring.js';
 import websocketPlugin from './plugins/websocket.js';
 import authRoutes from './routes/auth.js';
+import sessionsRoutes from './routes/sessions.js';
 import csrfRoutes from './routes/csrf.js';
 import googleOAuthRoutes from './routes/google-oauth.js';
 import facebookOAuthRoutes from './routes/facebook-oauth.js';
@@ -194,6 +195,7 @@ export function buildFastify(): FastifyInstance {
   // Register routes WITH /api prefix - CloudFront forwards full paths to backend
   app.register(monitoringRoutes, { prefix: '/api/monitoring' });
   app.register(authRoutes, { prefix: '/api/auth' });
+  app.register(sessionsRoutes, { prefix: '/api/auth' });
   app.register(csrfRoutes, { prefix: '/api' });
   app.register(googleOAuthRoutes, { prefix: '/api/auth' });
   app.register(facebookOAuthRoutes, { prefix: '/api/auth' });

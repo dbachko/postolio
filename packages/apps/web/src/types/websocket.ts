@@ -72,18 +72,15 @@ export type CampaignStatus =
 
 export interface WebSocketMessage {
   type:
-    | 'auth'
+    | 'authenticated' // Cookie-based auth confirmation from server
     | 'subscribe'
     | 'ping'
     | 'pong'
-    | 'auth_success'
-    | 'auth_error'
     | 'subscribed'
     | 'status_update'
     | 'batch_status_update'
     | 'campaign_status_update'
     | 'campaign_error';
-  token?: string;
   room?: string;
   brandId?: string;
   campaignId?: string;

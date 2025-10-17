@@ -16,7 +16,7 @@ interface FacebookSignInIsolatedProps {
 export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSignInIsolatedProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
-  const { setUser, setToken } = useAuthStore();
+  const { setUser } = useAuthStore();
   const navigate = useNavigate();
   const sdkLoadedRef = useRef(false);
 
@@ -45,9 +45,6 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(mode === 'link' && localStorage.getItem('token')
-              ? { Authorization: `Bearer ${localStorage.getItem('token')}` }
-              : {}),
           },
           credentials: 'include',
           body: JSON.stringify({
@@ -63,10 +60,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
         }
 
         if (mode !== 'link') {
-          // Store auth data
-          setToken(data.token);
           setUser(data.user);
-          localStorage.setItem('token', data.token);
 
           const actionText = data.isNewUser ? 'Account created' : 'Signed in';
           toast.success(`${actionText} successfully!`, {
@@ -97,7 +91,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
         setIsLoading(false);
       }
     },
-    [mode, navigate, onError, onSuccess, setToken, setUser]
+    [mode, navigate, onError, onSuccess, setUser]
   );
 
   const handleFacebookLogin = useCallback(() => {

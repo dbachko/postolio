@@ -11,7 +11,7 @@ import { TIMEOUTS } from '@/constants/timeouts';
 export function MagicLinkVerify() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { setUser, setToken } = useAuthStore();
+  const { setUser } = useAuthStore();
 
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
@@ -47,11 +47,7 @@ export function MagicLinkVerify() {
         throw new Error(data.error || 'Failed to verify magic link');
       }
 
-      // Store auth data
-      setToken(data.token);
       setUser(data.user);
-      localStorage.setItem('token', data.token);
-
       setStatus('success');
 
       toast.success('Successfully signed in!', {

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { apiClient, type User } from '../lib/api';
+import { generateDeviceFingerprint, getDeviceName } from '../lib/device-fingerprint';
 
 interface AuthState {
   user: User | null;
@@ -9,9 +10,7 @@ interface AuthState {
   register: (email: string, password: string, name?: string, timezone?: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
-  getToken: () => string | null;
   setUser: (user: User) => void;
-  setToken: (token: string) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -21,8 +20,16 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email: string, password: string, rememberMe?: boolean) => {
     try {
-      const response = await apiClient.login({ email, password, rememberMe });
-      apiClient.setToken(response.token);
+      const fingerprint = await generateDeviceFingerprint();
+      const deviceName = getDeviceName();
+
+      const response = await apiClient.login({
+        email,
+        password,
+        rememberMe,
+        deviceFingerprint: fingerprint.visitorId,
+        deviceName,
+      });
       set({ user: response.user, isAuthenticated: true });
     } catch (error) {
       console.error('Login failed:', error);
@@ -32,13 +39,17 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   register: async (email: string, password: string, name?: string, timezone?: string) => {
     try {
+      const fingerprint = await generateDeviceFingerprint();
+      const deviceName = getDeviceName();
+
       const response = await apiClient.register({
         email,
         password,
         name,
         timezone,
+        deviceFingerprint: fingerprint.visitorId,
+        deviceName,
       });
-      apiClient.setToken(response.token);
       set({ user: response.user, isAuthenticated: true });
     } catch (error) {
       console.error('Registration failed:', error);
@@ -52,38 +63,20 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      apiClient.removeToken();
       set({ user: null, isAuthenticated: false });
     }
   },
 
   checkAuth: async () => {
-    // Skip auth check if no token exists
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      set({ user: null, isAuthenticated: false, isLoading: false });
-      return;
-    }
-
     try {
       const response = await apiClient.getProfile();
       set({ user: response.user, isAuthenticated: true, isLoading: false });
     } catch {
-      // Only clear auth state, don't trigger any redirects here
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },
 
-  getToken: () => {
-    return localStorage.getItem('auth_token');
-  },
-
   setUser: (user: User) => {
     set({ user, isAuthenticated: true });
-  },
-
-  setToken: (token: string) => {
-    apiClient.setToken(token);
-    localStorage.setItem('auth_token', token);
   },
 }));
