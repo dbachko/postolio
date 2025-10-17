@@ -3,6 +3,7 @@ import type { Session } from '../../lib/api';
 import { apiClient } from '../../lib/api';
 import { SessionCard } from './SessionCard';
 import { RevokeSessionDialog } from './RevokeSessionDialog';
+import { RevokeAllSessionsDialog } from './RevokeAllSessionsDialog';
 import { EditDeviceNameDialog } from './EditDeviceNameDialog';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
@@ -24,6 +25,8 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [isRevoking, setIsRevoking] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [revokeAllDialogOpen, setRevokeAllDialogOpen] = useState(false);
+  const [isRevokingAll, setIsRevokingAll] = useState(false);
 
   const loadSessions = async () => {
     try {
@@ -96,15 +99,12 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
     }
   };
 
-  const handleRevokeAll = async () => {
-    if (
-      !confirm(
-        'Are you sure you want to revoke all other sessions? This will log out all other devices.'
-      )
-    ) {
-      return;
-    }
+  const handleRevokeAll = () => {
+    setRevokeAllDialogOpen(true);
+  };
 
+  const confirmRevokeAll = async () => {
+    setIsRevokingAll(true);
     try {
       await apiClient.revokeAllSessions();
       toast.success('All other sessions revoked successfully');
@@ -112,6 +112,9 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
     } catch (err) {
       console.error('Failed to revoke all sessions:', err);
       toast.error('Failed to revoke sessions. Please try again.');
+    } finally {
+      setIsRevokingAll(false);
+      setRevokeAllDialogOpen(false);
     }
   };
 
@@ -204,6 +207,13 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
         currentName={selectedSession?.deviceName || ''}
         onConfirm={confirmEditDeviceName}
         isLoading={isUpdating}
+      />
+
+      <RevokeAllSessionsDialog
+        open={revokeAllDialogOpen}
+        onOpenChange={setRevokeAllDialogOpen}
+        onConfirm={confirmRevokeAll}
+        isLoading={isRevokingAll}
       />
     </div>
   );

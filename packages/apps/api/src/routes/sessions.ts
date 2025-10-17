@@ -1,10 +1,11 @@
 import { FastifyPluginAsync } from 'fastify';
 import { SessionService } from '../services/session.service.js';
+import { RefreshTokenService } from '../services/refresh-token.js';
 import { prisma } from '../config/database.js';
 import { z } from 'zod';
 import { validateAndSanitize } from '../middleware/validation.js';
 import type { Session } from '@postolio/database';
-import { getClientIp } from '../utils/request-info.js';
+import { getClientIp, parseDeviceName } from '../utils/request-info.js';
 
 // Request schemas
 const updateDeviceNameSchema = z.object({
@@ -50,7 +51,7 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       // Format sessions for frontend
       const formattedSessions = sessions.map((session: Session) => ({
         id: session.id,
-        deviceName: session.deviceName || 'Unknown Device',
+        deviceName: session.deviceName || parseDeviceName(session.userAgent) || 'Unknown Device',
         deviceFingerprint: session.deviceFingerprint,
         ipAddress: session.ipAddress,
         location: session.location,
@@ -91,7 +92,8 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.send({
           session: {
             id: session.id,
-            deviceName: session.deviceName || 'Unknown Device',
+            deviceName:
+              session.deviceName || parseDeviceName(session.userAgent) || 'Unknown Device',
             deviceFingerprint: session.deviceFingerprint,
             ipAddress: session.ipAddress,
             location: session.location,
@@ -140,6 +142,11 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         // Revoke the session
         await SessionService.revokeSession(id, 'user_requested');
 
+        // Invalidate the associated refresh token so it can't be used to rotate
+        if (session.refreshTokenHash) {
+          await RefreshTokenService.invalidateSessionTokenByHash(userId, session.refreshTokenHash);
+        }
+
         return reply.send({
           success: true,
           message: 'Session revoked successfully',
@@ -163,14 +170,19 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
         // Get current session ID
         const refreshToken = request.cookies.refresh_token;
         let currentSessionId: string | undefined;
+        let currentSessionHash: string | undefined;
 
         if (refreshToken) {
           const currentSession = await SessionService.findSessionByToken(refreshToken);
           currentSessionId = currentSession?.id;
+          currentSessionHash = currentSession?.refreshTokenHash ?? undefined;
         }
 
         // Revoke all sessions except current
         await SessionService.revokeAllUserSessions(userId, currentSessionId);
+
+        // Invalidate all refresh tokens except possibly current one
+        await RefreshTokenService.invalidateAllUserTokensExceptHash(userId, currentSessionHash);
 
         return reply.send({
           success: true,
@@ -281,7 +293,10 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
             ? {
                 timestamp: mostRecentSession.createdAt,
                 location: mostRecentSession.location,
-                device: mostRecentSession.deviceName || 'Unknown Device',
+                device:
+                  mostRecentSession.deviceName ||
+                  parseDeviceName(mostRecentSession.userAgent) ||
+                  'Unknown Device',
               }
             : null,
           oauthProviders,
@@ -309,7 +324,7 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
 
         const loginHistory = sessions.map((session: Session) => ({
           timestamp: session.createdAt,
-          device: session.deviceName || 'Unknown Device',
+          device: session.deviceName || parseDeviceName(session.userAgent) || 'Unknown Device',
           location: session.location,
           ipAddress: session.ipAddress,
           status: session.revokedAt ? 'revoked' : 'active',

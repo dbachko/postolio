@@ -2,7 +2,7 @@ import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { isProductionEnv } from '../utils/env-mode.js';
 import { getDatabaseClient } from '../config/database.js';
-import { getClientIp, getUserAgent } from '../utils/request-info.js';
+import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { RefreshTokenService } from '../services/refresh-token.js';
@@ -134,11 +134,19 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Issue refresh + access tokens and create session
+      const ipAddress = getClientIp(request);
+      const userAgent = getUserAgent(request);
+      const humanDeviceName = parseDeviceName(userAgent);
       const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
         fastify,
         user.id,
-        getClientIp(request),
-        getUserAgent(request)
+        ipAddress,
+        userAgent,
+        {
+          deviceName: humanDeviceName,
+          ipAddress,
+          userAgent,
+        }
       );
 
       // Set access token cookie (short-lived)

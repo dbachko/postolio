@@ -5,7 +5,7 @@ import { randomBytes } from 'crypto';
 import axios from 'axios';
 import { isProductionEnv } from '../utils/env-mode.js';
 import { RefreshTokenService } from '../services/refresh-token.js';
-import { getClientIp, getUserAgent } from '../utils/request-info.js';
+import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
 import { AuditLogger, AuditEventType } from '../services/audit-logger.js';
 
 const prisma = getDatabaseClient();
@@ -149,11 +149,19 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Issue refresh + access tokens and create session
+      const ipAddress = getClientIp(request);
+      const userAgent = getUserAgent(request);
+      const humanDeviceName = parseDeviceName(userAgent);
       const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
         fastify,
         user.id,
-        getClientIp(request),
-        getUserAgent(request)
+        ipAddress,
+        userAgent,
+        {
+          deviceName: humanDeviceName,
+          ipAddress,
+          userAgent,
+        }
       );
 
       // Set access token cookie (short-lived)

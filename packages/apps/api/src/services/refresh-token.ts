@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { getDatabaseClient } from '../config/database.js';
 import { AuditLogger, AuditEventType } from './audit-logger.js';
 import { RedisTokenStore } from './redis-token-store.js';
@@ -186,6 +186,14 @@ export class RefreshTokenService {
       return this.generateRefreshToken(fastify, oldTokenParsed.userId, ipAddress, userAgent);
     }
 
+    // Validate that the old token maps to an active session; if not, treat as invalid
+    const session = await SessionService.findSessionByToken(oldToken);
+    if (!session) {
+      // Ensure any lingering old token is removed and stop rotation
+      await tokenStore.deleteToken(oldToken);
+      return null;
+    }
+
     // Generate new token in same family
     const newToken = randomBytes(this.TOKEN_LENGTH).toString('hex');
     const newGeneration = oldTokenParsed.generation + 1;
@@ -223,13 +231,9 @@ export class RefreshTokenService {
     await tokenStore.deleteToken(oldToken);
 
     // Update session last activity and refresh token hash
-    // Find session using OLD token before it was rotated
-    const session = await SessionService.findSessionByToken(oldToken);
-    if (session) {
-      await SessionService.updateLastActivity(session.id);
-      // Update the stored refreshTokenHash to the new token's hash
-      await SessionService.updateRefreshTokenHash(session.id, newToken);
-    }
+    await SessionService.updateLastActivity(session.id);
+    // Update the stored refreshTokenHash to the new token's hash
+    await SessionService.updateRefreshTokenHash(session.id, newToken);
 
     // Generate new access token (include session id if available)
     const user = await prisma.user.findUnique({
@@ -266,6 +270,45 @@ export class RefreshTokenService {
       accessToken,
       family: oldTokenParsed.family,
     };
+  }
+
+  /**
+   * Invalidate a session's refresh token by matching its stored hash.
+   * Returns true if a token was found and deleted.
+   */
+  static async invalidateSessionTokenByHash(
+    userId: string,
+    refreshTokenHash: string
+  ): Promise<boolean> {
+    const userTokens = await tokenStore.getUserTokens(userId);
+    for (const t of userTokens) {
+      const hash = createHash('sha256').update(t.token).digest('hex');
+      if (hash === refreshTokenHash) {
+        await tokenStore.deleteToken(t.token);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Invalidate all user's refresh tokens except the one matching keepHash (if provided).
+   * Returns the number of tokens deleted.
+   */
+  static async invalidateAllUserTokensExceptHash(
+    userId: string,
+    keepHash?: string
+  ): Promise<number> {
+    const userTokens = await tokenStore.getUserTokens(userId);
+    let deleted = 0;
+    for (const t of userTokens) {
+      const hash = createHash('sha256').update(t.token).digest('hex');
+      if (!keepHash || hash !== keepHash) {
+        await tokenStore.deleteToken(t.token);
+        deleted++;
+      }
+    }
+    return deleted;
   }
 
   /**
