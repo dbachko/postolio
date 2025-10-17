@@ -8,12 +8,9 @@ import { Input } from '../../ui/input';
 import { Textarea } from '../../ui/textarea';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../ui/select';
 import { AutoSaveIndicator } from '../shared/AutoSaveIndicator';
-
-const frequencyOptions = [
-  { value: 'daily', label: 'Daily' },
-  { value: 'every2days', label: 'Every 2 Days' },
-  { value: '3weekly', label: '3x Weekly' },
-] as const;
+import { StyleCardGroup } from '../shared/StyleCardGroup';
+import { FrequencyToggleGroup } from '../shared/FrequencyToggleGroup';
+import { TimeQuickPick } from '../shared/TimeQuickPick';
 
 export function Step2CampaignBrief() {
   const {
@@ -145,46 +142,13 @@ export function Step2CampaignBrief() {
         </CardHeader>
         <CardContent className="space-y-4">
           <ThemeChipInput themes={themes} onChange={(t) => updateField('themes', t)} />
+          <StyleCardGroup value={style} onChange={(v) => updateField('style', v)} />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-1">
-              <Label>Style</Label>
-              <Select value={style} onValueChange={(v) => updateField('style', v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select content style" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="modern">Modern & Minimalist</SelectItem>
-                  <SelectItem value="vibrant">Vibrant & Colorful</SelectItem>
-                  <SelectItem value="professional">Professional & Corporate</SelectItem>
-                  <SelectItem value="casual">Casual & Friendly</SelectItem>
-                  <SelectItem value="luxury">Luxury & Premium</SelectItem>
-                  <SelectItem value="vintage">Vintage & Retro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Frequency</Label>
-              <Select value={frequency} onValueChange={(v) => updateField('frequency', v as any)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select posting frequency" />
-                </SelectTrigger>
-                <SelectContent>
-                  {frequencyOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label>Preferred Posting Time</Label>
-            <Input
-              type="time"
-              value={postingTime}
-              onChange={(e) => updateField('postingTime', e.target.value)}
+            <FrequencyToggleGroup
+              value={frequency}
+              onChange={(v) => updateField('frequency', v as any)}
             />
+            <TimeQuickPick value={postingTime} onChange={(v) => updateField('postingTime', v)} />
           </div>
         </CardContent>
       </Card>

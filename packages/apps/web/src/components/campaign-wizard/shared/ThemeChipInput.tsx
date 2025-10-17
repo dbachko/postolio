@@ -3,7 +3,7 @@ import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
 import { X } from 'lucide-react';
-import { commonThemes } from '../../../constants/campaign';
+import { commonThemes, themeMeta } from '../../../constants/campaign';
 
 interface ThemeChipInputProps {
   themes: string[];
@@ -40,7 +40,9 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
               variant={themes.includes(theme) ? 'default' : 'secondary'}
               className="hover:bg-primary/80 cursor-pointer"
               onClick={() => addTheme(theme)}
+              title={themeMeta[theme]?.help}
             >
+              {themeMeta[theme]?.icon && <span className="mr-1">{themeMeta[theme]!.icon}</span>}
               {theme}
             </Badge>
           ))}
@@ -73,7 +75,8 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
           <p className="mb-2 text-sm text-gray-600">Selected themes:</p>
           <div className="flex flex-wrap gap-2">
             {themes.map((theme) => (
-              <Badge key={theme} variant="default" className="group">
+              <Badge key={theme} variant="default" className="group" title={themeMeta[theme]?.help}>
+                {themeMeta[theme]?.icon && <span className="mr-1">{themeMeta[theme]!.icon}</span>}
                 {theme}
                 <Button
                   type="button"
