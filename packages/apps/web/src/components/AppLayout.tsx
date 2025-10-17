@@ -38,6 +38,7 @@ import {
   FileText,
   Sparkles,
   Home,
+  Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
@@ -460,6 +461,11 @@ export function AppLayout({ children }: LayoutProps) {
                     <DropdownMenuItem onClick={() => navigate('/settings')}>
                       <Settings className="mr-2 h-4 w-4" aria-hidden="true" />
                       Settings
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem onClick={() => navigate('/security')}>
+                      <Shield className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Security
                     </DropdownMenuItem>
 
                     <DropdownMenuSeparator />

@@ -1,5 +1,7 @@
 import { execSync } from 'child_process';
 import { getDatabaseClient } from './database.js';
+import fs from 'fs';
+import path from 'path';
 
 interface TableRow {
   table_name: string;
@@ -16,7 +18,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
       SELECT table_name 
       FROM information_schema.tables 
       WHERE table_schema = 'public' 
-      AND table_name IN ('users', 'brands', 'content', 'campaigns', 'brand_style_profile_projection')
+      AND table_name IN ('users', 'brands', 'content', 'campaigns', 'brand_style_profile_projection', 'sessions')
     `;
 
     const tables: TableRow[] = Array.isArray(result)
@@ -28,6 +30,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
       'content',
       'campaigns',
       'brand_style_profile_projection',
+      'sessions',
     ];
     const existingTables = tables.map((row) => row.table_name);
     const missingTables = requiredTables.filter((table) => !existingTables.includes(table));
@@ -37,9 +40,26 @@ export async function ensureDatabaseSchema(): Promise<void> {
       console.log('🚀 Running database migrations to create missing tables...');
 
       try {
+        // Resolve Prisma schema path in the monorepo regardless of current working directory
+        const candidateSchemas = [
+          // When running from API package directory (e.g., inside container)
+          path.resolve(process.cwd(), '../../libs/database/prisma/schema.prisma'),
+          // When running from repo root in dev
+          path.resolve(process.cwd(), 'packages/libs/database/prisma/schema.prisma'),
+          // Fallback: try one level up (in case of different CWD layouts)
+          path.resolve(process.cwd(), '../libs/database/prisma/schema.prisma'),
+        ];
+        const schemaPath = candidateSchemas.find((p) => fs.existsSync(p));
+        if (!schemaPath) {
+          console.warn(
+            '⚠️  Prisma schema not found via known paths; proceeding without explicit --schema'
+          );
+        }
+
         // Use migrate deploy in production, db push in development
-        const migrateCommand =
+        const baseCmd =
           process.env.NODE_ENV === 'prod' ? 'npx prisma migrate deploy' : 'npx prisma db push';
+        const migrateCommand = schemaPath ? `${baseCmd} --schema ${schemaPath}` : baseCmd;
 
         console.log(`🔧 Running: ${migrateCommand}`);
         execSync(migrateCommand, {

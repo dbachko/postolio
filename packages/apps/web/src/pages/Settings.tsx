@@ -17,7 +17,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { useTimezone } from '../contexts/TimezoneContext';
 import { COMMON_TIMEZONES, getUserTimezone, getTimezoneAbbr } from '../lib/timezone';
-import { Globe, Clock, Info, Save, RefreshCw } from 'lucide-react';
+import { Globe, Clock, Info, Save, RefreshCw, Shield } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useBrandStore } from '../stores/brandStore';
 import { apiClient } from '../lib/api';
 
@@ -311,6 +312,28 @@ export function Settings() {
             </CardHeader>
             <CardContent>
               <p className="text-gray-500">Account settings coming soon...</p>
+
+              {/* Quick link to Security Dashboard */}
+              <div className="bg-muted/40 mt-6 rounded-lg border p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-9 w-9 place-items-center rounded-md bg-blue-50 text-blue-700">
+                      <Shield className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Security</div>
+                      <div className="text-muted-foreground text-sm">
+                        Manage devices, active sessions, and recent logins
+                      </div>
+                    </div>
+                  </div>
+                  <Link to="/security">
+                    <Button variant="default" className="whitespace-nowrap">
+                      Open
+                    </Button>
+                  </Link>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
