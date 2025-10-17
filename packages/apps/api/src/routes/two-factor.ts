@@ -3,6 +3,7 @@ import { TwoFactorService, TwoFactorMethod } from '../services/two-factor.js';
 import { validateAndSanitize } from '../middleware/validation.js';
 import { twoFactorSetupSchema, twoFactorVerifySchema } from '../schemas/auth.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
+import { isProductionEnv } from '../utils/env-mode.js';
 
 const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
   // Temporary auth check - will be replaced when auth plugin loads properly
@@ -128,7 +129,7 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
       if (result.trustedToken) {
         reply.setCookie('trusted_device', result.trustedToken, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'prod',
+          secure: isProductionEnv(),
           sameSite: 'lax',
           path: '/',
           maxAge: 30 * 24 * 60 * 60, // 30 days

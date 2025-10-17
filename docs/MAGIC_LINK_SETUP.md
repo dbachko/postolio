@@ -114,6 +114,23 @@ You should see:
 }
 ```
 
+### Logging Fallback (for non-email environments)
+
+If you don't have SMTP/SES configured in a given environment, you can enable a logging fallback so magic links still work. The API will log the magic link URL to the server console instead of sending an email.
+
+- Enable: set `ALLOW_MAGIC_LINK_LOGGING=true` in the API environment
+- Works regardless of `NODE_ENV`
+- Where to find the link: Look in the API terminal output for a block like:
+
+```
+[DEV] Magic link email service not configured. Logging link instead.
+Email: user@example.com
+Mode: signin
+Magic link: http://localhost:5173/auth/magic-link?token=...
+```
+
+Use that URL to complete the flow during local testing.
+
 3. **Test sending a magic link**:
    - Go to http://localhost:5173/register or http://localhost:5173/login
    - Click "Or sign in with magic link (no password)"

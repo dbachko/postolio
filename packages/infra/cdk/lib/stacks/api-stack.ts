@@ -455,6 +455,17 @@ export class ApiStack extends cdk.Stack {
             S3_IMAGES_BUCKET: imagesBucketName,
             CLOUDFRONT_DOMAIN: imagesCdnDomain,
             CLOUDFRONT_DISTRIBUTION_ID: imagesCdnDistributionId,
+            // Feature flags
+            ALLOW_MAGIC_LINK_LOGGING:
+              (
+                (this.node.tryGetContext('allowMagicLinkLogging') as string | undefined) ||
+                process.env.ALLOW_MAGIC_LINK_LOGGING ||
+                'false'
+              )
+                .toString()
+                .toLowerCase() === 'true'
+                ? 'true'
+                : 'false',
             // EventBridge bus for platform events; API code falls back to 'default' if unset
             EVENT_BUS_NAME: schedulingEventBusNameParam.stringValue,
             BRAND_STYLE_PROFILES_TABLE: brandProfilesTableName,

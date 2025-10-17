@@ -14,6 +14,7 @@ import { RefreshTokenService } from '../services/refresh-token.js';
 import { TimezoneService } from '../services/timezone.js';
 import Redis from 'ioredis';
 import { getRedisUrl } from '../utils/redis-url.js';
+import { isProductionEnv } from '../utils/env-mode.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
@@ -85,7 +86,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Set access token in HTTP-only cookie
       reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProductionEnv(),
         sameSite: 'strict',
         path: '/',
         maxAge: 15 * 60, // 15 minutes for access token
@@ -94,7 +95,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Set refresh token in separate HTTP-only cookie
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProductionEnv(),
         sameSite: 'strict',
         path: '/api/auth', // Sent to all /api/auth endpoints
         maxAge: 7 * 24 * 60 * 60, // 7 days for new users
@@ -291,7 +292,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Set access token in HTTP-only cookie
       reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProductionEnv(),
         sameSite: 'strict',
         path: '/',
         maxAge: 15 * 60, // 15 minutes for access token
@@ -300,7 +301,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Set refresh token in separate HTTP-only cookie
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProductionEnv(),
         sameSite: 'strict',
         path: '/api/auth', // Sent to all /api/auth endpoints
         maxAge: rememberMe
@@ -349,7 +350,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     // Set new access token
     reply.setCookie('auth_token', result.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProductionEnv(),
       sameSite: 'strict',
       path: '/',
       maxAge: 15 * 60, // 15 minutes
@@ -358,7 +359,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     // Set new refresh token
     reply.setCookie('refresh_token', result.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProductionEnv(),
       sameSite: 'strict',
       path: '/api/auth', // Sent to all /api/auth endpoints
       maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -400,14 +401,14 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     reply.clearCookie('auth_token', {
       path: '/',
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProductionEnv(),
       sameSite: 'strict',
     });
 
     reply.clearCookie('refresh_token', {
       path: '/api/auth',
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProductionEnv(),
       sameSite: 'strict',
     });
 

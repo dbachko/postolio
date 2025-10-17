@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { MagicLinkService } from '../services/magic-link.js';
+import { isProductionEnv } from '../utils/env-mode.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 
 interface SendMagicLinkBody {
@@ -25,8 +26,12 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'Email is required' });
       }
 
-      // Check if email service is configured
-      if (!MagicLinkService.isConfigured()) {
+      // Check if email service is configured (allow fallback via env or dev)
+      const allowLoggingFallback = process.env.ALLOW_MAGIC_LINK_LOGGING === 'true';
+      if (
+        !MagicLinkService.isConfigured() &&
+        !(process.env.NODE_ENV === 'dev' || allowLoggingFallback)
+      ) {
         return reply.code(503).send({
           error: 'Email service not configured',
           message: 'Magic link authentication is not available at this time',
@@ -63,7 +68,7 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
     // Set HTTP-only cookie for enhanced security
     reply.setCookie('auth_token', result.token!, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'prod',
+      secure: isProductionEnv(),
       sameSite: 'lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60, // 7 days
@@ -78,11 +83,17 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Check if magic link is configured
   fastify.get('/magic-link/status', async (request, reply) => {
+    const allowLoggingFallback = process.env.ALLOW_MAGIC_LINK_LOGGING === 'true';
+    const configured =
+      MagicLinkService.isConfigured() || process.env.NODE_ENV === 'dev' || allowLoggingFallback;
     return reply.send({
-      configured: MagicLinkService.isConfigured(),
-      message: MagicLinkService.isConfigured()
-        ? 'Magic link authentication is available'
-        : 'Magic link authentication requires SMTP configuration',
+      configured,
+      message: configured
+        ? !MagicLinkService.isConfigured() &&
+          (process.env.NODE_ENV === 'dev' || allowLoggingFallback)
+          ? 'Magic link available (logging fallback active: link is printed to API logs)'
+          : 'Magic link authentication is available'
+        : 'Magic link authentication requires email (SMTP/SES) configuration',
     });
   });
 };

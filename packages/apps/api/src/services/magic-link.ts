@@ -77,6 +77,24 @@ export class MagicLinkService {
 
       await redis.setex(magicLinkKey, this.TOKEN_EXPIRY, JSON.stringify(magicLinkData));
 
+      // Development fallback: if email service isn't configured, log the link and succeed
+      const emailConfigured = EmailService.isConfigured();
+      const allowLoggingFallback = process.env.ALLOW_MAGIC_LINK_LOGGING === 'true';
+      if (!emailConfigured && (process.env.NODE_ENV === 'dev' || allowLoggingFallback)) {
+        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${token}`;
+        console.warn(
+          `\n[DEV] Magic link email service not configured. Logging link instead.\n` +
+            `Email: ${email}\n` +
+            `Mode: ${isSignUp ? 'signup' : 'signin'}\n` +
+            `Magic link: ${magicLinkUrl}\n`
+        );
+        return {
+          success: true,
+          message: 'Magic link generated (development). Check API logs for the link.',
+        };
+      }
+
       // Send magic link email using centralized email service
       const emailResult = await EmailService.sendMagicLink(email, token, isSignUp);
 

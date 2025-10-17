@@ -547,6 +547,7 @@ jobs:
               --context imageTag="$IMAGE_TAG" \
               --context domainName="${{ vars.DOMAIN_NAME }}" \
               --context corsOrigin="${{ vars.VITE_API_URL }}" \
+              --context allowMagicLinkLogging="${{ vars.ALLOW_MAGIC_LINK_LOGGING }}" \
               --context openaiApiKey="$OPENAI_API_KEY" \
               --context googleClientId="$GOOGLE_CLIENT_ID" \
               --context googleClientSecret="$GOOGLE_CLIENT_SECRET" \

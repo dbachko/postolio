@@ -1,5 +1,6 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
+import { isProductionEnv } from '../utils/env-mode.js';
 import { getDatabaseClient } from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -138,7 +139,7 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       // Set HTTP-only cookie for enhanced security
       reply.setCookie('auth_token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'prod',
+        secure: isProductionEnv(),
         sameSite: 'lax',
         path: '/',
         maxAge: 7 * 24 * 60 * 60, // 7 days

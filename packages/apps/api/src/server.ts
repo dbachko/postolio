@@ -1,4 +1,5 @@
 import './dotenv-init.js';
+import { isProductionEnv } from './utils/env-mode.js';
 import { validateEnvironment } from './config/validation.js';
 import fastify, { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import cors from '@fastify/cors';
@@ -130,7 +131,7 @@ export function buildFastify(): FastifyInstance {
           'https://www.googleapis.com',
         ],
         objectSrc: ["'none'"],
-        upgradeInsecureRequests: process.env.NODE_ENV === 'prod' ? [] : null,
+        upgradeInsecureRequests: isProductionEnv() ? [] : null,
       },
     },
     hsts: {
@@ -152,7 +153,7 @@ export function buildFastify(): FastifyInstance {
     cookieOpts: {
       signed: true,
       httpOnly: true, // Secure: Frontend gets token from API, not cookie
-      secure: process.env.NODE_ENV === 'prod',
+      secure: isProductionEnv(),
       sameSite: 'strict',
       path: '/',
     },
