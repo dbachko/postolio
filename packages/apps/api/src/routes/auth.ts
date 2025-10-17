@@ -15,6 +15,7 @@ import { TimezoneService } from '../services/timezone.js';
 import Redis from 'ioredis';
 import { getRedisUrl } from '../utils/redis-url.js';
 import { isProductionEnv } from '../utils/env-mode.js';
+import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
@@ -70,16 +71,19 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Generate tokens with refresh token rotation and session tracking
+      const ipAddress = getClientIp(request);
+      const userAgent = getUserAgent(request);
+      const humanDeviceName = deviceName || parseDeviceName(userAgent);
       const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
         fastify,
         user.id,
-        request.ip,
-        request.headers['user-agent'],
+        ipAddress,
+        userAgent,
         {
           deviceFingerprint,
-          deviceName,
-          ipAddress: request.ip,
-          userAgent: request.headers['user-agent'],
+          deviceName: humanDeviceName,
+          ipAddress,
+          userAgent,
         }
       );
 
@@ -92,12 +96,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         maxAge: 15 * 60, // 15 minutes for access token
       });
 
-      // Set refresh token in separate HTTP-only cookie
+      // Set refresh token in separate HTTP-only cookie (scoped to /api/auth so logout can read it)
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: isProductionEnv(),
         sameSite: 'strict',
-        path: '/api/auth/refresh', // Scoped strictly to refresh endpoint
+        path: '/api/auth',
         maxAge: 7 * 24 * 60 * 60, // 7 days for new users
       });
 
@@ -276,16 +280,19 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Generate tokens with refresh token rotation and session tracking
+      const ipAddress = getClientIp(request);
+      const userAgent = getUserAgent(request);
+      const humanDeviceName = deviceName || parseDeviceName(userAgent);
       const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
         fastify,
         user.id,
-        request.ip,
-        request.headers['user-agent'],
+        ipAddress,
+        userAgent,
         {
           deviceFingerprint,
-          deviceName,
-          ipAddress: request.ip,
-          userAgent: request.headers['user-agent'],
+          deviceName: humanDeviceName,
+          ipAddress,
+          userAgent,
         }
       );
 
@@ -336,8 +343,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const result = await RefreshTokenService.rotateRefreshToken(
       fastify,
       refreshToken,
-      request.ip,
-      request.headers['user-agent']
+      getClientIp(request),
+      getUserAgent(request)
     );
 
     if (!result) {
@@ -356,12 +363,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       maxAge: 15 * 60, // 15 minutes
     });
 
-    // Set new refresh token
+    // Set new refresh token (keep path at /api/auth so logout can invalidate it)
     reply.setCookie('refresh_token', result.refreshToken, {
       httpOnly: true,
       secure: isProductionEnv(),
       sameSite: 'strict',
-      path: '/api/auth/refresh', // Scoped strictly to refresh endpoint
+      path: '/api/auth',
       maxAge: 30 * 24 * 60 * 60, // 30 days
     });
 
@@ -375,6 +382,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     // Try to get user info for audit log
     let userId: string | undefined;
     let email: string | undefined;
+    const ipAddress = getClientIp(request);
+    const userAgent = getUserAgent(request);
 
     try {
       const token = request.cookies?.auth_token || request.headers.authorization?.substring(7);
@@ -395,6 +404,24 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const refreshToken = request.cookies?.refresh_token;
     if (refreshToken) {
       await RefreshTokenService.invalidateRefreshToken(refreshToken);
+    } else if (userId) {
+      // Fallback: try to find the most likely current session by matching IP and User-Agent
+      try {
+        const { SessionService } = await import('../services/session.service.js');
+        const sessions = await SessionService.getUserSessions(userId);
+        const match = sessions
+          .filter(
+            (s) =>
+              (userAgent ? s.userAgent === userAgent : true) &&
+              (ipAddress ? s.ipAddress === ipAddress : true)
+          )
+          .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime())[0];
+        if (match) {
+          await SessionService.revokeSession(match.id, 'user_logout');
+        }
+      } catch (e) {
+        request.log.error(e, 'Failed to revoke session via logout fallback');
+      }
     }
 
     // Clear both cookies
@@ -405,6 +432,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       sameSite: 'strict',
     });
 
+    // Clear refresh cookies for both possible paths
+    reply.clearCookie('refresh_token', {
+      path: '/api/auth',
+      httpOnly: true,
+      secure: isProductionEnv(),
+      sameSite: 'strict',
+    });
     reply.clearCookie('refresh_token', {
       path: '/api/auth/refresh',
       httpOnly: true,

@@ -98,7 +98,7 @@ export class RefreshTokenService {
     }
 
     const accessToken = fastify.jwt.sign(
-      { id: user.id, email: user.email }
+      { id: user.id, email: user.email, sid: session.id }
       // Token expiry is configured in auth plugin (default 1h)
     );
 
@@ -222,7 +222,16 @@ export class RefreshTokenService {
     // Invalidate old token
     await tokenStore.deleteToken(oldToken);
 
-    // Generate new access token
+    // Update session last activity and refresh token hash
+    // Find session using OLD token before it was rotated
+    const session = await SessionService.findSessionByToken(oldToken);
+    if (session) {
+      await SessionService.updateLastActivity(session.id);
+      // Update the stored refreshTokenHash to the new token's hash
+      await SessionService.updateRefreshTokenHash(session.id, newToken);
+    }
+
+    // Generate new access token (include session id if available)
     const user = await prisma.user.findUnique({
       where: { id: oldTokenParsed.userId },
       select: { id: true, email: true },
@@ -233,18 +242,9 @@ export class RefreshTokenService {
     }
 
     const accessToken = fastify.jwt.sign(
-      { id: user.id, email: user.email }
+      { id: user.id, email: user.email, sid: session?.id }
       // Token expiry is configured in auth plugin (default 1h)
     );
-
-    // Update session last activity and refresh token hash
-    // Find session using OLD token before it was rotated
-    const session = await SessionService.findSessionByToken(oldToken);
-    if (session) {
-      await SessionService.updateLastActivity(session.id);
-      // Update the stored refreshTokenHash to the new token's hash
-      await SessionService.updateRefreshTokenHash(session.id, newToken);
-    }
 
     // Log rotation
     await AuditLogger.log({

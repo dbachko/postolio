@@ -71,7 +71,11 @@ export interface SessionsResponse {
 
 export interface SecuritySummary {
   activeSessions: number;
-  lastPasswordChange: string;
+  // Backend now returns null when no local password is set
+  lastPasswordChange: string | null;
+  // Indicates if user has local password auth enabled (registered/changed/reset/logged in with password)
+  passwordAuthEnabled?: boolean;
+  oauthProviders?: string[];
   recentLogins: number;
   suspiciousActivity: number;
   lastLogin: {

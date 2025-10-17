@@ -85,6 +85,7 @@ export function buildFastify(): FastifyInstance {
       level: 'info',
     },
     bodyLimit: 10 * 1024 * 1024, // 10MB limit - industry standard for social media management tools
+    trustProxy: true, // Honor X-Forwarded-For for real client IPs behind proxies
     ...httpsOptions,
   });
 

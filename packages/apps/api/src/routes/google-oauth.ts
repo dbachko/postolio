@@ -2,6 +2,7 @@ import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { isProductionEnv } from '../utils/env-mode.js';
 import { getDatabaseClient } from '../config/database.js';
+import { getClientIp, getUserAgent } from '../utils/request-info.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { RefreshTokenService } from '../services/refresh-token.js';
@@ -136,8 +137,8 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
         fastify,
         user.id,
-        request.ip,
-        request.headers['user-agent']
+        getClientIp(request),
+        getUserAgent(request)
       );
 
       // Set access token cookie (short-lived)
@@ -149,12 +150,12 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         maxAge: 15 * 60, // 15 minutes
       });
 
-      // Set refresh token cookie (path-scoped)
+      // Set refresh token cookie (scoped to /api/auth so logout can read it)
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: isProductionEnv(),
         sameSite: 'strict',
-        path: '/api/auth/refresh',
+        path: '/api/auth',
         maxAge: 30 * 24 * 60 * 60, // 30 days
       });
 

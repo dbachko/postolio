@@ -59,8 +59,17 @@ function MetricCard({ icon, label, value, description, variant = 'default' }: Me
 }
 
 export function SecurityMetrics({ summary }: SecurityMetricsProps) {
+  const usingOAuthOnly = summary.passwordAuthEnabled === false;
+
   const getPasswordChangeStatus = () => {
     try {
+      if (usingOAuthOnly) {
+        const provider = summary.oauthProviders?.[0];
+        return {
+          variant: 'default' as const,
+          description: provider ? `Using ${provider} sign-in` : 'No password set',
+        };
+      }
       if (!summary.lastPasswordChange) {
         return { variant: 'default' as const, description: 'Unknown' };
       }
@@ -117,9 +126,11 @@ export function SecurityMetrics({ summary }: SecurityMetricsProps) {
         icon={<Key className="h-6 w-6" />}
         label="Password Age"
         value={
-          summary.lastPasswordChange
-            ? `${Math.floor((Date.now() - new Date(summary.lastPasswordChange).getTime()) / (1000 * 60 * 60 * 24))} days`
-            : '—'
+          usingOAuthOnly
+            ? 'Not set'
+            : summary.lastPasswordChange
+              ? `${Math.floor((Date.now() - new Date(summary.lastPasswordChange).getTime()) / (1000 * 60 * 60 * 24))} days`
+              : '—'
         }
         description={passwordStatus.description}
         variant={passwordStatus.variant}

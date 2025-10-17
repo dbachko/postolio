@@ -7,6 +7,8 @@ declare module '@fastify/jwt' {
     user: {
       id: string;
       email: string;
+      sid?: string; // session id claim (added to access tokens)
+      iat?: number; // issued at (for potential future invalidation checks)
     };
   }
 }
@@ -76,6 +78,18 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         // Validate required claims
         if (!request.user || !request.user.id || !request.user.email) {
           throw new Error('Invalid token payload: missing required fields');
+        }
+
+        // If a session id claim is present, ensure the session is active and not revoked
+        if (request.user.sid) {
+          const { SessionService } = await import('../services/session.service.js');
+          const session = await SessionService.getSessionById(request.user.sid, request.user.id);
+          if (!session) {
+            return reply.code(401).send({
+              error: 'Session revoked',
+              code: 'SESSION_REVOKED',
+            });
+          }
         }
       } catch (err) {
         // Handle specific JWT errors

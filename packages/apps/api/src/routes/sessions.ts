@@ -4,6 +4,7 @@ import { prisma } from '../config/database.js';
 import { z } from 'zod';
 import { validateAndSanitize } from '../middleware/validation.js';
 import type { Session } from '@postolio/database';
+import { getClientIp } from '../utils/request-info.js';
 
 // Request schemas
 const updateDeviceNameSchema = z.object({
@@ -33,7 +34,7 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
       // present on this endpoint. Try to infer current session by IP/User-Agent.
       if (!currentSessionId && sessions.length > 0) {
         const ua = request.headers['user-agent'];
-        const ip = request.ip;
+        const ip = getClientIp(request);
         const match = sessions
           .filter(
             (s: Session) => (ua ? s.userAgent === ua : true) && (ip ? s.ipAddress === ip : true)
@@ -233,27 +234,46 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
           (a: Session, b: Session) => b.createdAt.getTime() - a.createdAt.getTime()
         )[0];
 
-        // Determine last password change: prefer audit log events, fallback to account creation
-        const [passwordEvent, userForFallback] = await Promise.all([
-          prisma.auditLog.findFirst({
-            where: {
-              userId,
-              success: true,
-              eventType: { in: ['PASSWORD_CHANGED', 'PASSWORD_RESET_COMPLETED'] },
-            },
-            orderBy: { createdAt: 'desc' },
-          }),
-          prisma.user.findUnique({ where: { id: userId }, select: { createdAt: true } }),
-        ]);
+        // Determine last password change and whether local password auth is enabled
+        const [passwordEvent, userForFallback, registerEvent, passwordLoginEvent] =
+          await Promise.all([
+            prisma.auditLog.findFirst({
+              where: {
+                userId,
+                success: true,
+                eventType: { in: ['PASSWORD_CHANGED', 'PASSWORD_RESET_COMPLETED'] },
+              },
+              orderBy: { createdAt: 'desc' },
+            }),
+            prisma.user.findUnique({
+              where: { id: userId },
+              select: { createdAt: true, googleId: true, facebookId: true },
+            }),
+            prisma.auditLog.findFirst({
+              where: { userId, eventType: 'USER_REGISTER', success: true },
+              orderBy: { createdAt: 'asc' },
+            }),
+            prisma.auditLog.findFirst({
+              where: { userId, eventType: 'USER_LOGIN', success: true },
+              orderBy: { createdAt: 'desc' },
+            }),
+          ]);
 
-        const lastPasswordChange = (
-          passwordEvent?.createdAt ||
-          userForFallback?.createdAt ||
-          new Date()
-        ).toISOString();
+        // Heuristic: local password auth considered enabled if user ever registered with password,
+        // logged in with password, or changed/reset their password
+        const passwordAuthEnabled = Boolean(passwordEvent || registerEvent || passwordLoginEvent);
+
+        const lastPasswordChange = passwordAuthEnabled
+          ? (passwordEvent?.createdAt || userForFallback?.createdAt || new Date()).toISOString()
+          : null;
+
+        const oauthProviders: string[] = [];
+        if (userForFallback?.googleId) oauthProviders.push('google');
+        if (userForFallback?.facebookId) oauthProviders.push('facebook');
 
         return reply.send({
           activeSessions: sessions.length,
+          passwordAuthEnabled,
           lastPasswordChange,
           recentLogins: sessions.length,
           suspiciousActivity: 0, // Placeholder for future detection
@@ -264,6 +284,7 @@ const sessionsRoutes: FastifyPluginAsync = async (fastify) => {
                 device: mostRecentSession.deviceName || 'Unknown Device',
               }
             : null,
+          oauthProviders,
         });
       } catch (error: unknown) {
         fastify.log.error(error, 'Error getting security summary');
