@@ -36,6 +36,25 @@ export interface CampaignWizardState {
   saveStatus: 'saved' | 'saving' | 'error' | 'idle';
   draftId?: string;
   seasonalityAssist: boolean;
+  // Persisted AI strategy results to avoid losing them on refresh/navigation
+  strategyPredictions: {
+    estimatedPosts: number;
+    reach: { low: number; high: number };
+    engagementRate: number;
+  } | null;
+  strategyPredictionsMeta: {
+    basis: 'historical' | 'heuristic';
+    samples: { engagement: number; reach: number };
+  } | null;
+  strategySchedule: {
+    phases: Array<{
+      phase: string;
+      startOffsetDays: number;
+      frequency: 'daily' | 'every2days' | '3weekly';
+      rationale: string;
+    }>;
+    postingTime: string | null;
+  } | null;
 }
 
 export interface CampaignTypeConfig {

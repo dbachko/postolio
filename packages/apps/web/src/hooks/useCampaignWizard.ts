@@ -43,6 +43,9 @@ const initialState: CampaignWizardState = {
   saveStatus: 'idle',
   draftId: undefined,
   seasonalityAssist: true,
+  strategyPredictions: null,
+  strategyPredictionsMeta: null,
+  strategySchedule: null,
 };
 
 export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
@@ -57,7 +60,7 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
 
       setCampaignType: (type) => set({ campaignType: type }),
       loadDefaultsFromType: (cfg) => {
-        const { timeline, brandId } = get();
+        const { timeline } = get();
         const now = new Date();
         const startISO = now.toISOString().split('T')[0]!;
         const end = new Date(now);
@@ -70,19 +73,6 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
           // Do not preload static themes; we will fetch suggestions from API
           themes: [],
         });
-
-        // Fire-and-forget: prefill themes from API suggestions if possible
-        if (brandId) {
-          apiClient
-            .getThemeSuggestions(brandId, { campaignType: cfg.id, limit: 6 })
-            .then((res) => {
-              const current = useCampaignWizard.getState().themes;
-              if (!Array.isArray(current) || current.length > 0) return;
-              const top = (res?.suggestions || []).map((s) => s.value).slice(0, 4);
-              if (top.length > 0) useCampaignWizard.setState({ themes: top });
-            })
-            .catch(() => {});
-        }
       },
 
       updateField: (key, value) => set({ [key]: value } as unknown as Partial<CampaignWizardState>),
@@ -128,6 +118,9 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
             promotionDetails: state.promotionDetails,
             contentPillars: state.contentPillars,
             acceptedRecommendations: state.acceptedRecommendations,
+            strategyPredictions: state.strategyPredictions,
+            strategyPredictionsMeta: state.strategyPredictionsMeta,
+            strategySchedule: state.strategySchedule,
           } as const;
           const res = await apiClient.saveCampaignDraft({
             brandId: state.brandId,
@@ -160,6 +153,9 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
         acceptedRecommendations: state.acceptedRecommendations,
         draftId: state.draftId,
         seasonalityAssist: state.seasonalityAssist,
+        strategyPredictions: state.strategyPredictions,
+        strategyPredictionsMeta: state.strategyPredictionsMeta,
+        strategySchedule: state.strategySchedule,
       }),
     }
   )
@@ -209,6 +205,12 @@ export function useWizardAutoSave(): void {
     state.promotionDetails?.discountPercentage,
     state.promotionDetails?.promoCode,
     state.promotionDetails?.limitedQuantity,
+    // Include fields updated on strategy step so server draft persists them
+    JSON.stringify(state.contentPillars?.pillars || []),
+    JSON.stringify(state.acceptedRecommendations || []),
+    JSON.stringify(state.strategyPredictions || null),
+    JSON.stringify(state.strategyPredictionsMeta || null),
+    JSON.stringify(state.strategySchedule || null),
   ]);
 
   // Wizard funnel instrumentation: step changes

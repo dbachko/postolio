@@ -137,7 +137,7 @@ export default function InstagramAnalytics() {
             </CardHeader>
             <CardContent>
               <Button asChild className="w-full">
-                <a href="/instagram">Connect Instagram</a>
+                <a href="/brands">Connect Instagram</a>
               </Button>
             </CardContent>
           </Card>

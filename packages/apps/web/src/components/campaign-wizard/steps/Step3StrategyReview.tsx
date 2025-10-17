@@ -24,11 +24,11 @@ export function Step3StrategyReview() {
     estimatedPosts: number;
     reach: { low: number; high: number };
     engagementRate: number;
-  } | null>(null);
+  } | null>(wizard.strategyPredictions || null);
   const [predictionsMeta, setPredictionsMeta] = useState<{
     basis: 'historical' | 'heuristic';
     samples: { engagement: number; reach: number };
-  } | null>(null);
+  } | null>(wizard.strategyPredictionsMeta || null);
   const [schedulePhases, setSchedulePhases] = useState<
     Array<{
       phase: string;
@@ -36,7 +36,7 @@ export function Step3StrategyReview() {
       frequency: 'daily' | 'every2days' | '3weekly';
       rationale: string;
     }>
-  >([]);
+  >(wizard.strategySchedule?.phases || []);
   // Auto-apply optimizations instead of showing recommendations
   const [optimizationNoteVisible, setOptimizationNoteVisible] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
@@ -48,7 +48,9 @@ export function Step3StrategyReview() {
     };
     themes?: { prev: string[]; next: string[]; added: string[] };
   } | null>(null);
-  const [_schedulePostingTime, setSchedulePostingTime] = useState<string | null>(null);
+  const [_schedulePostingTime, setSchedulePostingTime] = useState<string | null>(
+    wizard.strategySchedule?.postingTime || null
+  );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [analysis, setAnalysis] = useState<{
@@ -107,6 +109,39 @@ export function Step3StrategyReview() {
     wizard.postingTime,
   ]);
 
+  // Ensure pillar percentages sum to exactly 100 by adjusting the last pillar
+  const normalizePillars = (
+    ps: Array<{ name: string; percentage: number }>
+  ): Array<{ name: string; percentage: number }> => {
+    if (!ps.length) return ps;
+    const clamped = ps.map((p) => ({
+      name: p.name,
+      percentage: Math.max(0, Math.min(100, Math.round(Number(p.percentage) || 0))),
+    }));
+    const sum = clamped.reduce((s, p) => s + p.percentage, 0);
+    const diff = 100 - sum;
+    if (diff !== 0) {
+      const last = clamped.length - 1;
+      clamped[last] = {
+        ...clamped[last],
+        percentage: Math.max(0, Math.min(100, clamped[last].percentage + diff)),
+      };
+    }
+    return clamped;
+  };
+
+  const isDefaultPillars = useMemo(() => {
+    return (
+      pillars.length === 3 &&
+      pillars[0]?.name === 'Pillar 1' &&
+      pillars[0]?.percentage === 34 &&
+      pillars[1]?.name === 'Pillar 2' &&
+      pillars[1]?.percentage === 33 &&
+      pillars[2]?.name === 'Pillar 3' &&
+      pillars[2]?.percentage === 33
+    );
+  }, [pillars]);
+
   const onGenerate = async () => {
     if (!canGenerate || !brand || !wizard.timeline) return;
     setIsGenerating(true);
@@ -127,16 +162,52 @@ export function Step3StrategyReview() {
         promotionDetails: wizard.promotionDetails || undefined,
       });
       if (res?.success) {
-        const pillars = res.strategy.contentPillars.pillars.map((p) => ({
-          name: p.name,
-          percentage: p.percentage,
-        }));
-        setPillars(pillars);
-        updateField('contentPillars', res.strategy.contentPillars);
+        const generatedPillars = normalizePillars(
+          res.strategy.contentPillars.pillars.map((p) => ({
+            name: p.name,
+            percentage: p.percentage,
+          }))
+        );
+
+        // Preserve user/analysis-provided pillars; only apply generated if using defaults
+        if (wizard.contentPillars?.pillars?.length || !isDefaultPillars) {
+          // Keep current UI pillars; do not override names/percentages
+          setPillars(normalizePillars(pillars));
+          // Optionally merge in AI themes by index without touching names/percentages
+          try {
+            const merged = pillars.map((p, i) => ({
+              name: p.name,
+              percentage: p.percentage,
+              themes: res.strategy.contentPillars.pillars[i]?.themes || [],
+            }));
+            updateField('contentPillars', { pillars: merged });
+          } catch {
+            // Fallback: keep existing contentPillars if present
+            if (wizard.contentPillars?.pillars?.length) {
+              updateField('contentPillars', wizard.contentPillars);
+            }
+          }
+        } else {
+          setPillars(generatedPillars);
+          updateField('contentPillars', {
+            pillars: res.strategy.contentPillars.pillars.map((p, idx) => ({
+              name: generatedPillars[idx]?.name ?? p.name,
+              percentage: generatedPillars[idx]?.percentage ?? p.percentage,
+              themes: p.themes || [],
+            })),
+          });
+        }
         setPredictions(res.strategy.predictions);
         setPredictionsMeta(res.strategy.predictionsMeta || null);
         setSchedulePhases(res.strategy.schedule.phases);
         setSchedulePostingTime(res.strategy.schedule.postingTime);
+        // Persist strategy details in wizard state so they survive refresh/navigation
+        updateField('strategyPredictions', res.strategy.predictions);
+        updateField('strategyPredictionsMeta', res.strategy.predictionsMeta || null);
+        updateField('strategySchedule', {
+          phases: res.strategy.schedule.phases,
+          postingTime: res.strategy.schedule.postingTime || null,
+        });
         // Auto-apply strategy optimizations (posting time, frequency, themes)
         try {
           const prevPosting = wizard.postingTime || null;
@@ -227,8 +298,22 @@ export function Step3StrategyReview() {
       name: p.name,
       percentage: p.percentage,
     }));
-    setPillars(mapped);
-    updateField('contentPillars', { pillars: analysis.suggestedPillars });
+    const normalized = ((arr: Array<{ name: string; percentage: number }>) => {
+      const sum = arr.reduce((s, x) => s + Math.round(x.percentage), 0);
+      const adjusted = arr.map((x) => ({ name: x.name, percentage: Math.round(x.percentage) }));
+      if (sum !== 100 && adjusted.length) {
+        adjusted[adjusted.length - 1].percentage += 100 - sum;
+      }
+      return adjusted;
+    })(mapped);
+    setPillars(normalized);
+    updateField('contentPillars', {
+      pillars: normalized.map((p, i) => ({
+        name: p.name,
+        percentage: p.percentage,
+        themes: analysis.suggestedPillars[i]?.themes || [],
+      })),
+    });
     // Also adopt frequency suggestion if present
     if (analysis.schedule?.frequency) {
       updateField('frequency', analysis.schedule.frequency as 'daily' | 'every2days' | '3weekly');
@@ -387,7 +472,7 @@ export function Step3StrategyReview() {
                       <button
                         type="button"
                         className="text-blue-600 hover:underline"
-                        onClick={() => navigate('/instagram')}
+                        onClick={() => navigate('/brands')}
                       >
                         Connect now
                       </button>
