@@ -16,6 +16,7 @@ import { Switch } from './ui/switch';
 import { toast } from 'sonner';
 import { frequencyOptions, styleOptions } from '../constants/campaign';
 import { apiClient, type Campaign } from '../lib/api';
+import { GoalsListInput } from './campaign-wizard/shared/GoalsListInput';
 
 interface CampaignEditDialogProps {
   open: boolean;
@@ -106,7 +107,14 @@ export function CampaignEditDialog({
   const [postingTime, setPostingTime] = useState<string>(campaign.config?.postingTime || '12:00');
   const [themes, setThemes] = useState<string>((campaign.config?.themes || []).join(', '));
   const [style, setStyle] = useState<string>(campaign.config?.style || '');
-  const [goals, setGoals] = useState<string>(((campaign.config as any)?.goals as string) || '');
+  const [goals, setGoals] = useState<string[]>(
+    (Array.isArray((campaign.config as any)?.goals)
+      ? ((campaign.config as any)?.goals as string[])
+      : (((campaign.config as any)?.goals as unknown as string) || '')
+          .split(/\n|;/)
+          .map((s) => s.trim())
+          .filter(Boolean)) || []
+  );
   const [seasonalityAssist, setSeasonalityAssist] = useState<boolean>(
     (campaign.config as any)?.seasonalityAssist ?? true
   );
@@ -125,7 +133,15 @@ export function CampaignEditDialog({
     setPostingTime(campaign.config?.postingTime || '12:00');
     setThemes((campaign.config?.themes || []).join(', '));
     setStyle(campaign.config?.style || '');
-    setGoals((((campaign.config as any) || {}).goals as string) || '');
+    const g = (campaign.config as any)?.goals;
+    setGoals(
+      Array.isArray(g)
+        ? (g as string[])
+        : ((g as unknown as string) || '')
+            .split(/\n|;/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+    );
     setSeasonalityAssist((((campaign.config as any) || {}).seasonalityAssist as boolean) ?? true);
   }, [open, campaign]);
 
@@ -163,8 +179,14 @@ export function CampaignEditDialog({
       if (perms.style && style !== (campaign.config?.style || '')) {
         updates.style = style;
       }
-      if (perms.all && goals !== (((campaign.config as any) || {}).goals as string)) {
-        updates.goals = goals.trim();
+      if (perms.all) {
+        const prevGoals = Array.isArray((campaign.config as any)?.goals)
+          ? ((campaign.config as any)?.goals as string[])
+          : [];
+        const normalized = goals.map((g) => g.trim()).filter(Boolean);
+        if (JSON.stringify(normalized) !== JSON.stringify(prevGoals)) {
+          updates.goals = normalized;
+        }
       }
       if (
         perms.all &&
@@ -325,14 +347,8 @@ export function CampaignEditDialog({
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="goals">Goals</Label>
-          <Textarea
-            id="goals"
-            value={goals}
-            onChange={(e) => setGoals(e.target.value)}
-            disabled={!perms.all}
-            rows={3}
-          />
+          <Label>Goals</Label>
+          <GoalsListInput goals={goals} onChange={setGoals} disabled={!perms.all} />
         </div>
 
         <div className="grid grid-cols-2 items-center gap-2">

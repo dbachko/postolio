@@ -1,16 +1,16 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
 import { ThemeChipInput } from '../shared/ThemeChipInput';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Label } from '../../ui/label';
 import { Input } from '../../ui/input';
-import { Textarea } from '../../ui/textarea';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../ui/select';
 import { AutoSaveIndicator } from '../shared/AutoSaveIndicator';
 import { StyleCardGroup } from '../shared/StyleCardGroup';
 import { FrequencyToggleGroup } from '../shared/FrequencyToggleGroup';
 import { TimeQuickPick } from '../shared/TimeQuickPick';
+import { GoalsListInput } from '../shared/GoalsListInput';
 
 export function Step2CampaignBrief() {
   const {
@@ -29,21 +29,31 @@ export function Step2CampaignBrief() {
     nextStep,
   } = useCampaignWizard();
 
-  const [localGoals, setLocalGoals] = useState(goals || '');
+  const [goalsList, setGoalsList] = useState<string[]>(() =>
+    goals && goals.length ? goals : ['']
+  );
+
+  // Keep local list in sync if draft hydration changes wizard.goals externally
+  useEffect(() => {
+    if (!Array.isArray(goals)) return;
+    if (goals.join('\n') !== goalsList.join('\n')) {
+      setGoalsList(goals.length ? goals : ['']);
+    }
+  }, [goals]);
 
   const canContinue = useMemo(() => {
     return (
-      localGoals.trim().length > 0 &&
+      goalsList.some((g) => g.trim().length > 0) &&
       !!timeline?.startDate &&
       !!timeline?.endDate &&
       new Date(timeline.endDate) > new Date(timeline.startDate) &&
       themes.length > 0 &&
       frequency !== ''
     );
-  }, [localGoals, timeline?.startDate, timeline?.endDate, themes.length, frequency]);
+  }, [goalsList, timeline?.startDate, timeline?.endDate, themes.length, frequency]);
 
   const handleContinue = () => {
-    updateField('goals', localGoals);
+    updateField('goals', goalsList);
     nextStep();
   };
 
@@ -77,17 +87,14 @@ export function Step2CampaignBrief() {
         <CardHeader>
           <CardTitle>Goals</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <Label htmlFor="goals">What do you want to achieve?</Label>
-          <Textarea
-            id="goals"
-            value={localGoals}
-            onChange={(e) => setLocalGoals(e.target.value.slice(0, 500))}
-            placeholder="Increase awareness, promote new product, drive signups…"
+        <CardContent>
+          <GoalsListInput
+            goals={goalsList}
+            onChange={(g) => {
+              setGoalsList(g);
+              updateField('goals', g);
+            }}
           />
-          <div className={`text-xs ${localGoals.length >= 500 ? 'text-red-600' : 'text-gray-500'}`}>
-            {localGoals.length}/500
-          </div>
         </CardContent>
       </Card>
 

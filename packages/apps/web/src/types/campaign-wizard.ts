@@ -21,11 +21,11 @@ export interface CampaignWizardState {
   brandId: string | null;
   name: string;
   campaignType: CampaignType | null;
-  goals: string;
+  goals: string[];
   timeline: Timeline | null;
   themes: string[];
   style: string;
-  frequency: 'daily' | 'every2days' | '3weekly' | '';
+  frequency: string; // allow custom schedules
   postingTime: string; // HH:mm
   priority: number;
   promotionDetails: PromotionDetails | null;

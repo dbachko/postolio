@@ -43,7 +43,7 @@ export function Step3StrategyReview() {
   const [optChanges, setOptChanges] = useState<{
     postingTime?: { prev: string | null; next: string | null };
     frequency?: {
-      prev: 'daily' | 'every2days' | '3weekly' | '';
+      prev: string; // wizard frequency can be custom
       next: 'daily' | 'every2days' | '3weekly';
     };
     themes?: { prev: string[]; next: string[]; added: string[] };
@@ -149,7 +149,10 @@ export function Step3StrategyReview() {
       const res = await apiClient.generateCampaignStrategy({
         brandId: brand.id,
         name: wizard.name || 'Campaign',
-        goals: wizard.goals || 'Grow engagement and conversions',
+        goals:
+          Array.isArray(wizard.goals) && wizard.goals.length
+            ? wizard.goals
+            : ['Grow engagement and conversions'],
         campaignType: wizard.campaignType || 'custom',
         timeline: { startDate: wizard.timeline.startDate, endDate: wizard.timeline.endDate },
         themes:
@@ -272,7 +275,9 @@ export function Step3StrategyReview() {
     try {
       const res = await apiClient.analyzeCampaignGoal({
         brandId: brand.id,
-        goal: wizard.goals || 'Grow engagement and conversions',
+        goal:
+          (Array.isArray(wizard.goals) && wizard.goals.find((g) => g.trim().length > 0)) ||
+          'Grow engagement and conversions',
         themes: wizard.themes,
         campaignType: wizard.campaignType || 'custom',
       });

@@ -23,7 +23,7 @@ export function Step5Review() {
     return {
       type: state.campaignType || 'custom',
       name: state.name,
-      goals: state.goals,
+      goals: Array.isArray(state.goals) ? state.goals : [],
       timeline: state.timeline,
       themes: state.themes,
       style: state.style,
@@ -57,7 +57,7 @@ export function Step5Review() {
         campaignType: state.campaignType || 'custom',
         promotionDetails: state.promotionDetails || undefined,
         contentPillars: state.contentPillars || undefined,
-        goals: state.goals || undefined,
+        goals: Array.isArray(state.goals) ? state.goals : undefined,
         seasonalityAssist: state.seasonalityAssist,
       } as const;
       await apiClient.configureCampaign(payload as any);
@@ -88,7 +88,7 @@ export function Step5Review() {
             brandId: brand.id,
             name: '',
             campaignType: null,
-            goals: '',
+            goals: [],
             timeline: null,
             themes: [],
             style: '',
@@ -151,7 +151,23 @@ export function Step5Review() {
             <div>
               <div className="text-gray-600">Name & Goals</div>
               <div className="font-medium">{summary.name || '—'}</div>
-              <div className="text-gray-600">{summary.goals || '—'}</div>
+              {summary.goals.length ? (
+                <ol className="mt-1 space-y-1 pl-0 text-gray-600">
+                  {summary.goals.map((g, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className="min-w-6 justify-center px-2 py-0 text-xs"
+                      >
+                        {i + 1}
+                      </Badge>
+                      <span>{g}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <div className="text-gray-600">—</div>
+              )}
             </div>
             <Button variant="outline" onClick={() => setStep(2)}>
               Edit

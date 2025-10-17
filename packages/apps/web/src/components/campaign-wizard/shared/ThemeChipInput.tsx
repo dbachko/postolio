@@ -52,7 +52,7 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
 
   const brandId = brand?.id || null;
   const campaignType = wizard.campaignType || undefined;
-  const goals = wizard.goals || undefined;
+  const goals = Array.isArray(wizard.goals) && wizard.goals.length ? wizard.goals : undefined;
 
   useEffect(() => {
     if (!brandId) return;

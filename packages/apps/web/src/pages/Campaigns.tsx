@@ -358,7 +358,7 @@ export function Campaigns() {
             brandId: selectedBrand.id,
             name: '',
             campaignType: null,
-            goals: '',
+            goals: [],
             timeline: null,
             themes: [],
             style: '',

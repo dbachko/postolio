@@ -3,37 +3,100 @@ import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
 import { Card, CardHeader, CardTitle, CardContent } from '../../ui/card';
 import { Button } from '../../ui/button';
 
-function computeSchedule(
-  start: string,
-  end: string,
-  frequency: 'daily' | 'every2days' | '3weekly'
-): string[] {
+function computeSchedule(start: string, end: string, frequency: string): string[] {
   const dates: string[] = [];
   if (!start || !end) return dates;
   const s = new Date(start);
   const e = new Date(end);
   const current = new Date(s);
+  const f = (frequency || '').toLowerCase().trim();
+
+  // Built-ins
+  const builtins = new Set(['daily', 'every2days', '3weekly']);
+  if (builtins.has(f)) {
+    while (current <= e) {
+      dates.push(current.toISOString().slice(0, 10));
+      switch (f) {
+        case 'daily':
+          current.setDate(current.getDate() + 1);
+          break;
+        case 'every2days':
+          current.setDate(current.getDate() + 2);
+          break;
+        case '3weekly': {
+          const day = current.getDay();
+          if (day === 1)
+            current.setDate(current.getDate() + 2); // Mon->Wed
+          else if (day === 3)
+            current.setDate(current.getDate() + 2); // Wed->Fri
+          else current.setDate(current.getDate() + 3); // Fri->Mon
+          break;
+        }
+      }
+    }
+    return dates;
+  }
+
+  // Parse patterns like "every 2 days"
+  const everyNMatch = f.match(/every\s+(\d+)\s*day/);
+  if (everyNMatch) {
+    const n = Math.max(1, parseInt(everyNMatch[1]!, 10));
+    while (current <= e) {
+      dates.push(current.toISOString().slice(0, 10));
+      current.setDate(current.getDate() + n);
+    }
+    return dates;
+  }
+
+  // Parse weekdays like "monday and wednesday", "mon, wed", "weekdays", "weekends"
+  const daysMap: Record<string, number> = {
+    sunday: 0,
+    sun: 0,
+    monday: 1,
+    mon: 1,
+    tuesday: 2,
+    tue: 2,
+    tues: 2,
+    wednesday: 3,
+    wed: 3,
+    thursday: 4,
+    thu: 4,
+    thur: 4,
+    thurs: 4,
+    friday: 5,
+    fri: 5,
+    saturday: 6,
+    sat: 6,
+  };
+  const tokens = f
+    .replace(/\band\b|\bor\b|,|;/g, ' ')
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const days = new Set<number>();
+  if (f.includes('weekday')) {
+    [1, 2, 3, 4, 5].forEach((d) => days.add(d));
+  }
+  if (f.includes('weekend')) {
+    [0, 6].forEach((d) => days.add(d));
+  }
+  for (const t of tokens) {
+    if (t in daysMap) days.add(daysMap[t]!);
+  }
+  if (days.size > 0) {
+    while (current <= e) {
+      if (days.has(current.getDay())) {
+        dates.push(current.toISOString().slice(0, 10));
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    return dates;
+  }
+
+  // Fallback weekly cadence
   while (current <= e) {
     dates.push(current.toISOString().slice(0, 10));
-    switch (frequency) {
-      case 'daily':
-        current.setDate(current.getDate() + 1);
-        break;
-      case 'every2days':
-        current.setDate(current.getDate() + 2);
-        break;
-      case '3weekly': {
-        const day = current.getDay();
-        if (day === 1)
-          current.setDate(current.getDate() + 2); // Mon->Wed
-        else if (day === 3)
-          current.setDate(current.getDate() + 2); // Wed->Fri
-        else current.setDate(current.getDate() + 3); // Fri->Mon
-        break;
-      }
-      default:
-        current.setDate(current.getDate() + 7);
-    }
+    current.setDate(current.getDate() + 7);
   }
   return dates;
 }
@@ -43,7 +106,7 @@ export function Step4Timeline() {
 
   const items = useMemo(() => {
     if (!timeline?.startDate || !timeline?.endDate || !frequency) return [] as string[];
-    return computeSchedule(timeline.startDate, timeline.endDate, frequency as any);
+    return computeSchedule(timeline.startDate, timeline.endDate, frequency);
   }, [timeline?.startDate, timeline?.endDate, frequency]);
 
   const applyOptimal = (time: string) => {

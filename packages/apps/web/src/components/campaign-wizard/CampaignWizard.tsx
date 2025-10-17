@@ -77,7 +77,7 @@ export function CampaignWizard() {
             brandId: brand.id,
             name: '',
             campaignType: null,
-            goals: '',
+            goals: [],
             timeline: null,
             themes: [],
             style: '',

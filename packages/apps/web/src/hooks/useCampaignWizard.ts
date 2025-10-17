@@ -30,7 +30,7 @@ const initialState: CampaignWizardState = {
   brandId: null,
   name: '',
   campaignType: null,
-  goals: '',
+  goals: [],
   timeline: null,
   themes: [],
   style: '',
@@ -85,7 +85,20 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
         for (const key of Object.keys(initialState) as (keyof CampaignWizardState)[]) {
           if (draft[key] !== undefined) {
             // dynamic assignment with runtime cast
-            (next as any)[key] = (draft as any)[key];
+            if (key === 'goals') {
+              const g = (draft as any)[key];
+              // Migrate legacy string to array (split by newline/semicolon)
+              (next as any)[key] = Array.isArray(g)
+                ? g
+                : typeof g === 'string'
+                  ? g
+                      .split(/\n|;/)
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                  : [];
+            } else {
+              (next as any)[key] = (draft as any)[key];
+            }
           }
         }
         set({
@@ -194,7 +207,7 @@ export function useWizardAutoSave(): void {
     state.brandId,
     state.name,
     state.campaignType,
-    state.goals,
+    JSON.stringify(state.goals || []),
     state.timeline?.startDate,
     state.timeline?.endDate,
     state.themes.join('|'),

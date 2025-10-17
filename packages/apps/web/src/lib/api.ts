@@ -122,7 +122,7 @@ export interface CampaignConfig {
     limitedQuantity?: boolean;
   };
   contentPillars?: { pillars: Array<{ name: string; percentage: number; themes: string[] }> };
-  goals?: string;
+  goals?: string[];
   seasonalityAssist?: boolean;
 }
 
@@ -246,7 +246,7 @@ class ApiClient {
     brandId: string,
     opts?: {
       campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
-      goals?: string;
+      goals?: string[];
       limit?: number;
     }
   ): Promise<{
@@ -260,7 +260,7 @@ class ApiClient {
   }> {
     const params = new URLSearchParams();
     if (opts?.campaignType) params.set('campaignType', opts.campaignType);
-    if (opts?.goals) params.set('goals', opts.goals);
+    if (opts?.goals && opts.goals.length) params.set('goals', JSON.stringify(opts.goals));
     if (opts?.limit) params.set('limit', String(opts.limit));
     const qs = params.toString();
     return this.request(
@@ -910,7 +910,9 @@ class ApiClient {
         style: config.style,
         postingTime: config.postingTime,
         priority: config.priority,
-        ...((config as any).goals ? { goals: (config as any).goals } : {}),
+        ...(Array.isArray((config as any).goals) && (config as any).goals.length
+          ? { goals: (config as any).goals }
+          : {}),
         ...((config as any).seasonalityAssist !== undefined
           ? { seasonalityAssist: (config as any).seasonalityAssist }
           : {}),
@@ -941,7 +943,7 @@ class ApiClient {
   // Phase 2: AI goal analysis
   async analyzeCampaignGoal(data: {
     brandId: string;
-    goal: string;
+    goal: string; // still a single goal input
     themes?: string[];
     campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
   }): Promise<{
@@ -965,7 +967,7 @@ class ApiClient {
   async generateCampaignStrategy(data: {
     brandId: string;
     name: string;
-    goals: string;
+    goals: string[];
     campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
     timeline: { startDate: string; endDate: string };
     themes: string[];
@@ -1042,7 +1044,7 @@ class ApiClient {
       endDate?: string;
       status?: string;
       priority?: number;
-      goals?: string;
+      goals?: string[];
       seasonalityAssist?: boolean;
     }
   ): Promise<{
