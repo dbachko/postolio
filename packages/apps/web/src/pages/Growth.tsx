@@ -62,12 +62,10 @@ export function Growth() {
       queryKey: ['growth-strategies', selectedBrand?.id, selectedFocus],
       queryFn: async () => {
         if (!selectedBrand) return null;
-        return (
-          (await apiClient.post(`/api/growth/strategies`, {
-            brandId: selectedBrand.id,
-            focus: selectedFocus || undefined,
-          })) as any
-        ).strategies as GrowthStrategiesResponse;
+        return (await apiClient.post(`/api/growth/strategies`, {
+          brandId: selectedBrand.id,
+          focus: selectedFocus || undefined,
+        })) as GrowthStrategiesResponse;
       },
       enabled: !!selectedBrand,
     });
@@ -245,7 +243,7 @@ export function Growth() {
 
         {strategies && (
           <div className="space-y-6">
-            {strategies?.strategies.map((strategy: GrowthStrategy) => (
+            {strategies?.strategies?.map((strategy: GrowthStrategy) => (
               <div key={strategy.id} className="rounded-lg border p-6">
                 <div className="mb-4">
                   <div className="mb-2 flex items-start justify-between">
@@ -261,7 +259,7 @@ export function Growth() {
                   <div>
                     <h4 className="mb-2 font-medium">Action Items</h4>
                     <ul className="space-y-1">
-                      {strategy.actions.map((action, index) => (
+                      {(strategy.actions || []).map((action, index) => (
                         <li key={index} className="flex items-start">
                           <span className="mr-2 text-green-500">✓</span>
                           <span className="text-sm text-gray-700">{action}</span>
@@ -285,7 +283,7 @@ export function Growth() {
                       <div>
                         <span className="text-sm font-medium">Resources Needed:</span>
                         <div className="mt-1">
-                          {strategy.resources.map((resource, index) => (
+                          {(strategy.resources || []).map((resource, index) => (
                             <span
                               key={index}
                               className="mb-1 mr-1 inline-block rounded bg-gray-100 px-2 py-1 text-xs text-gray-700"
