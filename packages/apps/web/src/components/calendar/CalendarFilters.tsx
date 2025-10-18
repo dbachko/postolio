@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   useCalendarFilterStore,
@@ -63,16 +63,36 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
   const campaigns = (campaignsData?.campaigns || []) as Campaign[];
   const activeFilterCount = filters.getActiveFilterCount();
 
+  // Back-compat: if URL/state contains legacy 'none' campaign selection (no longer shown),
+  // map it to the Default Campaign ID once campaigns load
+  useEffect(() => {
+    if (campaigns.length === 0) return;
+    if (filters.campaigns.includes('none')) {
+      const def = campaigns.find((c) => c.isDefault);
+      if (def) {
+        filters.setCampaigns([def.id]);
+      }
+    }
+  }, [campaigns, filters.campaigns]);
+
   const handleCampaignChange = (value: string) => {
     if (value === 'all') {
       filters.setCampaigns([]);
-    } else if (value === 'none') {
-      filters.setCampaigns(['none']); // Special value to show posts without campaigns
     } else {
       const selectedCampaigns = value ? value.split(',') : [];
       filters.setCampaigns(selectedCampaigns);
     }
   };
+
+  // Compute select control value without exposing legacy 'none'
+  const selectCampaignValue = useMemo(() => {
+    if (filters.campaigns.length === 0) return 'all';
+    if (filters.campaigns.includes('none')) {
+      const def = campaigns.find((c) => c.isDefault);
+      return def ? def.id : 'all';
+    }
+    return filters.campaigns.join(',');
+  }, [filters.campaigns, campaigns]);
 
   const handleApplyDateRange = () => {
     filters.setDateRange(tempDateRange.start, tempDateRange.end);
@@ -104,22 +124,12 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
         {/* Campaign Filter */}
         <div>
           <Label className="mb-1 text-xs text-gray-600">Campaigns</Label>
-          <Select
-            value={
-              filters.campaigns.length === 0
-                ? 'all'
-                : filters.campaigns.includes('none')
-                  ? 'none'
-                  : filters.campaigns.join(',')
-            }
-            onValueChange={handleCampaignChange}
-          >
+          <Select value={selectCampaignValue} onValueChange={handleCampaignChange}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="All posts" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All posts</SelectItem>
-              <SelectItem value="none">No campaign (manual posts)</SelectItem>
               {campaigns.map((campaign) => (
                 <SelectItem key={campaign.id} value={campaign.id}>
                   {campaign.name}
@@ -314,16 +324,6 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
       {filters.hasActiveFilters() && (
         <div className="flex flex-wrap gap-2 border-t pt-2">
           {filters.campaigns.map((campaignId) => {
-            if (campaignId === 'none') {
-              return (
-                <Badge key="none" variant="secondary">
-                  No Campaign (manual posts)
-                  <button onClick={() => filters.setCampaigns([])} className="ml-1">
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              );
-            }
             const campaign = campaigns.find((c) => c.id === campaignId);
             return campaign ? (
               <Badge key={campaignId} variant="secondary">

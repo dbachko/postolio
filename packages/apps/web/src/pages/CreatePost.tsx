@@ -334,15 +334,11 @@ export function CreatePost() {
               <Calendar className="h-4 w-4" />
               Campaign (Optional)
             </Label>
-            <Select
-              value={campaignId || 'none'}
-              onValueChange={(value) => setCampaignId(value === 'none' ? '' : value)}
-            >
+            <Select value={campaignId} onValueChange={(value) => setCampaignId(value)}>
               <SelectTrigger id="campaign" aria-label="Select campaign">
                 <SelectValue placeholder="Select a campaign (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No Campaign</SelectItem>
                 {campaignsQuery.data?.campaigns
                   ?.filter((c) => ['active', 'preview'].includes(c.status))
                   .map((campaign) => (
@@ -357,7 +353,7 @@ export function CreatePost() {
               className="text-muted-foreground text-sm"
               title="By default, new posts are assigned to the Default Campaign so nothing is lost. You can change it here."
             >
-              Defaults to Default Campaign; change if needed
+              Auto-assigns to Default Campaign; change if needed
             </p>
           </div>
 
