@@ -169,8 +169,6 @@ export function Campaigns() {
     }
   }, [currentView, selectedBrand]);
 
-  // Editing via legacy form removed
-
   // Auto brand-switching effect when accessing campaign via URL
   useEffect(() => {
     if (isRealCampaignId(urlCampaignId) && urlCampaignQuery.data?.campaign) {
@@ -240,8 +238,6 @@ export function Campaigns() {
       campaignDetailsQuery,
     ]
   );
-
-  // Removed campaign progress handler; we no longer track campaign-level percent
 
   const handleCampaignError = useCallback(
     (data: CampaignErrorData) => {
@@ -390,7 +386,6 @@ export function Campaigns() {
   }, [navigate, resetWizard, selectedBrand, setWizardBrandId]);
 
   // Campaign edit hook
-  // Legacy edit flow removed
 
   if (!selectedBrand) {
     return (
@@ -464,7 +459,7 @@ export function Campaigns() {
                 automated posting.{' '}
                 <a
                   className="text-blue-600 underline hover:text-blue-800"
-                  href="/instagram-analytics"
+                  href="/analytics?tab=instagram"
                 >
                   Manage Instagram Connection
                 </a>
@@ -545,7 +540,7 @@ export function Campaigns() {
                 {instagramStatusQuery.data && !instagramStatusQuery.data.connected && (
                   <p className="text-sm text-gray-600">
                     Connect Instagram first to enable campaign creation.{' '}
-                    <a className="text-blue-600 underline" href="/instagram-analytics">
+                    <a className="text-blue-600 underline" href="/analytics?tab=instagram">
                       Connect now
                     </a>
                   </p>
@@ -559,7 +554,6 @@ export function Campaigns() {
               onStartCampaign={handleStartCampaign}
               onPauseCampaign={handlePauseCampaign}
               onDeleteCampaign={handleDeleteCampaign}
-              // onEditCampaign removed during wizard rollout
               startCampaignLoading={startCampaignMutation.isPending}
               pauseCampaignLoading={pauseCampaignMutation.isPending}
               deleteCampaignLoading={deleteCampaignMutation.isPending}
@@ -570,8 +564,6 @@ export function Campaigns() {
 
       {/* Create Campaign View */}
       {currentView === 'create' && <CampaignWizard />}
-
-      {/* Edit view removed */}
 
       {/* Campaign Details View */}
       {currentView === 'details' && campaignDetailsQuery.data?.campaign && (

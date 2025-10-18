@@ -83,7 +83,7 @@ const mainNavItems: NavigationItem[] = [
 const secondaryNavItems: NavigationItem[] = [
   {
     label: 'Instagram',
-    path: '/instagram-analytics',
+    path: '/analytics?tab=instagram',
     icon: Instagram,
     description: 'Instagram insights',
   },
@@ -261,8 +261,6 @@ export function AppLayout({ children }: LayoutProps) {
                   <span className="text-xs">⌘</span>K
                 </kbd>
               </Button>
-
-              {/* Help Button removed from top navigation */}
 
               {/* Grid Menu Dropdown */}
               <div className="relative" ref={menuRef}>

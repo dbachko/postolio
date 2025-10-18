@@ -70,7 +70,7 @@ const navigationItems: NavigationItem[] = [
   },
   {
     label: 'Instagram',
-    path: '/instagram-analytics',
+    path: '/analytics?tab=instagram',
     icon: Instagram,
     description: 'Instagram insights',
   },

@@ -135,7 +135,7 @@ export function ImageUploader({
       fileInputRef.current.value = '';
     }
 
-    // Notify parent component that image was removed
+    // Notify parent component that image changed
     onChange('');
   }, [onChange]);
 
