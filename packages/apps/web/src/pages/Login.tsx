@@ -22,6 +22,20 @@ export function Login() {
   const { login } = useAuthStore();
   const navigate = useNavigate();
 
+  // Feature flags via env (GitHub Actions / Vite env)
+  const googleEnabled = import.meta.env.VITE_AUTH_GOOGLE_ENABLED !== 'false';
+  const facebookEnabled = import.meta.env.VITE_AUTH_FACEBOOK_ENABLED !== 'false';
+  const magicLinkEnabled = import.meta.env.VITE_AUTH_MAGIC_LINK_ENABLED !== 'false';
+  const googleConfigured = !!(
+    import.meta.env.VITE_GOOGLE_CLIENT_ID && import.meta.env.VITE_GOOGLE_CLIENT_ID !== ''
+  );
+  const facebookConfigured = !!(
+    import.meta.env.VITE_FACEBOOK_APP_ID && import.meta.env.VITE_FACEBOOK_APP_ID !== ''
+  );
+  const showGoogle = googleEnabled && googleConfigured;
+  const showFacebook = facebookEnabled && facebookConfigured;
+  const showOAuthProviders = showGoogle || showFacebook;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -52,23 +66,27 @@ export function Login() {
           </CardHeader>
           <CardContent>
             {/* OAuth Providers */}
-            <div className="mb-6 space-y-3">
-              <GoogleSignInIsolated mode="signin" />
-              <FacebookSignInIsolated mode="signin" />
-            </div>
+            {showOAuthProviders && (
+              <div className="mb-6 space-y-3">
+                {showGoogle && <GoogleSignInIsolated mode="signin" />}
+                {showFacebook && <FacebookSignInIsolated mode="signin" />}
+              </div>
+            )}
 
-            {/* Divider */}
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
+            {/* Divider (only when OAuth shown) */}
+            {showOAuthProviders && (
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background text-muted-foreground px-2">Or continue with</span>
+                </div>
               </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background text-muted-foreground px-2">Or continue with</span>
-              </div>
-            </div>
+            )}
 
             {/* Magic Link Option */}
-            {showMagicLink ? (
+            {magicLinkEnabled && showMagicLink ? (
               <>
                 <MagicLinkForm mode="signin" onSuccess={() => navigate('/dashboard')} />
                 <div className="mt-4 text-center">
@@ -135,16 +153,18 @@ export function Login() {
                 </Button>
 
                 {/* Magic Link Alternative */}
-                <div className="mt-4 text-center">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowMagicLink(true)}
-                  >
-                    Or sign in with magic link (no password)
-                  </Button>
-                </div>
+                {magicLinkEnabled && (
+                  <div className="mt-4 text-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowMagicLink(true)}
+                    >
+                      Or sign in with magic link (no password)
+                    </Button>
+                  </div>
+                )}
               </form>
             )}
           </CardContent>

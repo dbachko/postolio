@@ -32,6 +32,20 @@ export function Register() {
   const { register: registerUser } = useAuthStore();
   const navigate = useNavigate();
 
+  // Feature flags via env
+  const googleEnabled = import.meta.env.VITE_AUTH_GOOGLE_ENABLED !== 'false';
+  const facebookEnabled = import.meta.env.VITE_AUTH_FACEBOOK_ENABLED !== 'false';
+  const magicLinkEnabled = import.meta.env.VITE_AUTH_MAGIC_LINK_ENABLED !== 'false';
+  const googleConfigured = !!(
+    import.meta.env.VITE_GOOGLE_CLIENT_ID && import.meta.env.VITE_GOOGLE_CLIENT_ID !== ''
+  );
+  const facebookConfigured = !!(
+    import.meta.env.VITE_FACEBOOK_APP_ID && import.meta.env.VITE_FACEBOOK_APP_ID !== ''
+  );
+  const showGoogle = googleEnabled && googleConfigured;
+  const showFacebook = facebookEnabled && facebookConfigured;
+  const showOAuthProviders = showGoogle || showFacebook;
+
   const {
     register,
     handleSubmit,
@@ -96,23 +110,27 @@ export function Register() {
           </CardHeader>
           <CardContent>
             {/* OAuth Providers */}
-            <div className="mb-6 space-y-3">
-              <GoogleSignInIsolated mode="signup" />
-              <FacebookSignInIsolated mode="signup" />
-            </div>
+            {showOAuthProviders && (
+              <div className="mb-6 space-y-3">
+                {showGoogle && <GoogleSignInIsolated mode="signup" />}
+                {showFacebook && <FacebookSignInIsolated mode="signup" />}
+              </div>
+            )}
 
             {/* Divider */}
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
+            {showOAuthProviders && (
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background text-muted-foreground px-2">Or continue with</span>
+                </div>
               </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background text-muted-foreground px-2">Or continue with</span>
-              </div>
-            </div>
+            )}
 
             {/* Magic Link Option */}
-            {showMagicLink ? (
+            {magicLinkEnabled && showMagicLink ? (
               <>
                 <MagicLinkForm mode="signup" onSuccess={() => navigate('/dashboard')} />
                 <div className="mt-4 text-center">
@@ -206,16 +224,18 @@ export function Register() {
                 </Button>
 
                 {/* Magic Link Alternative */}
-                <div className="text-center">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowMagicLink(true)}
-                  >
-                    Or sign up with magic link (no password)
-                  </Button>
-                </div>
+                {magicLinkEnabled && (
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowMagicLink(true)}
+                    >
+                      Or sign up with magic link (no password)
+                    </Button>
+                  </div>
+                )}
 
                 {/* Privacy Policy Notice */}
                 <div className="text-muted-foreground mt-4 text-center text-xs">

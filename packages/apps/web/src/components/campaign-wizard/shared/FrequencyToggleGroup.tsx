@@ -15,12 +15,21 @@ export function FrequencyToggleGroup({ value, onChange }: FrequencyToggleGroupPr
   const selectedValue = builtinValues.includes(value) ? value : 'custom';
   return (
     <div className="space-y-2">
-      <Label>Frequency</Label>
+      <Label>
+        Frequency{' '}
+        <span className="text-red-600" aria-hidden>
+          *
+        </span>
+      </Label>
       <RadioGroup
         value={selectedValue}
         onValueChange={(v) => {
-          if (v === 'custom') return; // handled by input
-          onChange(v);
+          // Allow selecting custom explicitly; set to empty to enable custom entry
+          if (v === 'custom') {
+            onChange('');
+          } else {
+            onChange(v);
+          }
         }}
         className="grid grid-cols-1 gap-2 sm:grid-cols-3"
       >
@@ -59,7 +68,7 @@ export function FrequencyToggleGroup({ value, onChange }: FrequencyToggleGroupPr
               placeholder="e.g., Mondays and Wednesdays; Tue, Thu; every 2 days"
               value={selectedValue === 'custom' ? value : ''}
               onFocus={() => {
-                if (selectedValue !== 'custom') onChange(value);
+                if (selectedValue !== 'custom') onChange('');
               }}
               onChange={(e) => onChange(e.target.value)}
             />

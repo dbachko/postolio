@@ -118,7 +118,7 @@ You should see:
 
 If you don't have SMTP/SES configured in a given environment, you can enable a logging fallback so magic links still work. The API will log the magic link URL to the server console instead of sending an email.
 
-- Enable: set `ALLOW_MAGIC_LINK_LOGGING=true` in the API environment
+- Enable: set `AUTH_MAGIC_LINK_ENABLED=true` in the API environment
 - Works regardless of `NODE_ENV`
 - Where to find the link: Look in the API terminal output for a block like:
 

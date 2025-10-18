@@ -146,6 +146,31 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
     };
   }, [isConfigured, isInitialized, handleGoogleResponse, mode, onError]);
 
+  // Ensure the Google button remains visible after auth attempts
+  useEffect(() => {
+    if (
+      !isLoading &&
+      isInitialized &&
+      buttonRef.current &&
+      buttonRef.current.childElementCount === 0 &&
+      window.google?.accounts?.id
+    ) {
+      try {
+        window.google.accounts.id.renderButton(buttonRef.current, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          text:
+            mode === 'signin' ? 'signin_with' : mode === 'signup' ? 'signup_with' : 'continue_with',
+          width: buttonRef.current.offsetWidth || 400,
+          locale: 'en',
+        });
+      } catch (err) {
+        console.warn('Re-rendering Google Sign-In button failed:', err);
+      }
+    }
+  }, [isLoading, isInitialized, mode]);
+
   if (!isConfigured) {
     return (
       <div className="bg-muted/50 w-full rounded-md border p-3 text-center">
@@ -157,20 +182,27 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-10 w-full items-center justify-center rounded-md border">
-        <span className="text-muted-foreground text-sm">Connecting to Google...</span>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full">
-      <div ref={buttonRef} className="w-full" style={{ minHeight: '40px' }} />
+    <div className="relative w-full">
+      <div
+        ref={buttonRef}
+        className="w-full"
+        style={{
+          minHeight: '40px',
+          opacity: isLoading ? 0.6 : 1,
+          pointerEvents: isLoading ? 'none' : 'auto',
+        }}
+      />
       {!isInitialized && (
         <div className="flex h-10 w-full items-center justify-center rounded-md border">
           <span className="text-muted-foreground text-sm">Loading Google Sign-In...</span>
+        </div>
+      )}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="bg-background/80 text-muted-foreground pointer-events-none flex h-10 w-full items-center justify-center rounded-md border">
+            <span className="text-sm">Connecting to Google...</span>
+          </div>
         </div>
       )}
     </div>

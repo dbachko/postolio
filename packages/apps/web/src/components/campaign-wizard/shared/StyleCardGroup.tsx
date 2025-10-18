@@ -20,8 +20,12 @@ export function StyleCardGroup({ value, onChange }: StyleCardGroupProps) {
       <RadioGroup
         value={selectedValue}
         onValueChange={(v) => {
-          if (v === 'custom') return; // handled by input
-          onChange(v);
+          // Allow selecting custom explicitly; set to empty string to enter custom text
+          if (v === 'custom') {
+            onChange('');
+          } else {
+            onChange(v);
+          }
         }}
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
       >
@@ -56,7 +60,7 @@ export function StyleCardGroup({ value, onChange }: StyleCardGroupProps) {
           );
         })}
         {/* Custom style card */}
-        <Label htmlFor="style-custom" className="block h-full cursor-pointer">
+        <Label htmlFor="style-custom" className="col-span-full block h-full cursor-pointer">
           <Card
             className={cn(
               'h-full transition-shadow',
@@ -74,7 +78,7 @@ export function StyleCardGroup({ value, onChange }: StyleCardGroupProps) {
                   onChange={(e) => onChange(e.target.value)}
                   onFocus={() => {
                     // Ensure radio shows as selected when focusing input
-                    if (selectedValue !== 'custom') onChange(value);
+                    if (selectedValue !== 'custom') onChange('');
                   }}
                 />
                 <p className="text-muted-foreground mt-1 text-xs">

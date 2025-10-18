@@ -104,7 +104,12 @@ export function Step2CampaignBrief() {
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-1">
-            <Label htmlFor="start-date">Start Date</Label>
+            <Label htmlFor="start-date">
+              Start Date{' '}
+              <span className="text-red-600" aria-hidden>
+                *
+              </span>
+            </Label>
             <Input
               id="start-date"
               type="date"
@@ -115,10 +120,17 @@ export function Step2CampaignBrief() {
                   endDate: timeline?.endDate || '',
                 })
               }
+              required
+              aria-required="true"
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="end-date">End Date</Label>
+            <Label htmlFor="end-date">
+              End Date{' '}
+              <span className="text-red-600" aria-hidden>
+                *
+              </span>
+            </Label>
             <Input
               id="end-date"
               type="date"
@@ -129,6 +141,8 @@ export function Step2CampaignBrief() {
                   endDate: e.target.value,
                 })
               }
+              required
+              aria-required="true"
             />
           </div>
           {timeline?.startDate && timeline?.endDate && (
@@ -148,7 +162,15 @@ export function Step2CampaignBrief() {
           <CardTitle>Themes & Style</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ThemeChipInput themes={themes} onChange={(t) => updateField('themes', t)} />
+          <div className="space-y-2">
+            <Label>
+              Themes{' '}
+              <span className="text-red-600" aria-hidden>
+                *
+              </span>
+            </Label>
+            <ThemeChipInput themes={themes} onChange={(t) => updateField('themes', t)} />
+          </div>
           <StyleCardGroup value={style} onChange={(v) => updateField('style', v)} />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <FrequencyToggleGroup

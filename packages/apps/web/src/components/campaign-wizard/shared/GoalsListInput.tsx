@@ -3,7 +3,7 @@ import { Card, CardContent } from '../../ui/card';
 import { Label } from '../../ui/label';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
-import { ArrowUp, ArrowDown, Plus, Trash2, GripVertical } from 'lucide-react';
+import { ArrowUp, ArrowDown, Plus, Trash2 } from 'lucide-react';
 
 interface GoalsListInputProps {
   goals: string[];
@@ -12,7 +12,9 @@ interface GoalsListInputProps {
 }
 
 export function GoalsListInput({ goals, onChange, disabled }: GoalsListInputProps) {
-  const dragIndex = useRef<number>(-1);
+  // Track focus for newly added inputs
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const nextFocusIndex = useRef<number | null>(null);
   const nonEmptyCount = useMemo(() => goals.filter((g) => g.trim().length > 0).length, [goals]);
   const MAX_GOALS = 5;
   const canAdd = nonEmptyCount < MAX_GOALS;
@@ -47,68 +49,41 @@ export function GoalsListInput({ goals, onChange, disabled }: GoalsListInputProp
     onChange(next);
   };
 
-  const handleDragStart = (idx: number) => (e: React.DragEvent) => {
-    if (disabled) return;
-    dragIndex.current = idx;
-    e.dataTransfer.effectAllowed = 'move';
-    try {
-      e.dataTransfer.setData('text/plain', String(idx));
-    } catch (_err) {
-      void 0; // noop
+  // After a new goal is added, move focus to it
+  useEffect(() => {
+    if (nextFocusIndex.current != null) {
+      const idx = nextFocusIndex.current;
+      nextFocusIndex.current = null;
+      const el = inputRefs.current[idx!];
+      if (el) {
+        try {
+          el.focus();
+        } catch (_) {
+          /* noop */
+        }
+      }
     }
-  };
-  const handleDragOver = (e: React.DragEvent) => {
-    if (disabled) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-  const handleDrop = (targetIdx: number) => (e: React.DragEvent) => {
-    if (disabled) return;
-    e.preventDefault();
-    let from = dragIndex.current;
-    try {
-      const txt = e.dataTransfer.getData('text/plain');
-      if (txt) from = parseInt(txt, 10);
-    } catch (_err) {
-      void 0; // noop
-    }
-    if (Number.isNaN(from) || from === targetIdx || from < 0) return;
-    const next = goals.slice();
-    const [moved] = next.splice(from, 1);
-    next.splice(targetIdx, 0, moved);
-    dragIndex.current = -1;
-    onChange(next);
-  };
+  }, [goals.length]);
 
   return (
     <div className="space-y-2">
-      <Label>What do you want to achieve?</Label>
+      <Label>
+        What do you want to achieve?{' '}
+        <span className="text-red-600" aria-hidden>
+          *
+        </span>
+      </Label>
       <div className="space-y-2">
         {goals.map((g, idx) => (
-          <Card
-            key={idx}
-            className="transition-shadow hover:shadow-sm"
-            draggable={!disabled}
-            onDragStart={handleDragStart(idx)}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop(idx)}
-          >
+          <Card key={idx} className="transition-shadow hover:shadow-sm">
             <CardContent className="flex items-center gap-2 p-3">
-              <button
-                type="button"
-                className="cursor-grab rounded p-1 text-gray-500 hover:bg-gray-100 active:cursor-grabbing disabled:cursor-default"
-                aria-label="Drag to reorder"
-                draggable={!disabled}
-                onDragStart={handleDragStart(idx)}
-                onDragEnd={() => (dragIndex.current = -1)}
-                disabled={disabled}
-              >
-                <GripVertical className="h-4 w-4" />
-              </button>
               <div className="w-5 text-center text-xs text-gray-500">{idx + 1}</div>
               <Input
                 placeholder="e.g., Increase website signups by 20%"
                 value={g}
+                ref={(el) => {
+                  inputRefs.current[idx] = el;
+                }}
                 onChange={(e) => {
                   const next = goals.slice();
                   next[idx] = e.target.value;
@@ -117,7 +92,10 @@ export function GoalsListInput({ goals, onChange, disabled }: GoalsListInputProp
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (canAdd) addGoal();
+                    if (canAdd) {
+                      nextFocusIndex.current = idx + 1;
+                      addGoal();
+                    }
                   }
                 }}
                 disabled={disabled}
@@ -145,7 +123,7 @@ export function GoalsListInput({ goals, onChange, disabled }: GoalsListInputProp
                 </Button>
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="destructive"
                   size="sm"
                   aria-label="Remove goal"
                   onClick={() => removeGoal(idx)}

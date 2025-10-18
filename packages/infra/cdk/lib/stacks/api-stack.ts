@@ -471,11 +471,11 @@ export class ApiStack extends cdk.Stack {
             S3_IMAGES_BUCKET: imagesBucketName,
             CLOUDFRONT_DOMAIN: imagesCdnDomain,
             CLOUDFRONT_DISTRIBUTION_ID: imagesCdnDistributionId,
-            // Feature flags
-            ALLOW_MAGIC_LINK_LOGGING:
+            // Feature flags (unified names)
+            AUTH_MAGIC_LINK_ENABLED:
               (
-                (this.node.tryGetContext('allowMagicLinkLogging') as string | undefined) ||
-                process.env.ALLOW_MAGIC_LINK_LOGGING ||
+                (this.node.tryGetContext('authMagicLinkEnabled') as string | undefined) ||
+                process.env.AUTH_MAGIC_LINK_ENABLED ||
                 'false'
               )
                 .toString()

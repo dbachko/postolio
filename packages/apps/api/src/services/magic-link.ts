@@ -79,7 +79,7 @@ export class MagicLinkService {
 
       // Development fallback: if email service isn't configured, log the link and succeed
       const emailConfigured = EmailService.isConfigured();
-      const allowLoggingFallback = process.env.ALLOW_MAGIC_LINK_LOGGING === 'true';
+      const allowLoggingFallback = process.env.AUTH_MAGIC_LINK_ENABLED === 'true';
       if (!emailConfigured && (process.env.NODE_ENV === 'dev' || allowLoggingFallback)) {
         const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${token}`;

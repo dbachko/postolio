@@ -26,8 +26,8 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'Email is required' });
       }
 
-      // Check if email service is configured (allow fallback via env or dev)
-      const allowLoggingFallback = process.env.ALLOW_MAGIC_LINK_LOGGING === 'true';
+      // Check if email service is configured (allow fallback via unified flag or dev)
+      const allowLoggingFallback = process.env.AUTH_MAGIC_LINK_ENABLED === 'true';
       if (
         !MagicLinkService.isConfigured() &&
         !(process.env.NODE_ENV === 'dev' || allowLoggingFallback)
@@ -83,7 +83,7 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Check if magic link is configured
   fastify.get('/magic-link/status', async (request, reply) => {
-    const allowLoggingFallback = process.env.ALLOW_MAGIC_LINK_LOGGING === 'true';
+    const allowLoggingFallback = process.env.AUTH_MAGIC_LINK_ENABLED === 'true';
     const configured =
       MagicLinkService.isConfigured() || process.env.NODE_ENV === 'dev' || allowLoggingFallback;
     return reply.send({

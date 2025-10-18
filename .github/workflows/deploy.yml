@@ -547,7 +547,7 @@ jobs:
               --context imageTag="$IMAGE_TAG" \
               --context domainName="${{ vars.DOMAIN_NAME }}" \
               --context corsOrigin="${{ vars.VITE_API_URL }}" \
-              --context allowMagicLinkLogging="${{ vars.ALLOW_MAGIC_LINK_LOGGING }}" \
+              --context authMagicLinkEnabled="${{ vars.AUTH_MAGIC_LINK_ENABLED }}" \
               --context openaiApiKey="$OPENAI_API_KEY" \
               --context googleClientId="$GOOGLE_CLIENT_ID" \
               --context googleClientSecret="$GOOGLE_CLIENT_SECRET" \
@@ -644,6 +644,9 @@ jobs:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_FACEBOOK_APP_ID: ${{ vars.VITE_FACEBOOK_APP_ID }}
+          VITE_AUTH_GOOGLE_ENABLED: ${{ vars.VITE_AUTH_GOOGLE_ENABLED }}
+          VITE_AUTH_FACEBOOK_ENABLED: ${{ vars.VITE_AUTH_FACEBOOK_ENABLED }}
+          VITE_AUTH_MAGIC_LINK_ENABLED: ${{ vars.VITE_AUTH_MAGIC_LINK_ENABLED }}
           VITE_FEATURE_AI_SUGGESTIONS: ${{ vars.VITE_FEATURE_AI_SUGGESTIONS }}
           VITE_FEATURE_VIDEO_SUPPORT: ${{ vars.VITE_FEATURE_VIDEO_SUPPORT }}
           VITE_ENVIRONMENT: ${{ needs.detect-changes.outputs.environment }}

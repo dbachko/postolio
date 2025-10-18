@@ -36,69 +36,9 @@ function computeSchedule(start: string, end: string, frequency: string): string[
     }
     return dates;
   }
-
-  // Parse patterns like "every 2 days"
-  const everyNMatch = f.match(/every\s+(\d+)\s*day/);
-  if (everyNMatch) {
-    const n = Math.max(1, parseInt(everyNMatch[1]!, 10));
-    while (current <= e) {
-      dates.push(current.toISOString().slice(0, 10));
-      current.setDate(current.getDate() + n);
-    }
-    return dates;
-  }
-
-  // Parse weekdays like "monday and wednesday", "mon, wed", "weekdays", "weekends"
-  const daysMap: Record<string, number> = {
-    sunday: 0,
-    sun: 0,
-    monday: 1,
-    mon: 1,
-    tuesday: 2,
-    tue: 2,
-    tues: 2,
-    wednesday: 3,
-    wed: 3,
-    thursday: 4,
-    thu: 4,
-    thur: 4,
-    thurs: 4,
-    friday: 5,
-    fri: 5,
-    saturday: 6,
-    sat: 6,
-  };
-  const tokens = f
-    .replace(/\band\b|\bor\b|,|;/g, ' ')
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter(Boolean);
-  const days = new Set<number>();
-  if (f.includes('weekday')) {
-    [1, 2, 3, 4, 5].forEach((d) => days.add(d));
-  }
-  if (f.includes('weekend')) {
-    [0, 6].forEach((d) => days.add(d));
-  }
-  for (const t of tokens) {
-    if (t in daysMap) days.add(daysMap[t]!);
-  }
-  if (days.size > 0) {
-    while (current <= e) {
-      if (days.has(current.getDay())) {
-        dates.push(current.toISOString().slice(0, 10));
-      }
-      current.setDate(current.getDate() + 1);
-    }
-    return dates;
-  }
-
-  // Fallback weekly cadence
-  while (current <= e) {
-    dates.push(current.toISOString().slice(0, 10));
-    current.setDate(current.getDate() + 7);
-  }
-  return dates;
+  // For custom schedules, do not attempt to parse free text.
+  // We will feed the raw input to the LLM later.
+  return [];
 }
 
 export function Step4Timeline() {
