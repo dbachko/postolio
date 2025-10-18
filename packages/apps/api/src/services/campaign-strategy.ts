@@ -27,7 +27,8 @@ export interface AnalyzeGoalResult {
 export const GenerateStrategySchema = z.object({
   brandId: z.string().min(1),
   name: z.string().min(1),
-  goals: z.string().min(1),
+  // Accept both a single string or an array of strings from the client
+  goals: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
   campaignType: z
     .enum(['promotional', 'educational', 'seasonal', 'thought_leadership', 'custom'])
     .optional(),
@@ -311,6 +312,8 @@ export async function generateStrategy(input: GenerateStrategyInput): Promise<Ca
     return fallbackStrategy;
   }
 
+  const goalsText = Array.isArray(input.goals) ? input.goals.join('; ') : input.goals;
+
   const prompt = `Design a concise Instagram campaign strategy as JSON only with fields:
 contentPillars: { pillars: [{ name, percentage, themes[] }] }
 schedule: { phases: [{ phase, startOffsetDays, frequency, rationale }], postingTime }
@@ -326,7 +329,7 @@ Input:
 Brand historical avg engagement rate: ${(avgEngagementRate * 100).toFixed(2)}%
 Median reach per post: ${medianReach}
 Campaign type: ${input.campaignType ?? 'custom'}
-Goals: ${input.goals}
+Goals: ${goalsText}
 Themes: ${(input.themes || []).join(', ')}
 Style: ${input.style}
 Timeline days: ${days}

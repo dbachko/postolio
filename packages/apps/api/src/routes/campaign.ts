@@ -82,7 +82,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     style: z.string().optional(),
     postingTime: z.string().regex(/^\d{2}:\d{2}$/),
     priority: z.number().int().min(1).max(10).optional(),
-    goals: z.string().max(2000).optional(),
+    // Accept goals as single string or array from the wizard; normalize later
+    goals: z.union([z.string().max(2000), z.array(z.string()).min(1)]).optional(),
     seasonalityAssist: z.boolean().optional(),
     promotionDetails: z
       .object({
@@ -176,6 +177,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         );
 
         // Convert date strings to Date objects with timezone awareness
+        const goalsText = Array.isArray(body.goals) ? body.goals.join('; ') : body.goals;
+
         const config: CampaignConfig = {
           name: body.name,
           brandId: body.brandId,
@@ -192,7 +195,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           ...(body.campaignType ? { campaignType: body.campaignType } : {}),
           ...(body.promotionDetails ? { urgencyTactics: body.promotionDetails } : {}),
           ...(body.contentPillars ? { contentPillars: body.contentPillars } : {}),
-          ...(body.goals ? { goals: body.goals } : {}),
+          ...(goalsText ? { goals: goalsText } : {}),
           ...(body.seasonalityAssist !== undefined
             ? { seasonalityAssist: body.seasonalityAssist }
             : {}),

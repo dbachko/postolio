@@ -261,21 +261,27 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
         )}
 
         {/* Action Buttons */}
-        <div className="flex justify-end space-x-2">
+        <div className="flex flex-wrap justify-end gap-2">
           {isConnected ? (
             <>
               <Button
                 variant="outline"
                 onClick={handleDisconnect}
                 disabled={disconnectMutation.isPending}
+                className="w-full sm:w-auto"
               >
                 {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
               </Button>
-              <InstagramSyncButton brandId={brand.id} variant="outline" />
+              <InstagramSyncButton
+                brandId={brand.id}
+                variant="outline"
+                className="w-full sm:w-auto"
+              />
               <Button
                 onClick={() => refreshStatusMutation.mutate()}
                 variant="secondary"
                 disabled={refreshStatusMutation.isPending}
+                className="w-full sm:w-auto"
               >
                 {refreshStatusMutation.isPending ? 'Refreshing...' : 'Refresh Status'}
               </Button>

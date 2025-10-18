@@ -21,13 +21,11 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import {
-  ChevronDown,
   Settings,
   LogOut,
   Check,
   Building2,
   Search,
-  HelpCircle,
   BarChart3,
   Instagram,
   TrendingUp,
@@ -346,26 +344,6 @@ export function AppLayout({ children }: LayoutProps) {
 
                         {/* Quick Actions */}
                         <div className="mt-4 space-y-1 border-t pt-4">
-                          <button
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setHelpOpen(true);
-                            }}
-                            className="hover:bg-accent flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors"
-                          >
-                            <HelpCircle className="mr-3 h-4 w-4" aria-hidden="true" />
-                            Help & FAQ
-                          </button>
-                          <button
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setHelpDrawerOpen(true);
-                            }}
-                            className="hover:bg-accent flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors"
-                          >
-                            <Grid3X3 className="mr-3 h-4 w-4" aria-hidden="true" />
-                            Help Sidebar (beta)
-                          </button>
                           <Link
                             to="/dashboard"
                             onClick={() => setMenuOpen(false)}
@@ -403,7 +381,7 @@ export function AppLayout({ children }: LayoutProps) {
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
-                      className="flex h-9 items-center space-x-2 px-3"
+                      className="flex h-9 items-center px-2"
                       aria-label="User and brand menu"
                     >
                       <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
@@ -411,10 +389,6 @@ export function AppLayout({ children }: LayoutProps) {
                           {selectedBrand?.name?.charAt(0) || user.email?.charAt(0)?.toUpperCase()}
                         </span>
                       </div>
-                      <span className="hidden text-sm font-medium sm:inline">
-                        {selectedBrand ? selectedBrand.name : 'Select Brand'}
-                      </span>
-                      <ChevronDown className="h-3 w-3" aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
@@ -511,15 +485,6 @@ export function AppLayout({ children }: LayoutProps) {
           </CommandGroup>
 
           <CommandGroup heading="Quick Actions">
-            <CommandItem
-              onSelect={() => {
-                setHelpOpen(true);
-                setSearchOpen(false);
-              }}
-            >
-              <HelpCircle className="mr-3 h-4 w-4" aria-hidden="true" />
-              Open Help
-            </CommandItem>
             <CommandItem
               onSelect={() => {
                 navigate('/campaigns/create?fresh=1');

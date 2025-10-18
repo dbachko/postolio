@@ -443,7 +443,7 @@ export function Brands() {
                       />
                     </div>
 
-                    <div className="flex justify-end space-x-3">
+                    <div className="flex flex-wrap justify-end gap-3">
                       <button
                         type="button"
                         onClick={() => handleEditCancel(selectedBrand.id)}
@@ -463,7 +463,7 @@ export function Brands() {
                 ) : (
                   /* Display Mode */
                   <div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex-1">
                         <h3 className="text-lg font-medium text-gray-900">{selectedBrand.name}</h3>
                         {selectedBrand.description && (
@@ -473,7 +473,7 @@ export function Brands() {
                           Created {new Date(selectedBrand.createdAt).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="flex items-center space-x-3">
+                      <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                         {profileAvailable[selectedBrand.id] &&
                           (profileSummaries[selectedBrand.id] ? (
                             <div className="flex items-center gap-3">
@@ -496,7 +496,7 @@ export function Brands() {
                               Analyzed
                             </span>
                           ))}
-                        <div className="flex space-x-2">
+                        <div className="flex flex-wrap gap-2 sm:justify-end">
                           <button
                             onClick={() => handleEditStart(selectedBrand)}
                             className="rounded px-3 py-1 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-700"
@@ -603,7 +603,7 @@ export function Brands() {
                         />
                       </div>
 
-                      <div className="flex justify-end space-x-3">
+                      <div className="flex flex-wrap justify-end gap-3">
                         <button
                           type="button"
                           onClick={() => handleEditCancel(brand.id)}
@@ -623,7 +623,7 @@ export function Brands() {
                   ) : (
                     /* Display Mode */
                     <div>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex-1">
                           <h3 className="text-lg font-medium text-gray-900">{brand.name}</h3>
                           {brand.description && (
@@ -636,7 +636,7 @@ export function Brands() {
                             <p className="text-xs text-gray-500">Country: {brand.countryCode}</p>
                           )}
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                           {profileAvailable[brand.id] &&
                             (profileSummaries[brand.id] ? (
                               <div className="flex items-center gap-2">
@@ -659,7 +659,7 @@ export function Brands() {
                                 Analyzed
                               </span>
                             ))}
-                          <div className="flex space-x-2">
+                          <div className="flex flex-wrap gap-2 sm:justify-end">
                             <button
                               onClick={() => handleSelectBrand(brand)}
                               className={`rounded px-3 py-1 text-sm font-medium ${

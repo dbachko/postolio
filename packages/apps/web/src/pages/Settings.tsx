@@ -311,8 +311,6 @@ export function Settings() {
               <CardDescription>Manage your account information and preferences</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-500">Account settings coming soon...</p>
-
               {/* Quick link to Security Dashboard */}
               <div className="bg-muted/40 mt-6 rounded-lg border p-4">
                 <div className="flex items-start justify-between gap-4">
