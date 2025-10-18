@@ -3,7 +3,7 @@
  * Centralized database client management with test support
  */
 
-import { PrismaClient } from '@postolio/database';
+import { PrismaClient, Prisma } from '@postolio/database';
 
 interface QueryEventLike {
   query: string;
@@ -41,26 +41,38 @@ let prismaInstance: PrismaClient | null = null;
 export function getDatabaseClient(): PrismaClient {
   if (!prismaInstance) {
     // Enhanced Prisma configuration with connection pooling
-    prismaInstance = new PrismaClient({
-      log: process.env.NODE_ENV === 'dev' ? ['query', 'info', 'warn', 'error'] : ['warn', 'error'],
+    // Reduce noisy query logs in all environments unless explicitly enabled.
+    const enableQueryLogging = (process.env.LOG_QUERIES || '').toLowerCase() === 'true';
 
+    const logLevels: (Prisma.LogLevel | Prisma.LogDefinition)[] = [
+      'warn',
+      'error',
+      // Keep 'info' only for local dev
+      ...(process.env.NODE_ENV === 'dev' ? (['info'] as Prisma.LogLevel[]) : []),
+      // Emit query events only when explicitly enabled (no stdout spam)
+      ...(enableQueryLogging
+        ? ([{ level: 'query', emit: 'event' }] as Prisma.LogDefinition[])
+        : ([] as Prisma.LogDefinition[])),
+    ];
+
+    prismaInstance = new PrismaClient({
+      log: logLevels,
       datasources: {
         db: {
           url: process.env.DATABASE_URL || getDatabaseUrl(),
         },
       },
-
       // Note: Connection pool configuration moved to environment variables
       // DATABASE_URL should include connection pool parameters
     });
 
     // Connection event handlers
-    prismaInstance.$on('query' as never, (e: QueryEventLike) => {
-      if (process.env.LOG_QUERIES === 'true') {
+    if (enableQueryLogging) {
+      prismaInstance.$on('query' as never, (e: QueryEventLike) => {
         console.log('Query: ' + e.query);
         console.log('Duration: ' + e.duration + 'ms');
-      }
-    });
+      });
+    }
 
     // Graceful shutdown handlers
     const gracefulShutdown = async () => {
