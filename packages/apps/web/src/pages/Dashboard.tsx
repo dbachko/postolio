@@ -61,7 +61,7 @@ export function Dashboard() {
     enabled: brands.length > 0,
   });
 
-  const allCampaigns = allCampaignsData?.campaigns || [];
+  const allCampaigns = (allCampaignsData?.campaigns || []).filter((c) => !c.isDefault);
   const contentMetrics = contentMetricsData || { scheduled: 0, published: 0 };
 
   // Calculate campaign-focused metrics

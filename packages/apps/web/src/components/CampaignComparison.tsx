@@ -102,9 +102,9 @@ export function CampaignComparison({ campaigns, isOpen, onClose }: CampaignCompa
     }
   };
 
-  // Filter to only show active or completed campaigns that can be compared
-  const comparableCampaigns = campaigns.filter((campaign) =>
-    ['active', 'completed', 'paused'].includes(campaign.status)
+  // Filter to only show campaigns that can be compared and are not the Default Campaign
+  const comparableCampaigns = campaigns.filter(
+    (campaign) => ['active', 'completed', 'paused'].includes(campaign.status) && !campaign.isDefault
   );
 
   return (

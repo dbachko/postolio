@@ -283,7 +283,7 @@ export function Campaigns() {
 
   // Memoized campaigns data to prevent unnecessary re-renders
   const campaigns = useMemo(
-    () => campaignsQuery.data?.campaigns || [],
+    () => (campaignsQuery.data?.campaigns || []).filter((c) => !c.isDefault),
     [campaignsQuery.data?.campaigns]
   );
 

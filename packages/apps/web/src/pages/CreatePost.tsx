@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '../lib/api';
@@ -44,6 +44,14 @@ export function CreatePost() {
     queryFn: () => apiClient.listCampaigns(selectedBrand?.id),
     enabled: !!selectedBrand,
   });
+
+  // Preselect default campaign when campaigns load
+  useEffect(() => {
+    if (!campaignId && campaignsQuery.data?.campaigns) {
+      const def = campaignsQuery.data.campaigns.find((c) => c.isDefault);
+      if (def) setCampaignId(def.id);
+    }
+  }, [campaignId, campaignsQuery.data]);
 
   const createPostMutation = useMutation({
     mutationFn: async (data: {
@@ -340,12 +348,16 @@ export function CreatePost() {
                   .map((campaign) => (
                     <SelectItem key={campaign.id} value={campaign.id}>
                       {campaign.name}
+                      {campaign.isDefault ? ' (Default)' : ''}
                     </SelectItem>
                   ))}
               </SelectContent>
             </Select>
-            <p className="text-muted-foreground text-sm">
-              Optionally assign this post to a campaign
+            <p
+              className="text-muted-foreground text-sm"
+              title="By default, new posts are assigned to the Default Campaign so nothing is lost. You can change it here."
+            >
+              Defaults to Default Campaign; change if needed
             </p>
           </div>
 

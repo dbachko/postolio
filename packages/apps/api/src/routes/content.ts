@@ -11,6 +11,7 @@ import { computePlaceholders } from '../services/placeholderService.js';
 import { schedulerService } from '../services/scheduler.js';
 
 import { getDatabaseClient } from '../config/database.js';
+import { getOrCreateDefaultCampaign } from '../services/default-campaign.js';
 
 const prisma = getDatabaseClient();
 
@@ -85,6 +86,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         // Save generated content to database
+        // Resolve default campaign id to attach generated posts
+        const defaultCampaign = await getOrCreateDefaultCampaign(brandId);
+
         const contentRecords = await Promise.all(
           generatedContent.map(async (content) => {
             // Validate content before saving
@@ -106,6 +110,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
                 retentionExpiresAt: content.retentionExpiresAt || null,
                 status: 'draft',
                 brandId,
+                campaignId: defaultCampaign.id,
                 generationParams: JSON.parse(
                   JSON.stringify({
                     theme,
@@ -275,6 +280,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Determine status based on scheduledAt
         const status = scheduledAt ? 'scheduled' : 'draft';
 
+        // Resolve default campaign if one is not provided
+        const resolvedCampaignId = campaignId || (await getOrCreateDefaultCampaign(brandId)).id;
+
         // Create content record
         const content = await prisma.content.create({
           data: {
@@ -285,7 +293,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             retentionExpiresAt,
             status,
             brandId,
-            campaignId: campaignId || null,
+            campaignId: resolvedCampaignId,
             scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
             generationParams: Prisma.JsonNull, // null indicates manual creation
           },

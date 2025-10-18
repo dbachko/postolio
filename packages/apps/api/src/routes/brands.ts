@@ -5,6 +5,7 @@ import { instagramService } from '../services/instagram.js';
 // Legacy AI analyze endpoint removed
 
 import { getDatabaseClient } from '../config/database.js';
+import { getOrCreateDefaultCampaign } from '../services/default-campaign.js';
 
 const prisma = getDatabaseClient();
 const eventBridge = new EventBridge({});
@@ -64,6 +65,10 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             createdAt: true,
             countryCode: true,
           },
+        });
+        // Ensure the brand has a default campaign (fire-and-forget)
+        getOrCreateDefaultCampaign(brand.id).catch((e) => {
+          request.log.warn({ err: e, brandId: brand.id }, 'Failed to create default campaign');
         });
         // Note: do not auto-start brand analysis on creation.
         // Analysis runs only on IG connect, brand updates, or manual trigger.
