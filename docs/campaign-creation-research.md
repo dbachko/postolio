@@ -2154,7 +2154,7 @@ POST / api / campaigns / predict - performance;
 - [ ] Performance metrics collection from Instagram API
 - [ ] Campaign learning signals storage
 - [ ] Campaign insights generation
-- [ ] Campaign comparison dashboard
+
 - [ ] Learning feedback loop (insights future strategies)
 
 **Database Schema**:

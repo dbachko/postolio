@@ -1205,31 +1205,6 @@ class ApiClient {
     return this.request(`/api/campaign/analytics/${campaignId}`);
   }
 
-  async compareCampaigns(campaignIds: string[]): Promise<{
-    success: boolean;
-    data: {
-      campaigns: Array<{
-        id: string;
-        name: string;
-        metrics: unknown;
-        performance: 'high' | 'medium' | 'low';
-      }>;
-      summary: {
-        totalCampaigns: number;
-        avgEngagementRate: number;
-        bestPerformingMetric: string;
-        improvementOpportunity: string;
-      };
-      topPerformer: string;
-    };
-    lastUpdated: string;
-  }> {
-    return this.request('/api/campaign/analytics/compare', {
-      method: 'POST',
-      body: JSON.stringify({ campaignIds }),
-    });
-  }
-
   async getCampaignRecommendations(campaignId: string): Promise<{
     success: boolean;
     data: Array<{

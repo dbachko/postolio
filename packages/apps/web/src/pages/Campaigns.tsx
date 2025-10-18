@@ -13,7 +13,6 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { PostEditorModal } from '../components/PostEditorModal';
 import { CampaignAnalytics } from '../components/CampaignAnalytics';
 import { CampaignEditDialog } from '../components/CampaignEditDialog';
-import { CampaignComparison } from '../components/CampaignComparison';
 import { CampaignsList } from '../components/CampaignsList';
 import { CampaignWizard } from '../components/campaign-wizard/CampaignWizard';
 import { Skeleton } from '../components/ui/skeleton';
@@ -25,7 +24,7 @@ import type {
   CampaignErrorData,
   StatusUpdateEvent,
 } from '../types/websocket';
-import { Loader2, Calendar, Users, TrendingUp, AlertCircle, Plus, BarChart3 } from 'lucide-react';
+import { Loader2, Calendar, AlertCircle, Plus, TrendingUp, Users } from 'lucide-react';
 
 // Helper function to check if campaign ID is valid (not 'create')
 const isRealCampaignId = (campaignId: string | undefined): boolean => {
@@ -58,7 +57,7 @@ export function Campaigns() {
   // Modal state
   const [selectedPost, setSelectedPost] = useState<Content | null>(null);
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
-  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
+
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   // Status badge colors for generated content cards
@@ -483,19 +482,6 @@ export function Campaigns() {
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsComparisonOpen(true)}
-                    disabled={
-                      !campaigns.length ||
-                      campaigns.filter((c) => ['active', 'completed', 'paused'].includes(c.status))
-                        .length < 2
-                    }
-                    className="flex items-center gap-2"
-                  >
-                    <BarChart3 className="h-4 w-4" />
-                    Compare Campaigns
-                  </Button>
                   <Button
                     onClick={handleCreateNewCampaign}
                     className="flex items-center gap-2"
@@ -1035,13 +1021,6 @@ export function Campaigns() {
           setIsPostEditorOpen(false);
           setSelectedPost(null);
         }}
-      />
-
-      {/* Campaign Comparison Modal */}
-      <CampaignComparison
-        campaigns={campaigns}
-        isOpen={isComparisonOpen}
-        onClose={() => setIsComparisonOpen(false)}
       />
     </div>
   );

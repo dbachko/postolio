@@ -11,10 +11,6 @@ interface CampaignMetricsQuery {
   timeRange?: '7d' | '30d' | '90d';
 }
 
-interface CompareCampaignsBody {
-  campaignIds: string[];
-}
-
 interface OptimizationParams {
   campaignId: string;
 }
@@ -49,48 +45,6 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
         reply.status(500).send({
           success: false,
           error: error instanceof Error ? error.message : 'Failed to get campaign metrics',
-        });
-      }
-    }
-  );
-
-  // Compare multiple campaigns
-  fastify.post<{ Body: CompareCampaignsBody }>(
-    '/campaign/analytics/compare',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        const userId = request.user!.id;
-        const { campaignIds } = request.body;
-
-        if (!Array.isArray(campaignIds) || campaignIds.length === 0) {
-          reply.status(400).send({
-            success: false,
-            error: 'campaignIds array is required and cannot be empty',
-          });
-          return;
-        }
-
-        if (campaignIds.length > 10) {
-          reply.status(400).send({
-            success: false,
-            error: 'Cannot compare more than 10 campaigns at once',
-          });
-          return;
-        }
-
-        const comparison = await campaignAnalyticsService.compareCampaigns(campaignIds, userId);
-
-        reply.send({
-          success: true,
-          data: comparison,
-          lastUpdated: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Compare campaigns error:', error);
-        reply.status(500).send({
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to compare campaigns',
         });
       }
     }

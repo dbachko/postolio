@@ -21,22 +21,6 @@ export interface CampaignMetrics {
   }>;
 }
 
-export interface CampaignComparison {
-  campaigns: Array<{
-    id: string;
-    name: string;
-    metrics: CampaignMetrics;
-    performance: 'high' | 'medium' | 'low';
-  }>;
-  summary: {
-    totalCampaigns: number;
-    avgEngagementRate: number;
-    bestPerformingMetric: string;
-    improvementOpportunity: string;
-  };
-  topPerformer: string;
-}
-
 export interface OptimizationRecommendation {
   type: 'frequency' | 'content' | 'timing' | 'hashtags' | 'themes';
   message: string;
@@ -180,82 +164,6 @@ export class CampaignAnalyticsService {
   }
 
   /**
-   * Compare performance across multiple campaigns
-   */
-  async compareCampaigns(campaignIds: string[], userId: string): Promise<CampaignComparison> {
-    const campaigns = [];
-    let totalEngagement = 0;
-    let totalImpressions = 0;
-    let bestPerformer = '';
-    let bestPerformance = 0;
-
-    for (const campaignId of campaignIds) {
-      const campaign = await prisma.campaign.findFirst({
-        where: {
-          id: campaignId,
-          brand: { userId },
-        },
-      });
-
-      if (campaign) {
-        const metrics = await this.getCampaignMetrics(campaignId, userId);
-        const performance = this.classifyPerformance(metrics.averageEngagementRate);
-
-        campaigns.push({
-          id: campaignId,
-          name: campaign.name,
-          metrics,
-          performance,
-        });
-
-        totalEngagement += metrics.totalEngagement;
-        totalImpressions += metrics.totalImpressions;
-
-        if (metrics.averageEngagementRate > bestPerformance) {
-          bestPerformance = metrics.averageEngagementRate;
-          bestPerformer = campaign.name;
-        }
-      }
-    }
-
-    const avgEngagementRate = totalImpressions > 0 ? (totalEngagement / totalImpressions) * 100 : 0;
-
-    // Analyze performance patterns
-    const engagementRates = campaigns.map((c) => c.metrics.averageEngagementRate);
-    const avgRate = engagementRates.reduce((sum, rate) => sum + rate, 0) / engagementRates.length;
-
-    let bestPerformingMetric = 'engagement';
-    let improvementOpportunity = 'frequency';
-
-    // Determine best performing metric and improvement opportunity
-    const totalReach = campaigns.reduce((sum, c) => sum + c.metrics.reach, 0);
-    const totalPosts = campaigns.reduce((sum, c) => sum + c.metrics.totalPosts, 0);
-
-    if (totalReach > totalImpressions * 0.8) {
-      bestPerformingMetric = 'reach';
-    } else if (totalPosts / campaigns.length > 20) {
-      bestPerformingMetric = 'consistency';
-    }
-
-    if (avgRate < 2) {
-      improvementOpportunity = 'content quality';
-    } else if (campaigns.some((c) => c.metrics.postingFrequency < 0.5)) {
-      improvementOpportunity = 'posting frequency';
-    }
-
-    return {
-      campaigns,
-      summary: {
-        totalCampaigns: campaigns.length,
-        avgEngagementRate,
-        bestPerformingMetric,
-        improvementOpportunity,
-      },
-      topPerformer: bestPerformer,
-    };
-  }
-
-  /**
    * Generate optimization recommendations for a campaign
    */
   async getOptimizationRecommendations(
@@ -382,15 +290,6 @@ export class CampaignAnalyticsService {
       methodology:
         'Based on industry standard CPM and engagement values. Actual ROI may vary by industry and audience quality.',
     };
-  }
-
-  /**
-   * Classify campaign performance
-   */
-  private classifyPerformance(engagementRate: number): 'high' | 'medium' | 'low' {
-    if (engagementRate >= 3) return 'high';
-    if (engagementRate >= 1.5) return 'medium';
-    return 'low';
   }
 }
 
