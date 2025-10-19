@@ -81,6 +81,13 @@ export function Campaigns() {
     enabled: !!selectedBrand,
   });
 
+  // Limits upsell (account-wide)
+  const limitsQuery = useQuery({
+    queryKey: ['limits', 'schedule-ahead'],
+    queryFn: () => apiClient.getScheduleAheadLimit(),
+    staleTime: 60 * 1000,
+  });
+
   // Instagram connection status for gating campaign creation
   const instagramStatusQuery = useQuery({
     queryKey: ['instagram-status', selectedBrand?.id],
@@ -104,6 +111,30 @@ export function Campaigns() {
     queryKey: ['campaign', selectedCampaignId],
     queryFn: () => apiClient.getCampaign(selectedCampaignId!),
     enabled: !!selectedCampaignId && currentView === 'details',
+  });
+
+  // Load placeholders for the campaign's brand (current + next month)
+  const placeholdersQuery = useQuery({
+    queryKey: ['campaign-placeholders', selectedCampaignId],
+    enabled:
+      !!selectedCampaignId && currentView === 'details' && !!campaignDetailsQuery.data?.campaign,
+    queryFn: async () => {
+      const camp = campaignDetailsQuery.data!.campaign;
+      const brandId = camp.brandId!;
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = (now.getMonth() + 1).toString().padStart(2, '0');
+      const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const y2 = next.getFullYear();
+      const m2 = (next.getMonth() + 1).toString().padStart(2, '0');
+      const curRes = await apiClient.getCalendarContent(brandId, `${y}-${m}`);
+      const nextRes = await apiClient.getCalendarContent(brandId, `${y2}-${m2}`);
+      const placeholders = [
+        ...(curRes?.data?.placeholders || []),
+        ...(nextRes?.data?.placeholders || []),
+      ];
+      return placeholders.filter((p: any) => p.campaignId === camp.id);
+    },
   });
 
   // Campaign mutations - moved here to avoid conditional hook calls
@@ -956,11 +987,108 @@ export function Campaigns() {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Upcoming Slots (Placeholders) */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle>Upcoming Slots</CardTitle>
+                      <CardDescription>Future campaign posts you can create now</CardDescription>
+                    </div>
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            if (!campaign.id) return;
+                            const res = await apiClient.fillCampaignWindow(campaign.id);
+                            if (res.success) {
+                              toast.success(`Generated ${res.generated} post(s)`);
+                              // refresh campaign details and placeholders
+                              campaignDetailsQuery.refetch();
+                              placeholdersQuery.refetch();
+                            } else {
+                              toast.error(res.message || 'Generation failed');
+                            }
+                          } catch (e) {
+                            console.error(e);
+                            toast.error('Failed to trigger generation');
+                          }
+                        }}
+                      >
+                        Generate Next Now
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {!placeholdersQuery.data || placeholdersQuery.data.length === 0 ? (
+                      <div className="py-6 text-sm text-gray-600">
+                        No upcoming placeholders this month.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {placeholdersQuery.data
+                          .filter((p: any) => new Date(p.scheduledAt) > new Date())
+                          .sort(
+                            (a: any, b: any) =>
+                              new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
+                          )
+                          .slice(0, 5)
+                          .map((p: any) => (
+                            <div
+                              key={p.id}
+                              className="flex items-center justify-between rounded border p-3"
+                            >
+                              <div>
+                                <div className="text-sm font-medium">{p.campaignName}</div>
+                                <div className="text-xs text-gray-600">
+                                  {format(new Date(p.scheduledAt), 'MMM d, yyyy h:mm a')}
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const params = new URLSearchParams();
+                                  params.set('campaignId', p.campaignId);
+                                  params.set('scheduledAt', p.scheduledAt);
+                                  navigate(`/posts/create?${params.toString()}`);
+                                }}
+                              >
+                                Create Post
+                              </Button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </>
             );
           })()}
         </>
       )}
+
+      {/* Upsell banner if cap reached */}
+      {limitsQuery.data?.data &&
+        Number.isFinite(limitsQuery.data.data.maxAllowed) &&
+        limitsQuery.data.data.currentCount >= limitsQuery.data.data.maxAllowed && (
+          <Card>
+            <CardContent className="flex items-center justify-between p-4">
+              <div>
+                <div className="font-medium">You've reached your plan's scheduling limit</div>
+                <div className="text-sm text-gray-600">
+                  {limitsQuery.data.data.currentCount}/{limitsQuery.data.data.maxAllowed} scheduled
+                  ahead
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => navigate('/settings')}>
+                Upgrade
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
       {/* Edit Campaign Dialog */}
       {campaignDetailsQuery.data?.campaign && (

@@ -74,6 +74,13 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
   const campaigns = campaignsQuery.data?.campaigns || [];
 
+  // Fetch schedule-ahead limits (account-wide)
+  const limitsQuery = useQuery({
+    queryKey: ['limits', 'schedule-ahead'],
+    queryFn: () => apiClient.getScheduleAheadLimit(),
+    staleTime: 60 * 1000,
+  });
+
   // Calculate campaign progress
   const campaignProgress = useMemo(() => {
     return campaigns.map((campaign) => {
@@ -163,6 +170,29 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
   return (
     <div className="space-y-4">
+      {/* Upsell banner when account hit scheduling cap */}
+      {limitsQuery.data?.data &&
+        Number.isFinite(limitsQuery.data.data.maxAllowed) &&
+        limitsQuery.data.data.currentCount >= limitsQuery.data.data.maxAllowed && (
+          <Card>
+            <CardContent className="flex items-center justify-between p-4">
+              <div>
+                <div className="font-medium">You've reached your plan's scheduling limit</div>
+                <div className="text-sm text-gray-600">
+                  {limitsQuery.data.data.currentCount}/{limitsQuery.data.data.maxAllowed} scheduled
+                  ahead
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => (window.location.href = '/settings')}
+              >
+                Upgrade
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       {/* Header with navigation and view switcher */}
       <Card>
         <CardHeader>
@@ -353,6 +383,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             hashtags: i.hashtags,
             imageUrl: i.imageUrl || undefined,
             campaignName: i.campaignName || i.campaign?.name,
+            campaignId: i.campaignId || i.campaign?.id,
             processing: Boolean(i?.generationParams?.processing?.active),
           }))}
           currentDate={currentDate}

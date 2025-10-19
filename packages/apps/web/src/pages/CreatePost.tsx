@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ import {
 
 export function CreatePost() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { selectedBrand } = useBrandStore();
   const queryClient = useQueryClient();
 
@@ -53,6 +54,27 @@ export function CreatePost() {
     }
   }, [campaignId, campaignsQuery.data]);
 
+  // Prefill from query params (campaignId, scheduledAt)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const qCampaignId = params.get('campaignId');
+    const qScheduledAt = params.get('scheduledAt');
+    if (qCampaignId) {
+      setCampaignId(qCampaignId);
+    }
+    if (qScheduledAt) {
+      // Convert ISO date to datetime-local format in user's local timezone
+      const d = new Date(qScheduledAt);
+      if (!isNaN(d.getTime())) {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+          d.getHours()
+        )}:${pad(d.getMinutes())}`;
+        setScheduledAt(local);
+      }
+    }
+  }, [location.search]);
+
   const createPostMutation = useMutation({
     mutationFn: async (data: {
       brandId: string;
@@ -64,7 +86,7 @@ export function CreatePost() {
     }) => {
       return apiClient.createManualContent(data);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['content'] });
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
 
@@ -86,6 +108,14 @@ export function CreatePost() {
           ? 'You can view it in the content calendar'
           : 'You can find it in the content calendar as a draft',
       });
+
+      // Upsell toast if plan limit prevented scheduling
+      if ((res as any)?.upsell?.upgradeRequired) {
+        const msg =
+          (res as any)?.upsell?.message ||
+          'You’ve reached your plan’s scheduling limit. Upgrade to schedule more posts.';
+        toast.info(msg);
+      }
 
       // Navigate to content calendar where they can see the post
       navigate('/content');

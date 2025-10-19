@@ -1020,10 +1020,25 @@ class ApiClient {
     return this.request(`/api/campaign/${campaignId}`);
   }
 
+  async fillCampaignWindow(
+    campaignId: string
+  ): Promise<{ success: boolean; generated: number; message?: string }> {
+    return this.request(`/api/campaign/${campaignId}/fill-window`, {
+      method: 'POST',
+    });
+  }
+
   async deleteCampaign(campaignId: string): Promise<{ success: boolean; message: string }> {
     return this.request(`/api/campaign/${campaignId}`, {
       method: 'DELETE',
     });
+  }
+
+  async getScheduleAheadLimit(): Promise<{
+    success: boolean;
+    data: { tier: string; maxAllowed: number; currentCount: number };
+  }> {
+    return this.request(`/api/content/limits/schedule-ahead`);
   }
 
   async getCampaignDraft(brandId: string): Promise<{

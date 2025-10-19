@@ -16,6 +16,7 @@ interface TimelineItem {
   hashtags?: string[];
   imageUrl?: string;
   campaignName?: string;
+  campaignId?: string;
   processing?: boolean;
 }
 
@@ -137,6 +138,11 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
                         onClick={() => {
                           if (item.type === 'content') {
                             navigate(`/posts/${item.id}`);
+                          } else if (item.type === 'placeholder') {
+                            const params = new URLSearchParams();
+                            if (item.campaignId) params.set('campaignId', item.campaignId);
+                            if (item.scheduledAt) params.set('scheduledAt', item.scheduledAt);
+                            navigate(`/posts/create?${params.toString()}`);
                           }
                         }}
                       >

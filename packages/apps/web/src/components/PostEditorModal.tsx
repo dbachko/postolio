@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Save } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface PostEditorModalProps {
   content: Content | null;
@@ -200,6 +201,14 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       setTimeout(() => {
         setSaveStatus('idle');
       }, 2000);
+
+      // Upsell toast if plan limit prevents scheduling
+      if ((response as any)?.upsell?.upgradeRequired) {
+        const msg =
+          (response as any)?.upsell?.message ||
+          'You’ve reached your plan’s scheduling limit. Upgrade to schedule more posts.';
+        toast.info(msg);
+      }
     },
     onError: (error) => {
       setSaveStatus('error');

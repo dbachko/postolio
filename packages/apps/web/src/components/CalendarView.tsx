@@ -495,9 +495,15 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   const handleSelectEvent = useCallback(
     (event: unknown) => {
       if (!isCalendarEvent(event)) return;
-      const resource = event.resource;
-      // Don't navigate for placeholders
+      const resource = event.resource as any;
+      // If placeholder, take user to create post with prefilled campaign/time
       if ('isPlaceholder' in resource && resource.isPlaceholder) {
+        const campaignId = resource.campaignId;
+        const scheduledAt = resource.scheduledAt;
+        const params = new URLSearchParams();
+        if (campaignId) params.set('campaignId', campaignId);
+        if (scheduledAt) params.set('scheduledAt', scheduledAt);
+        navigate(`/posts/create?${params.toString()}`);
         return;
       }
       // Navigate to post detail page

@@ -18,6 +18,7 @@ import type { StatusBroadcaster } from './status-broadcaster.js';
 import type { GenerationParams } from '../types/scheduler.js';
 import { eventEmitter } from './event-emitter.js';
 import { logger } from '@postolio/logger';
+import { getMaxScheduledAheadForTier } from '../constants/subscription.js';
 // We now pass S3 object keys directly to Scheduler; CDN URLs no longer required
 
 const prisma = getDatabaseClient();
@@ -250,14 +251,41 @@ export class SchedulerAdapter {
       originalStatus = content.status as ContentStatus;
       originalScheduledAt = content.scheduledAt;
 
-      // 2. Get the brand's timezone for proper scheduling
+      // 2. Enforce plan limits: max allowed future scheduled per brand for this user tier
+      try {
+        const tier = content.brand?.user?.subscriptionTier || 'free';
+        const maxAhead = getMaxScheduledAheadForTier(tier);
+        if (Number.isFinite(maxAhead)) {
+          const now = new Date();
+          const futureCountExcludingThis = await prisma.content.count({
+            where: {
+              brandId: content.brandId,
+              id: { not: content.id },
+              scheduledAt: { gte: now },
+              status: { in: ['scheduled', 'draft'] },
+            },
+          });
+          if (futureCountExcludingThis + 1 > maxAhead) {
+            return {
+              success: false,
+              error: `Upgrade required: your plan allows up to ${maxAhead} scheduled posts ahead`,
+            };
+          }
+        }
+      } catch (limitError) {
+        logger.warn('Plan limit check failed; proceeding without limit enforcement', {
+          error: limitError,
+        });
+      }
+
+      // 3. Get the brand's timezone for proper scheduling
       const brandTimezone = await TimezoneService.getBrandTimezone(content.brandId);
       logger.info('Scheduling with brand timezone', {
         brandId: content.brandId,
         timezone: brandTimezone,
       });
 
-      // 3. Determine the scheduled time
+      // 4. Determine the scheduled time
       let scheduledTimeUTC: Date;
 
       if (customTime) {
@@ -279,7 +307,7 @@ export class SchedulerAdapter {
         scheduledTimeUTC = TimezoneService.toUTC(defaultTimeLocal, brandTimezone);
       }
 
-      // 4. Handle concurrency and set processing state
+      // 5. Handle concurrency and set processing state
       const currentParams = (content.generationParams as GenerationParams | null) || {};
       const operationId = randomUUID();
 
@@ -318,7 +346,7 @@ export class SchedulerAdapter {
         },
       });
 
-      // 5. Create schedule in AWS microservice first (primary system)
+      // 6. Create schedule in AWS microservice first (primary system)
       let scheduleId: string | undefined;
       let awsScheduleCreated = false;
 
@@ -391,7 +419,7 @@ export class SchedulerAdapter {
         }
       }
 
-      // 6. Handle processing state based on AWS result
+      // 7. Handle processing state based on AWS result
       if (!awsScheduleCreated) {
         // AWS scheduling failed - clear processing state and set error
         try {
@@ -415,7 +443,7 @@ export class SchedulerAdapter {
       }
       // If AWS succeeded, leave processing state active - EventBridge events will clear it
 
-      // 6. Broadcast status change (only after both AWS and DB succeed)
+      // 8. Broadcast status change (only after both AWS and DB succeed)
       if (awsScheduleCreated && this.broadcaster && scheduleId) {
         await this.broadcaster.broadcastStatusChange(
           content.id,
@@ -430,7 +458,7 @@ export class SchedulerAdapter {
         );
       }
 
-      // 7. Emit campaign-content association event for tracking
+      // 9. Emit campaign-content association event for tracking
       if (awsScheduleCreated && content.campaignId) {
         await eventEmitter.emitCampaignContentAssociated(
           content.campaignId,

@@ -312,12 +312,19 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         // If scheduled time is provided, create AWS schedule
+        let upsell: { upgradeRequired: boolean; message?: string } | null = null;
         if (scheduledAt) {
           try {
             const scheduleResult = await schedulerService.scheduleContent(content.id);
 
             if (!scheduleResult.success) {
               console.error('Failed to create AWS schedule:', scheduleResult.error);
+              if (
+                typeof scheduleResult.error === 'string' &&
+                scheduleResult.error.toLowerCase().includes('upgrade required')
+              ) {
+                upsell = { upgradeRequired: true, message: scheduleResult.error };
+              }
               // Note: We don't fail the request as the content is already created locally
             } else {
               console.log(`Content ${content.id} scheduled successfully in AWS`);
@@ -346,6 +353,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             brandId,
             source: 'manual',
           },
+          ...(upsell ? { upsell } : {}),
         });
       } catch (error) {
         console.error('Manual content creation error:', error);
@@ -657,6 +665,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // For new scheduling (wasn't scheduled, now is), perform AWS scheduling BEFORE DB update to avoid inconsistent state
         // Skip AWS operations if content belongs to a draft campaign
         let scheduledInAwsBeforeUpdate = false;
+        let planLimitHit = false;
+        let planLimitMessage: string | undefined;
         if (!isInDraftCampaign && !originalScheduledTime && newScheduledTime) {
           try {
             console.log(
@@ -670,6 +680,13 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
             if (!scheduleResult.success) {
               console.error('AWS new schedule failed (pre-DB update):', scheduleResult.error);
+              if (
+                typeof scheduleResult.error === 'string' &&
+                scheduleResult.error.toLowerCase().includes('upgrade required')
+              ) {
+                planLimitHit = true;
+                planLimitMessage = scheduleResult.error;
+              }
               // Degrade gracefully: continue with DB update so user sees scheduled time
               // Adapter already records schedulingError in DB when possible
             } else {
@@ -787,6 +804,13 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
 
               if (!scheduleResult.success) {
                 console.error('Failed to create AWS schedule:', scheduleResult.error);
+                if (
+                  typeof scheduleResult.error === 'string' &&
+                  scheduleResult.error.toLowerCase().includes('upgrade required')
+                ) {
+                  planLimitHit = true;
+                  planLimitMessage = scheduleResult.error;
+                }
 
                 // If this is auto-recovery from failed reschedule and scheduling still fails,
                 // return error to user with helpful message
@@ -899,6 +923,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         return {
           content: contentWithUrl,
           learning: learningResults,
+          ...(planLimitHit ? { upsell: { upgradeRequired: true, message: planLimitMessage } } : {}),
         };
       } catch (error) {
         console.error('Content update error:', error);
@@ -1226,6 +1251,42 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: 'Failed to retrieve calendar content' });
     }
   });
+
+  // Get schedule-ahead limit status for current user (account-wide)
+  fastify.get(
+    '/limits/schedule-ahead',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return reply.code(404).send({ success: false, error: 'User not found' });
+
+        const { getMaxScheduledAheadForTier } = await import('../constants/subscription.js');
+        const maxAllowed = getMaxScheduledAheadForTier(user.subscriptionTier || 'free');
+        const now = new Date();
+        const currentCount = await prisma.content.count({
+          where: {
+            brand: { userId },
+            scheduledAt: { gte: now },
+            status: { in: ['scheduled', 'draft'] },
+          },
+        });
+
+        return reply.send({
+          success: true,
+          data: {
+            tier: user.subscriptionTier || 'free',
+            maxAllowed,
+            currentCount,
+          },
+        });
+      } catch (error) {
+        console.error('Limits status error:', error);
+        return reply.code(500).send({ success: false, error: 'Failed to get limit status' });
+      }
+    }
+  );
 };
 
 export default contentRoutes;

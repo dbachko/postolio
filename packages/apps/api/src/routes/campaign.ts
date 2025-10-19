@@ -24,6 +24,7 @@ import {
 import { getDatabaseClient } from '../config/database.js';
 import { isDefaultCampaign } from '../services/default-campaign.js';
 import { instagramService } from '../services/instagram.js';
+import { campaignSlidingWindowService } from '../services/campaign-sliding-window.js';
 
 const prisma = getDatabaseClient();
 
@@ -474,6 +475,13 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send({ error: result.error || 'Failed to start campaign' });
         }
 
+        // Maintain sliding window after start (generate next posts to keep window full)
+        try {
+          await campaignSlidingWindowService.maintainWindow(campaignId);
+        } catch (e) {
+          request.log.warn({ err: e }, 'Sliding window generation after start failed');
+        }
+
         return reply.send({
           success: true,
           campaign: result.campaign,
@@ -492,6 +500,36 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(500).send({
           error: 'Failed to start campaign. Please try again.',
         });
+      }
+    }
+  );
+
+  // Fill sliding window for a campaign (manual trigger)
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/fill-window',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { id: campaignId } = request.params;
+
+        if (!campaignId) {
+          return reply.code(400).send({ error: 'Campaign ID is required' });
+        }
+
+        // Verify ownership
+        const campaign = await prisma.campaign.findFirst({
+          where: { id: campaignId, brand: { userId } },
+          select: { id: true },
+        });
+        if (!campaign)
+          return reply.code(404).send({ error: 'Campaign not found or access denied' });
+
+        const res = await campaignSlidingWindowService.maintainWindow(campaignId, 3);
+        return reply.send({ success: res.success, generated: res.generated, message: res.message });
+      } catch (error) {
+        request.log.error({ error }, 'fill-window failed');
+        return reply.code(500).send({ error: 'Failed to fill sliding window' });
       }
     }
   );

@@ -347,6 +347,23 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
                           : item.caption}
                       </div>
                     </button>
+                    {item.type === 'placeholder' && (
+                      <div className="mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const params = new URLSearchParams();
+                            if (item.campaignId) params.set('campaignId', item.campaignId);
+                            if (item.scheduledAt) params.set('scheduledAt', item.scheduledAt);
+                            navigate(`/posts/create?${params.toString()}`);
+                          }}
+                        >
+                          Create Post for this slot
+                        </Button>
+                      </div>
+                    )}
                     {isExpanded && item.hashtags && item.hashtags.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {item.hashtags.map((tag, idx) => (
