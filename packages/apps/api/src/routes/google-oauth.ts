@@ -3,6 +3,8 @@ import { OAuth2Client } from 'google-auth-library';
 import { isProductionEnv } from '../utils/env-mode.js';
 import { getDatabaseClient } from '../config/database.js';
 import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
+import { ensureDeviceId } from '../utils/device-id.js';
+import { revokeSameDeviceSessions } from '../utils/session-dedup.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { RefreshTokenService } from '../services/refresh-token.js';
@@ -133,6 +135,14 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         isNewUser = true;
       }
 
+      // Resolve stable device identifier and set cookie if needed
+      const stableFingerprint = ensureDeviceId(request, reply);
+
+      // Revoke any existing active session for this device to avoid duplicates
+      if (stableFingerprint) {
+        await revokeSameDeviceSessions(user.id, stableFingerprint, request);
+      }
+
       // Issue refresh + access tokens and create session
       const ipAddress = getClientIp(request);
       const userAgent = getUserAgent(request);
@@ -143,6 +153,7 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         ipAddress,
         userAgent,
         {
+          deviceFingerprint: stableFingerprint,
           deviceName: humanDeviceName,
           ipAddress,
           userAgent,

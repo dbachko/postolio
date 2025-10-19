@@ -16,6 +16,8 @@ import Redis from 'ioredis';
 import { getRedisUrl } from '../utils/redis-url.js';
 import { isProductionEnv } from '../utils/env-mode.js';
 import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
+import { ensureDeviceId } from '../utils/device-id.js';
+import { revokeSameDeviceSessions } from '../utils/session-dedup.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
@@ -70,6 +72,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      // Resolve stable device identifier and set cookie if needed
+      const stableFingerprint = ensureDeviceId(request, reply, deviceFingerprint);
+
       // Generate tokens with refresh token rotation and session tracking
       const ipAddress = getClientIp(request);
       const userAgent = getUserAgent(request);
@@ -80,7 +85,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         ipAddress,
         userAgent,
         {
-          deviceFingerprint,
+          deviceFingerprint: stableFingerprint,
           deviceName: humanDeviceName,
           ipAddress,
           userAgent,
@@ -279,6 +284,14 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // Resolve stable device identifier and set cookie if needed
+      const stableFingerprint = ensureDeviceId(request, reply, deviceFingerprint);
+
+      // Before creating a new session, revoke any existing active session for this device to avoid duplicates
+      if (stableFingerprint) {
+        await revokeSameDeviceSessions(user.id, stableFingerprint, request);
+      }
+
       // Generate tokens with refresh token rotation and session tracking
       const ipAddress = getClientIp(request);
       const userAgent = getUserAgent(request);
@@ -289,7 +302,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         ipAddress,
         userAgent,
         {
-          deviceFingerprint,
+          deviceFingerprint: stableFingerprint,
           deviceName: humanDeviceName,
           ipAddress,
           userAgent,
@@ -349,7 +362,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!result) {
       // Invalid or expired refresh token
-      reply.clearCookie('refresh_token', { path: '/api/auth/refresh' });
+      // Clear refresh token on the same path it was originally set
+      reply.clearCookie('refresh_token', { path: '/api/auth' });
       reply.clearCookie('auth_token', { path: '/' });
       return reply.code(401).send({ error: 'Invalid or expired refresh token' });
     }

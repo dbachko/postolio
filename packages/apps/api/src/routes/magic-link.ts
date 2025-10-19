@@ -2,6 +2,11 @@ import { FastifyPluginAsync } from 'fastify';
 import { MagicLinkService } from '../services/magic-link.js';
 import { isProductionEnv } from '../utils/env-mode.js';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
+import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
+import { RefreshTokenService } from '../services/refresh-token.js';
+import { AuditLogger, AuditEventType } from '../services/audit-logger.js';
+import { ensureDeviceId } from '../utils/device-id.js';
+import { revokeSameDeviceSessions } from '../utils/session-dedup.js';
 
 interface SendMagicLinkBody {
   email: string;
@@ -61,23 +66,63 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
 
     const result = await MagicLinkService.verifyMagicLink(fastify, token);
 
-    if (!result.success) {
-      return reply.code(401).send({ error: result.message });
+    if (!result.success || !result.user) {
+      return reply.code(401).send({ error: result.message || 'Invalid or expired magic link' });
     }
 
-    // Set HTTP-only cookie for enhanced security
-    reply.setCookie('auth_token', result.token!, {
+    const user = result.user;
+
+    // Resolve stable device identifier and set cookie if needed
+    const stableFingerprint = ensureDeviceId(request, reply);
+
+    // Revoke any existing active session for this device to avoid duplicates
+    if (stableFingerprint) {
+      await revokeSameDeviceSessions(user.id, stableFingerprint, request);
+    }
+
+    // Create a standard session with refresh token + access token
+    const ipAddress = getClientIp(request);
+    const userAgent = getUserAgent(request);
+    const humanDeviceName = parseDeviceName(userAgent);
+
+    const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
+      fastify,
+      user.id,
+      ipAddress,
+      userAgent,
+      {
+        deviceFingerprint: stableFingerprint,
+        deviceName: humanDeviceName,
+        ipAddress,
+        userAgent,
+      }
+    );
+
+    // Set access token (short-lived)
+    reply.setCookie('auth_token', accessToken, {
       httpOnly: true,
       secure: isProductionEnv(),
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge: 15 * 60, // 15 minutes
     });
+
+    // Set refresh token (scoped so logout/refresh can read it)
+    reply.setCookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: isProductionEnv(),
+      sameSite: 'strict',
+      path: '/api/auth',
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+    });
+
+    // Log magic link verified + login
+    await AuditLogger.logAuth(AuditEventType.MAGIC_LINK_VERIFIED, user.id, user.email, request);
 
     return reply.send({
       success: true,
-      token: result.token,
-      user: result.user,
+      user,
+      message: 'Signed in with magic link',
     });
   });
 
