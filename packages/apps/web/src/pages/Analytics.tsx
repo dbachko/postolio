@@ -194,7 +194,7 @@ export default function Analytics() {
     if (!selectedBrand?.id) return;
     setIgLoading(true);
     try {
-      // Check IG configuration status
+      // 1) Check IG configuration status first
       const status = await apiClient.get<{ configured: boolean }>(
         `/api/instagram-analytics/status/${selectedBrand.id}`
       );
@@ -206,19 +206,28 @@ export default function Analytics() {
       }
 
       setIgConfigured(true);
-      // Keep it simple: use 30d to align with default analytics period
-      const [overview, posts] = await Promise.all([
-        apiClient.get<IGAnalyticsOverview>(
-          `/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=30d`
-        ),
-        apiClient.get<IGPostPerformance>(
-          `/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`
-        ),
-      ]);
-      setIgOverview(overview);
-      setIgPosts(posts);
-    } catch (_err) {
-      // If the API signals not configured via error, mark as not configured; otherwise silent fail
+
+      // 2) Fetch analytics data. Failures here should NOT flip configured=false
+      try {
+        const [overview, posts] = await Promise.all([
+          apiClient.get<IGAnalyticsOverview>(
+            `/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=30d`
+          ),
+          apiClient.get<IGPostPerformance>(
+            `/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`
+          ),
+        ]);
+        setIgOverview(overview);
+        setIgPosts(posts);
+      } catch (innerErr) {
+        console.error('Failed to load Instagram analytics data:', innerErr);
+        // Keep configured=true; just clear data so UI can show a graceful empty state
+        setIgOverview(null);
+        setIgPosts(null);
+      }
+    } catch (statusErr) {
+      // Only set not-configured if the status check itself fails decisively
+      console.error('Instagram analytics status check failed:', statusErr);
       setIgConfigured(false);
       setIgOverview(null);
       setIgPosts(null);
