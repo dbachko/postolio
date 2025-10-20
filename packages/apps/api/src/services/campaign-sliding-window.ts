@@ -3,6 +3,7 @@ import { getDatabaseClient } from '../config/database.js';
 import { TimezoneService } from './timezone.js';
 import { generateInstagramContent } from './content-generator.js';
 import { schedulerService } from './scheduler.js';
+import { computeUpcomingSlots } from './slot-utils.js';
 
 const prisma = getDatabaseClient();
 
@@ -20,6 +21,7 @@ const prisma = getDatabaseClient();
  */
 export class CampaignSlidingWindowService {
   static readonly SLOT_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 hours
+  static readonly MULTI_SLOT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes for explicit postingTimes
   static readonly SCHEDULING_BUFFER_MS = 5 * 60 * 1000; // 5 minutes from now
 
   /**
@@ -56,6 +58,7 @@ export class CampaignSlidingWindowService {
         ? (raw as {
             duration?: { start?: string; end?: string };
             postingTime?: string;
+            postingTimes?: string[];
             frequency?: 'daily' | 'every2days' | '3weekly' | string;
             themes?: string[];
             style?: string;
@@ -65,6 +68,9 @@ export class CampaignSlidingWindowService {
     const durationStart = config.duration?.start ? new Date(config.duration.start) : null;
     const durationEnd = config.duration?.end ? new Date(config.duration.end) : null;
     const postingTime = config.postingTime || '12:00';
+    const postingTimes = Array.isArray(config.postingTimes)
+      ? (config.postingTimes as string[])
+      : [];
     const frequency = (config.frequency as 'daily' | 'every2days' | '3weekly') || 'daily';
 
     if (!durationStart || !durationEnd) {
@@ -118,7 +124,9 @@ export class CampaignSlidingWindowService {
     const occupiedTimes = futureScheduled
       .map((c) => c.scheduledAt!.getTime())
       .sort((a, b) => a - b);
+    const hasMultiTimes = postingTimes.length > 0;
     const occupiedLocalDates = new Set<string>();
+    const occupiedLocalSlotKeys = new Set<string>();
     const occupiedLocalWeeks = new Map<string, number>();
     const weekKeyOf = (d: Date) => {
       const local = TimezoneService.toLocal(d, timezone);
@@ -134,19 +142,22 @@ export class CampaignSlidingWindowService {
     for (const c of futureScheduled) {
       if (!c.scheduledAt) continue;
       const local = TimezoneService.toLocal(c.scheduledAt, timezone);
-      const key = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(
+      const dayKey = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(
         local.getDate()
       ).padStart(2, '0')}`;
-      occupiedLocalDates.add(key);
+      occupiedLocalDates.add(dayKey);
+      const timeKey = `${String(local.getHours()).padStart(2, '0')}:${String(local.getMinutes()).padStart(2, '0')}`;
+      occupiedLocalSlotKeys.add(`${dayKey}T${timeKey}`);
       const wk = weekKeyOf(c.scheduledAt);
       occupiedLocalWeeks.set(wk, (occupiedLocalWeeks.get(wk) || 0) + 1);
     }
 
     // Find next available campaign slots
-    const candidateSlots = await this.computeUpcomingSlots(
+    const candidateSlots = await computeUpcomingSlots(
       durationStart,
       durationEnd,
       postingTime,
+      postingTimes,
       frequency,
       timezone,
       Math.max(10, accountRemaining * 3) // scan generously, bounded
@@ -159,26 +170,42 @@ export class CampaignSlidingWindowService {
     // Select earliest slots that are not occupied within ±2h
     const selectedSlots: Date[] = [];
     const perWeekLimit = frequency === '3weekly' ? 3 : Number.POSITIVE_INFINITY;
+    const conflictWindow = hasMultiTimes
+      ? CampaignSlidingWindowService.MULTI_SLOT_WINDOW_MS
+      : CampaignSlidingWindowService.SLOT_WINDOW_MS;
     for (const slot of filteredSlots) {
       const ts = slot.getTime();
-      // Enforce per-day uniqueness in brand local time
+      // Enforce per-day or per-slot uniqueness in brand local time
       const slotLocal = TimezoneService.toLocal(slot, timezone);
-      const slotKey = `${slotLocal.getFullYear()}-${String(slotLocal.getMonth() + 1).padStart(
+      const dayKey = `${slotLocal.getFullYear()}-${String(slotLocal.getMonth() + 1).padStart(
         2,
         '0'
       )}-${String(slotLocal.getDate()).padStart(2, '0')}`;
-      if (occupiedLocalDates.has(slotKey)) continue;
+      if (!hasMultiTimes) {
+        if (occupiedLocalDates.has(dayKey)) continue;
+      } else {
+        const timeKey = `${String(slotLocal.getHours()).padStart(2, '0')}:${String(
+          slotLocal.getMinutes()
+        ).padStart(2, '0')}`;
+        const fullKey = `${dayKey}T${timeKey}`;
+        if (occupiedLocalSlotKeys.has(fullKey)) continue;
+      }
       // Enforce per-week quota for 3weekly campaigns
       const slotWeekKey = weekKeyOf(slot);
       const currentWeekCount = occupiedLocalWeeks.get(slotWeekKey) || 0;
       if (currentWeekCount >= perWeekLimit) continue;
 
-      const conflict = occupiedTimes.some(
-        (t) => Math.abs(t - ts) < CampaignSlidingWindowService.SLOT_WINDOW_MS
-      );
+      const conflict = occupiedTimes.some((t) => Math.abs(t - ts) < conflictWindow);
       if (!conflict) {
         selectedSlots.push(slot);
-        occupiedLocalDates.add(slotKey); // prevent picking another slot the same day
+        if (!hasMultiTimes) {
+          occupiedLocalDates.add(dayKey); // prevent picking another slot the same day
+        } else {
+          const timeKey = `${String(slotLocal.getHours()).padStart(2, '0')}:${String(
+            slotLocal.getMinutes()
+          ).padStart(2, '0')}`;
+          occupiedLocalSlotKeys.add(`${dayKey}T${timeKey}`);
+        }
         occupiedLocalWeeks.set(slotWeekKey, currentWeekCount + 1);
       }
       if (selectedSlots.length >= accountRemaining) break;
@@ -220,15 +247,24 @@ export class CampaignSlidingWindowService {
       let created: { id: string; generationParams: unknown } | null = null;
       await prisma.$transaction(
         async (tx) => {
-          // Compute start/end of the local day in UTC
-          const d = TimezoneService.toLocal(slot, timezone);
-          const dayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-            d.getDate()
-          ).padStart(2, '0')}`;
-          const localStart = TimezoneService.createDateInBrandTimezone(dayStr, '00:00', timezone);
-          const localEnd = TimezoneService.createDateInBrandTimezone(dayStr, '23:59', timezone);
-          const utcStart = TimezoneService.toUTC(localStart, timezone);
-          const utcEnd = TimezoneService.toUTC(localEnd, timezone);
+          // Compute uniqueness window
+          let utcStart: Date;
+          let utcEnd: Date;
+          if (hasMultiTimes) {
+            // reserve only this slot window in UTC
+            utcStart = new Date(slot.getTime() - CampaignSlidingWindowService.MULTI_SLOT_WINDOW_MS);
+            utcEnd = new Date(slot.getTime() + CampaignSlidingWindowService.MULTI_SLOT_WINDOW_MS);
+          } else {
+            // reserve whole local day
+            const d = TimezoneService.toLocal(slot, timezone);
+            const dayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+              d.getDate()
+            ).padStart(2, '0')}`;
+            const localStart = TimezoneService.createDateInBrandTimezone(dayStr, '00:00', timezone);
+            const localEnd = TimezoneService.createDateInBrandTimezone(dayStr, '23:59', timezone);
+            utcStart = TimezoneService.toUTC(localStart, timezone);
+            utcEnd = TimezoneService.toUTC(localEnd, timezone);
+          }
 
           const existingCount = await tx.content.count({
             where: {
@@ -237,7 +273,7 @@ export class CampaignSlidingWindowService {
             },
           });
           if (existingCount > 0) {
-            return; // another worker reserved this day
+            return; // another worker reserved this time window
           }
           created = await tx.content.create({
             data: {
