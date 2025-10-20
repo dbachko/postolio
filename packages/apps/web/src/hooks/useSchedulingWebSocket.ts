@@ -30,6 +30,8 @@ export function useSchedulingWebSocket({
   const isConnectingRef = useRef(false); // Guard against multiple simultaneous connections
   const countdownIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const lastConnectionAttemptRef = useRef<number>(0); // Track last connection attempt time
+  const isAuthenticatedRef = useRef(false); // Track if server-side auth completed
+  const isRefreshingRef = useRef(false); // Prevent duplicate refresh attempts
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -168,8 +170,8 @@ export function useSchedulingWebSocket({
       ws.onopen = () => {
         console.log('WebSocket connected');
         isConnectingRef.current = false; // Reset connecting flag
-        handleConnectionChange('connected');
-        reconnectAttemptsRef.current = 0;
+        // Do not mark as fully connected until server confirms authentication
+        handleConnectionChange('connecting');
         setRetryIn(0); // Clear retry countdown
 
         // Clear countdown interval if exists
@@ -202,6 +204,10 @@ export function useSchedulingWebSocket({
 
           if (message.type === 'authenticated') {
             console.log('WebSocket authenticated via cookie');
+            // Mark connection as fully established and reset reconnect attempts
+            isAuthenticatedRef.current = true;
+            reconnectAttemptsRef.current = 0;
+            handleConnectionChange('connected');
             // Subscribe to brand room after authentication
             ws.send(
               JSON.stringify({
@@ -248,7 +254,7 @@ export function useSchedulingWebSocket({
         handleWebSocketError(error);
       };
 
-      ws.onclose = (event) => {
+      ws.onclose = async (event) => {
         console.log('WebSocket disconnected', event.code, event.reason);
         isConnectingRef.current = false; // Reset connecting flag on close
         handleConnectionChange('disconnected');
@@ -263,10 +269,36 @@ export function useSchedulingWebSocket({
           countdownIntervalRef.current = undefined;
         }
 
+        // Special handling: if auth cookie is missing/invalid, attempt to refresh tokens once
+        if (
+          event.code === 1008 &&
+          /No authentication cookie|Authentication failed/.test(event.reason) &&
+          !isRefreshingRef.current
+        ) {
+          try {
+            isRefreshingRef.current = true;
+            const { auth } = await import('@/lib/api');
+            console.log('[Auth] Attempting refresh due to WebSocket auth error...');
+            await auth.refreshToken();
+            console.log('[Auth] Token refreshed; reconnecting WebSocket');
+          } catch (e) {
+            console.warn('[Auth] Refresh failed after WebSocket auth error', e);
+          } finally {
+            isRefreshingRef.current = false;
+          }
+        }
+
+        // Capture whether this connection ever authenticated before closing
+        const wasAuthenticated = isAuthenticatedRef.current;
+        // Reset auth flag on any close
+        isAuthenticatedRef.current = false;
+
         // Attempt reconnection if enabled and not at max attempts
         if (enabled && reconnectAttemptsRef.current < maxReconnectAttempts) {
           const delay = calculateReconnectDelay(reconnectAttemptsRef.current);
-          reconnectAttemptsRef.current++;
+          // Only increment attempts if we never reached authenticated state
+          // This prevents infinite 1/5 loops when server immediately closes after onopen
+          if (!wasAuthenticated) reconnectAttemptsRef.current++;
 
           console.log(
             `Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
@@ -440,6 +472,7 @@ export function useSchedulingWebSocket({
     // Reset state
     isConnectingRef.current = false;
     reconnectAttemptsRef.current = 0;
+    isAuthenticatedRef.current = false;
     setRetryIn(0);
 
     // Close existing connection
