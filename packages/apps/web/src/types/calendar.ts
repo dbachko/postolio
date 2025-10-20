@@ -5,6 +5,7 @@ export interface Placeholder {
   type: 'placeholder';
   campaignId: string;
   campaignName: string;
+  campaignColor: string | null;
   scheduledAt: string;
   status: 'placeholder';
   message: string;

@@ -402,7 +402,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         const monthStart = new Date(year, monthNum - 1, 1);
         const monthEnd = new Date(year, monthNum, 0, 23, 59, 59);
 
-        // Get existing content for the month
+        // Get existing content for the month with campaign info for color coding
         const content = await prisma.content.findMany({
           where: {
             brandId,
@@ -410,6 +410,11 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
               { scheduledAt: { gte: monthStart, lte: monthEnd } },
               { postedAt: { gte: monthStart, lte: monthEnd } },
             ],
+          },
+          include: {
+            campaign: {
+              select: { id: true, name: true, color: true },
+            },
           },
           orderBy: { scheduledAt: 'asc' },
         });
@@ -422,7 +427,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         // Compute placeholders (timezone-aware)
         const placeholders = await computePlaceholders(campaigns, content, monthStart, monthEnd);
 
-        // Map to response format with CDN URLs
+        // Map to response format with CDN URLs and campaign colors
         const contentWithUrls = content.map((item) => ({
           id: item.id,
           caption: item.caption,
@@ -435,6 +440,8 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           updatedAt: item.updatedAt,
           brandId: item.brandId,
           campaignId: item.campaignId,
+          campaignName: item.campaign?.name,
+          campaignColor: item.campaign?.color,
           instagramPostId: item.instagramPostId,
           instagramPermalink: item.instagramPermalink,
         }));

@@ -312,6 +312,9 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     const isProcessing = Boolean((content as any)?.generationParams?.processing?.active);
     const isDraggable = !isPlaceholder && content.status !== 'published';
 
+    // Get campaign color from content or placeholder
+    const campaignColor = (content as any)?.campaignColor || null;
+
     const statusColors = {
       draft: 'bg-gray-100 border-gray-400 text-gray-800',
       scheduled: 'bg-blue-100 border-blue-400 text-blue-800',
@@ -334,9 +337,30 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
       ? Loader2
       : statusIcons[content.status as keyof typeof statusIcons];
 
+    // Campaign color styles
+    const getCampaignStyles = () => {
+      if (!campaignColor) return {};
+
+      // Convert hex to rgba for background
+      const hexToRgba = (hex: string, opacity: number) => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+      };
+
+      return {
+        backgroundColor: hexToRgba(campaignColor, 0.1),
+        borderLeftColor: campaignColor,
+        borderLeftWidth: '3px',
+        borderLeftStyle: 'solid' as const,
+      };
+    };
+
     return (
       <div
-        className={`rounded p-1 ${isPlaceholder ? 'border border-dashed' : 'border-l-2'} ${isProcessing ? statusColors.scheduled : statusColors[content.status as keyof typeof statusColors] || statusColors.draft} ${isDraggable ? 'cursor-move' : isPlaceholder ? '' : 'cursor-pointer'} transition-opacity hover:opacity-80`}
+        className={`rounded p-1 ${isPlaceholder ? 'border border-dashed' : 'border-l-2'} ${!campaignColor ? (isProcessing ? statusColors.scheduled : statusColors[content.status as keyof typeof statusColors] || statusColors.draft) : ''} ${isDraggable ? 'cursor-move' : isPlaceholder ? '' : 'cursor-pointer'} transition-opacity hover:opacity-80`}
+        style={campaignColor ? getCampaignStyles() : {}}
         onClick={() => {
           if (!isPlaceholder && 'id' in content) {
             onContentClick?.(content as Content);

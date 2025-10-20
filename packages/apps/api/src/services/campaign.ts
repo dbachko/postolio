@@ -238,6 +238,14 @@ class CampaignService {
 
       const estimatedPosts = Math.ceil((durationDays / 7) * postsPerWeek);
 
+      // Auto-assign campaign color for calendar visualization
+      const existingCampaigns = await prisma.campaign.findMany({
+        where: { brandId: config.brandId },
+        select: { color: true },
+      });
+      const { assignCampaignColor } = await import('../utils/campaign-colors.js');
+      const assignedColor = assignCampaignColor(existingCampaigns.map((c) => c.color));
+
       // Create campaign with 'creating' status
       const campaign = await prisma.campaign.create({
         data: {
@@ -246,6 +254,7 @@ class CampaignService {
           status: 'creating',
           priority: config.priority || 5,
           previewGenerated: false,
+          color: assignedColor,
           campaignType: (config.campaignType as CampaignTypeEnum) ?? CampaignTypeEnum.custom,
           // Persist structured metadata (Phase 1 manual, Phase 2 AI-generated)
           ...(config.contentPillars

@@ -6,6 +6,7 @@ import { TimelineView } from './TimelineView';
 import { ContentListView } from './ContentListView';
 import { CalendarFilters } from './calendar/CalendarFilters';
 import { CalendarExport } from './calendar/CalendarExport';
+import { CampaignColorLegend } from './CampaignColorLegend';
 import { useFilteredContent } from '../hooks/useFilteredContent';
 import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { useURLFilterSync } from '../hooks/useURLFilterSync';
@@ -274,6 +275,9 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
       {/* Filters */}
       <CalendarFilters brandId={brandId} />
+
+      {/* Campaign Color Legend */}
+      <CampaignColorLegend items={filteredItems as any as CalendarItem[]} className="px-4" />
 
       {/* Filter Results Summary */}
       {isFiltered && (

@@ -34,6 +34,8 @@ export interface Content {
   updatedAt: string;
   brandId: string;
   campaignId?: string | null;
+  campaignName?: string | null;
+  campaignColor?: string | null;
   instagramPostId?: string | null;
   instagramPermalink?: string | null;
 }

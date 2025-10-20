@@ -17,6 +17,7 @@ interface TimelineItem {
   imageUrl?: string;
   campaignName?: string;
   campaignId?: string;
+  campaignColor?: string | null;
   processing?: boolean;
 }
 
@@ -134,7 +135,23 @@ export function TimelineView({ items, currentDate }: TimelineViewProps) {
                             ? 'border border-dashed'
                             : 'cursor-pointer border transition-shadow hover:shadow-md'
                         } ${getStatusColor(item.status, item.type, item.processing)}`}
-                        style={{ top: `${idx * 25}px` }}
+                        style={{
+                          top: `${idx * 25}px`,
+                          ...(item.campaignColor
+                            ? {
+                                borderLeftWidth: '4px',
+                                borderLeftStyle: 'solid',
+                                borderLeftColor: item.campaignColor,
+                                backgroundColor: (() => {
+                                  const hex = item.campaignColor;
+                                  const r = parseInt(hex.slice(1, 3), 16);
+                                  const g = parseInt(hex.slice(3, 5), 16);
+                                  const b = parseInt(hex.slice(5, 7), 16);
+                                  return `rgba(${r}, ${g}, ${b}, 0.08)`;
+                                })(),
+                              }
+                            : {}),
+                        }}
                         onClick={() => {
                           if (item.type === 'content') {
                             navigate(`/posts/${item.id}`);

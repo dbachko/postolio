@@ -33,6 +33,7 @@ interface ListItem {
   imageUrl?: string;
   campaignName?: string;
   campaignId?: string;
+  campaignColor?: string | null;
   processing?: boolean;
 }
 
@@ -298,13 +299,28 @@ export function ContentListView({ items, currentDate }: ContentListViewProps) {
                       ? 'border border-dashed border-gray-300'
                       : 'cursor-pointer border border-gray-200'
                   }`}
+                  style={
+                    item.campaignColor
+                      ? {
+                          borderLeftWidth: '4px',
+                          borderLeftStyle: 'solid',
+                          borderLeftColor: item.campaignColor,
+                        }
+                      : {}
+                  }
                   onClick={() => {
                     if (item.type === 'content') {
                       navigate(`/posts/${item.id}`);
                     }
                   }}
                 >
-                  <div className="col-span-1">
+                  <div className="col-span-1 flex items-center gap-2">
+                    {item.campaignColor && (
+                      <div
+                        className="h-8 w-1 rounded-full"
+                        style={{ backgroundColor: item.campaignColor }}
+                      />
+                    )}
                     {item.type === 'placeholder' ? (
                       <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-100">
                         <Clock className="h-4 w-4 text-gray-500" />

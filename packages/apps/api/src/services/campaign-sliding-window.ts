@@ -81,13 +81,12 @@ export class CampaignSlidingWindowService {
     const timezone = await TimezoneService.getBrandTimezone(campaign.brandId);
     const now = new Date();
 
-    // Compute existing scheduled-like posts in future for this campaign
-    // Treat content with scheduledAt in the future as occupying slots regardless of status (draft|scheduled)
+    // Query content for slot conflict detection
+    // 1. Campaign-specific content for time window checks
     const existingFuture = await prisma.content.findMany({
       where: {
         campaignId: campaignId,
         scheduledAt: { gte: new Date(now.getTime() - CampaignSlidingWindowService.SLOT_WINDOW_MS) },
-        // Include draft/scheduled; published are typically in the past, but defensive
         status: {
           in: ['draft', 'scheduled', 'published'] as ContentStatus[],
         },
@@ -97,6 +96,30 @@ export class CampaignSlidingWindowService {
     });
 
     const futureScheduled = existingFuture.filter((c) => c.scheduledAt && c.scheduledAt > now);
+
+    // 2. Brand-wide content for single-slot day blocking (includes all campaigns)
+    const brandFutureContent = await prisma.content.findMany({
+      where: {
+        brandId: campaign.brandId,
+        OR: [
+          {
+            scheduledAt: {
+              gte: new Date(now.getTime() - CampaignSlidingWindowService.SLOT_WINDOW_MS),
+            },
+          },
+          {
+            postedAt: {
+              gte: new Date(now.getTime() - CampaignSlidingWindowService.SLOT_WINDOW_MS),
+            },
+          },
+        ],
+        status: {
+          in: ['draft', 'scheduled', 'published'] as ContentStatus[],
+        },
+      },
+      select: { id: true, scheduledAt: true, postedAt: true, campaignId: true },
+      orderBy: { scheduledAt: 'asc' },
+    });
 
     // Enforce subscription cap at account level (user-wide)
     const tier = campaign.brand.user?.subscriptionTier || 'free';
@@ -124,8 +147,19 @@ export class CampaignSlidingWindowService {
     const occupiedTimes = futureScheduled
       .map((c) => c.scheduledAt!.getTime())
       .sort((a, b) => a - b);
-    const hasMultiTimes = postingTimes.length > 0;
+
+    // Normalize posting times to determine if single-slot or multi-slot
+    const normalizedTimes = (postingTimes.length > 0 ? postingTimes : [postingTime])
+      .filter(Boolean)
+      .map((t) => {
+        const [h, m] = t.split(':');
+        return `${String(parseInt(h ?? '0', 10)).padStart(2, '0')}:${String(parseInt(m ?? '0', 10)).padStart(2, '0')}`;
+      })
+      .filter((v, i, a) => a.indexOf(v) === i);
+    const isSingleSlot = normalizedTimes.length <= 1;
+
     const occupiedLocalDates = new Set<string>();
+    const brandOccupiedDates = new Set<string>(); // Brand-wide day occupancy
     const occupiedLocalSlotKeys = new Set<string>();
     const occupiedLocalWeeks = new Map<string, number>();
     const weekKeyOf = (d: Date) => {
@@ -139,6 +173,8 @@ export class CampaignSlidingWindowService {
       ).padStart(2, '0')}`;
       return key; // Local week key identified by Monday's date
     };
+
+    // Track campaign-specific occupancy
     for (const c of futureScheduled) {
       if (!c.scheduledAt) continue;
       const local = TimezoneService.toLocal(c.scheduledAt, timezone);
@@ -150,6 +186,17 @@ export class CampaignSlidingWindowService {
       occupiedLocalSlotKeys.add(`${dayKey}T${timeKey}`);
       const wk = weekKeyOf(c.scheduledAt);
       occupiedLocalWeeks.set(wk, (occupiedLocalWeeks.get(wk) || 0) + 1);
+    }
+
+    // Track brand-wide occupancy (for single-slot day blocking)
+    for (const c of brandFutureContent) {
+      const refDate = c.postedAt || c.scheduledAt;
+      if (!refDate) continue;
+      const local = TimezoneService.toLocal(refDate, timezone);
+      const dayKey = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(
+        local.getDate()
+      ).padStart(2, '0')}`;
+      brandOccupiedDates.add(dayKey);
     }
 
     // Find next available campaign slots
@@ -170,9 +217,9 @@ export class CampaignSlidingWindowService {
     // Select earliest slots that are not occupied within ±2h
     const selectedSlots: Date[] = [];
     const perWeekLimit = frequency === '3weekly' ? 3 : Number.POSITIVE_INFINITY;
-    const conflictWindow = hasMultiTimes
-      ? CampaignSlidingWindowService.MULTI_SLOT_WINDOW_MS
-      : CampaignSlidingWindowService.SLOT_WINDOW_MS;
+    const conflictWindow = isSingleSlot
+      ? CampaignSlidingWindowService.SLOT_WINDOW_MS
+      : CampaignSlidingWindowService.MULTI_SLOT_WINDOW_MS;
     for (const slot of filteredSlots) {
       const ts = slot.getTime();
       // Enforce per-day or per-slot uniqueness in brand local time
@@ -181,9 +228,11 @@ export class CampaignSlidingWindowService {
         2,
         '0'
       )}-${String(slotLocal.getDate()).padStart(2, '0')}`;
-      if (!hasMultiTimes) {
-        if (occupiedLocalDates.has(dayKey)) continue;
+      if (isSingleSlot) {
+        // For single-slot campaigns, check brand-wide day occupancy
+        if (brandOccupiedDates.has(dayKey)) continue;
       } else {
+        // For multi-slot campaigns, check specific time slot occupancy
         const timeKey = `${String(slotLocal.getHours()).padStart(2, '0')}:${String(
           slotLocal.getMinutes()
         ).padStart(2, '0')}`;
@@ -198,8 +247,9 @@ export class CampaignSlidingWindowService {
       const conflict = occupiedTimes.some((t) => Math.abs(t - ts) < conflictWindow);
       if (!conflict) {
         selectedSlots.push(slot);
-        if (!hasMultiTimes) {
-          occupiedLocalDates.add(dayKey); // prevent picking another slot the same day
+        if (isSingleSlot) {
+          brandOccupiedDates.add(dayKey); // prevent picking another slot the same day (brand-wide)
+          occupiedLocalDates.add(dayKey); // also track for campaign
         } else {
           const timeKey = `${String(slotLocal.getHours()).padStart(2, '0')}:${String(
             slotLocal.getMinutes()
@@ -250,8 +300,8 @@ export class CampaignSlidingWindowService {
           // Compute uniqueness window
           let utcStart: Date;
           let utcEnd: Date;
-          if (hasMultiTimes) {
-            // reserve only this slot window in UTC
+          if (!isSingleSlot) {
+            // Multi-slot: reserve only this slot window in UTC
             utcStart = new Date(slot.getTime() - CampaignSlidingWindowService.MULTI_SLOT_WINDOW_MS);
             utcEnd = new Date(slot.getTime() + CampaignSlidingWindowService.MULTI_SLOT_WINDOW_MS);
           } else {

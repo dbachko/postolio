@@ -146,4 +146,94 @@ describe('computePlaceholders', () => {
     const hasJan16 = placeholders.some((p) => p.scheduledAt.startsWith('2025-01-16'));
     expect(hasJan16).toBe(false);
   });
+
+  it('blocks placeholders on days with content from OTHER campaigns (cross-campaign blocking)', async () => {
+    vi.setSystemTime(new Date('2025-01-15T08:00:00Z'));
+
+    // Two different campaigns for the same brand
+    const campaigns: Campaign[] = [
+      {
+        id: 'campaign-a',
+        name: 'Campaign A',
+        brandId: 'b1',
+        config: {
+          frequency: 'daily',
+          duration: { start: '2025-01-15', end: '2025-01-20' },
+          postingTime: '15:00', // 3 PM
+        },
+      } as unknown as Campaign,
+    ];
+
+    // Content exists from a DIFFERENT campaign (e.g., default campaign from Instagram sync)
+    const existingContent: Content[] = [
+      {
+        id: 'synced-post',
+        brandId: 'b1',
+        campaignId: 'default-campaign', // Different campaign!
+        status: 'published',
+        postedAt: new Date('2025-01-16T09:00:00Z'), // Posted at 9 AM
+        scheduledAt: null,
+      } as unknown as Content,
+    ];
+
+    const placeholders = await computePlaceholders(
+      campaigns,
+      existingContent,
+      new Date('2025-01-01T00:00:00Z'),
+      new Date('2025-01-31T23:59:59Z')
+    );
+
+    // For single-slot campaigns, should block ENTIRE day if ANY content exists
+    // Should NOT create placeholder for Jan 16 at 3 PM because synced post exists at 9 AM
+    const hasJan16 = placeholders.some((p) => p.scheduledAt.startsWith('2025-01-16'));
+    expect(hasJan16).toBe(false);
+
+    // But Jan 17 should have a placeholder (no content on that day)
+    const hasJan17 = placeholders.some((p) => p.scheduledAt.startsWith('2025-01-17'));
+    expect(hasJan17).toBe(true);
+  });
+
+  it('allows cross-campaign posts on same day for multi-slot campaigns', async () => {
+    vi.setSystemTime(new Date('2025-01-15T08:00:00Z'));
+
+    // Multi-slot campaign
+    const campaigns: Campaign[] = [
+      {
+        id: 'campaign-multi',
+        name: 'Multi-slot Campaign',
+        brandId: 'b1',
+        config: {
+          frequency: 'daily',
+          duration: { start: '2025-01-15', end: '2025-01-20' },
+          postingTimes: ['12:00', '15:00', '20:00'],
+        },
+      } as unknown as Campaign,
+    ];
+
+    // Content from different campaign at 9 AM
+    const existingContent: Content[] = [
+      {
+        id: 'synced-post',
+        brandId: 'b1',
+        campaignId: 'default-campaign',
+        status: 'published',
+        postedAt: new Date('2025-01-16T09:00:00Z'),
+        scheduledAt: null,
+      } as unknown as Content,
+    ];
+
+    const placeholders = await computePlaceholders(
+      campaigns,
+      existingContent,
+      new Date('2025-01-01T00:00:00Z'),
+      new Date('2025-01-31T23:59:59Z')
+    );
+
+    // For multi-slot campaigns, should allow placeholders at different times
+    // Should create placeholders for Jan 16 at 12:00, 15:00, and 20:00
+    const jan16Slots = placeholders.filter((p) => p.scheduledAt.startsWith('2025-01-16'));
+    expect(jan16Slots.length).toBe(3);
+    const times = jan16Slots.map((p) => p.scheduledAt.substring(11, 16)).sort();
+    expect(times).toEqual(['12:00', '15:00', '20:00']);
+  });
 });

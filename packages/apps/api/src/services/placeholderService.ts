@@ -6,6 +6,7 @@ export interface CalendarPlaceholder {
   type: 'placeholder';
   campaignId: string;
   campaignName: string;
+  campaignColor: string | null;
   scheduledAt: string;
   status: 'placeholder';
   message: string;
@@ -69,9 +70,11 @@ export async function computePlaceholders(
     // Resolve brand timezone (per-campaign)
     const timezone = await TimezoneService.getBrandTimezone(campaign.brandId);
 
-    // Build a set of occupied local dates for this campaign, based on both scheduledAt and postedAt
-    // This ensures we never place a placeholder on a day that already has content for the campaign
+    // Build sets of occupied dates:
+    // - occupiedLocalDates: dates with content for THIS campaign only (used for time window checks)
+    // - brandOccupiedDates: dates with ANY content for this BRAND (used for single-slot day blocking)
     const occupiedLocalDates = new Set<string>();
+    const brandOccupiedDates = new Set<string>();
     const toLocalKey = (d: Date) => {
       const local = TimezoneService.toLocal(d, timezone);
       const key = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(
@@ -80,12 +83,21 @@ export async function computePlaceholders(
       return key;
     };
     for (const c of existingContent) {
-      if (c.campaignId !== campaign.id) continue;
+      // Track dates for this specific campaign
+      if (c.campaignId === campaign.id) {
+        if (c.postedAt) {
+          occupiedLocalDates.add(toLocalKey(new Date(c.postedAt)));
+        }
+        if (c.scheduledAt) {
+          occupiedLocalDates.add(toLocalKey(new Date(c.scheduledAt)));
+        }
+      }
+      // Track dates for ANY content on this brand (cross-campaign blocking)
       if (c.postedAt) {
-        occupiedLocalDates.add(toLocalKey(new Date(c.postedAt)));
+        brandOccupiedDates.add(toLocalKey(new Date(c.postedAt)));
       }
       if (c.scheduledAt) {
-        occupiedLocalDates.add(toLocalKey(new Date(c.scheduledAt)));
+        brandOccupiedDates.add(toLocalKey(new Date(c.scheduledAt)));
       }
     }
 
@@ -157,18 +169,13 @@ export async function computePlaceholders(
           return within(schedMs) || within(postedMs);
         });
 
-        // For single-time-per-day campaigns (no postingTimes array), block the entire day if any content exists that day
+        // For single-slot campaigns (0 or 1 posting times per day), block the entire day if ANY content exists
+        // This prevents placeholders on days with content from other campaigns (e.g., synced Instagram posts)
         let dayBlocked = false;
-        if (postingTimes.length === 0) {
-          // If any content exists on the same local day for this campaign, block
-          dayBlocked = existingContent.some((content) => {
-            if (content.campaignId !== campaign.id) return false;
-            const ref = content.postedAt || content.scheduledAt;
-            if (!ref) return false;
-            const refKey = toLocalKey(new Date(ref));
-            const slotKey = toLocalKey(scheduledAtUTC);
-            return refKey === slotKey;
-          });
+        if (normalizedTimes.length <= 1) {
+          // Check brand-wide occupancy for single-slot campaigns
+          const slotKey = toLocalKey(scheduledAtUTC);
+          dayBlocked = brandOccupiedDates.has(slotKey);
         }
 
         if (!hasContent && !dayBlocked) {
@@ -177,6 +184,7 @@ export async function computePlaceholders(
             type: 'placeholder',
             campaignId: campaign.id,
             campaignName: campaign.name,
+            campaignColor: campaign.color,
             scheduledAt: scheduledAtUTC.toISOString(),
             status: 'placeholder',
             message: 'Content will be generated closer to scheduled date',
@@ -199,7 +207,10 @@ export async function computePlaceholders(
     }
 
     console.log(
-      `[Placeholders] Generated ${generatedCount} placeholders for campaign ${campaign.name}`
+      `[Placeholders] Campaign ${campaign.name}: ${normalizedTimes.length} posting times, ` +
+        `${occupiedLocalDates.size} campaign days occupied, ` +
+        `${brandOccupiedDates.size} brand days occupied, ` +
+        `${generatedCount} placeholders generated`
     );
   }
 
