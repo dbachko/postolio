@@ -28,7 +28,7 @@ export function useURLFilterSync() {
 
   // Sync URL → Store (on mount and URL changes)
   // URL -> Store sync is intentionally decoupled from store changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (isUpdatingFromStore.current) {
       isUpdatingFromStore.current = false;
@@ -97,7 +97,7 @@ export function useURLFilterSync() {
   }, [searchParams]); // Only depend on searchParams changes
 
   // Sync Store → URL (when store changes)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (isUpdatingFromURL.current) {
       isUpdatingFromURL.current = false;

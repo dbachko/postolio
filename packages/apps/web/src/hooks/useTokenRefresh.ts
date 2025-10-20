@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '../stores/authStore';
-import { apiClient } from '../lib/api';
+import { auth as authApi } from '../lib/api';
 
 export function useTokenRefresh() {
   const { isAuthenticated, logout } = useAuthStore();
@@ -84,7 +84,7 @@ export function useTokenRefresh() {
 
       console.log(`Token refresh attempt #${refreshAttemptsRef.current}`);
 
-      const response = await apiClient.refreshToken();
+      const response = await authApi.refreshToken();
 
       if (response.message) {
         // Token is now in HttpOnly cookie - no manual storage needed

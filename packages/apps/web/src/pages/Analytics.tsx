@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { apiClient } from '../lib/api';
+import { brand as brandApi, httpGet, httpPut, httpDelete } from '../lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import AnalyticsChart from '../components/AnalyticsChart';
 import SchedulingPanel from '../components/SchedulingPanel';
@@ -107,7 +107,7 @@ export default function Analytics() {
   const [igLoading, setIgLoading] = useState(false);
 
   // Initial brands load on mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     loadBrands();
   }, []);
@@ -140,7 +140,7 @@ export default function Analytics() {
 
   const loadBrands = async () => {
     try {
-      const response = await apiClient.getBrands();
+      const response = await brandApi.getBrands();
       // Brand management is handled by the brand store
       console.log('Brands loaded:', response.brands);
     } catch {
@@ -156,10 +156,8 @@ export default function Analytics() {
 
     try {
       const [reportResponse, statsResponse] = await Promise.all([
-        apiClient.get<{ report: AnalyticsReport }>(
-          `/api/analytics/report/${selectedBrand.id}?days=${daysPeriod}`
-        ),
-        apiClient.get<{ stats: SchedulingStats }>(`/api/analytics/stats/${selectedBrand.id}`),
+        httpGet(`/api/analytics/report/${selectedBrand.id}?days=${daysPeriod}`),
+        httpGet(`/api/analytics/stats/${selectedBrand.id}`),
       ]);
 
       setReport(reportResponse.report);
@@ -175,12 +173,10 @@ export default function Analytics() {
     if (!selectedBrand?.id) return;
 
     try {
-      const response = await apiClient.get<{ scheduledPosts: ScheduledPost[] }>(
-        `/api/analytics/scheduled/${selectedBrand.id}`
-      );
+      const response = await httpGet(`/api/analytics/scheduled/${selectedBrand.id}`);
       // Ensure hashtags is always an array to avoid runtime errors
       setScheduledPosts(
-        (response.scheduledPosts || []).map((post) => ({
+        (response.scheduledPosts || []).map((post: any) => ({
           ...post,
           hashtags: Array.isArray(post.hashtags) ? post.hashtags : [],
         }))
@@ -195,9 +191,7 @@ export default function Analytics() {
     setIgLoading(true);
     try {
       // 1) Check IG configuration status first
-      const status = await apiClient.get<{ configured: boolean }>(
-        `/api/instagram-analytics/status/${selectedBrand.id}`
-      );
+      const status = await httpGet(`/api/instagram-analytics/status/${selectedBrand.id}`);
       if (!status.configured) {
         setIgConfigured(false);
         setIgOverview(null);
@@ -210,12 +204,8 @@ export default function Analytics() {
       // 2) Fetch analytics data. Failures here should NOT flip configured=false
       try {
         const [overview, posts] = await Promise.all([
-          apiClient.get<IGAnalyticsOverview>(
-            `/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=30d`
-          ),
-          apiClient.get<IGPostPerformance>(
-            `/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`
-          ),
+          httpGet(`/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=30d`),
+          httpGet(`/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`),
         ]);
         setIgOverview(overview);
         setIgPosts(posts);
@@ -238,7 +228,7 @@ export default function Analytics() {
 
   const handleCancelPost = async (contentId: string) => {
     try {
-      await apiClient.delete(`/api/analytics/scheduled/${contentId}`);
+      await httpDelete(`/api/analytics/scheduled/${contentId}`);
 
       // Remove from local state
       setScheduledPosts((prev) => prev.filter((post) => post.id !== contentId));
@@ -252,7 +242,7 @@ export default function Analytics() {
 
   const handleReschedulePost = async (contentId: string, newTime: string) => {
     try {
-      await apiClient.put('/api/analytics/reschedule', {
+      await httpPut('/api/analytics/reschedule', {
         contentId,
         newTime,
       });
@@ -503,7 +493,7 @@ export default function Analytics() {
                   <h3 className="mb-4 text-lg font-semibold">Top Performing Posts</h3>
                   {igPosts.posts && igPosts.posts.length > 0 ? (
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {igPosts.posts.slice(0, 6).map((post) => (
+                      {(igPosts.posts as any[]).slice(0, 6).map((post: any) => (
                         <div key={post.id} className="overflow-hidden rounded-lg border">
                           {post.media_url && (
                             <div className="relative aspect-square">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiClient, type Brand } from '../lib/api';
+import { brand as brandApi, httpGet, httpPost, type Brand } from '../lib/api';
 import EngagementSettings from '../components/EngagementSettings';
 
 interface EngagementStatus {
@@ -29,13 +29,13 @@ export default function Engagement() {
   const [actionLoading, setActionLoading] = useState(false);
 
   // Initial brands load on mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     loadBrands();
   }, []);
 
   // Load engagement data when brand changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (selectedBrandId) {
       loadEngagementData();
@@ -44,7 +44,7 @@ export default function Engagement() {
 
   const loadBrands = async () => {
     try {
-      const response = await apiClient.getBrands();
+      const response = await brandApi.getBrands();
       setBrands(response.brands);
       if (response.brands.length > 0) {
         setSelectedBrandId(response.brands[0].id);
@@ -62,11 +62,9 @@ export default function Engagement() {
 
     try {
       const [statusResponse, statsResponse] = await Promise.all([
-        apiClient.get<{ status: EngagementStatus }>(`/api/engagement/status/${selectedBrandId}`),
-        apiClient.get<{ stats: EngagementStats }>(
-          `/api/engagement/stats/${selectedBrandId}?days=7`
-        ),
-      ]);
+        httpGet(`/api/engagement/status/${selectedBrandId}`),
+        httpGet(`/api/engagement/stats/${selectedBrandId}?days=7`),
+      ] as any);
 
       setStatus(statusResponse.status);
       setStats(statsResponse.stats);
@@ -84,7 +82,7 @@ export default function Engagement() {
     setError('');
 
     try {
-      await apiClient.post(`/api/engagement/start/${selectedBrandId}`);
+      await httpPost(`/api/engagement/start/${selectedBrandId}`);
       await loadEngagementData(); // Refresh status
     } catch (err: unknown) {
       setError((err as Error).message || 'Failed to start engagement automation');
@@ -100,7 +98,7 @@ export default function Engagement() {
     setError('');
 
     try {
-      await apiClient.post(`/api/engagement/stop/${selectedBrandId}`);
+      await httpPost(`/api/engagement/stop/${selectedBrandId}`);
       await loadEngagementData(); // Refresh status
     } catch (err: unknown) {
       setError((err as Error).message || 'Failed to stop engagement automation');

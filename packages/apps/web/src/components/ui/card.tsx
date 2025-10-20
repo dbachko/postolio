@@ -98,4 +98,3 @@ export {
   CardContent,
   cardVariants,
 };
-/* eslint-disable react-refresh/only-export-components */

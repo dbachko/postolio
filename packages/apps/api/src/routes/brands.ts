@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { uploadImageToS3, buildCdnUrl } from '../services/s3-image.js';
+import { computePlaceholders } from '../services/placeholderService.js';
 import { instagramService } from '../services/instagram.js';
 // Legacy AI analyze endpoint removed
 
@@ -25,9 +26,9 @@ interface UpdateBrandBody {
 }
 
 const brandsRoutes: FastifyPluginAsync = async (fastify) => {
-  // Create a new brand
+  // Create a new brand (RESTful: POST /)
   fastify.post<{ Body: CreateBrandBody }>(
-    '/create',
+    '/',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
@@ -86,10 +87,10 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Legacy /analyze endpoint removed in favor of /api/brand-analysis routes
+  // Legacy /analyze endpoint removed in favor of nested analysis
 
-  // Get user's brands
-  fastify.get('/list', { preHandler: fastify.authenticate }, async (request, reply) => {
+  // Get user's brands (RESTful: GET /)
+  fastify.get('/', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const userId = request.user!.id;
 
@@ -114,9 +115,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // Get specific brand details
+  // Get specific brand details (RESTful: GET /:id)
   fastify.get<{ Params: { id: string } }>(
-    '/brand/:id',
+    '/:id',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
@@ -152,9 +153,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Update a brand
+  // Update a brand (RESTful: PUT /:id)
   fastify.put<{ Params: { id: string }; Body: UpdateBrandBody }>(
-    '/brand/:id',
+    '/:id',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
@@ -321,9 +322,9 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Delete a brand
+  // Delete a brand (RESTful: DELETE /:id)
   fastify.delete<{ Params: { id: string } }>(
-    '/brand/:id',
+    '/:id',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
@@ -369,6 +370,150 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         console.error('Brand deletion error:', error);
         return reply.code(500).send({ error: 'Failed to delete brand' });
       }
+    }
+  );
+
+  // Brand calendar (moved from content.ts)
+  fastify.get<{ Params: { id: string; month: string } }>(
+    '/:id/calendar/:month',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { id: brandId, month } = request.params;
+
+        // Verify brand ownership
+        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+        if (!brand) return reply.code(404).send({ success: false, error: 'Brand not found' });
+
+        // Parse month string (format: YYYY-MM)
+        const parts = month.split('-');
+        if (parts.length !== 2)
+          return reply.code(400).send({ error: 'Invalid month format. Use YYYY-MM' });
+        const [yearStr, monthStr] = parts;
+        if (!yearStr || !monthStr)
+          return reply.code(400).send({ error: 'Invalid month format. Use YYYY-MM' });
+        const year = parseInt(yearStr, 10);
+        const monthNum = parseInt(monthStr, 10);
+        if (isNaN(year) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+          return reply.code(400).send({ error: 'Invalid month format. Use YYYY-MM' });
+        }
+
+        const monthStart = new Date(year, monthNum - 1, 1);
+        const monthEnd = new Date(year, monthNum, 0, 23, 59, 59);
+
+        // Get existing content for the month
+        const content = await prisma.content.findMany({
+          where: {
+            brandId,
+            OR: [
+              { scheduledAt: { gte: monthStart, lte: monthEnd } },
+              { postedAt: { gte: monthStart, lte: monthEnd } },
+            ],
+          },
+          orderBy: { scheduledAt: 'asc' },
+        });
+
+        // Get active campaigns
+        const campaigns = await prisma.campaign.findMany({
+          where: { brandId, status: { in: ['active', 'preview'] } },
+        });
+
+        // Compute placeholders
+        const placeholders = computePlaceholders(campaigns, content, monthStart, monthEnd);
+
+        // Map to response format with CDN URLs
+        const contentWithUrls = content.map((item) => ({
+          id: item.id,
+          caption: item.caption,
+          hashtags: item.hashtags,
+          imageUrl: buildCdnUrl(item.s3ImageKey),
+          status: item.status,
+          scheduledAt: item.scheduledAt,
+          postedAt: item.postedAt,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          brandId: item.brandId,
+          campaignId: item.campaignId,
+          instagramPostId: item.instagramPostId,
+          instagramPermalink: item.instagramPermalink,
+        }));
+
+        return { success: true, data: { content: contentWithUrls, placeholders } };
+      } catch (error) {
+        request.log.error({ err: error }, 'Calendar content error');
+        return reply.code(500).send({ error: 'Failed to retrieve calendar content' });
+      }
+    }
+  );
+
+  // Brand content history (moved from content.ts)
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/content/history',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { id: brandId } = request.params;
+
+        // Verify ownership
+        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+        if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+
+        const contentHistory = await prisma.content.findMany({
+          where: {
+            brandId,
+            status: { in: ['draft', 'scheduled', 'published', 'failed', 'skipped'] },
+          },
+          select: {
+            id: true,
+            caption: true,
+            hashtags: true,
+            s3ImageKey: true,
+            imageRegion: true,
+            retentionExpiresAt: true,
+            status: true,
+            scheduledAt: true,
+            postedAt: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: 50,
+        });
+
+        const historyWithUrls = contentHistory.map((item) => ({
+          id: item.id,
+          caption: item.caption,
+          hashtags: item.hashtags,
+          imageUrl: buildCdnUrl(item.s3ImageKey),
+          status: item.status,
+          scheduledAt: item.scheduledAt,
+          postedAt: item.postedAt,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        }));
+
+        return { content: historyWithUrls };
+      } catch (error) {
+        request.log.error({ err: error }, 'Content history error');
+        return reply.code(500).send({ error: 'Failed to retrieve content history' });
+      }
+    }
+  );
+
+  // Instagram authorize alias -> forwards to auth route
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/instagram/authorize',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id } = request.params;
+      const r = await fastify.inject({
+        method: 'GET',
+        url: `/api/auth/instagram/authorize?brandId=${encodeURIComponent(id)}`,
+        headers: { cookie: request.headers.cookie as string },
+      });
+      return reply.code(r.statusCode).send(r.json());
     }
   );
 };

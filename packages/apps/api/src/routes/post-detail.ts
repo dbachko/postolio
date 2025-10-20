@@ -19,8 +19,8 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
   // Add authentication middleware to all routes
   app.addHook('preHandler', app.authenticate);
 
-  // Get comprehensive post detail
-  app.get<{ Params: PostDetailParams }>('/api/posts/:postId/detail', async (request, reply) => {
+  // Get comprehensive post detail (RESTful)
+  app.get<{ Params: PostDetailParams }>('/api/posts/:postId', async (request, reply) => {
     // Validate params
     const paramsValidation = validateRequest(PostDetailParamsSchema, request.params);
     if (!paramsValidation.success) {

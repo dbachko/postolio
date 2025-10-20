@@ -15,7 +15,7 @@ import { Button } from './ui/button';
 import { Switch } from './ui/switch';
 import { toast } from 'sonner';
 import { frequencyOptions, styleOptions } from '../constants/campaign';
-import { apiClient, type Campaign } from '../lib/api';
+import { campaign as campaignApi, type Campaign } from '../lib/api';
 import { GoalsListInput } from './campaign-wizard/shared/GoalsListInput';
 
 interface CampaignEditDialogProps {
@@ -202,7 +202,7 @@ export function CampaignEditDialog({
         return;
       }
 
-      const res = await apiClient.updateCampaign(campaign.id, updates as any);
+      const res = await campaignApi.updateCampaign(campaign.id, updates as any);
       if (res.success) {
         toast.success(res.message || 'Campaign updated');
         onOpenChange(false);

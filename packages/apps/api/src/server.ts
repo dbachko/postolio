@@ -25,7 +25,6 @@ import monitoringRoutes from './routes/monitoring.js';
 import instagramOAuthRoutes from './routes/instagram-oauth.js';
 import brandsRoutes from './routes/brands.js';
 import contentRoutes from './routes/content.js';
-import instagramRoutes from './routes/instagram.js';
 import analyticsRoutes from './routes/analytics.js';
 import instagramAnalyticsRoutes from './routes/instagram-analytics.js';
 import engagementRoutes from './routes/engagement.js';
@@ -42,8 +41,10 @@ import { complianceRoutes } from './routes/compliance.js';
 import postDetailRoutes from './routes/post-detail.js';
 import configRoutes from './routes/config.js';
 import backgroundJobsRoutes from './routes/background-jobs.js';
-import brandAnalysisRoutes from './routes/brand-analysis.js';
 import themeSuggestionRoutes from './routes/theme-suggestions.js';
+import accountRoutes from './routes/account.js';
+import brandAnalysisNested from './routes/brand-analysis-nested.js';
+import brandsInstagram from './routes/brands-instagram.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import Redis from 'ioredis';
@@ -209,7 +210,6 @@ export function buildFastify(): FastifyInstance {
   app.register(instagramOAuthRoutes, { prefix: '/api/auth/instagram' });
   app.register(brandsRoutes, { prefix: '/api/brands' });
   app.register(contentRoutes, { prefix: '/api/content' });
-  app.register(instagramRoutes, { prefix: '/api/instagram' });
   app.register(analyticsRoutes, { prefix: '/api/analytics' });
   app.register(instagramAnalyticsRoutes, {
     prefix: '/api/instagram-analytics',
@@ -218,16 +218,24 @@ export function buildFastify(): FastifyInstance {
   app.register(growthRoutes, { prefix: '/api/growth' });
   app.register(aiRoutes, { prefix: '/api/ai' });
   app.register(autopilotRoutes, { prefix: '/api/autopilot' });
-  app.register(campaignRoutes, { prefix: '/api/campaign' });
-  app.register(campaignAnalyticsRoutes, { prefix: '/api/' }); // API root level for campaign analytics
+  // Mount campaigns at plural REST path
+  app.register(campaignRoutes, { prefix: '/api/campaigns' });
+  app.register(campaignAnalyticsRoutes, { prefix: '/api' }); // API root level for campaign analytics
   app.register(rollingContentRoutes, { prefix: '/api/rolling-content' });
   app.register(legalRoutes, { prefix: '/api/legal' });
   app.register(dataDeletionRoutes, { prefix: '/api/legal' });
   app.register(complianceRoutes);
-  app.register(postDetailRoutes); // Post detail routes don't need prefix, they include /api
+  app.register(postDetailRoutes); // Post detail routes include /api in their own paths
+  // Account utility routes
+  app.register(accountRoutes, { prefix: '/api/account' });
   app.register(configRoutes); // Config routes include their own /api prefix
   app.register(backgroundJobsRoutes); // Background job monitoring routes
-  app.register(brandAnalysisRoutes, { prefix: '/api/brand-analysis' });
+  // Legacy brand-analysis paths and nested RESTful variants
+  // Use /api/brands/:brandId/analysis/* for brand analysis
+  app.register(brandAnalysisNested, { prefix: '/api/brands' });
+
+  // Add brand-nested Instagram wrappers under /api/brands
+  app.register(brandsInstagram, { prefix: '/api/brands' });
   app.register(themeSuggestionRoutes, { prefix: '/api/brands' });
 
   const registerHealthRoute = (path: string) => {

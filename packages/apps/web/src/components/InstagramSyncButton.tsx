@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from './ui/button';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { apiClient } from '../lib/api';
+import { brand as brandApi } from '../lib/api';
 
 interface InstagramSyncButtonProps {
   brandId: string;
@@ -35,7 +35,7 @@ export function InstagramSyncButton({
   const syncMutation = useMutation<SyncResponse, Error>({
     mutationFn: async () => {
       setSyncProgress('Starting sync...');
-      const response = await apiClient.syncInstagramPosts(brandId, {
+      const response = await brandApi.syncInstagramPosts(brandId, {
         maxPosts: 100,
         maxDays: 30,
       });

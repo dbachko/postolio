@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { SecuritySummary, LoginHistoryResponse } from '../../lib/api';
-import { apiClient } from '../../lib/api';
+import { session } from '../../lib/api';
 import { SecurityMetrics } from './SecurityMetrics';
 import { LoginHistory } from './LoginHistory';
 import { Alert, AlertDescription } from '../ui/alert';
@@ -18,8 +18,8 @@ export function SecurityDashboard() {
       setError(null);
 
       const [summaryData, historyData] = await Promise.all([
-        apiClient.getSecuritySummary(),
-        apiClient.getLoginHistory(),
+        session.getSecuritySummary(),
+        session.getLoginHistory(),
       ]);
 
       setSummary(summaryData);

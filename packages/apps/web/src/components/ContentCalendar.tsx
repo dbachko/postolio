@@ -11,7 +11,7 @@ import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { useURLFilterSync } from '../hooks/useURLFilterSync';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { apiClient, type Content } from '@/lib/api';
+import { content as contentApi, campaign as campaignApi, type Content } from '@/lib/api';
 import type { CalendarItem, Placeholder } from '../types/calendar';
 import { Calendar, List, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 
@@ -35,7 +35,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   // Fetch calendar data with placeholders - with prefetching
   const calendarQuery = useQuery({
     queryKey: ['calendar', brandId, format(currentDate, 'yyyy-MM')],
-    queryFn: () => apiClient.getCalendarContent(brandId, format(currentDate, 'yyyy-MM')),
+    queryFn: () => contentApi.getCalendarContent(brandId, format(currentDate, 'yyyy-MM')),
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
   });
@@ -50,14 +50,14 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     // Prefetch previous month
     queryClient.prefetchQuery({
       queryKey: ['calendar', brandId, prevMonth],
-      queryFn: () => apiClient.getCalendarContent(brandId, prevMonth),
+      queryFn: () => contentApi.getCalendarContent(brandId, prevMonth),
       staleTime: 5 * 60 * 1000,
     });
 
     // Prefetch next month
     queryClient.prefetchQuery({
       queryKey: ['calendar', brandId, nextMonth],
-      queryFn: () => apiClient.getCalendarContent(brandId, nextMonth),
+      queryFn: () => contentApi.getCalendarContent(brandId, nextMonth),
       staleTime: 5 * 60 * 1000,
     });
   }, [currentDate, brandId, queryClient]);
@@ -68,7 +68,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   // Fetch campaigns for progress visualization
   const campaignsQuery = useQuery({
     queryKey: ['campaigns', brandId],
-    queryFn: () => apiClient.listCampaigns(brandId),
+    queryFn: () => campaignApi.listCampaigns(brandId),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -77,13 +77,13 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   // Fetch schedule-ahead limits (account-wide)
   const limitsQuery = useQuery({
     queryKey: ['limits', 'schedule-ahead'],
-    queryFn: () => apiClient.getScheduleAheadLimit(),
+    queryFn: () => campaignApi.getScheduleAheadLimit(),
     staleTime: 60 * 1000,
   });
 
   // Calculate campaign progress
   const campaignProgress = useMemo(() => {
-    return campaigns.map((campaign) => {
+    return (campaigns as any[]).map((campaign: any) => {
       const campaignContent = content.filter((c) => c.campaignId === campaign.id);
       const campaignPlaceholders = placeholders.filter((p) => p.campaignId === campaign.id);
       const total = campaignContent.length + campaignPlaceholders.length;

@@ -6,7 +6,7 @@ import { Button } from '../../ui/button';
 import { Switch } from '../../ui/switch';
 import { Badge } from '../../ui/badge';
 import { Alert, AlertDescription } from '../../ui/alert';
-import { apiClient } from '../../../lib/api';
+import { campaign as campaignApi, httpPost } from '../../../lib/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -60,12 +60,12 @@ export function Step5Review() {
         goals: Array.isArray(state.goals) ? state.goals : undefined,
         seasonalityAssist: state.seasonalityAssist,
       } as const;
-      await apiClient.configureCampaign(payload as any);
+      await campaignApi.createCampaign(payload as any);
       // Invalidate campaigns list for this brand so the dashboard shows the new campaign immediately
       queryClient.invalidateQueries({ queryKey: ['campaigns', brand.id] });
       // Log funnel event (fire-and-forget)
       try {
-        await apiClient.post('/api/analytics/wizard-event', {
+        await httpPost('/api/analytics/wizard-event', {
           eventName: 'wizard.launch',
           step: 5,
           brandId: brand.id,
@@ -81,7 +81,7 @@ export function Step5Review() {
         /* noop */
       }
       try {
-        void apiClient.saveCampaignDraft({
+        void campaignApi.saveCampaignDraft({
           brandId: brand.id,
           wizardState: {
             currentStep: 1,

@@ -65,11 +65,23 @@ interface PreviewCampaignBody {
   exampleCount?: number;
 }
 
-interface StartCampaignBody {
-  campaignId: string;
-}
+// legacy StartCampaignBody removed; start is now param-based
 
 const campaignRoutes: FastifyPluginAsync = async (fastify) => {
+  const sanitizeGoalsValue = (val: unknown): string | string[] | undefined => {
+    if (Array.isArray(val)) {
+      const arr = (val as unknown[])
+        .filter((s): s is string => typeof s === 'string')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      return arr.length ? arr : undefined;
+    }
+    if (typeof val === 'string') {
+      const t = val.trim();
+      return t.length ? t : undefined;
+    }
+    return undefined;
+  };
   const ConfigureSchema = z.object({
     name: z.string().min(1),
     brandId: z.string().min(1),
@@ -109,10 +121,27 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       .optional(),
   });
 
-  // Configure campaign
+  // Configure campaign (RESTful: POST /)
   fastify.post<{ Body: ConfigureCampaignBody }>(
-    '/configure',
-    { preHandler: [fastify.authenticate, validateBody(ConfigureSchema)] },
+    '/',
+    {
+      preHandler: [
+        fastify.authenticate,
+        async (request) => {
+          // Sanitize goals without using `any` by mutating the same reference
+          const rawUnknown = request.body as unknown;
+          if (rawUnknown && typeof rawUnknown === 'object') {
+            const container = rawUnknown as Record<string, unknown> & { goals?: unknown };
+            if (Object.prototype.hasOwnProperty.call(container, 'goals')) {
+              const sanitized = sanitizeGoalsValue(container.goals);
+              if (sanitized === undefined) delete container.goals;
+              else container.goals = sanitized;
+            }
+          }
+        },
+        validateBody(ConfigureSchema),
+      ],
+    },
     async (request, reply) => {
       try {
         const userId = request.user!.id;
@@ -251,6 +280,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+  // Legacy '/configure' removed in favor of RESTful '/'
+
   // Generate campaign preview
   fastify.post<{ Body: PreviewCampaignBody }>(
     '/preview',
@@ -323,9 +354,26 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // Generate AI strategy (Phase 2)
+  // Generate strategy (RESTful path)
   fastify.post<{ Body: z.infer<typeof GenerateStrategySchema> }>(
-    '/generate-strategy',
-    { preHandler: [fastify.authenticate, validateBody(GenerateStrategySchema)] },
+    '/strategy',
+    {
+      preHandler: [
+        fastify.authenticate,
+        async (request) => {
+          const rawUnknown = request.body as unknown;
+          if (rawUnknown && typeof rawUnknown === 'object') {
+            const container = rawUnknown as Record<string, unknown> & { goals?: unknown };
+            if (Object.prototype.hasOwnProperty.call(container, 'goals')) {
+              const sanitized = sanitizeGoalsValue(container.goals);
+              if (sanitized === undefined) delete container.goals;
+              else container.goals = sanitized;
+            }
+          }
+        },
+        validateBody(GenerateStrategySchema),
+      ],
+    },
     async (request, reply) => {
       try {
         const userId = request.user!.id;
@@ -362,7 +410,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Body: z.infer<typeof DraftBodySchema> }>(
-    '/draft',
+    '/drafts',
     {
       preHandler: [
         fastify.authenticate,
@@ -407,7 +455,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   // Get latest campaign creation wizard draft for a brand
   const DraftQuerySchema = z.object({ brandId: z.string().min(1) });
   fastify.get<{ Querystring: z.infer<typeof DraftQuerySchema> }>(
-    '/draft',
+    '/drafts',
     { preHandler: [fastify.authenticate, validateQuery(DraftQuerySchema)] },
     async (request, reply) => {
       try {
@@ -437,18 +485,14 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Start campaign
-  fastify.post<{ Body: StartCampaignBody }>(
-    '/start',
+  // Start campaign (REST: /:id/start)
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/start',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
         const userId = request.user!.id;
-        const { campaignId } = request.body;
-
-        if (!campaignId) {
-          return reply.code(400).send({ error: 'Campaign ID is required' });
-        }
+        const { id: campaignId } = request.params;
 
         // Prevent starting default campaign
         try {
@@ -503,6 +547,8 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+
+  // Legacy '/list', '/draft', '/start' endpoints removed
 
   // Fill sliding window for a campaign (manual trigger)
   fastify.post<{ Params: { id: string } }>(
@@ -584,7 +630,22 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   }
   fastify.put<{ Params: { id: string }; Body: UpdateCampaignBody }>(
     '/:id',
-    { preHandler: fastify.authenticate },
+    {
+      preHandler: [
+        fastify.authenticate,
+        async (request) => {
+          const rawUnknown = request.body as unknown;
+          if (rawUnknown && typeof rawUnknown === 'object') {
+            const container = rawUnknown as Record<string, unknown> & { goals?: unknown };
+            if (Object.prototype.hasOwnProperty.call(container, 'goals')) {
+              const sanitized = sanitizeGoalsValue(container.goals);
+              if (sanitized === undefined) delete container.goals;
+              else container.goals = sanitized;
+            }
+          }
+        },
+      ],
+    },
     async (request, reply) => {
       try {
         const userId = request.user!.id;
@@ -723,9 +784,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // List user's campaigns
+  // List user's campaigns (REST: GET /)
   fastify.get<{ Querystring: { brandId?: string } }>(
-    '/list',
+    '/',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
@@ -964,7 +1025,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     contentIds?: string[];
   }
   fastify.post<{ Params: { id: string }; Body: RegenerateContentBody }>(
-    '/:id/regenerate-content',
+    '/:id/regenerate',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {

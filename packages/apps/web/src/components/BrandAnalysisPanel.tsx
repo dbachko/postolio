@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
+import { brand as brandApi } from '@/lib/api';
 
 type AnalysisProfile = {
   brandId: string;
@@ -33,7 +33,7 @@ export function BrandAnalysisPanel({
   // Fetch latest profile
   const profileQuery = useQuery<AnalysisProfile | { error: string }>({
     queryKey: ['brand-analysis-profile', brandId],
-    queryFn: () => apiClient.getBrandAnalysisProfile(brandId),
+    queryFn: async () => (await brandApi.getBrandAnalysisProfile(brandId)) as any,
     retry: 1,
   });
 
@@ -46,7 +46,7 @@ export function BrandAnalysisPanel({
     stopPolling();
     pollTimer.current = window.setInterval(async () => {
       try {
-        const s = await apiClient.getBrandAnalysisStatus(brandId);
+        const s = await brandApi.getBrandAnalysisStatus(brandId);
         const state = s.status as 'none' | 'accepted' | 'running' | 'completed' | 'failed';
         const next = {
           state,
@@ -96,7 +96,7 @@ export function BrandAnalysisPanel({
     setIsRunning(true);
     setStatus({ state: 'accepted' });
     try {
-      await apiClient.startBrandAnalysis(brandId, { force: true, maxPosts: 20 });
+      await brandApi.startBrandAnalysis(brandId, { force: true, maxPosts: 20 });
       startPolling();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to start analysis';

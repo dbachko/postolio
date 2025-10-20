@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, memo, useEffect, useRef } from 'react';
-import { apiClient } from '../lib/api';
+import { content as contentApi } from '../lib/api';
 import { useDebounce } from '../hooks/useDebounce';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -176,7 +176,7 @@ export default function PostDetail() {
     queryKey: ['post', postId],
     // Adapt backend response (which may contain nulls) into PostDetailData shape with undefined instead of null
     queryFn: async (): Promise<PostDetailData> => {
-      const response = await apiClient.getPostDetail(postId!);
+      const response = await contentApi.getPostDetail(postId!);
       const raw = response.data as any;
       return {
         ...raw,
@@ -199,7 +199,7 @@ export default function PostDetail() {
   const { data: insights, isFetching: insightsFetching } = useQuery<PostInsights>({
     queryKey: ['post-insights', postId],
     queryFn: async () => {
-      const response = await apiClient.getPostInsights(postId!);
+      const response = await contentApi.getPostInsights(postId!);
       return response.data;
     },
     enabled: !!postId && post?.status === 'published',
@@ -212,7 +212,7 @@ export default function PostDetail() {
     comments: { username: string; text: string }[];
   }>({
     queryKey: ['post-comments', postId],
-    queryFn: async () => (await apiClient.getPostComments(postId!)).data,
+    queryFn: async () => (await contentApi.getPostComments(postId!)).data,
     enabled: !!postId && post?.status === 'published',
     staleTime: 60000,
   });
@@ -256,7 +256,7 @@ export default function PostDetail() {
       if (!data.caption || data.caption.trim().length === 0) {
         throw new Error('Cannot update content with empty caption');
       }
-      return apiClient.updateContent(data);
+      return contentApi.updateContent(data);
     },
     onMutate: () => {
       setSaveStatus('saving');
@@ -356,7 +356,7 @@ export default function PostDetail() {
       if (postId) {
         setSaveStatus('saving');
         try {
-          const response = await apiClient.uploadContentImage(postId, fileOrUrl);
+          const response = await contentApi.uploadContentImage(postId, fileOrUrl);
           if (response.success && response.content) {
             const newImageUrl = response.content.imageUrl || objectUrl;
             setFormData((prev) => ({
@@ -434,7 +434,7 @@ export default function PostDetail() {
         const utc = convertLocalToUTC(local, timezone);
         payload = utc.toISOString();
       }
-      return apiClient.schedulePost(postId!, payload);
+      return contentApi.schedulePost(postId!, payload);
     },
     onSuccess: (resp) => {
       toast.success('Post scheduling started');
@@ -462,7 +462,7 @@ export default function PostDetail() {
 
   const publishNowMutation = useMutation({
     mutationFn: async () => {
-      return apiClient.publishPost(postId!);
+      return contentApi.publishPost(postId!);
     },
     onSuccess: () => {
       toast.success('Post published successfully');
@@ -475,7 +475,7 @@ export default function PostDetail() {
 
   const deletePostMutation = useMutation({
     mutationFn: async () => {
-      return apiClient.deletePost(postId!);
+      return contentApi.deletePost(postId!);
     },
     onSuccess: () => {
       toast.success('Post deleted successfully');

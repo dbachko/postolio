@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
-import { apiClient } from '../lib/api';
+import { brand as brandApi } from '../lib/api';
 import type { Brand } from '../lib/api';
 import { InstagramSyncButton } from './InstagramSyncButton';
 
@@ -30,13 +30,13 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
   // Check Instagram connection status
   const { data: connectionStatus, isLoading } = useQuery({
     queryKey: ['instagram-status', brand.id],
-    queryFn: () => apiClient.getInstagramConnectionStatus(brand.id),
+    queryFn: () => brandApi.getInstagramConnectionStatus(brand.id),
     refetchOnWindowFocus: true,
   });
 
   // Initialize OAuth flow
   const connectMutation = useMutation({
-    mutationFn: () => apiClient.initializeInstagramOAuth(brand.id),
+    mutationFn: () => brandApi.initializeInstagramOAuth(brand.id),
     onSuccess: (data) => {
       // Open OAuth popup
       const popup = window.open(
@@ -85,7 +85,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
 
   // Disconnect Instagram
   const disconnectMutation = useMutation({
-    mutationFn: () => apiClient.disconnectInstagram(brand.id),
+    mutationFn: () => brandApi.disconnectInstagram(brand.id),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['instagram-status', brand.id],
@@ -98,7 +98,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
 
   // Refresh Instagram status with fresh API data
   const refreshStatusMutation = useMutation({
-    mutationFn: () => apiClient.getInstagramConnectionStatus(brand.id, true),
+    mutationFn: () => brandApi.getInstagramConnectionStatus(brand.id, true),
     onSuccess: (data) => {
       // Update the query cache with the fresh data instead of just invalidating
       queryClient.setQueryData(['instagram-status', brand.id], data);

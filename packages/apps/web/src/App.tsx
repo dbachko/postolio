@@ -13,7 +13,7 @@ import Analytics from './pages/Analytics';
 import Engagement from './pages/Engagement';
 import { Growth } from './pages/Growth';
 import { AIFeatures } from './pages/AIFeatures';
-import { Campaigns } from './pages/Campaigns';
+import Campaigns from './pages/Campaigns';
 import { Content } from './pages/Content';
 import { Settings } from './pages/Settings';
 import { SecuritySettings } from './pages/SecuritySettings';

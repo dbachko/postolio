@@ -112,7 +112,7 @@ async function tryFetchHolidays(
   if (!countryCode) return [];
   try {
     // Lazy import so build doesn’t fail without dependency
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const HolidaysMod = (await import('date-holidays')) as unknown;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const HolidaysCtor = (HolidaysMod as any).default ?? (HolidaysMod as any);

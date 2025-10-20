@@ -5,7 +5,7 @@ import {
   type ContentStatus,
   type ContentType,
 } from '../../stores/calendarFilterStore';
-import { apiClient, type Campaign } from '../../lib/api';
+import { campaign as campaignApi, type Campaign } from '../../lib/api';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
@@ -56,7 +56,7 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
   // Fetch campaigns for filter dropdown
   const { data: campaignsData } = useQuery({
     queryKey: ['campaigns', brandId],
-    queryFn: () => apiClient.listCampaigns(brandId),
+    queryFn: () => campaignApi.listCampaigns(brandId),
     staleTime: 5 * 60 * 1000,
   });
 

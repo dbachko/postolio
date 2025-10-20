@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Session } from '../../lib/api';
-import { apiClient } from '../../lib/api';
+import { session as sessionApi } from '../../lib/api';
 import { SessionCard } from './SessionCard';
 import { RevokeSessionDialog } from './RevokeSessionDialog';
 import { RevokeAllSessionsDialog } from './RevokeAllSessionsDialog';
@@ -32,7 +32,7 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await apiClient.getSessions();
+      const response = await sessionApi.getSessions();
       setSessions(response.sessions);
       onSessionsChange?.(response.sessions.length);
     } catch (err) {
@@ -60,7 +60,7 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
 
     setIsRevoking(true);
     try {
-      await apiClient.revokeSession(selectedSession.id);
+      await sessionApi.revokeSession(selectedSession.id);
       toast.success('Session revoked successfully');
       await loadSessions();
     } catch (err) {
@@ -86,7 +86,7 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
 
     setIsUpdating(true);
     try {
-      await apiClient.updateSessionDeviceName(selectedSession.id, newName);
+      await sessionApi.updateSessionDeviceName(selectedSession.id, newName);
       toast.success('Device name updated successfully');
       await loadSessions();
     } catch (err) {
@@ -106,7 +106,7 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
   const confirmRevokeAll = async () => {
     setIsRevokingAll(true);
     try {
-      await apiClient.revokeAllSessions();
+      await sessionApi.revokeAllSessions();
       toast.success('All other sessions revoked successfully');
       await loadSessions();
     } catch (err) {

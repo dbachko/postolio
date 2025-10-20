@@ -11,7 +11,7 @@ import { Step3StrategyReview } from './steps/Step3StrategyReview';
 import { Step4Timeline } from './steps/Step4Timeline';
 import { Step5Review } from './steps/Step5Review';
 import { Alert, AlertDescription } from '../ui/alert';
-import { apiClient } from '../../lib/api';
+import { campaign, httpPost } from '../../lib/api';
 import { HelpCircle } from 'lucide-react';
 import { WizardHelpDialog } from './shared/WizardHelpDialog';
 
@@ -48,7 +48,7 @@ export function CampaignWizard() {
     (async () => {
       try {
         if (!draftId && !skipHydration) {
-          const res = await apiClient.getCampaignDraft(brand.id);
+          const res = await campaign.getCampaignDraft(brand.id);
           if (res?.success && res?.draft?.wizardState) {
             hydrateFromDraft({ ...(res.draft.wizardState || {}), draftId: res.draft.id });
           }
@@ -70,7 +70,7 @@ export function CampaignWizard() {
     }
     try {
       if (brand) {
-        void apiClient.saveCampaignDraft({
+        void campaign.saveCampaignDraft({
           brandId: brand.id,
           wizardState: {
             currentStep: 1,
@@ -95,7 +95,7 @@ export function CampaignWizard() {
     }
     try {
       if (brand) {
-        apiClient.post('/api/analytics/wizard-event', {
+        httpPost('/api/analytics/wizard-event', {
           eventName: 'wizard.reset',
           step: 1,
           brandId: brand.id,

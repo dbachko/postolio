@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiClient } from '@/lib/api';
+import { brand as brandApi } from '@/lib/api';
 
 interface Props {
   brandId: string | null;
@@ -26,7 +26,7 @@ export function BrandProfileDrawer({ brandId, onClose }: Props) {
       setLoading(true);
       setError(null);
       try {
-        const res = await apiClient.getBrandAnalysisProfile(brandId);
+        const res = await brandApi.getBrandAnalysisProfile(brandId);
         if ('error' in res) {
           setError(res.error || 'No profile found');
           setProfile(null);
@@ -47,7 +47,7 @@ export function BrandProfileDrawer({ brandId, onClose }: Props) {
     setReRunLoading(true);
     setReRunMessage(null);
     try {
-      const res = await apiClient.startBrandAnalysis(brandId, { force: true, maxPosts: 20 });
+      const res = await brandApi.startBrandAnalysis(brandId, { force: true, maxPosts: 20 });
       if (res && res.status === 'accepted') {
         setReRunMessage('Analysis requested. It will refresh shortly.');
       } else {

@@ -20,7 +20,7 @@ import { COMMON_TIMEZONES, getUserTimezone, getTimezoneAbbr } from '../lib/timez
 import { Globe, Clock, Info, Save, RefreshCw, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useBrandStore } from '../stores/brandStore';
-import { apiClient } from '../lib/api';
+import { brand as brandApi } from '../lib/api';
 
 export function Settings() {
   const { timezone, isAutoDetected, setTimezone } = useTimezone();
@@ -37,7 +37,7 @@ export function Settings() {
       // Fetch brand timezone settings
       const fetchBrandTimezone = async () => {
         try {
-          const response = await apiClient.getBrandTimezone(selectedBrand.id);
+          const response = await brandApi.getBrandTimezone(selectedBrand.id);
           setBrandTimezone(response.timezone || null);
         } catch (error) {
           console.error('Failed to fetch brand timezone:', error);
@@ -83,7 +83,7 @@ export function Settings() {
 
     setIsSaving(true);
     try {
-      await apiClient.updateBrandTimezone(selectedBrand.id, brandTimezone);
+      await brandApi.updateBrandTimezone(selectedBrand.id, brandTimezone);
       toast.success('Brand timezone settings saved successfully');
     } catch (error) {
       toast.error('Failed to save brand timezone');

@@ -2,7 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { apiClient } from '../lib/api';
+import { campaign as campaignApi, content as contentApi } from '../lib/api';
 import { useBrandStore } from '../stores/brandStore';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -42,14 +42,14 @@ export function CreatePost() {
   // Fetch campaigns for the dropdown
   const campaignsQuery = useQuery({
     queryKey: ['campaigns', selectedBrand?.id],
-    queryFn: () => apiClient.listCampaigns(selectedBrand?.id),
+    queryFn: () => campaignApi.listCampaigns(selectedBrand?.id),
     enabled: !!selectedBrand,
   });
 
   // Preselect default campaign when campaigns load
   useEffect(() => {
-    if (!campaignId && campaignsQuery.data?.campaigns) {
-      const def = campaignsQuery.data.campaigns.find((c) => c.isDefault);
+    if (!campaignId && (campaignsQuery.data as any)?.campaigns) {
+      const def = (campaignsQuery.data as any).campaigns.find((c: any) => c.isDefault);
       if (def) setCampaignId(def.id);
     }
   }, [campaignId, campaignsQuery.data]);
@@ -84,7 +84,7 @@ export function CreatePost() {
       campaignId?: string;
       scheduledAt?: string;
     }) => {
-      return apiClient.createManualContent(data);
+      return contentApi.createManualContent(data);
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['content'] });
@@ -369,9 +369,9 @@ export function CreatePost() {
                 <SelectValue placeholder="Select a campaign (optional)" />
               </SelectTrigger>
               <SelectContent>
-                {campaignsQuery.data?.campaigns
-                  ?.filter((c) => ['active', 'preview'].includes(c.status))
-                  .map((campaign) => (
+                {(campaignsQuery.data as any)?.campaigns
+                  ?.filter((c: any) => ['active', 'preview'].includes(c.status))
+                  .map((campaign: any) => (
                     <SelectItem key={campaign.id} value={campaign.id}>
                       {campaign.name}
                       {campaign.isDefault ? ' (Default)' : ''}

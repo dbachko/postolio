@@ -5,7 +5,7 @@ import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import { format, parse, startOfWeek, getDay, addDays, subDays, isToday } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type Content } from '../lib/api';
+import { content as contentApi, type Content } from '../lib/api';
 import {
   ChevronLeft,
   ChevronRight,
@@ -86,7 +86,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
   // Fetch calendar content with placeholders if brandId is provided
   const calendarQuery = useQuery({
     queryKey: ['calendar', brandId, format(currentDate, 'yyyy-MM')],
-    queryFn: () => apiClient.getCalendarContent(brandId!, format(currentDate, 'yyyy-MM')),
+    queryFn: () => contentApi.getCalendarContent(brandId!, format(currentDate, 'yyyy-MM')),
     enabled: !!brandId && !propContent,
     staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
   });
@@ -130,7 +130,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
 
   const rescheduleMutation = useMutation({
     mutationFn: ({ contentId, scheduledAt }: { contentId: string; scheduledAt: string }) =>
-      apiClient.updateContent({ contentId, scheduledAt }),
+      contentApi.updateContent({ contentId, scheduledAt }),
     onMutate: async ({ contentId, scheduledAt }) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({
@@ -192,9 +192,9 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
 
   // Convert content and placeholders to calendar events
   const events: CalendarEvent[] = useMemo(() => {
-    const contentEvents = content
+    const contentEvents = (content as Content[])
       .filter((item) => item.scheduledAt || item.postedAt)
-      .map((item) => {
+      .map((item: Content) => {
         // Prefer actual posted time for published items; otherwise use scheduled time
         const utcDate =
           (item.status === 'published' && item.postedAt) || item.scheduledAt || item.postedAt!;
@@ -209,7 +209,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
       });
 
     // Add placeholder events
-    const placeholderEvents = placeholders.map((placeholder) => {
+    const placeholderEvents = placeholders.map((placeholder: any) => {
       const localDate = convertUTCToLocal(placeholder.scheduledAt, timezone);
       return {
         id: placeholder.id,
@@ -382,7 +382,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
             </div>
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">
-                {content.filter((c) => c.status === 'scheduled').length} posts scheduled
+                {content.filter((c: any) => c.status === 'scheduled').length} posts scheduled
               </div>
             </div>
           </div>
@@ -452,13 +452,13 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
           <div className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-sm bg-blue-400"></div>
             <span className="text-gray-600">
-              Scheduled ({content.filter((c) => c.status === 'scheduled').length})
+              Scheduled ({content.filter((c: any) => c.status === 'scheduled').length})
             </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-sm bg-green-400"></div>
             <span className="text-gray-600">
-              Published ({content.filter((c) => c.status === 'published').length})
+              Published ({content.filter((c: any) => c.status === 'published').length})
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -468,7 +468,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
           <div className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-sm bg-red-400"></div>
             <span className="text-gray-600">
-              Failed ({content.filter((c) => c.status === 'failed').length})
+              Failed ({content.filter((c: any) => c.status === 'failed').length})
             </span>
           </div>
         </div>

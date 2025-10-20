@@ -3,7 +3,7 @@ import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
 import { Button } from '../../ui/button';
 import { X, TrendingUp } from 'lucide-react';
-import { apiClient } from '../../../lib/api';
+import { brand as brandApi } from '../../../lib/api';
 import { useBrandStore } from '../../../stores/brandStore';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
@@ -61,16 +61,16 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await apiClient.getThemeSuggestions(brandId, {
+        const res = await brandApi.getThemeSuggestions(brandId, {
           campaignType: (campaignType || 'custom') as any,
           goals,
           limit: 12,
         });
         if (!isCancelled) {
-          const vals = (res?.suggestions || []).map((s) => s.value).filter(Boolean);
+          const vals = (res?.suggestions || []).map((s: any) => s.value).filter(Boolean);
           // Ensure uniqueness and keep order
           const dedup = Array.from(new Set(vals));
-          setSuggested(dedup);
+          setSuggested(dedup as any);
           const map: Record<
             string,
             {

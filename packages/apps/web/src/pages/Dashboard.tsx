@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiClient, type Campaign } from '../lib/api';
+import { brand as brandApi, campaign as campaignApi, content as contentApi } from '../lib/api';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +17,7 @@ export function Dashboard() {
 
   const { data: brandsData, isLoading: brandsLoading } = useQuery({
     queryKey: ['brands'],
-    queryFn: () => apiClient.getBrands(),
+    queryFn: () => brandApi.getBrands(),
   });
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export function Dashboard() {
   // Get comprehensive metrics across all brands
   const { data: allCampaignsData } = useQuery({
     queryKey: ['allCampaigns'],
-    queryFn: () => apiClient.listCampaigns(), // Get campaigns for all brands
+    queryFn: () => campaignApi.listCampaigns(), // Get campaigns for all brands
     enabled: brands.length > 0,
   });
 
@@ -43,7 +43,7 @@ export function Dashboard() {
       if (brands.length === 0) return { scheduled: 0, published: 0 };
 
       // Get content from all brands
-      const promises = brands.map((brand) => apiClient.getContentHistory(brand.id));
+      const promises = brands.map((b) => contentApi.getContentHistory(b.id));
       const results = await Promise.all(promises);
 
       const allContent = results.flatMap((result) => result?.content || []);
@@ -61,7 +61,9 @@ export function Dashboard() {
     enabled: brands.length > 0,
   });
 
-  const allCampaigns = (allCampaignsData?.campaigns || []).filter((c) => !c.isDefault);
+  const allCampaigns = (((allCampaignsData as any)?.campaigns || []) as any[]).filter(
+    (c: any) => !c.isDefault
+  );
   const contentMetrics = contentMetricsData || { scheduled: 0, published: 0 };
 
   // Calculate campaign-focused metrics
@@ -70,7 +72,7 @@ export function Dashboard() {
   const publishedPosts = contentMetrics.published;
 
   // Handle campaign viewing with auto brand-switching
-  const handleViewCampaign = (campaign: Campaign) => {
+  const handleViewCampaign = (campaign: any) => {
     const campaignBrandId = campaign.brandId;
 
     // Auto-switch brand if campaign belongs to different brand

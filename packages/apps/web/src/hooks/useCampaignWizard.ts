@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import debounce from 'lodash.debounce';
 import { useEffect, useMemo } from 'react';
-import { apiClient } from '../lib/api';
+import { campaign as campaignApi, httpPost } from '../lib/api';
 import { useBrandStore } from '../stores/brandStore';
 import type {
   CampaignWizardState,
@@ -135,7 +135,7 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
             strategyPredictionsMeta: state.strategyPredictionsMeta,
             strategySchedule: state.strategySchedule,
           } as const;
-          const res = await apiClient.saveCampaignDraft({
+          const res = await campaignApi.saveCampaignDraft({
             brandId: state.brandId,
             wizardState: payload as unknown as Record<string, unknown>,
             draftId: state.draftId,
@@ -230,12 +230,10 @@ export function useWizardAutoSave(): void {
   useEffect(() => {
     if (!state.brandId) return;
     // Fire and forget; ignore errors
-    apiClient
-      .post('/api/analytics/wizard-event', {
-        eventName: 'wizard.step',
-        step: state.currentStep,
-        brandId: state.brandId,
-      })
-      .catch(() => {});
+    httpPost('/api/analytics/wizard-event', {
+      eventName: 'wizard.step',
+      step: state.currentStep,
+      brandId: state.brandId,
+    }).catch(() => {});
   }, [state.currentStep, state.brandId]);
 }

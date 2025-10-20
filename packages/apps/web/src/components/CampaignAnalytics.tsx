@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { apiClient } from '../lib/api';
+import { campaign as campaignApi } from '../lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -31,21 +31,21 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
   // Fetch campaign metrics
   const metricsQuery = useQuery({
     queryKey: ['campaign-metrics', campaignId],
-    queryFn: () => apiClient.getCampaignMetrics(campaignId),
+    queryFn: () => campaignApi.getCampaignMetrics(campaignId),
     enabled: !!campaignId,
   });
 
   // Fetch optimization recommendations
   const recommendationsQuery = useQuery({
     queryKey: ['campaign-recommendations', campaignId],
-    queryFn: () => apiClient.getCampaignRecommendations(campaignId),
+    queryFn: () => campaignApi.getCampaignRecommendations(campaignId),
     enabled: !!campaignId,
   });
 
   // Fetch ROI data
   const roiQuery = useQuery({
     queryKey: ['campaign-roi', campaignId],
-    queryFn: () => apiClient.getCampaignROI(campaignId),
+    queryFn: () => campaignApi.getCampaignROI(campaignId),
     enabled: !!campaignId,
   });
 
@@ -267,7 +267,7 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {metrics.topHashtags.slice(0, 10).map((hashtag, index) => (
+                  {metrics.topHashtags.slice(0, 10).map((hashtag: any, index: number) => (
                     <div key={hashtag.tag} className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Badge variant="outline">#{index + 1}</Badge>
@@ -300,7 +300,7 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {metrics.performanceByDate.slice(-7).map((day) => (
+                  {metrics.performanceByDate.slice(-7).map((day: any) => (
                     <div key={day.date} className="flex items-center justify-between">
                       <span className="text-sm">{format(new Date(day.date), 'MMM d, yyyy')}</span>
                       <div className="flex gap-4 text-sm">
@@ -342,7 +342,7 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {recommendations.map((rec, index) => (
+                  {recommendations.map((rec: any, index: number) => (
                     <Card key={index} className="border-l-4 border-l-blue-500">
                       <CardContent className="p-4">
                         <div className="mb-2 flex items-start justify-between">

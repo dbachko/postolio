@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type Brand } from '../lib/api';
+import { brand as brandApi, type Brand } from '../lib/api';
 import {
   Select,
   SelectContent,
@@ -46,7 +46,7 @@ export function Brands() {
 
   const { data: brandsData, isLoading } = useQuery({
     queryKey: ['brands'],
-    queryFn: () => apiClient.getBrands(),
+    queryFn: () => brandApi.getBrands(),
   });
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function Brands() {
     const load = async () => {
       const entries = await Promise.all(
         (brands || []).map(
-          async (b) => [b.id, await apiClient.hasBrandProfileProjection(b.id)] as const
+          async (b) => [b.id, await brandApi.hasBrandProfileProjection(b.id)] as const
         )
       );
       setProfileAvailable(Object.fromEntries(entries));
@@ -77,7 +77,7 @@ export function Brands() {
       const results = await Promise.all(
         toFetch.map(async (b) => {
           try {
-            const prof = await apiClient.getBrandAnalysisProfile(b.id);
+            const prof = await brandApi.getBrandAnalysisProfile(b.id);
             if ('error' in prof) return [b.id, null] as const;
             const tones = Array.isArray(prof.text?.tone) ? prof.text!.tone.slice(0, 3) : [];
             const palette = Array.isArray(prof.visual?.palette)
@@ -100,7 +100,7 @@ export function Brands() {
 
   const createBrandMutation = useMutation({
     mutationFn: (data: typeof createFormData) =>
-      apiClient.createBrand({
+      brandApi.createBrand({
         name: data.name,
         description: data.description,
         countryCode: data.countryCode ? data.countryCode.toUpperCase() : null,
@@ -116,7 +116,7 @@ export function Brands() {
   });
 
   const deleteBrandMutation = useMutation({
-    mutationFn: (brandId: string) => apiClient.deleteBrand(brandId),
+    mutationFn: (brandId: string) => brandApi.deleteBrand(brandId),
     onSuccess: (_, brandId) => {
       removeBrand(brandId);
       queryClient.invalidateQueries({ queryKey: ['brands'] });
@@ -133,7 +133,7 @@ export function Brands() {
     }: {
       brandId: string;
       data: { name: string; description: string; countryCode?: string | null };
-    }) => apiClient.updateBrand(brandId, data),
+    }) => brandApi.updateBrand(brandId, data),
     onSuccess: (response) => {
       updateBrand(response.brand);
       queryClient.invalidateQueries({ queryKey: ['brands'] });

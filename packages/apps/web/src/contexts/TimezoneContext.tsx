@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { getUserTimezone } from '../lib/timezone';
 import { useAuthStore } from '../stores/authStore';
-import { apiClient } from '../lib/api';
+import { auth as authApi, brand as brandApi } from '../lib/api';
 
 interface TimezoneContextType {
   // Current timezone being used
@@ -80,7 +80,7 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     window.localStorage.setItem('userTimezone', newTimezone);
 
     try {
-      await apiClient.updateUserTimezone({
+      await authApi.updateUserTimezone({
         timezone: newTimezone,
         timezoneAutoDetected: isAuto,
       });
@@ -107,7 +107,7 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     }
 
     try {
-      const data = await apiClient.getBrandTimezone(brandId);
+      const data = await brandApi.getBrandTimezone(brandId);
       const brandTz = data.timezone || timezone;
 
       // Cache the result
@@ -123,7 +123,7 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
   // Refresh timezone from user settings
   const refreshTimezone = async () => {
     try {
-      const data = await apiClient.getProfile();
+      const data = await authApi.getProfile();
       if (data.user) {
         if (data.user.timezone && !data.user.timezoneAutoDetected) {
           setTimezoneState(data.user.timezone);

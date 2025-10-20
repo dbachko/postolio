@@ -25,7 +25,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
     Params: CampaignMetricsParams;
     Querystring: CampaignMetricsQuery;
   }>(
-    '/campaign/analytics/:campaignId',
+    '/campaigns/:campaignId/analytics',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
@@ -52,7 +52,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Get optimization recommendations
   fastify.get<{ Params: OptimizationParams }>(
-    '/campaign/analytics/:campaignId/recommendations',
+    '/campaigns/:campaignId/analytics/recommendations',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
@@ -83,7 +83,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Calculate campaign ROI
   fastify.get<{ Params: ROIParams }>(
-    '/campaign/analytics/:campaignId/roi',
+    '/campaigns/:campaignId/analytics/roi',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
@@ -109,7 +109,7 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Get analytics summary for all campaigns of a brand
   fastify.get<{ Params: { brandId: string } }>(
-    '/brand/:brandId/analytics/summary',
+    '/brands/:brandId/analytics/summary',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       try {
@@ -208,6 +208,8 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+
+  // No legacy paths; use only RESTful endpoints above
 };
 
 export default campaignAnalyticsRoutes;

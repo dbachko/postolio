@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { apiClient } from '../lib/api';
+import { httpPost } from '../lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 
@@ -82,7 +82,7 @@ export function AIFeatures() {
     { brandId: string; content: string; currentHashtags: string[] }
   >({
     mutationFn: async (data) => {
-      const res = await apiClient.post('/ai/hashtags/optimize', data);
+      const res = await httpPost('/ai/hashtags/optimize', data);
       return res as HashtagResults;
     },
     onSuccess: (data) => setHashtagResults(data),
@@ -94,7 +94,7 @@ export function AIFeatures() {
     { brandId: string; competitors: string[] }
   >({
     mutationFn: async (data) => {
-      const res = (await apiClient.post('/ai/competitors/analyze', data)) as {
+      const res = (await httpPost('/ai/competitors/analyze', data)) as {
         analysis: CompetitorResults;
       };
       return res.analysis;
@@ -108,7 +108,7 @@ export function AIFeatures() {
     { brandId: string; context: string; contentType: 'post' | 'story' | 'reel' }
   >({
     mutationFn: async (data) => {
-      const res = (await apiClient.post('/ai/content/suggestions', data)) as {
+      const res = (await httpPost('/ai/content/suggestions', data)) as {
         suggestions: ContentSuggestion[];
       };
       return res.suggestions;
@@ -118,7 +118,7 @@ export function AIFeatures() {
 
   const scheduleMutation = useMutation<ScheduleResults, unknown, { brandId: string }>({
     mutationFn: async (data) => {
-      const res = (await apiClient.post('/ai/schedule/optimize', data)) as {
+      const res = (await httpPost('/ai/schedule/optimize', data)) as {
         optimizedSchedule: ScheduleResults;
       };
       return res.optimizedSchedule;

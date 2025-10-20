@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../lib/api';
+import { httpPost, httpGet } from '../lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 
@@ -49,7 +49,7 @@ export function Growth() {
     queryFn: async () => {
       if (!selectedBrand) return null;
       return (
-        (await apiClient.post(`/api/growth/analyze`, {
+        (await httpPost(`/api/growth/analyze`, {
           brandId: selectedBrand.id,
         })) as any
       ).analysis as GrowthAnalysisResponse;
@@ -62,7 +62,7 @@ export function Growth() {
       queryKey: ['growth-strategies', selectedBrand?.id, selectedFocus],
       queryFn: async () => {
         if (!selectedBrand) return null;
-        return (await apiClient.post(`/api/growth/strategies`, {
+        return (await httpPost(`/api/growth/strategies`, {
           brandId: selectedBrand.id,
           focus: selectedFocus || undefined,
         })) as GrowthStrategiesResponse;
@@ -74,7 +74,7 @@ export function Growth() {
     queryKey: ['growth-metrics', selectedBrand?.id],
     queryFn: async () => {
       if (!selectedBrand) return null;
-      return ((await apiClient.get(`/api/growth/metrics/${selectedBrand.id}?period=30`)) as any)
+      return ((await httpGet(`/api/growth/metrics/${selectedBrand.id}?period=30`)) as any)
         .metrics as GrowthMetrics;
     },
     enabled: !!selectedBrand,

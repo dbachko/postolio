@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiClient } from '../lib/api';
+import { httpGet, httpPost } from '../lib/api';
 
 interface EngagementRules {
   autoLike: {
@@ -75,9 +75,7 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
     setLoading(true);
     setError('');
     try {
-      const response = await apiClient.get<{ rules: EngagementRules }>(
-        `/api/engagement/rules/${brandId}`
-      );
+      const response = await httpGet(`/api/engagement/rules/${brandId}`);
       if (response.rules) {
         setRules(response.rules);
       }
@@ -100,7 +98,7 @@ export default function EngagementSettings({ brandId }: EngagementSettingsProps)
     setSuccess('');
 
     try {
-      await apiClient.post('/api/engagement/rules', {
+      await httpPost('/api/engagement/rules', {
         brandId,
         rules,
       });

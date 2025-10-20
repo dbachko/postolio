@@ -8,7 +8,11 @@ import type {
   UseSchedulingWebSocketOptions,
   WebSocketMessage,
 } from '../types/websocket';
-import { WebSocketError, ConnectionError } from '../types/websocket';
+import { ConnectionError } from '../types/websocket';
+import { useWsCacheInvalidation } from './ws/useWsCacheInvalidation';
+import { useWsBackoff } from './ws/useWsBackoff';
+import { useWsErrorHandler } from './ws/useWsErrorHandler';
+import { useWsHeartbeat } from './ws/useWsHeartbeat';
 
 export function useSchedulingWebSocket({
   enabled = true,
@@ -23,7 +27,6 @@ export function useSchedulingWebSocket({
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const reconnectAttemptsRef = useRef(0);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const isConnectingRef = useRef(false); // Guard against multiple simultaneous connections
   const countdownIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const lastConnectionAttemptRef = useRef<number>(0); // Track last connection attempt time
@@ -81,101 +84,14 @@ export function useSchedulingWebSocket({
     ];
   }, [selectedBrand?.id]);
 
-  // Type definitions for cache data (moved outside callback for performance)
-  type ContentStatus = 'draft' | 'scheduled' | 'published' | 'failed';
+  // Handle status update and invalidate queries (extracted)
+  const handleStatusUpdate = useWsCacheInvalidation(queryClient, queryKeys, (e) => {
+    setLastUpdate(new Date());
+    onStatusUpdate?.(e as any);
+  }) as (event: StatusUpdateEvent) => void;
 
-  interface ContentItem {
-    id: string;
-    status: ContentStatus;
-    [key: string]: unknown;
-  }
-
-  interface CacheData {
-    content?: ContentItem[];
-    [key: string]: unknown;
-  }
-
-  // Handle status update and invalidate queries
-  const handleStatusUpdate = useCallback(
-    (event: StatusUpdateEvent) => {
-      setLastUpdate(new Date());
-
-      // Call custom handler if provided
-      onStatusUpdate?.(event);
-
-      // Invalidate relevant queries to refresh UI
-      queryKeys.forEach((queryKey) => {
-        queryClient.invalidateQueries({ queryKey });
-      });
-
-      // If this update is related to a campaign, invalidate the campaign query
-      if (event.type === 'status_update' && 'contentId' in event.data) {
-        const metadata = event.data.metadata as { campaignId?: string } | undefined;
-        if (metadata?.campaignId) {
-          console.log('Invalidating campaign query for campaign:', metadata.campaignId);
-          queryClient.invalidateQueries({ queryKey: ['campaign', metadata.campaignId] });
-        }
-      }
-
-      // Update cache optimistically if we have the data
-      if (event.type === 'status_update' && 'contentId' in event.data) {
-        const contentId = event.data.contentId;
-        const newStatus = event.data.newStatus;
-
-        // Update content in cache
-        queryClient.setQueriesData(
-          { queryKey: ['content'] },
-          (oldData: CacheData | ContentItem[] | undefined) => {
-            if (!oldData) return oldData;
-
-            // Handle array of content
-            if (Array.isArray(oldData)) {
-              return oldData.map((item: ContentItem) =>
-                item.id === contentId ? { ...item, status: newStatus } : item
-              );
-            }
-
-            // Handle paginated response
-            if ('content' in oldData && Array.isArray(oldData.content)) {
-              return {
-                ...oldData,
-                content: oldData.content.map((item: ContentItem) =>
-                  item.id === contentId ? { ...item, status: newStatus } : item
-                ),
-              };
-            }
-
-            return oldData;
-          }
-        );
-
-        // Also update individual post detail cache and clear any processing flags
-        queryClient.setQueryData(['post', contentId], (old: any) => {
-          if (!old) return old;
-          return {
-            ...old,
-            status: newStatus,
-            generationParams: {
-              ...(old.generationParams || {}),
-              processing: {
-                ...(old.generationParams?.processing || {}),
-                active: false,
-              },
-            },
-          };
-        });
-      }
-    },
-    [queryKeys, queryClient, onStatusUpdate]
-  );
-
-  // Exponential backoff calculation with jitter (react-use-websocket pattern)
-  const calculateReconnectDelay = useCallback((attemptNumber: number) => {
-    // Increase max delay to 30 seconds for JWT expiration scenarios
-    const baseDelay = Math.min(Math.pow(2, attemptNumber) * 1000, 30000); // Cap at 30 seconds
-    const jitter = Math.random() * 0.1 * baseDelay; // Add 10% jitter to prevent thundering herd
-    return Math.floor(baseDelay + jitter);
-  }, []);
+  // Exponential backoff calculation with jitter (extracted)
+  const calculateReconnectDelay = useWsBackoff();
 
   // Handle connection status changes
   const handleConnectionChange = useCallback(
@@ -186,20 +102,8 @@ export function useSchedulingWebSocket({
     [onConnectionChange]
   );
 
-  // Handle WebSocket errors
-  const handleWebSocketError = useCallback(
-    (error: Error | Event) => {
-      const wsError =
-        error instanceof Error
-          ? new WebSocketError(error.message, 'WEBSOCKET_ERROR')
-          : new ConnectionError('WebSocket connection failed');
-
-      console.error('WebSocket error:', wsError);
-      onError?.(wsError);
-      handleConnectionChange('error');
-    },
-    [onError, handleConnectionChange]
-  );
+  // Handle WebSocket errors (extracted)
+  const handleWebSocketError = useWsErrorHandler(onError, handleConnectionChange);
 
   // Message filter to prevent unnecessary re-renders (react-use-websocket pattern)
   const messageFilter = useCallback((message: WebSocketMessage) => {
@@ -209,6 +113,9 @@ export function useSchedulingWebSocket({
     }
     return true;
   }, []);
+
+  // Heartbeat management for active WebSocket connections
+  const { startHeartbeat, stopHeartbeat } = useWsHeartbeat();
 
   // Connect to WebSocket
   const connect = useCallback(async () => {
@@ -275,11 +182,7 @@ export function useSchedulingWebSocket({
         // Wait for 'authenticated' message from server before subscribing
 
         // Start heartbeat
-        heartbeatIntervalRef.current = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'ping' }));
-          }
-        }, heartbeatInterval);
+        startHeartbeat(wsRef, heartbeatInterval);
 
         // Process any queued offline actions
         if (offlineQueue.getQueueSize() > 0) {
@@ -352,10 +255,7 @@ export function useSchedulingWebSocket({
         wsRef.current = null;
 
         // Clear heartbeat
-        if (heartbeatIntervalRef.current) {
-          clearInterval(heartbeatIntervalRef.current);
-          heartbeatIntervalRef.current = undefined;
-        }
+        stopHeartbeat();
 
         // Clear any existing countdown
         if (countdownIntervalRef.current) {
@@ -458,10 +358,7 @@ export function useSchedulingWebSocket({
       reconnectTimeoutRef.current = undefined;
     }
 
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = undefined;
-    }
+    stopHeartbeat();
 
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
@@ -510,10 +407,7 @@ export function useSchedulingWebSocket({
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = undefined;
         }
-        if (heartbeatIntervalRef.current) {
-          clearInterval(heartbeatIntervalRef.current);
-          heartbeatIntervalRef.current = undefined;
-        }
+        stopHeartbeat();
         if (countdownIntervalRef.current) {
           clearInterval(countdownIntervalRef.current);
           countdownIntervalRef.current = undefined;
@@ -555,10 +449,7 @@ export function useSchedulingWebSocket({
     }
 
     // Clear intervals
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = undefined;
-    }
+    stopHeartbeat();
 
     setConnectionStatus('disconnected');
 

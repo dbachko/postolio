@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { apiClient, type Content } from '../lib/api';
+import { content as contentApi, type Content } from '../lib/api';
 import { OptimizedImage } from './OptimizedImage';
 import { formatInUserTimezone } from '../lib/timezone';
 import { useTimezone } from '../contexts/TimezoneContext';
@@ -42,7 +42,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
   }, [content.status]);
 
   const publishMutation = useMutation({
-    mutationFn: (contentId: string) => apiClient.publishToInstagram(contentId),
+    mutationFn: (contentId: string) => contentApi.publishToInstagram(contentId),
     onSuccess: () => {
       setPublishError(null);
       queryClient.invalidateQueries({ queryKey: ['contentHistory', brandId] });
@@ -54,7 +54,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: (contentId: string) => apiClient.scheduleContent(contentId),
+    mutationFn: (contentId: string) => contentApi.scheduleContent(contentId),
     onMutate: () => {
       setIsScheduling(true);
     },

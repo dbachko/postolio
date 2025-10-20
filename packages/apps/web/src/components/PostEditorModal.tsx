@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useTimezone } from '../contexts/TimezoneContext';
 import { convertLocalToUTC } from '../lib/timezone';
-import { apiClient, type Content } from '../lib/api';
+import { content as contentApi, type Content } from '../lib/api';
 import { ImageUploader } from './ImageUploader';
 import { PostCaptionEditor } from './PostCaptionEditor';
 import { PostHashtagEditor } from './PostHashtagEditor';
@@ -173,7 +173,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
         throw new Error('Cannot update content with empty caption');
       }
 
-      return apiClient.updateContent(data);
+      return contentApi.updateContent(data);
     },
     onMutate: () => {
       setSaveStatus('saving');
@@ -287,7 +287,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       if (content) {
         setSaveStatus('saving');
         try {
-          const response = await apiClient.uploadContentImage(content.id, fileOrUrl);
+          const response = await contentApi.uploadContentImage(content.id, fileOrUrl);
           if (response.success && response.content) {
             // Update with the server's response - use imageUrl if available
             const newImageUrl = response.content.imageUrl || objectUrl;

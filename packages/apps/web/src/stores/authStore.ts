@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { apiClient, type User } from '../lib/api';
+import { auth as authApi, type User } from '../lib/api';
 import { generateDeviceFingerprint, getDeviceName } from '../lib/device-fingerprint';
 
 interface AuthState {
@@ -23,7 +23,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const fingerprint = await generateDeviceFingerprint();
       const deviceName = getDeviceName();
 
-      const response = await apiClient.login({
+      const response = await authApi.login({
         email,
         password,
         rememberMe,
@@ -42,7 +42,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const fingerprint = await generateDeviceFingerprint();
       const deviceName = getDeviceName();
 
-      const response = await apiClient.register({
+      const response = await authApi.register({
         email,
         password,
         name,
@@ -59,7 +59,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     try {
-      await apiClient.logout();
+      await authApi.logout();
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -69,7 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   checkAuth: async () => {
     try {
-      const response = await apiClient.getProfile();
+      const response = await authApi.getProfile();
       set({ user: response.user, isAuthenticated: true, isLoading: false });
     } catch {
       set({ user: null, isAuthenticated: false, isLoading: false });

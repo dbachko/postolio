@@ -1,4 +1,4 @@
-import { apiClient } from './api';
+import { auth as authApi } from './api';
 
 /**
  * AuthInterceptor - Manages automatic token refresh
@@ -85,7 +85,7 @@ export class AuthInterceptor {
   private static async performRefresh(): Promise<void> {
     try {
       console.log('[Auth] Refreshing token...');
-      await apiClient.refreshToken();
+      await authApi.refreshToken();
       this.lastRefreshTime = Date.now();
       console.log('[Auth] Token refreshed successfully');
     } catch (error) {

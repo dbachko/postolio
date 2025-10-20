@@ -160,4 +160,3 @@ export {
   NavigationMenuViewport,
   navigationMenuTriggerStyle,
 };
-/* eslint-disable react-refresh/only-export-components */

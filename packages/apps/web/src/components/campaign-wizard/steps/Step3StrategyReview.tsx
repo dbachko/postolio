@@ -6,7 +6,7 @@ import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
 import { useBrandStore } from '../../../stores/brandStore';
-import { apiClient } from '../../../lib/api';
+import { campaign as campaignApi, brand as brandApi } from '../../../lib/api';
 import { Loader2, Lightbulb } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../ui/dialog';
 import { WizardHelpDialog } from '../shared/WizardHelpDialog';
@@ -146,7 +146,7 @@ export function Step3StrategyReview() {
     if (!canGenerate || !brand || !wizard.timeline) return;
     setIsGenerating(true);
     try {
-      const res = await apiClient.generateCampaignStrategy({
+      const res = await campaignApi.generateCampaignStrategy({
         brandId: brand.id,
         name: wizard.name || 'Campaign',
         goals:
@@ -166,7 +166,7 @@ export function Step3StrategyReview() {
       });
       if (res?.success) {
         const generatedPillars = normalizePillars(
-          res.strategy.contentPillars.pillars.map((p) => ({
+          res.strategy.contentPillars.pillars.map((p: any) => ({
             name: p.name,
             percentage: p.percentage,
           }))
@@ -178,7 +178,7 @@ export function Step3StrategyReview() {
           setPillars(normalizePillars(pillars));
           // Optionally merge in AI themes by index without touching names/percentages
           try {
-            const merged = pillars.map((p, i) => ({
+            const merged = (pillars as any[]).map((p: any, i: number) => ({
               name: p.name,
               percentage: p.percentage,
               themes: res.strategy.contentPillars.pillars[i]?.themes || [],
@@ -193,7 +193,7 @@ export function Step3StrategyReview() {
         } else {
           setPillars(generatedPillars);
           updateField('contentPillars', {
-            pillars: res.strategy.contentPillars.pillars.map((p, idx) => ({
+            pillars: (res.strategy.contentPillars.pillars as any[]).map((p: any, idx: number) => ({
               name: generatedPillars[idx]?.name ?? p.name,
               percentage: generatedPillars[idx]?.percentage ?? p.percentage,
               themes: p.themes || [],
@@ -208,9 +208,9 @@ export function Step3StrategyReview() {
         updateField('strategyPredictions', res.strategy.predictions);
         updateField('strategyPredictionsMeta', res.strategy.predictionsMeta || null);
         updateField('strategySchedule', {
-          phases: res.strategy.schedule.phases,
+          phases: res.strategy.schedule.phases as any[],
           postingTime: res.strategy.schedule.postingTime || null,
-        });
+        } as any);
         // Auto-apply strategy optimizations (posting time, frequency, themes)
         try {
           const prevPosting = wizard.postingTime || null;
@@ -231,7 +231,7 @@ export function Step3StrategyReview() {
 
           const prevThemes = Array.isArray(wizard.themes) ? wizard.themes : [];
           const pillarThemes = (res.strategy.contentPillars?.pillars || [])
-            .flatMap((p) => p.themes || [])
+            .flatMap((p: any) => p.themes || [])
             .filter(Boolean) as string[];
           const nextThemes = Array.from(new Set([...prevThemes, ...pillarThemes]));
           if (nextThemes.length !== prevThemes.length) {
@@ -273,7 +273,7 @@ export function Step3StrategyReview() {
     if (!brand) return;
     setIsAnalyzing(true);
     try {
-      const res = await apiClient.analyzeCampaignGoal({
+      const res = await campaignApi.analyzeCampaignGoal({
         brandId: brand.id,
         goal:
           (Array.isArray(wizard.goals) && wizard.goals.find((g) => g.trim().length > 0)) ||
@@ -490,7 +490,7 @@ export function Step3StrategyReview() {
                         onClick={async () => {
                           if (!brand) return;
                           try {
-                            await apiClient.startBrandAnalysis(brand.id, {
+                            await brandApi.startBrandAnalysis(brand.id, {
                               force: true,
                               maxPosts: 30,
                             });
