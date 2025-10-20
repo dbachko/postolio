@@ -36,9 +36,10 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
 
     // Determine which URL to use
     if (cdnUrl) {
-      // Use CDN URL with format optimization
-      const cdnBase = cdnUrl.replace(/\.(jpg|jpeg|png|webp)$/i, '');
-      const optimizedUrl = format === 'webp' ? `${cdnBase}.webp` : cdnUrl;
+      // Use CDN URL with format optimization (derive a .webp candidate if supported)
+      const hasExt = /\.(jpg|jpeg|png|webp)$/i.test(cdnUrl);
+      const cdnBase = hasExt ? cdnUrl.replace(/\.(jpg|jpeg|png|webp)$/i, '') : cdnUrl;
+      const optimizedUrl = format === 'webp' && hasExt ? `${cdnBase}.webp` : cdnUrl;
       setImageSrc(optimizedUrl);
     } else if (fallbackUrl) {
       // Use fallback URL if no CDN URL available
@@ -56,23 +57,42 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   };
 
   const handleError = () => {
-    setError(true);
-    setLoading(false);
+    // Move through a safe fallback sequence without getting stuck:
+    // 1) If we tried an optimized .webp derived from the CDN URL, fall back to original CDN URL
+    // 2) Then try provided fallbackUrl (original external URL), if any
+    // 3) Finally, try the original src passed in
 
-    // Try fallback URLs in order
-    if (imageSrc === cdnUrl && fallbackUrl) {
-      console.warn('CDN image failed to load, trying fallback URL');
+    // If we have a CDN URL and we're not currently using it, try it next
+    if (cdnUrl && imageSrc !== cdnUrl) {
+      console.warn('Optimized image failed; falling back to original CDN URL');
+      setImageSrc(cdnUrl);
+      setError(false);
+      setLoading(true);
+      return;
+    }
+
+    // If we have a fallback URL and we're not currently using it, try it next
+    if (fallbackUrl && imageSrc !== fallbackUrl) {
+      console.warn('CDN image failed; falling back to provided fallback URL');
       setImageSrc(fallbackUrl);
       setError(false);
       setLoading(true);
-    } else if (imageSrc === fallbackUrl && src !== fallbackUrl) {
-      console.warn('Fallback URL failed, trying original source');
+      return;
+    }
+
+    // Finally, try the original src if it's different
+    if (src && imageSrc !== src) {
+      console.warn('Fallback URL failed; trying original src');
       setImageSrc(src);
       setError(false);
       setLoading(true);
-    } else {
-      console.error('All image sources failed to load');
+      return;
     }
+
+    // All options exhausted
+    setError(true);
+    setLoading(false);
+    console.error('All image sources failed to load');
   };
 
   const aspectRatioClasses = {

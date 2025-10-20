@@ -419,8 +419,8 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           where: { brandId, status: { in: ['active', 'preview'] } },
         });
 
-        // Compute placeholders
-        const placeholders = computePlaceholders(campaigns, content, monthStart, monthEnd);
+        // Compute placeholders (timezone-aware)
+        const placeholders = await computePlaceholders(campaigns, content, monthStart, monthEnd);
 
         // Map to response format with CDN URLs
         const contentWithUrls = content.map((item) => ({

@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, memo, useEffect, useRef } from 'react';
 import { content as contentApi } from '../lib/api';
@@ -521,7 +521,14 @@ export default function PostDetail() {
                 Created {format(new Date(post.createdAt), 'MMM d, yyyy')}
               </span>
               {post.campaign && (
-                <span className="flex items-center gap-1">Campaign: {post.campaign.name}</span>
+                <Link
+                  to={`/campaigns/${post.campaign.id}`}
+                  className="flex items-center gap-1 hover:underline"
+                  title={`View campaign: ${post.campaign.name}`}
+                >
+                  <span>Campaign:</span>
+                  <span>{post.campaign.name}</span>
+                </Link>
               )}
               {(postFetching || insightsFetching) && (
                 <span className="flex items-center gap-1 text-blue-600">
