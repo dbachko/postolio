@@ -419,7 +419,7 @@ export class SchedulerAdapter {
         }
       }
 
-      // 7. Handle processing state based on AWS result
+      // 7. Persist schedule metadata if AWS succeeded; otherwise clear processing
       if (!awsScheduleCreated) {
         // AWS scheduling failed - clear processing state and set error
         try {
@@ -440,8 +440,40 @@ export class SchedulerAdapter {
           logger.error('Failed to update local database with scheduling error', { error: dbError });
           throw dbError;
         }
+      } else {
+        // Persist scheduleId and flag so later cancel/delete can reliably unschedule
+        try {
+          const updatedParams = {
+            ...currentParams,
+            // keep processing active until downstream sync clears it
+            processing: currentParams.processing || {
+              active: true,
+              operation: 'scheduling',
+              startedAt: new Date().toISOString(),
+              operationId,
+            },
+            scheduleId: scheduleId,
+            awsScheduleCreated: true,
+          } as GenerationParams;
+
+          // Only update scheduledAt if it differs or was missing
+          const needsScheduledAtUpdate =
+            !content.scheduledAt || content.scheduledAt.getTime() !== scheduledTimeUTC.getTime();
+
+          await prisma.content.update({
+            where: { id: contentId },
+            data: {
+              ...(needsScheduledAtUpdate ? { scheduledAt: scheduledTimeUTC } : {}),
+              generationParams: JSON.parse(JSON.stringify(updatedParams)),
+            },
+          });
+        } catch (persistErr) {
+          logger.warn('Failed to persist schedule metadata; cancel may not work', {
+            error: persistErr,
+            contentId,
+          });
+        }
       }
-      // If AWS succeeded, leave processing state active - EventBridge events will clear it
 
       // 8. Broadcast status change (only after both AWS and DB succeed)
       if (awsScheduleCreated && this.broadcaster && scheduleId) {
@@ -528,6 +560,7 @@ export class SchedulerAdapter {
       // Get content to find schedule ID and store original state
       const content = await prisma.content.findUnique({
         where: { id: contentId },
+        include: { brand: { select: { id: true, userId: true } } },
       });
 
       if (!content) {
@@ -536,8 +569,25 @@ export class SchedulerAdapter {
 
       // Type-safe access to generationParams with proper null checking
       const generationParams = (content.generationParams as GenerationParams | null) || {};
-      const scheduleId = generationParams.scheduleId;
-      const wasAwsScheduled = generationParams.awsScheduleCreated;
+      let scheduleId = generationParams.scheduleId;
+      let wasAwsScheduled = generationParams.awsScheduleCreated;
+
+      // Fallback: scheduleId might not have been persisted (older records)
+      if ((!scheduleId || !wasAwsScheduled) && content.brand?.id) {
+        try {
+          const list = await (await this.client).getUpcomingSchedules(content.brand.id, 50);
+          const match = list.find((s) => s.contentId === contentId);
+          if (match) {
+            scheduleId = match.scheduleId;
+            wasAwsScheduled = true;
+          }
+        } catch (listErr) {
+          logger.warn('Failed to list schedules for fallback cancel lookup', {
+            error: listErr,
+            brandId: content.brand.id,
+          });
+        }
+      }
 
       let awsCancelled = false;
 

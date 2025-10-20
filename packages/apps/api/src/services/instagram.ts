@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { redisService } from './redis.js';
 import * as crypto from 'crypto';
 import { analyticsCache } from './analytics-cache.js';
@@ -534,8 +534,31 @@ class InstagramService {
       const followerResponse = await axios.get(followerUrl);
 
       // Get insights for the time range
-      const metricsUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/insights?metric=impressions,reach,profile_views&period=day&since=${startDate.toISOString().split('T')[0]}&until=${endDate.toISOString().split('T')[0]}&access_token=${credentials.accessToken}`;
-      const insightsResponse = await axios.get(metricsUrl);
+      const baseId = credentials.accountId || brand.instagramAccountId;
+      const since = startDate.toISOString().split('T')[0];
+      const until = endDate.toISOString().split('T')[0];
+      const buildMetricsUrl = (metrics: string) =>
+        `https://graph.facebook.com/v23.0/${baseId}/insights?metric=${metrics}&period=day&since=${since}&until=${until}&access_token=${credentials.accessToken}`;
+
+      let metrics = 'impressions,reach,profile_views';
+      let insightsResponse;
+      try {
+        insightsResponse = await axios.get(buildMetricsUrl(metrics));
+      } catch (err) {
+        // If profile_views is not allowed for this account or permissions are missing,
+        // retry with a reduced metric set to salvage usable data.
+        const axErr = err as AxiosError<{ error?: { code?: number; message?: string } }>;
+        const code = axErr.response?.data?.error?.code;
+        const message: string = axErr.response?.data?.error?.message || '';
+        const isMetricError =
+          code === 100 || /Invalid metric|Unsupported get request/i.test(message);
+        if (isMetricError) {
+          metrics = 'impressions,reach';
+          insightsResponse = await axios.get(buildMetricsUrl(metrics));
+        } else {
+          throw err;
+        }
+      }
 
       // Process insights data
       const insights = insightsResponse.data.data;
@@ -555,9 +578,27 @@ class InstagramService {
         fromCache: false,
       };
     } catch (error) {
-      console.error('Failed to fetch account insights:', error);
+      // Avoid logging sensitive tokens from axios request configs
+      const axErr = error as AxiosError<{
+        error?: { code?: number; message?: string; error_subcode?: number };
+      }>;
+      const msg = axErr.response?.data?.error?.message || (error as Error).message;
+      const code = axErr.response?.data?.error?.code;
+      const subcode = axErr.response?.data?.error?.error_subcode;
+      console.error('Failed to fetch account insights:', { message: msg, code, subcode });
+
+      // Map common Graph API errors to clearer messages for route handler
+      if (code === 190 || /access token/i.test(msg)) {
+        throw new Error('Instagram token invalid or expired');
+      }
+      if (code === 10 || /permissions/i.test(msg) || /manage_insights/i.test(msg)) {
+        throw new Error('Missing instagram_manage_insights permission');
+      }
+      if (code === 100 || /Invalid metric|Unsupported get request/i.test(msg)) {
+        throw new Error('Unsupported insight metric for this account');
+      }
       throw new Error(
-        `Failed to fetch account insights: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to fetch account insights: ${msg || 'Unknown error'} (code: ${code ?? 'n/a'})`
       );
     }
   }

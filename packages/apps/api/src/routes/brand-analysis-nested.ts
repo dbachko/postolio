@@ -135,6 +135,8 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
         const res = await doc.send(
           new QueryCommand({
             TableName: JOBS_TABLE,
+            // Query the brandId-requestedAt GSI to get the latest job
+            IndexName: 'GSI1',
             KeyConditionExpression: 'brandId = :bid',
             ExpressionAttributeValues: { ':bid': brandId },
             ScanIndexForward: false,
@@ -151,7 +153,10 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
           error: item.errorMessage,
         });
       } catch (e) {
-        request.log.error({ err: e }, 'Failed to fetch latest job');
+        request.log.error(
+          { err: e, brandId, table: JOBS_TABLE, index: 'GSI1' },
+          'Failed to fetch latest job'
+        );
         return reply.code(500).send({ error: 'Failed to fetch job status' });
       }
     }

@@ -91,11 +91,21 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
   });
 
-  // Use provided content or fetched content
+  // Use provided content or fetched content, then defensively de-duplicate by id
   const content = useMemo(
     () => propContent ?? calendarQuery.data?.data?.content ?? [],
     [propContent, calendarQuery.data?.data?.content]
   );
+  const contentDeduped = useMemo(() => {
+    const seen = new Set<string>();
+    const arr = Array.isArray(content) ? (content as Content[]) : [];
+    return arr.filter((item) => {
+      if (!item || typeof item.id !== 'string') return false;
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [content]);
   const placeholders = useMemo(
     () => calendarQuery.data?.data?.placeholders ?? [],
     [calendarQuery.data?.data?.placeholders]
@@ -192,7 +202,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
 
   // Convert content and placeholders to calendar events
   const events: CalendarEvent[] = useMemo(() => {
-    const contentEvents = (content as Content[])
+    const contentEvents = (contentDeduped as Content[])
       .filter((item) => item.scheduledAt || item.postedAt)
       .map((item: Content) => {
         // Prefer actual posted time for published items; otherwise use scheduled time
@@ -237,7 +247,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
     });
 
     return [...contentEvents, ...placeholderEvents];
-  }, [content, placeholders, timezone]);
+  }, [contentDeduped, placeholders, timezone]);
 
   // Handle event drop (rescheduling)
   const handleEventDrop = useCallback(
@@ -382,7 +392,7 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
             </div>
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">
-                {content.filter((c: any) => c.status === 'scheduled').length} posts scheduled
+                {contentDeduped.filter((c: any) => c.status === 'scheduled').length} posts scheduled
               </div>
             </div>
           </div>
@@ -452,13 +462,13 @@ export function CalendarView({ brandId, content: propContent, onContentClick }: 
           <div className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-sm bg-blue-400"></div>
             <span className="text-gray-600">
-              Scheduled ({content.filter((c: any) => c.status === 'scheduled').length})
+              Scheduled ({contentDeduped.filter((c: any) => c.status === 'scheduled').length})
             </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-sm bg-green-400"></div>
             <span className="text-gray-600">
-              Published ({content.filter((c: any) => c.status === 'published').length})
+              Published ({contentDeduped.filter((c: any) => c.status === 'published').length})
             </span>
           </div>
           <div className="flex items-center gap-2">

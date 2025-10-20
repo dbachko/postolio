@@ -36,7 +36,6 @@ import {
   Menu,
   Search,
   BarChart3,
-  Instagram,
   TrendingUp,
   Brain,
   Users,
@@ -67,12 +66,6 @@ const navigationItems: NavigationItem[] = [
     path: '/analytics',
     icon: BarChart3,
     description: 'Performance metrics',
-  },
-  {
-    label: 'Instagram',
-    path: '/analytics?tab=instagram',
-    icon: Instagram,
-    description: 'Instagram insights',
   },
   {
     label: 'Engagement',

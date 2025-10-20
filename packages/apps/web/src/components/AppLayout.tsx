@@ -27,7 +27,6 @@ import {
   Building2,
   Search,
   BarChart3,
-  Instagram,
   TrendingUp,
   Brain,
   Users,
@@ -81,12 +80,6 @@ const mainNavItems: NavigationItem[] = [
 
 // Secondary navigation items (in dropdown menu)
 const secondaryNavItems: NavigationItem[] = [
-  {
-    label: 'Instagram',
-    path: '/analytics?tab=instagram',
-    icon: Instagram,
-    description: 'Instagram insights',
-  },
   {
     label: 'Engagement',
     path: '/engagement',

@@ -75,6 +75,35 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
         });
       }
 
+      if (error instanceof Error && error.message.includes('token invalid or expired')) {
+        return reply.status(401).send({
+          error: 'Instagram token invalid or expired; please reconnect Instagram',
+          configured: false,
+        });
+      }
+
+      if (error instanceof Error && error.message.includes('Missing instagram_manage_insights')) {
+        return reply.status(403).send({
+          error:
+            'Instagram permission missing: instagram_manage_insights. Please reconnect and grant permissions.',
+          configured: false,
+        });
+      }
+
+      if (error instanceof Error && error.message.includes('Unsupported insight metric')) {
+        return reply.status(502).send({
+          error: 'Instagram insights metric not available for this account',
+        });
+      }
+
+      // Map missing credentials to a clear client error so UI can degrade gracefully
+      if (error instanceof Error && error.message.includes('Failed to get Instagram credentials')) {
+        return reply.status(400).send({
+          error: 'Instagram credentials missing or expired for this brand',
+          configured: false,
+        });
+      }
+
       return reply.status(500).send({
         error: 'Failed to fetch Instagram analytics overview',
         details: error instanceof Error ? error.message : 'Unknown error',
@@ -135,6 +164,13 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
       if (error instanceof Error && error.message.includes('Instagram not configured')) {
         return reply.status(400).send({
           error: 'Instagram not configured for this brand',
+          configured: false,
+        });
+      }
+
+      if (error instanceof Error && error.message.includes('Failed to get Instagram credentials')) {
+        return reply.status(400).send({
+          error: 'Instagram credentials missing or expired for this brand',
           configured: false,
         });
       }
@@ -232,7 +268,7 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
         return reply.status(404).send({ error: 'Brand not found or unauthorized' });
       }
 
-      // Check if Instagram is configured
+      // Check if Instagram is configured (brand fields)
       if (!instagramService.isConfigured(brand)) {
         return reply.status(400).send({
           error: 'Instagram not configured for this brand',
@@ -241,6 +277,25 @@ const instagramAnalyticsRoutes: FastifyPluginAsync = async function (fastify) {
           cacheAge: 0,
           rateLimitRemaining: 200,
         });
+      }
+
+      // Validate that credentials are available from Token Service; if not, treat as not configured
+      try {
+        const { PublisherCredentialsService } = await import(
+          '../services/publisher-credentials.js'
+        );
+        const creds = await PublisherCredentialsService.getCredentialsForBrand(brand.id);
+        if (!creds || !creds.accessToken) {
+          return reply.status(400).send({
+            error: 'Instagram credentials missing for this brand',
+            configured: false,
+            lastUpdated: null,
+            cacheAge: 0,
+            rateLimitRemaining: 200,
+          });
+        }
+      } catch (credErr) {
+        request.log.warn({ err: credErr }, 'Failed to validate credentials; proceeding');
       }
 
       const status = await instagramService.getAnalyticsCacheStatus(brand);

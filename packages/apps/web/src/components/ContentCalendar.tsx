@@ -62,7 +62,16 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     });
   }, [currentDate, brandId, queryClient]);
 
-  const content = (calendarQuery.data?.data?.content || []) as Content[];
+  const content = useMemo(() => {
+    const raw = (calendarQuery.data?.data?.content || []) as Content[];
+    const seen = new Set<string>();
+    return raw.filter((item) => {
+      if (!item || typeof item.id !== 'string') return false;
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [calendarQuery.data?.data?.content]);
   const placeholders = (calendarQuery.data?.data?.placeholders || []) as Placeholder[];
 
   // Fetch campaigns for progress visualization

@@ -85,16 +85,6 @@ export function Layout({ children }: LayoutProps) {
                   </NavigationMenuItem>
                   <NavigationMenuItem>
                     <Link
-                      to="/analytics?tab=instagram"
-                      className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/analytics') ? '!bg-accent !text-accent-foreground' : ''
-                      }`}
-                    >
-                      Instagram Analytics
-                    </Link>
-                  </NavigationMenuItem>
-                  <NavigationMenuItem>
-                    <Link
                       to="/engagement"
                       className={`${navigationMenuTriggerStyle()} ${
                         isActiveRoute('/engagement') ? '!bg-accent !text-accent-foreground' : ''
