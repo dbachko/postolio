@@ -444,7 +444,8 @@ export class FoundationStack extends cdk.Stack {
     // Avoid CloudFormation timing out while waiting for CloudFront to finish deploying.
     // This is especially useful when associating a freshly issued ACM certificate
     // or when DNS validation/propagation is slow.
-    const cfnImagesDistribution = imagesDistribution.node.defaultChild as cloudfront.CfnDistribution;
+    const cfnImagesDistribution = imagesDistribution.node
+      .defaultChild as cloudfront.CfnDistribution;
     if (cfnImagesDistribution) {
       cfnImagesDistribution.waitForDeployment = false;
     }
