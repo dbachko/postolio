@@ -2,7 +2,7 @@ name: Deploy Stack-Based Architecture
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, master, develop]
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
@@ -182,25 +182,31 @@ jobs:
             if [[ -n "${{ github.event.inputs.stacks }}" && "${{ github.event.inputs.stacks }}" != "all" ]]; then
               IFS=',' read -ra REQUESTED_STACKS <<< "${{ github.event.inputs.stacks }}"
               for stack in "${REQUESTED_STACKS[@]}"; do
-                STACKS+=("\"$stack\"")
+                # Append as plain values; we'll quote when building JSON
+                STACKS+=("$stack")
               done
             else
-              for s in "${ALL_STACKS[@]}"; do STACKS+=("\"$s\""); done
+              for s in "${ALL_STACKS[@]}"; do STACKS+=("$s"); done
             fi
           else
             # Auto-detect changed stacks
-            [[ "${{ steps.changes.outputs.foundation }}" == "true" ]] && STACKS+=("\"foundation\"")
-            [[ "${{ steps.changes.outputs.auth }}" == "true" ]] && STACKS+=("\"auth\"")
-            [[ "${{ steps.changes.outputs.scheduling }}" == "true" ]] && STACKS+=("\"scheduling\"")
-            [[ "${{ steps.changes.outputs.publishing }}" == "true" ]] && STACKS+=("\"publishing\"")
-            [[ "${{ steps.changes.outputs.brand-analysis }}" == "true" ]] && STACKS+=("\"brand-analysis\"")
-            [[ "${{ steps.changes.outputs.api }}" == "true" ]] && STACKS+=("\"api\"")
-            [[ "${{ steps.changes.outputs.web }}" == "true" ]] && STACKS+=("\"web\"")
+            [[ "${{ steps.changes.outputs.foundation }}" == "true" ]] && STACKS+=("foundation")
+            [[ "${{ steps.changes.outputs.auth }}" == "true" ]] && STACKS+=("auth")
+            [[ "${{ steps.changes.outputs.scheduling }}" == "true" ]] && STACKS+=("scheduling")
+            [[ "${{ steps.changes.outputs.publishing }}" == "true" ]] && STACKS+=("publishing")
+            [[ "${{ steps.changes.outputs.brand-analysis }}" == "true" ]] && STACKS+=("brand-analysis")
+            [[ "${{ steps.changes.outputs.api }}" == "true" ]] && STACKS+=("api")
+            [[ "${{ steps.changes.outputs.web }}" == "true" ]] && STACKS+=("web")
 
             # If infra changed, deploy all stacks
             if [[ "${{ steps.changes.outputs.infra }}" == "true" ]]; then
               STACKS=()
-              for s in "${ALL_STACKS[@]}"; do STACKS+=("\"$s\""); done
+              for s in "${ALL_STACKS[@]}"; do STACKS+=("$s"); done
+            fi
+
+            # If pushing to main/master and nothing changed, still deploy all stacks
+            if [[ ${#STACKS[@]} -eq 0 && "${{ github.event_name }}" == "push" && ( "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ) ]]; then
+              for s in "${ALL_STACKS[@]}"; do STACKS+=("$s"); done
             fi
           fi
 
@@ -245,12 +251,14 @@ jobs:
 
           if [ ${#STACKS[@]} -eq 0 ]; then
             echo "stack-matrix=[]" >> $GITHUB_OUTPUT
+            echo "Stacks to deploy: []"
           else
-            MATRIX=$(IFS=,; echo "[${STACKS[*]}]")
-            echo "stack-matrix=$MATRIX" >> $GITHUB_OUTPUT
+            # Build valid JSON array (e.g., ["foundation","auth"]) without double-escaping
+            JSON_ARRAY=$(printf '"%s",' "${STACKS[@]}")
+            JSON_ARRAY="[${JSON_ARRAY%,}]"
+            echo "stack-matrix=$JSON_ARRAY" >> $GITHUB_OUTPUT
+            echo "Stacks to deploy: $JSON_ARRAY"
           fi
-
-          echo "Stacks to deploy: $MATRIX"
 
       - name: Debug change detection outputs
         if: always()
@@ -280,8 +288,8 @@ jobs:
     if: |
       github.event_name != 'pull_request' && (
         needs.detect-changes.outputs.api-changed == 'true' ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.forceRebuild == 'true') ||
-        (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
       )
     environment: ${{ needs.detect-changes.outputs.environment }}
     steps:
