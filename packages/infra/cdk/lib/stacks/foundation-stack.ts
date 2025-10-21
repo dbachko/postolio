@@ -441,6 +441,14 @@ export class FoundationStack extends cdk.Stack {
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
     });
 
+    // Avoid CloudFormation timing out while waiting for CloudFront to finish deploying.
+    // This is especially useful when associating a freshly issued ACM certificate
+    // or when DNS validation/propagation is slow.
+    const cfnImagesDistribution = imagesDistribution.node.defaultChild as cloudfront.CfnDistribution;
+    if (cfnImagesDistribution) {
+      cfnImagesDistribution.waitForDeployment = false;
+    }
+
     // Create Route53 A record for custom domain
     if (hostedZone && cdnDomainName) {
       new route53.ARecord(this, 'CdnAliasRecord', {
