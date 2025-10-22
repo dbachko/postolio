@@ -1,5 +1,3 @@
-// Shared types extracted from legacy ApiClient
-
 export interface User {
   id: string;
   email: string;
@@ -133,7 +131,6 @@ export interface Campaign {
   name: string;
   status: 'creating' | 'preview' | 'active' | 'paused' | 'completed' | 'failed' | 'processing';
   brandId: string;
-  isDefault?: boolean;
   config?: {
     duration?: { start: string; end: string };
     frequency?: string;

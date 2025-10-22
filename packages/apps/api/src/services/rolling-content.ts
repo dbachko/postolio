@@ -214,7 +214,6 @@ class RollingContentService {
       }
 
       // Get or generate style profile
-      // Brand profile projection is used by the generator; no legacy style profile needed
 
       // Calculate how many posts to generate
       const postsNeeded = Math.min(

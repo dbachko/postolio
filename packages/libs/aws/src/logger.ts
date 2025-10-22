@@ -342,7 +342,7 @@ export function logContentError(
 }
 
 /**
- * Legacy migration helper - gradually replace console.error calls
+ * Migration helper - gradually replace console.error calls
  */
 export function migrateConsoleError(
   serviceName: string,
@@ -354,13 +354,13 @@ export function migrateConsoleError(
 
   if (error) {
     logger.error(message, {
-      operation: 'legacy_console_error',
+      operation: 'console_error_migration',
       error,
       ...context,
     });
   } else {
-    logger.warn(`Legacy console.error call: ${message}`, {
-      operation: 'legacy_console_error',
+    logger.warn(`console.error call (to migrate): ${message}`, {
+      operation: 'console_error_migration',
       ...context,
     });
   }

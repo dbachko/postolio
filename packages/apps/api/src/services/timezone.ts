@@ -254,7 +254,6 @@ export class TimezoneService {
   static parseTimezoneAwareDate(dateStr: string, timezone: string): Date {
     let processedDateStr = dateStr;
     if (dateStr.includes('T')) {
-      // Handle legacy ISO strings
       const datePart = dateStr.split('T')[0];
       if (!datePart) {
         throw new Error('Invalid date format');

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   useCalendarFilterStore,
@@ -63,18 +63,6 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
   const campaigns = (campaignsData?.campaigns || []) as Campaign[];
   const activeFilterCount = filters.getActiveFilterCount();
 
-  // Back-compat: if URL/state contains legacy 'none' campaign selection (no longer shown),
-  // map it to the Default Campaign ID once campaigns load
-  useEffect(() => {
-    if (campaigns.length === 0) return;
-    if (filters.campaigns.includes('none')) {
-      const def = campaigns.find((c) => c.isDefault);
-      if (def) {
-        filters.setCampaigns([def.id]);
-      }
-    }
-  }, [campaigns, filters.campaigns]);
-
   const handleCampaignChange = (value: string) => {
     if (value === 'all') {
       filters.setCampaigns([]);
@@ -84,15 +72,11 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
     }
   };
 
-  // Compute select control value without exposing legacy 'none'
+  // Compute select control value
   const selectCampaignValue = useMemo(() => {
     if (filters.campaigns.length === 0) return 'all';
-    if (filters.campaigns.includes('none')) {
-      const def = campaigns.find((c) => c.isDefault);
-      return def ? def.id : 'all';
-    }
     return filters.campaigns.join(',');
-  }, [filters.campaigns, campaigns]);
+  }, [filters.campaigns]);
 
   const handleApplyDateRange = () => {
     filters.setDateRange(tempDateRange.start, tempDateRange.end);
@@ -130,6 +114,7 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All posts</SelectItem>
+              <SelectItem value="none">Unassigned</SelectItem>
               {campaigns.map((campaign) => (
                 <SelectItem key={campaign.id} value={campaign.id}>
                   {campaign.name}

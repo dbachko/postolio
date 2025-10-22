@@ -208,8 +208,6 @@ const campaignAnalyticsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
-
-  // No legacy paths; use only RESTful endpoints above
 };
 
 export default campaignAnalyticsRoutes;

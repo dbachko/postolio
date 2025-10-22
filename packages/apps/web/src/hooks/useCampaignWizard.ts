@@ -87,7 +87,7 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()(
             // dynamic assignment with runtime cast
             if (key === 'goals') {
               const g = (draft as any)[key];
-              // Migrate legacy string to array (split by newline/semicolon)
+
               (next as any)[key] = Array.isArray(g)
                 ? g
                 : typeof g === 'string'

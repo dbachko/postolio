@@ -1,6 +1,6 @@
 /**
  * Scheduler Adapter Service
- * Bridges the gap between legacy scheduler and new AWS Content Scheduler
+ * Adapter for AWS Content Scheduler integration
  */
 
 import { randomUUID } from 'crypto';
@@ -68,7 +68,7 @@ export class SchedulerAdapter {
     } catch (error) {
       logger.error('Failed to initialize ContentSchedulerClient', { error });
 
-      // Fallback: try with legacy environment variable
+      // Fallback: try with alternative environment variable
       const fallbackUrl = process.env.SCHEDULER_API_URL || 'http://localhost:4000';
 
       // Check if scheduler is properly configured
@@ -860,7 +860,7 @@ export class SchedulerAdapter {
           // Include content details in case they were edited
           caption: content.caption || '',
           hashtags: content.hashtags || [],
-          // No legacy or metadata fallback for mediaKeys; upstream must supply keys
+          // No metadata fallback for mediaKeys; upstream must supply keys
         };
         if (content.s3ImageKey) {
           updatePayload.mediaKeys = [content.s3ImageKey];

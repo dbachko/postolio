@@ -11,7 +11,6 @@ import { schedulerService } from '../services/scheduler.js';
 import { instagramService } from '../services/instagram.js';
 
 import { getDatabaseClient } from '../config/database.js';
-import { getOrCreateDefaultCampaign } from '../services/default-campaign.js';
 
 const prisma = getDatabaseClient();
 
@@ -86,8 +85,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         // Save generated content to database
-        // Resolve default campaign id to attach generated posts
-        const defaultCampaign = await getOrCreateDefaultCampaign(brandId);
 
         const contentRecords = await Promise.all(
           generatedContent.map(async (content) => {
@@ -110,7 +107,8 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
                 retentionExpiresAt: content.retentionExpiresAt || null,
                 status: 'draft',
                 brandId,
-                campaignId: defaultCampaign.id,
+
+                campaignId: null,
                 generationParams: JSON.parse(
                   JSON.stringify({
                     theme,
@@ -280,8 +278,7 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
         // Determine status based on scheduledAt
         const status = scheduledAt ? 'scheduled' : 'draft';
 
-        // Resolve default campaign if one is not provided
-        const resolvedCampaignId = campaignId || (await getOrCreateDefaultCampaign(brandId)).id;
+        const resolvedCampaignId = campaignId || null;
 
         // Create content record
         const content = await prisma.content.create({
@@ -361,8 +358,6 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
-
-  // Legacy /create endpoint removed in favor of RESTful '/'
 
   // Get draft content for review
   fastify.get<{ Params: { brandId: string } }>(

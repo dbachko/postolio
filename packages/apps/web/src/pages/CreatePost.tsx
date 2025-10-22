@@ -46,14 +46,6 @@ export function CreatePost() {
     enabled: !!selectedBrand,
   });
 
-  // Preselect default campaign when campaigns load
-  useEffect(() => {
-    if (!campaignId && (campaignsQuery.data as any)?.campaigns) {
-      const def = (campaignsQuery.data as any).campaigns.find((c: any) => c.isDefault);
-      if (def) setCampaignId(def.id);
-    }
-  }, [campaignId, campaignsQuery.data]);
-
   // Prefill from query params (campaignId, scheduledAt)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -374,16 +366,12 @@ export function CreatePost() {
                   .map((campaign: any) => (
                     <SelectItem key={campaign.id} value={campaign.id}>
                       {campaign.name}
-                      {campaign.isDefault ? ' (Default)' : ''}
                     </SelectItem>
                   ))}
               </SelectContent>
             </Select>
-            <p
-              className="text-muted-foreground text-sm"
-              title="By default, new posts are assigned to the Default Campaign so nothing is lost. You can change it here."
-            >
-              Auto-assigns to Default Campaign; change if needed
+            <p className="text-muted-foreground text-sm">
+              Optional: assign this post to a campaign
             </p>
           </div>
 

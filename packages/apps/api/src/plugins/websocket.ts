@@ -240,7 +240,6 @@ function handleSubscribe(socket: AuthenticatedSocket, message: SubscribeMessage)
 
   const roomsToSubscribe: string[] = [];
 
-  // Handle legacy brandId subscription
   if (message.brandId) {
     roomsToSubscribe.push(`brand:${message.brandId}`);
     socket.brandId = message.brandId; // Keep for backward compatibility
@@ -311,7 +310,6 @@ function handleUnsubscribe(socket: AuthenticatedSocket) {
     socket.subscribedRooms.clear();
   }
 
-  // Legacy cleanup for backward compatibility
   if (socket.brandId) {
     const room = `brand:${socket.brandId}`;
     connections.get(room)?.delete(socket);
@@ -339,7 +337,6 @@ function cleanupSocket(socket: AuthenticatedSocket) {
     socket.subscribedRooms.clear();
   }
 
-  // Legacy cleanup for backward compatibility
   if (socket.brandId) {
     const room = `brand:${socket.brandId}`;
     connections.get(room)?.delete(socket);

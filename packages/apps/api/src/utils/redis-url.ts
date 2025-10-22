@@ -16,7 +16,7 @@ export function getRedisUrl(fallbackUrl: string = 'redis://localhost:6379'): str
     return `redis://${host}:${port}`;
   }
 
-  // Fallback for local development or legacy configuration
+  // Fallback for local development configuration
   return process.env.REDIS_URL || fallbackUrl;
 }
 

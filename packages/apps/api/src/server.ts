@@ -230,7 +230,7 @@ export function buildFastify(): FastifyInstance {
   app.register(accountRoutes, { prefix: '/api/account' });
   app.register(configRoutes); // Config routes include their own /api prefix
   app.register(backgroundJobsRoutes); // Background job monitoring routes
-  // Legacy brand-analysis paths and nested RESTful variants
+
   // Use /api/brands/:brandId/analysis/* for brand analysis
   app.register(brandAnalysisNested, { prefix: '/api/brands' });
 

@@ -131,8 +131,6 @@ model Campaign {
   priority           Int            @default(5)
   previewGenerated   Boolean        @default(false)
   errorMessage       String?
-  // Marks the system-managed default campaign for a brand
-  isDefault          Boolean        @default(false)
   // Visual identification: hex color code for calendar/timeline display
   color              String?
   createdAt          DateTime       @default(now())

@@ -135,7 +135,6 @@ export async function runVisualExtractor(
 }
 
 export function consolidateVisualDescriptors(items: VisualItemDescriptor[]) {
-  // Legacy placeholder kept for compatibility; prefer runVisualExtractor result
   void items;
   return { palette: [], motifs: [], composition: [] };
 }

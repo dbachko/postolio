@@ -195,7 +195,6 @@ export async function invokeLLM<T = unknown>(opts: LlmInvocationOptions): Promis
           throw new LlmValidationError('Response exceeds size guard');
         return { data: parsed as T, usage: json?.usage };
       } else {
-        // Chat Completions for legacy/4o models
         const content: Array<
           { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
         > = [{ type: 'text', text: opts.prompt }];
@@ -300,7 +299,7 @@ export async function invokeLLM<T = unknown>(opts: LlmInvocationOptions): Promis
         return res.data;
       } catch (err) {
         lastError = err;
-        // For validation error, single retry once (keep legacy behavior)
+
         if (err instanceof LlmValidationError) {
           if (attempt === 0) continue;
           throw err;

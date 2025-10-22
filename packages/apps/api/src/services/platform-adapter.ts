@@ -9,7 +9,7 @@ export interface PlatformContent {
   caption: string;
   hashtags: string[];
   mediaUrl?: string;
-  imageUrl?: string; // Add support for legacy imageUrl field
+  imageUrl?: string;
   mediaType?: 'image' | 'video' | 'carousel';
   metadata?: Record<string, unknown>;
 }

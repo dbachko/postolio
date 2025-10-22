@@ -3,15 +3,11 @@ import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { uploadImageToS3, buildCdnUrl } from '../services/s3-image.js';
 import { computePlaceholders } from '../services/placeholderService.js';
 import { instagramService } from '../services/instagram.js';
-// Legacy AI analyze endpoint removed
 
 import { getDatabaseClient } from '../config/database.js';
-import { getOrCreateDefaultCampaign } from '../services/default-campaign.js';
 
 const prisma = getDatabaseClient();
 const eventBridge = new EventBridge({});
-
-// interface BrandAnalysisBody removed with legacy endpoint
 
 interface CreateBrandBody {
   name: string;
@@ -67,10 +63,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             countryCode: true,
           },
         });
-        // Ensure the brand has a default campaign (fire-and-forget)
-        getOrCreateDefaultCampaign(brand.id).catch((e) => {
-          request.log.warn({ err: e, brandId: brand.id }, 'Failed to create default campaign');
-        });
+
         // Note: do not auto-start brand analysis on creation.
         // Analysis runs only on IG connect, brand updates, or manual trigger.
         return reply.code(201).send({ brand });
@@ -86,8 +79,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
-
-  // Legacy /analyze endpoint removed in favor of nested analysis
 
   // Get user's brands (RESTful: GET /)
   fastify.get('/', { preHandler: fastify.authenticate }, async (request, reply) => {

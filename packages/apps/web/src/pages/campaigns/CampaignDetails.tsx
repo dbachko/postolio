@@ -112,28 +112,26 @@ export function CampaignDetails({
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
             <CardTitle>{campaign.name}</CardTitle>
-            {!campaign.isDefault && (
-              <div className="flex items-center gap-2">
-                {campaign.status === 'preview' && (
-                  <Button size="sm" className="gap-2" onClick={onStartCampaign}>
-                    <Play className="h-4 w-4" />
-                    Launch
-                  </Button>
-                )}
-                {campaign.status === 'active' && (
-                  <Button size="sm" variant="outline" className="gap-2" onClick={onPauseCampaign}>
-                    <Pause className="h-4 w-4" />
-                    Pause
-                  </Button>
-                )}
-                {campaign.status === 'paused' && (
-                  <Button size="sm" className="gap-2" onClick={onStartCampaign}>
-                    <Play className="h-4 w-4" />
-                    Resume
-                  </Button>
-                )}
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {campaign.status === 'preview' && (
+                <Button size="sm" className="gap-2" onClick={onStartCampaign}>
+                  <Play className="h-4 w-4" />
+                  Launch
+                </Button>
+              )}
+              {campaign.status === 'active' && (
+                <Button size="sm" variant="outline" className="gap-2" onClick={onPauseCampaign}>
+                  <Pause className="h-4 w-4" />
+                  Pause
+                </Button>
+              )}
+              {campaign.status === 'paused' && (
+                <Button size="sm" className="gap-2" onClick={onStartCampaign}>
+                  <Play className="h-4 w-4" />
+                  Resume
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>

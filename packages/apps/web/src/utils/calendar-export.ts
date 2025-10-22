@@ -144,7 +144,7 @@ export async function exportToPDF(
   if (groupByCampaign) {
     contentGroups = new Map();
     content.forEach((item) => {
-      const key = item.campaignName || item.campaignId || 'Default Campaign';
+      const key = item.campaignName || item.campaignId || 'Unassigned';
       if (!contentGroups.has(key)) {
         contentGroups.set(key, []);
       }

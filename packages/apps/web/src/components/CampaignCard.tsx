@@ -52,16 +52,12 @@ const CampaignCard = memo(
     };
 
     const canDeleteCampaign = () => {
-      if (campaign.isDefault) return false;
       // Only campaigns with status: draft, preview, creating, failed can be deleted
       const deletableStatuses = ['draft', 'preview', 'creating', 'failed'];
       return deletableStatuses.includes(campaign.status);
     };
 
     const getDeleteTooltip = () => {
-      if (campaign.isDefault) {
-        return 'Default campaign cannot be deleted or modified.';
-      }
       if (canDeleteCampaign()) {
         return 'Delete campaign';
       }
@@ -169,15 +165,6 @@ const CampaignCard = memo(
                   <Badge variant={getBadgeVariant()} className="text-xs">
                     {getStatusLabel()}
                   </Badge>
-                  {campaign.isDefault && (
-                    <Badge
-                      variant="secondary"
-                      className="text-xs"
-                      title="Default Campaign: automatically created and indefinite. New and Instagram-synced posts go here by default. Not editable or deletable."
-                    >
-                      Default
-                    </Badge>
-                  )}
 
                   {/* Content count indicator */}
                   {campaign.content && campaign.content.length > 0 && (
@@ -190,7 +177,7 @@ const CampaignCard = memo(
 
               {/* Quick actions - only show on hover and for relevant states */}
               <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                {!campaign.isDefault && campaign.status === 'preview' && (
+                {campaign.status === 'preview' && (
                   <Button
                     size="sm"
                     onClick={(e) => {
@@ -205,7 +192,7 @@ const CampaignCard = memo(
                   </Button>
                 )}
 
-                {!campaign.isDefault && campaign.status === 'active' && (
+                {campaign.status === 'active' && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -221,7 +208,7 @@ const CampaignCard = memo(
                   </Button>
                 )}
 
-                {!campaign.isDefault && campaign.status === 'paused' && (
+                {campaign.status === 'paused' && (
                   <Button
                     size="sm"
                     onClick={(e) => {

@@ -22,7 +22,6 @@ import {
 } from '../services/campaign-strategy.js';
 
 import { getDatabaseClient } from '../config/database.js';
-import { isDefaultCampaign } from '../services/default-campaign.js';
 import { instagramService } from '../services/instagram.js';
 import { campaignSlidingWindowService } from '../services/campaign-sliding-window.js';
 
@@ -64,8 +63,6 @@ interface PreviewCampaignBody {
   configId: string;
   exampleCount?: number;
 }
-
-// legacy StartCampaignBody removed; start is now param-based
 
 const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   const sanitizeGoalsValue = (val: unknown): string | string[] | undefined => {
@@ -280,7 +277,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
-  // Legacy '/configure' removed in favor of RESTful '/'
 
   // Generate campaign preview
   fastify.post<{ Body: PreviewCampaignBody }>(
@@ -494,19 +490,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user!.id;
         const { id: campaignId } = request.params;
 
-        // Prevent starting default campaign
-        try {
-          // Lazy import to avoid circular imports at module load
-          const { isDefaultCampaign } = await import('../services/default-campaign.js');
-          if (await isDefaultCampaign(campaignId)) {
-            return reply
-              .code(400)
-              .send({ error: 'Default campaign cannot be started or modified' });
-          }
-        } catch (e) {
-          request.log.warn({ err: e }, 'Failed to check default campaign');
-        }
-
         const result = await campaignService.startCampaign(campaignId, userId);
 
         if (!result.success) {
@@ -547,8 +530,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
-
-  // Legacy '/list', '/draft', '/start' endpoints removed
 
   // Fill sliding window for a campaign (manual trigger)
   fastify.post<{ Params: { id: string } }>(
@@ -653,11 +634,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (!id) {
           return reply.code(400).send({ error: 'Campaign ID is required' });
-        }
-
-        // Block all modifications to the default campaign
-        if (await isDefaultCampaign(id)) {
-          return reply.code(400).send({ error: 'Default campaign cannot be modified' });
         }
 
         // Validate request schema
@@ -842,13 +818,13 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
             id: campaign.id,
             name: campaign.name,
             status: campaign.status,
+            brandId: campaign.brandId,
             brand: campaign.brand,
             contentCount: campaign._count.content,
             config: campaign.config,
             createdAt: campaign.createdAt,
             startedAt: campaign.startedAt,
             completedAt: campaign.completedAt,
-            isDefault: (campaign as unknown as { isDefault?: boolean }).isDefault === true,
           })),
         });
       } catch (error) {
@@ -899,11 +875,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (!campaign) {
           return reply.code(404).send({ error: 'Campaign not found or access denied' });
-        }
-
-        // Prevent deletion of default campaign
-        if (await isDefaultCampaign(id)) {
-          return reply.code(400).send({ error: 'Default campaign cannot be deleted' });
         }
 
         // Only allow deletion of campaigns that haven't been started
@@ -961,11 +932,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (typeof priority !== 'number' || priority < 1 || priority > 10) {
         return reply.code(400).send({ error: 'Priority must be a number between 1 and 10' });
-      }
-
-      // Block priority changes on default campaign
-      if (await isDefaultCampaign(id)) {
-        return reply.code(400).send({ error: 'Default campaign cannot be modified' });
       }
 
       const updatedCampaign = await campaignService.updateCampaignPriority(id, priority, userId);

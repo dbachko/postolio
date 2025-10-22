@@ -45,8 +45,6 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 const eventBridge = tracer.captureAWSv3Client(new EventBridgeClient({}));
 
-// No legacy derivation: mediaKeys must be supplied by caller
-
 async function getSchedulerEventBusTargetConfig() {
   const groupName = process.env.SCHEDULER_GROUP_NAME || 'default';
   const roleArn = process.env.SCHEDULER_EVENTS_ROLE_ARN;

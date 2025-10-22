@@ -5,7 +5,6 @@ import {
   type GeneratedContent,
 } from './content-generator.js';
 import { getStatusBroadcaster } from './broadcast-registry.js';
-// Legacy StyleProfile removed; generators use brand profile projection
 
 const prisma = getDatabaseClient();
 
@@ -76,7 +75,6 @@ class CampaignJobService {
         configRaw && typeof configRaw === 'object'
           ? (configRaw as { themes: string[]; style?: string })
           : { themes: [] as string[], style: undefined };
-      // Brand profile projection is used in the generator; no legacy style profile required
 
       // No numeric progress updates stored in DB
 

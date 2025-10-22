@@ -267,8 +267,6 @@ class AutopilotService {
         throw new Error(`Brand not found: ${gap.brandId}`);
       }
 
-      // Brand profile projection will be used inside content generation; no legacy style profile required
-
       // Get content strategy
       const prefs = brand.preferences as Record<string, unknown> | null | undefined;
       const rawStrategy2 =

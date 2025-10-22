@@ -32,7 +32,7 @@ const schedulerClient = tracer.captureAWSv3Client(new SchedulerClient({}));
 // Initialize retry strategy with industry best practices
 const retryStrategy = new RetryStrategy(metrics);
 
-// Legacy constant kept for backward compatibility in logs
+// Constant kept for backward compatibility in logs
 const MAX_RETRY_ATTEMPTS = 5; // Increased to match industry standard
 
 function isSQSEvent(e: unknown): e is SQSEvent {

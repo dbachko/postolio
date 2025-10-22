@@ -6,7 +6,6 @@ import { PublisherCredentialsService } from './publisher-credentials.js';
 import { prisma } from '../config/database.js';
 import type { Prisma } from '@postolio/database';
 import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
-import { getOrCreateDefaultCampaign } from './default-campaign.js';
 
 export interface InstagramPost {
   id: string;
@@ -1205,12 +1204,11 @@ class InstagramService {
     }
 
     // Create content record payload (used for create or patch existing)
-    // Resolve default campaign for assignment
-    const defaultCampaign = await getOrCreateDefaultCampaign(brand.id!);
 
     const contentData = {
       brandId: brand.id!,
-      campaignId: defaultCampaign.id,
+
+      campaignId: null,
       caption: post.caption,
       hashtags: post.hashtags || [],
       status: 'published' as const,
@@ -1259,8 +1257,8 @@ class InstagramService {
           instagramPostId: contentData.instagramPostId,
           instagramPermalink: contentData.instagramPermalink,
           schedulingError: null,
-          // Attach to default campaign if not already assigned
-          campaignId: current?.campaignId || defaultCampaign.id,
+
+          campaignId: current?.campaignId || null,
           // Only set S3 fields if the existing draft doesn't have them
           s3ImageKey: current?.s3ImageKey || s3ImageKey || undefined,
           imageRegion: current?.imageRegion || imageRegion || undefined,

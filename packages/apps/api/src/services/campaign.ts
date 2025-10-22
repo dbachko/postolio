@@ -9,7 +9,7 @@ import {
   campaignCoordinationService,
   type CampaignConfigWithPriority,
 } from './campaign-coordination.js';
-// Legacy StyleProfile removed; generation uses brand profile projection internally
+
 import { TimezoneService } from './timezone.js';
 import { DEFAULT_TIMEZONE } from '../constants/timezone.js';
 import { schedulerService } from './scheduler.js';
@@ -75,7 +75,7 @@ type EditableCampaignFields = Partial<{
   name: string;
   priority: number;
   status: CampaignStatus;
-  // Direct top-level convenience fields (legacy / backwards compat)
+  // Direct top-level convenience fields (backwards compat)
   themes: string[];
   style: string;
   frequency: string;
@@ -348,7 +348,6 @@ class CampaignService {
         postingTime?: string;
         [k: string]: unknown;
       };
-      // Brand profile projection is fetched in generators; no legacy style profile required
 
       // Generate example content using themes from campaign config
       const contentRequests: ContentGenerationRequest[] = (config.themes || []).map(
@@ -503,7 +502,6 @@ class CampaignService {
               style?: string;
             })
           : {};
-      // Brand profile projection is used by downstream generators; no legacy style profile check here
 
       // Generate posting schedule (now timezone-aware)
       if (

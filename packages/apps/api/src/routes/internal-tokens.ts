@@ -32,8 +32,6 @@ const TokenResponseSchema = z.object({
   pageId: z.string().optional(),
 });
 
-// (Legacy encryption helpers removed; Token Service now manages encryption if needed)
-
 const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
   // Internal token retrieval endpoint (for service-to-service communication)
   fastify.post(

@@ -317,7 +317,7 @@ export function isServiceError(error: any, code?: string): error is ServiceError
 }
 
 /**
- * Legacy error classes for backward compatibility
+ * Error classes for backward compatibility
  */
 export class APIError extends ServiceError {
   public readonly statusCode: number;
