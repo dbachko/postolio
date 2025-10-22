@@ -40,15 +40,21 @@ interface ListItem {
 interface ContentListViewProps {
   items: ListItem[];
   currentDate: Date;
+  timezone?: string; // brand posting timezone override
 }
 
 type SortField = 'date' | 'status' | 'type';
 type SortOrder = 'asc' | 'desc';
 type FilterStatus = 'all' | 'published' | 'scheduled' | 'placeholder' | 'failed';
 
-export function ContentListView({ items, currentDate }: ContentListViewProps) {
+export function ContentListView({
+  items,
+  currentDate,
+  timezone: tzOverride,
+}: ContentListViewProps) {
   const navigate = useNavigate();
-  const { timezone } = useTimezone();
+  const { timezone: ctxTz } = useTimezone();
+  const timezone = tzOverride || ctxTz;
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [sortField, setSortField] = useState<SortField>('date');

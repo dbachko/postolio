@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { campaign as campaignApi } from '../lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -23,10 +24,16 @@ import {
 interface CampaignAnalyticsProps {
   campaignId: string;
   campaignName: string;
+  timezone?: string; // brand posting timezone override
 }
 
-export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalyticsProps) {
+export function CampaignAnalytics({
+  campaignId,
+  campaignName,
+  timezone: tzOverride,
+}: CampaignAnalyticsProps) {
   const [selectedTab, setSelectedTab] = useState('overview');
+  const timezone = tzOverride;
 
   // Fetch campaign metrics
   const metricsQuery = useQuery({
@@ -302,7 +309,11 @@ export function CampaignAnalytics({ campaignId, campaignName }: CampaignAnalytic
                 <div className="space-y-3">
                   {metrics.performanceByDate.slice(-7).map((day: any) => (
                     <div key={day.date} className="flex items-center justify-between">
-                      <span className="text-sm">{format(new Date(day.date), 'MMM d, yyyy')}</span>
+                      <span className="text-sm">
+                        {timezone
+                          ? formatInTimeZone(new Date(day.date), timezone, 'MMM d, yyyy')
+                          : format(new Date(day.date), 'MMM d, yyyy')}
+                      </span>
                       <div className="flex gap-4 text-sm">
                         <span>{formatNumber(day.impressions)} impressions</span>
                         <span>{formatNumber(day.engagement)} engagement</span>

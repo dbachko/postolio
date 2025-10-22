@@ -184,7 +184,8 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
 
   // If we shouldn't retry, mark as failed
   if (!retryDecision.shouldRetry) {
-    await markAsFailed(scheduleId, retryDecision.reason, lastError);
+    // Pass the analyzed error context instead of undefined variable
+    await markAsFailed(scheduleId, retryDecision.reason, analysisInput);
 
     // Record metrics based on failure reason
     if (retryDecision.circuitBreakerOpen) {
@@ -203,7 +204,8 @@ async function processRetryMessage(record: SQSRecord): Promise<void> {
     const scheduleData = await getScheduleData(scheduleId);
 
     if (!scheduleData) {
-      await markAsFailed(scheduleId, 'Schedule data not found', lastError);
+      // Include analyzed error for better diagnostics
+      await markAsFailed(scheduleId, 'Schedule data not found', analysisInput);
       return;
     }
 

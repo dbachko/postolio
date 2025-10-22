@@ -20,7 +20,7 @@ const prisma = getDatabaseClient();
  * - Creates content as draft with scheduledAt set and processing state; AWS scheduler will finalize
  */
 export class CampaignSlidingWindowService {
-  static readonly SLOT_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 hours
+  static readonly SLOT_WINDOW_MS = 90 * 60 * 1000; // 90 minutes
   static readonly MULTI_SLOT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes for explicit postingTimes
   static readonly SCHEDULING_BUFFER_MS = 5 * 60 * 1000; // 5 minutes from now
 
@@ -97,30 +97,6 @@ export class CampaignSlidingWindowService {
 
     const futureScheduled = existingFuture.filter((c) => c.scheduledAt && c.scheduledAt > now);
 
-    // 2. Brand-wide content for single-slot day blocking (includes all campaigns)
-    const brandFutureContent = await prisma.content.findMany({
-      where: {
-        brandId: campaign.brandId,
-        OR: [
-          {
-            scheduledAt: {
-              gte: new Date(now.getTime() - CampaignSlidingWindowService.SLOT_WINDOW_MS),
-            },
-          },
-          {
-            postedAt: {
-              gte: new Date(now.getTime() - CampaignSlidingWindowService.SLOT_WINDOW_MS),
-            },
-          },
-        ],
-        status: {
-          in: ['draft', 'scheduled', 'published'] as ContentStatus[],
-        },
-      },
-      select: { id: true, scheduledAt: true, postedAt: true, campaignId: true },
-      orderBy: { scheduledAt: 'asc' },
-    });
-
     // Enforce subscription cap at account level (user-wide)
     const tier = campaign.brand.user?.subscriptionTier || 'free';
     const { getMaxScheduledAheadForTier } = await import('../constants/subscription.js');
@@ -159,7 +135,8 @@ export class CampaignSlidingWindowService {
     const isSingleSlot = normalizedTimes.length <= 1;
 
     const occupiedLocalDates = new Set<string>();
-    const brandOccupiedDates = new Set<string>(); // Brand-wide day occupancy
+    // Per-campaign occupancy helpers
+    const brandOccupiedDates = new Set<string>(); // Deprecated: brand-wide blocking removed
     const occupiedLocalSlotKeys = new Set<string>();
     const occupiedLocalWeeks = new Map<string, number>();
     const weekKeyOf = (d: Date) => {
@@ -188,16 +165,7 @@ export class CampaignSlidingWindowService {
       occupiedLocalWeeks.set(wk, (occupiedLocalWeeks.get(wk) || 0) + 1);
     }
 
-    // Track brand-wide occupancy (for single-slot day blocking)
-    for (const c of brandFutureContent) {
-      const refDate = c.postedAt || c.scheduledAt;
-      if (!refDate) continue;
-      const local = TimezoneService.toLocal(refDate, timezone);
-      const dayKey = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(
-        local.getDate()
-      ).padStart(2, '0')}`;
-      brandOccupiedDates.add(dayKey);
-    }
+    // brand-wide occupancy removed per new specification
 
     // Find next available campaign slots
     const candidateSlots = await computeUpcomingSlots(
@@ -229,8 +197,8 @@ export class CampaignSlidingWindowService {
         '0'
       )}-${String(slotLocal.getDate()).padStart(2, '0')}`;
       if (isSingleSlot) {
-        // For single-slot campaigns, check brand-wide day occupancy
-        if (brandOccupiedDates.has(dayKey)) continue;
+        // For single-slot campaigns, ensure we don't place more than one per day for this campaign
+        if (occupiedLocalDates.has(dayKey)) continue;
       } else {
         // For multi-slot campaigns, check specific time slot occupancy
         const timeKey = `${String(slotLocal.getHours()).padStart(2, '0')}:${String(

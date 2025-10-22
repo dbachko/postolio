@@ -167,6 +167,9 @@ export default function PostDetail() {
 
   // Status color handled by getContentDisplayStatus
 
+  const { timezone, getBrandTimezone } = useTimezone();
+  const [brandTimezone, setBrandTimezone] = useState<string>(timezone);
+
   // Fetch post details with auto-refresh
   const {
     data: post,
@@ -194,6 +197,24 @@ export default function PostDetail() {
     refetchInterval: 30000,
     staleTime: 10000,
   });
+
+  // Resolve brand timezone when post loads
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const brandId = post?.brand?.id;
+      if (!brandId) return;
+      try {
+        const tz = await getBrandTimezone(brandId);
+        if (mounted && tz) setBrandTimezone(tz);
+      } catch {
+        if (mounted) setBrandTimezone(timezone);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [post?.brand?.id, getBrandTimezone, timezone]);
 
   // Fetch post insights
   const { data: insights, isFetching: insightsFetching } = useQuery<PostInsights>({
@@ -423,7 +444,7 @@ export default function PostDetail() {
     setLearningFeedback({ isVisible: false, message: '' });
   };
 
-  const { timezone } = useTimezone();
+  // Use brand timezone for quick actions as well
 
   // Quick action mutations
   const schedulePostMutation = useMutation({
@@ -431,7 +452,7 @@ export default function PostDetail() {
       let payload = scheduledAt;
       if (scheduledAt && !scheduledAt.endsWith('Z')) {
         const local = new Date(scheduledAt);
-        const utc = convertLocalToUTC(local, timezone);
+        const utc = convertLocalToUTC(local, brandTimezone);
         payload = utc.toISOString();
       }
       return contentApi.schedulePost(postId!, payload);
@@ -727,7 +748,7 @@ export default function PostDetail() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Scheduled</span>
                   <span className="font-medium">
-                    {formatInUserTimezone(post.scheduledAt, 'MMM d, h:mm a', timezone)}
+                    {formatInUserTimezone(post.scheduledAt, 'MMM d, h:mm a', brandTimezone)}
                   </span>
                 </div>
               )}
@@ -736,7 +757,7 @@ export default function PostDetail() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Published</span>
                   <span className="font-medium">
-                    {formatInUserTimezone(post.postedAt, 'MMM d, h:mm a', timezone)}
+                    {formatInUserTimezone(post.postedAt, 'MMM d, h:mm a', brandTimezone)}
                   </span>
                 </div>
               )}

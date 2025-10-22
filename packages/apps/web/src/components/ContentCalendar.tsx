@@ -13,6 +13,7 @@ import { useURLFilterSync } from '../hooks/useURLFilterSync';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { content as contentApi, campaign as campaignApi, type Content } from '@/lib/api';
+import { useTimezone } from '../contexts/TimezoneContext';
 import type { CalendarItem, Placeholder } from '../types/calendar';
 import { Calendar, List, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 
@@ -32,6 +33,24 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const { timezone: userTz, getBrandTimezone } = useTimezone();
+  const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
+
+  // Resolve brand posting timezone (fallback to user timezone)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const tz = await getBrandTimezone(brandId);
+        if (mounted && tz) setBrandTimezone(tz);
+      } catch {
+        if (mounted) setBrandTimezone(userTz);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [brandId, getBrandTimezone, userTz]);
 
   // Fetch calendar data with placeholders - with prefetching
   const calendarQuery = useQuery({
@@ -381,6 +400,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             scheduledAt: c.scheduledAt || undefined,
             postedAt: c.postedAt || undefined,
           }))}
+          timezone={brandTimezone}
         />
       )}
 
@@ -400,6 +420,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             processing: Boolean(i?.generationParams?.processing?.active),
           }))}
           currentDate={currentDate}
+          timezone={brandTimezone}
         />
       )}
 
@@ -420,6 +441,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             processing: Boolean(i?.generationParams?.processing?.active),
           }))}
           currentDate={currentDate}
+          timezone={brandTimezone}
         />
       )}
     </div>

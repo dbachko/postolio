@@ -21,10 +21,27 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const queryClient = useQueryClient();
-  const { timezone } = useTimezone();
+  const { timezone, getBrandTimezone } = useTimezone();
+  const [brandTimezone, setBrandTimezone] = useState<string>(timezone);
   const navigate = useNavigate();
   // const { connectionStatus } = useSchedulingWebSocket()
   const connectionStatus = 'connected'; // Default to connected for now
+
+  // Resolve brand timezone (fallback to user tz)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const tz = await getBrandTimezone(brandId);
+        if (mounted && tz) setBrandTimezone(tz);
+      } catch {
+        if (mounted) setBrandTimezone(timezone);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [brandId, getBrandTimezone, timezone]);
 
   // Update local status when content prop changes (from real-time updates)
   useEffect(() => {
@@ -238,7 +255,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
         {content.scheduledAt && (
           <div className="mt-2 text-xs text-gray-500">
             Scheduled for:{' '}
-            {formatInUserTimezone(content.scheduledAt, 'MMM d, yyyy h:mm a', timezone)}
+            {formatInUserTimezone(content.scheduledAt, 'MMM d, yyyy h:mm a', brandTimezone)}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useBrandStore } from '@/stores/brandStore';
 import { useCampaignsQueries } from '@/hooks/useCampaignsQueries';
+import { campaign as campaignApi } from '@/lib/api';
 import { useCampaignMutations } from '@/hooks/useCampaignMutations';
 import { CampaignDashboard } from './CampaignDashboard';
 import { CampaignCreate } from './CampaignCreate';
@@ -26,7 +27,7 @@ export default function CampaignsContainer() {
     urlCampaignId || null
   );
 
-  const { campaignsQuery, campaignDetailsQuery } = useCampaignsQueries({
+  const { campaignsQuery, campaignDetailsQuery, limitsQuery } = useCampaignsQueries({
     selectedBrandId: selectedBrand?.id,
     urlCampaignId: selectedCampaignId || undefined,
     currentView,
@@ -68,6 +69,18 @@ export default function CampaignsContainer() {
     <CampaignDetails
       campaign={campaignDetailsQuery.data?.campaign}
       isLoading={campaignDetailsQuery.isLoading}
+      onStartCampaign={() => selectedCampaignId && startCampaignMutation.mutate(selectedCampaignId)}
+      onPauseCampaign={() => selectedCampaignId && pauseCampaignMutation.mutate(selectedCampaignId)}
+      limits={limitsQuery.data?.data}
+      onFillWindow={async () => {
+        if (!selectedCampaignId) return;
+        try {
+          await campaignApi.fillCampaignWindow(selectedCampaignId);
+          await campaignDetailsQuery.refetch();
+        } catch (e) {
+          console.error('fill-window failed', e);
+        }
+      }}
     />
   );
 

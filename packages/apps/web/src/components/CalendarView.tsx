@@ -74,13 +74,20 @@ interface CalendarViewProps {
   brandId?: string;
   content?: Content[];
   onContentClick?: (content: Content) => void;
+  timezone?: string; // brand posting timezone override
 }
 
-export function CalendarView({ brandId, content: propContent, onContentClick }: CalendarViewProps) {
+export function CalendarView({
+  brandId,
+  content: propContent,
+  onContentClick,
+  timezone: tzOverride,
+}: CalendarViewProps) {
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<View>('week');
-  const { timezone, isAutoDetected } = useTimezone();
+  const { timezone: ctxTimezone, isAutoDetected } = useTimezone();
+  const timezone = tzOverride || ctxTimezone;
   const queryClient = useQueryClient();
 
   // Fetch calendar content with placeholders if brandId is provided

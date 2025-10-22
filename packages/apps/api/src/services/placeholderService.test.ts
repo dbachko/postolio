@@ -68,7 +68,7 @@ describe('computePlaceholders', () => {
     expect(hasJan15).toBe(false);
   });
 
-  it('allows multiple placeholders per day when postingTimes array provided, blocking only occupied slots', async () => {
+  it('generates a single placeholder per day using primary postingTime, even if postingTimes array is provided', async () => {
     vi.setSystemTime(new Date('2025-01-15T08:00:00Z'));
 
     const campaigns: Campaign[] = [
@@ -79,6 +79,7 @@ describe('computePlaceholders', () => {
         config: {
           frequency: 'daily',
           duration: { start: '2025-01-14', end: '2025-01-16' },
+          postingTime: '12:00',
           postingTimes: ['12:00', '15:00', '20:00'],
         },
       } as unknown as Campaign,
@@ -102,10 +103,10 @@ describe('computePlaceholders', () => {
       new Date('2025-01-31T23:59:59Z')
     );
 
-    // Should include 2025-01-15 15:00 and 20:00 but not 12:00
+    // With one placeholder per day using postingTime and a same-day post at 12:15,
+    // there should be NO placeholder for 2025-01-15
     const daySlots = placeholders.filter((p) => p.scheduledAt.startsWith('2025-01-15'));
-    const times = daySlots.map((p) => p.scheduledAt.substring(11, 16)).sort();
-    expect(times).toEqual(['15:00', '20:00']);
+    expect(daySlots.length).toBe(0);
   });
 
   it('does not create placeholders for slots already scheduled in the future', async () => {
@@ -147,7 +148,7 @@ describe('computePlaceholders', () => {
     expect(hasJan16).toBe(false);
   });
 
-  it('blocks placeholders on days with content from OTHER campaigns (cross-campaign blocking)', async () => {
+  it('does NOT block placeholders on days with content from OTHER campaigns (no cross-campaign blocking)', async () => {
     vi.setSystemTime(new Date('2025-01-15T08:00:00Z'));
 
     // Two different campaigns for the same brand
@@ -183,17 +184,12 @@ describe('computePlaceholders', () => {
       new Date('2025-01-31T23:59:59Z')
     );
 
-    // For single-slot campaigns, should block ENTIRE day if ANY content exists
-    // Should NOT create placeholder for Jan 16 at 3 PM because synced post exists at 9 AM
+    // Placeholders should still be created for Jan 16 despite other-campaign content
     const hasJan16 = placeholders.some((p) => p.scheduledAt.startsWith('2025-01-16'));
-    expect(hasJan16).toBe(false);
-
-    // But Jan 17 should have a placeholder (no content on that day)
-    const hasJan17 = placeholders.some((p) => p.scheduledAt.startsWith('2025-01-17'));
-    expect(hasJan17).toBe(true);
+    expect(hasJan16).toBe(true);
   });
 
-  it('allows cross-campaign posts on same day for multi-slot campaigns', async () => {
+  it('generates a single placeholder per day for multi-slot campaigns as well', async () => {
     vi.setSystemTime(new Date('2025-01-15T08:00:00Z'));
 
     // Multi-slot campaign
@@ -229,11 +225,8 @@ describe('computePlaceholders', () => {
       new Date('2025-01-31T23:59:59Z')
     );
 
-    // For multi-slot campaigns, should allow placeholders at different times
-    // Should create placeholders for Jan 16 at 12:00, 15:00, and 20:00
+    // Only one placeholder per day using default/primary postingTime
     const jan16Slots = placeholders.filter((p) => p.scheduledAt.startsWith('2025-01-16'));
-    expect(jan16Slots.length).toBe(3);
-    const times = jan16Slots.map((p) => p.scheduledAt.substring(11, 16)).sort();
-    expect(times).toEqual(['12:00', '15:00', '20:00']);
+    expect(jan16Slots.length).toBe(1);
   });
 });

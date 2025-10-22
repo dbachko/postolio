@@ -24,11 +24,13 @@ interface TimelineItem {
 interface TimelineViewProps {
   items: TimelineItem[];
   currentDate: Date;
+  timezone?: string; // brand posting timezone override
 }
 
-export function TimelineView({ items, currentDate }: TimelineViewProps) {
+export function TimelineView({ items, currentDate, timezone: tzOverride }: TimelineViewProps) {
   const navigate = useNavigate();
-  const { timezone } = useTimezone();
+  const { timezone: ctxTz } = useTimezone();
+  const timezone = tzOverride || ctxTz;
 
   // Group items by day for the current week
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });

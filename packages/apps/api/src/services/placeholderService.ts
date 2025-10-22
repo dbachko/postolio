@@ -20,6 +20,7 @@ export async function computePlaceholders(
 ): Promise<CalendarPlaceholder[]> {
   const placeholders: CalendarPlaceholder[] = [];
   const now = new Date(); // Cache current time for consistent comparisons
+  const CONFLICT_WINDOW_MS = 90 * 60 * 1000; // ±90 minutes conflict window
 
   console.log(
     `[Placeholders] Computing for month ${monthStart.toISOString()} to ${monthEnd.toISOString()}`
@@ -45,20 +46,13 @@ export async function computePlaceholders(
       continue;
     }
 
-    const { frequency, duration, postingTime = '12:00' } = config;
-    const postingTimes = Array.isArray(config.postingTimes)
-      ? (config.postingTimes as string[])
-      : [];
-    const normalizedTimes = (postingTimes.length > 0 ? postingTimes : [postingTime])
-      .filter(Boolean)
-      .map((t) => {
-        const [h, m] = t.split(':');
-        const hh = String(parseInt(h ?? '0', 10)).padStart(2, '0');
-        const mm = String(parseInt(m ?? '0', 10)).padStart(2, '0');
-        return `${hh}:${mm}`;
-      })
-      // de-duplicate times
-      .filter((v, i, a) => a.indexOf(v) === i);
+    const { frequency, duration } = config;
+    // Always use primary postingTime for placeholders (single per day)
+    const postingTime = (config.postingTime || '12:00').trim();
+    const [ph, pm] = postingTime.split(':');
+    const primaryTime = `${String(parseInt(ph ?? '0', 10)).padStart(2, '0')}:${String(
+      parseInt(pm ?? '0', 10)
+    ).padStart(2, '0')}`;
     if (!duration?.start || !duration?.end) {
       console.log(`[Placeholders] Skipping campaign ${campaign.name} - invalid duration`);
       continue;
@@ -70,11 +64,8 @@ export async function computePlaceholders(
     // Resolve brand timezone (per-campaign)
     const timezone = await TimezoneService.getBrandTimezone(campaign.brandId);
 
-    // Build sets of occupied dates:
-    // - occupiedLocalDates: dates with content for THIS campaign only (used for time window checks)
-    // - brandOccupiedDates: dates with ANY content for this BRAND (used for single-slot day blocking)
+    // Build set of occupied local dates for THIS campaign only
     const occupiedLocalDates = new Set<string>();
-    const brandOccupiedDates = new Set<string>();
     const toLocalKey = (d: Date) => {
       const local = TimezoneService.toLocal(d, timezone);
       const key = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(
@@ -92,13 +83,6 @@ export async function computePlaceholders(
           occupiedLocalDates.add(toLocalKey(new Date(c.scheduledAt)));
         }
       }
-      // Track dates for ANY content on this brand (cross-campaign blocking)
-      if (c.postedAt) {
-        brandOccupiedDates.add(toLocalKey(new Date(c.postedAt)));
-      }
-      if (c.scheduledAt) {
-        brandOccupiedDates.add(toLocalKey(new Date(c.scheduledAt)));
-      }
     }
 
     // Calculate posting schedule within month bounds
@@ -111,27 +95,27 @@ export async function computePlaceholders(
       continue;
     }
 
-    // Generate placeholder dates based on frequency
+    // Generate a single placeholder per day based on frequency and primary posting time
     const intervalDays =
       frequency === 'daily'
         ? 1
         : frequency === 'every2days'
           ? 2
           : frequency === '3weekly'
-            ? 7 / 3 // Post every ~2.33 days for 3 times per week
+            ? 7 / 3 // Post roughly every 2-3 days for 3 per week
             : 7;
 
     // Validate posting time(s) format
-    const invalidTime = normalizedTimes.find((t) => {
-      const parts = t.split(':');
+    const invalidTime = (() => {
+      const parts = primaryTime.split(':');
       if (parts.length !== 2) return true;
       const h = parseInt(parts[0], 10);
       const m = parseInt(parts[1], 10);
       return isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59;
-    });
+    })();
     if (invalidTime) {
       console.error(
-        `[Placeholders] Invalid posting time format for campaign ${campaign.name}: ${invalidTime}`
+        `[Placeholders] Invalid posting time format for campaign ${campaign.name}: ${primaryTime}`
       );
       continue;
     }
@@ -151,46 +135,46 @@ export async function computePlaceholders(
         currentDate.getDate()
       ).padStart(2, '0')}`;
 
-      for (const t of normalizedTimes) {
-        // Build a UTC instant for the brand-local date at the posting time
-        const scheduledAtUTC = TimezoneService.createDateInBrandTimezone(dateStr, t, timezone);
+      // Build a UTC instant for the brand-local date at the primary posting time
+      const scheduledAtUTC = TimezoneService.createDateInBrandTimezone(
+        dateStr,
+        primaryTime,
+        timezone
+      );
 
-        // Skip past slots
-        if (!(scheduledAtUTC > now)) continue;
+      // Skip past slots
+      if (!(scheduledAtUTC > now)) {
+        currentDate.setDate(currentDate.getDate() + Math.ceil(intervalDays));
+        continue;
+      }
 
-        // Check if content already exists for this slot (within 2 hour window), considering scheduledAt and postedAt
-        const hasContent = existingContent.some((content) => {
-          if (content.campaignId !== campaign.id) return false;
-          const slotTime = scheduledAtUTC.getTime();
-          const schedMs = content.scheduledAt ? new Date(content.scheduledAt).getTime() : null;
-          const postedMs = content.postedAt ? new Date(content.postedAt).getTime() : null;
-          const within = (ms: number | null) =>
-            ms === null ? false : Math.abs(ms - slotTime) < 2 * 60 * 60 * 1000;
-          return within(schedMs) || within(postedMs);
+      // Per-campaign day-level suppression: if any content exists for this day, skip
+      const dayKey = toLocalKey(scheduledAtUTC);
+      const dayHasCampaignContent = occupiedLocalDates.has(dayKey);
+
+      // Window-based suppression (±90m) for same-campaign nearby posts
+      const withinWindow = existingContent.some((content) => {
+        if (content.campaignId !== campaign.id) return false;
+        const slotTime = scheduledAtUTC.getTime();
+        const schedMs = content.scheduledAt ? new Date(content.scheduledAt).getTime() : null;
+        const postedMs = content.postedAt ? new Date(content.postedAt).getTime() : null;
+        const within = (ms: number | null) =>
+          ms === null ? false : Math.abs(ms - slotTime) < CONFLICT_WINDOW_MS;
+        return within(schedMs) || within(postedMs);
+      });
+
+      if (!dayHasCampaignContent && !withinWindow) {
+        placeholders.push({
+          id: `placeholder-${campaign.id}-${scheduledAtUTC.toISOString()}`,
+          type: 'placeholder',
+          campaignId: campaign.id,
+          campaignName: campaign.name,
+          campaignColor: campaign.color,
+          scheduledAt: scheduledAtUTC.toISOString(),
+          status: 'placeholder',
+          message: 'Content will be generated closer to scheduled date',
         });
-
-        // For single-slot campaigns (0 or 1 posting times per day), block the entire day if ANY content exists
-        // This prevents placeholders on days with content from other campaigns (e.g., synced Instagram posts)
-        let dayBlocked = false;
-        if (normalizedTimes.length <= 1) {
-          // Check brand-wide occupancy for single-slot campaigns
-          const slotKey = toLocalKey(scheduledAtUTC);
-          dayBlocked = brandOccupiedDates.has(slotKey);
-        }
-
-        if (!hasContent && !dayBlocked) {
-          placeholders.push({
-            id: `placeholder-${campaign.id}-${scheduledAtUTC.toISOString()}`,
-            type: 'placeholder',
-            campaignId: campaign.id,
-            campaignName: campaign.name,
-            campaignColor: campaign.color,
-            scheduledAt: scheduledAtUTC.toISOString(),
-            status: 'placeholder',
-            message: 'Content will be generated closer to scheduled date',
-          });
-          generatedCount++;
-        }
+        generatedCount++;
       }
 
       // Move to next posting date - add the full interval in days
@@ -207,9 +191,8 @@ export async function computePlaceholders(
     }
 
     console.log(
-      `[Placeholders] Campaign ${campaign.name}: ${normalizedTimes.length} posting times, ` +
+      `[Placeholders] Campaign ${campaign.name}: using primary postingTime ${primaryTime}, ` +
         `${occupiedLocalDates.size} campaign days occupied, ` +
-        `${brandOccupiedDates.size} brand days occupied, ` +
         `${generatedCount} placeholders generated`
     );
   }
