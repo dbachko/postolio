@@ -140,7 +140,12 @@ export interface Campaign {
     postingTime?: string;
     priority?: number;
   };
-  content: Content[];
+  // In list views, content is omitted to reduce payload. Keep optional.
+  content?: Content[];
+  // Lightweight counts returned by list endpoint
+  contentCount?: number;
+  scheduledCount?: number;
+  publishedCount?: number;
   errorMessage?: string | null;
   previewGenerated?: boolean;
   priority: number;

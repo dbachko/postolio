@@ -17,6 +17,7 @@ interface Props {
   onStartCampaign?: () => void;
   onPauseCampaign?: () => void;
   onFillWindow?: () => void;
+  fillWindowLoading?: boolean;
   limits?: { tier: string; maxAllowed: number; currentCount: number };
   onUpdated?: () => void; // called after saving edits
 }
@@ -27,6 +28,7 @@ export function CampaignDetails({
   onStartCampaign,
   onPauseCampaign,
   onFillWindow,
+  fillWindowLoading,
   limits,
   onUpdated,
 }: Props) {
@@ -183,8 +185,13 @@ export function CampaignDetails({
           <div className="flex items-center justify-between gap-3">
             <CardTitle>Posts</CardTitle>
             {!capacityFull && (!campaign.content || campaign.content.length === 0) && (
-              <Button size="sm" onClick={onFillWindow} className="gap-2">
-                Fill Window
+              <Button
+                size="sm"
+                onClick={onFillWindow}
+                disabled={!!fillWindowLoading}
+                className="gap-2"
+              >
+                {fillWindowLoading ? 'Filling…' : 'Fill Window'}
               </Button>
             )}
           </div>

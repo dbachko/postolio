@@ -226,7 +226,7 @@ export function AppLayout({ children }: LayoutProps) {
               {/* Primary action: New Post (permanent in top bar) */}
               <Button
                 size="sm"
-                className="hidden gap-2 sm:inline-flex"
+                className="hidden gap-2 bg-blue-600 text-white hover:bg-blue-700 sm:inline-flex"
                 onClick={() => navigate('/posts/create')}
                 aria-label="Create new post"
               >
@@ -235,7 +235,7 @@ export function AppLayout({ children }: LayoutProps) {
               </Button>
               <Button
                 size="icon"
-                className="sm:hidden"
+                className="bg-blue-600 text-white hover:bg-blue-700 sm:hidden"
                 onClick={() => navigate('/posts/create')}
                 aria-label="Create new post"
               >

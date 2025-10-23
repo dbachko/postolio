@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addMonths, subMonths } from 'date-fns';
 import { MonthGridView } from './MonthGridView';
@@ -16,7 +16,15 @@ import { Button } from './ui/button';
 import { content as contentApi, campaign as campaignApi, type Content } from '@/lib/api';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { CalendarItem, Placeholder } from '../types/calendar';
-import { Calendar, List, Clock, ChevronLeft, ChevronRight, Loader2, Plus } from 'lucide-react';
+import {
+  Calendar,
+  List,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  ChevronDown,
+} from 'lucide-react';
 
 // type guard no longer needed for the month grid only
 
@@ -28,7 +36,6 @@ interface ContentCalendarProps {
 }
 
 export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
-  const navigate = useNavigate();
   // Sync filters with URL
   useURLFilterSync();
 
@@ -38,6 +45,10 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [showProgress, setShowProgress] = useState(false);
+  // Keep timeline icon import referenced while the control is hidden
+  const __keepTimelineIcon = Clock;
+  void __keepTimelineIcon;
 
   // Resolve brand posting timezone (fallback to user timezone)
   useEffect(() => {
@@ -266,6 +277,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                 <Calendar className="h-4 w-4" />
                 <span className="hidden sm:inline">Month</span>
               </Button>
+              {/* Timeline temporarily disabled
               <Button
                 variant={viewMode === 'timeline' ? 'default' : 'ghost'}
                 size="sm"
@@ -278,6 +290,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                 <Clock className="h-4 w-4" />
                 <span className="hidden sm:inline">Timeline</span>
               </Button>
+              */}
               <Button
                 variant={viewMode === 'list' ? 'default' : 'ghost'}
                 size="sm"
@@ -342,18 +355,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
               </Button>
             )}
 
-            {/* Primary page action: Create new post */}
-            <Button
-              size="sm"
-              className="gap-1"
-              onClick={() => {
-                // Consider passing context (campaign/date) via query in future iterations
-                navigate('/posts/create');
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">New Post</span>
-            </Button>
+            {/* New Post button removed (exists in tab navigation) */}
           </div>
         </div>
       </div>
@@ -366,43 +368,57 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
       {/* Filter results summary removed for cleaner filtered state */}
 
-      {/* Campaign Progress */}
+      {/* Campaign Progress (collapsed by default) */}
       {campaignProgress.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium">Campaign Progress</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={showProgress}
+              aria-controls="campaign-progress"
+              onClick={() => setShowProgress((v) => !v)}
+              className="text-gray-700 hover:text-gray-900"
+            >
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${showProgress ? 'rotate-180' : ''}`}
+              />
+            </Button>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {campaignProgress.map((campaign) => (
-                <div key={campaign.id} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{campaign.name}</span>
-                    <span className="text-gray-500">{campaign.progress}%</span>
+          {showProgress && (
+            <CardContent id="campaign-progress">
+              <div className="space-y-3">
+                {campaignProgress.map((campaign) => (
+                  <div key={campaign.id} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{campaign.name}</span>
+                      <span className="text-gray-500">{campaign.progress}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-gray-200">
+                      <div
+                        className="h-2 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${campaign.progress}%`,
+                          backgroundColor:
+                            campaign.status === 'active'
+                              ? '#22c55e'
+                              : campaign.status === 'paused'
+                                ? '#6b7280'
+                                : '#3b82f6',
+                        }}
+                      />
+                    </div>
+                    <div className="flex gap-4 text-xs text-gray-500">
+                      <span>{campaign.published} published</span>
+                      <span>{campaign.scheduled} scheduled</span>
+                      <span>{campaign.pending} pending</span>
+                    </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-gray-200">
-                    <div
-                      className="h-2 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${campaign.progress}%`,
-                        backgroundColor:
-                          campaign.status === 'active'
-                            ? '#22c55e'
-                            : campaign.status === 'paused'
-                              ? '#6b7280'
-                              : '#3b82f6',
-                      }}
-                    />
-                  </div>
-                  <div className="flex gap-4 text-xs text-gray-500">
-                    <span>{campaign.published} published</span>
-                    <span>{campaign.scheduled} scheduled</span>
-                    <span>{campaign.pending} pending</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
+                ))}
+              </div>
+            </CardContent>
+          )}
         </Card>
       )}
 

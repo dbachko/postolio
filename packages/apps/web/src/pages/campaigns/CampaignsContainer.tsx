@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useBrandStore } from '@/stores/brandStore';
 import { useCampaignsQueries } from '@/hooks/useCampaignsQueries';
-import { campaign as campaignApi } from '@/lib/api';
 import { useCampaignMutations } from '@/hooks/useCampaignMutations';
 import { CampaignDashboard } from './CampaignDashboard';
 import { CampaignCreate } from './CampaignCreate';
@@ -33,8 +32,12 @@ export default function CampaignsContainer() {
     currentView,
   });
 
-  const { startCampaignMutation, pauseCampaignMutation, deleteCampaignMutation } =
-    useCampaignMutations(() => campaignsQuery.refetch());
+  const {
+    startCampaignMutation,
+    pauseCampaignMutation,
+    deleteCampaignMutation,
+    fillWindowMutation,
+  } = useCampaignMutations(() => campaignsQuery.refetch());
 
   useEffect(() => {
     const pathname = location.pathname;
@@ -75,13 +78,10 @@ export default function CampaignsContainer() {
       onUpdated={() => campaignDetailsQuery.refetch()}
       onFillWindow={async () => {
         if (!selectedCampaignId) return;
-        try {
-          await campaignApi.fillCampaignWindow(selectedCampaignId);
-          await campaignDetailsQuery.refetch();
-        } catch (e) {
-          console.error('fill-window failed', e);
-        }
+        await fillWindowMutation.mutateAsync(selectedCampaignId);
+        await campaignDetailsQuery.refetch();
       }}
+      fillWindowLoading={fillWindowMutation.isPending}
     />
   );
 

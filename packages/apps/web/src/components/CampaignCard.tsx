@@ -2,11 +2,12 @@ import { memo, useMemo } from 'react';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
-import { Calendar, Pause, Play, Trash2 } from 'lucide-react';
+import { CalendarClock, Palette, Tag, Clock, Star, Pause, Play, Trash2 } from 'lucide-react';
 import type { Campaign } from '../lib/api';
 import { getStableColorFromId } from '../utils/campaign-colors';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
-import { useNavigateWithFilters } from '@/hooks/useURLFilterSync';
+// import { useNavigateWithFilters } from '@/hooks/useURLFilterSync';
+import { getFrequencyLabel, getPriorityLabel, getStyleLabel } from '@/utils/campaign';
 
 interface CampaignCardProps {
   campaign: Campaign;
@@ -30,7 +31,7 @@ const CampaignCard = memo(
     pauseCampaignLoading = false,
     deleteCampaignLoading = false,
   }: CampaignCardProps) => {
-    const goToContentWithFilters = useNavigateWithFilters();
+    // const goToContentWithFilters = useNavigateWithFilters();
     const apiColor = (campaign as any).color as string | undefined;
     const color = useMemo(() => {
       const stored = getStoredCampaignColor(campaign.id);
@@ -68,20 +69,23 @@ const CampaignCard = memo(
       return `Campaigns with status "${campaign.status}" cannot be deleted. Only campaigns that haven't started (draft, preview, creating, failed) can be deleted.`;
     };
 
-    const getBadgeVariant = () => {
+    const getStatusBadgeClasses = () => {
       switch (campaign.status) {
         case 'active':
-        case 'preview':
-          return 'default';
-        case 'creating':
-        case 'processing':
-          return 'secondary';
+          return 'bg-green-600 text-white border-transparent';
         case 'failed':
-          return 'destructive';
+          return 'bg-red-600 text-white border-transparent';
+        case 'creating':
+        case 'preview':
+          return 'bg-blue-600 text-white border-transparent';
+        case 'processing':
+          return 'bg-amber-500 text-white border-transparent';
         case 'paused':
-          return 'outline';
+          return 'bg-gray-400 text-white border-transparent';
+        case 'completed':
+          return 'bg-emerald-600 text-white border-transparent';
         default:
-          return 'secondary';
+          return 'bg-gray-300 text-gray-900 border-transparent';
       }
     };
 
@@ -106,15 +110,20 @@ const CampaignCard = memo(
 
     // Priority label helper removed (unused)
 
-    const scheduledCount = useMemo(
-      () =>
-        Array.isArray(campaign.content)
-          ? campaign.content.filter((c: any) => c.status === 'scheduled').length
-          : undefined,
-      [campaign.content]
-    );
+    const scheduledCount = useMemo(() => {
+      const fromCounts = (campaign as any).scheduledCount;
+      if (typeof fromCounts === 'number') return fromCounts;
+      if (Array.isArray(campaign.content)) {
+        return campaign.content.filter((c: any) => c.status === 'scheduled').length;
+      }
+      return undefined;
+    }, [campaign]);
 
-    const totalCount = Array.isArray(campaign.content) ? campaign.content.length : undefined;
+    const totalCount = useMemo(() => {
+      const fromCounts = (campaign as any).contentCount;
+      if (typeof fromCounts === 'number') return fromCounts;
+      return Array.isArray(campaign.content) ? campaign.content.length : undefined;
+    }, [campaign]);
 
     return (
       <Card
@@ -132,11 +141,11 @@ const CampaignCard = memo(
                     className="inline-flex h-2.5 w-2.5 rounded-full"
                     style={{ background: color }}
                   />
-                  <Badge variant={getBadgeVariant()} className="text-xs">
+                  <Badge variant="secondary" className={`text-xs ${getStatusBadgeClasses()}`}>
                     {getStatusLabel()}
                   </Badge>
                 </div>
-                <h3 className="truncate text-lg font-semibold text-gray-900 transition-colors group-hover:text-blue-600">
+                <h3 className="text-lg font-semibold text-gray-900 transition-colors group-hover:text-blue-600">
                   {campaign.name}
                 </h3>
               </div>
@@ -189,19 +198,7 @@ const CampaignCard = memo(
                   </Button>
                 )}
 
-                {/* View in Calendar */}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    goToContentWithFilters({ campaigns: [campaign.id] });
-                  }}
-                  className="px-2 py-1 text-xs text-blue-600 hover:text-blue-700"
-                  title="View in calendar"
-                >
-                  <Calendar className="h-3 w-3" />
-                </Button>
+                {/* Calendar quick action removed to simplify UI */}
 
                 {/* Delete action on hover */}
                 <div className="group/delete relative">
@@ -237,43 +234,61 @@ const CampaignCard = memo(
               </div>
             </div>
 
-            {/* Info grid: frequency, style, themes */}
-            <div className="grid grid-cols-2 gap-4 text-sm lg:grid-cols-3">
-              <div>
+            {/* Info rows with icons: frequency, style, themes, posting time, priority */}
+            <div className="mt-2 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-gray-500" />
                 <div className="text-gray-500">Frequency</div>
-                <div className="font-medium text-gray-800">{campaign.config?.frequency || '—'}</div>
+                <div className="font-medium text-gray-800">
+                  {getFrequencyLabel(campaign.config?.frequency || '—')}
+                </div>
               </div>
-              <div>
+              <div className="flex items-center gap-2">
+                <Palette className="h-4 w-4 text-gray-500" />
                 <div className="text-gray-500">Style</div>
-                <div className="font-medium text-gray-800">{campaign.config?.style || '—'}</div>
+                <div className="font-medium text-gray-800">
+                  {getStyleLabel(campaign.config?.style || '—')}
+                </div>
               </div>
-              <div className="col-span-2 lg:col-span-1">
-                <div className="text-gray-500">Themes</div>
-                <div className="truncate text-gray-800">
-                  {(campaign.config?.themes || []).length > 0
-                    ? (campaign.config?.themes || []).slice(0, 4).join(', ')
-                    : '—'}
+              <div className="sm:col-span-2">
+                <div className="mb-1 flex items-center gap-2 text-gray-500">
+                  <Tag className="h-4 w-4" />
+                  Themes
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(campaign.config?.themes || []).length > 0 ? (
+                    (campaign.config?.themes || []).map((t) => (
+                      <Badge key={t} variant="secondary" className="whitespace-normal">
+                        {t}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-gray-800">—</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-gray-500" />
+                <div className="text-gray-500">Posting Time</div>
+                <div className="font-medium text-gray-800">
+                  {campaign.config?.postingTime || '—'}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Star className="h-4 w-4 text-gray-500" />
+                <div className="text-gray-500">Priority</div>
+                <div className="font-medium text-gray-800">
+                  {getPriorityLabel(campaign.config?.priority ?? campaign.priority ?? 5)}
                 </div>
               </div>
             </div>
 
             {/* Stats row */}
-            <div className="mt-3 flex items-center justify-between text-sm text-gray-700">
+            <div className="mt-4 flex items-center justify-between text-sm text-gray-700">
               <div>
                 <span className="font-medium">{scheduledCount ?? '—'}</span> scheduled
                 <span className="mx-2 text-gray-300">•</span>
                 <span className="font-medium">{totalCount ?? '—'}</span> posts
-                <Button
-                  size="sm"
-                  variant="link"
-                  className="ml-2 h-auto p-0 text-blue-600"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    goToContentWithFilters({ campaigns: [campaign.id] });
-                  }}
-                >
-                  View on calendar
-                </Button>
               </div>
             </div>
           </div>

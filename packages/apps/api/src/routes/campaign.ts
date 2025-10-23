@@ -801,16 +801,41 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
                 name: true,
               },
             },
-            _count: {
-              select: {
-                content: true,
-              },
-            },
           },
           orderBy: {
             createdAt: 'desc',
           },
         });
+
+        // Aggregate content counts by status for returned campaign list
+        const campaignIds = campaigns.map((c) => c.id);
+        const statusCounts = campaignIds.length
+          ? await prisma.content.groupBy({
+              by: ['campaignId', 'status'],
+              where: { campaignId: { in: campaignIds } },
+              _count: { _all: true },
+            })
+          : [];
+
+        const countsMap = new Map<
+          string,
+          { total: number; scheduled: number; published: number; draft: number }
+        >();
+        for (const id of campaignIds) {
+          countsMap.set(id, { total: 0, scheduled: 0, published: 0, draft: 0 });
+        }
+        for (const row of statusCounts as Array<{
+          campaignId: string;
+          status: string;
+          _count: { _all: number };
+        }>) {
+          const entry = countsMap.get(row.campaignId);
+          if (!entry) continue;
+          entry.total += row._count._all;
+          if (row.status === 'scheduled') entry.scheduled += row._count._all;
+          if (row.status === 'published') entry.published += row._count._all;
+          if (row.status === 'draft') entry.draft += row._count._all;
+        }
 
         return reply.send({
           success: true,
@@ -820,7 +845,9 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
             status: campaign.status,
             brandId: campaign.brandId,
             brand: campaign.brand,
-            contentCount: campaign._count.content,
+            contentCount: countsMap.get(campaign.id)?.total ?? 0,
+            scheduledCount: countsMap.get(campaign.id)?.scheduled ?? 0,
+            publishedCount: countsMap.get(campaign.id)?.published ?? 0,
             config: campaign.config,
             createdAt: campaign.createdAt,
             startedAt: campaign.startedAt,

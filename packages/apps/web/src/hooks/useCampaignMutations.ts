@@ -36,5 +36,28 @@ export function useCampaignMutations(refetchCampaigns: () => void) {
     },
   });
 
-  return { startCampaignMutation, pauseCampaignMutation, deleteCampaignMutation };
+  const fillWindowMutation = useMutation({
+    mutationFn: (campaignId: string) => campaignApi.fillCampaignWindow(campaignId),
+    onSuccess: (res: any) => {
+      const generated = res?.generated ?? res?.scheduledPosts ?? 0;
+      const msg =
+        res?.message ||
+        (generated > 0
+          ? `Filled scheduling window with ${generated} post${generated === 1 ? '' : 's'}.`
+          : 'No new posts were generated (window already filled).');
+      toast.success(msg);
+      refetchCampaigns();
+    },
+    onError: (error) => {
+      console.error('Failed to fill window:', error);
+      toast.error('Failed to fill window. Please try again.');
+    },
+  });
+
+  return {
+    startCampaignMutation,
+    pauseCampaignMutation,
+    deleteCampaignMutation,
+    fillWindowMutation,
+  };
 }

@@ -9,6 +9,8 @@ import {
   isToday,
   startOfMonth,
   startOfWeek,
+  startOfDay,
+  isBefore,
 } from 'date-fns';
 import type { CalendarItem } from '../types/calendar';
 import { convertUTCToLocal, convertLocalToUTC } from '../lib/timezone';
@@ -64,6 +66,7 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
   }
 
   const byDay = useMemo(() => groupByLocalDay(items, timezone), [items, timezone]);
+  const startOfToday = startOfDay(new Date());
 
   const weekdayLabels = [
     'Sunday',
@@ -93,6 +96,7 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
           const key = format(date, 'yyyy-MM-dd');
           const dayItems = byDay.get(key) || [];
           const today = isToday(date);
+          const isPastDay = isBefore(date, startOfToday);
           const handleCreateForDate = () => {
             const local = new Date(date);
             // Default to 9:00 AM in brand timezone for clarity
@@ -105,12 +109,17 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
           return (
             <div
               key={key}
-              className="group relative min-h-[140px] bg-white p-2 transition-colors hover:bg-blue-50/40"
+              className={
+                `group relative min-h-[140px] p-2 transition-colors ` +
+                (isPastDay ? 'bg-gray-50' : 'bg-white hover:bg-blue-50/40')
+              }
             >
               {/* Day header */}
               <div className="mb-2 flex items-center justify-between">
                 <div
-                  className={`text-xs font-medium ${isInMonth ? 'text-gray-900' : 'text-gray-400'}`}
+                  className={`text-xs font-medium ${
+                    isInMonth ? (isPastDay ? 'text-gray-400' : 'text-gray-900') : 'text-gray-400'
+                  }`}
                 >
                   {format(date, 'd')}
                 </div>
@@ -121,26 +130,28 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
                 )}
               </div>
 
-              {/* Hover create button */}
-              <button
-                type="button"
-                onClick={handleCreateForDate}
-                className="absolute right-2 top-2 hidden items-center gap-1 rounded-md border border-blue-200 bg-white/90 px-2 py-0.5 text-[11px] font-medium text-blue-700 shadow-sm hover:bg-blue-50 group-hover:flex"
-                title="Create post"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-3.5 w-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              {/* Hover create button - don't show for past days */}
+              {!isPastDay && (
+                <button
+                  type="button"
+                  onClick={handleCreateForDate}
+                  className="absolute right-2 top-2 hidden items-center gap-1 rounded-md border border-blue-200 bg-white/90 px-2 py-0.5 text-[11px] font-medium text-blue-700 shadow-sm hover:bg-blue-50 group-hover:flex"
+                  title="Create post"
                 >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                New
-              </button>
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  New
+                </button>
+              )}
 
               {/* Items stacked vertically */}
               <div className="flex flex-col gap-2">

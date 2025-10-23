@@ -109,18 +109,22 @@ export function CampaignEditDialog({
   const [name, setName] = useState(campaign.name);
   const [priority, setPriority] = useState<number>(campaign.priority || 5);
   // Predefined palette (Shadcn/Tailwind 300) via CSS variables
-  const palette: string[] = [
-    'var(--swatch-blue-300)',
-    'var(--swatch-indigo-300)',
-    'var(--swatch-violet-300)',
-    'var(--swatch-purple-300)',
-    'var(--swatch-fuchsia-300)',
-    'var(--swatch-pink-300)',
-    'var(--swatch-rose-300)',
-    'var(--swatch-orange-300)',
-    'var(--swatch-amber-300)',
-    'var(--swatch-emerald-300)',
-  ];
+  // IMPORTANT: memoize to avoid recreating each render which caused an effect loop
+  const palette: string[] = useMemo(
+    () => [
+      'var(--swatch-blue-300)',
+      'var(--swatch-indigo-300)',
+      'var(--swatch-violet-300)',
+      'var(--swatch-purple-300)',
+      'var(--swatch-fuchsia-300)',
+      'var(--swatch-pink-300)',
+      'var(--swatch-rose-300)',
+      'var(--swatch-orange-300)',
+      'var(--swatch-amber-300)',
+      'var(--swatch-emerald-300)',
+    ],
+    []
+  );
   const initialColor =
     getStoredCampaignColor(campaign.id) ||
     (campaign as any).color ||
