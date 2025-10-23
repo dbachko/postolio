@@ -161,6 +161,7 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
                     item={it}
                     timezone={timezone}
                     onReschedule={(item) => {
+                      if ((item as any)?.status === 'published') return; // view-only
                       setRescheduleItem(item);
                       setRescheduleOpen(true);
                     }}

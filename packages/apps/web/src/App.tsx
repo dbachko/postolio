@@ -28,6 +28,7 @@ const CreatePost = lazy(() =>
     default: module.CreatePost,
   }))
 );
+const Limits = lazy(() => import('./pages/Limits'));
 
 const queryClient = new QueryClient();
 
@@ -213,6 +214,26 @@ function App() {
                     <ProtectedRoute>
                       <Layout>
                         <SecuritySettings />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/limits"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <ErrorBoundary>
+                          <Suspense
+                            fallback={
+                              <div className="flex min-h-[200px] items-center justify-center">
+                                <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
+                              </div>
+                            }
+                          >
+                            <Limits />
+                          </Suspense>
+                        </ErrorBoundary>
                       </Layout>
                     </ProtectedRoute>
                   }

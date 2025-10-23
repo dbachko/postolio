@@ -37,19 +37,22 @@ export function ScheduleLimitBanner() {
   if (!atCapacity || dismissed) return null;
 
   return (
-    <div className="border-b border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-1.5">
+    <div className="border-b border-amber-200 bg-amber-50 shadow-sm dark:border-amber-900 dark:bg-amber-950/20">
+      {/* Match AppLayout nav container sizing (height + paddings) */}
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-2 text-amber-900 dark:text-amber-200">
           <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-          <span className="truncate font-medium">You've reached your plan's scheduling limit</span>
+          <span className="truncate text-sm font-medium">
+            You've reached your plan's scheduling limit
+          </span>
           {/* Counts intentionally hidden to reduce noise per design */}
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
           <Button
             size="sm"
             variant="outline"
-            onClick={() => (window.location.href = '/settings')}
-            className="h-7 border-amber-300 text-amber-900 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/30"
+            onClick={() => (window.location.href = '/limits')}
+            className="h-9 border-amber-300 text-amber-900 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/30"
           >
             Learn More
           </Button>
@@ -66,7 +69,7 @@ export function ScheduleLimitBanner() {
               }
               setDismissed(true);
             }}
-            className="h-7 w-7 p-1 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+            className="h-9 w-9 p-2 hover:bg-amber-100 dark:hover:bg-amber-900/30"
           >
             <X className="h-4 w-4" />
           </Button>

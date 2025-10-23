@@ -317,7 +317,7 @@ export function CalendarView({
     const content = calendarEvent.resource;
     const isPlaceholder = 'isPlaceholder' in content && content.isPlaceholder;
     const isProcessing = Boolean((content as any)?.generationParams?.processing?.active);
-    const isDraggable = !isPlaceholder && content.status !== 'published';
+    const isDraggable = !isPlaceholder && (content as any)?.status !== 'published';
 
     // Get campaign color from content or placeholder
     const campaignColor = (content as any)?.campaignColor || null;
@@ -518,19 +518,7 @@ export function CalendarView({
   };
 
   // Check if event is draggable
-  const canDragEvent = useCallback(
-    (ev: unknown) => {
-      if (!isCalendarEvent(ev)) return false;
-      const status = ev.resource.status;
-      const isPlaceholder = 'isPlaceholder' in ev.resource && ev.resource.isPlaceholder;
-      // Allow dragging for draft and scheduled posts
-      // Disallow for published, placeholder, failed, and skipped posts
-      return (
-        !isPlaceholder && status !== 'published' && status !== 'failed' && status !== 'skipped'
-      );
-    },
-    [isCalendarEvent]
-  );
+  const canDragEvent = useCallback((_ev: unknown) => false, []);
 
   // Handle event click to navigate to post detail
   const handleSelectEvent = useCallback(

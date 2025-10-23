@@ -2,7 +2,15 @@ import { type ReactNode, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CalendarItem } from '../types/calendar';
 import { formatCompact } from '../lib/timezone';
-import { Pencil, MoreHorizontal, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import {
+  MoreHorizontal,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Pencil,
+  ExternalLink,
+  CalendarClock,
+} from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 // import { convertLocalToUTC } from '@/lib/timezone';
@@ -14,7 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { ExternalLink, CalendarClock, Copy, Trash2 } from 'lucide-react';
+import { Copy, Trash2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 
@@ -184,7 +192,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
         </div>
       ) : null}
 
-      {/* Bottom row: icon-only Edit + menu */}
+      {/* Bottom row: edit (except published) + menu */}
       <div className="mt-1 flex items-center justify-between">
         <TooltipProvider>
           <Tooltip>
@@ -196,6 +204,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
                 onClick={(e) => {
                   e.stopPropagation();
                   if (item.type === 'placeholder') return;
+                  if ((item as any)?.status === 'published') return; // published: view-only
                   window.location.href = `/posts/${(item as any).id}?edit=1`;
                 }}
               >
@@ -225,7 +234,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
               <ExternalLink className="h-4 w-4" />
               Open Post
             </DropdownMenuItem>
-            {item.type !== 'placeholder' && (
+            {item.type !== 'placeholder' && (item as any)?.status !== 'published' && (
               <DropdownMenuItem
                 onClick={() => onReschedule && onReschedule(item)}
                 className="gap-2"

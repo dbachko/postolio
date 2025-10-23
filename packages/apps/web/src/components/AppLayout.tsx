@@ -533,6 +533,13 @@ export function AppLayout({ children }: LayoutProps) {
             </div>
             <div className="flex items-center gap-1 text-xs md:text-sm">
               <Link
+                to="/limits"
+                className="hover:text-foreground hover:bg-accent rounded px-2 py-1 transition-colors"
+              >
+                Limits & Plans
+              </Link>
+              <span className="text-muted-foreground/50">•</span>
+              <Link
                 to="/privacy-policy"
                 className="hover:text-foreground hover:bg-accent rounded px-2 py-1 transition-colors"
               >
