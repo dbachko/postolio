@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Pause, Play } from 'lucide-react';
+import { Pause, Play, Edit, Calendar } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CampaignAnalytics } from '@/components/CampaignAnalytics';
 import { CampaignEditDialog } from '@/components/CampaignEditDialog';
@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { Campaign } from '@/lib/api';
 import { useEffect, useState } from 'react';
 import { useTimezone } from '@/contexts/TimezoneContext';
+import { useNavigateWithFilters } from '@/hooks/useURLFilterSync';
 
 interface Props {
   campaign?: Campaign;
@@ -17,6 +18,7 @@ interface Props {
   onPauseCampaign?: () => void;
   onFillWindow?: () => void;
   limits?: { tier: string; maxAllowed: number; currentCount: number };
+  onUpdated?: () => void; // called after saving edits
 }
 
 export function CampaignDetails({
@@ -26,9 +28,13 @@ export function CampaignDetails({
   onPauseCampaign,
   onFillWindow,
   limits,
+  onUpdated,
 }: Props) {
   const { timezone: userTz, getBrandTimezone } = useTimezone();
   const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
+  const goToContentWithFilters = useNavigateWithFilters();
+  // Must be declared before any early returns to keep hooks order stable
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -106,6 +112,7 @@ export function CampaignDetails({
       campaign.status === 'processing' ||
       (campaign.status === 'preview' && !campaign.previewGenerated)) &&
     !capacityFull;
+
   return (
     <div className="space-y-4">
       <Card>
@@ -113,6 +120,25 @@ export function CampaignDetails({
           <div className="flex items-center justify-between gap-3">
             <CardTitle>{campaign.name}</CardTitle>
             <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                onClick={() => goToContentWithFilters({ campaigns: [campaign.id] })}
+                title="View this campaign in the calendar"
+              >
+                <Calendar className="h-4 w-4" />
+                View Calendar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                onClick={() => setEditOpen(true)}
+              >
+                <Edit className="h-4 w-4" />
+                Edit
+              </Button>
               {campaign.status === 'preview' && (
                 <Button size="sm" className="gap-2" onClick={onStartCampaign}>
                   <Play className="h-4 w-4" />
@@ -179,7 +205,14 @@ export function CampaignDetails({
           )}
         </CardContent>
       </Card>
-      <CampaignEditDialog campaign={campaign} open={false} onOpenChange={() => {}} />
+      <CampaignEditDialog
+        campaign={campaign}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={() => {
+          onUpdated?.();
+        }}
+      />
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
 } from './ui/dropdown-menu';
 import { ExternalLink, CalendarClock, Copy, Trash2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 
 interface PostPreviewCardProps {
   item: CalendarItem;
@@ -43,7 +44,9 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
       displayTime = formatCompact(ts, 'h:mm a', timezone);
     }
 
-    const campaignColor = (item as any)?.campaignColor || null;
+    const directColor = (item as any)?.campaignColor || null;
+    const stored = getStoredCampaignColor((item as any)?.campaignId) || null;
+    const campaignColor = directColor || stored;
 
     return { status, displayTime, campaignColor };
   }, [item, timezone]);
@@ -113,9 +116,16 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
   };
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={handleOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleOpen();
+        }
+      }}
       className={`group w-full rounded-md border px-2 py-2 text-left shadow-sm transition-colors hover:bg-gray-50 ${
         statusStyles[status] || statusStyles.draft
       }`}
@@ -160,14 +170,14 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
             }}
             className="inline-flex max-w-full items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] font-medium"
             style={{
-              borderColor: campaignColor || '#3b82f6',
-              color: '#111827',
+              borderColor: campaignColor || 'hsl(var(--ring))',
+              color: 'hsl(var(--foreground))',
             }}
             title={item.campaignName}
           >
             <span
               className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: campaignColor || '#3b82f6' }}
+              style={{ backgroundColor: campaignColor || 'hsl(var(--ring))' }}
             />
             <span className="truncate">{item.campaignName}</span>
           </a>
@@ -243,6 +253,6 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </button>
+    </div>
   );
 }

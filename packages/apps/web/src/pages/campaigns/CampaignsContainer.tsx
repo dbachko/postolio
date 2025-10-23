@@ -72,6 +72,7 @@ export default function CampaignsContainer() {
       onStartCampaign={() => selectedCampaignId && startCampaignMutation.mutate(selectedCampaignId)}
       onPauseCampaign={() => selectedCampaignId && pauseCampaignMutation.mutate(selectedCampaignId)}
       limits={limitsQuery.data?.data}
+      onUpdated={() => campaignDetailsQuery.refetch()}
       onFillWindow={async () => {
         if (!selectedCampaignId) return;
         try {

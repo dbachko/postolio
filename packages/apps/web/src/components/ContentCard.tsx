@@ -56,7 +56,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
 
       return () => clearTimeout(timer);
     }
-  }, [content.status]);
+  }, [content.status, localStatus]);
 
   const publishMutation = useMutation({
     mutationFn: (contentId: string) => contentApi.publishToInstagram(contentId),
@@ -138,14 +138,17 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
 
         <div className="mb-4">
           <div className="flex flex-wrap gap-1">
-            {content.hashtags.map((tag, index) => (
-              <span
-                key={index}
-                className="inline-block rounded bg-blue-100 px-2 py-1 text-xs text-blue-800"
-              >
-                #{tag}
-              </span>
-            ))}
+            {content.hashtags.map((tag, index) => {
+              const t = typeof tag === 'string' && tag.startsWith('#') ? tag.slice(1) : tag;
+              return (
+                <span
+                  key={index}
+                  className="inline-block rounded bg-blue-100 px-2 py-1 text-xs text-blue-800"
+                >
+                  #{t}
+                </span>
+              );
+            })}
           </div>
         </div>
 

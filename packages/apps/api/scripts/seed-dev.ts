@@ -95,6 +95,31 @@ async function main() {
     },
   });
 
+  // Helper for date formatting to yyyy-MM-dd
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  console.log('==> Creating a demo campaign');
+  const start = new Date();
+  const end = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+  const campaign = await prisma.campaign.create({
+    data: {
+      name: 'Demo Campaign',
+      brandId: brand.id,
+      status: 'preview',
+      priority: 5,
+      config: {
+        duration: { start: toYMD(start), end: toYMD(end) },
+        frequency: 'daily',
+        postingTime: '12:00',
+        themes: ['announcements', 'education', 'behind_the_scenes'],
+        style: 'informative',
+        goals: ['increase engagement', 'grow followers'],
+        seasonalityAssist: true,
+      } as any,
+    },
+  });
+
   console.log(`==> Creating ${posts} content items (mix of drafts and scheduled)`);
   const contentPayload: Array<{
     brandId: string;
@@ -103,6 +128,7 @@ async function main() {
     status: ContentStatus;
     scheduledAt?: Date | null;
     s3ImageKey?: string | null;
+    campaignId?: string | null;
   }> = [];
 
   const scheduledCount = Math.min(3, posts);
@@ -116,25 +142,12 @@ async function main() {
       status: isScheduled ? ('scheduled' as ContentStatus) : ('draft' as ContentStatus),
       scheduledAt,
       s3ImageKey: null,
+      // Associate first few posts with the campaign for easier testing
+      campaignId: i < 5 ? campaign.id : null,
     });
   }
 
   await prisma.content.createMany({ data: contentPayload });
-
-  console.log('==> Creating a demo campaign');
-  await prisma.campaign.create({
-    data: {
-      name: 'Demo Campaign',
-      brandId: brand.id,
-      status: 'active',
-      priority: 5,
-      config: {
-        frequency: 'daily',
-        durationDays: 7,
-        topics: ['announcements', 'education'],
-      },
-    },
-  });
 
   console.log('\n✅ Seed complete');
   console.log('--- Credentials ---');

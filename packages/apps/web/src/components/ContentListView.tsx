@@ -388,11 +388,15 @@ export function ContentListView({
                     )}
                     {isExpanded && item.hashtags && item.hashtags.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {item.hashtags.map((tag, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-xs">
-                            #{tag}
-                          </Badge>
-                        ))}
+                        {item.hashtags.map((tag, idx) => {
+                          const t =
+                            typeof tag === 'string' && tag.startsWith('#') ? tag.slice(1) : tag;
+                          return (
+                            <Badge key={idx} variant="secondary" className="text-xs">
+                              #{t}
+                            </Badge>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

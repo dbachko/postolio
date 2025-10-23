@@ -131,6 +131,7 @@ export interface Campaign {
   name: string;
   status: 'creating' | 'preview' | 'active' | 'paused' | 'completed' | 'failed' | 'processing';
   brandId: string;
+  color?: string | null;
   config?: {
     duration?: { start: string; end: string };
     frequency?: string;

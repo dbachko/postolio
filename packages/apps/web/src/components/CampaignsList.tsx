@@ -13,46 +13,7 @@ interface CampaignsListProps {
   deleteCampaignLoading?: boolean;
 }
 
-// Status configuration for campaign grouping
-const statusConfig = {
-  active: {
-    label: 'Active Campaigns',
-    color: 'bg-green-50 border-green-200',
-    badgeColor: 'bg-green-100 text-green-800',
-    icon: '🟢',
-  },
-  preview: {
-    label: 'Ready to Launch',
-    color: 'bg-blue-50 border-blue-200',
-    badgeColor: 'bg-blue-100 text-blue-800',
-    icon: '🔵',
-  },
-  creating: {
-    label: 'Generating Content',
-    color: 'bg-yellow-50 border-yellow-200',
-    badgeColor: 'bg-yellow-100 text-yellow-800',
-    icon: '🟡',
-  },
-  processing: {
-    label: 'Processing',
-    color: 'bg-orange-50 border-orange-200',
-    badgeColor: 'bg-orange-100 text-orange-800',
-    icon: '🟠',
-  },
-  paused: {
-    label: 'Paused Campaigns',
-    color: 'bg-gray-50 border-gray-200',
-    badgeColor: 'bg-gray-100 text-gray-800',
-    icon: '⚪',
-  },
-  failed: {
-    label: 'Failed Campaigns',
-    color: 'bg-red-50 border-red-200',
-    badgeColor: 'bg-red-100 text-red-800',
-    icon: '🔴',
-  },
-};
-
+// Redesigned list: flat, neutral grid of professional cards
 const CampaignsList = memo(
   ({
     campaigns,
@@ -64,54 +25,25 @@ const CampaignsList = memo(
     pauseCampaignLoading = false,
     deleteCampaignLoading = false,
   }: CampaignsListProps) => {
-    // Group campaigns by status
-    const groupedCampaigns = campaigns.reduce(
-      (groups: Record<string, Campaign[]>, campaign: Campaign) => {
-        const status = campaign.status || 'unknown';
-        if (!groups[status]) {
-          groups[status] = [];
-        }
-        groups[status].push(campaign);
-        return groups;
-      },
-      {}
-    );
+    if (!campaigns || campaigns.length === 0) {
+      return <div className="text-muted-foreground text-sm">No campaigns yet</div>;
+    }
 
     return (
-      <div className="space-y-6">
-        {Object.entries(statusConfig).map(([status, config]) => {
-          const statusCampaigns = groupedCampaigns[status] || [];
-          if (statusCampaigns.length === 0) return null;
-
-          return (
-            <div key={status} className={`rounded-lg border p-4 ${config.color}`}>
-              <div className="mb-4 flex items-center gap-2">
-                <span className="text-lg">{config.icon}</span>
-                <h3 className="text-lg font-semibold text-gray-900">{config.label}</h3>
-                <span className={`rounded-full px-2 py-1 text-xs font-medium ${config.badgeColor}`}>
-                  {statusCampaigns.length} campaign
-                  {statusCampaigns.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {statusCampaigns.map((campaign: Campaign) => (
-                  <CampaignCard
-                    key={campaign.id}
-                    campaign={campaign}
-                    onViewDetails={onViewCampaignDetails}
-                    onStartCampaign={onStartCampaign}
-                    onPauseCampaign={onPauseCampaign}
-                    onDeleteCampaign={onDeleteCampaign}
-                    startCampaignLoading={startCampaignLoading}
-                    pauseCampaignLoading={pauseCampaignLoading}
-                    deleteCampaignLoading={deleteCampaignLoading}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {campaigns.map((campaign: Campaign) => (
+          <CampaignCard
+            key={campaign.id}
+            campaign={campaign}
+            onViewDetails={onViewCampaignDetails}
+            onStartCampaign={onStartCampaign}
+            onPauseCampaign={onPauseCampaign}
+            onDeleteCampaign={onDeleteCampaign}
+            startCampaignLoading={startCampaignLoading}
+            pauseCampaignLoading={pauseCampaignLoading}
+            deleteCampaignLoading={deleteCampaignLoading}
+          />
+        ))}
       </div>
     );
   }

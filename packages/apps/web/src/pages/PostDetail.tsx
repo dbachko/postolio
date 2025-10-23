@@ -254,7 +254,7 @@ export default function PostDetail() {
     if (post && isEditing) {
       setFormData({
         caption: post.caption || '',
-        hashtags: post.hashtags || [],
+        hashtags: (post.hashtags || []).map((t: string) => (t.startsWith('#') ? t.slice(1) : t)),
         imageUrl: post.imageUrl || '',
         scheduledAt: post.scheduledAt
           ? format(new Date(post.scheduledAt), "yyyy-MM-dd'T'HH:mm")
@@ -544,6 +544,7 @@ export default function PostDetail() {
                   status={saveStatus}
                   lastSaved={lastSaved}
                   showAILearningMessage={saveStatus === 'saved'}
+                  idleHint="Edits save automatically"
                 />
               )}
             </div>
@@ -680,11 +681,14 @@ export default function PostDetail() {
                 <div className="space-y-4">
                   <p className="whitespace-pre-wrap text-gray-700">{post.caption}</p>
                   <div className="flex flex-wrap gap-2">
-                    {post.hashtags.map((tag, index) => (
-                      <span key={index} className="text-blue-600">
-                        #{tag}
-                      </span>
-                    ))}
+                    {post.hashtags.map((tag, index) => {
+                      const t = typeof tag === 'string' && tag.startsWith('#') ? tag.slice(1) : tag;
+                      return (
+                        <span key={index} className="text-blue-600">
+                          #{t}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               </>

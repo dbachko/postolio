@@ -75,7 +75,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
     if (content && isOpen) {
       const initialData = {
         caption: content.caption || '',
-        hashtags: content.hashtags || [],
+        hashtags: (content.hashtags || []).map((t: string) => (t.startsWith('#') ? t.slice(1) : t)),
         imageUrl: content.imageUrl || '',
         scheduledAt: content.scheduledAt
           ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm")

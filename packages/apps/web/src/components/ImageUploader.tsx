@@ -35,20 +35,23 @@ export function ImageUploader({
     }
   }, [value, selectedFile]);
 
-  const validateFile = (file: File): string | null => {
-    // Check file type
-    if (!acceptedFormats.includes(file.type)) {
-      return `Invalid file type. Accepted formats: ${acceptedFormats.map((f) => f.split('/')[1]).join(', ')}`;
-    }
+  const validateFile = useCallback(
+    (file: File): string | null => {
+      // Check file type
+      if (!acceptedFormats.includes(file.type)) {
+        return `Invalid file type. Accepted formats: ${acceptedFormats.map((f) => f.split('/')[1]).join(', ')}`;
+      }
 
-    // Check file size
-    const sizeInMB = file.size / (1024 * 1024);
-    if (sizeInMB > maxSizeInMB) {
-      return `File size exceeds ${maxSizeInMB}MB limit. Current size: ${sizeInMB.toFixed(2)}MB`;
-    }
+      // Check file size
+      const sizeInMB = file.size / (1024 * 1024);
+      if (sizeInMB > maxSizeInMB) {
+        return `File size exceeds ${maxSizeInMB}MB limit. Current size: ${sizeInMB.toFixed(2)}MB`;
+      }
 
-    return null;
-  };
+      return null;
+    },
+    [acceptedFormats, maxSizeInMB]
+  );
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -85,7 +88,7 @@ export function ImageUploader({
         onChange(file);
       }
     },
-    [value, onChange, onUpload, acceptedFormats, maxSizeInMB]
+    [value, onChange, onUpload, validateFile]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {

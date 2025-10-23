@@ -18,9 +18,12 @@ export function PostHashtagEditor({
 }: PostHashtagEditorProps) {
   const [input, setInput] = useState('');
 
-  // Initialize input from hashtags
+  const sanitize = (tag: string) => tag.replace(/^#+/, '');
+
+  // Initialize input from hashtags (strip any leading # from props)
   useEffect(() => {
-    setInput(hashtags.join(' '));
+    const sanitized = (hashtags || []).map(sanitize);
+    setInput(sanitized.join(' '));
   }, [hashtags]);
 
   const handleInputChange = (value: string) => {
@@ -61,7 +64,7 @@ export function PostHashtagEditor({
               className={`${!disabled ? 'cursor-pointer hover:bg-red-100 hover:text-red-800' : ''}`}
               onClick={!disabled ? () => removeHashtag(index) : undefined}
             >
-              #{hashtag} {!disabled && '×'}
+              #{sanitize(hashtag)} {!disabled && '×'}
             </Badge>
           ))}
         </div>

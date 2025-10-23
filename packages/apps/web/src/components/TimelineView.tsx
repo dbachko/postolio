@@ -58,7 +58,7 @@ export function TimelineView({ items, currentDate, timezone: tzOverride }: Timel
     });
 
     return grouped;
-  }, [items, weekDays]);
+  }, [items, weekDays, timezone]);
 
   const getStatusColor = (status: string, type: string, processing?: boolean) => {
     if (type === 'placeholder') return 'bg-gray-100 text-gray-600 border-gray-300';

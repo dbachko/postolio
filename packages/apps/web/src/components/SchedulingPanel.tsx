@@ -80,14 +80,18 @@ export default function SchedulingPanel({
                   <div className="mb-2 flex flex-wrap gap-1">
                     {(Array.isArray(post.hashtags) ? post.hashtags : [])
                       .slice(0, 3)
-                      .map((tag, index) => (
-                        <span
-                          key={index}
-                          className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
+                      .map((tag, index) => {
+                        const t =
+                          typeof tag === 'string' && tag.startsWith('#') ? tag.slice(1) : tag;
+                        return (
+                          <span
+                            key={index}
+                            className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700"
+                          >
+                            #{t}
+                          </span>
+                        );
+                      })}
                     {Array.isArray(post.hashtags) && post.hashtags.length > 3 && (
                       <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
                         +{post.hashtags.length - 3} more

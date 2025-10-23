@@ -104,6 +104,27 @@ export function getContrastTextColor(hex: string | null | undefined): string {
 }
 
 /**
+ * Deterministically pick a color from a small palette based on an ID/string.
+ * Useful when a campaign doesn't have an explicit color provided by the API.
+ */
+export function getStableColorFromId(id: string | undefined | null): string {
+  const palette = [
+    'var(--swatch-blue-300)',
+    'var(--swatch-emerald-300)',
+    'var(--swatch-amber-300)',
+    'var(--swatch-violet-300)',
+    'var(--swatch-teal-300)',
+    'var(--swatch-red-300)',
+    'var(--swatch-indigo-300)',
+    'var(--swatch-rose-300)',
+  ];
+  if (!id) return palette[0];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return palette[hash % palette.length];
+}
+
+/**
  * Creates inline styles for campaign color coding
  * Suitable for React component style props
  *

@@ -33,6 +33,7 @@ import {
   Sparkles,
   Home,
   Shield,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
@@ -218,6 +219,24 @@ export function AppLayout({ children }: LayoutProps) {
 
             {/* Right Section: Search + Menu + Brand Dropdown */}
             <div className="flex items-center space-x-2">
+              {/* Primary action: New Post (permanent in top bar) */}
+              <Button
+                size="sm"
+                className="hidden gap-2 sm:inline-flex"
+                onClick={() => navigate('/posts/create')}
+                aria-label="Create new post"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                New Post
+              </Button>
+              <Button
+                size="icon"
+                className="sm:hidden"
+                onClick={() => navigate('/posts/create')}
+                aria-label="Create new post"
+              >
+                <Plus className="h-5 w-5" aria-hidden="true" />
+              </Button>
               {/* Search Button */}
               <Button
                 variant="ghost"
@@ -449,6 +468,15 @@ export function AppLayout({ children }: LayoutProps) {
           </CommandGroup>
 
           <CommandGroup heading="Quick Actions">
+            <CommandItem
+              onSelect={() => {
+                navigate('/posts/create');
+                setSearchOpen(false);
+              }}
+            >
+              <Plus className="mr-3 h-4 w-4" aria-hidden="true" />
+              Create New Post
+            </CommandItem>
             <CommandItem
               onSelect={() => {
                 navigate('/campaigns/create?fresh=1');

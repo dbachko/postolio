@@ -8,6 +8,8 @@ interface PostSaveIndicatorProps {
   lastSaved?: Date | null;
   className?: string;
   showAILearningMessage?: boolean;
+  // Optional hint shown when idle and nothing saved yet
+  idleHint?: string;
 }
 
 export function PostSaveIndicator({
@@ -15,6 +17,7 @@ export function PostSaveIndicator({
   lastSaved,
   className = '',
   showAILearningMessage = false,
+  idleHint,
 }: PostSaveIndicatorProps) {
   const getIcon = () => {
     switch (status) {
@@ -45,7 +48,7 @@ export function PostSaveIndicator({
       default:
         return lastSaved
           ? `Last saved: ${format(lastSaved, 'HH:mm:ss')}`
-          : 'Changes will be saved when you close the dialog';
+          : idleHint || 'Changes will be saved when you close the dialog';
     }
   };
 

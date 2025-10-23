@@ -15,6 +15,8 @@ import { Button } from './ui/button';
 import { Switch } from './ui/switch';
 import { toast } from 'sonner';
 import { frequencyOptions, styleOptions } from '../constants/campaign';
+import { getStableColorFromId } from '../utils/campaign-colors';
+import { getStoredCampaignColor, setStoredCampaignColor } from '@/utils/campaign-color-storage';
 import { campaign as campaignApi, type Campaign } from '../lib/api';
 import { GoalsListInput } from './campaign-wizard/shared/GoalsListInput';
 
@@ -34,6 +36,7 @@ type EditableFlags = {
   postingTime: boolean;
   themes: boolean;
   style: boolean;
+  color: boolean;
   reason: string;
 };
 
@@ -51,6 +54,7 @@ function getEditPermissions(status: Campaign['status']): EditableFlags {
         postingTime: true,
         themes: true,
         style: true,
+        color: true,
         reason: 'All fields are editable for this campaign status.',
       };
     case 'active':
@@ -64,6 +68,7 @@ function getEditPermissions(status: Campaign['status']): EditableFlags {
         postingTime: false,
         themes: false,
         style: false,
+        color: true,
         reason: 'Active/paused campaigns only allow editing name and priority.',
       };
     case 'completed':
@@ -76,6 +81,7 @@ function getEditPermissions(status: Campaign['status']): EditableFlags {
         postingTime: false,
         themes: false,
         style: false,
+        color: false,
         reason: 'Completed campaigns are read-only.',
       };
     default:
@@ -88,6 +94,7 @@ function getEditPermissions(status: Campaign['status']): EditableFlags {
         postingTime: false,
         themes: false,
         style: false,
+        color: true,
         reason: 'Limited editing is available for this campaign status.',
       };
   }
@@ -101,6 +108,25 @@ export function CampaignEditDialog({
 }: CampaignEditDialogProps) {
   const [name, setName] = useState(campaign.name);
   const [priority, setPriority] = useState<number>(campaign.priority || 5);
+  // Predefined palette (Shadcn/Tailwind 300) via CSS variables
+  const palette: string[] = [
+    'var(--swatch-blue-300)',
+    'var(--swatch-indigo-300)',
+    'var(--swatch-violet-300)',
+    'var(--swatch-purple-300)',
+    'var(--swatch-fuchsia-300)',
+    'var(--swatch-pink-300)',
+    'var(--swatch-rose-300)',
+    'var(--swatch-orange-300)',
+    'var(--swatch-amber-300)',
+    'var(--swatch-emerald-300)',
+  ];
+  const initialColor =
+    getStoredCampaignColor(campaign.id) ||
+    (campaign as any).color ||
+    getStableColorFromId(campaign.id) ||
+    palette[0];
+  const [color, setColor] = useState<string>(initialColor);
   const [startDate, setStartDate] = useState<string>(campaign.config?.duration?.start || '');
   const [endDate, setEndDate] = useState<string>(campaign.config?.duration?.end || '');
   const [frequency, setFrequency] = useState<string>(campaign.config?.frequency || '');
@@ -127,6 +153,12 @@ export function CampaignEditDialog({
     // Hydrate when dialog opens in case campaign object changed
     setName(campaign.name);
     setPriority(campaign.priority || 5);
+    setColor(
+      getStoredCampaignColor(campaign.id) ||
+        (campaign as any).color ||
+        getStableColorFromId(campaign.id) ||
+        palette[0]
+    );
     setStartDate(campaign.config?.duration?.start || '');
     setEndDate(campaign.config?.duration?.end || '');
     setFrequency(campaign.config?.frequency || '');
@@ -143,7 +175,7 @@ export function CampaignEditDialog({
             .filter(Boolean)
     );
     setSeasonalityAssist((((campaign.config as any) || {}).seasonalityAssist as boolean) ?? true);
-  }, [open, campaign]);
+  }, [open, campaign, palette]);
 
   const onSubmit = async () => {
     if (saving) return;
@@ -179,6 +211,10 @@ export function CampaignEditDialog({
       if (perms.style && style !== (campaign.config?.style || '')) {
         updates.style = style;
       }
+      // Color is a frontend-only preference for now; track change and persist locally
+      const prevStoredColor = getStoredCampaignColor(campaign.id);
+      const colorChanged = !!(perms.color && color && color !== prevStoredColor);
+      if (colorChanged) setStoredCampaignColor(campaign.id, color);
       if (perms.all) {
         const prevGoals = Array.isArray((campaign.config as any)?.goals)
           ? ((campaign.config as any)?.goals as string[])
@@ -197,7 +233,12 @@ export function CampaignEditDialog({
       }
 
       if (Object.keys(updates).length === 0) {
-        toast.info('No changes to save');
+        if (colorChanged) {
+          toast.success('Calendar highlight color saved');
+          onOpenChange(false);
+        } else {
+          toast.info('No changes to save');
+        }
         setSaving(false);
         return;
       }
@@ -205,6 +246,7 @@ export function CampaignEditDialog({
       const res = await campaignApi.updateCampaign(campaign.id, updates as any);
       if (res.success) {
         toast.success(res.message || 'Campaign updated');
+        if (colorChanged) toast.info('Calendar highlight color saved');
         onOpenChange(false);
         onSaved?.();
       } else {
@@ -363,6 +405,33 @@ export function CampaignEditDialog({
               disabled={!perms.all}
             />
           </div>
+        </div>
+
+        {/* Calendar highlight color (compact, less prominent) */}
+        <div className="mt-3 grid gap-1">
+          <Label className="text-xs text-gray-600">Calendar highlight color</Label>
+          <Select value={color} onValueChange={(v) => perms.color && setColor(v)}>
+            <SelectTrigger className="h-8 w-48 justify-between px-2 py-1 text-xs">
+              <div
+                className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+                style={{ backgroundColor: color, color: 'hsl(var(--foreground))', opacity: 0.85 }}
+              >
+                {campaign.name || 'Preview'}
+              </div>
+            </SelectTrigger>
+            <SelectContent className="w-56">
+              {palette.map((hex) => (
+                <SelectItem key={hex} value={hex}>
+                  <div
+                    className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+                    style={{ backgroundColor: hex, color: 'hsl(var(--foreground))', opacity: 0.85 }}
+                  >
+                    {campaign.name || 'Preview'}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <DialogFooter>

@@ -32,6 +32,8 @@ export function CreatePost() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [campaignId, setCampaignId] = useState<string>('');
   const [scheduledAt, setScheduledAt] = useState<string>('');
+  const [scheduleError, setScheduleError] = useState<string | undefined>(undefined);
+  const [lastSubmitMode, setLastSubmitMode] = useState<'draft' | 'schedule'>('draft');
   const [errors, setErrors] = useState<{
     caption?: string;
     hashtags?: string;
@@ -91,7 +93,7 @@ export function CreatePost() {
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
 
       // Show success toast with context
-      const isScheduled = !!scheduledAt;
+      const isScheduled = lastSubmitMode === 'schedule';
       const hasCampaign = !!campaignId;
 
       let message = 'Post created successfully!';
@@ -137,16 +139,16 @@ export function CreatePost() {
   };
 
   const validateHashtags = (value: string): string | undefined => {
-    const tags = value.split(/[\s,]+/).filter((tag) => tag.length > 0);
+    const tags = value
+      .split(/[\s,]+/)
+      .filter((tag) => tag.length > 0)
+      .map((t) => (t.startsWith('#') ? t.slice(1) : t));
 
     if (tags.length > 30) {
       return `Maximum 30 hashtags allowed (currently ${tags.length})`;
     }
 
-    const invalidTags = tags.filter((tag) => {
-      const cleanTag = tag.startsWith('#') ? tag.substring(1) : tag;
-      return !/^[a-zA-Z0-9_]+$/.test(cleanTag);
-    });
+    const invalidTags = tags.filter((tag) => !/^[a-zA-Z0-9_]+$/.test(tag));
 
     if (invalidTags.length > 0) {
       return `Invalid hashtags: ${invalidTags.join(', ')}. Only letters, numbers, and underscores allowed`;
@@ -179,13 +181,13 @@ export function CreatePost() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedBrand) return;
+  const submit = (mode: 'draft' | 'schedule') => {
+    if (!selectedBrand || createPostMutation.isPending) return;
 
     // Clear previous errors
     setErrors({});
     setMutationError(null);
+    setScheduleError(undefined);
 
     // Validate all fields
     const captionError = validateCaption(caption);
@@ -193,18 +195,27 @@ export function CreatePost() {
     const imageError = validateImage(imageFile);
 
     if (captionError || hashtagsError || imageError) {
-      setErrors({
-        caption: captionError,
-        hashtags: hashtagsError,
-        image: imageError,
-      });
+      setErrors({ caption: captionError, hashtags: hashtagsError, image: imageError });
       return;
     }
 
-    const hashtagArray = hashtags
-      .split(/[\s,]+/)
-      .filter((tag) => tag.length > 0)
-      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
+    if (mode === 'schedule' && !scheduledAt) {
+      setScheduleError('Select a date and time to schedule the post');
+      return;
+    }
+
+    const hashtagArray = Array.from(
+      new Set(
+        hashtags
+          .split(/[\s,]+/)
+          .filter((tag) => tag.length > 0)
+          .map((t) => (t.startsWith('#') ? t.slice(1) : t))
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0)
+      )
+    );
+
+    setLastSubmitMode(mode);
 
     createPostMutation.mutate({
       brandId: selectedBrand.id,
@@ -212,8 +223,13 @@ export function CreatePost() {
       hashtags: hashtagArray,
       imageFile: imageFile || undefined,
       campaignId: campaignId || undefined,
-      scheduledAt: scheduledAt || undefined,
+      scheduledAt: mode === 'schedule' ? scheduledAt : undefined,
     });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submit(scheduledAt ? 'schedule' : 'draft');
   };
 
   if (!selectedBrand) {
@@ -385,7 +401,7 @@ export function CreatePost() {
               </SelectTrigger>
               <SelectContent>
                 {campaignOptions.length === 0 ? (
-                  <SelectItem value="__new">+ Create new campaign…</SelectItem>
+                  <SelectItem value="__new">+ Create new campaign</SelectItem>
                 ) : (
                   <>
                     {campaignOptions.map((campaign: any) => (
@@ -393,7 +409,7 @@ export function CreatePost() {
                         {campaign.name}
                       </SelectItem>
                     ))}
-                    <SelectItem value="__new">+ Create new campaign…</SelectItem>
+                    <SelectItem value="__new">+ Create new campaign</SelectItem>
                   </>
                 )}
               </SelectContent>
@@ -413,21 +429,47 @@ export function CreatePost() {
               id="scheduledAt"
               type="datetime-local"
               value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
+              onChange={(e) => {
+                setScheduledAt(e.target.value);
+                if (scheduleError) setScheduleError(undefined);
+              }}
               aria-label="Schedule post time"
-              aria-describedby="schedule-help"
+              aria-describedby={scheduleError ? 'schedule-error' : 'schedule-help'}
+              aria-invalid={!!scheduleError}
             />
-            <p id="schedule-help" className="text-muted-foreground text-sm">
-              Leave empty to save as draft, or set a time to schedule the post
-            </p>
+            {scheduleError ? (
+              <p id="schedule-error" className="text-sm text-red-500" role="alert">
+                {scheduleError}
+              </p>
+            ) : (
+              <p id="schedule-help" className="text-muted-foreground text-sm">
+                Leave empty to save as draft, or set a time to schedule the post
+              </p>
+            )}
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-4">
-            <Button type="submit" disabled={!caption || createPostMutation.isPending}>
-              {createPostMutation.isPending ? 'Creating...' : 'Create Post'}
+          <div className="flex flex-wrap gap-3">
+            <Button
+              type="button"
+              onClick={() => submit('schedule')}
+              disabled={createPostMutation.isPending || !caption || !scheduledAt}
+            >
+              {createPostMutation.isPending && lastSubmitMode === 'schedule'
+                ? 'Scheduling...'
+                : 'Schedule Post'}
             </Button>
-            <Button type="button" variant="outline" onClick={() => navigate(-1)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => submit('draft')}
+              disabled={createPostMutation.isPending || !caption}
+            >
+              {createPostMutation.isPending && lastSubmitMode === 'draft'
+                ? 'Saving...'
+                : 'Save as Draft'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
               Cancel
             </Button>
           </div>

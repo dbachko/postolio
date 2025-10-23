@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addMonths, subMonths } from 'date-fns';
 import { MonthGridView } from './MonthGridView';
@@ -16,7 +16,7 @@ import { Button } from './ui/button';
 import { content as contentApi, campaign as campaignApi, type Content } from '@/lib/api';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { CalendarItem, Placeholder } from '../types/calendar';
-import { Calendar, List, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Calendar, List, Clock, ChevronLeft, ChevronRight, Loader2, Plus } from 'lucide-react';
 
 // type guard no longer needed for the month grid only
 
@@ -28,6 +28,7 @@ interface ContentCalendarProps {
 }
 
 export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
+  const navigate = useNavigate();
   // Sync filters with URL
   useURLFilterSync();
 
@@ -119,7 +120,10 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       return true;
     });
   }, [calendarQuery.data?.data?.content]);
-  const placeholders = (calendarQuery.data?.data?.placeholders || []) as Placeholder[];
+  const placeholders: Placeholder[] = useMemo(
+    () => (calendarQuery.data?.data?.placeholders || []) as Placeholder[],
+    [calendarQuery.data?.data?.placeholders]
+  );
 
   // Fetch campaigns for progress visualization
   const campaignsQuery = useQuery({
@@ -128,7 +132,10 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const campaigns = campaignsQuery.data?.campaigns || [];
+  const campaigns = useMemo(
+    () => campaignsQuery.data?.campaigns || [],
+    [campaignsQuery.data?.campaigns]
+  );
 
   // Fetch schedule-ahead limits (account-wide)
   const limitsQuery = useQuery({
@@ -270,7 +277,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             </span>
           </div>
 
-          {/* Right: view toggles + Filters button */}
+          {/* Right: view toggles + Filters button + New Post */}
           <div className="flex items-center gap-2">
             <div className="flex gap-1 rounded-md bg-gray-100 p-1">
               <Button
@@ -361,6 +368,19 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                 Clear
               </Button>
             )}
+
+            {/* Primary page action: Create new post */}
+            <Button
+              size="sm"
+              className="gap-1"
+              onClick={() => {
+                // Consider passing context (campaign/date) via query in future iterations
+                navigate('/posts/create');
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">New Post</span>
+            </Button>
           </div>
         </div>
       </div>
