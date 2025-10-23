@@ -5,8 +5,16 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --target node22 --out-dir dist --dts",
+    "build": "tsup src/index.ts --format esm,cjs --target node22 --out-dir dist --dts",
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {

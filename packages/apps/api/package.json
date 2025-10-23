@@ -6,6 +6,7 @@
     "build:deps": "pnpm --filter \"api^...\" run build",
     "build": "pnpm run build:deps && tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
+    "seed:dev": "tsx scripts/seed-dev.ts",
     "lint": "eslint src/**/*.ts",
     "generate-secret": "node scripts/generate-jwt-secret.js"
   },

@@ -45,15 +45,15 @@ mkcert \
 echo "==> Writing API env to use repo-local certs"
 API_ENV_FILE="$REPO_ROOT/packages/apps/api/.env"
 touch "$API_ENV_FILE"
-grep -q '^SSL_CERT_PATH=' "$API_ENV_FILE" 2>/dev/null && sed -i '' "s#^SSL_CERT_PATH=.*#SSL_CERT_PATH=../../certs/ai.localhost.pem#" "$API_ENV_FILE" || echo "SSL_CERT_PATH=../../certs/ai.localhost.pem" >> "$API_ENV_FILE"
-grep -q '^SSL_KEY_PATH=' "$API_ENV_FILE" 2>/dev/null && sed -i '' "s#^SSL_KEY_PATH=.*#SSL_KEY_PATH=../../certs/ai.localhost-key.pem#" "$API_ENV_FILE" || echo "SSL_KEY_PATH=../../certs/ai.localhost-key.pem" >> "$API_ENV_FILE"
+grep -q '^SSL_CERT_PATH=' "$API_ENV_FILE" 2>/dev/null && sed -i '' "s#^SSL_CERT_PATH=.*#SSL_CERT_PATH=../../../certs/ai.localhost.pem#" "$API_ENV_FILE" || echo "SSL_CERT_PATH=../../../certs/ai.localhost.pem" >> "$API_ENV_FILE"
+grep -q '^SSL_KEY_PATH=' "$API_ENV_FILE" 2>/dev/null && sed -i '' "s#^SSL_KEY_PATH=.*#SSL_KEY_PATH=../../../certs/ai.localhost-key.pem#" "$API_ENV_FILE" || echo "SSL_KEY_PATH=../../../certs/ai.localhost-key.pem" >> "$API_ENV_FILE"
 grep -q '^NODE_ENV=' "$API_ENV_FILE" 2>/dev/null || echo "NODE_ENV=dev" >> "$API_ENV_FILE"
 
 echo "==> Writing Web env (optional; Vite also uses sane defaults)"
 WEB_ENV_FILE="$REPO_ROOT/packages/apps/web/.env"
 touch "$WEB_ENV_FILE"
-grep -q '^SSL_CERT_PATH=' "$WEB_ENV_FILE" 2>/dev/null && sed -i '' "s#^SSL_CERT_PATH=.*#SSL_CERT_PATH=../../certs/ai.localhost.pem#" "$WEB_ENV_FILE" || echo "SSL_CERT_PATH=../../certs/ai.localhost.pem" >> "$WEB_ENV_FILE"
-grep -q '^SSL_KEY_PATH=' "$WEB_ENV_FILE" 2>/dev/null && sed -i '' "s#^SSL_KEY_PATH=.*#SSL_KEY_PATH=../../certs/ai.localhost-key.pem#" "$WEB_ENV_FILE" || echo "SSL_KEY_PATH=../../certs/ai.localhost-key.pem" >> "$WEB_ENV_FILE"
+grep -q '^SSL_CERT_PATH=' "$WEB_ENV_FILE" 2>/dev/null && sed -i '' "s#^SSL_CERT_PATH=.*#SSL_CERT_PATH=../../../certs/ai.localhost.pem#" "$WEB_ENV_FILE" || echo "SSL_CERT_PATH=../../../certs/ai.localhost.pem" >> "$WEB_ENV_FILE"
+grep -q '^SSL_KEY_PATH=' "$WEB_ENV_FILE" 2>/dev/null && sed -i '' "s#^SSL_KEY_PATH=.*#SSL_KEY_PATH=../../../certs/ai.localhost-key.pem#" "$WEB_ENV_FILE" || echo "SSL_KEY_PATH=../../../certs/ai.localhost-key.pem" >> "$WEB_ENV_FILE"
 
 cat <<EOF
 
@@ -74,4 +74,3 @@ Notes:
 - Vite reads SSL_CERT_PATH/SSL_KEY_PATH from packages/apps/web/.env or defaults to ../../certs paths
 - No /etc/hosts changes are required: .localhost domains resolve to 127.0.0.1
 EOF
-

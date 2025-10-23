@@ -24,9 +24,10 @@ export default defineConfig({
       try {
         // Look for SSL certificates
         const certPath =
-          process.env.SSL_CERT_PATH || path.resolve(__dirname, '../../certs/ai.localhost.pem');
+          process.env.SSL_CERT_PATH || path.resolve(__dirname, '../../../certs/ai.localhost.pem');
         const keyPath =
-          process.env.SSL_KEY_PATH || path.resolve(__dirname, '../../certs/ai.localhost-key.pem');
+          process.env.SSL_KEY_PATH ||
+          path.resolve(__dirname, '../../../certs/ai.localhost-key.pem');
 
         if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
           return {
