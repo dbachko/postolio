@@ -137,12 +137,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     [campaignsQuery.data?.campaigns]
   );
 
-  // Fetch schedule-ahead limits (account-wide)
-  const limitsQuery = useQuery({
-    queryKey: ['limits', 'schedule-ahead'],
-    queryFn: () => campaignApi.getScheduleAheadLimit(),
-    staleTime: 60 * 1000,
-  });
+  // Schedule-ahead capacity banner is now shown globally in AppLayout
 
   // Calculate campaign progress
   const campaignProgress = useMemo(() => {
@@ -230,29 +225,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
   return (
     <div className="space-y-4">
-      {/* Upsell banner when account hit scheduling cap */}
-      {limitsQuery.data?.data &&
-        Number.isFinite(limitsQuery.data.data.maxAllowed) &&
-        limitsQuery.data.data.currentCount >= limitsQuery.data.data.maxAllowed && (
-          <Card>
-            <CardContent className="flex items-center justify-between p-4">
-              <div>
-                <div className="font-medium">You've reached your plan's scheduling limit</div>
-                <div className="text-sm text-gray-600">
-                  {limitsQuery.data.data.currentCount}/{limitsQuery.data.data.maxAllowed} scheduled
-                  ahead
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => (window.location.href = '/settings')}
-              >
-                Upgrade
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+      {/* Capacity banner moved to global top nav area */}
       {/* Compact Header Bar: navigation, current month, view toggles, filters toggle */}
       <div className="rounded-lg border bg-white px-3 py-2 shadow-sm">
         <div className="flex items-center justify-between gap-3">

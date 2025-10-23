@@ -38,6 +38,7 @@ import {
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
 import { RightHelpDrawer } from './help/RightHelpDrawer';
+import { ScheduleLimitBanner } from './ScheduleLimitBanner';
 
 interface LayoutProps {
   children: ReactNode;
@@ -175,6 +176,9 @@ export function AppLayout({ children }: LayoutProps) {
       >
         Skip to main content
       </a>
+
+      {/* Capacity banner above top nav */}
+      <ScheduleLimitBanner />
 
       {/* Ultra-thin navigation bar */}
       <nav

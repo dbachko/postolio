@@ -843,58 +843,6 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Get single campaign (REST: GET /:id)
-  fastify.get<{ Params: { id: string } }>(
-    '/:id',
-    { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      try {
-        const userId = request.user!.id;
-        const { id } = request.params;
-
-        if (!id) {
-          return reply.code(400).send({ error: 'Campaign ID is required' });
-        }
-
-        const campaign = await prisma.campaign.findFirst({
-          where: {
-            id,
-            brand: { userId },
-          },
-          include: {
-            brand: { select: { id: true, name: true } },
-            _count: { select: { content: true } },
-          },
-        });
-
-        if (!campaign) {
-          return reply.code(404).send({ error: 'Campaign not found or access denied' });
-        }
-
-        return reply.send({
-          success: true,
-          campaign: {
-            id: campaign.id,
-            name: campaign.name,
-            status: campaign.status,
-            brandId: campaign.brandId,
-            brand: campaign.brand,
-            contentCount: campaign._count.content,
-            config: campaign.config,
-            priority: campaign.priority,
-            createdAt: campaign.createdAt,
-            updatedAt: campaign.updatedAt,
-            startedAt: campaign.startedAt,
-            completedAt: campaign.completedAt,
-          },
-        });
-      } catch (error) {
-        console.error('Get campaign error:', error);
-        return reply.code(500).send({ error: 'Failed to retrieve campaign. Please try again.' });
-      }
-    }
-  );
-
   // Delete campaign (only if not started)
   fastify.delete<{ Params: { id: string } }>(
     '/:id',
