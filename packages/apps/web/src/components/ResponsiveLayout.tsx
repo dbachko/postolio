@@ -36,9 +36,6 @@ import {
   Menu,
   Search,
   BarChart3,
-  TrendingUp,
-  Brain,
-  Users,
   Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -66,24 +63,6 @@ const navigationItems: NavigationItem[] = [
     path: '/analytics',
     icon: BarChart3,
     description: 'Performance metrics',
-  },
-  {
-    label: 'Engagement',
-    path: '/engagement',
-    icon: Users,
-    description: 'Audience engagement',
-  },
-  {
-    label: 'Growth',
-    path: '/growth',
-    icon: TrendingUp,
-    description: 'Growth strategies',
-  },
-  {
-    label: 'AI Features',
-    path: '/ai-features',
-    icon: Brain,
-    description: 'AI-powered tools',
   },
 ];
 

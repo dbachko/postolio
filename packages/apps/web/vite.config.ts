@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   server: {
-    host: '0.0.0.0',
+    host: 'ai.localhost',
     port: 5173,
     https: (() => {
       // Skip HTTPS in CI environment
@@ -23,8 +23,10 @@ export default defineConfig({
 
       try {
         // Look for SSL certificates
-        const certPath = '/home/developer/project/certs/ai.localhost+1.pem';
-        const keyPath = '/home/developer/project/certs/ai.localhost+1-key.pem';
+        const certPath =
+          process.env.SSL_CERT_PATH || path.resolve(__dirname, '../../certs/ai.localhost.pem');
+        const keyPath =
+          process.env.SSL_KEY_PATH || path.resolve(__dirname, '../../certs/ai.localhost-key.pem');
 
         if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
           return {
@@ -41,33 +43,33 @@ export default defineConfig({
       // Proxy API routes to backend - keeps /api prefix as backend expects it
       // Frontend: /api/auth/login → Backend: /api/auth/login
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'https://ai.localhost:3000',
         changeOrigin: true,
         secure: false, // Allow self-signed certificates
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
             console.log(
-              `🔄 Proxying: ${req.method} ${req.url} → http://localhost:3000${proxyReq.path}`
+              `🔄 Proxying: ${req.method} ${req.url} → https://ai.localhost:3000${proxyReq.path}`
             );
           });
         },
       },
       // Proxy legal routes to backend for privacy policy and terms
       '/legal': {
-        target: 'http://localhost:3000',
+        target: 'https://ai.localhost:3000',
         changeOrigin: true,
         secure: false, // Allow self-signed certificates
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
             console.log(
-              `📜 Proxying legal: ${req.method} ${req.url} → http://localhost:3000${proxyReq.path}`
+              `📜 Proxying legal: ${req.method} ${req.url} → https://ai.localhost:3000${proxyReq.path}`
             );
           });
         },
       },
       // Proxy WebSocket connections
       '/ws': {
-        target: 'ws://localhost:3000',
+        target: 'wss://ai.localhost:3000',
         ws: true,
         changeOrigin: true,
         secure: false,

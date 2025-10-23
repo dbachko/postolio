@@ -27,9 +27,6 @@ import {
   Building2,
   Search,
   BarChart3,
-  TrendingUp,
-  Brain,
-  Users,
   Megaphone,
   Grid3X3,
   FileText,
@@ -79,26 +76,7 @@ const mainNavItems: NavigationItem[] = [
 ];
 
 // Secondary navigation items (in dropdown menu)
-const secondaryNavItems: NavigationItem[] = [
-  {
-    label: 'Engagement',
-    path: '/engagement',
-    icon: Users,
-    description: 'Audience engagement',
-  },
-  {
-    label: 'Growth',
-    path: '/growth',
-    icon: TrendingUp,
-    description: 'Growth strategies',
-  },
-  {
-    label: 'AI Features',
-    path: '/ai-features',
-    icon: Brain,
-    description: 'AI-powered tools',
-  },
-];
+const secondaryNavItems: NavigationItem[] = [];
 
 // Combine all navigation items for search
 const allNavItems = [...mainNavItems, ...secondaryNavItems];

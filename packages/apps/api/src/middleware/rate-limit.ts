@@ -180,8 +180,6 @@ export function applyRateLimiting(app: FastifyInstance, redisClient: RedisLikeCl
       '/api/content/generate',
       '/api/campaigns/create',
       '/api/campaigns/regenerate',
-      '/api/ai/analyze-brand',
-      '/api/ai/generate-content',
     ];
 
     if (aiEndpoints.some((endpoint) => request.url.startsWith(endpoint))) {
@@ -227,7 +225,7 @@ export function applyRateLimiting(app: FastifyInstance, redisClient: RedisLikeCl
 
   // Analytics endpoints
   app.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
-    const analyticsEndpoints = ['/api/analytics/', '/api/growth/', '/api/instagram/insights'];
+    const analyticsEndpoints = ['/api/analytics/', '/api/instagram/insights'];
 
     if (analyticsEndpoints.some((endpoint) => request.url.startsWith(endpoint))) {
       await createRateLimiter(redisClient, 'ANALYTICS')(request, reply);

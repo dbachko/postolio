@@ -27,7 +27,6 @@ export async function setupTestData() {
         name: 'Test Brand',
         description: 'Brand for E2E testing',
         userId: user.id,
-        engagementActive: true,
         preferences: {
           themes: ['lifestyle', 'product'],
           postingTimes: ['09:00', '18:00'],

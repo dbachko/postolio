@@ -83,36 +83,6 @@ export function Layout({ children }: LayoutProps) {
                       Analytics
                     </Link>
                   </NavigationMenuItem>
-                  <NavigationMenuItem>
-                    <Link
-                      to="/engagement"
-                      className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/engagement') ? '!bg-accent !text-accent-foreground' : ''
-                      }`}
-                    >
-                      Engagement
-                    </Link>
-                  </NavigationMenuItem>
-                  <NavigationMenuItem>
-                    <Link
-                      to="/growth"
-                      className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/growth') ? '!bg-accent !text-accent-foreground' : ''
-                      }`}
-                    >
-                      Growth
-                    </Link>
-                  </NavigationMenuItem>
-                  <NavigationMenuItem>
-                    <Link
-                      to="/ai-features"
-                      className={`${navigationMenuTriggerStyle()} ${
-                        isActiveRoute('/ai-features') ? '!bg-accent !text-accent-foreground' : ''
-                      }`}
-                    >
-                      AI Features
-                    </Link>
-                  </NavigationMenuItem>
                 </NavigationMenuList>
               </NavigationMenu>
             </div>

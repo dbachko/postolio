@@ -2,6 +2,7 @@
   "name": "postolio-monorepo",
   "private": true,
   "scripts": {
+    "setup:ai-localhost": "bash scripts/setup-ai-localhost.sh",
     "build": "turbo build",
     "dev": "turbo dev --parallel",
     "test": "turbo test",

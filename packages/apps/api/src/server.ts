@@ -27,9 +27,6 @@ import brandsRoutes from './routes/brands.js';
 import contentRoutes from './routes/content.js';
 import analyticsRoutes from './routes/analytics.js';
 import instagramAnalyticsRoutes from './routes/instagram-analytics.js';
-import engagementRoutes from './routes/engagement.js';
-import growthRoutes from './routes/growth.js';
-import aiRoutes from './routes/ai.js';
 import autopilotRoutes from './routes/autopilot.js';
 import campaignRoutes from './routes/campaign.js';
 import campaignAnalyticsRoutes from './routes/campaign-analytics.js';
@@ -214,9 +211,6 @@ export function buildFastify(): FastifyInstance {
   app.register(instagramAnalyticsRoutes, {
     prefix: '/api/instagram-analytics',
   });
-  app.register(engagementRoutes, { prefix: '/api/engagement' });
-  app.register(growthRoutes, { prefix: '/api/growth' });
-  app.register(aiRoutes, { prefix: '/api/ai' });
   app.register(autopilotRoutes, { prefix: '/api/autopilot' });
   // Mount campaigns at plural REST path
   app.register(campaignRoutes, { prefix: '/api/campaigns' });

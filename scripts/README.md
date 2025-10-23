@@ -10,6 +10,55 @@ This directory contains essential production scripts for deploying and managing 
 
 ---
 
+## Local HTTPS: ai.localhost (macOS)
+
+Postolio dev runs over HTTPS on the `ai.localhost` domain to support OAuth and Instagram flows that require SSL.
+
+### Prerequisites
+
+- macOS (recommended for this helper)
+- mkcert (local CA + dev cert generator)
+  - Install via Homebrew:
+    - `brew install mkcert`
+    - Optional (Firefox trust): `brew install nss`
+
+### One‑time Setup
+
+```
+pnpm run setup:ai-localhost
+```
+
+This script:
+
+- Installs/trusts the mkcert local CA (if not already installed)
+- Generates repo‑local certificates under `certs/`:
+  - `certs/ai.localhost.pem`
+  - `certs/ai.localhost-key.pem`
+- Writes `.env` pointers for API and Web:
+  - `packages/apps/api/.env`: `SSL_CERT_PATH`, `SSL_KEY_PATH`, `NODE_ENV=dev`
+  - `packages/apps/web/.env`: `SSL_CERT_PATH`, `SSL_KEY_PATH`
+
+### Run Locally
+
+```
+pnpm --filter api dev            # Fastify API on https://ai.localhost:3000
+pnpm --filter @postolio/web dev  # Vite UI on https://ai.localhost:5173
+```
+
+Notes:
+
+- No `/etc/hosts` changes are needed — `.localhost` domains resolve to loopback.
+- The API and Web servers read SSL paths from their `.env` files (or default to `../../certs/...`).
+- CORS in the API includes `https://ai.localhost:5173` out of the box.
+
+### Troubleshooting
+
+- mkcert not found: install with `brew install mkcert`, then re‑run the setup command.
+- Browser trust warnings: run `mkcert -install` (the script does this), then restart your browser.
+- Regenerate certs: delete the `certs/` files and re‑run `pnpm run setup:ai-localhost`.
+
+---
+
 ## Get Application URLs
 
 The `get-app-urls.sh` script retrieves URLs and resource information from your deployed stacks.

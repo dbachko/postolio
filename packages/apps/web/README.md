@@ -19,6 +19,12 @@ To run any script for only this application from the monorepo root, use the `--f
 pnpm --filter=@postolio/web dev
 ```
 
+### Local HTTPS on ai.localhost
+
+- Run `scripts/setup-ai-localhost.sh` once to generate and trust local dev certs (mkcert required).
+- Web dev server will be available at `https://ai.localhost:5173`.
+- API dev server proxies via HTTPS to `https://ai.localhost:3000`.
+
 ## REST Structure and API Clients
 
 The web app consumes a RESTful API via domain-scoped clients backed by a shared HTTP adapter.
@@ -69,9 +75,7 @@ The web app consumes a RESTful API via domain-scoped clients backed by a shared 
   - `POST /api/content/upload-image` — upload image
   - `GET /api/posts/:id{,/insights,/comments}` — post detail and insights
 
-- Analytics/Engagement/Growth (helpers)
+- Analytics (helpers)
   - Analytics: `/api/analytics/{report/:brandId,stats/:brandId,scheduled/:brandId,reschedule}`
-  - Engagement: `/api/engagement/{status/:brandId,stats/:brandId,start/:brandId,stop/:brandId}`
-  - Growth: `/api/growth/{analyze,strategies,metrics/:brandId}`
 
 The monolithic `api.ts` has been decomposed. Prefer importing domain clients from `src/lib/api/index.ts` and keep view components thin by using container hooks for data/mutations.
