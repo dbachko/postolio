@@ -105,14 +105,19 @@ export function useURLFilterSync() {
     }
 
     isUpdatingFromStore.current = true;
-    const newParams = encodeFiltersToURL(currentFilters);
+    // Preserve non-filter params like view/date while updating filter params
+    const merged = new URLSearchParams(searchParams);
 
-    // Compare with current URL params
-    const currentParams = new URLSearchParams(searchParams);
+    // Remove existing filter keys first
+    ['campaigns', 'statuses', 'types', 'dateStart', 'dateEnd', 'search'].forEach((k) =>
+      merged.delete(k)
+    );
 
-    // Only navigate if params actually changed
-    if (newParams.toString() !== currentParams.toString()) {
-      navigate(`?${newParams.toString()}`, { replace: true });
+    const encoded = encodeFiltersToURL(currentFilters);
+    encoded.forEach((v, k) => merged.set(k, v));
+
+    if (merged.toString() !== searchParams.toString()) {
+      navigate(`?${merged.toString()}`, { replace: true });
     }
   }, [
     currentFilters.campaigns,
@@ -122,6 +127,7 @@ export function useURLFilterSync() {
     currentFilters.dateRange.end,
     currentFilters.searchQuery,
     navigate,
+    searchParams,
   ]);
 }
 

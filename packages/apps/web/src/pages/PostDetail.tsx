@@ -1,4 +1,4 @@
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, memo, useEffect, useRef } from 'react';
 import { content as contentApi } from '../lib/api';
@@ -148,6 +148,7 @@ const MetricsGrid = memo(({ insights }: { insights: PostInsights }) => (
 export default function PostDetail() {
   const { postId } = useParams<{ postId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<FormData>({
@@ -164,6 +165,16 @@ export default function PostDetail() {
     message: string;
     appliedToFuturePosts?: number;
   }>({ isVisible: false, message: '' });
+
+  // Enable edit mode from query param (?edit=1) on initial mount
+  useEffect(() => {
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('edit') === '1') {
+      setIsEditing(true);
+    }
+    // only run on first render for this post
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Status color handled by getContentDisplayStatus
 

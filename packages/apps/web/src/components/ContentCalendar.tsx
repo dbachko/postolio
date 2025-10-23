@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addMonths, subMonths } from 'date-fns';
-import { CalendarView } from './CalendarView';
+import { MonthGridView } from './MonthGridView';
 import { TimelineView } from './TimelineView';
 import { ContentListView } from './ContentListView';
 import { CalendarFilters } from './calendar/CalendarFilters';
@@ -17,8 +18,7 @@ import { useTimezone } from '../contexts/TimezoneContext';
 import type { CalendarItem, Placeholder } from '../types/calendar';
 import { Calendar, List, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 
-const isContent = (item: CalendarItem): item is Content & { type: 'content' } =>
-  item.type === 'content';
+// type guard no longer needed for the month grid only
 
 type ViewMode = 'month' | 'timeline' | 'list';
 
@@ -35,6 +35,8 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const { timezone: userTz, getBrandTimezone } = useTimezone();
   const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Resolve brand posting timezone (fallback to user timezone)
   useEffect(() => {
@@ -51,6 +53,31 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       mounted = false;
     };
   }, [brandId, getBrandTimezone, userTz]);
+
+  // Read view + date from URL once
+  useEffect(() => {
+    const v = searchParams.get('view');
+    if (v === 'month' || v === 'timeline' || v === 'list') {
+      setViewMode(v as ViewMode);
+    }
+    const dateParam = searchParams.get('date');
+    if (dateParam) {
+      // Support yyyy-MM or full ISO
+      const d = /\d{4}-\d{2}$/.test(dateParam)
+        ? new Date(`${dateParam}-01T00:00:00`)
+        : new Date(dateParam);
+      if (!isNaN(d.getTime())) setCurrentDate(d);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Helper to merge URL params
+  const setParam = (key: string, value: string | null) => {
+    const next = new URLSearchParams(searchParams);
+    if (value == null || value === '') next.delete(key);
+    else next.set(key, value);
+    setSearchParams(next, { replace: true });
+  };
 
   // Fetch calendar data with placeholders - with prefetching
   const calendarQuery = useQuery({
@@ -155,36 +182,33 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
   // Apply filters to content
   const filters = useCalendarFilterStore();
-  const { filteredItems, totalItems, filteredCount, isFiltered } = useFilteredContent(
-    allItems as any
-  );
+  const { filteredItems } = useFilteredContent(allItems as any);
 
   // Navigation handlers
   const handlePreviousMonth = () => {
-    setCurrentDate((prev) => subMonths(prev, 1));
+    setCurrentDate((prev) => {
+      const next = subMonths(prev, 1);
+      setParam('date', format(next, 'yyyy-MM'));
+      return next;
+    });
   };
 
   const handleNextMonth = () => {
-    setCurrentDate((prev) => addMonths(prev, 1));
+    setCurrentDate((prev) => {
+      const next = addMonths(prev, 1);
+      setParam('date', format(next, 'yyyy-MM'));
+      return next;
+    });
   };
 
   const handleToday = () => {
-    setCurrentDate(new Date());
+    const t = new Date();
+    setCurrentDate(t);
+    setParam('date', format(t, 'yyyy-MM'));
   };
 
   // Statistics (based on filtered items)
-  const stats = useMemo(() => {
-    const filteredContent = filteredItems.filter((item: any) => item.type === 'content');
-    const filteredPlaceholders = filteredItems.filter((item: any) => item.type === 'placeholder');
-
-    return {
-      total: filteredItems.length,
-      published: filteredContent.filter((c) => c.status === 'published').length,
-      scheduled: filteredContent.filter((c) => c.status === 'scheduled').length,
-      placeholders: filteredPlaceholders.length,
-      failed: filteredContent.filter((c) => c.status === 'failed').length,
-    };
-  }, [filteredItems]);
+  // Stats removed from UI; keep placeholder for potential future use
 
   if (calendarQuery.isLoading) {
     return (
@@ -222,100 +246,132 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             </CardContent>
           </Card>
         )}
-      {/* Header with navigation and view switcher */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4">
-            {/* Title and Navigation Row */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle>Content Calendar</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={handlePreviousMonth}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleToday}>
-                  Today
-                </Button>
-                <Button variant="outline" size="icon" onClick={handleNextMonth}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <span className="ml-2 font-medium">{format(currentDate, 'MMMM yyyy')}</span>
-              </div>
-            </div>
-
-            {/* View Controls Row */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
-                <Button
-                  variant={viewMode === 'month' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('month')}
-                  className="gap-2"
-                  data-testid="view-month"
-                >
-                  <Calendar className="h-4 w-4" />
-                  Month
-                </Button>
-                <Button
-                  variant={viewMode === 'timeline' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('timeline')}
-                  className="gap-2"
-                >
-                  <Clock className="h-4 w-4" />
-                  Timeline
-                </Button>
-                <Button
-                  variant={viewMode === 'list' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('list')}
-                  className="gap-2"
-                >
-                  <List className="h-4 w-4" />
-                  List
-                </Button>
-              </div>
-
-              <CalendarExport
-                content={filteredItems.map((item) => ({
-                  ...item,
-                  scheduledAt: item.scheduledAt || undefined,
-                  postedAt: item.postedAt || undefined,
-                  campaignId: item.campaignId || undefined,
-                  instagramPermalink: item.instagramPermalink || undefined,
-                }))}
-                brandName={brandName || 'Brand'}
-                dateRange={filters.dateRange}
-              />
-            </div>
+      {/* Compact Header Bar: navigation, current month, view toggles, filters toggle */}
+      <div className="rounded-lg border bg-white px-3 py-2 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          {/* Left: Navigation + current month */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handlePreviousMonth}
+              aria-label="Previous"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleToday}>
+              Today
+            </Button>
+            <Button variant="outline" size="icon" onClick={handleNextMonth} aria-label="Next">
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <span className="ml-2 text-sm font-medium text-gray-700">
+              {format(currentDate, 'MMMM yyyy')}
+            </span>
           </div>
-        </CardHeader>
-      </Card>
 
-      {/* Filters */}
-      <CalendarFilters brandId={brandId} />
+          {/* Right: view toggles + Filters button */}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1 rounded-md bg-gray-100 p-1">
+              <Button
+                variant={viewMode === 'month' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => {
+                  setViewMode('month');
+                  setParam('view', 'month');
+                }}
+                className="gap-1"
+                data-testid="view-month"
+              >
+                <Calendar className="h-4 w-4" />
+                <span className="hidden sm:inline">Month</span>
+              </Button>
+              <Button
+                variant={viewMode === 'timeline' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => {
+                  setViewMode('timeline');
+                  setParam('view', 'timeline');
+                }}
+                className="gap-1"
+              >
+                <Clock className="h-4 w-4" />
+                <span className="hidden sm:inline">Timeline</span>
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => {
+                  setViewMode('list');
+                  setParam('view', 'list');
+                }}
+                className="gap-1"
+              >
+                <List className="h-4 w-4" />
+                <span className="hidden sm:inline">List</span>
+              </Button>
+            </div>
+            {(() => {
+              const hasActive = filters.hasActiveFilters();
+              const count = filters.getActiveFilterCount();
+              const active = showFilters || hasActive;
+              return (
+                <Button
+                  variant={active ? 'default' : 'outline'}
+                  size="sm"
+                  aria-pressed={active}
+                  onClick={() => setShowFilters((s) => !s)}
+                  className="relative"
+                >
+                  Filters
+                  {hasActive && (
+                    <span
+                      className={`ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium ${active ? 'bg-white text-black' : 'bg-black text-white'}`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </Button>
+              );
+            })()}
+            {/* Export */}
+            <CalendarExport
+              content={filteredItems.map((item: any) => ({
+                id: item.id,
+                type: item.type,
+                caption: item.caption || '',
+                hashtags: item.hashtags || [],
+                status: item.status,
+                scheduledAt: item.scheduledAt || undefined,
+                postedAt: item.postedAt || undefined,
+                campaignId: item.campaignId || undefined,
+                instagramPermalink: item.instagramPermalink || undefined,
+              }))}
+              brandName={brandName || 'Brand'}
+              dateRange={filters.dateRange}
+            />
+            {filters.hasActiveFilters() && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => filters.clearAll()}
+                aria-label="Clear all filters"
+                className="text-gray-600 hover:text-gray-900"
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Filters (hidden by default, compact) */}
+      {showFilters && <CalendarFilters brandId={brandId} compact />}
 
       {/* Campaign Color Legend */}
       <CampaignColorLegend items={filteredItems as any as CalendarItem[]} className="px-4" />
 
-      {/* Filter Results Summary */}
-      {isFiltered && (
-        <Card>
-          <CardContent className="px-4 py-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">
-                Showing <span className="font-medium text-gray-900">{filteredCount}</span> of{' '}
-                {totalItems} items
-              </span>
-              {filteredCount === 0 && (
-                <Button variant="ghost" size="sm" onClick={() => filters.clearAll()}>
-                  Clear filters
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Filter results summary removed for cleaner filtered state */}
 
       {/* Campaign Progress */}
       {campaignProgress.length > 0 && (
@@ -357,49 +413,16 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
         </Card>
       )}
 
-      {/* Statistics bar */}
-      <div className="grid grid-cols-5 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <div className="text-sm text-gray-600">Total Posts</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-600">{stats.published}</div>
-            <div className="text-sm text-gray-600">Published</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-600">{stats.scheduled}</div>
-            <div className="text-sm text-gray-600">Scheduled</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-gray-500">{stats.placeholders}</div>
-            <div className="text-sm text-gray-600">Future AI</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
-            <div className="text-sm text-gray-600">Failed</div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Statistics removed to reduce header/footer noise */}
 
       {/* View content based on selected mode */}
       {viewMode === 'month' && (
-        <CalendarView
-          brandId={brandId}
-          content={(filteredItems as any).filter(isContent).map((c: any) => ({
-            ...c,
-            scheduledAt: c.scheduledAt || undefined,
-            postedAt: c.postedAt || undefined,
+        <MonthGridView
+          items={(filteredItems as any).map((i: any) => ({
+            ...i,
+            type: i.type || 'content',
           }))}
+          currentDate={currentDate}
           timezone={brandTimezone}
         />
       )}

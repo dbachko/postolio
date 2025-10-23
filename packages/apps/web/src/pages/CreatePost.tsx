@@ -46,11 +46,17 @@ export function CreatePost() {
     enabled: !!selectedBrand,
   });
 
-  // Prefill from query params (campaignId, scheduledAt)
+  const campaignOptions = ((campaignsQuery.data as any)?.campaigns || []).filter((c: any) =>
+    ['active', 'preview'].includes(c.status)
+  );
+
+  // Prefill from query params (campaignId, scheduledAt, caption, hashtags)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const qCampaignId = params.get('campaignId');
     const qScheduledAt = params.get('scheduledAt');
+    const qCaption = params.get('caption');
+    const qHashtags = params.get('hashtags');
     if (qCampaignId) {
       setCampaignId(qCampaignId);
     }
@@ -65,6 +71,8 @@ export function CreatePost() {
         setScheduledAt(local);
       }
     }
+    if (qCaption) setCaption(qCaption);
+    if (qHashtags) setHashtags(qHashtags);
   }, [location.search]);
 
   const createPostMutation = useMutation({
@@ -356,18 +364,38 @@ export function CreatePost() {
               <Calendar className="h-4 w-4" />
               Campaign (Optional)
             </Label>
-            <Select value={campaignId} onValueChange={(value) => setCampaignId(value)}>
+            <Select
+              value={campaignId}
+              onValueChange={(value) => {
+                if (value === '__new') {
+                  navigate('/campaigns/create');
+                  return;
+                }
+                setCampaignId(value);
+              }}
+            >
               <SelectTrigger id="campaign" aria-label="Select campaign">
-                <SelectValue placeholder="Select a campaign (optional)" />
+                <SelectValue
+                  placeholder={
+                    campaignOptions.length === 0
+                      ? 'No campaigns yet'
+                      : 'Select a campaign (optional)'
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
-                {(campaignsQuery.data as any)?.campaigns
-                  ?.filter((c: any) => ['active', 'preview'].includes(c.status))
-                  .map((campaign: any) => (
-                    <SelectItem key={campaign.id} value={campaign.id}>
-                      {campaign.name}
-                    </SelectItem>
-                  ))}
+                {campaignOptions.length === 0 ? (
+                  <SelectItem value="__new">+ Create new campaign…</SelectItem>
+                ) : (
+                  <>
+                    {campaignOptions.map((campaign: any) => (
+                      <SelectItem key={campaign.id} value={campaign.id}>
+                        {campaign.name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__new">+ Create new campaign…</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
             <p className="text-muted-foreground text-sm">

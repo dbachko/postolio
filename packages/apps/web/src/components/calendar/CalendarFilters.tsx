@@ -18,6 +18,7 @@ import { Search, X, Filter, Calendar as CalendarIcon } from 'lucide-react';
 
 interface CalendarFiltersProps {
   brandId: string;
+  compact?: boolean;
 }
 
 const STATUS_OPTIONS: { value: ContentStatus; label: string; color: string }[] = [
@@ -45,7 +46,7 @@ const CONTENT_TYPE_OPTIONS: { value: ContentType; label: string }[] = [
   { value: 'placeholder', label: 'AI Placeholders' },
 ];
 
-export function CalendarFilters({ brandId }: CalendarFiltersProps) {
+export function CalendarFilters({ brandId, compact = false }: CalendarFiltersProps) {
   const filters = useCalendarFilterStore();
   const [isDateRangeOpen, setIsDateRangeOpen] = useState(false);
   const [tempDateRange, setTempDateRange] = useState({
@@ -90,31 +91,37 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
   };
 
   return (
-    <div className="space-y-4 rounded-lg border bg-white p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-gray-500" />
-          <span className="font-medium">Filters</span>
-          {activeFilterCount > 0 && <Badge variant="secondary">{activeFilterCount} active</Badge>}
+    <div className={`space-y-3 rounded-lg border bg-white ${compact ? 'p-2' : 'p-4'}`}>
+      {!compact && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-gray-500" />
+            <span className="font-medium">Filters</span>
+            {activeFilterCount > 0 && <Badge variant="secondary">{activeFilterCount} active</Badge>}
+          </div>
+          {filters.hasActiveFilters() && (
+            <Button variant="ghost" size="sm" onClick={filters.clearAll} className="text-gray-500">
+              Clear All
+            </Button>
+          )}
         </div>
-        {filters.hasActiveFilters() && (
-          <Button variant="ghost" size="sm" onClick={filters.clearAll} className="text-gray-500">
-            Clear All
-          </Button>
-        )}
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div
+        className={`grid grid-cols-1 ${compact ? 'gap-2' : 'gap-4'} md:grid-cols-2 lg:grid-cols-4`}
+      >
         {/* Campaign Filter */}
         <div>
-          <Label className="mb-1 text-xs text-gray-600">Campaigns</Label>
+          <Label className={`mb-1 text-xs text-gray-600 ${compact ? 'sr-only' : ''}`}>
+            Campaign
+          </Label>
           <Select value={selectCampaignValue} onValueChange={handleCampaignChange}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="All posts" />
+            <SelectTrigger className={`w-full ${compact ? 'h-8 text-xs' : ''}`}>
+              <SelectValue placeholder="All campaigns" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All posts</SelectItem>
-              <SelectItem value="none">Unassigned</SelectItem>
+              <SelectItem value="all">All campaigns</SelectItem>
+              <SelectItem value="none">No campaign</SelectItem>
               {campaigns.map((campaign) => (
                 <SelectItem key={campaign.id} value={campaign.id}>
                   {campaign.name}
@@ -126,10 +133,14 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
 
         {/* Status Filter */}
         <div>
-          <Label className="mb-1 text-xs text-gray-600">Status</Label>
+          <Label className={`mb-1 text-xs text-gray-600 ${compact ? 'sr-only' : ''}`}>Status</Label>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full justify-start">
+              <Button
+                variant="outline"
+                size={compact ? 'sm' : 'default'}
+                className={`w-full justify-start ${compact ? 'h-8 text-xs' : ''}`}
+              >
                 {filters.statuses.length === 0
                   ? 'All statuses'
                   : `${filters.statuses.length} selected`}
@@ -155,10 +166,16 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
 
         {/* Content Type Filter */}
         <div>
-          <Label className="mb-1 text-xs text-gray-600">Content Type</Label>
+          <Label className={`mb-1 text-xs text-gray-600 ${compact ? 'sr-only' : ''}`}>
+            Content Type
+          </Label>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full justify-start">
+              <Button
+                variant="outline"
+                size={compact ? 'sm' : 'default'}
+                className={`w-full justify-start ${compact ? 'h-8 text-xs' : ''}`}
+              >
                 {filters.contentTypes.length === 2
                   ? 'All types'
                   : filters.contentTypes
@@ -186,10 +203,16 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
 
         {/* Date Range Filter */}
         <div>
-          <Label className="mb-1 text-xs text-gray-600">Date Range</Label>
+          <Label className={`mb-1 text-xs text-gray-600 ${compact ? 'sr-only' : ''}`}>
+            Date Range
+          </Label>
           <Popover open={isDateRangeOpen} onOpenChange={setIsDateRangeOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full justify-start">
+              <Button
+                variant="outline"
+                size={compact ? 'sm' : 'default'}
+                className={`w-full justify-start ${compact ? 'h-8 text-xs' : ''}`}
+              >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {filters.dateRange.start || filters.dateRange.end ? (
                   <span className="text-sm">
@@ -293,7 +316,7 @@ export function CalendarFilters({ brandId }: CalendarFiltersProps) {
           placeholder="Search captions, hashtags, or campaigns..."
           value={filters.searchQuery}
           onChange={(e) => filters.setSearchQuery(e.target.value)}
-          className="pl-10 pr-10"
+          className={`pl-10 pr-10 ${compact ? 'h-8 text-sm' : ''}`}
         />
         {filters.searchQuery && (
           <button
