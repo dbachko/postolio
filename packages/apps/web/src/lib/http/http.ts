@@ -71,13 +71,23 @@ export function createHttp(): HttpRequest {
         }
       }
 
-      if (response.status === 401 && endpoint !== '/api/auth/refresh') {
+      // Guard against infinite 401 -> refresh -> retry loops.
+      // If this request is already a post-refresh retry, skip re-invoking the interceptor.
+      const isRetry = String(headers['x-skip-auth-retry']) === 'true';
+
+      if (response.status === 401 && endpoint !== '/api/auth/refresh' && !isRetry) {
         const { AuthInterceptor } = await import('../auth-interceptor');
         if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
           console.debug('[AuthDebug] /api/auth/me 401 detected, attempting refresh...');
         }
         const retryResult = await AuthInterceptor.handleUnauthorized(() =>
-          request(endpoint, options)
+          request(endpoint, {
+            ...options,
+            headers: {
+              ...(options.headers as any),
+              'x-skip-auth-retry': 'true',
+            },
+          })
         );
         if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
           console.debug('[AuthDebug] /api/auth/me refresh result', {
