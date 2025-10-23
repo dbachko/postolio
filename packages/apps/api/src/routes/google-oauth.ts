@@ -166,7 +166,7 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         secure: isProductionEnv(),
         sameSite: 'strict',
         path: '/',
-        maxAge: 15 * 60, // 15 minutes
+        maxAge: 60 * 60, // 1 hour
       });
 
       // Set refresh token cookie (scoped to /api/auth so logout can read it)

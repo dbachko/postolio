@@ -1,6 +1,11 @@
 import { CSRFTokenManager } from '@postolio/csrf-client';
 import { makeCachedTimezoneGetter } from './timezone';
 
+// Debug flag to trace /api/auth/me 401 -> refresh behavior (enable via Vite env)
+const DEBUG_AUTH_ME_REFRESH = Boolean(
+  (import.meta as any).env?.VITE_DEBUG_AUTH_ME_REFRESH === 'true'
+);
+
 export type HttpRequest = (path: string, init?: RequestInit) => Promise<any>;
 
 export function createHttp(): HttpRequest {
@@ -66,16 +71,24 @@ export function createHttp(): HttpRequest {
         }
       }
 
-      if (
-        response.status === 401 &&
-        endpoint !== '/api/auth/me' &&
-        endpoint !== '/api/auth/refresh'
-      ) {
+      if (response.status === 401 && endpoint !== '/api/auth/refresh') {
         const { AuthInterceptor } = await import('../auth-interceptor');
+        if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
+          console.debug('[AuthDebug] /api/auth/me 401 detected, attempting refresh...');
+        }
         const retryResult = await AuthInterceptor.handleUnauthorized(() =>
           request(endpoint, options)
         );
+        if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
+          console.debug('[AuthDebug] /api/auth/me refresh result', {
+            shouldRetry: retryResult.shouldRetry,
+            hasResult: Boolean(retryResult.result),
+          });
+        }
         if (retryResult.shouldRetry && retryResult.result) return retryResult.result;
+        if (DEBUG_AUTH_ME_REFRESH && endpoint === '/api/auth/me') {
+          console.debug('[AuthDebug] /api/auth/me refresh failed, redirecting to /login');
+        }
         if (!window.location.pathname.startsWith('/login')) window.location.href = '/login';
       }
 

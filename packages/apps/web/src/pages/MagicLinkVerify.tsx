@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { generateDeviceFingerprint, getDeviceName } from '@/lib/device-fingerprint';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -32,13 +33,24 @@ export function MagicLinkVerify() {
 
   const verifyMagicLink = async (token: string) => {
     try {
+      // Generate device context for stable session/device tracking
+      let deviceFingerprint: string | undefined;
+      let deviceName: string | undefined;
+      try {
+        const fp = await generateDeviceFingerprint();
+        deviceFingerprint = fp.visitorId;
+        deviceName = getDeviceName();
+      } catch {
+        // Non-fatal: proceed without explicit fingerprint
+      }
+
       const response = await fetch('/api/auth/magic-link/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, deviceFingerprint, deviceName }),
       });
 
       const data = await response.json();

@@ -15,6 +15,8 @@ interface SendMagicLinkBody {
 
 interface VerifyMagicLinkBody {
   token: string;
+  deviceFingerprint?: string;
+  deviceName?: string;
 }
 
 const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
@@ -73,7 +75,7 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
     const user = result.user;
 
     // Resolve stable device identifier and set cookie if needed
-    const stableFingerprint = ensureDeviceId(request, reply);
+    const stableFingerprint = ensureDeviceId(request, reply, request.body.deviceFingerprint);
 
     // Revoke any existing active session for this device to avoid duplicates
     if (stableFingerprint) {
@@ -83,7 +85,7 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
     // Create a standard session with refresh token + access token
     const ipAddress = getClientIp(request);
     const userAgent = getUserAgent(request);
-    const humanDeviceName = parseDeviceName(userAgent);
+    const humanDeviceName = request.body.deviceName || parseDeviceName(userAgent);
 
     const { refreshToken, accessToken } = await RefreshTokenService.generateRefreshToken(
       fastify,
@@ -104,7 +106,7 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
       secure: isProductionEnv(),
       sameSite: 'strict',
       path: '/',
-      maxAge: 15 * 60, // 15 minutes
+      maxAge: 60 * 60, // 1 hour
     });
 
     // Set refresh token (scoped so logout/refresh can read it)

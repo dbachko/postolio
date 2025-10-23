@@ -98,7 +98,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         secure: isProductionEnv(),
         sameSite: 'strict',
         path: '/',
-        maxAge: 15 * 60, // 15 minutes for access token
+        maxAge: 60 * 60, // 1 hour access token
       });
 
       // Set refresh token in separate HTTP-only cookie (scoped to /api/auth so logout can read it)
@@ -315,7 +315,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         secure: isProductionEnv(),
         sameSite: 'strict',
         path: '/',
-        maxAge: 15 * 60, // 15 minutes for access token
+        maxAge: 60 * 60, // 1 hour access token
       });
 
       // Set refresh token in separate HTTP-only cookie
@@ -374,7 +374,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       secure: isProductionEnv(),
       sameSite: 'strict',
       path: '/',
-      maxAge: 15 * 60, // 15 minutes
+      maxAge: 60 * 60, // 1 hour
     });
 
     // Set new refresh token (keep path at /api/auth so logout can invalidate it)

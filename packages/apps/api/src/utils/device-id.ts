@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { isProductionEnv } from '../utils/env-mode.js';
-import { getUserAgent } from './request-info.js';
+import { randomBytes } from 'crypto';
 
 /**
  * Resolve a stable device identifier and ensure the durable cookie is set.
@@ -15,9 +15,9 @@ export function ensureDeviceId(
   let deviceId = request.cookies?.device_id || providedFingerprint;
 
   if (!deviceId) {
-    const ua = getUserAgent(request) || '';
-    // Deterministic derivation matching existing logic
-    deviceId = Buffer.from(ua).toString('hex').slice(0, 32);
+    // Generate a durable, cryptographically-strong device identifier
+    // This avoids collisions from user-agent–derived values on mobile
+    deviceId = randomBytes(16).toString('hex'); // 32 hex chars
   }
 
   if (!request.cookies?.device_id && deviceId) {
