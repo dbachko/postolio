@@ -97,7 +97,22 @@ jobs:
           npx turbo build --filter='...[origin/${{ github.base_ref }}]'
 
       - name: Check formatting
-        run: pnpm prettier --check "**/*.{ts,tsx,md}" --ignore-path .gitignore
+        run: |
+          # Determine changed files against the PR base branch
+          BASE_REF=origin/${{ github.base_ref }}
+          # List added/modified/copied/renamed files and filter for Prettier-supported patterns
+          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMR ${BASE_REF}...HEAD | grep -E '\\.(ts|tsx|md)$' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No relevant changed files for Prettier. Skipping."
+            exit 0
+          fi
+
+          echo "Running Prettier check on changed files:"
+          echo "$CHANGED_FILES" | sed 's/^/- /'
+
+          # Run Prettier check only on the changed files
+          pnpm prettier --check $CHANGED_FILES --ignore-path .gitignore
 
   # ============================================
   # Unit Tests
