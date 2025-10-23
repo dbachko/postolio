@@ -233,8 +233,8 @@ export function AppLayout({ children }: LayoutProps) {
                 </kbd>
               </Button>
 
-              {/* Grid Menu Dropdown */}
-              <div className="relative" ref={menuRef}>
+              {/* Grid Menu Dropdown (hidden on desktop when main nav is visible) */}
+              <div className="relative md:hidden" ref={menuRef}>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -259,10 +259,6 @@ export function AppLayout({ children }: LayoutProps) {
                     {/* Menu Content */}
                     <div className="bg-card absolute right-0 z-40 mt-2 w-80 rounded-lg border shadow-lg">
                       <div className="p-4">
-                        <h3 className="text-muted-foreground mb-3 text-sm font-semibold">
-                          More Features
-                        </h3>
-
                         {/* Mobile: Show main nav items */}
                         <div className="mb-4 md:hidden">
                           <div className="space-y-1">
@@ -288,7 +284,6 @@ export function AppLayout({ children }: LayoutProps) {
                               </Link>
                             ))}
                           </div>
-                          <div className="my-3 border-t" />
                         </div>
 
                         {/* Secondary Navigation Items */}

@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { ExternalLink, CalendarClock, Copy, Trash2 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 interface PostPreviewCardProps {
   item: CalendarItem;
@@ -122,10 +123,19 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
     >
       {/* Top row: status icon + time, and tiny image thumbnail if present */}
       <div className="mb-1 flex items-start justify-between">
-        <div className="flex items-center gap-1.5 text-[11px] leading-none text-gray-600">
-          {iconByStatus[status]}
-          {displayTime && <span className="font-medium">{displayTime}</span>}
-        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5 text-[11px] leading-none text-gray-600">
+                {iconByStatus[status]}
+                {displayTime && <span className="font-medium">{displayTime}</span>}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <span className="capitalize">{status === 'placeholder' ? 'Future AI' : status}</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         {item.imageUrl ? (
           <div className="ml-2 h-6 w-8 shrink-0 overflow-hidden rounded-sm">
             {/* Use native img to avoid pulling in heavier components */}
@@ -166,19 +176,25 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
 
       {/* Bottom row: icon-only Edit + menu */}
       <div className="mt-1 flex items-center justify-between">
-        <button
-          type="button"
-          className="inline-flex items-center justify-center rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-gray-200"
-          title="Edit post"
-          aria-label="Edit post"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (item.type === 'placeholder') return;
-            window.location.href = `/posts/${(item as any).id}?edit=1`;
-          }}
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-gray-200"
+                aria-label="Edit post"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (item.type === 'placeholder') return;
+                  window.location.href = `/posts/${(item as any).id}?edit=1`;
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Edit post</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <span
