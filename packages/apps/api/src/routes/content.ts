@@ -394,9 +394,13 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
             imageRegion: true,
             status: true,
             createdAt: true,
+            updatedAt: true,
+            scheduledAt: true,
+            brandId: true,
             generationParams: true,
           },
-          orderBy: { createdAt: 'desc' },
+          // For draft review, default to last modified first
+          orderBy: { updatedAt: 'desc' },
         });
 
         // Build CDN URLs from S3 keys and map to public response format
@@ -407,6 +411,9 @@ const contentRoutes: FastifyPluginAsync = async (fastify) => {
           imageUrl: buildCdnUrl(item.s3ImageKey),
           status: item.status,
           createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          scheduledAt: item.scheduledAt,
+          brandId: brandId,
           generationParams: item.generationParams,
         }));
 

@@ -30,6 +30,7 @@ import {
   Megaphone,
   Grid3X3,
   FileText,
+  FileEdit,
   Sparkles,
   Home,
   Shield,
@@ -66,6 +67,13 @@ const mainNavItems: NavigationItem[] = [
     path: '/content',
     icon: FileText,
     description: 'Content library',
+    matchType: 'exact',
+  },
+  {
+    label: 'Drafts',
+    path: '/drafts',
+    icon: FileEdit,
+    description: 'Work-in-progress posts',
     matchType: 'exact',
   },
   {

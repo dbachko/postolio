@@ -28,6 +28,11 @@ export class ContentClient {
     return this.request('/api/content', { method: 'POST', body: JSON.stringify(body) });
   }
 
+  // List drafts for a brand (sorted by last modified by default)
+  getDrafts(brandId: string) {
+    return this.request(`/api/content/pending/${encodeURIComponent(brandId)}`);
+  }
+
   getContentHistory(brandId: string) {
     return this.request(`/api/brands/${brandId}/content/history`);
   }

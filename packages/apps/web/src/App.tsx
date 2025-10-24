@@ -29,6 +29,7 @@ const CreatePost = lazy(() =>
   }))
 );
 const Limits = lazy(() => import('./pages/Limits'));
+const Drafts = lazy(() => import('./pages/Drafts'));
 
 const queryClient = new QueryClient();
 
@@ -114,6 +115,26 @@ function App() {
                     <ProtectedRoute>
                       <Layout>
                         <Analytics />
+                      </Layout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/drafts"
+                  element={
+                    <ProtectedRoute>
+                      <Layout>
+                        <ErrorBoundary>
+                          <Suspense
+                            fallback={
+                              <div className="flex min-h-[200px] items-center justify-center">
+                                <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
+                              </div>
+                            }
+                          >
+                            <Drafts />
+                          </Suspense>
+                        </ErrorBoundary>
                       </Layout>
                     </ProtectedRoute>
                   }
