@@ -30,6 +30,7 @@ import instagramAnalyticsRoutes from './routes/instagram-analytics.js';
 import autopilotRoutes from './routes/autopilot.js';
 import campaignRoutes from './routes/campaign.js';
 import campaignAnalyticsRoutes from './routes/campaign-analytics.js';
+import brandStyleRoutes from './routes/brand-style.js';
 import rollingContentRoutes from './routes/rolling-content.js';
 import legalRoutes from './routes/legal.js';
 import userRoutes from './routes/user.js';
@@ -227,6 +228,7 @@ export function buildFastify(): FastifyInstance {
 
   // Use /api/brands/:brandId/analysis/* for brand analysis
   app.register(brandAnalysisNested, { prefix: '/api/brands' });
+  app.register(brandStyleRoutes, { prefix: '/api/brands' });
 
   // Add brand-nested Instagram wrappers under /api/brands
   app.register(brandsInstagram, { prefix: '/api/brands' });

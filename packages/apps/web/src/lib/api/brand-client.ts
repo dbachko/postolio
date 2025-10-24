@@ -87,6 +87,18 @@ export class BrandClient {
     return this.request(`/api/brands/${brandId}/analysis/profile`);
   }
 
+  // Style freeze core flag
+  getFreezeCore(brandId: string) {
+    return this.request(`/api/brands/${brandId}/style/freeze-core`);
+  }
+
+  setFreezeCore(brandId: string, freezeCore: boolean) {
+    return this.request(`/api/brands/${brandId}/style/freeze-core`, {
+      method: 'PATCH',
+      body: JSON.stringify({ freezeCore }),
+    });
+  }
+
   getThemeSuggestions(
     brandId: string,
     opts?: { campaignType?: string; goals?: string[]; limit?: number }

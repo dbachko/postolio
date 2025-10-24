@@ -18,6 +18,7 @@ export interface BrandAnalysisRequestedEvent {
     brandId: string;
     requestedBy?: string;
     options?: Record<string, unknown>;
+    brandInfo?: { countryCode?: string | null; freezeCore?: boolean };
   };
 }
 
@@ -25,6 +26,7 @@ type RequestDetail = {
   brandId: string;
   requestedBy?: string;
   options?: Record<string, unknown>;
+  brandInfo?: { countryCode?: string | null; freezeCore?: boolean };
   posts?: Array<{
     id: string;
     caption?: string;

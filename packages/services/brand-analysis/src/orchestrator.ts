@@ -12,6 +12,10 @@ import { getAndResetLlmUsage } from './llm/llm-client';
 import { PROMPT_SET_VERSION } from './prompts/prompt-set';
 import { runToneExtractor } from './pipeline/tone-extractor';
 import { computeHashtagMetrics } from './preprocessing/hashtag-metrics';
+import { classifyPosts } from './pipeline/seasonal-detector';
+import { jaccard } from './drift/drift-detector';
+import { pageHinkley } from './drift/change-point';
+import { estimateCausalImpact } from './pipeline/causal-impact';
 
 export interface RunOptions {
   maxPosts?: number;
@@ -93,22 +97,33 @@ export class BrandAnalysisOrchestrator {
         if (fetched && fetched.length) posts = fetched;
       }
 
-      // Use posts to compute deterministic metrics
-      const captions: string[] = Array.isArray(posts)
-        ? posts.map((p) => String(p.caption || '')).filter((s) => s.length > 0)
+      // Classify posts into core/seasonal/trending and filter out generated/campaign posts
+      const countryCode =
+        (options as any)?.brandInfo?.countryCode || (undefined as string | undefined);
+      let freezeCore = true; // Smart Freeze default ON
+      if ((options as any)?.brandInfo && (options as any).brandInfo.freezeCore !== undefined) {
+        freezeCore = Boolean((options as any).brandInfo.freezeCore);
+      } else if (process.env.BRAND_ANALYSIS_DEFAULT_FREEZE_CORE) {
+        freezeCore = /^true$/i.test(process.env.BRAND_ANALYSIS_DEFAULT_FREEZE_CORE);
+      }
+      const cls = classifyPosts(posts || [], { countryCode: countryCode || undefined });
+
+      // Use core posts to compute deterministic metrics
+      const coreCaptions: string[] = Array.isArray(cls.corePosts)
+        ? cls.corePosts.map((p) => String(p.caption || '')).filter((s) => s.length > 0)
         : [];
-      const textOut = runTextExtractor({ captions });
-      const topicOut = runTopicEntityExtractor({ captions });
-      const hashtagCounts = computeHashtagMetrics(captions).counts;
+      const textOut = runTextExtractor({ captions: coreCaptions });
+      const topicOut = runTopicEntityExtractor({ captions: coreCaptions });
+      const hashtagCounts = computeHashtagMetrics(coreCaptions).counts;
       const toneOut = await runToneExtractor({
-        captions,
+        captions: coreCaptions,
         hashtags: Object.entries(hashtagCounts)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 25)
           .map(([k]) => k.replace(/^#/, '')),
       });
-      const corrOut = runEngagementCorrelationFromPosts(posts || []);
-      const mediaUrls = (posts || [])
+      const corrOut = runEngagementCorrelationFromPosts(cls.corePosts || []);
+      const mediaUrls = (cls.corePosts || [])
         .filter((p) => (p.media_type || '').toUpperCase() !== 'VIDEO')
         .map((p) => p.media_url)
         .filter((u: unknown): u is string => typeof u === 'string' && u.length > 0)
@@ -273,6 +288,126 @@ export class BrandAnalysisOrchestrator {
           motifs: visualOut.motifs,
           composition: visualOut.composition,
         };
+      }
+
+      // Apply visual anchors for core palette if provided via env
+      const anchorPalette = (process.env.BRAND_ANALYSIS_CORE_PALETTE_ANCHORS || '')
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter((s) => /^#?[0-9a-f]{6}$/.test(s))
+        .map((s) => (s.startsWith('#') ? s : `#${s}`));
+      if (anchorPalette.length > 0) {
+        profile.anchors = profile.anchors || {};
+        profile.anchors.visual = profile.anchors.visual || {};
+        profile.anchors.visual.palette = anchorPalette;
+        // Ensure core visual palette includes anchors if palette exists
+        if (profile.visual?.palette) {
+          const merged = Array.from(new Set([...(profile.visual.palette || []), ...anchorPalette]));
+          profile.visual.palette = merged.slice(0, 12);
+        }
+      }
+
+      // Build overlays (SEASONAL, TRENDING) if appropriate
+      const overlays: NonNullable<BrandStyleProfile['overlays']> = [];
+      // Seasonal overlay
+      if (cls.seasonalLabel && (cls.seasonalPosts?.length || 0) > 0) {
+        const seasonCaptions = cls.seasonalPosts
+          .map((p) => String(p.caption || ''))
+          .filter((s) => s.length > 0);
+        const seasonTopics = runTopicEntityExtractor({ captions: seasonCaptions });
+        const seasonUrls = cls.seasonalPosts
+          .filter((p) => (p.media_type || '').toUpperCase() !== 'VIDEO')
+          .map((p) => p.media_url)
+          .filter((u: unknown): u is string => typeof u === 'string' && u.length > 0)
+          .slice(0, 10);
+        const seasonVisual = await runVisualExtractor({ mediaUrls: seasonUrls });
+        // Change-point detection on seasonal indicator series
+        const chronPosts = [...(posts || [])].sort((a, b) => {
+          const ta = Date.parse(a.timestamp || '');
+          const tb = Date.parse(b.timestamp || '');
+          return (ta || 0) - (tb || 0);
+        });
+        const seasonalSeries = chronPosts.map((p) => {
+          const lbl = classifyPosts([p], { countryCode }).seasonalLabel;
+          return lbl ? 1 : 0;
+        });
+        const ph = pageHinkley(seasonalSeries, 0.05, 5);
+        let effectEstimate: number | undefined;
+        if (ph.hasChange && typeof ph.index === 'number') {
+          try {
+            const impact = await estimateCausalImpact({
+              series: seasonalSeries,
+              interventionIndex: Math.max(1, ph.index),
+            });
+            effectEstimate = impact.effectEstimate;
+          } catch {
+            // ignore errors; effectEstimate remains undefined
+          }
+        }
+        overlays.push({
+          type: 'SEASONAL',
+          label: cls.seasonalLabel,
+          createdAt: new Date().toISOString(),
+          expiresAt: cls.seasonalExpiresAt,
+          visual: seasonVisual.palette.length > 0 ? { palette: seasonVisual.palette } : undefined,
+          topics: (seasonTopics.topics || []).slice(0, 15),
+          source: {
+            reason: 'auto-seasonal-detection',
+            sampleSize: cls.seasonalPosts.length,
+            effectEstimate,
+          },
+        });
+      }
+      // Trending overlay (topics only, 14-day TTL)
+      if ((cls.trendingPosts?.length || 0) > 0) {
+        const trendingCaptions = cls.trendingPosts
+          .map((p) => String(p.caption || ''))
+          .filter((s) => s.length > 0);
+        const trendingTopics = runTopicEntityExtractor({ captions: trendingCaptions });
+        const ttl = 14 * 24 * 60 * 60 * 1000;
+        overlays.push({
+          type: 'TRENDING',
+          label: 'trending',
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + ttl).toISOString(),
+          topics: (trendingTopics.topics || []).slice(0, 15),
+          source: { reason: 'auto-trending-window', sampleSize: cls.trendingPosts.length },
+        });
+      }
+
+      if (overlays.length > 0) {
+        profile.overlays = overlays;
+      }
+
+      // Core palette gating with persistence and prior comparison
+      if (latestProfile?.profile && profile.visual?.palette) {
+        const prev = (latestProfile.profile as any)?.visual?.palette as string[] | undefined;
+        if (Array.isArray(prev) && prev.length > 0) {
+          const j = jaccard(prev, profile.visual.palette);
+          const palGate = Number(process.env.BRAND_ANALYSIS_CORE_PALETTE_GATE_JACCARD || 0.6);
+          if (
+            (freezeCore || j < palGate) &&
+            (profile.overlays || []).some((o) => o.type === 'SEASONAL')
+          ) {
+            // Suppress core palette change; move new palette into seasonal overlay if missing
+            const seasonal = (profile.overlays || []).find((o) => o.type === 'SEASONAL');
+            if (seasonal && (!seasonal.visual?.palette || seasonal.visual.palette.length === 0)) {
+              seasonal.visual = seasonal.visual || {};
+              seasonal.visual.palette = profile.visual.palette.slice(0, 12);
+            }
+            profile.driftFindings = [
+              ...(Array.isArray(profile.driftFindings) ? profile.driftFindings : []),
+              {
+                field: 'visual.palette',
+                summary: freezeCore
+                  ? 'Core palette change suppressed due to freezeCore=true'
+                  : `Core palette change suppressed due to seasonal overlay (J=${j.toFixed(2)})`,
+              },
+            ];
+            // Revert core palette to previous
+            profile.visual.palette = prev.slice(0, 12);
+          }
+        }
       }
       let validation = validateProfile(profile);
       if (!validation.ok) {

@@ -11,6 +11,31 @@ export const VisualSectionSchema = z.object({
   composition: z.array(z.string()).default([]).optional(),
 });
 
+export const OverlaySchema = z.object({
+  type: z.enum(['SEASONAL', 'TRENDING', 'CAMPAIGN']),
+  label: z.string().optional(),
+  createdAt: z
+    .string()
+    .refine((v) => !Number.isNaN(Date.parse(v)), 'createdAt must be ISO date')
+    .optional(),
+  expiresAt: z
+    .string()
+    .refine((v) => !Number.isNaN(Date.parse(v)), 'expiresAt must be ISO date')
+    .optional(),
+  text: TextSectionSchema.partial().optional(),
+  visual: VisualSectionSchema.partial().optional(),
+  topics: z.array(z.object({ value: z.string(), count: z.number().int().min(1) })).optional(),
+  source: z
+    .object({
+      reason: z.string().optional(),
+      campaignId: z.string().optional(),
+      sampleSize: z.number().int().optional(),
+      effectEstimate: z.number().optional(),
+      method: z.string().optional(),
+    })
+    .optional(),
+});
+
 export const BrandStyleProfileSchema = z.object({
   brandId: z.string(),
   version: z.number().int().min(1),
@@ -22,6 +47,16 @@ export const BrandStyleProfileSchema = z.object({
   topics: z.array(z.object({ value: z.string(), count: z.number().int().min(1) })).optional(),
   correlations: z.array(z.object({ feature: z.string(), delta: z.number() })).optional(),
   driftFindings: z.array(z.unknown()).optional(),
+  overlays: z.array(OverlaySchema).optional(),
+  anchors: z
+    .object({
+      visual: z
+        .object({
+          palette: z.array(z.string()).default([]).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export type BrandStyleProfile = z.infer<typeof BrandStyleProfileSchema>;

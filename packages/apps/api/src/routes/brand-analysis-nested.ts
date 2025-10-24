@@ -64,6 +64,17 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
 
       // Fetch recent posts and minimize payload to fit EventBridge limits
       const postsRaw = await instagramService.getRecentPosts(igBrand, Math.min(maxPosts, 25));
+      // Fetch brand market/preferences for analysis context
+      const brandInfo = await prisma.brand.findFirst({
+        where: { id: brandId, userId: request.user!.id },
+        select: { countryCode: true, preferences: true },
+      });
+      type Prefs = { profileFreezeCore?: boolean } | null;
+      const prefsRaw = brandInfo?.preferences as unknown as Prefs;
+      const freezeCore =
+        prefsRaw && typeof prefsRaw === 'object' && prefsRaw.profileFreezeCore !== undefined
+          ? Boolean(prefsRaw.profileFreezeCore)
+          : true; // Smart Freeze default ON when unset
       const posts = await Promise.all(
         postsRaw.map(async (p) => {
           let mediaUrl = p.media_url;
@@ -110,6 +121,10 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
                 brandId,
                 requestedBy: request.user?.id,
                 options: { force, maxPosts },
+                brandInfo: {
+                  countryCode: brandInfo?.countryCode || null,
+                  freezeCore,
+                },
                 posts,
               }),
             },
