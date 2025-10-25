@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
 import { useAuthStore } from './stores/authStore';
@@ -47,6 +47,215 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
 }
 
+// Loading fallback for lazy routes
+const LazyLoadingFallback = ({ minHeight = '200px' }: { minHeight?: string }) => (
+  <div className="flex items-center justify-center" style={{ minHeight }}>
+    <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
+  </div>
+);
+
+// Create router with data router API
+const router = createBrowserRouter([
+  {
+    path: '/login',
+    element: <Login />,
+  },
+  {
+    path: '/register',
+    element: <Register />,
+  },
+  {
+    path: '/auth/magic-link',
+    element: <MagicLinkVerify />,
+  },
+  {
+    path: '/auth/verify-email',
+    element: <EmailVerify />,
+  },
+  {
+    path: '/password/reset',
+    element: <PasswordReset />,
+  },
+  {
+    path: '/privacy-policy',
+    element: <PrivacyPolicy />,
+  },
+  {
+    path: '/terms-of-service',
+    element: <TermsOfService />,
+  },
+  {
+    path: '/legal/data-deletion',
+    element: <DataDeletion />,
+  },
+  {
+    path: '/',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <Dashboard />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/dashboard',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <Dashboard />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/brands',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <Brands />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/content',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <Content />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/analytics',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <Analytics />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/drafts',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ErrorBoundary>
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <Drafts />
+            </Suspense>
+          </ErrorBoundary>
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/campaigns',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <Campaigns />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/campaigns/create',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <Campaigns />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/campaigns/:campaignId/edit',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <Campaigns />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/campaigns/:campaignId',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <Campaigns />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/posts/:postId',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ErrorBoundary>
+            <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
+              <PostDetail />
+            </Suspense>
+          </ErrorBoundary>
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/posts/create',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ErrorBoundary>
+            <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
+              <CreatePost />
+            </Suspense>
+          </ErrorBoundary>
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/settings',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <Settings />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/security',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <SecuritySettings />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/limits',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ErrorBoundary>
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <Limits />
+            </Suspense>
+          </ErrorBoundary>
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
+]);
+
 function App() {
   const { checkAuth } = useAuthStore();
 
@@ -59,209 +268,8 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ConnectionStatusProvider>
           <TimezoneProvider>
-            <Router>
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/auth/magic-link" element={<MagicLinkVerify />} />
-                <Route path="/auth/verify-email" element={<EmailVerify />} />
-                <Route path="/password/reset" element={<PasswordReset />} />
-                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                <Route path="/terms-of-service" element={<TermsOfService />} />
-                <Route path="/legal/data-deletion" element={<DataDeletion />} />
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Dashboard />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Dashboard />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/brands"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Brands />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/content"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Content />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/analytics"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Analytics />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/drafts"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <ErrorBoundary>
-                          <Suspense
-                            fallback={
-                              <div className="flex min-h-[200px] items-center justify-center">
-                                <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
-                              </div>
-                            }
-                          >
-                            <Drafts />
-                          </Suspense>
-                        </ErrorBoundary>
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/campaigns"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Campaigns />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/campaigns/create"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Campaigns />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/campaigns/:campaignId/edit"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Campaigns />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/campaigns/:campaignId"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Campaigns />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/posts/:postId"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <ErrorBoundary>
-                          <Suspense
-                            fallback={
-                              <div className="flex min-h-[400px] items-center justify-center">
-                                <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
-                              </div>
-                            }
-                          >
-                            <PostDetail />
-                          </Suspense>
-                        </ErrorBoundary>
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/posts/create"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <ErrorBoundary>
-                          <Suspense
-                            fallback={
-                              <div className="flex min-h-[400px] items-center justify-center">
-                                <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
-                              </div>
-                            }
-                          >
-                            <CreatePost />
-                          </Suspense>
-                        </ErrorBoundary>
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/settings"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Settings />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/security"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <SecuritySettings />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/limits"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <ErrorBoundary>
-                          <Suspense
-                            fallback={
-                              <div className="flex min-h-[200px] items-center justify-center">
-                                <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2"></div>
-                              </div>
-                            }
-                          >
-                            <Limits />
-                          </Suspense>
-                        </ErrorBoundary>
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-              </Routes>
-              <Toaster position="bottom-left" />
-            </Router>
+            <RouterProvider router={router} />
+            <Toaster position="bottom-left" />
           </TimezoneProvider>
         </ConnectionStatusProvider>
       </QueryClientProvider>
