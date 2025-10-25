@@ -340,10 +340,17 @@ export default function PostDetail() {
       return;
     }
 
+    // Normalize hashtags by stripping leading '#'
+    const normalizeHashtags = (tags: string[] | undefined | null) =>
+      (tags || [])
+        .map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : ''))
+        .filter((t) => t.length > 0);
+
     // Check if form data has changed from original
     const hasChanges =
       debouncedFormData.caption !== post.caption ||
-      JSON.stringify(debouncedFormData.hashtags) !== JSON.stringify(post.hashtags) ||
+      JSON.stringify(normalizeHashtags(debouncedFormData.hashtags)) !==
+        JSON.stringify(normalizeHashtags(post.hashtags as unknown as string[])) ||
       debouncedFormData.imageUrl !== (post.imageUrl || '') ||
       debouncedFormData.scheduledAt !==
         (post.scheduledAt ? format(new Date(post.scheduledAt), "yyyy-MM-dd'T'HH:mm") : '');
@@ -352,7 +359,8 @@ export default function PostDetail() {
       updateContentMutation.mutate({
         contentId: postId,
         caption: debouncedFormData.caption,
-        hashtags: debouncedFormData.hashtags,
+        // Send normalized hashtags to backend for consistency
+        hashtags: normalizeHashtags(debouncedFormData.hashtags),
         imageUrl: debouncedFormData.imageUrl || undefined,
         scheduledAt: debouncedFormData.scheduledAt,
       });
