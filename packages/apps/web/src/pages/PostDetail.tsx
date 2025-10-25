@@ -346,14 +346,22 @@ export default function PostDetail() {
         .map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : ''))
         .filter((t) => t.length > 0);
 
+    // Compute scheduledAt changes by comparing UTC instants
+    const currentScheduledUtc = post.scheduledAt
+      ? new Date(post.scheduledAt).toISOString()
+      : undefined;
+    const formScheduledUtc = debouncedFormData.scheduledAt
+      ? convertLocalToUTC(new Date(debouncedFormData.scheduledAt), brandTimezone).toISOString()
+      : undefined;
+    const scheduledChanged = currentScheduledUtc !== formScheduledUtc;
+
     // Check if form data has changed from original
     const hasChanges =
       debouncedFormData.caption !== post.caption ||
       JSON.stringify(normalizeHashtags(debouncedFormData.hashtags)) !==
         JSON.stringify(normalizeHashtags(post.hashtags as unknown as string[])) ||
       debouncedFormData.imageUrl !== (post.imageUrl || '') ||
-      debouncedFormData.scheduledAt !==
-        (post.scheduledAt ? format(new Date(post.scheduledAt), "yyyy-MM-dd'T'HH:mm") : '');
+      scheduledChanged;
 
     if (hasChanges) {
       updateContentMutation.mutate({
@@ -362,7 +370,8 @@ export default function PostDetail() {
         // Send normalized hashtags to backend for consistency
         hashtags: normalizeHashtags(debouncedFormData.hashtags),
         imageUrl: debouncedFormData.imageUrl || undefined,
-        scheduledAt: debouncedFormData.scheduledAt,
+        // Only send scheduledAt when it actually changes, in UTC
+        scheduledAt: scheduledChanged ? formScheduledUtc : undefined,
       });
     }
   }, [debouncedFormData, post, isEditing, postId, updateContentMutation]);
