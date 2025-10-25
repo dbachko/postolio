@@ -277,7 +277,7 @@ export default function PostDetail() {
   const debouncedFormData = useDebounce(formData, 500);
 
   // Update post mutation with learning feedback
-  const updateContentMutation = useMutation({
+  const { mutate: mutateContent, isPending: isSaving } = useMutation({
     mutationFn: async (data: {
       contentId: string;
       caption?: string;
@@ -331,9 +331,14 @@ export default function PostDetail() {
     },
   });
 
+  // Track last submitted payload to avoid duplicate requests
+  const lastSubmittedRef = useRef<string | null>(null);
+
   // Auto-save when debounced form data changes
   useEffect(() => {
     if (!post || !isEditing || !postId) return;
+    // Avoid spamming while a save is in-flight
+    if (isSaving) return;
 
     // Don't auto-save if caption is empty
     if (!debouncedFormData.caption || debouncedFormData.caption.trim().length === 0) {
@@ -346,6 +351,9 @@ export default function PostDetail() {
         .map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : ''))
         .filter((t) => t.length > 0);
 
+    // Normalize caption for comparison (server trims on save)
+    const trimmedCaption = (debouncedFormData.caption || '').trim();
+
     // Compute scheduledAt changes by comparing UTC instants
     const currentScheduledUtc = post.scheduledAt
       ? new Date(post.scheduledAt).toISOString()
@@ -357,24 +365,31 @@ export default function PostDetail() {
 
     // Check if form data has changed from original
     const hasChanges =
-      debouncedFormData.caption !== post.caption ||
+      trimmedCaption !== (post.caption || '') ||
       JSON.stringify(normalizeHashtags(debouncedFormData.hashtags)) !==
         JSON.stringify(normalizeHashtags(post.hashtags as unknown as string[])) ||
       debouncedFormData.imageUrl !== (post.imageUrl || '') ||
       scheduledChanged;
 
     if (hasChanges) {
-      updateContentMutation.mutate({
+      const payload = {
         contentId: postId,
-        caption: debouncedFormData.caption,
+        caption: trimmedCaption,
         // Send normalized hashtags to backend for consistency
         hashtags: normalizeHashtags(debouncedFormData.hashtags),
         imageUrl: debouncedFormData.imageUrl || undefined,
         // Only send scheduledAt when it actually changes, in UTC
-        scheduledAt: scheduledChanged ? formScheduledUtc : undefined,
-      });
+        ...(scheduledChanged ? { scheduledAt: formScheduledUtc } : {}),
+      } as const;
+
+      const key = JSON.stringify(payload);
+      if (lastSubmittedRef.current === key) {
+        return;
+      }
+      lastSubmittedRef.current = key;
+      mutateContent(payload as any);
     }
-  }, [debouncedFormData, post, isEditing, postId, updateContentMutation]);
+  }, [debouncedFormData, post, isEditing, postId, brandTimezone, isSaving, mutateContent]);
 
   const handleCaptionChange = (value: string) => {
     setFormData((prev) => ({ ...prev, caption: value }));
