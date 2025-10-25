@@ -14,6 +14,8 @@ import { useURLFilterSync } from '../hooks/useURLFilterSync';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { content as contentApi, campaign as campaignApi, type Content } from '@/lib/api';
+import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
+import { getStableColorFromId } from '@/utils/campaign-colors';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { CalendarItem, Placeholder } from '../types/calendar';
 import {
@@ -234,6 +236,19 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     );
   }
 
+  // Add a stable fallback color for items without a campaign color
+  const enrichWithCampaignColor = (items: any[]): any[] =>
+    items.map((i) => {
+      const campaignId = i.campaignId || i.campaign?.id || null;
+      const direct = i.campaignColor || null;
+      const stored = campaignId ? getStoredCampaignColor(campaignId) : null;
+      const fallback = campaignId ? getStableColorFromId(campaignId) : null;
+      return {
+        ...i,
+        campaignColor: direct || stored || fallback,
+      };
+    });
+
   return (
     <div className="space-y-4">
       {/* Capacity banner moved to global top nav area */}
@@ -364,7 +379,10 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       {showFilters && <CalendarFilters brandId={brandId} compact />}
 
       {/* Campaign Color Legend */}
-      <CampaignColorLegend items={filteredItems as any as CalendarItem[]} className="px-4" />
+      <CampaignColorLegend
+        items={enrichWithCampaignColor(filteredItems as any) as any as CalendarItem[]}
+        className="px-4"
+      />
 
       {/* Filter results summary removed for cleaner filtered state */}
 
@@ -427,10 +445,14 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       {/* View content based on selected mode */}
       {viewMode === 'month' && (
         <MonthGridView
-          items={(filteredItems as any).map((i: any) => ({
-            ...i,
-            type: i.type || 'content',
-          }))}
+          items={
+            enrichWithCampaignColor(
+              (filteredItems as any).map((i: any) => ({
+                ...i,
+                type: i.type || 'content',
+              }))
+            ) as any
+          }
           currentDate={currentDate}
           timezone={brandTimezone}
         />
@@ -438,19 +460,23 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
       {viewMode === 'timeline' && (
         <TimelineView
-          items={(filteredItems as any).map((i: any) => ({
-            id: i.id,
-            type: i.type,
-            caption: i.caption || '',
-            scheduledAt: i.scheduledAt || undefined,
-            postedAt: i.postedAt || undefined,
-            status: i.status,
-            hashtags: i.hashtags,
-            imageUrl: i.imageUrl || undefined,
-            campaignName: i.campaignName || i.campaign?.name,
-            campaignId: i.campaignId || i.campaign?.id,
-            processing: Boolean(i?.generationParams?.processing?.active),
-          }))}
+          items={
+            enrichWithCampaignColor(
+              (filteredItems as any).map((i: any) => ({
+                id: i.id,
+                type: i.type,
+                caption: i.caption || '',
+                scheduledAt: i.scheduledAt || undefined,
+                postedAt: i.postedAt || undefined,
+                status: i.status,
+                hashtags: i.hashtags,
+                imageUrl: i.imageUrl || undefined,
+                campaignName: i.campaignName || i.campaign?.name,
+                campaignId: i.campaignId || i.campaign?.id,
+                processing: Boolean(i?.generationParams?.processing?.active),
+              }))
+            ) as any
+          }
           currentDate={currentDate}
           timezone={brandTimezone}
         />
@@ -458,20 +484,24 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
       {viewMode === 'list' && (
         <ContentListView
-          items={(filteredItems as any).map((i: any) => ({
-            id: i.id,
-            type: i.type,
-            caption: i.caption || '',
-            scheduledAt: i.scheduledAt || undefined,
-            postedAt: i.postedAt || undefined,
-            createdAt: i.createdAt,
-            status: i.status,
-            hashtags: i.hashtags,
-            imageUrl: i.imageUrl || undefined,
-            campaignName: i.campaignName || i.campaign?.name,
-            campaignId: i.campaignId || i.campaign?.id,
-            processing: Boolean(i?.generationParams?.processing?.active),
-          }))}
+          items={
+            enrichWithCampaignColor(
+              (filteredItems as any).map((i: any) => ({
+                id: i.id,
+                type: i.type,
+                caption: i.caption || '',
+                scheduledAt: i.scheduledAt || undefined,
+                postedAt: i.postedAt || undefined,
+                createdAt: i.createdAt,
+                status: i.status,
+                hashtags: i.hashtags,
+                imageUrl: i.imageUrl || undefined,
+                campaignName: i.campaignName || i.campaign?.name,
+                campaignId: i.campaignId || i.campaign?.id,
+                processing: Boolean(i?.generationParams?.processing?.active),
+              }))
+            ) as any
+          }
           currentDate={currentDate}
           timezone={brandTimezone}
         />

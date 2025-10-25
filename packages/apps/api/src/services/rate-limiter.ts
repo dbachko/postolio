@@ -1,5 +1,4 @@
 import { redisService } from './redis.js';
-import type { FastifyRequest, FastifyReply } from 'fastify';
 
 interface RateLimitConfig {
   windowMs: number; // Time window in milliseconds
@@ -80,33 +79,9 @@ export const pauseResumeRateLimiter = new RateLimiter({
   keyPrefix: 'pause_resume_rl',
 });
 
-export const draftRateLimiter = new RateLimiter({
-  windowMs: 30 * 1000, // 30 seconds
-  maxRequests: 10, // up to 10 autosaves per 30s
-  keyPrefix: 'draft_rl',
-});
+// Draft rate limiter removed (campaign drafts feature deprecated)
 
 /**
  * Fastify middleware for rate limiting
  */
-export function createRateLimitMiddleware(rateLimiter: RateLimiter) {
-  return async (request: FastifyRequest & { user?: { id?: string } }, reply: FastifyReply) => {
-    const userId =
-      request.user?.id || (request.headers['x-user-id'] as string | undefined) || 'anonymous';
-
-    const result = await rateLimiter.checkRateLimit(userId);
-
-    reply.header('X-RateLimit-Limit', rateLimiter['config'].maxRequests);
-    reply.header('X-RateLimit-Remaining', result.remaining);
-    reply.header('X-RateLimit-Reset', Math.floor(result.resetTime.getTime() / 1000));
-
-    if (!result.allowed) {
-      reply.header('Retry-After', result.retryAfter || 60);
-      return reply.code(429).send({
-        error: 'Too many requests',
-        message: `Rate limit exceeded. Try again in ${result.retryAfter || 60} seconds.`,
-        retryAfter: result.retryAfter || 60,
-      });
-    }
-  };
-}
+// createRateLimitMiddleware removed; direct checks are used inline by routes

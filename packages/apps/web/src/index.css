@@ -197,18 +197,18 @@
     --radius: 0.5rem;
 
     /* Campaign color swatches (300 tone) */
-    --swatch-blue-300: #93C5FD;
-    --swatch-indigo-300: #A5B4FC;
-    --swatch-violet-300: #C4B5FD;
-    --swatch-purple-300: #D8B4FE;
-    --swatch-fuchsia-300: #F0ABFC;
-    --swatch-pink-300: #F9A8D4;
-    --swatch-rose-300: #FDA4AF;
-    --swatch-orange-300: #FDBA74;
-    --swatch-amber-300: #FCD34D;
-    --swatch-emerald-300: #6EE7B7;
-    --swatch-teal-300: #5EEAD4;
-    --swatch-red-300: #FCA5A5;
+    --swatch-blue-300: #93c5fd;
+    --swatch-indigo-300: #a5b4fc;
+    --swatch-violet-300: #c4b5fd;
+    --swatch-purple-300: #d8b4fe;
+    --swatch-fuchsia-300: #f0abfc;
+    --swatch-pink-300: #f9a8d4;
+    --swatch-rose-300: #fda4af;
+    --swatch-orange-300: #fdba74;
+    --swatch-amber-300: #fcd34d;
+    --swatch-emerald-300: #6ee7b7;
+    --swatch-teal-300: #5eead4;
+    --swatch-red-300: #fca5a5;
   }
 
   .dark {

@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+// react-query not needed here after removing actions
 import { useNavigate } from 'react-router-dom';
-import { content as contentApi, type Content } from '../lib/api';
+import { type Content } from '../lib/api';
 import { OptimizedImage } from './OptimizedImage';
 import { formatInUserTimezone } from '../lib/timezone';
 import { useTimezone } from '../contexts/TimezoneContext';
 // import { useSchedulingWebSocket } from '../hooks/useSchedulingWebSocket'
 import { StatusBadge } from './StatusBadge';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 interface ContentCardProps {
   content: Content;
@@ -16,11 +16,8 @@ interface ContentCardProps {
 }
 
 export function ContentCard({ content, brandId, isOptimistic = false }: ContentCardProps) {
-  const [publishError, setPublishError] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState(content.status);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [isScheduling, setIsScheduling] = useState(false);
-  const queryClient = useQueryClient();
   const { timezone, getBrandTimezone } = useTimezone();
   const [brandTimezone, setBrandTimezone] = useState<string>(timezone);
   const navigate = useNavigate();
@@ -58,48 +55,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
     }
   }, [content.status, localStatus]);
 
-  const publishMutation = useMutation({
-    mutationFn: (contentId: string) => contentApi.publishToInstagram(contentId),
-    onSuccess: () => {
-      setPublishError(null);
-      queryClient.invalidateQueries({ queryKey: ['contentHistory', brandId] });
-    },
-    onError: (error: Error) => {
-      const errorMessage = error?.message || 'Failed to publish to Instagram. Please try again.';
-      setPublishError(errorMessage);
-    },
-  });
-
-  const scheduleMutation = useMutation({
-    mutationFn: (contentId: string) => contentApi.scheduleContent(contentId),
-    onMutate: () => {
-      setIsScheduling(true);
-    },
-    onSuccess: () => {
-      setIsScheduling(false);
-      queryClient.invalidateQueries({
-        queryKey: ['content', 'scheduled', brandId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['content', 'pending', brandId],
-      });
-    },
-    onError: (error: Error) => {
-      setIsScheduling(false);
-      const errorMessage = error?.message || 'Failed to schedule content. Please try again.';
-      setPublishError(errorMessage);
-    },
-  });
-
-  const handlePublish = () => {
-    setPublishError(null);
-    publishMutation.mutate(content.id);
-  };
-
-  const handleSchedule = () => {
-    setPublishError(null);
-    scheduleMutation.mutate(content.id);
-  };
+  // Removed manual schedule and publish actions from cards per design update
 
   const isConnected = connectionStatus === 'connected';
 
@@ -156,7 +112,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
           <div className="flex items-center gap-2">
             <StatusBadge
               status={localStatus}
-              isLoading={isScheduling || isOptimistic}
+              isLoading={isOptimistic}
               retryCount={0}
               className={`transition-all duration-500 ${
                 isTransitioning ? 'scale-110 ring-2 ring-blue-400 ring-offset-2' : ''
@@ -174,65 +130,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
             )}
           </div>
 
-          {content.status === 'draft' && (
-            <div className="flex flex-col space-y-2">
-              <div className="flex space-x-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSchedule();
-                  }}
-                  className="flex items-center gap-2 rounded bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={isScheduling || !isConnected}
-                >
-                  {isScheduling ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Scheduling...
-                    </>
-                  ) : (
-                    'Schedule'
-                  )}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePublish();
-                  }}
-                  className="flex items-center gap-2 rounded bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-2 text-sm text-white hover:from-purple-600 hover:to-pink-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={publishMutation.isPending || !isConnected}
-                >
-                  {publishMutation.isPending ? (
-                    <>
-                      <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent"></div>
-                      Publishing...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2z" />
-                        <path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z" />
-                        <circle cx="17.5" cy="6.5" r="1" />
-                      </svg>
-                      Publish Now
-                    </>
-                  )}
-                </button>
-              </div>
-              {!isConnected && (
-                <div className="rounded border border-yellow-200 bg-yellow-50 p-2">
-                  <p className="text-xs text-yellow-800">
-                    Actions disabled - waiting for connection
-                  </p>
-                </div>
-              )}
-              {publishError && (
-                <div className="rounded border border-red-200 bg-red-50 p-2">
-                  <p className="text-xs text-red-800">{publishError}</p>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Manual schedule/publish actions removed on cards */}
 
           {content.status === 'published' && content.instagramPermalink && (
             <div className="flex space-x-2">

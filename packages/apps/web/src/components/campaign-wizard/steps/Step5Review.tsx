@@ -74,35 +74,6 @@ export function Step5Review() {
         // ignore telemetry errors
       }
       toast.success('Campaign created. Generating preview posts...');
-      // Clear local and server drafts so next creation starts clean
-      try {
-        localStorage.removeItem('campaign-wizard-storage');
-      } catch (_) {
-        /* noop */
-      }
-      try {
-        void campaignApi.saveCampaignDraft({
-          brandId: brand.id,
-          wizardState: {
-            currentStep: 1,
-            brandId: brand.id,
-            name: '',
-            campaignType: null,
-            goals: [],
-            timeline: null,
-            themes: [],
-            style: '',
-            frequency: '',
-            postingTime: '12:00',
-            priority: 5,
-            promotionDetails: null,
-            contentPillars: null,
-            acceptedRecommendations: [],
-          },
-        });
-      } catch (_) {
-        /* noop */
-      }
       reset();
       navigate('/campaigns');
     } catch (err) {

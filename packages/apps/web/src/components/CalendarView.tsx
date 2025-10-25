@@ -347,21 +347,20 @@ export function CalendarView({
     // Campaign color styles
     const getCampaignStyles = () => {
       if (!campaignColor) return {};
-
-      // Convert hex to rgba for background
-      const hexToRgba = (hex: string, opacity: number) => {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-      };
-
+      const isHex = /^#([0-9A-F]{6})$/i.test(campaignColor);
       return {
-        backgroundColor: hexToRgba(campaignColor, 0.1),
         borderLeftColor: campaignColor,
         borderLeftWidth: '3px',
         borderLeftStyle: 'solid' as const,
-      };
+        ...(isHex
+          ? (() => {
+              const r = parseInt(campaignColor.slice(1, 3), 16);
+              const g = parseInt(campaignColor.slice(3, 5), 16);
+              const b = parseInt(campaignColor.slice(5, 7), 16);
+              return { backgroundColor: `rgba(${r}, ${g}, ${b}, 0.1)` };
+            })()
+          : {}),
+      } as React.CSSProperties;
     };
 
     return (

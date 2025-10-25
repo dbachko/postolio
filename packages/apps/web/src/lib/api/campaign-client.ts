@@ -20,14 +20,6 @@ export class CampaignClient {
     return payload;
   }
 
-  saveCampaignDraft(data: {
-    brandId: string;
-    wizardState: Record<string, unknown>;
-    draftId?: string;
-  }) {
-    return this.request('/api/campaigns/drafts', { method: 'POST', body: JSON.stringify(data) });
-  }
-
   createCampaign(config: any) {
     const body = this.sanitizeGoals({ ...(config || {}) });
     return this.request(`/api/campaigns`, { method: 'POST', body: JSON.stringify(body) });
@@ -73,10 +65,6 @@ export class CampaignClient {
 
   getScheduleAheadLimit() {
     return this.request('/api/account/limits/schedule-ahead');
-  }
-
-  getCampaignDraft(brandId: string) {
-    return this.request(`/api/campaigns/drafts?brandId=${encodeURIComponent(brandId)}`);
   }
 
   updateCampaign(campaignId: string, patch: any) {

@@ -192,28 +192,28 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
         </div>
       ) : null}
 
-      {/* Bottom row: edit (except published) + menu */}
+      {/* Bottom row: edit (hidden for published) + menu */}
       <div className="mt-1 flex items-center justify-between">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-gray-200"
-                aria-label="Edit post"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (item.type === 'placeholder') return;
-                  if ((item as any)?.status === 'published') return; // published: view-only
-                  window.location.href = `/posts/${(item as any).id}?edit=1`;
-                }}
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Edit post</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {item.type !== 'placeholder' && status !== 'published' && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-gray-200"
+                  aria-label="Edit post"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.href = `/posts/${(item as any).id}?edit=1`;
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Edit post</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <span

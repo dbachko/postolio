@@ -33,11 +33,7 @@ export function CampaignDashboard({
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
             <CardTitle>Campaigns</CardTitle>
-            <Button
-              size="sm"
-              className="gap-2"
-              onClick={() => navigate('/campaigns/create?fresh=1')}
-            >
+            <Button size="sm" className="gap-2" onClick={() => navigate('/campaigns/create')}>
               <Plus className="h-4 w-4" />
               Create Campaign
             </Button>

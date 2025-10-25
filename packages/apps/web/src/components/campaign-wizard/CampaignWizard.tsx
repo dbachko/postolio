@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { useCampaignWizard, useWizardAutoSave } from '../../hooks/useCampaignWizard';
+// import { useLocation } from 'react-router-dom';
+import { useBlocker } from 'react-router-dom';
+import { useCampaignWizard, useWizardBrandSync } from '../../hooks/useCampaignWizard';
 import { useBrandStore } from '../../stores/brandStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -11,88 +12,77 @@ import { Step3StrategyReview } from './steps/Step3StrategyReview';
 import { Step4Timeline } from './steps/Step4Timeline';
 import { Step5Review } from './steps/Step5Review';
 import { Alert, AlertDescription } from '../ui/alert';
-import { campaign, httpPost } from '../../lib/api';
+import { httpPost } from '../../lib/api';
 import { HelpCircle } from 'lucide-react';
 import { WizardHelpDialog } from './shared/WizardHelpDialog';
 
 export function CampaignWizard() {
-  const location = useLocation();
+  // const location = useLocation();
   const currentStep = useCampaignWizard((s) => s.currentStep);
   const brand = useBrandStore((s) => s.selectedBrand);
-  const hydrateFromDraft = useCampaignWizard((s) => s.hydrateFromDraft);
-  const draftId = useCampaignWizard((s) => s.draftId);
   const reset = useCampaignWizard((s) => s.reset);
   const setBrandId = useCampaignWizard((s) => s.setBrandId);
-  const [skipHydration, setSkipHydration] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // Keep auto-save active
-  useWizardAutoSave();
+  // Keep brand ID synced when user switches brand
+  useWizardBrandSync();
 
-  // If URL contains fresh=1, skip server draft hydration for this session
+  // Always start fresh on mount: reset state and set brand
   useEffect(() => {
-    try {
-      const params = new URLSearchParams(location.search);
-      if (params.get('fresh') === '1') {
-        setSkipHydration(true);
-      }
-    } catch (_) {
-      // ignore URL parsing errors
-    }
-  }, [location.search]);
-
-  // Ensure brand is selected
-  useEffect(() => {
-    if (!brand) return;
-    // Attempt to hydrate from server draft if no local draft present
-    (async () => {
-      try {
-        if (!draftId && !skipHydration) {
-          const res = await campaign.getCampaignDraft(brand.id);
-          if (res?.success && res?.draft?.wizardState) {
-            hydrateFromDraft({ ...(res.draft.wizardState || {}), draftId: res.draft.id });
-          }
-        }
-      } catch (_) {
-        // ignore if not found
-      }
-    })();
-  }, [brand, draftId, skipHydration, hydrateFromDraft]);
-
-  const handleReset = () => {
-    setSkipHydration(true);
     reset();
     if (brand) setBrandId(brand.id);
-    try {
-      localStorage.removeItem('campaign-wizard-storage');
-    } catch (_) {
-      /* noop */
-    }
-    try {
-      if (brand) {
-        void campaign.saveCampaignDraft({
-          brandId: brand.id,
-          wizardState: {
-            currentStep: 1,
-            brandId: brand.id,
-            name: '',
-            campaignType: null,
-            goals: [],
-            timeline: null,
-            themes: [],
-            style: '',
-            frequency: '',
-            postingTime: '12:00',
-            priority: 5,
-            promotionDetails: null,
-            contentPillars: null,
-            acceptedRecommendations: [],
-          },
-        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Determine if wizard has unsaved work to warn on navigation
+  const isDirty = useCampaignWizard((s) => {
+    return (
+      (s.name && s.name.trim().length > 0) ||
+      s.campaignType !== null ||
+      (Array.isArray(s.goals) && s.goals.length > 0) ||
+      !!s.timeline ||
+      (Array.isArray(s.themes) && s.themes.length > 0) ||
+      (s.style && s.style.trim().length > 0) ||
+      (s.frequency && s.frequency.trim().length > 0) ||
+      s.promotionDetails != null ||
+      s.contentPillars != null ||
+      (Array.isArray(s.acceptedRecommendations) && s.acceptedRecommendations.length > 0) ||
+      s.strategyPredictions != null ||
+      s.strategyPredictionsMeta != null ||
+      s.strategySchedule != null
+    );
+  });
+
+  // Block internal route transitions with a tiny confirm
+  function useNavigationConfirm(when: boolean, message: string) {
+    const blocker = useBlocker(when);
+    useEffect(() => {
+      if (blocker.state === 'blocked') {
+        const proceed = window.confirm(message);
+        if (proceed) blocker.proceed();
+        else blocker.reset();
       }
-    } catch (_) {
-      /* noop */
-    }
+    }, [blocker, message]);
+  }
+
+  useNavigationConfirm(isDirty, "You'll lose your changes. Leave this page?");
+
+  // Warn on browser/tab close or hard navigation
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
+  // Ensure brand id is set when brand is available (already handled by useWizardBrandSync)
+
+  const handleReset = () => {
+    reset();
+    if (brand) setBrandId(brand.id);
     try {
       if (brand) {
         httpPost('/api/analytics/wizard-event', {

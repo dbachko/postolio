@@ -491,7 +491,7 @@ export function AppLayout({ children }: LayoutProps) {
             </CommandItem>
             <CommandItem
               onSelect={() => {
-                navigate('/campaigns/create?fresh=1');
+                navigate('/campaigns/create');
                 setSearchOpen(false);
               }}
             >

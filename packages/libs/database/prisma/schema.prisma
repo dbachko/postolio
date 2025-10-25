@@ -49,7 +49,6 @@ model User {
   
   brands            Brand[]
   modifiedCampaigns Campaign[]
-  campaignDrafts    CampaignDraft[]
 
   @@index([email])
   @@index([accountLockedUntil])
@@ -75,7 +74,6 @@ model Brand {
   user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaigns            Campaign[]
   content              Content[]
-  campaignDrafts       CampaignDraft[]
 
   @@index([userId])
   @@index([createdAt])
@@ -153,23 +151,7 @@ model Campaign {
   @@map("campaigns")
 }
 
-/// Stores server-side drafts of the campaign creation wizard for cross-device continuity
-model CampaignDraft {
-  id          String   @id @default(cuid())
-  userId      String
-  brandId     String
-  wizardState Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([brandId])
-  @@unique([userId, brandId])
-  @@map("campaign_drafts")
-}
+// CampaignDraft model removed; drafts feature fully deprecated
 
 
 enum ContentStatus {

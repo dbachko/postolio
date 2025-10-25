@@ -140,18 +140,23 @@ export function TimelineView({ items, currentDate, timezone: tzOverride }: Timel
                         style={{
                           top: `${idx * 25}px`,
                           ...(item.campaignColor
-                            ? {
-                                borderLeftWidth: '4px',
-                                borderLeftStyle: 'solid',
-                                borderLeftColor: item.campaignColor,
-                                backgroundColor: (() => {
-                                  const hex = item.campaignColor;
-                                  const r = parseInt(hex.slice(1, 3), 16);
-                                  const g = parseInt(hex.slice(3, 5), 16);
-                                  const b = parseInt(hex.slice(5, 7), 16);
-                                  return `rgba(${r}, ${g}, ${b}, 0.08)`;
-                                })(),
-                              }
+                            ? (() => {
+                                const color = item.campaignColor;
+                                const isHex = /^#([0-9A-F]{6})$/i.test(color);
+                                return {
+                                  borderLeftWidth: '4px',
+                                  borderLeftStyle: 'solid',
+                                  borderLeftColor: color,
+                                  ...(isHex
+                                    ? (() => {
+                                        const r = parseInt(color.slice(1, 3), 16);
+                                        const g = parseInt(color.slice(3, 5), 16);
+                                        const b = parseInt(color.slice(5, 7), 16);
+                                        return { backgroundColor: `rgba(${r}, ${g}, ${b}, 0.08)` };
+                                      })()
+                                    : {}),
+                                } as React.CSSProperties;
+                              })()
                             : {}),
                         }}
                         onClick={() => {

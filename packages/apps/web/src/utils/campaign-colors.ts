@@ -108,15 +108,19 @@ export function getContrastTextColor(hex: string | null | undefined): string {
  * Useful when a campaign doesn't have an explicit color provided by the API.
  */
 export function getStableColorFromId(id: string | undefined | null): string {
+  // Hex palette (Tailwind 300-ish tones) for broad contrast and readability
   const palette = [
-    'var(--swatch-blue-300)',
-    'var(--swatch-emerald-300)',
-    'var(--swatch-amber-300)',
-    'var(--swatch-violet-300)',
-    'var(--swatch-teal-300)',
-    'var(--swatch-red-300)',
-    'var(--swatch-indigo-300)',
-    'var(--swatch-rose-300)',
+    '#93C5FD', // blue-300
+    '#6EE7B7', // emerald-300
+    '#FCD34D', // amber-300
+    '#C4B5FD', // violet-300
+    '#5EEAD4', // teal-300
+    '#FCA5A5', // red-300
+    '#A5B4FC', // indigo-300
+    '#FDA4AF', // rose-300
+    '#FDBA74', // orange-300
+    '#F0ABFC', // fuchsia-300
+    '#F9A8D4', // pink-300
   ];
   if (!id) return palette[0];
   let hash = 0;
