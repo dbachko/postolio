@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { useAuthStore } from './stores/authStore';
 import { TimezoneProvider } from './contexts/TimezoneContext';
 import { ConnectionStatusProvider } from './contexts/WebSocketContext';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { ThemeProvider } from 'next-themes';
 import { AppLayout as Layout } from './components/AppLayout';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
@@ -23,6 +23,7 @@ import { MagicLinkVerify } from './pages/MagicLinkVerify';
 import { EmailVerify } from './pages/EmailVerify';
 import { PasswordReset } from './pages/PasswordReset';
 import { useEffect, lazy, Suspense } from 'react';
+import { useTheme } from 'next-themes';
 import { ErrorBoundary } from './components/ErrorBoundary';
 const PostDetail = lazy(() => import('./pages/PostDetail'));
 const CreatePost = lazy(() =>
@@ -280,7 +281,14 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ConnectionStatusProvider>
           <TimezoneProvider>
-            <ThemeProvider>
+            <ThemeProvider
+              attribute="class"
+              enableSystem
+              defaultTheme="system"
+              storageKey="postolio-theme-mode"
+              disableTransitionOnChange
+            >
+              <ThemeBootstrapper />
               <RouterProvider router={router} />
               <Toaster position="bottom-left" />
             </ThemeProvider>
@@ -292,3 +300,13 @@ function App() {
 }
 
 export default App;
+
+function ThemeBootstrapper() {
+  const { user } = useAuthStore();
+  const { setTheme } = useTheme();
+  useEffect(() => {
+    if (!user) return;
+    if (user.theme) setTheme(user.theme);
+  }, [user, setTheme]);
+  return null;
+}

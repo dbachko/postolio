@@ -474,7 +474,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // User is already authenticated via preHandler
       const userId = request.user!.id;
 
-      const user = await prisma.user.findUnique({
+      const dbUser = await prisma.user.findUnique({
         where: { id: userId },
         select: {
           id: true,
@@ -484,15 +484,28 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           subscriptionTier: true,
           timezone: true,
           timezoneAutoDetected: true,
+          themePreference: true,
           createdAt: true,
           updatedAt: true,
         },
       });
 
-      if (!user) {
+      if (!dbUser) {
         return reply.code(404).send({ error: 'User not found' });
       }
 
+      const user = {
+        id: dbUser.id,
+        email: dbUser.email,
+        name: dbUser.name,
+        instagramUsername: dbUser.instagramUsername,
+        subscriptionTier: dbUser.subscriptionTier,
+        timezone: dbUser.timezone,
+        timezoneAutoDetected: dbUser.timezoneAutoDetected,
+        theme: dbUser.themePreference,
+        createdAt: dbUser.createdAt,
+        updatedAt: dbUser.updatedAt,
+      };
       return { user };
     } catch (err) {
       // Log the specific error for debugging

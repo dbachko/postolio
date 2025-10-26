@@ -39,6 +39,10 @@ export class AuthClient {
   updateUserTimezone(data: { timezone: string; timezoneAutoDetected: boolean }) {
     return this.request('/api/users/timezone', { method: 'PATCH', body: JSON.stringify(data) });
   }
+
+  updateUserTheme(data: { theme: 'system' | 'light' | 'dark' }) {
+    return this.request('/api/users/theme', { method: 'PATCH', body: JSON.stringify(data) });
+  }
 }
 
 export class SessionClient {

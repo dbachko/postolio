@@ -29,6 +29,8 @@ model User {
   scheduledDeletion DateTime?
   timezone             String?            // User's preferred timezone (null = auto-detect)
   timezoneAutoDetected Boolean            @default(true) // Whether to auto-detect timezone
+  // Theme preference (system, light, dark)
+  themePreference     ThemePreference    @default(system)
   
   // OAuth fields
   googleId          String?            @unique @map("googleid") // Google OAuth ID
@@ -235,4 +237,10 @@ model BrandStyleProfileProjection {
   @@index([profileVersion])
   @@index([archetype])
   @@map("brand_style_profile_projection")
+}
+
+enum ThemePreference {
+  system
+  light
+  dark
 }

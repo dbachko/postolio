@@ -6,6 +6,7 @@ export interface User {
   subscriptionTier: string;
   timezone?: string | null;
   timezoneAutoDetected?: boolean;
+  theme?: 'system' | 'light' | 'dark';
   createdAt: string;
 }
 

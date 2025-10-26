@@ -71,6 +71,60 @@ We do not keep legacy Tailwind color classes. Use shadcn tokens and neutral styl
   - Tokens: defined in `packages/apps/web/src/index.css` under `:root` and `.dark` (packages/apps/web/src/index.css:71 and packages/apps/web/src/index.css:99)
   - To change base color in the future, run `pnpm dlx shadcn@latest init` or update `components.json` and regenerate tokens per docs: https://ui.shadcn.com/docs/theming#base-colors
 
+### Prevent Theme Flash (Preload Snippet)
+
+We use `next-themes` with the class strategy and a short pre-hydration script to avoid a flash of the wrong theme on first paint.
+
+- Already added in `packages/apps/web/index.html:7`.
+- Storage key: `postolio-theme-mode` (matches our ThemeProvider).
+- What it does:
+  - Reads saved mode: `system | light | dark`.
+  - Applies `html.dark` before React mounts (when system prefers dark or mode is `dark`).
+  - Temporarily disables CSS transitions via `html.theme-preload` to avoid flicker, then removes it after load.
+
+Reference snippet (for future apps):
+
+```html
+<style id="theme-preload-style">
+    html.theme-preload *,
+    html.theme-preload *::before,
+    html.theme-preload *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+</style>
+<script>
+  (function () {
+    try {
+      var storageKey = 'postolio-theme-mode';
+      var mode = localStorage.getItem(storageKey) || 'system';
+      var prefersDark =
+        window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var isDark = mode === 'dark' || (mode === 'system' && prefersDark);
+      var root = document.documentElement;
+      root.classList.add('theme-preload');
+      if (isDark) root.classList.add('dark');
+      else root.classList.remove('dark');
+      var removePreload = function () {
+        root.classList.remove('theme-preload');
+      };
+      if (document.readyState === 'complete') {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(removePreload);
+        });
+      } else {
+        window.addEventListener('load', function () {
+          requestAnimationFrame(function () {
+            requestAnimationFrame(removePreload);
+          });
+        });
+      }
+    } catch (e) {}
+  })();
+</script>
+```
+
 ## Validation & Tooling
 
 - Lint enforces import path to `@/components/ui/*`.

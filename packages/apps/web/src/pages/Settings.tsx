@@ -21,6 +21,9 @@ import { Globe, Clock, Info, Save, RefreshCw, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useBrandStore } from '../stores/brandStore';
 import { brand as brandApi } from '../lib/api';
+import { auth as authApi } from '../lib/api';
+import { useTheme } from 'next-themes';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 export function Settings() {
   const { timezone, isAutoDetected, setTimezone } = useTimezone();
@@ -30,6 +33,10 @@ export function Settings() {
   const [brandTimezone, setBrandTimezone] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [detectedTimezone] = useState(getUserTimezone());
+  const { theme, setTheme } = useTheme();
+  const [appearanceMode, setAppearanceMode] = useState<'system' | 'light' | 'dark'>(
+    (theme as 'system' | 'light' | 'dark') || 'system'
+  );
 
   // Load brand-specific timezone if a brand is selected
   useEffect(() => {
@@ -109,10 +116,11 @@ export function Settings() {
       </div>
 
       <Tabs defaultValue="timezone" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="timezone">Timezone</TabsTrigger>
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="appearance">Appearance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="timezone" className="space-y-6">
@@ -348,6 +356,88 @@ export function Settings() {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">Notification settings coming soon...</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="appearance">
+          <Card>
+            <CardHeader>
+              <CardTitle>Appearance</CardTitle>
+              <CardDescription>Choose your color theme preference</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="appearance">Theme</Label>
+                <RadioGroup
+                  value={appearanceMode}
+                  onValueChange={(val) => setAppearanceMode(val as 'system' | 'light' | 'dark')}
+                  className="grid grid-cols-3 gap-2 sm:max-w-md"
+                >
+                  <label
+                    htmlFor="appearance-system"
+                    className="border-border bg-card hover:bg-accent hover:text-accent-foreground inline-flex cursor-pointer items-center justify-between rounded-lg border p-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem id="appearance-system" value="system" />
+                      <span>System</span>
+                    </div>
+                  </label>
+                  <label
+                    htmlFor="appearance-light"
+                    className="border-border bg-card hover:bg-accent hover:text-accent-foreground inline-flex cursor-pointer items-center justify-between rounded-lg border p-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem id="appearance-light" value="light" />
+                      <span>Light</span>
+                    </div>
+                  </label>
+                  <label
+                    htmlFor="appearance-dark"
+                    className="border-border bg-card hover:bg-accent hover:text-accent-foreground inline-flex cursor-pointer items-center justify-between rounded-lg border p-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem id="appearance-dark" value="dark" />
+                      <span>Dark</span>
+                    </div>
+                  </label>
+                </RadioGroup>
+                <p className="text-muted-foreground text-sm">
+                  System adapts to your device’s appearance and updates automatically.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={async () => {
+                    setIsSaving(true);
+                    try {
+                      setTheme(appearanceMode);
+                      await authApi.updateUserTheme({ theme: appearanceMode });
+                      toast.success('Theme settings saved successfully');
+                    } catch (_e) {
+                      toast.error('Failed to save theme settings');
+                    } finally {
+                      setIsSaving(false);
+                    }
+                  }}
+                  disabled={isSaving}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {isSaving ? 'Saving...' : 'Save Theme'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setAppearanceMode('system');
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Reset to System
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

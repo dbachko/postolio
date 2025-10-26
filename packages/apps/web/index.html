@@ -4,6 +4,50 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+    <!-- Prevent theme flash: apply dark class before hydration based on localStorage or OS -->
+    <style id="theme-preload-style">
+      /* Disable transitions/animations during initial paint to avoid flicker */
+      html.theme-preload *,
+      html.theme-preload *::before,
+      html.theme-preload *::after {
+        transition: none !important;
+        animation: none !important;
+      }
+    </style>
+    <script>
+      (function () {
+        try {
+          var storageKey = 'postolio-theme-mode';
+          var mode = localStorage.getItem(storageKey) || 'system';
+          var prefersDark =
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = mode === 'dark' || (mode === 'system' && prefersDark);
+          var root = document.documentElement;
+          // Disable transitions during first paint
+          root.classList.add('theme-preload');
+          if (isDark) root.classList.add('dark');
+          else root.classList.remove('dark');
+          // Re-enable transitions after load and a couple RAFs
+          var removePreload = function () {
+            root.classList.remove('theme-preload');
+          };
+          if (document.readyState === 'complete') {
+            requestAnimationFrame(function () {
+              requestAnimationFrame(removePreload);
+            });
+          } else {
+            window.addEventListener('load', function () {
+              requestAnimationFrame(function () {
+                requestAnimationFrame(removePreload);
+              });
+            });
+          }
+        } catch (e) {
+          // noop: if anything fails, default to light
+        }
+      })();
+    </script>
+
     <!-- Primary Meta Tags -->
     <title>Postolio - AI-Powered Instagram Content Management</title>
     <meta name="title" content="Postolio - AI-Powered Instagram Content Management" />

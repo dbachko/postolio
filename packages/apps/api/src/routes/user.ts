@@ -1,5 +1,6 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
+import type { ThemePreference } from '@postolio/database';
 import { TimezoneService } from '../services/timezone.js';
 
 const prisma = getDatabaseClient();
@@ -23,6 +24,14 @@ function isBrandTimezoneUpdateBody(body: unknown): body is { timezone: string | 
   return obj.timezone === null || typeof obj.timezone === 'string';
 }
 
+// Theme update body guard (single field)
+function isThemeUpdateBody(body: unknown): body is { theme: 'system' | 'light' | 'dark' } {
+  if (!body || typeof body !== 'object') return false;
+  const obj = body as Record<string, unknown>;
+  const theme = obj.theme;
+  return theme === 'system' || theme === 'light' || theme === 'dark';
+}
+
 // Validation helpers using type guards
 function validateTimezoneUpdate(
   body: unknown
@@ -37,6 +46,11 @@ function validateBrandTimezoneUpdate(body: unknown): { timezone: string | null }
   if (isBrandTimezoneUpdateBody(body)) {
     return body;
   }
+  return null;
+}
+
+function validateThemeUpdate(body: unknown): { theme: 'system' | 'light' | 'dark' } | null {
+  if (isThemeUpdateBody(body)) return body as { theme: 'system' | 'light' | 'dark' };
   return null;
 }
 
@@ -81,6 +95,48 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         return { success: true, user: updatedUser };
       } catch (err: unknown) {
         request.log.error({ err }, 'Failed to update user timezone');
+        return reply.code(500).send({ error: 'Internal server error' });
+      }
+    }
+  );
+
+  // Update user theme preference (system|light|dark)
+  fastify.patch(
+    '/api/users/theme',
+    { preHandler: fastify.authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user!.id;
+
+      try {
+        const validated = validateThemeUpdate(request.body);
+        if (!validated) {
+          return reply.status(400).send({
+            error: 'Invalid request body. Expected { theme: "system"|"light"|"dark" }',
+          });
+        }
+
+        const { theme } = validated;
+
+        const updatedUser = await prisma.user.update({
+          where: { id: userId },
+          data: {
+            themePreference: theme as unknown as ThemePreference,
+          },
+          select: {
+            id: true,
+            themePreference: true,
+          },
+        });
+
+        return {
+          success: true,
+          user: {
+            id: updatedUser.id,
+            theme: updatedUser.themePreference,
+          },
+        };
+      } catch (err: unknown) {
+        request.log.error({ err }, 'Failed to update user theme');
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
