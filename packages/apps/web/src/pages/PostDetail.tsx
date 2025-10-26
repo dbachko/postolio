@@ -3,11 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, memo, useEffect, useRef } from 'react';
 import { content as contentApi } from '../lib/api';
 import { useDebounce } from '../hooks/useDebounce';
-import { Card } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Label } from '../components/ui/label';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
 import {
   Calendar,
   Clock,
@@ -103,40 +103,40 @@ interface FormData {
 // Memoized metrics component to prevent unnecessary re-renders
 const MetricsGrid = memo(({ insights }: { insights: PostInsights }) => (
   <div className="grid grid-cols-2 gap-3 md:gap-4">
-    <div className="rounded-lg bg-gray-50 p-3 md:p-4">
+    <div className="bg-muted rounded-lg p-3 md:p-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-600 md:text-sm">Likes</span>
-        <Heart className="h-3 w-3 text-red-500 md:h-4 md:w-4" />
+        <span className="text-muted-foreground text-xs md:text-sm">Likes</span>
+        <Heart className="h-3 w-3 md:h-4 md:w-4" />
       </div>
       <p className="mt-1 text-lg font-bold md:text-2xl">
         {insights.metrics.likes_count.toLocaleString()}
       </p>
     </div>
 
-    <div className="rounded-lg bg-gray-50 p-3 md:p-4">
+    <div className="bg-muted rounded-lg p-3 md:p-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-600 md:text-sm">Comments</span>
-        <MessageCircle className="h-3 w-3 text-blue-500 md:h-4 md:w-4" />
+        <span className="text-muted-foreground text-xs md:text-sm">Comments</span>
+        <MessageCircle className="h-3 w-3 md:h-4 md:w-4" />
       </div>
       <p className="mt-1 text-lg font-bold md:text-2xl">
         {insights.metrics.comments_count.toLocaleString()}
       </p>
     </div>
 
-    <div className="rounded-lg bg-gray-50 p-3 md:p-4">
+    <div className="bg-muted rounded-lg p-3 md:p-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-600 md:text-sm">Reach</span>
-        <BarChart3 className="h-3 w-3 text-green-500 md:h-4 md:w-4" />
+        <span className="text-muted-foreground text-xs md:text-sm">Reach</span>
+        <BarChart3 className="h-3 w-3 md:h-4 md:w-4" />
       </div>
       <p className="mt-1 text-lg font-bold md:text-2xl">
         {insights.metrics.reach.toLocaleString()}
       </p>
     </div>
 
-    <div className="rounded-lg bg-gray-50 p-3 md:p-4">
+    <div className="bg-muted rounded-lg p-3 md:p-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-600 md:text-sm">Shares</span>
-        <Share2 className="h-3 w-3 text-purple-500 md:h-4 md:w-4" />
+        <span className="text-muted-foreground text-xs md:text-sm">Shares</span>
+        <Share2 className="h-3 w-3 md:h-4 md:w-4" />
       </div>
       <p className="mt-1 text-lg font-bold md:text-2xl">
         {insights.metrics.shares.toLocaleString()}
@@ -596,7 +596,7 @@ export default function PostDetail() {
                 </Link>
               )}
               {(postFetching || insightsFetching) && (
-                <span className="flex items-center gap-1 text-blue-600">
+                <span className="flex items-center gap-1">
                   <RefreshCw className="h-3 w-3 animate-spin" />
                   Updating...
                 </span>
@@ -698,7 +698,7 @@ export default function PostDetail() {
               <>
                 {/* Image */}
                 {post.imageUrl && (
-                  <div className="mb-4 overflow-hidden rounded-lg bg-gray-100">
+                  <div className="bg-muted mb-4 overflow-hidden rounded-lg">
                     <img
                       src={post.imageUrl}
                       alt="Post content"
@@ -711,15 +711,11 @@ export default function PostDetail() {
 
                 {/* Caption and Hashtags */}
                 <div className="space-y-4">
-                  <p className="whitespace-pre-wrap text-gray-700">{post.caption}</p>
+                  <p className="text-foreground whitespace-pre-wrap">{post.caption}</p>
                   <div className="flex flex-wrap gap-2">
                     {post.hashtags.map((tag, index) => {
                       const t = typeof tag === 'string' && tag.startsWith('#') ? tag.slice(1) : tag;
-                      return (
-                        <span key={index} className="text-blue-600">
-                          #{t}
-                        </span>
-                      );
+                      return <span key={index}>#{t}</span>;
                     })}
                   </div>
                 </div>
@@ -751,7 +747,7 @@ export default function PostDetail() {
                   {insights ? (
                     <MetricsGrid insights={insights} />
                   ) : (
-                    <p className="py-8 text-center text-gray-500">
+                    <p className="text-muted-foreground py-8 text-center">
                       Metrics will be available once the post is published
                     </p>
                   )}
@@ -762,17 +758,17 @@ export default function PostDetail() {
                     <div className="max-h-[400px] space-y-4 overflow-y-auto">
                       {commentsData.comments.map(
                         (comment: { username: string; text: string }, index: number) => (
-                          <div key={index} className="flex gap-3 rounded-lg bg-gray-50 p-3">
+                          <div key={index} className="bg-muted flex gap-3 rounded-lg p-3">
                             <div className="flex-1">
                               <p className="text-sm font-medium">{comment.username}</p>
-                              <p className="mt-1 text-sm text-gray-700">{comment.text}</p>
+                              <p className="text-foreground mt-1 text-sm">{comment.text}</p>
                             </div>
                           </div>
                         )
                       )}
                     </div>
                   ) : (
-                    <p className="py-8 text-center text-gray-500">No comments yet</p>
+                    <p className="text-muted-foreground py-8 text-center">No comments yet</p>
                   )}
                 </TabsContent>
               </Tabs>
@@ -787,13 +783,13 @@ export default function PostDetail() {
             <h3 className="mb-3 text-base font-semibold md:mb-4 md:text-lg">Information</h3>
             <div className="space-y-2 text-xs md:space-y-3 md:text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">Brand</span>
+                <span className="text-muted-foreground">Brand</span>
                 <span className="font-medium">{post.brand.name}</span>
               </div>
 
               {post.scheduledAt && (
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Scheduled</span>
+                  <span className="text-muted-foreground">Scheduled</span>
                   <span className="font-medium">
                     {formatInUserTimezone(post.scheduledAt, 'MMM d, h:mm a', brandTimezone)}
                   </span>
@@ -802,7 +798,7 @@ export default function PostDetail() {
 
               {post.postedAt && (
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Published</span>
+                  <span className="text-muted-foreground">Published</span>
                   <span className="font-medium">
                     {formatInUserTimezone(post.postedAt, 'MMM d, h:mm a', brandTimezone)}
                   </span>
@@ -814,13 +810,13 @@ export default function PostDetail() {
                   <hr className="my-3" />
                   {post.generationParams.theme && (
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Theme</span>
+                      <span className="text-muted-foreground">Theme</span>
                       <span className="font-medium">{post.generationParams.theme}</span>
                     </div>
                   )}
                   {post.generationParams.style && (
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Style</span>
+                      <span className="text-muted-foreground">Style</span>
                       <span className="font-medium">{post.generationParams.style}</span>
                     </div>
                   )}

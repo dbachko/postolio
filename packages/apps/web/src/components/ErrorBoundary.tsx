@@ -1,7 +1,7 @@
 import React, { Component, type ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { Button } from './ui/button';
-import { Card } from './ui/card';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 interface Props {
   children: ReactNode;
@@ -41,12 +41,12 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="flex min-h-[400px] items-center justify-center p-4">
           <Card className="w-full max-w-md p-6">
             <div className="flex flex-col items-center space-y-4 text-center">
-              <div className="rounded-full bg-red-100 p-3">
-                <AlertCircle className="h-6 w-6 text-red-600" />
+              <div className="bg-muted rounded-full p-3">
+                <AlertCircle className="h-6 w-6" />
               </div>
               <div className="space-y-2">
                 <h2 className="text-lg font-semibold">Something went wrong</h2>
-                <p className="text-sm text-gray-600">
+                <p className="text-muted-foreground text-sm">
                   {this.state.error?.message || 'An unexpected error occurred'}
                 </p>
               </div>

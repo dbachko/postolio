@@ -6,13 +6,19 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from './ui/dialog';
-import { Label } from './ui/label';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Button } from './ui/button';
-import { Switch } from './ui/switch';
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { frequencyOptions, styleOptions } from '../constants/campaign';
 import { getStableColorFromId } from '../utils/campaign-colors';
@@ -274,7 +280,7 @@ export function CampaignEditDialog({
           <DialogDescription>
             {disabledMsg}
             {perms.all ? (
-              <span className="ml-1 text-gray-500">
+              <span className="text-muted-foreground ml-1">
                 Changing themes or style may regenerate preview content.
               </span>
             ) : null}
@@ -400,7 +406,7 @@ export function CampaignEditDialog({
         <div className="grid grid-cols-2 items-center gap-2">
           <div>
             <Label>Seasonality Assistance</Label>
-            <div className="text-xs text-gray-500">Use seasons/holidays when relevant</div>
+            <div className="text-muted-foreground text-xs">Use seasons/holidays when relevant</div>
           </div>
           <div className="flex justify-end">
             <Switch
@@ -413,7 +419,7 @@ export function CampaignEditDialog({
 
         {/* Calendar highlight color (compact, less prominent) */}
         <div className="mt-3 grid gap-1">
-          <Label className="text-xs text-gray-600">Calendar highlight color</Label>
+          <Label className="text-muted-foreground text-xs">Calendar highlight color</Label>
           <Select value={color} onValueChange={(v) => perms.color && setColor(v)}>
             <SelectTrigger className="h-8 w-48 justify-between px-2 py-1 text-xs">
               <div

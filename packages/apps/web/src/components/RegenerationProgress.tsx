@@ -1,8 +1,14 @@
 import { memo, useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
-import { Button } from './ui/button';
-import { Progress } from './ui/progress';
-import { Badge } from './ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import { CheckCircle, RefreshCw, XCircle, AlertCircle } from 'lucide-react';
 
 interface RegenerationProgressProps {
@@ -79,17 +85,17 @@ const RegenerationProgress = memo(
     }, [isOpen, jobId, onComplete]);
 
     const getStatusIcon = () => {
-      if (!progressData) return <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />;
+      if (!progressData) return <RefreshCw className="text-foreground h-5 w-5 animate-spin" />;
 
       switch (progressData.status) {
         case 'completed':
-          return <CheckCircle className="h-5 w-5 text-green-600" />;
+          return <CheckCircle className="text-foreground h-5 w-5" />;
         case 'failed':
-          return <XCircle className="h-5 w-5 text-red-600" />;
+          return <XCircle className="text-destructive h-5 w-5" />;
         case 'processing':
-          return <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />;
+          return <RefreshCw className="text-foreground h-5 w-5 animate-spin" />;
         default:
-          return <AlertCircle className="h-5 w-5 text-yellow-600" />;
+          return <AlertCircle className="text-foreground h-5 w-5" />;
       }
     };
 
@@ -111,18 +117,7 @@ const RegenerationProgress = memo(
     };
 
     const getStatusColor = () => {
-      if (!progressData) return 'bg-blue-50 border-blue-200';
-
-      switch (progressData.status) {
-        case 'completed':
-          return 'bg-green-50 border-green-200';
-        case 'failed':
-          return 'bg-red-50 border-red-200';
-        case 'processing':
-          return 'bg-blue-50 border-blue-200';
-        default:
-          return 'bg-yellow-50 border-yellow-200';
-      }
+      return 'bg-muted border';
     };
 
     const estimatedTimeRemaining = () => {
@@ -156,7 +151,7 @@ const RegenerationProgress = memo(
                 </span>
               </div>
               <Progress value={progressData ? progressData.progress : 0} className="w-full" />
-              <div className="text-center text-xs text-gray-500">
+              <div className="text-muted-foreground text-center text-xs">
                 {progressData ? `${Math.round(progressData.progress)}%` : '0%'} complete
               </div>
             </div>
@@ -167,7 +162,7 @@ const RegenerationProgress = memo(
                 <div>
                   <h4 className="font-medium">{getStatusText()}</h4>
                   {progressData?.status === 'processing' && (
-                    <p className="mt-1 text-sm text-gray-600">
+                    <p className="text-muted-foreground mt-1 text-sm">
                       {progressData.completed} posts completed •{' '}
                       {progressData.total - progressData.completed} remaining
                       {estimatedTimeRemaining() && (
@@ -176,27 +171,25 @@ const RegenerationProgress = memo(
                     </p>
                   )}
                   {progressData?.status === 'completed' && (
-                    <p className="mt-1 text-sm text-green-700">
+                    <p className="text-foreground mt-1 text-sm">
                       All {progressData.completed} posts have been successfully regenerated
                     </p>
                   )}
                   {progressData?.status === 'failed' && (
-                    <p className="mt-1 text-sm text-red-700">
+                    <p className="text-destructive mt-1 text-sm">
                       Regeneration failed. You can try again or contact support.
                     </p>
                   )}
                 </div>
                 <Badge
-                  variant={progressData?.status === 'completed' ? 'default' : 'secondary'}
-                  className={
-                    progressData?.status === 'completed'
-                      ? 'bg-green-100 text-green-800'
-                      : progressData?.status === 'failed'
-                        ? 'bg-red-100 text-red-800'
-                        : progressData?.status === 'processing'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                  variant={
+                    progressData?.status === 'failed'
+                      ? 'destructive'
+                      : progressData?.status === 'completed'
+                        ? 'default'
+                        : 'secondary'
                   }
+                  className="capitalize"
                 >
                   {progressData?.status || 'pending'}
                 </Badge>
@@ -205,9 +198,9 @@ const RegenerationProgress = memo(
 
             {/* Error Details */}
             {progressData?.errors && progressData.errors.length > 0 && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-                <h4 className="mb-2 text-sm font-medium text-red-900">Errors:</h4>
-                <ul className="space-y-1 text-xs text-red-700">
+              <div className="bg-muted rounded-lg border p-3">
+                <h4 className="text-foreground mb-2 text-sm font-medium">Errors:</h4>
+                <ul className="text-muted-foreground space-y-1 text-xs">
                   {progressData.errors.slice(0, 3).map((error, index) => (
                     <li key={index}>• {error}</li>
                   ))}
@@ -220,8 +213,8 @@ const RegenerationProgress = memo(
 
             {/* Generic Error */}
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="border-destructive/20 bg-destructive/10 rounded-lg border p-3">
+                <p className="text-destructive text-sm">{error}</p>
               </div>
             )}
           </div>

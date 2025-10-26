@@ -14,7 +14,7 @@ export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) 
   return (
     <div className="mt-2 space-y-2" role="status" aria-live="polite" aria-atomic="true">
       {/* Progress Bar */}
-      <div className="relative h-2 overflow-hidden rounded-full bg-gray-200">
+      <div className="bg-muted relative h-2 overflow-hidden rounded-full">
         <div
           className="h-full rounded-full transition-all duration-300 ease-out"
           style={{
@@ -28,9 +28,21 @@ export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) 
           aria-label={`Password strength: ${strength.level}`}
         />
         {/* Milestone markers */}
-        <div className="absolute left-[40%] top-0 h-full w-px bg-gray-300" aria-hidden="true" />
-        <div className="absolute left-[60%] top-0 h-full w-px bg-gray-300" aria-hidden="true" />
-        <div className="absolute left-[75%] top-0 h-full w-px bg-green-500" aria-hidden="true" />
+        <div
+          className="absolute left-[40%] top-0 h-full w-px"
+          style={{ backgroundColor: 'var(--border)' }}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute left-[60%] top-0 h-full w-px"
+          style={{ backgroundColor: 'var(--border)' }}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute left-[75%] top-0 h-full w-px"
+          style={{ backgroundColor: color }}
+          aria-hidden="true"
+        />
       </div>
 
       {/* Strength Label and Message */}
@@ -42,14 +54,14 @@ export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) 
         >
           {strength.level.charAt(0).toUpperCase() + strength.level.slice(1)}
         </span>
-        <span className="text-gray-600" aria-label="Password requirement message">
+        <span className="text-muted-foreground" aria-label="Password requirement message">
           {strength.message}
         </span>
       </div>
 
       {/* Complexity Rules (shown only when needed) */}
       {strength.showComplexityRules && password.length < 15 && (
-        <div className="space-y-1 text-xs text-gray-500">
+        <div className="text-muted-foreground space-y-1 text-xs">
           {password.length < 8 && <div>• At least 8 characters required</div>}
           {password.length >= 8 && password.length < 15 && (
             <>

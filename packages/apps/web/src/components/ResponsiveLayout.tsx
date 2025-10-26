@@ -35,10 +35,13 @@ import {
   Building2,
   Menu,
   Search,
-  BarChart3,
+  // BarChart3,
   Megaphone,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface LayoutProps {
   children: ReactNode;
@@ -58,12 +61,12 @@ const navigationItems: NavigationItem[] = [
     icon: Megaphone,
     description: 'Manage content campaigns',
   },
-  {
-    label: 'Analytics',
-    path: '/analytics',
-    icon: BarChart3,
-    description: 'Performance metrics',
-  },
+  // {
+  //   label: 'Analytics',
+  //   path: '/analytics',
+  //   icon: BarChart3,
+  //   description: 'Performance metrics',
+  // },
 ];
 
 export function ResponsiveLayout({ children }: LayoutProps) {
@@ -74,6 +77,7 @@ export function ResponsiveLayout({ children }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = () => {
     logout();
@@ -172,6 +176,20 @@ export function ResponsiveLayout({ children }: LayoutProps) {
 
             {/* Right Side Actions */}
             <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                onClick={toggleTheme}
+                className="h-9 w-9"
+                title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              >
+                {theme === 'dark' ? (
+                  <Sun className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Moon className="h-4 w-4" aria-hidden="true" />
+                )}
+              </Button>
               {/* Search Button */}
               <Button
                 variant="outline"
@@ -229,7 +247,7 @@ export function ResponsiveLayout({ children }: LayoutProps) {
                             <div className="flex w-full items-center justify-between">
                               <span>{brand.name}</span>
                               {selectedBrand?.id === brand.id && (
-                                <Check className="h-4 w-4 text-blue-600" aria-hidden="true" />
+                                <Check className="text-primary h-4 w-4" aria-hidden="true" />
                               )}
                             </div>
                           </DropdownMenuItem>
@@ -253,7 +271,7 @@ export function ResponsiveLayout({ children }: LayoutProps) {
                     <DropdownMenuSeparator />
 
                     {/* Logout */}
-                    <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                    <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                       <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
                       Logout
                     </DropdownMenuItem>
@@ -363,16 +381,17 @@ export function ResponsiveLayout({ children }: LayoutProps) {
                           <span>Settings</span>
                         </Link>
 
-                        <button
+                        <Button
+                          variant="ghost"
                           onClick={() => {
                             setMobileMenuOpen(false);
                             handleLogout();
                           }}
-                          className="hover:bg-accent flex w-full items-center space-x-3 rounded-lg px-4 py-2 text-left text-sm text-red-600"
+                          className="hover:bg-accent text-destructive flex w-full items-center justify-start space-x-3 rounded-lg px-4 py-2 text-left text-sm"
                         >
                           <LogOut className="h-4 w-4" aria-hidden="true" />
                           <span>Logout</span>
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}

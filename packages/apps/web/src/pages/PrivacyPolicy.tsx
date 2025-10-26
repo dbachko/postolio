@@ -50,28 +50,28 @@ export function PrivacyPolicy() {
         elements.push(
           <h1
             key={key++}
-            className="mb-4 border-b-2 border-blue-600 pb-2 text-3xl font-bold text-blue-600"
+            className="border-border text-foreground mb-4 border-b-2 pb-2 text-3xl font-bold"
           >
             {line.substring(2)}
           </h1>
         );
       } else if (line.startsWith('## ')) {
         elements.push(
-          <h2 key={key++} className="mb-3 mt-6 text-2xl font-semibold text-blue-700">
+          <h2 key={key++} className="text-foreground mb-3 mt-6 text-2xl font-semibold">
             {line.substring(3)}
           </h2>
         );
       } else if (line.startsWith('### ')) {
         elements.push(
-          <h3 key={key++} className="mb-2 mt-4 text-xl font-medium text-blue-800">
+          <h3 key={key++} className="text-foreground mb-2 mt-4 text-xl font-medium">
             {line.substring(4)}
           </h3>
         );
       } else if (line.startsWith('**Effective Date:**') || line.startsWith('**Last Updated:**')) {
         elements.push(
-          <div key={key++} className="mb-6 rounded-r border-l-4 border-blue-500 bg-blue-50 p-4">
+          <div key={key++} className="bg-muted mb-6 rounded-r border border-l-4 p-4">
             <div
-              className="text-sm text-blue-800"
+              className="text-foreground text-sm"
               dangerouslySetInnerHTML={{
                 __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'),
               }}
@@ -103,9 +103,9 @@ export function PrivacyPolicy() {
         elements.push(
           <p
             key={key++}
-            className="mb-3 leading-relaxed text-gray-700"
+            className="text-muted-foreground mb-3 leading-relaxed"
             dangerouslySetInnerHTML={{
-              __html: line.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900">$1</strong>'),
+              __html: line.replace(/\*\*(.*?)\*\*/g, '<strong class="text-foreground">$1</strong>'),
             }}
           />
         );
@@ -124,11 +124,11 @@ export function PrivacyPolicy() {
     return (
       <div className="mx-auto max-w-4xl p-6">
         <div className="animate-pulse">
-          <div className="mb-4 h-8 rounded bg-gray-200"></div>
+          <div className="bg-muted mb-4 h-8 rounded"></div>
           <div className="space-y-3">
-            <div className="h-4 w-3/4 rounded bg-gray-200"></div>
-            <div className="h-4 w-1/2 rounded bg-gray-200"></div>
-            <div className="h-4 w-5/6 rounded bg-gray-200"></div>
+            <div className="bg-muted h-4 w-3/4 rounded"></div>
+            <div className="bg-muted h-4 w-1/2 rounded"></div>
+            <div className="bg-muted h-4 w-5/6 rounded"></div>
           </div>
         </div>
       </div>
@@ -141,11 +141,11 @@ export function PrivacyPolicy() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <div className="mb-2 text-red-600">Error Loading Privacy Policy</div>
-              <p className="text-gray-600">{error}</p>
-              <p className="mt-2 text-sm text-gray-500">
+              <div className="text-destructive mb-2">Error Loading Privacy Policy</div>
+              <p className="text-muted-foreground">{error}</p>
+              <p className="text-muted-foreground mt-2 text-sm">
                 Please contact us at{' '}
-                <a href="mailto:privacy@postolio.example" className="text-blue-600 hover:underline">
+                <a href="mailto:privacy@postolio.example" className="text-primary hover:underline">
                   privacy@postolio.example
                 </a>
               </p>
@@ -162,7 +162,7 @@ export function PrivacyPolicy() {
       <div className="mb-6">
         <Link
           to="/"
-          className="inline-flex items-center text-blue-600 transition-colors hover:text-blue-700"
+          className="text-primary inline-flex items-center transition-colors hover:underline"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Postolio
@@ -175,11 +175,11 @@ export function PrivacyPolicy() {
           <div className="prose prose-lg max-w-none">{formatMarkdown(content)}</div>
 
           {/* Contact Section */}
-          <div className="mt-8 rounded-lg border border-blue-200 bg-blue-50 p-6">
-            <h3 className="mb-3 text-lg font-semibold text-blue-900">
+          <div className="bg-muted mt-8 rounded-lg border p-6">
+            <h3 className="text-foreground mb-3 text-lg font-semibold">
               Questions about this Privacy Policy?
             </h3>
-            <div className="space-y-2 text-sm text-blue-800">
+            <div className="text-muted-foreground space-y-2 text-sm">
               <p>
                 <strong>Privacy Inquiries:</strong>{' '}
                 <a href="mailto:privacy@postolio.example" className="hover:underline">

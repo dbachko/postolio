@@ -1,5 +1,5 @@
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 interface PostCaptionEditorProps {
   value: string;
@@ -30,7 +30,7 @@ export function PostCaptionEditor({
         disabled={disabled}
       />
       {showCharacterCount && (
-        <div className="text-right text-xs text-gray-500">{value.length} characters</div>
+        <div className="text-muted-foreground text-right text-xs">{value.length} characters</div>
       )}
     </div>
   );

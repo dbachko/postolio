@@ -1,6 +1,6 @@
 import type { LoginHistoryItem } from '../../lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Badge } from '../ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { DeviceIcon } from '../sessions/DeviceIcon';
 import { format } from 'date-fns';
 import { CheckCircle, XCircle } from 'lucide-react';
@@ -21,7 +21,7 @@ export function LoginHistory({ history }: LoginHistoryProps) {
   const getStatusBadge = (item: LoginHistoryItem) => {
     if (item.status === 'active') {
       return (
-        <Badge variant="default" className="bg-green-100 text-green-800">
+        <Badge variant="default">
           <CheckCircle className="mr-1 h-3 w-3" />
           Active
         </Badge>
@@ -29,7 +29,7 @@ export function LoginHistory({ history }: LoginHistoryProps) {
     }
 
     return (
-      <Badge variant="outline" className="text-gray-600">
+      <Badge variant="secondary">
         <XCircle className="mr-1 h-3 w-3" />
         Revoked
       </Badge>
@@ -57,7 +57,7 @@ export function LoginHistory({ history }: LoginHistoryProps) {
           <CardTitle>Recent Login Activity</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="py-8 text-center text-gray-500">No login history available.</p>
+          <p className="text-muted-foreground py-8 text-center">No login history available.</p>
         </CardContent>
       </Card>
     );
@@ -78,7 +78,10 @@ export function LoginHistory({ history }: LoginHistoryProps) {
                 key={index}
                 className="flex items-start gap-4 border-b pb-4 last:border-0 last:pb-0"
               >
-                <DeviceIcon deviceName={item.device} className="mt-1 h-5 w-5 text-gray-500" />
+                <DeviceIcon
+                  deviceName={item.device}
+                  className="text-muted-foreground mt-1 h-5 w-5"
+                />
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -87,20 +90,22 @@ export function LoginHistory({ history }: LoginHistoryProps) {
                   </div>
 
                   <div className="mt-1 space-y-1">
-                    <div className="text-sm text-gray-600">
+                    <div className="text-muted-foreground text-sm">
                       {format(new Date(item.timestamp), 'PPp')}
                     </div>
 
                     {locationString && (
-                      <div className="text-sm text-gray-500">{locationString}</div>
+                      <div className="text-muted-foreground text-sm">{locationString}</div>
                     )}
 
                     {item.ipAddress && (
-                      <div className="font-mono text-xs text-gray-400">{item.ipAddress}</div>
+                      <div className="text-muted-foreground font-mono text-xs">
+                        {item.ipAddress}
+                      </div>
                     )}
 
                     {item.status === 'revoked' && item.revokedReason && (
-                      <div className="text-xs italic text-gray-500">
+                      <div className="text-muted-foreground text-xs italic">
                         {getRevokedReasonText(item.revokedReason)}
                       </div>
                     )}

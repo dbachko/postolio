@@ -69,7 +69,7 @@ export function Register() {
       await registerUser(data.email, data.password, data.name, timezone);
       toast.success('Account created successfully!', {
         description: 'Welcome to Postolio! Redirecting to dashboard...',
-        icon: <CheckCircle className="text-green-500" />,
+        icon: <CheckCircle className="text-foreground" />,
         duration: TIMEOUTS.TOAST_DURATION,
       });
       setTimeout(() => navigate('/dashboard'), TIMEOUTS.SUCCESS_REDIRECT);
@@ -86,7 +86,7 @@ export function Register() {
       setError(message);
       toast.error('Registration failed', {
         description: message,
-        icon: <AlertCircle className="text-red-500" />,
+        icon: <AlertCircle className="text-destructive" />,
         duration: TIMEOUTS.TOAST_DURATION,
       });
     } finally {
@@ -186,7 +186,7 @@ export function Register() {
                     placeholder="Enter your email"
                     {...register('email', validationRules.email)}
                     aria-invalid={!!errors.email}
-                    className={errors.email ? 'border-red-500' : ''}
+                    className={errors.email ? 'border-destructive' : ''}
                   />
                 </FormField>
 
@@ -205,16 +205,17 @@ export function Register() {
                       placeholder="Enter password or passphrase"
                       {...register('password', validationRules.password)}
                       aria-invalid={!!errors.password}
-                      className={errors.password ? 'border-red-500' : ''}
+                      className={errors.password ? 'border-destructive' : ''}
                     />
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2 top-1/2 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center p-2 text-gray-500 hover:text-gray-700"
+                      className="text-muted-foreground hover:text-foreground absolute right-2 top-1/2 min-h-[44px] min-w-[44px] -translate-y-1/2 p-2"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                    </button>
+                    </Button>
                   </div>
                   <PasswordStrengthMeter password={password} />
                 </FormField>

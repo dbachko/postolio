@@ -11,8 +11,8 @@ import { CampaignColorLegend } from './CampaignColorLegend';
 import { useFilteredContent } from '../hooks/useFilteredContent';
 import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { useURLFilterSync } from '../hooks/useURLFilterSync';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { content as contentApi, campaign as campaignApi, type Content } from '@/lib/api';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 import { getStableColorFromId } from '@/utils/campaign-colors';
@@ -253,7 +253,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     <div className="space-y-4">
       {/* Capacity banner moved to global top nav area */}
       {/* Compact Header Bar: navigation, current month, view toggles, filters toggle */}
-      <div className="rounded-lg border bg-white px-3 py-2 shadow-sm">
+      <div className="bg-card rounded-lg border px-3 py-2 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           {/* Left: Navigation + current month */}
           <div className="flex items-center gap-2">
@@ -271,14 +271,14 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             <Button variant="outline" size="icon" onClick={handleNextMonth} aria-label="Next">
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <span className="ml-2 text-sm font-medium text-gray-700">
+            <span className="text-foreground ml-2 text-sm font-medium">
               {format(currentDate, 'MMMM yyyy')}
             </span>
           </div>
 
           {/* Right: view toggles + Filters button + New Post */}
           <div className="flex items-center gap-2">
-            <div className="flex gap-1 rounded-md bg-gray-100 p-1">
+            <div className="bg-muted flex gap-1 rounded-md p-1">
               <Button
                 variant={viewMode === 'month' ? 'default' : 'ghost'}
                 size="sm"
@@ -334,7 +334,11 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                   Filters
                   {hasActive && (
                     <span
-                      className={`ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium ${active ? 'bg-white text-black' : 'bg-black text-white'}`}
+                      className={`ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                        active
+                          ? 'bg-background text-foreground ring-ring ring-1'
+                          : 'bg-foreground text-background'
+                      }`}
                     >
                       {count}
                     </span>
@@ -364,7 +368,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                 size="sm"
                 onClick={() => filters.clearAll()}
                 aria-label="Clear all filters"
-                className="text-gray-600 hover:text-gray-900"
+                className="text-muted-foreground hover:text-foreground"
               >
                 Clear
               </Button>
@@ -397,7 +401,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
               aria-expanded={showProgress}
               aria-controls="campaign-progress"
               onClick={() => setShowProgress((v) => !v)}
-              className="text-gray-700 hover:text-gray-900"
+              className="text-muted-foreground hover:text-foreground"
             >
               <ChevronDown
                 className={`h-4 w-4 transition-transform ${showProgress ? 'rotate-180' : ''}`}
@@ -411,9 +415,9 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                   <div key={campaign.id} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-medium">{campaign.name}</span>
-                      <span className="text-gray-500">{campaign.progress}%</span>
+                      <span className="text-muted-foreground">{campaign.progress}%</span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-gray-200">
+                    <div className="bg-muted h-2 w-full rounded-full">
                       <div
                         className="h-2 rounded-full transition-all duration-300"
                         style={{
@@ -427,7 +431,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                         }}
                       />
                     </div>
-                    <div className="flex gap-4 text-xs text-gray-500">
+                    <div className="text-muted-foreground flex gap-4 text-xs">
                       <span>{campaign.published} published</span>
                       <span>{campaign.scheduled} scheduled</span>
                       <span>{campaign.pending} pending</span>

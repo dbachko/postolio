@@ -48,7 +48,7 @@ export function EmailVerify() {
 
       toast.success('Email verified!', {
         description: 'Your email has been successfully verified.',
-        icon: <CheckCircle className="text-green-500" />,
+        icon: <CheckCircle />,
         duration: TIMEOUTS.TOAST_DURATION,
       });
 
@@ -62,7 +62,7 @@ export function EmailVerify() {
 
       toast.error('Verification failed', {
         description: errorMessage,
-        icon: <XCircle className="text-red-500" />,
+        icon: <XCircle />,
       });
     }
   };
@@ -98,8 +98,8 @@ export function EmailVerify() {
 
             {status === 'success' && (
               <div className="flex flex-col items-center space-y-4">
-                <div className="rounded-full bg-green-100 p-3">
-                  <CheckCircle className="h-8 w-8 text-green-600" />
+                <div className="bg-muted rounded-full p-3">
+                  <CheckCircle className="h-8 w-8" />
                 </div>
                 <div className="space-y-2 text-center">
                   <p className="font-medium">Your email has been successfully verified!</p>

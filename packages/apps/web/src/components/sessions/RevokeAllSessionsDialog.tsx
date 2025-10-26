@@ -5,8 +5,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../ui/dialog';
-import { Button } from '../ui/button';
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 
 interface RevokeAllSessionsDialogProps {
@@ -32,7 +32,7 @@ export function RevokeAllSessionsDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <AlertTriangle className="text-foreground h-5 w-5" />
             Log out of all other devices
           </DialogTitle>
           <DialogDescription>
@@ -42,7 +42,7 @@ export function RevokeAllSessionsDialog({
         </DialogHeader>
 
         <div className="space-y-2 py-4">
-          <p className="text-sm text-gray-600">
+          <p className="text-muted-foreground text-sm">
             Use this if you suspect unauthorized access or lost a device. You will remain signed in
             on this device.
           </p>

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { Card, CardContent } from '../../ui/card';
-import { Label } from '../../ui/label';
-import { Input } from '../../ui/input';
-import { Button } from '../../ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { ArrowUp, ArrowDown, Plus, Trash2 } from 'lucide-react';
 
 interface GoalsListInputProps {
@@ -69,7 +69,7 @@ export function GoalsListInput({ goals, onChange, disabled }: GoalsListInputProp
     <div className="space-y-2">
       <Label>
         What do you want to achieve?{' '}
-        <span className="text-red-600" aria-hidden>
+        <span className="text-destructive" aria-hidden>
           *
         </span>
       </Label>
@@ -77,7 +77,7 @@ export function GoalsListInput({ goals, onChange, disabled }: GoalsListInputProp
         {goals.map((g, idx) => (
           <Card key={idx} className="transition-shadow hover:shadow-sm">
             <CardContent className="flex items-center gap-2 p-3">
-              <div className="w-5 text-center text-xs text-gray-500">{idx + 1}</div>
+              <div className="text-muted-foreground w-5 text-center text-xs">{idx + 1}</div>
               <Input
                 placeholder="e.g., Increase website signups by 20%"
                 value={g}
@@ -136,10 +136,10 @@ export function GoalsListInput({ goals, onChange, disabled }: GoalsListInputProp
           </Card>
         ))}
       </div>
-      <div className="flex items-center justify-between text-xs text-gray-600">
+      <div className="text-muted-foreground flex items-center justify-between text-xs">
         <div>
           {nonEmptyCount}/{MAX_GOALS} goal{nonEmptyCount === 1 ? '' : 's'}
-          {!canAdd && <span className="ml-2 text-red-600">Max 5 goals</span>}
+          {!canAdd && <span className="text-destructive ml-2">Max 5 goals</span>}
         </div>
         <Button
           type="button"

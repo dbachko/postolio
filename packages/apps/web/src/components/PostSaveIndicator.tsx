@@ -22,13 +22,13 @@ export function PostSaveIndicator({
   const getIcon = () => {
     switch (status) {
       case 'saving':
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+        return <Loader2 className="text-foreground h-4 w-4 animate-spin" />;
       case 'saved':
-        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+        return <CheckCircle2 className="text-foreground h-4 w-4" />;
       case 'error':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="text-destructive h-4 w-4" />;
       default:
-        return <Save className="h-4 w-4 text-gray-400" />;
+        return <Save className="text-muted-foreground h-4 w-4" />;
     }
   };
 
@@ -53,7 +53,7 @@ export function PostSaveIndicator({
   };
 
   return (
-    <div className={`flex items-center gap-2 text-sm text-gray-500 ${className}`}>
+    <div className={`text-muted-foreground flex items-center gap-2 text-sm ${className}`}>
       {getIcon()}
       <span>{getText()}</span>
     </div>

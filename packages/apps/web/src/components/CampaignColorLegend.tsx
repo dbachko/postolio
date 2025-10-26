@@ -43,16 +43,16 @@ export function CampaignColorLegend({ items, className = '' }: CampaignColorLege
 
   return (
     <div className={`flex flex-wrap items-center gap-3 ${className}`}>
-      <span className="text-xs font-medium text-gray-500">Campaigns:</span>
+      <span className="text-muted-foreground text-xs font-medium">Campaigns:</span>
       {campaigns.map((campaign) => (
         <div
           key={campaign.id}
-          className="flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-xs transition-shadow hover:shadow-sm"
+          className="bg-card flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-shadow hover:shadow-sm"
           style={{ borderColor: campaign.color }}
         >
           <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: campaign.color }} />
-          <span className="font-medium text-gray-700">{campaign.name}</span>
-          <span className="text-gray-400">({campaign.count})</span>
+          <span className="text-foreground font-medium">{campaign.name}</span>
+          <span className="text-muted-foreground">({campaign.count})</span>
         </div>
       ))}
     </div>

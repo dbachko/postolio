@@ -5,8 +5,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../ui/dialog';
-import { Button } from '../ui/button';
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 
 interface RevokeSessionDialogProps {
@@ -34,7 +34,7 @@ export function RevokeSessionDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <AlertTriangle className="text-foreground h-5 w-5" />
             Revoke Session
           </DialogTitle>
           <DialogDescription>
@@ -43,7 +43,7 @@ export function RevokeSessionDialog({
         </DialogHeader>
 
         <div className="space-y-2 py-4">
-          <p className="text-sm text-gray-600">
+          <p className="text-muted-foreground text-sm">
             This will immediately log out this device. If you're currently using that device, you'll
             need to log in again.
           </p>

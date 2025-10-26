@@ -1,4 +1,5 @@
 import { Brain, Sparkles, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface PostLearningFeedbackProps {
   isVisible: boolean;
@@ -19,28 +20,30 @@ export function PostLearningFeedback({
 
   return (
     <div
-      className={`animate-in slide-in-from-top rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50 p-4 duration-300 ${className}`}
+      className={`animate-in slide-in-from-top bg-muted rounded-lg border p-4 duration-300 ${className}`}
     >
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-blue-600" />
-          <Sparkles className="h-4 w-4 text-purple-600" />
+          <Brain className="text-foreground h-5 w-5" />
+          <Sparkles className="text-foreground h-4 w-4" />
         </div>
         <div className="flex-1">
-          <div className="text-sm font-medium text-gray-900">{message}</div>
+          <div className="text-foreground text-sm font-medium">{message}</div>
           {appliedToFuturePosts && (
-            <div className="mt-1 text-xs text-gray-600">
+            <div className="text-muted-foreground mt-1 text-xs">
               Improvements applied to ~{appliedToFuturePosts} future posts
             </div>
           )}
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onDismiss}
-          className="text-gray-400 transition-colors hover:text-gray-600"
+          className="text-muted-foreground hover:text-foreground"
           aria-label="Dismiss learning notification"
         >
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
     </div>
   );

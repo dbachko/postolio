@@ -114,7 +114,7 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
   return (
     <div className="space-y-3">
       <div>
-        <p className="mb-2 text-sm text-gray-600">
+        <p className="text-muted-foreground mb-2 text-sm">
           {isLoading ? 'Loading suggested themes…' : 'Suggested themes for your brand:'}
         </p>
         <div className="mb-2 flex items-center gap-2">
@@ -136,12 +136,12 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
           >
             Accept Top
           </Button>
-          <div className="ml-auto flex items-center gap-1 text-xs text-gray-500">
+          <div className="text-muted-foreground ml-auto flex items-center gap-1 text-xs">
             <TrendingUp className="h-3 w-3" />
             <span>Performance-boosted themes marked</span>
           </div>
         </div>
-        {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
+        {error && <p className="text-destructive mb-2 text-xs">{error}</p>}
         <div className="flex flex-wrap gap-2">
           {(chips.length > 0 ? chips : []).map((theme) => {
             const d = details[theme];
@@ -169,29 +169,31 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
                   </Badge>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-80">
-                  <div className="mb-1 text-xs font-semibold text-gray-700">Why suggested</div>
-                  <div className="mb-2 text-xs text-gray-600">{titleParts.join(' • ')}</div>
+                  <div className="text-foreground mb-1 text-xs font-semibold">Why suggested</div>
+                  <div className="text-muted-foreground mb-2 text-xs">{titleParts.join(' • ')}</div>
                   {reasonLines.length > 0 ? (
-                    <ul className="list-disc space-y-1 pl-4 text-xs text-gray-700">
+                    <ul className="text-foreground list-disc space-y-1 pl-4 text-xs">
                       {reasonLines.map((r, i) => (
                         <li key={i}>{r}</li>
                       ))}
                     </ul>
                   ) : (
-                    <div className="text-xs text-gray-500">No additional details.</div>
+                    <div className="text-muted-foreground text-xs">No additional details.</div>
                   )}
                 </PopoverContent>
               </Popover>
             );
           })}
           {!isLoading && chips.length === 0 && (
-            <span className="text-xs text-gray-500">No suggestions yet. Add your own below.</span>
+            <span className="text-muted-foreground text-xs">
+              No suggestions yet. Add your own below.
+            </span>
           )}
         </div>
       </div>
 
       <div>
-        <p className="mb-2 text-sm text-gray-600">Or add custom theme:</p>
+        <p className="text-muted-foreground mb-2 text-sm">Or add custom theme:</p>
         <div className="flex gap-2">
           <Input
             type="text"
@@ -213,7 +215,7 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
 
       {themes.length > 0 && (
         <div>
-          <p className="mb-2 text-sm text-gray-600">Selected themes:</p>
+          <p className="text-muted-foreground mb-2 text-sm">Selected themes:</p>
           <div className="flex flex-wrap gap-2">
             {themes.map((theme) => (
               <Badge key={theme} variant="default" className="group" title={themeMeta[theme]?.help}>

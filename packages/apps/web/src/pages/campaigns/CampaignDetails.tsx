@@ -56,7 +56,7 @@ export function CampaignDetails({
   const renderSkeletonGrid = (count = 6) => (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="overflow-hidden rounded-lg bg-white shadow-md">
+        <div key={i} className="bg-card overflow-hidden rounded-lg shadow-md">
           <Skeleton className="h-48 w-full" />
           <div className="space-y-3 p-4">
             <Skeleton className="h-4 w-3/4" />
@@ -206,7 +206,7 @@ export function CampaignDetails({
               ))}
             </div>
           ) : (
-            <div className="py-6 text-center text-sm text-gray-500">
+            <div className="text-muted-foreground py-6 text-center text-sm">
               No posts yet for this campaign
             </div>
           )}

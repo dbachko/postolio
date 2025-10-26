@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import './CalendarView.css';
+import { Button } from '@/components/ui/button';
 
 const locales = {
   'en-US': enUS,
@@ -322,14 +323,15 @@ export function CalendarView({
     // Get campaign color from content or placeholder
     const campaignColor = (content as any)?.campaignColor || null;
 
+    // Neutral status styling — no color-coding
     const statusColors = {
-      draft: 'bg-gray-100 border-gray-400 text-gray-800',
-      scheduled: 'bg-blue-100 border-blue-400 text-blue-800',
-      published: 'bg-green-100 border-green-400 text-green-800',
-      failed: 'bg-red-100 border-red-400 text-red-800',
-      skipped: 'bg-yellow-100 border-yellow-400 text-yellow-800',
-      placeholder: 'bg-gray-50 border-gray-300 text-gray-600',
-    };
+      draft: 'bg-muted border-border text-foreground',
+      scheduled: 'bg-muted border-border text-foreground',
+      published: 'bg-muted border-border text-foreground',
+      failed: 'bg-muted border-border text-foreground',
+      skipped: 'bg-muted border-border text-foreground',
+      placeholder: 'bg-muted border-border text-muted-foreground',
+    } as const;
 
     const statusIcons = {
       draft: null,
@@ -398,7 +400,7 @@ export function CalendarView({
       <div className="mb-6 space-y-4">
         {/* Timezone Display */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="text-muted-foreground flex items-center gap-2 text-sm">
             <Globe className="h-4 w-4" />
             <span>
               Showing times in {tzAbbr}
@@ -408,20 +410,20 @@ export function CalendarView({
         </div>
 
         {/* Autopilot Status */}
-        <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4">
+        <div className="rounded-lg border p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-3 w-3 animate-pulse rounded-full bg-green-400"></div>
+              <div className="bg-muted h-3 w-3 animate-pulse rounded-full"></div>
               <div>
-                <h3 className="font-medium text-gray-900">Autopilot Active</h3>
-                <p className="text-sm text-gray-600">
+                <h3 className="font-medium">Autopilot Active</h3>
+                <p className="text-muted-foreground text-sm">
                   Next run:{' '}
                   {formatInUserTimezone(nextRunTime, "EEEE, MMMM d 'at' h:mm a", timezone)}
                 </p>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-sm font-medium text-gray-900">
+              <div className="text-sm font-medium">
                 {contentDeduped.filter((c: any) => c.status === 'scheduled').length} posts scheduled
               </div>
             </div>
@@ -431,58 +433,44 @@ export function CalendarView({
         {/* Navigation Controls */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-xl font-semibold">
               {view === 'week' ? 'Weekly Schedule' : 'Daily Schedule'}
             </h2>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant="ghost"
                 onClick={handlePrevious}
-                className="rounded-lg p-2 transition-colors hover:bg-gray-100"
                 title="Previous"
+                className="h-8 w-8 p-2"
               >
                 <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={handleToday}
-                className="rounded-lg px-3 py-1 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
-              >
+              </Button>
+              <Button variant="outline" onClick={handleToday} className="h-8 px-3 py-1">
                 Today
-              </button>
-              <button
-                onClick={handleNext}
-                className="rounded-lg p-2 transition-colors hover:bg-gray-100"
-                title="Next"
-              >
+              </Button>
+              <Button variant="ghost" onClick={handleNext} title="Next" className="h-8 w-8 p-2">
                 <ChevronRight className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="text-sm font-medium text-gray-700">
-              {format(currentDate, 'MMMM yyyy')}
-            </div>
-            <div className="flex rounded-lg bg-gray-100 p-1">
-              <button
+            <div className="text-sm font-medium">{format(currentDate, 'MMMM yyyy')}</div>
+            <div className="bg-muted flex rounded-lg p-1">
+              <Button
+                variant={view === 'day' ? 'default' : 'ghost'}
                 onClick={() => setView('day')}
-                className={`rounded px-3 py-1 text-sm font-medium transition-colors ${
-                  view === 'day'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
+                className="h-8 px-3 py-1"
               >
                 Day
-              </button>
-              <button
+              </Button>
+              <Button
+                variant={view === 'week' ? 'default' : 'ghost'}
                 onClick={() => setView('week')}
-                className={`rounded px-3 py-1 text-sm font-medium transition-colors ${
-                  view === 'week'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
+                className="h-8 px-3 py-1"
               >
                 Week
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -490,24 +478,24 @@ export function CalendarView({
         {/* Status Legend */}
         <div className="flex items-center gap-6 text-sm">
           <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-sm bg-blue-400"></div>
-            <span className="text-gray-600">
+            <div className="bg-muted h-3 w-3 rounded-sm"></div>
+            <span className="text-muted-foreground">
               Scheduled ({contentDeduped.filter((c: any) => c.status === 'scheduled').length})
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-sm bg-green-400"></div>
-            <span className="text-gray-600">
+            <div className="bg-muted h-3 w-3 rounded-sm"></div>
+            <span className="text-muted-foreground">
               Published ({contentDeduped.filter((c: any) => c.status === 'published').length})
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-sm border border-dashed border-gray-400 bg-gray-50"></div>
-            <span className="text-gray-600">Future AI ({placeholders.length})</span>
+            <div className="bg-muted h-3 w-3 rounded-sm border border-dashed"></div>
+            <span className="text-muted-foreground">Future AI ({placeholders.length})</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-sm bg-red-400"></div>
-            <span className="text-gray-600">
+            <div className="bg-muted h-3 w-3 rounded-sm"></div>
+            <span className="text-muted-foreground">
               Failed ({content.filter((c: any) => c.status === 'failed').length})
             </span>
           </div>
@@ -541,7 +529,7 @@ export function CalendarView({
   );
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="rounded-lg border p-6 shadow-sm">
       <CustomToolbar />
 
       <div
@@ -580,7 +568,7 @@ export function CalendarView({
             className: isToday(date) ? 'calendar-today' : '',
             style: isToday(date)
               ? {
-                  backgroundColor: '#f0f9ff',
+                  backgroundColor: 'hsl(var(--muted))',
                 }
               : {},
           })}

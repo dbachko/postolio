@@ -39,7 +39,7 @@ export default function Limits() {
       {/* Hero / Intro */}
       <div className="bg-card rounded-lg border p-6 shadow-sm">
         <div className="flex items-start gap-4">
-          <AlertTriangle className="mt-1 h-5 w-5 text-amber-600" />
+          <AlertTriangle className="text-foreground mt-1 h-5 w-5" />
           <div className="space-y-2">
             <h1 className="text-2xl font-semibold">Limits & Plans</h1>
             <p className="text-muted-foreground">

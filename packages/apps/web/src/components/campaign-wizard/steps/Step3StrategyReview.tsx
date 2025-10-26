@@ -1,17 +1,23 @@
 import { useMemo, useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../../ui/card';
-import { Alert, AlertDescription } from '../../ui/alert';
-import { Button } from '../../ui/button';
-import { Input } from '../../ui/input';
-import { Label } from '../../ui/label';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
 import { useBrandStore } from '../../../stores/brandStore';
 import { campaign as campaignApi, brand as brandApi } from '../../../lib/api';
 import { Loader2, Lightbulb } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { WizardHelpDialog } from '../shared/WizardHelpDialog';
 import { toast } from 'sonner';
-import { Badge } from '../../ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 
 export function Step3StrategyReview() {
@@ -389,19 +395,15 @@ export function Step3StrategyReview() {
                 )}
               </div>
             ))}
-            <div className="flex items-center justify-between text-xs text-gray-600">
+            <div className="text-muted-foreground flex items-center justify-between text-xs">
               <Button variant="outline" size="sm" onClick={addPillar}>
                 Add Pillar
               </Button>
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setHelpOpen(true)}
-                  className="text-blue-600 hover:underline"
-                >
+                <Button variant="link" className="h-auto px-0" onClick={() => setHelpOpen(true)}>
                   Learn more
-                </button>
-                <span className={total !== 100 ? 'text-red-600' : ''}>Total: {total}%</span>
+                </Button>
+                <span className={total !== 100 ? 'text-destructive' : ''}>Total: {total}%</span>
               </div>
             </div>
           </CardContent>
@@ -410,21 +412,21 @@ export function Step3StrategyReview() {
           <CardHeader>
             <CardTitle>Posting Schedule</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-600">
+          <CardContent className="text-muted-foreground space-y-2 text-sm">
             {schedulePhases.length === 0 ? (
               <>
-                <div className="h-4 w-4/5 animate-pulse rounded bg-gray-200" />
-                <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200" />
+                <div className="bg-muted h-4 w-4/5 animate-pulse rounded" />
+                <div className="bg-muted h-4 w-1/2 animate-pulse rounded" />
               </>
             ) : (
               <div className="space-y-2">
                 {schedulePhases.map((ph, idx) => (
                   <div key={idx} className="rounded border p-2">
                     <div className="font-medium">{ph.phase}</div>
-                    <div className="text-xs text-gray-600">
+                    <div className="text-muted-foreground text-xs">
                       Starts day +{ph.startOffsetDays} • {ph.frequency}
                     </div>
-                    <div className="text-xs text-gray-600">{ph.rationale}</div>
+                    <div className="text-muted-foreground text-xs">{ph.rationale}</div>
                   </div>
                 ))}
               </div>
@@ -440,11 +442,11 @@ export function Step3StrategyReview() {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-600">
+          <CardContent className="text-muted-foreground space-y-2 text-sm">
             {!predictions ? (
               <>
-                <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200" />
-                <div className="h-4 w-1/3 animate-pulse rounded bg-gray-200" />
+                <div className="bg-muted h-4 w-1/2 animate-pulse rounded" />
+                <div className="bg-muted h-4 w-1/3 animate-pulse rounded" />
               </>
             ) : (
               <div className="space-y-2 text-sm">
@@ -456,37 +458,33 @@ export function Step3StrategyReview() {
                       {predictions.reach.high.toLocaleString()}
                     </div>
                     <div>Engagement rate: {(predictions.engagementRate * 100).toFixed(2)}%</div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-muted-foreground text-xs">
                       Based on your recent brand performance (samples:{' '}
                       {predictionsMeta.samples.reach} reach, {predictionsMeta.samples.engagement}{' '}
                       engagement).
                     </div>
                   </>
                 ) : (
-                  <div className="text-xs text-gray-500">
+                  <div className="text-muted-foreground text-xs">
                     We’ll calibrate reach and engagement after your first scheduled/published posts.
                   </div>
                 )}
 
                 {/* Improve accuracy checklist */}
                 <div className="mt-3 space-y-2">
-                  <div className="text-xs font-medium text-gray-700">Improve accuracy</div>
-                  <ul className="list-disc space-y-1 pl-5 text-xs text-gray-700">
+                  <div className="text-foreground text-xs font-medium">Improve accuracy</div>
+                  <ul className="text-foreground list-disc space-y-1 pl-5 text-xs">
                     <li>
                       Connect Instagram for analytics{' '}
-                      <button
-                        type="button"
-                        className="text-blue-600 hover:underline"
-                        onClick={() => navigate('/brands')}
-                      >
+                      <Button variant="link" type="button" onClick={() => navigate('/brands')}>
                         Connect now
-                      </button>
+                      </Button>
                     </li>
                     <li>
                       Run brand analysis to enrich context{' '}
-                      <button
+                      <Button
+                        variant="link"
                         type="button"
-                        className="text-blue-600 hover:underline"
                         onClick={async () => {
                           if (!brand) return;
                           try {
@@ -502,17 +500,13 @@ export function Step3StrategyReview() {
                         }}
                       >
                         Start
-                      </button>
+                      </Button>
                     </li>
                     <li>
                       Schedule & publish a few posts to unlock data{' '}
-                      <button
-                        type="button"
-                        className="text-blue-600 hover:underline"
-                        onClick={() => navigate('/content')}
-                      >
+                      <Button variant="link" type="button" onClick={() => navigate('/content')}>
                         Go to content
-                      </button>
+                      </Button>
                     </li>
                   </ul>
                 </div>
@@ -558,11 +552,11 @@ export function Step3StrategyReview() {
           <DialogHeader>
             <DialogTitle>Applied changes</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 text-sm text-gray-700">
+          <div className="space-y-3 text-sm">
             {!optChanges && <div>No changes were applied.</div>}
             {optChanges?.postingTime && (
               <div>
-                <div className="text-gray-600">Posting time</div>
+                <div className="text-muted-foreground">Posting time</div>
                 <div>
                   {optChanges.postingTime.prev || '—'} → {optChanges.postingTime.next || '—'}
                 </div>
@@ -570,7 +564,7 @@ export function Step3StrategyReview() {
             )}
             {optChanges?.frequency && (
               <div>
-                <div className="text-gray-600">Frequency</div>
+                <div className="text-muted-foreground">Frequency</div>
                 <div>
                   {optChanges.frequency.prev || '—'} → {optChanges.frequency.next}
                 </div>
@@ -578,7 +572,7 @@ export function Step3StrategyReview() {
             )}
             {optChanges?.themes && (
               <div>
-                <div className="text-gray-600">Themes</div>
+                <div className="text-muted-foreground">Themes</div>
                 <div className="text-xs">Added: {optChanges.themes.added.join(', ') || '—'}</div>
               </div>
             )}
@@ -593,8 +587,8 @@ export function Step3StrategyReview() {
 
       {/* Tips */}
       <Card>
-        <CardContent className="flex items-start gap-3 text-sm text-gray-700">
-          <Lightbulb className="mt-0.5 h-4 w-4 text-amber-500" />
+        <CardContent className="flex items-start gap-3 text-sm">
+          <Lightbulb className="mt-0.5 h-4 w-4" />
           <div>
             <div className="font-medium">Tips</div>
             <p>
@@ -614,13 +608,13 @@ export function Step3StrategyReview() {
           </DialogHeader>
           <div className="space-y-4 text-sm">
             {!analysis ? (
-              <div className="flex items-center gap-2 text-gray-600">
+              <div className="text-muted-foreground flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> Preparing analysis…
               </div>
             ) : (
               <>
                 <div>
-                  <div className="mb-1 text-gray-600">Objectives</div>
+                  <div className="text-muted-foreground mb-1">Objectives</div>
                   <ul className="list-disc pl-5">
                     {analysis.objectives.map((o, i) => (
                       <li key={i}>{o}</li>
@@ -628,7 +622,7 @@ export function Step3StrategyReview() {
                   </ul>
                 </div>
                 <div>
-                  <div className="mb-1 text-gray-600">Key Messages</div>
+                  <div className="text-muted-foreground mb-1">Key Messages</div>
                   <ul className="list-disc pl-5">
                     {analysis.keyMessages.map((k, i) => (
                       <li key={i}>{k}</li>
@@ -636,12 +630,12 @@ export function Step3StrategyReview() {
                   </ul>
                 </div>
                 <div>
-                  <div className="mb-1 text-gray-600">Suggested Pillars</div>
+                  <div className="text-muted-foreground mb-1">Suggested Pillars</div>
                   <div className="space-y-2">
                     {analysis.suggestedPillars.map((p, i) => (
                       <div key={i} className="flex items-center justify-between rounded border p-2">
                         <div className="font-medium">{p.name}</div>
-                        <div className="text-gray-600">{p.percentage}%</div>
+                        <div className="text-muted-foreground">{p.percentage}%</div>
                       </div>
                     ))}
                   </div>

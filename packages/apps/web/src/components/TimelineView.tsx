@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { useTimezone } from '../contexts/TimezoneContext';
-import { Card, CardContent } from './ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Clock, Calendar, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 interface TimelineItem {
@@ -60,23 +60,10 @@ export function TimelineView({ items, currentDate, timezone: tzOverride }: Timel
     return grouped;
   }, [items, weekDays, timezone]);
 
-  const getStatusColor = (status: string, type: string, processing?: boolean) => {
-    if (type === 'placeholder') return 'bg-gray-100 text-gray-600 border-gray-300';
-    if (processing) return 'bg-blue-100 text-blue-800 border-blue-300';
-    switch (status) {
-      case 'published':
-        return 'bg-green-100 text-green-800 border-green-300';
-      case 'scheduled':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'failed':
-        return 'bg-red-100 text-red-800 border-red-300';
-      case 'skipped':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'draft':
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
+  const getStatusColor = (_status: string, type: string, processing?: boolean) => {
+    if (type === 'placeholder') return 'bg-muted text-muted-foreground border';
+    if (processing) return 'bg-muted text-foreground border';
+    return 'bg-muted text-foreground border';
   };
 
   const getStatusIcon = (status: string, type: string, processing?: boolean) => {
@@ -99,12 +86,12 @@ export function TimelineView({ items, currentDate, timezone: tzOverride }: Timel
       <CardContent className="p-6">
         <div className="space-y-6">
           {/* Timeline header with hours */}
-          <div className="grid grid-cols-8 gap-4 border-b pb-2 text-sm font-medium text-gray-600">
+          <div className="text-muted-foreground grid grid-cols-8 gap-4 border-b pb-2 text-sm font-medium">
             <div className="col-span-1">Time</div>
             {weekDays.map((day) => (
               <div
                 key={day.toISOString()}
-                className={`text-center ${isSameDay(day, new Date()) ? 'font-bold text-blue-600' : ''}`}
+                className={`text-center ${isSameDay(day, new Date()) ? 'text-foreground font-bold' : ''}`}
               >
                 <div>{format(day, 'EEE')}</div>
                 <div className="text-xs">{format(day, 'MMM d')}</div>
@@ -115,7 +102,7 @@ export function TimelineView({ items, currentDate, timezone: tzOverride }: Timel
           {/* Timeline content by hour */}
           {Array.from({ length: 24 }, (_, hour) => (
             <div key={hour} className="grid min-h-[60px] grid-cols-8 gap-4">
-              <div className="col-span-1 pt-1 text-sm text-gray-500">
+              <div className="text-muted-foreground col-span-1 pt-1 text-sm">
                 {formatInTimeZone(new Date().setHours(hour, 0, 0, 0), timezone, 'ha')}
               </div>
               {weekDays.map((day) => {
@@ -128,7 +115,7 @@ export function TimelineView({ items, currentDate, timezone: tzOverride }: Timel
                 });
 
                 return (
-                  <div key={`${dayKey}-${hour}`} className="relative border-l border-gray-200">
+                  <div key={`${dayKey}-${hour}`} className="border-border relative border-l">
                     {hourItems.map((item, idx) => (
                       <div
                         key={item.id}
@@ -204,19 +191,19 @@ export function TimelineView({ items, currentDate, timezone: tzOverride }: Timel
         {/* Legend */}
         <div className="mt-6 flex gap-4 border-t pt-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="h-4 w-4 rounded border border-green-300 bg-green-100"></div>
+            <div className="bg-muted h-4 w-4 rounded border"></div>
             <span>Published</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-4 w-4 rounded border border-blue-300 bg-blue-100"></div>
+            <div className="bg-muted h-4 w-4 rounded border"></div>
             <span>Scheduled</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-4 w-4 rounded border border-dashed border-gray-300 bg-gray-100"></div>
+            <div className="bg-muted h-4 w-4 rounded border border-dashed"></div>
             <span>Future AI</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-4 w-4 rounded border border-red-300 bg-red-100"></div>
+            <div className="bg-muted h-4 w-4 rounded border"></div>
             <span>Failed</span>
           </div>
         </div>

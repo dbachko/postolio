@@ -61,7 +61,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
 
   return (
     <div
-      className={`cursor-pointer overflow-hidden rounded-lg bg-white shadow-md transition-all hover:shadow-lg ${
+      className={`bg-card cursor-pointer overflow-hidden rounded-lg shadow-md transition-all hover:shadow-lg ${
         !isConnected ? 'opacity-75' : ''
       }`}
       onClick={() => navigate(`/posts/${content.id}`)}
@@ -82,14 +82,14 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
       <div className="p-4">
         {/* Stale data indicator */}
         {!isConnected && content.status === 'scheduled' && (
-          <div className="mb-2 flex items-center gap-2 rounded bg-yellow-50 p-2 text-xs text-yellow-600">
+          <div className="bg-muted text-muted-foreground mb-2 flex items-center gap-2 rounded p-2 text-xs">
             <AlertTriangle className="h-4 w-4" />
             <span>Status may not be current - connection lost</span>
           </div>
         )}
 
         <div className="mb-3">
-          <p className="text-sm leading-relaxed text-gray-900">{content.caption}</p>
+          <p className="text-foreground text-sm leading-relaxed">{content.caption}</p>
         </div>
 
         <div className="mb-4">
@@ -97,10 +97,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
             {content.hashtags.map((tag, index) => {
               const t = typeof tag === 'string' && tag.startsWith('#') ? tag.slice(1) : tag;
               return (
-                <span
-                  key={index}
-                  className="inline-block rounded bg-blue-100 px-2 py-1 text-xs text-blue-800"
-                >
+                <span key={index} className="bg-muted inline-block rounded px-2 py-1 text-xs">
                   #{t}
                 </span>
               );
@@ -115,18 +112,18 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
               isLoading={isOptimistic}
               retryCount={0}
               className={`transition-all duration-500 ${
-                isTransitioning ? 'scale-110 ring-2 ring-blue-400 ring-offset-2' : ''
+                isTransitioning ? 'ring-ring scale-110 ring-2 ring-offset-2' : ''
               }`}
             />
 
             {isOptimistic && (
-              <div className="flex items-center gap-1 text-xs text-gray-500">
+              <div className="text-muted-foreground flex items-center gap-1 text-xs">
                 <span>Updating...</span>
               </div>
             )}
 
             {isTransitioning && !isOptimistic && (
-              <span className="animate-pulse text-xs font-medium text-green-600">Updated</span>
+              <span className="text-foreground animate-pulse text-xs font-medium">Updated</span>
             )}
           </div>
 
@@ -138,7 +135,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
                 href={content.instagramPermalink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
+                className="bg-muted hover:bg-accent flex items-center gap-1 rounded px-3 py-1 text-sm"
               >
                 <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                   <path
@@ -154,7 +151,7 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
         </div>
 
         {content.scheduledAt && (
-          <div className="mt-2 text-xs text-gray-500">
+          <div className="text-muted-foreground mt-2 text-xs">
             Scheduled for:{' '}
             {formatInUserTimezone(content.scheduledAt, 'MMM d, yyyy h:mm a', brandTimezone)}
           </div>

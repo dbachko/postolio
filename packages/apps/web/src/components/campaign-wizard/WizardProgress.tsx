@@ -17,13 +17,15 @@ export function WizardProgress({ currentStep }: Props) {
         <div key={s.id} className="flex items-center gap-3">
           <div
             className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
-              currentStep >= s.id ? 'bg-primary text-white' : 'bg-gray-200 text-gray-600'
+              currentStep >= s.id
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground'
             }`}
           >
             {s.id}
           </div>
           <span className="text-sm">{s.label}</span>
-          {idx < steps.length - 1 && <div className="h-px w-8 bg-gray-300" />}
+          {idx < steps.length - 1 && <div className="bg-muted h-px w-8" />}
         </div>
       ))}
     </div>

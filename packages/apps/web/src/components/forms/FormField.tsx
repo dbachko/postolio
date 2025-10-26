@@ -23,12 +23,12 @@ export function FormField({
     <div className={cn('space-y-2', className)}>
       <Label htmlFor={htmlFor}>
         {label}
-        {required && <span className="ml-1 text-red-500">*</span>}
-        {!required && <span className="ml-1 text-gray-500">(optional)</span>}
+        {required && <span className="text-destructive ml-1">*</span>}
+        {!required && <span className="text-muted-foreground ml-1">(optional)</span>}
       </Label>
       {children}
       {error && (
-        <p className="text-sm text-red-500" role="alert" aria-live="polite">
+        <p className="text-destructive text-sm" role="alert" aria-live="polite">
           {error}
         </p>
       )}

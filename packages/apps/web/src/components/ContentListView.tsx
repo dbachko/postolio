@@ -3,11 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { formatInUserTimezone } from '../lib/timezone';
 import { useTimezone } from '../contexts/TimezoneContext';
-import { Card, CardContent } from './ui/card';
-import { Badge } from './ui/badge';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Calendar,
   Clock,
@@ -145,7 +151,7 @@ export function ContentListView({
   const getStatusBadge = (status: string, type: string, processing?: boolean) => {
     if (type === 'placeholder') {
       return (
-        <Badge variant="outline" className="gap-1">
+        <Badge variant="info" className="gap-1">
           <Clock className="h-3 w-3" />
           Future AI
         </Badge>
@@ -153,7 +159,7 @@ export function ContentListView({
     }
     if (processing) {
       return (
-        <Badge variant="secondary" className="gap-1">
+        <Badge variant="info" className="gap-1">
           <Loader2 className="h-3 w-3 animate-spin" />
           Scheduling...
         </Badge>
@@ -162,14 +168,14 @@ export function ContentListView({
     switch (status) {
       case 'published':
         return (
-          <Badge variant="default" className="gap-1 bg-green-600">
+          <Badge variant="success" className="gap-1">
             <CheckCircle className="h-3 w-3" />
             Published
           </Badge>
         );
       case 'scheduled':
         return (
-          <Badge variant="default" className="gap-1 bg-blue-600">
+          <Badge variant="info" className="gap-1">
             <Calendar className="h-3 w-3" />
             Scheduled
           </Badge>
@@ -183,7 +189,7 @@ export function ContentListView({
         );
       case 'skipped':
         return (
-          <Badge variant="outline" className="gap-1 bg-yellow-100 text-yellow-800">
+          <Badge variant="warning" className="gap-1">
             <AlertCircle className="h-3 w-3" />
             Skipped
           </Badge>
@@ -206,7 +212,7 @@ export function ContentListView({
         {/* Filters and search */}
         <div className="mb-6 flex gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+            <Search className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform" />
             <Input
               placeholder="Search posts..."
               value={searchQuery}
@@ -233,7 +239,7 @@ export function ContentListView({
         </div>
 
         {/* List header */}
-        <div className="grid grid-cols-12 gap-4 border-b pb-2 text-sm font-medium text-gray-600">
+        <div className="text-muted-foreground grid grid-cols-12 gap-4 border-b pb-2 text-sm font-medium">
           <div className="col-span-1">
             <Button
               variant="ghost"
@@ -289,7 +295,7 @@ export function ContentListView({
         {/* List items */}
         <div className="mt-4 space-y-2">
           {sortedItems.length === 0 ? (
-            <div className="py-8 text-center text-gray-500">
+            <div className="text-muted-foreground py-8 text-center">
               No posts found for the selected filters
             </div>
           ) : (
@@ -300,10 +306,8 @@ export function ContentListView({
               return (
                 <div
                   key={item.id}
-                  className={`grid grid-cols-12 gap-4 rounded-lg p-3 transition-colors hover:bg-gray-50 ${
-                    item.type === 'placeholder'
-                      ? 'border border-dashed border-gray-300'
-                      : 'cursor-pointer border border-gray-200'
+                  className={`hover:bg-accent/40 grid grid-cols-12 gap-4 rounded-lg p-3 transition-colors ${
+                    item.type === 'placeholder' ? 'border border-dashed' : 'cursor-pointer border'
                   }`}
                   style={
                     item.campaignColor
@@ -328,16 +332,16 @@ export function ContentListView({
                       />
                     )}
                     {item.type === 'placeholder' ? (
-                      <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-100">
-                        <Clock className="h-4 w-4 text-gray-500" />
+                      <div className="bg-muted flex h-8 w-8 items-center justify-center rounded">
+                        <Clock className="text-muted-foreground h-4 w-4" />
                       </div>
                     ) : item.imageUrl ? (
-                      <div className="h-8 w-8 overflow-hidden rounded bg-gray-100">
+                      <div className="bg-muted h-8 w-8 overflow-hidden rounded">
                         <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
                       </div>
                     ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-100">
-                        <ImageIcon className="h-4 w-4 text-gray-400" />
+                      <div className="bg-muted flex h-8 w-8 items-center justify-center rounded">
+                        <ImageIcon className="text-muted-foreground h-4 w-4" />
                       </div>
                     )}
                   </div>
@@ -346,7 +350,7 @@ export function ContentListView({
                     <div className="font-medium">
                       {formatInUserTimezone(itemDate, 'MMM d, yyyy', timezone)}
                     </div>
-                    <div className="text-gray-500">
+                    <div className="text-muted-foreground">
                       {formatInUserTimezone(itemDate, 'h:mm a', timezone)}
                     </div>
                   </div>
@@ -356,19 +360,20 @@ export function ContentListView({
                   </div>
 
                   <div className="col-span-5">
-                    <button
+                    <Button
+                      variant="ghost"
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleExpanded(item.id);
                       }}
-                      className="w-full text-left"
+                      className="h-auto w-full p-0 text-left"
                     >
                       <div className={`text-sm ${isExpanded ? '' : 'line-clamp-2'}`}>
                         {item.type === 'placeholder'
                           ? 'Content will be generated closer to scheduled date'
                           : item.caption}
                       </div>
-                    </button>
+                    </Button>
                     {item.type === 'placeholder' && (
                       <div className="mt-2">
                         <Button
@@ -401,7 +406,9 @@ export function ContentListView({
                     )}
                   </div>
 
-                  <div className="col-span-2 text-sm text-gray-600">{item.campaignName || '-'}</div>
+                  <div className="text-muted-foreground col-span-2 text-sm">
+                    {item.campaignName || '-'}
+                  </div>
                 </div>
               );
             })
@@ -409,7 +416,7 @@ export function ContentListView({
         </div>
 
         {/* Summary */}
-        <div className="mt-6 border-t pt-4 text-sm text-gray-600">
+        <div className="text-muted-foreground mt-6 border-t pt-4 text-sm">
           Showing {sortedItems.length} of {items.length} posts for{' '}
           {format(currentDate, 'MMMM yyyy')}
         </div>

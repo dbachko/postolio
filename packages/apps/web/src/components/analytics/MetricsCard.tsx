@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Badge } from '../ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -42,16 +42,13 @@ export function MetricsCard({
           {hasTrend && (
             <div className="flex items-center space-x-1">
               {isPositiveTrend ? (
-                <TrendingUp className="h-3 w-3 text-green-500" />
+                <TrendingUp className="text-foreground h-3 w-3" />
               ) : (
-                <TrendingDown className="h-3 w-3 text-red-500" />
+                <TrendingDown className="text-foreground h-3 w-3" />
               )}
               <Badge
-                variant="secondary"
-                className={cn(
-                  'text-xs',
-                  isPositiveTrend ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                )}
+                variant={isPositiveTrend ? 'default' : 'destructive'}
+                className={cn('text-xs')}
               >
                 {isPositiveTrend ? '+' : ''}
                 {trend.toFixed(1)}%

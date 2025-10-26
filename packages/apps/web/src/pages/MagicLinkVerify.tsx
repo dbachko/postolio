@@ -64,7 +64,7 @@ export function MagicLinkVerify() {
 
       toast.success('Successfully signed in!', {
         description: 'Welcome to Postolio! Redirecting to dashboard...',
-        icon: <CheckCircle className="text-green-500" />,
+        icon: <CheckCircle />,
         duration: TIMEOUTS.TOAST_DURATION,
       });
 
@@ -77,7 +77,7 @@ export function MagicLinkVerify() {
 
       toast.error('Verification failed', {
         description: errorMessage,
-        icon: <XCircle className="text-red-500" />,
+        icon: <XCircle />,
       });
     }
   };
@@ -109,7 +109,7 @@ export function MagicLinkVerify() {
 
             {status === 'success' && (
               <div className="flex flex-col items-center space-y-4">
-                <CheckCircle className="h-12 w-12 text-green-500" />
+                <CheckCircle className="h-12 w-12" />
                 <p className="text-center">
                   You've been successfully signed in!
                   <br />

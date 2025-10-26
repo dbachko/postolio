@@ -1,7 +1,7 @@
 import { campaignTypes } from '../../../constants/campaign-types';
 import { CampaignTypeCard } from '../shared/CampaignTypeCard';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
-import { Button } from '../../ui/button';
+import { Button } from '@/components/ui/button';
 
 export function Step1TypeSelection() {
   const { campaignType, setCampaignType, loadDefaultsFromType, nextStep } = useCampaignWizard();
@@ -18,7 +18,9 @@ export function Step1TypeSelection() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold">Choose a campaign type</h2>
-        <p className="text-sm text-gray-600">We’ll prefill smart defaults based on your choice.</p>
+        <p className="text-muted-foreground text-sm">
+          We’ll prefill smart defaults based on your choice.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

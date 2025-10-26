@@ -103,7 +103,9 @@ export function Settings() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="mt-2 text-gray-600">Manage your account and application preferences</p>
+        <p className="text-muted-foreground mt-2">
+          Manage your account and application preferences
+        </p>
       </div>
 
       <Tabs defaultValue="timezone" className="space-y-6">
@@ -156,7 +158,9 @@ export function Settings() {
                   <Label htmlFor="auto-detect" className="text-base">
                     Auto-detect timezone
                   </Label>
-                  <p className="text-sm text-gray-500">Automatically use your browser's timezone</p>
+                  <p className="text-muted-foreground text-sm">
+                    Automatically use your browser's timezone
+                  </p>
                 </div>
                 <Switch
                   id="auto-detect"
@@ -315,7 +319,7 @@ export function Settings() {
               <div className="bg-muted/40 mt-6 rounded-lg border p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="grid h-9 w-9 place-items-center rounded-md bg-blue-50 text-blue-700">
+                    <div className="bg-accent text-primary grid h-9 w-9 place-items-center rounded-md">
                       <Shield className="h-5 w-5" aria-hidden="true" />
                     </div>
                     <div>
@@ -343,7 +347,7 @@ export function Settings() {
               <CardDescription>Configure how you receive notifications</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-500">Notification settings coming soon...</p>
+              <p className="text-muted-foreground">Notification settings coming soon...</p>
             </CardContent>
           </Card>
         </TabsContent>

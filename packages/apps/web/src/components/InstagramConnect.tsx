@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Alert, AlertDescription } from './ui/alert';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { brand as brandApi } from '../lib/api';
 import type { Brand } from '../lib/api';
 import { InstagramSyncButton } from './InstagramSyncButton';
@@ -131,7 +131,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
           <CardDescription>Checking connection status...</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-20 animate-pulse rounded bg-gray-100"></div>
+          <div className="bg-muted h-20 animate-pulse rounded"></div>
         </CardContent>
       </Card>
     );
@@ -154,7 +154,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <div
-              className={`h-2 w-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-300'}`}
+              className={`h-2 w-2 rounded-full ${isConnected ? 'bg-foreground' : 'bg-muted-foreground'}`}
             />
             <span className="text-sm font-medium">
               {isConnected ? 'Connected' : 'Not Connected'}
@@ -167,7 +167,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
 
         {/* Connected Profile */}
         {isConnected && profile && (
-          <div className="rounded-lg border bg-gray-50 p-4">
+          <div className="bg-muted rounded-lg border p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-3">
                 <img
@@ -176,7 +176,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
                     'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150'
                   }
                   alt={`@${profile.username}`}
-                  className="h-12 w-12 rounded-full bg-gray-200"
+                  className="bg-muted h-12 w-12 rounded-full"
                   onError={(e) => {
                     e.currentTarget.src =
                       'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150';
@@ -188,18 +188,18 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
                     href={`https://instagram.com/${profile.username}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                    className="text-primary text-sm hover:underline"
                   >
                     @{profile.username}
                   </a>
                   <div className="mt-1 flex items-center space-x-4">
                     {profile.followers_count !== undefined && profile.followers_count !== null && (
-                      <span className="text-xs text-gray-500">
+                      <span className="text-muted-foreground text-xs">
                         {profile.followers_count.toLocaleString()} followers
                       </span>
                     )}
                     {profile.media_count !== undefined && profile.media_count !== null && (
-                      <span className="text-xs text-gray-500">
+                      <span className="text-muted-foreground text-xs">
                         {profile.media_count === 0
                           ? 'No posts yet'
                           : `${profile.media_count} posts`}
@@ -221,7 +221,9 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
                 </Badge>
               )}
             </div>
-            {profile.biography && <p className="mt-3 text-sm text-gray-600">{profile.biography}</p>}
+            {profile.biography && (
+              <p className="text-muted-foreground mt-3 text-sm">{profile.biography}</p>
+            )}
           </div>
         )}
 
@@ -252,7 +254,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
 
         {/* Sync Info Alert */}
         {isConnected && (
-          <Alert>
+          <Alert variant="info">
             <AlertDescription className="text-sm">
               <strong>Sync your posts:</strong> Import your recent Instagram posts to view them in
               Timeline and Calendar. Syncs up to 100 posts or 30 days of history.
@@ -288,6 +290,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
             </>
           ) : (
             <Button
+              variant="outline"
               onClick={handleConnect}
               disabled={connectMutation.isPending || isConnecting}
               className="w-full sm:w-auto"
@@ -299,7 +302,7 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
 
         {/* Requirements Notice */}
         {!isConnected && (
-          <Alert>
+          <Alert variant="warning">
             <AlertDescription className="text-sm">
               <strong>Requirements:</strong> You need an Instagram Business or Creator account
               linked to a Facebook Page. Personal accounts cannot be used for automated posting.

@@ -67,7 +67,7 @@ export function EmailVerificationBanner() {
       if (response.ok) {
         toast.success('Verification email sent!', {
           description: 'Check your inbox for the verification link.',
-          icon: <CheckCircle className="text-green-500" />,
+          icon: <CheckCircle className="text-foreground" />,
           duration: TIMEOUTS.TOAST_DURATION,
         });
 
@@ -102,15 +102,13 @@ export function EmailVerificationBanner() {
   }
 
   return (
-    <div className="border-b border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
-      <Alert className="mx-auto max-w-7xl border-blue-200 bg-transparent">
-        <Mail className="h-4 w-4 text-blue-600" />
+    <div className="border-b p-4">
+      <Alert className="mx-auto max-w-7xl bg-transparent">
+        <Mail className="h-4 w-4" />
         <AlertDescription className="flex items-center justify-between">
           <div className="flex-1">
-            <span className="font-medium text-blue-800 dark:text-blue-200">
-              Verify your email to unlock all features
-            </span>
-            <span className="ml-2 text-blue-700 dark:text-blue-300">
+            <span className="font-medium">Verify your email to unlock all features</span>
+            <span className="text-muted-foreground ml-2">
               Check your inbox for {status.email} or request a new verification email.
             </span>
           </div>
@@ -121,7 +119,7 @@ export function EmailVerificationBanner() {
                 variant="outline"
                 onClick={sendVerificationEmail}
                 disabled={isSending}
-                className="border-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                className="hover:bg-muted"
               >
                 {isSending ? (
                   <>
@@ -137,15 +135,13 @@ export function EmailVerificationBanner() {
               </Button>
             )}
             {!status.canResend && !isSending && (
-              <span className="text-sm text-blue-600 dark:text-blue-400">
-                Email sent! Check your inbox
-              </span>
+              <span className="text-muted-foreground text-sm">Email sent! Check your inbox</span>
             )}
             <Button
               size="sm"
               variant="ghost"
               onClick={handleDismiss}
-              className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+              className="hover:bg-muted p-1"
             >
               <X className="h-4 w-4" />
             </Button>

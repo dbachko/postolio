@@ -1,5 +1,5 @@
 import type { SecuritySummary } from '../../lib/api';
-import { Card, CardContent } from '../ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Shield, LogIn, AlertTriangle, Key } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -19,26 +19,26 @@ function MetricCard({ icon, label, value, description, variant = 'default' }: Me
   const getBgColor = () => {
     switch (variant) {
       case 'success':
-        return 'bg-green-50 border-green-200';
+        return 'bg-success/15';
       case 'warning':
-        return 'bg-amber-50 border-amber-200';
+        return 'bg-warning/15';
       case 'danger':
-        return 'bg-red-50 border-red-200';
+        return 'bg-destructive/10';
       default:
-        return 'bg-gray-50 border-gray-200';
+        return 'bg-muted';
     }
   };
 
   const getIconColor = () => {
     switch (variant) {
       case 'success':
-        return 'text-green-600';
+        return 'text-success';
       case 'warning':
-        return 'text-amber-600';
+        return 'text-warning';
       case 'danger':
-        return 'text-red-600';
+        return 'text-destructive';
       default:
-        return 'text-gray-600';
+        return 'text-foreground';
     }
   };
 
@@ -48,9 +48,9 @@ function MetricCard({ icon, label, value, description, variant = 'default' }: Me
         <div className="flex items-start gap-4">
           <div className={`rounded-lg p-2 ${getIconColor()}`}>{icon}</div>
           <div className="flex-1">
-            <p className="text-sm font-medium text-gray-600">{label}</p>
+            <p className="text-muted-foreground text-sm font-medium">{label}</p>
             <p className="mt-1 text-2xl font-bold">{value}</p>
-            {description && <p className="mt-1 text-xs text-gray-500">{description}</p>}
+            {description && <p className="text-muted-foreground mt-1 text-xs">{description}</p>}
           </div>
         </div>
       </CardContent>

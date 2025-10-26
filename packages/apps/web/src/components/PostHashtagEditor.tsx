@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Label } from './ui/label';
-import { Input } from './ui/input';
-import { Badge } from './ui/badge';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 
 interface PostHashtagEditorProps {
   hashtags: string[];
@@ -61,7 +61,7 @@ export function PostHashtagEditor({
             <Badge
               key={index}
               variant="secondary"
-              className={`${!disabled ? 'cursor-pointer hover:bg-red-100 hover:text-red-800' : ''}`}
+              className={`${!disabled ? 'hover:bg-destructive/10 hover:text-destructive cursor-pointer' : ''}`}
               onClick={!disabled ? () => removeHashtag(index) : undefined}
             >
               #{sanitize(hashtag)} {!disabled && '×'}

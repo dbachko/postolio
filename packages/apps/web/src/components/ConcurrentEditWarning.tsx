@@ -6,8 +6,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from './ui/dialog';
-import { Button } from './ui/button';
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { AlertTriangle, RefreshCw, Clock, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -40,7 +40,7 @@ const ConcurrentEditWarning = memo(
         <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              <AlertTriangle className="text-foreground h-5 w-5" />
               <DialogTitle>Recent Edit Detected</DialogTitle>
             </div>
             <DialogDescription>This campaign was recently edited by another user</DialogDescription>
@@ -48,18 +48,18 @@ const ConcurrentEditWarning = memo(
 
           <div className="space-y-4">
             {/* Warning Card */}
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="bg-muted rounded-lg border p-4">
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-amber-600" />
-                  <span className="text-sm text-amber-900">
+                  <Clock className="text-foreground h-4 w-4" />
+                  <span className="text-foreground text-sm">
                     Last edited <strong>{timeAgo}</strong>
                   </span>
                 </div>
                 {lastModifiedBy && (
                   <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-amber-600" />
-                    <span className="text-sm text-amber-900">
+                    <User className="text-foreground h-4 w-4" />
+                    <span className="text-foreground text-sm">
                       By: <strong>{lastModifiedBy}</strong>
                     </span>
                   </div>
@@ -68,7 +68,7 @@ const ConcurrentEditWarning = memo(
             </div>
 
             {/* Explanation */}
-            <div className="space-y-2 text-sm text-gray-600">
+            <div className="text-muted-foreground space-y-2 text-sm">
               <p>
                 Someone else has modified this campaign within the last 5 minutes. Your changes
                 might conflict with theirs.
@@ -77,21 +77,21 @@ const ConcurrentEditWarning = memo(
             </div>
 
             {/* Options */}
-            <div className="space-y-2 rounded-lg bg-gray-50 p-3">
+            <div className="bg-muted space-y-2 rounded-lg p-3">
               <div className="flex items-start gap-2">
-                <div className="mt-1.5 h-1.5 w-1.5 rounded-full bg-blue-600" />
+                <div className="bg-foreground mt-1.5 h-1.5 w-1.5 rounded-full" />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Refresh</p>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-foreground text-sm font-medium">Refresh</p>
+                  <p className="text-muted-foreground text-xs">
                     Load the latest version and lose your current changes
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <div className="mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-600" />
+                <div className="bg-foreground/70 mt-1.5 h-1.5 w-1.5 rounded-full" />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Continue Anyway</p>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-foreground text-sm font-medium">Continue Anyway</p>
+                  <p className="text-muted-foreground text-xs">
                     Keep editing with your current changes (may overwrite recent edits)
                   </p>
                 </div>

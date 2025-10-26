@@ -79,9 +79,9 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
   ];
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+    <div className="bg-card rounded-lg border shadow-sm">
       {/* Weekday header */}
-      <div className="grid grid-cols-7 border-b text-xs font-medium text-gray-500">
+      <div className="text-muted-foreground grid grid-cols-7 border-b text-xs font-medium">
         {weekdayLabels.map((d) => (
           <div key={d} className="px-3 py-2">
             {d}
@@ -90,7 +90,7 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
       </div>
 
       {/* Month grid */}
-      <div className="grid grid-cols-7 gap-px bg-gray-200">
+      <div className="bg-muted grid grid-cols-7 gap-px">
         {days.map((date) => {
           const isInMonth = isSameMonth(date, currentDate);
           const key = format(date, 'yyyy-MM-dd');
@@ -111,20 +111,24 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
               key={key}
               className={
                 `group relative min-h-[140px] p-2 transition-colors ` +
-                (isPastDay ? 'bg-gray-50' : 'bg-white hover:bg-blue-50/40')
+                (isPastDay ? 'bg-muted/40' : 'bg-background hover:bg-accent/40')
               }
             >
               {/* Day header */}
               <div className="mb-2 flex items-center justify-between">
                 <div
                   className={`text-xs font-medium ${
-                    isInMonth ? (isPastDay ? 'text-gray-400' : 'text-gray-900') : 'text-gray-400'
+                    isInMonth
+                      ? isPastDay
+                        ? 'text-muted-foreground'
+                        : 'text-foreground'
+                      : 'text-muted-foreground'
                   }`}
                 >
                   {format(date, 'd')}
                 </div>
                 {today && (
-                  <span className="rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-200">
+                  <span className="text-foreground ring-ring rounded px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset">
                     Today
                   </span>
                 )}
@@ -132,10 +136,11 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
 
               {/* Hover create button - don't show for past days */}
               {!isPastDay && (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={handleCreateForDate}
-                  className="absolute right-2 top-2 hidden items-center gap-1 rounded-md border border-blue-200 bg-white/90 px-2 py-0.5 text-[11px] font-medium text-blue-700 shadow-sm hover:bg-blue-50 group-hover:flex"
+                  className="absolute right-2 top-2 hidden items-center gap-1 px-2 py-0.5 text-[11px] font-medium group-hover:flex"
                   title="Create post"
                 >
                   <svg
@@ -150,7 +155,7 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
                     <path d="M12 5v14M5 12h14" />
                   </svg>
                   New
-                </button>
+                </Button>
               )}
 
               {/* Items stacked vertically */}
@@ -193,3 +198,4 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
     </div>
   );
 }
+import { Button } from '@/components/ui/button';

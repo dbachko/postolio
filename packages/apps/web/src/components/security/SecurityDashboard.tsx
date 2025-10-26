@@ -3,7 +3,7 @@ import type { SecuritySummary, LoginHistoryResponse } from '../../lib/api';
 import { session } from '../../lib/api';
 import { SecurityMetrics } from './SecurityMetrics';
 import { LoginHistory } from './LoginHistory';
-import { Alert, AlertDescription } from '../ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export function SecurityDashboard() {
@@ -39,7 +39,7 @@ export function SecurityDashboard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+        <Loader2 className="text-foreground h-8 w-8 animate-spin" />
       </div>
     );
   }
@@ -57,7 +57,7 @@ export function SecurityDashboard() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold">Security Dashboard</h2>
-        <p className="mt-1 text-sm text-gray-600">
+        <p className="text-muted-foreground mt-1 text-sm">
           Monitor your account security and login activity
         </p>
       </div>
@@ -65,7 +65,7 @@ export function SecurityDashboard() {
       <SecurityMetrics summary={summary} />
 
       {summary.lastLogin && (
-        <Alert>
+        <Alert variant="info">
           <AlertDescription>
             <strong>Last login:</strong> {new Date(summary.lastLogin.timestamp).toLocaleString()}{' '}
             {summary.lastLogin.location &&

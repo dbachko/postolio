@@ -1,6 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { content as contentApi, type Content } from '@/lib/api';
 import { useBrandStore } from '@/stores/brandStore';
 import { ContentCard } from '@/components/ContentCard';
@@ -42,7 +52,7 @@ export default function Drafts() {
 
   if (!selectedBrand) {
     return (
-      <div className="text-muted-foreground rounded border bg-white p-6">
+      <div className="text-muted-foreground bg-background rounded border p-6">
         Select or create a brand to manage drafts.
       </div>
     );
@@ -58,57 +68,61 @@ export default function Drafts() {
 
         {/* Sort */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Sort by</span>
-          <select
-            className="bg-background border-input focus:ring-ring focus:border-primary h-9 rounded-md border px-3 text-sm"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-          >
-            <option value="lastModifiedDesc">Last Modified Newest</option>
-            <option value="lastModifiedAsc">Last Modified Oldest</option>
-          </select>
+          <span className="text-muted-foreground text-sm">Sort by</span>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+            <SelectTrigger className="h-9 w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lastModifiedDesc">Last Modified Newest</SelectItem>
+              <SelectItem value="lastModifiedAsc">Last Modified Oldest</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[260px_1fr]">
         {/* Filters */}
         <aside className="bg-card z-10 self-start rounded-lg border p-4 md:sticky md:top-20">
-          <h2 className="mb-2 text-sm font-medium text-gray-700">Draft Types</h2>
+          <h2 className="text-foreground mb-2 text-sm font-medium">Draft Types</h2>
           <div className="space-y-2">
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
+            <div className="flex items-center gap-2 text-sm">
+              <Checkbox
+                id="drafts-all"
                 checked={showScheduledDrafts && showUnscheduledDrafts}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setShowScheduledDrafts(checked);
-                  setShowUnscheduledDrafts(checked);
+                onCheckedChange={(checked) => {
+                  const value = Boolean(checked);
+                  setShowScheduledDrafts(value);
+                  setShowUnscheduledDrafts(value);
                 }}
               />
-              All Post Types
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
+              <Label htmlFor="drafts-all" className="cursor-pointer">
+                All Post Types
+              </Label>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <Checkbox
+                id="drafts-scheduled"
                 checked={showScheduledDrafts}
-                onChange={(e) => setShowScheduledDrafts(e.target.checked)}
+                onCheckedChange={(checked) => setShowScheduledDrafts(Boolean(checked))}
               />
-              Scheduled Drafts
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
+              <Label htmlFor="drafts-scheduled" className="cursor-pointer">
+                Scheduled Drafts
+              </Label>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <Checkbox
+                id="drafts-unscheduled"
                 checked={showUnscheduledDrafts}
-                onChange={(e) => setShowUnscheduledDrafts(e.target.checked)}
+                onCheckedChange={(checked) => setShowUnscheduledDrafts(Boolean(checked))}
               />
-              Unscheduled Drafts
-            </label>
+              <Label htmlFor="drafts-unscheduled" className="cursor-pointer">
+                Unscheduled Drafts
+              </Label>
+            </div>
           </div>
 
-          <div className="mt-4 text-xs text-gray-500">
+          <div className="text-muted-foreground mt-4 text-xs">
             Tip: Scheduled Drafts are drafts with a time set.
           </div>
         </aside>
@@ -126,13 +140,16 @@ export default function Drafts() {
 
           {/* List */}
           {isLoading ? (
-            <div className="text-muted-foreground rounded border bg-white p-4">Loading…</div>
+            <div className="text-muted-foreground bg-background rounded border p-4">Loading…</div>
           ) : isError ? (
-            <div className="text-destructive rounded border bg-white p-4">
-              Failed to load drafts. <button onClick={() => refetch()}>Retry</button>
+            <div className="text-destructive bg-background rounded border p-4">
+              Failed to load drafts.{' '}
+              <Button variant="link" onClick={() => refetch()}>
+                Retry
+              </Button>
             </div>
           ) : filteredSortedDrafts.length === 0 ? (
-            <div className="text-muted-foreground rounded border bg-white p-6">
+            <div className="text-muted-foreground bg-background rounded border p-6">
               No drafts match your filters.
             </div>
           ) : (

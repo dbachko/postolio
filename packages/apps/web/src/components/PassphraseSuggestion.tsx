@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, memo } from 'react';
 import { Copy, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const suggestions = [
   'coffee mountain bicycle sunset',
@@ -42,28 +43,25 @@ export const PassphraseSuggestion = memo(() => {
   }, [suggestion]);
 
   return (
-    <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/20">
-      <h4 className="mb-2 text-sm font-medium text-blue-900 dark:text-blue-100">
-        Try a passphrase instead:
-      </h4>
-      <div className="flex items-center gap-2 rounded border border-blue-200 bg-white p-2 dark:border-blue-700 dark:bg-gray-900">
-        <code className="flex-1 font-mono text-sm text-blue-700 dark:text-blue-300">
-          {suggestion}
-        </code>
-        <button
+    <div className="bg-muted mt-4 rounded-lg border p-3">
+      <h4 className="text-foreground mb-2 text-sm font-medium">Try a passphrase instead:</h4>
+      <div className="bg-background flex items-center gap-2 rounded border p-2">
+        <code className="text-foreground flex-1 font-mono text-sm">{suggestion}</code>
+        <Button
           type="button"
+          variant="ghost"
           onClick={handleCopy}
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900"
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center p-2"
           aria-label={copied ? 'Copied to clipboard' : 'Copy passphrase'}
         >
           {copied ? (
-            <Check size={20} className="text-green-600 dark:text-green-400" />
+            <Check size={20} className="text-foreground" />
           ) : (
-            <Copy size={20} className="text-blue-600 dark:text-blue-400" />
+            <Copy size={20} className="text-foreground" />
           )}
-        </button>
+        </Button>
       </div>
-      <p className="mt-2 text-xs text-blue-700 dark:text-blue-300">
+      <p className="text-muted-foreground mt-2 text-xs">
         Passphrases are easier to remember and type, especially on mobile!
       </p>
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { brand as brandApi } from '@/lib/api';
+import { Button } from '@/components/ui/button';
 
 interface Props {
   brandId: string | null;
@@ -106,55 +107,46 @@ export function BrandProfileDrawer({ brandId, onClose }: Props) {
         role="button"
         aria-label="Close overlay"
       />
-      <div className={`absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl`}>
+      <div className={`bg-background absolute right-0 top-0 h-full w-full max-w-md shadow-xl`}>
         <div className="flex items-center justify-between border-b px-4 py-3">
-          <h3 className="text-sm font-medium text-gray-900">Brand Profile</h3>
+          <h3 className="text-foreground text-sm font-medium">Brand Profile</h3>
           <div className="flex items-center gap-2">
             {brandId && (
-              <button
-                onClick={handleReRun}
-                disabled={reRunLoading}
-                className="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
+              <Button variant="purple" size="sm" onClick={handleReRun} disabled={reRunLoading}>
                 {reRunLoading ? 'Requesting…' : 'Re-run Analysis'}
-              </button>
+              </Button>
             )}
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <Button variant="ghost" size="sm" onClick={onClose}>
               Close
-            </button>
+            </Button>
           </div>
         </div>
         <div className="max-h-[calc(100%-48px)] overflow-y-auto p-4">
           {reRunMessage && (
-            <div className="mb-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700">
-              {reRunMessage}
-            </div>
+            <div className="bg-muted mb-3 rounded border p-2 text-xs">{reRunMessage}</div>
           )}
-          {loading && <div className="text-sm text-gray-600">Loading…</div>}
-          {error && <div className="text-sm text-red-600">{error}</div>}
+          {loading && <div className="text-muted-foreground text-sm">Loading…</div>}
+          {error && <div className="text-destructive text-sm">{error}</div>}
           {!loading && !error && profile && (
-            <div className="space-y-4 text-sm text-gray-800">
+            <div className="text-foreground space-y-4 text-sm">
               <div>
-                <div className="text-xs text-gray-500">Version</div>
+                <div className="text-muted-foreground text-xs">Version</div>
                 <div>
                   {profile.version} · {new Date(profile.createdAt).toLocaleString()}
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 p-2">
+              <div className="bg-muted flex items-center justify-between gap-3 rounded border p-2">
                 <div>
-                  <div className="text-xs text-gray-500">Core Profile Updates</div>
-                  <div className="text-xs text-gray-700">
+                  <div className="text-muted-foreground text-xs">Core Profile Updates</div>
+                  <div className="text-foreground text-xs">
                     {freezeCore ? 'Frozen (requires manual approval)' : 'Auto-updates allowed'}
                   </div>
                 </div>
-                <button
+                <Button
+                  size="sm"
+                  variant={freezeCore ? 'outline' : 'default'}
                   onClick={toggleFreeze}
                   disabled={freezeLoading}
-                  className={`rounded px-3 py-1 text-xs ${
-                    freezeCore
-                      ? 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
-                      : 'border border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
-                  } disabled:opacity-50`}
                 >
                   {freezeCore
                     ? freezeLoading
@@ -163,32 +155,32 @@ export function BrandProfileDrawer({ brandId, onClose }: Props) {
                     : freezeLoading
                       ? 'Freezing…'
                       : 'Freeze Core'}
-                </button>
+                </Button>
               </div>
               <div>
-                <div className="text-xs text-gray-500">Tones</div>
+                <div className="text-muted-foreground text-xs">Tones</div>
                 <div>{profile.text?.tone?.join(', ') || '—'}</div>
               </div>
               <div>
-                <div className="text-xs text-gray-500">Top Topics</div>
+                <div className="text-muted-foreground text-xs">Top Topics</div>
                 <div className="space-y-1">
                   {(profile.topics || []).slice(0, 20).map((t) => (
                     <div key={t.value} className="flex items-center justify-between">
                       <span>{t.value}</span>
-                      <span className="text-xs text-gray-500">{t.count}</span>
+                      <span className="text-muted-foreground text-xs">{t.count}</span>
                     </div>
                   ))}
                   {(profile.topics || []).length === 0 && <div>—</div>}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-gray-500">Palette</div>
+                <div className="text-muted-foreground text-xs">Palette</div>
                 <div className="mt-1 flex flex-wrap gap-2">
                   {(profile.visual?.palette || []).slice(0, 12).map((hex) => (
                     <span
                       key={hex}
                       title={hex}
-                      className="inline-block h-5 w-5 rounded border border-gray-200"
+                      className="inline-block h-5 w-5 rounded border"
                       style={{ backgroundColor: hex }}
                     />
                   ))}
@@ -199,13 +191,13 @@ export function BrandProfileDrawer({ brandId, onClose }: Props) {
               </div>
               {profile.anchors?.visual?.palette && profile.anchors.visual.palette.length > 0 && (
                 <div>
-                  <div className="text-xs text-gray-500">Anchors (Official Colors)</div>
+                  <div className="text-muted-foreground text-xs">Anchors (Official Colors)</div>
                   <div className="mt-1 flex flex-wrap gap-2">
                     {profile.anchors.visual.palette.slice(0, 12).map((hex) => (
                       <span
                         key={hex}
                         title={hex}
-                        className="inline-block h-5 w-5 rounded border border-gray-200"
+                        className="inline-block h-5 w-5 rounded border"
                         style={{ backgroundColor: hex }}
                       />
                     ))}
@@ -213,34 +205,31 @@ export function BrandProfileDrawer({ brandId, onClose }: Props) {
                 </div>
               )}
               <div>
-                <div className="text-xs text-gray-500">Motifs</div>
+                <div className="text-muted-foreground text-xs">Motifs</div>
                 <div>{profile.visual?.motifs?.join(', ') || '—'}</div>
               </div>
               <div>
-                <div className="text-xs text-gray-500">Composition</div>
+                <div className="text-muted-foreground text-xs">Composition</div>
                 <div>{profile.visual?.composition?.join(', ') || '—'}</div>
               </div>
               {Array.isArray(profile.overlays) && profile.overlays.length > 0 && (
                 <div>
-                  <div className="text-xs font-medium text-gray-700">Overlays</div>
+                  <div className="text-foreground text-xs font-medium">Overlays</div>
                   <div className="mt-2 space-y-3">
                     {profile.overlays.map((ov, idx) => (
-                      <div
-                        key={`${ov.type}-${ov.label || idx}`}
-                        className="rounded border border-gray-200 p-2"
-                      >
+                      <div key={`${ov.type}-${ov.label || idx}`} className="rounded border p-2">
                         <div className="flex items-center justify-between">
-                          <div className="text-xs text-gray-500">
+                          <div className="text-muted-foreground text-xs">
                             {ov.type} {ov.label ? `· ${ov.label}` : ''}
                           </div>
-                          <div className="text-[11px] text-gray-400">
+                          <div className="text-muted-foreground text-[11px]">
                             {ov.expiresAt
                               ? `expires ${new Date(ov.expiresAt).toLocaleDateString()}`
                               : ''}
                           </div>
                         </div>
                         {ov.topics && ov.topics.length > 0 && (
-                          <div className="mt-1 text-xs text-gray-700">
+                          <div className="text-foreground mt-1 text-xs">
                             Topics:{' '}
                             {ov.topics
                               .slice(0, 8)
@@ -250,7 +239,7 @@ export function BrandProfileDrawer({ brandId, onClose }: Props) {
                         )}
                         {/* Optional effect estimate, if present */}
                         {(ov as any)?.source?.effectEstimate !== undefined && (
-                          <div className="mt-1 text-[11px] text-gray-600">
+                          <div className="text-muted-foreground mt-1 text-[11px]">
                             Effect:{' '}
                             {(((ov as any).source.effectEstimate as number) * 100).toFixed(1)}%
                             {(ov as any).source.method ? ` (${(ov as any).source.method})` : ''}
@@ -262,7 +251,7 @@ export function BrandProfileDrawer({ brandId, onClose }: Props) {
                               <span
                                 key={hex}
                                 title={hex}
-                                className="inline-block h-4 w-4 rounded border border-gray-200"
+                                className="inline-block h-4 w-4 rounded border"
                                 style={{ backgroundColor: hex }}
                               />
                             ))}

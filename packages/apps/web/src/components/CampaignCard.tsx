@@ -1,7 +1,7 @@
 import { memo, useMemo } from 'react';
-import { Badge } from './ui/badge';
-import { Button } from './ui/button';
-import { Card, CardContent } from './ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { CalendarClock, Palette, Tag, Clock, Star, Pause, Play, Trash2 } from 'lucide-react';
 import type { Campaign } from '../lib/api';
 import { getStableColorFromId } from '../utils/campaign-colors';
@@ -69,23 +69,20 @@ const CampaignCard = memo(
       return `Campaigns with status "${campaign.status}" cannot be deleted. Only campaigns that haven't started (draft, preview, creating, failed) can be deleted.`;
     };
 
-    const getStatusBadgeClasses = () => {
+    const getStatusBadgeVariant = () => {
       switch (campaign.status) {
         case 'active':
-          return 'bg-green-600 text-white border-transparent';
-        case 'failed':
-          return 'bg-red-600 text-white border-transparent';
+          return 'success' as const;
+        case 'paused':
+          return 'warning' as const;
+        case 'processing':
         case 'creating':
         case 'preview':
-          return 'bg-blue-600 text-white border-transparent';
-        case 'processing':
-          return 'bg-amber-500 text-white border-transparent';
-        case 'paused':
-          return 'bg-gray-400 text-white border-transparent';
-        case 'completed':
-          return 'bg-emerald-600 text-white border-transparent';
+          return 'info' as const;
+        case 'failed':
+          return 'destructive' as const;
         default:
-          return 'bg-gray-300 text-gray-900 border-transparent';
+          return 'secondary' as const;
       }
     };
 
@@ -127,11 +124,11 @@ const CampaignCard = memo(
 
     return (
       <Card
-        className="group cursor-pointer border-l-4 bg-white transition-all duration-200 hover:shadow-lg"
-        style={{ borderLeftColor: color }}
+        className="bg-card group relative cursor-pointer transition-all duration-200 hover:shadow-lg"
         onClick={() => onViewDetails(campaign.id)}
       >
         <CardContent className="p-6">
+          {/* Removed campaign-colored tint overlay per design update */}
           <div className="min-w-0 flex-1">
             {/* Header with title, status and color dot */}
             <div className="mb-4 flex items-start justify-between">
@@ -141,11 +138,11 @@ const CampaignCard = memo(
                     className="inline-flex h-2.5 w-2.5 rounded-full"
                     style={{ background: color }}
                   />
-                  <Badge variant="secondary" className={`text-xs ${getStatusBadgeClasses()}`}>
+                  <Badge variant={getStatusBadgeVariant()} className={`text-xs`}>
                     {getStatusLabel()}
                   </Badge>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 transition-colors group-hover:text-blue-600">
+                <h3 className="text-foreground text-lg font-semibold transition-colors group-hover:underline">
                   {campaign.name}
                 </h3>
               </div>
@@ -160,7 +157,7 @@ const CampaignCard = memo(
                       onStartCampaign(campaign.id);
                     }}
                     disabled={startCampaignLoading}
-                    className="bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-700"
+                    className="px-3 py-1 text-xs"
                   >
                     <Play className="mr-1 h-3 w-3" />
                     Launch
@@ -191,7 +188,7 @@ const CampaignCard = memo(
                       onStartCampaign(campaign.id);
                     }}
                     disabled={startCampaignLoading}
-                    className="bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-700"
+                    className="px-3 py-1 text-xs"
                   >
                     <Play className="mr-1 h-3 w-3" />
                     Resume
@@ -215,18 +212,21 @@ const CampaignCard = memo(
                     title={getDeleteTooltip()}
                     className={`px-2 py-1 text-xs transition-all ${
                       canDeleteCampaign()
-                        ? 'text-red-500 hover:bg-red-50 hover:text-red-700'
-                        : 'cursor-not-allowed text-gray-300 opacity-50 hover:bg-transparent'
+                        ? 'text-destructive hover:bg-destructive/10 hover:text-destructive'
+                        : 'text-muted-foreground cursor-not-allowed opacity-50 hover:bg-transparent'
                     }`}
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
                   {/* Show tooltip on hover for disabled state */}
                   {!canDeleteCampaign() && (
-                    <div className="absolute bottom-full right-0 z-50 mb-2 hidden w-64 rounded-md bg-gray-900 p-2 text-xs text-white shadow-lg group-hover/delete:block">
+                    <div className="bg-popover text-popover-foreground absolute bottom-full right-0 z-50 mb-2 hidden w-64 rounded-md p-2 text-xs shadow-lg group-hover/delete:block">
                       <div className="relative">
                         {getDeleteTooltip()}
-                        <div className="absolute right-4 top-full h-0 w-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-900"></div>
+                        <div
+                          className="absolute right-4 top-full h-0 w-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent"
+                          style={{ borderTopColor: 'var(--popover)' }}
+                        ></div>
                       </div>
                     </div>
                   )}
@@ -237,21 +237,21 @@ const CampaignCard = memo(
             {/* Info rows with icons: frequency, style, themes, posting time, priority */}
             <div className="mt-2 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div className="flex items-center gap-2">
-                <CalendarClock className="h-4 w-4 text-gray-500" />
-                <div className="text-gray-500">Frequency</div>
-                <div className="font-medium text-gray-800">
+                <CalendarClock className="text-muted-foreground h-4 w-4" />
+                <div className="text-muted-foreground">Frequency</div>
+                <div className="text-foreground font-medium">
                   {getFrequencyLabel(campaign.config?.frequency || '—')}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Palette className="h-4 w-4 text-gray-500" />
-                <div className="text-gray-500">Style</div>
-                <div className="font-medium text-gray-800">
+                <Palette className="text-muted-foreground h-4 w-4" />
+                <div className="text-muted-foreground">Style</div>
+                <div className="text-foreground font-medium">
                   {getStyleLabel(campaign.config?.style || '—')}
                 </div>
               </div>
               <div className="sm:col-span-2">
-                <div className="mb-1 flex items-center gap-2 text-gray-500">
+                <div className="text-muted-foreground mb-1 flex items-center gap-2">
                   <Tag className="h-4 w-4" />
                   Themes
                 </div>
@@ -263,31 +263,31 @@ const CampaignCard = memo(
                       </Badge>
                     ))
                   ) : (
-                    <span className="text-gray-800">—</span>
+                    <span className="text-foreground">—</span>
                   )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-gray-500" />
-                <div className="text-gray-500">Posting Time</div>
-                <div className="font-medium text-gray-800">
+                <Clock className="text-muted-foreground h-4 w-4" />
+                <div className="text-muted-foreground">Posting Time</div>
+                <div className="text-foreground font-medium">
                   {campaign.config?.postingTime || '—'}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Star className="h-4 w-4 text-gray-500" />
-                <div className="text-gray-500">Priority</div>
-                <div className="font-medium text-gray-800">
+                <Star className="text-muted-foreground h-4 w-4" />
+                <div className="text-muted-foreground">Priority</div>
+                <Badge variant="secondary" className="font-medium">
                   {getPriorityLabel(campaign.config?.priority ?? campaign.priority ?? 5)}
-                </div>
+                </Badge>
               </div>
             </div>
 
             {/* Stats row */}
-            <div className="mt-4 flex items-center justify-between text-sm text-gray-700">
+            <div className="text-muted-foreground mt-4 flex items-center justify-between text-sm">
               <div>
                 <span className="font-medium">{scheduledCount ?? '—'}</span> scheduled
-                <span className="mx-2 text-gray-300">•</span>
+                <span className="text-muted-foreground/60 mx-2">•</span>
                 <span className="font-medium">{totalCount ?? '—'}</span> posts
               </div>
             </div>

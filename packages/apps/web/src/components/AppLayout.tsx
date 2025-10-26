@@ -26,7 +26,7 @@ import {
   Check,
   Building2,
   Search,
-  BarChart3,
+  // BarChart3,
   Megaphone,
   Grid3X3,
   FileText,
@@ -35,11 +35,14 @@ import {
   Home,
   Shield,
   Plus,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
 import { RightHelpDrawer } from './help/RightHelpDrawer';
 import { ScheduleLimitBanner } from './ScheduleLimitBanner';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface LayoutProps {
   children: ReactNode;
@@ -76,13 +79,13 @@ const mainNavItems: NavigationItem[] = [
     description: 'Work-in-progress posts',
     matchType: 'exact',
   },
-  {
-    label: 'Analytics',
-    path: '/analytics',
-    icon: BarChart3,
-    description: 'Performance metrics',
-    matchType: 'exact',
-  },
+  // {
+  //   label: 'Analytics',
+  //   path: '/analytics',
+  //   icon: BarChart3,
+  //   description: 'Performance metrics',
+  //   matchType: 'exact',
+  // },
 ];
 
 // Secondary navigation items (in dropdown menu)
@@ -101,6 +104,7 @@ const isRouteActive = (item: NavigationItem, currentPath: string): boolean => {
 };
 
 export function AppLayout({ children }: LayoutProps) {
+  const containerCls = 'mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8';
   const { user, logout } = useAuthStore();
   const { selectedBrand, brands, setSelectedBrand } = useBrandStore();
   const navigate = useNavigate();
@@ -111,6 +115,7 @@ export function AppLayout({ children }: LayoutProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpDrawerOpen, setHelpDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = () => {
     logout();
@@ -176,7 +181,7 @@ export function AppLayout({ children }: LayoutProps) {
   );
 
   return (
-    <div className="bg-background min-h-screen">
+    <div className="bg-background flex min-h-screen flex-col">
       {/* Skip to main content for accessibility */}
       <a
         href="#main-content"
@@ -194,7 +199,7 @@ export function AppLayout({ children }: LayoutProps) {
         role="navigation"
         aria-label="Main navigation"
       >
-        <div className="mx-auto h-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className={cn('h-full', containerCls)}>
           <div className="flex h-full items-center justify-between">
             {/* Left Section: Logo + Main Nav (Desktop) / Logo (Mobile) */}
             <div className="flex h-full items-center">
@@ -217,7 +222,7 @@ export function AppLayout({ children }: LayoutProps) {
                     className={cn(
                       'flex h-full items-center border-b-2 px-6 transition-colors',
                       isActiveRoute(item)
-                        ? 'border-blue-600 bg-blue-50/50 text-blue-600'
+                        ? 'border-primary bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:text-foreground hover:bg-accent/50 border-transparent'
                     )}
                     aria-current={isActiveRoute(item) ? 'page' : undefined}
@@ -234,7 +239,7 @@ export function AppLayout({ children }: LayoutProps) {
               {/* Primary action: New Post (permanent in top bar) */}
               <Button
                 size="sm"
-                className="hidden gap-2 bg-blue-600 text-white hover:bg-blue-700 sm:inline-flex"
+                className="hidden gap-2 sm:inline-flex"
                 onClick={() => navigate('/posts/create')}
                 aria-label="Create new post"
               >
@@ -243,11 +248,27 @@ export function AppLayout({ children }: LayoutProps) {
               </Button>
               <Button
                 size="icon"
-                className="bg-blue-600 text-white hover:bg-blue-700 sm:hidden"
+                className="sm:hidden"
                 onClick={() => navigate('/posts/create')}
                 aria-label="Create new post"
               >
                 <Plus className="h-5 w-5" aria-hidden="true" />
+              </Button>
+
+              {/* Theme toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                onClick={toggleTheme}
+                className="h-9 w-9"
+                title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              >
+                {theme === 'dark' ? (
+                  <Sun className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Moon className="h-4 w-4" aria-hidden="true" />
+                )}
               </Button>
               {/* Search Button */}
               <Button
@@ -301,7 +322,7 @@ export function AppLayout({ children }: LayoutProps) {
                                 className={cn(
                                   'flex items-center rounded-lg px-3 py-2 text-sm transition-colors',
                                   isActiveRoute(item)
-                                    ? 'bg-blue-50 text-blue-600'
+                                    ? 'bg-accent text-primary'
                                     : 'hover:bg-accent hover:text-accent-foreground'
                                 )}
                               >
@@ -327,7 +348,7 @@ export function AppLayout({ children }: LayoutProps) {
                               className={cn(
                                 'flex flex-col items-center rounded-lg p-3 text-center transition-colors',
                                 isActiveRoute(item)
-                                  ? 'bg-blue-50 text-blue-600'
+                                  ? 'bg-accent text-primary'
                                   : 'hover:bg-accent hover:text-accent-foreground'
                               )}
                             >
@@ -379,8 +400,8 @@ export function AppLayout({ children }: LayoutProps) {
                       className="flex h-9 items-center px-2"
                       aria-label="User and brand menu"
                     >
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
-                        <span className="text-xs font-semibold text-white">
+                      <div className="bg-primary flex h-7 w-7 items-center justify-center rounded-full">
+                        <span className="text-primary-foreground text-xs font-semibold">
                           {selectedBrand?.name?.charAt(0) || user.email?.charAt(0)?.toUpperCase()}
                         </span>
                       </div>
@@ -412,7 +433,7 @@ export function AppLayout({ children }: LayoutProps) {
                             <div className="flex w-full items-center justify-between">
                               <span>{brand.name}</span>
                               {selectedBrand?.id === brand.id && (
-                                <Check className="h-4 w-4 text-blue-600" aria-hidden="true" />
+                                <Check className="text-primary h-4 w-4" aria-hidden="true" />
                               )}
                             </div>
                           </DropdownMenuItem>
@@ -439,7 +460,7 @@ export function AppLayout({ children }: LayoutProps) {
 
                     <DropdownMenuSeparator />
 
-                    <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                    <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                       <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
                       Logout
                     </DropdownMenuItem>
@@ -528,13 +549,13 @@ export function AppLayout({ children }: LayoutProps) {
       <EmailVerificationBanner />
 
       {/* Main Content */}
-      <main id="main-content" className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <main id="main-content" className={cn('flex-1 py-6', containerCls)}>
         {children}
       </main>
 
       {/* Footer */}
       <footer className="bg-card mt-8 border-t">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <div className={cn('py-4', containerCls)}>
           <div className="text-muted-foreground flex flex-col items-center justify-between space-y-3 text-sm md:flex-row md:space-y-0">
             <div className="text-center md:text-left">
               © {new Date().getFullYear()} Postolio. All rights reserved.

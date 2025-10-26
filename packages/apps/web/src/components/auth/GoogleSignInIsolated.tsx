@@ -30,7 +30,7 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
         onError?.(errorMsg);
         toast.error('Google sign-in failed', {
           description: errorMsg,
-          icon: <AlertCircle className="text-red-500" />,
+          icon: <AlertCircle className="text-destructive" />,
         });
         return;
       }
@@ -63,7 +63,7 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
           const actionText = data.isNewUser ? 'Account created' : 'Signed in';
           toast.success(`${actionText} successfully!`, {
             description: 'Welcome to Postolio! Redirecting...',
-            icon: <CheckCircle className="text-green-500" />,
+            icon: <CheckCircle className="text-foreground" />,
             duration: TIMEOUTS.TOAST_DURATION,
           });
 
@@ -73,7 +73,7 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
         } else {
           toast.success('Google account linked!', {
             description: 'You can now sign in with Google',
-            icon: <CheckCircle className="text-green-500" />,
+            icon: <CheckCircle className="text-foreground" />,
           });
         }
 
@@ -83,7 +83,7 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
         onError?.(errorMsg);
         toast.error('Authentication failed', {
           description: errorMsg,
-          icon: <AlertCircle className="text-red-500" />,
+          icon: <AlertCircle className="text-destructive" />,
         });
       } finally {
         setIsLoading(false);

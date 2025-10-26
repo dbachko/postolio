@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
-import { Card, CardHeader, CardTitle, CardContent } from '../../ui/card';
-import { Button } from '../../ui/button';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 function computeSchedule(start: string, end: string, frequency: string): string[] {
   const dates: string[] = [];
@@ -78,7 +78,7 @@ export function Step4Timeline() {
         </CardHeader>
         <CardContent>
           {items.length === 0 ? (
-            <div className="text-sm text-gray-600">
+            <div className="text-muted-foreground text-sm">
               Set your timeline and frequency to preview schedule.
             </div>
           ) : (
@@ -89,7 +89,7 @@ export function Step4Timeline() {
                   className="flex items-center justify-between rounded border p-2 text-sm"
                 >
                   <span>{d}</span>
-                  <span className="text-gray-600">{postingTime}</span>
+                  <span className="text-muted-foreground">{postingTime}</span>
                 </div>
               ))}
             </div>

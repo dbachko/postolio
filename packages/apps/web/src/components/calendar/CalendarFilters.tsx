@@ -6,13 +6,20 @@ import {
   type ContentType,
 } from '../../stores/calendarFilterStore';
 import { campaign as campaignApi, type Campaign } from '../../lib/api';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar } from '../ui/calendar';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { Search, X, Filter, Calendar as CalendarIcon } from 'lucide-react';
 
@@ -22,23 +29,11 @@ interface CalendarFiltersProps {
 }
 
 const STATUS_OPTIONS: { value: ContentStatus; label: string; color: string }[] = [
-  { value: 'draft', label: 'Draft', color: 'bg-gray-100 text-gray-800' },
-  {
-    value: 'scheduled',
-    label: 'Scheduled',
-    color: 'bg-blue-100 text-blue-800',
-  },
-  {
-    value: 'published',
-    label: 'Published',
-    color: 'bg-green-100 text-green-800',
-  },
-  { value: 'failed', label: 'Failed', color: 'bg-red-100 text-red-800' },
-  {
-    value: 'skipped',
-    label: 'Skipped',
-    color: 'bg-yellow-100 text-yellow-800',
-  },
+  { value: 'draft', label: 'Draft', color: '' },
+  { value: 'scheduled', label: 'Scheduled', color: '' },
+  { value: 'published', label: 'Published', color: '' },
+  { value: 'failed', label: 'Failed', color: '' },
+  { value: 'skipped', label: 'Skipped', color: '' },
 ];
 
 const CONTENT_TYPE_OPTIONS: { value: ContentType; label: string }[] = [
@@ -91,16 +86,16 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
   };
 
   return (
-    <div className={`space-y-3 rounded-lg border bg-white ${compact ? 'p-2' : 'p-4'}`}>
+    <div className={`space-y-3 rounded-lg border ${compact ? 'p-2' : 'p-4'}`}>
       {!compact && (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-500" />
+            <Filter className="h-4 w-4" />
             <span className="font-medium">Filters</span>
             {activeFilterCount > 0 && <Badge variant="secondary">{activeFilterCount} active</Badge>}
           </div>
           {filters.hasActiveFilters() && (
-            <Button variant="ghost" size="sm" onClick={filters.clearAll} className="text-gray-500">
+            <Button variant="ghost" size="sm" onClick={filters.clearAll}>
               Clear All
             </Button>
           )}
@@ -112,9 +107,7 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
       >
         {/* Campaign Filter */}
         <div>
-          <Label className={`mb-1 text-xs text-gray-600 ${compact ? 'sr-only' : ''}`}>
-            Campaign
-          </Label>
+          <Label className={`mb-1 text-xs ${compact ? 'sr-only' : ''}`}>Campaign</Label>
           <Select value={selectCampaignValue} onValueChange={handleCampaignChange}>
             <SelectTrigger className={`w-full ${compact ? 'h-8 text-xs' : ''}`}>
               <SelectValue placeholder="All campaigns" />
@@ -133,7 +126,7 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
 
         {/* Status Filter */}
         <div>
-          <Label className={`mb-1 text-xs text-gray-600 ${compact ? 'sr-only' : ''}`}>Status</Label>
+          <Label className={`mb-1 text-xs ${compact ? 'sr-only' : ''}`}>Status</Label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -149,15 +142,16 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
             <PopoverContent className="w-56">
               <div className="space-y-2">
                 {STATUS_OPTIONS.map((option) => (
-                  <label key={option.value} className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
+                  <div key={option.value} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`status-${option.value}`}
                       checked={filters.statuses.includes(option.value)}
-                      onChange={() => filters.toggleStatus(option.value)}
-                      className="rounded"
+                      onCheckedChange={() => filters.toggleStatus(option.value)}
                     />
-                    <Badge className={option.color}>{option.label}</Badge>
-                  </label>
+                    <Label htmlFor={`status-${option.value}`} className="cursor-pointer">
+                      <Badge>{option.label}</Badge>
+                    </Label>
+                  </div>
                 ))}
               </div>
             </PopoverContent>
@@ -166,9 +160,7 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
 
         {/* Content Type Filter */}
         <div>
-          <Label className={`mb-1 text-xs text-gray-600 ${compact ? 'sr-only' : ''}`}>
-            Content Type
-          </Label>
+          <Label className={`mb-1 text-xs ${compact ? 'sr-only' : ''}`}>Content Type</Label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -186,15 +178,16 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
             <PopoverContent className="w-48">
               <div className="space-y-2">
                 {CONTENT_TYPE_OPTIONS.map((option) => (
-                  <label key={option.value} className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
+                  <div key={option.value} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`ctype-${option.value}`}
                       checked={filters.contentTypes.includes(option.value)}
-                      onChange={() => filters.toggleContentType(option.value)}
-                      className="rounded"
+                      onCheckedChange={() => filters.toggleContentType(option.value)}
                     />
-                    <span className="text-sm">{option.label}</span>
-                  </label>
+                    <Label htmlFor={`ctype-${option.value}`} className="cursor-pointer font-normal">
+                      <span className="text-sm">{option.label}</span>
+                    </Label>
+                  </div>
                 ))}
               </div>
             </PopoverContent>
@@ -203,9 +196,7 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
 
         {/* Date Range Filter */}
         <div>
-          <Label className={`mb-1 text-xs text-gray-600 ${compact ? 'sr-only' : ''}`}>
-            Date Range
-          </Label>
+          <Label className={`mb-1 text-xs ${compact ? 'sr-only' : ''}`}>Date Range</Label>
           <Popover open={isDateRangeOpen} onOpenChange={setIsDateRangeOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -310,7 +301,7 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
 
       {/* Search Bar */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+        <Search className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform" />
         <Input
           type="text"
           placeholder="Search captions, hashtags, or campaigns..."
@@ -319,12 +310,15 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
           className={`pl-10 pr-10 ${compact ? 'h-8 text-sm' : ''}`}
         />
         {filters.searchQuery && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => filters.setSearchQuery('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 transform"
+            className="absolute right-3 top-1/2 h-6 w-6 -translate-y-1/2 transform p-0"
+            aria-label="Clear search"
           >
-            <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
-          </button>
+            <X className="text-muted-foreground hover:text-foreground h-4 w-4" />
+          </Button>
         )}
       </div>
 
@@ -336,14 +330,17 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
             return campaign ? (
               <Badge key={campaignId} variant="secondary">
                 Campaign: {campaign.name}
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() =>
                     filters.setCampaigns(filters.campaigns.filter((id) => id !== campaignId))
                   }
-                  className="ml-1"
+                  className="ml-1 h-5 w-5 p-0"
+                  aria-label="Remove campaign filter"
                 >
                   <X className="h-3 w-3" />
-                </button>
+                </Button>
               </Badge>
             ) : null;
           })}
@@ -351,21 +348,30 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
           {filters.statuses.map((status) => (
             <Badge key={status} className={STATUS_OPTIONS.find((s) => s.value === status)?.color}>
               {STATUS_OPTIONS.find((s) => s.value === status)?.label}
-              <button onClick={() => filters.toggleStatus(status)} className="ml-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => filters.toggleStatus(status)}
+                className="ml-1 h-5 w-5 p-0"
+                aria-label="Remove status filter"
+              >
                 <X className="h-3 w-3" />
-              </button>
+              </Button>
             </Badge>
           ))}
 
           {filters.contentTypes.length === 1 && (
             <Badge variant="secondary">
               Type: {CONTENT_TYPE_OPTIONS.find((t) => t.value === filters.contentTypes[0])?.label}
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => filters.toggleContentType(filters.contentTypes[0])}
-                className="ml-1"
+                className="ml-1 h-5 w-5 p-0"
+                aria-label="Remove content type filter"
               >
                 <X className="h-3 w-3" />
-              </button>
+              </Button>
             </Badge>
           )}
 
@@ -374,18 +380,30 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
               {filters.dateRange.start && format(filters.dateRange.start, 'MMM d')}
               {filters.dateRange.start && filters.dateRange.end && ' - '}
               {filters.dateRange.end && format(filters.dateRange.end, 'MMM d')}
-              <button onClick={() => filters.setDateRange(null, null)} className="ml-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => filters.setDateRange(null, null)}
+                className="ml-1 h-5 w-5 p-0"
+                aria-label="Remove date range filter"
+              >
                 <X className="h-3 w-3" />
-              </button>
+              </Button>
             </Badge>
           )}
 
           {filters.searchQuery && (
             <Badge variant="secondary">
               Search: "{filters.searchQuery}"
-              <button onClick={() => filters.setSearchQuery('')} className="ml-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => filters.setSearchQuery('')}
+                className="ml-1 h-5 w-5 p-0"
+                aria-label="Remove search filter"
+              >
                 <X className="h-3 w-3" />
-              </button>
+              </Button>
             </Badge>
           )}
         </div>

@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Button } from '../ui/button';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -14,10 +14,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../ui/dialog';
-import { Checkbox } from '../ui/checkbox';
-import { Label } from '../ui/label';
-import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+} from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { exportToCSV, exportToPDF, exportToICal } from '../../utils/calendar-export';
 import { Download, FileText, Table, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -261,13 +261,19 @@ export function CalendarExport({ content, brandName, dateRange }: CalendarExport
                 </div>
                 <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border p-3">
                   {CSV_FIELDS.map((field) => (
-                    <label key={field.id} className="flex cursor-pointer items-center space-x-2">
+                    <div key={field.id} className="flex items-center space-x-2">
                       <Checkbox
+                        id={`csv-${field.id}`}
                         checked={selectedFields.includes(field.id)}
                         onCheckedChange={() => toggleField(field.id)}
                       />
-                      <span className="text-sm">{field.label}</span>
-                    </label>
+                      <Label
+                        htmlFor={`csv-${field.id}`}
+                        className="cursor-pointer text-sm font-normal"
+                      >
+                        {field.label}
+                      </Label>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -276,8 +282,9 @@ export function CalendarExport({ content, brandName, dateRange }: CalendarExport
             {/* PDF Options */}
             {exportFormat === 'pdf' && (
               <div className="space-y-3">
-                <label className="flex cursor-pointer items-center space-x-2">
+                <div className="flex items-center space-x-2">
                   <Checkbox
+                    id="pdf-group-campaign"
                     checked={pdfOptions.groupByCampaign}
                     onCheckedChange={(checked) =>
                       setPdfOptions((prev) => ({
@@ -286,10 +293,16 @@ export function CalendarExport({ content, brandName, dateRange }: CalendarExport
                       }))
                     }
                   />
-                  <span className="text-sm">Group content by campaign</span>
-                </label>
-                <label className="flex cursor-pointer items-center space-x-2">
+                  <Label
+                    htmlFor="pdf-group-campaign"
+                    className="cursor-pointer text-sm font-normal"
+                  >
+                    Group content by campaign
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
                   <Checkbox
+                    id="pdf-include-images"
                     checked={pdfOptions.includeImages}
                     onCheckedChange={(checked) =>
                       setPdfOptions((prev) => ({
@@ -299,14 +312,19 @@ export function CalendarExport({ content, brandName, dateRange }: CalendarExport
                     }
                     disabled // For future enhancement
                   />
-                  <span className="text-sm text-gray-400">Include images (coming soon)</span>
-                </label>
+                  <Label
+                    htmlFor="pdf-include-images"
+                    className="text-muted-foreground cursor-pointer text-sm font-normal"
+                  >
+                    Include images (coming soon)
+                  </Label>
+                </div>
               </div>
             )}
 
             {/* Summary */}
-            <div className="rounded-lg bg-gray-50 p-3">
-              <div className="text-sm text-gray-600">
+            <div className="bg-muted rounded-lg p-3">
+              <div className="text-muted-foreground text-sm">
                 <div className="flex justify-between">
                   <span>Total items to export:</span>
                   <span className="font-medium">{content.length}</span>

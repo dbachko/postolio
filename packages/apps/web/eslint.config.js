@@ -24,6 +24,25 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': 'warn',
+      // Disallow importing UI primitives from outside the canonical alias path
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '../ui/*',
+                './ui/*',
+                '../components/ui/*',
+                '../../components/ui/*',
+                'src/components/ui/*',
+              ],
+              message:
+                'Import UI primitives from the canonical alias: "@/components/ui/<component>".',
+            },
+          ],
+        },
+      ],
     },
   },
 ];

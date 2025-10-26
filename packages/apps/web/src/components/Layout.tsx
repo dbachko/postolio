@@ -99,10 +99,7 @@ export function Layout({ children }: LayoutProps) {
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="w-56 border border-gray-200 bg-white shadow-lg"
-                  >
+                  <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>
                       <div className="flex flex-col space-y-1">
                         <p className="text-sm font-medium leading-none">Account</p>
@@ -128,7 +125,7 @@ export function Layout({ children }: LayoutProps) {
                             <div className="flex w-full items-center justify-between">
                               <span>{brand.name}</span>
                               {selectedBrand?.id === brand.id && (
-                                <Check className="h-4 w-4 text-blue-600" />
+                                <Check className="text-primary h-4 w-4" />
                               )}
                             </div>
                           </DropdownMenuItem>
@@ -152,7 +149,7 @@ export function Layout({ children }: LayoutProps) {
                     <DropdownMenuSeparator />
 
                     {/* Logout */}
-                    <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                    <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                       <LogOut className="mr-2 h-4 w-4" />
                       Logout
                     </DropdownMenuItem>

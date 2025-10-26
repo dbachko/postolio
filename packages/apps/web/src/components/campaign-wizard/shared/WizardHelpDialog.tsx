@@ -13,7 +13,7 @@ export function WizardHelpDialog({ open, onOpenChange }: WizardHelpDialogProps) 
           <DialogTitle>Campaign Wizard Help</DialogTitle>
         </DialogHeader>
         <div className="max-h-[70vh] overflow-y-auto pr-2">
-          <div className="space-y-6 text-sm leading-6 text-gray-800">
+          <div className="text-foreground space-y-6 text-sm leading-6">
             <section>
               <h3 className="mb-2 text-base font-semibold">Content Pillars</h3>
               <ul className="list-disc space-y-2 pl-5">

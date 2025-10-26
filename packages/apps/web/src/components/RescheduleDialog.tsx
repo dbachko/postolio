@@ -1,8 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
-import { Button } from './ui/button';
-import { Calendar } from './ui/calendar';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { format } from 'date-fns';
 import { convertLocalToUTC } from '@/lib/timezone';
 
@@ -69,8 +81,8 @@ export function RescheduleDialog({
         <div className="grid gap-4">
           {/* Manual pickers */}
           <div>
-            <div className="mb-2 text-sm font-medium text-gray-700">Manual</div>
-            <div className="mb-3 text-xs text-gray-500">Date</div>
+            <div className="mb-2 text-sm font-medium">Manual</div>
+            <div className="text-muted-foreground mb-3 text-xs">Date</div>
             <Calendar
               mode="single"
               selected={date}
@@ -78,7 +90,7 @@ export function RescheduleDialog({
               className="rounded-md border"
             />
             <div className="mt-3 flex items-center gap-2">
-              <div className="text-xs text-gray-500">Time</div>
+              <div className="text-muted-foreground text-xs">Time</div>
               <Select value={hour} onValueChange={setHour}>
                 <SelectTrigger className="w-14">
                   <SelectValue placeholder="hr" />
@@ -91,7 +103,7 @@ export function RescheduleDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <span className="text-gray-400">:</span>
+              <span className="text-muted-foreground">:</span>
               <Select value={minute} onValueChange={setMinute}>
                 <SelectTrigger className="w-16">
                   <SelectValue placeholder="min" />
@@ -114,7 +126,7 @@ export function RescheduleDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="mt-3 text-sm text-gray-600">
+            <div className="text-muted-foreground mt-3 text-sm">
               New time: {format(date, 'EEE, MMM d, yyyy')} at {hour}:{minute} {ampm.toUpperCase()}
             </div>
           </div>

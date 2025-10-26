@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
 import { useBrandStore } from '../../../stores/brandStore';
-import { Card, CardHeader, CardTitle, CardContent } from '../../ui/card';
-import { Button } from '../../ui/button';
-import { Switch } from '../../ui/switch';
-import { Badge } from '../../ui/badge';
-import { Alert, AlertDescription } from '../../ui/alert';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { campaign as campaignApi, httpPost } from '../../../lib/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -99,31 +99,33 @@ export function Step5Review() {
         <CardContent className="space-y-4 text-sm">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-gray-600">Campaign Type</div>
+              <div className="text-muted-foreground">Campaign Type</div>
               <div className="font-medium capitalize">{summary.type.replace('_', ' ')}</div>
             </div>
             <Button variant="outline" onClick={() => setStep(1)}>
               Edit
             </Button>
           </div>
-          <div className="h-px w-full bg-gray-200" />
+          <div className="bg-muted h-px w-full" />
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-gray-600">Seasonality Assistance</div>
-              <div className="text-gray-600">Use seasons/holidays in content when relevant</div>
+              <div className="text-muted-foreground">Seasonality Assistance</div>
+              <div className="text-muted-foreground">
+                Use seasons/holidays in content when relevant
+              </div>
             </div>
             <Switch
               checked={summary.seasonalityAssist}
               onCheckedChange={(v) => useCampaignWizard.setState({ seasonalityAssist: v })}
             />
           </div>
-          <div className="h-px w-full bg-gray-200" />
+          <div className="bg-muted h-px w-full" />
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-gray-600">Name & Goals</div>
+              <div className="text-muted-foreground">Name & Goals</div>
               <div className="font-medium">{summary.name || '—'}</div>
               {summary.goals.length ? (
-                <ol className="mt-1 space-y-1 pl-0 text-gray-600">
+                <ol className="text-muted-foreground mt-1 space-y-1 pl-0">
                   {summary.goals.map((g, i) => (
                     <li key={i} className="flex items-center gap-2">
                       <Badge
@@ -137,21 +139,21 @@ export function Step5Review() {
                   ))}
                 </ol>
               ) : (
-                <div className="text-gray-600">—</div>
+                <div className="text-muted-foreground">—</div>
               )}
             </div>
             <Button variant="outline" onClick={() => setStep(2)}>
               Edit
             </Button>
           </div>
-          <div className="h-px w-full bg-gray-200" />
+          <div className="bg-muted h-px w-full" />
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-gray-600">Timeline & Posting</div>
+              <div className="text-muted-foreground">Timeline & Posting</div>
               <div className="font-medium">
                 {summary.timeline?.startDate || '—'} → {summary.timeline?.endDate || '—'}
               </div>
-              <div className="text-gray-600">
+              <div className="text-muted-foreground">
                 {summary.frequency || '—'} • {summary.postingTime || '—'}
               </div>
             </div>
@@ -159,10 +161,10 @@ export function Step5Review() {
               Edit
             </Button>
           </div>
-          <div className="h-px w-full bg-gray-200" />
+          <div className="bg-muted h-px w-full" />
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-gray-600">Themes & Style</div>
+              <div className="text-muted-foreground">Themes & Style</div>
               <div className="mb-1 flex flex-wrap gap-1">
                 {summary.themes.map((t) => (
                   <Badge key={t} variant="secondary">
@@ -170,7 +172,7 @@ export function Step5Review() {
                   </Badge>
                 ))}
               </div>
-              <div className="text-gray-600">{summary.style || '—'}</div>
+              <div className="text-muted-foreground">{summary.style || '—'}</div>
             </div>
             <Button variant="outline" onClick={() => setStep(2)}>
               Edit

@@ -5,8 +5,8 @@ import { SessionCard } from './SessionCard';
 import { RevokeSessionDialog } from './RevokeSessionDialog';
 import { RevokeAllSessionsDialog } from './RevokeAllSessionsDialog';
 import { EditDeviceNameDialog } from './EditDeviceNameDialog';
-import { Button } from '../ui/button';
-import { Alert, AlertDescription } from '../ui/alert';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LogOut, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -121,7 +121,7 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+        <Loader2 className="text-foreground h-8 w-8 animate-spin" />
       </div>
     );
   }
@@ -143,7 +143,7 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold">Your Devices</h2>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="text-muted-foreground mt-1 text-sm">
             {sessions.length} active {sessions.length === 1 ? 'session' : 'sessions'}
           </p>
         </div>
@@ -159,7 +159,7 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
         {/* Current session first */}
         {currentSession && (
           <div>
-            <h3 className="mb-2 text-sm font-medium text-gray-500">Current Session</h3>
+            <h3 className="text-muted-foreground mb-2 text-sm font-medium">Current Session</h3>
             <SessionCard
               session={currentSession}
               onRevoke={handleRevoke}
@@ -171,7 +171,7 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
         {/* Other sessions */}
         {otherSessions.length > 0 && (
           <div>
-            <h3 className="mb-2 text-sm font-medium text-gray-500">Other Sessions</h3>
+            <h3 className="text-muted-foreground mb-2 text-sm font-medium">Other Sessions</h3>
             <div className="space-y-3">
               {otherSessions.map((session) => (
                 <SessionCard
@@ -186,7 +186,7 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
         )}
 
         {sessions.length === 0 && (
-          <div className="py-12 text-center text-gray-500">
+          <div className="text-muted-foreground py-12 text-center">
             <p>No active sessions found.</p>
           </div>
         )}

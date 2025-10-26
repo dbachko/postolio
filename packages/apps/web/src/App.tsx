@@ -4,12 +4,13 @@ import { Toaster } from '@/components/ui/sonner';
 import { useAuthStore } from './stores/authStore';
 import { TimezoneProvider } from './contexts/TimezoneContext';
 import { ConnectionStatusProvider } from './contexts/WebSocketContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { AppLayout as Layout } from './components/AppLayout';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Brands } from './pages/Brands';
-import Analytics from './pages/Analytics';
+// import Analytics from './pages/Analytics';
 import Campaigns from './pages/Campaigns';
 import { Content } from './pages/Content';
 import { Settings } from './pages/Settings';
@@ -17,6 +18,7 @@ import { SecuritySettings } from './pages/SecuritySettings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { TermsOfService } from './pages/TermsOfService';
 import { DataDeletion } from './pages/DataDeletion';
+import UiKitchenSink from './pages/UiKitchenSink';
 import { MagicLinkVerify } from './pages/MagicLinkVerify';
 import { EmailVerify } from './pages/EmailVerify';
 import { PasswordReset } from './pages/PasswordReset';
@@ -39,7 +41,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-32 w-32 animate-spin rounded-full border-b-2 border-gray-900"></div>
+        <div className="h-32 w-32 animate-spin rounded-full border-b-2"></div>
       </div>
     );
   }
@@ -128,16 +130,16 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
-  {
-    path: '/analytics',
-    element: (
-      <ProtectedRoute>
-        <Layout>
-          <Analytics />
-        </Layout>
-      </ProtectedRoute>
-    ),
-  },
+  // {
+  //   path: '/analytics',
+  //   element: (
+  //     <ProtectedRoute>
+  //       <Layout>
+  //         <Analytics />
+  //       </Layout>
+  //     </ProtectedRoute>
+  //   ),
+  // },
   {
     path: '/drafts',
     element: (
@@ -254,6 +256,16 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
+  {
+    path: '/_ui',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <UiKitchenSink />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
 ]);
 
 function App() {
@@ -268,8 +280,10 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ConnectionStatusProvider>
           <TimezoneProvider>
-            <RouterProvider router={router} />
-            <Toaster position="bottom-left" />
+            <ThemeProvider>
+              <RouterProvider router={router} />
+              <Toaster position="bottom-left" />
+            </ThemeProvider>
           </TimezoneProvider>
         </ConnectionStatusProvider>
       </QueryClientProvider>

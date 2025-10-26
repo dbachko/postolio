@@ -19,6 +19,13 @@ To run any script for only this application from the monorepo root, use the `--f
 pnpm --filter=@postolio/web dev
 ```
 
+## UI Components (shadcn/ui)
+
+- We standardize on shadcn/ui primitives installed locally under `src/components/ui`.
+- Usage guide: see `docs/SHADCN-UI-USAGE.md` for install commands, import rules, tokens/colors, and composition patterns.
+- Always import from `@/components/ui/<component>` and prefer design tokens like `text-foreground`, `bg-background`, `border` over palette utilities.
+- CI guard: `pnpm -w run lint:colors` blocks Tailwind palette utilities outside of UI primitives. Replace with tokens or dynamic inline styles.
+
 ### Local HTTPS on ai.localhost
 
 - Run `scripts/setup-ai-localhost.sh` once to generate and trust local dev certs (mkcert required).

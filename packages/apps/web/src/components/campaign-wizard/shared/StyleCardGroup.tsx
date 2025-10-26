@@ -38,7 +38,7 @@ export function StyleCardGroup({ value, onChange }: StyleCardGroupProps) {
               <Card
                 className={cn(
                   'h-full transition-shadow',
-                  checked ? 'shadow-md ring-2 ring-blue-500' : 'hover:shadow-sm'
+                  checked ? 'ring-ring shadow-md ring-2' : 'hover:shadow-sm'
                 )}
               >
                 <CardContent className="flex min-h-24 items-start gap-3 p-4">
@@ -64,7 +64,7 @@ export function StyleCardGroup({ value, onChange }: StyleCardGroupProps) {
           <Card
             className={cn(
               'h-full transition-shadow',
-              selectedValue === 'custom' ? 'shadow-md ring-2 ring-blue-500' : 'hover:shadow-sm'
+              selectedValue === 'custom' ? 'ring-ring shadow-md ring-2' : 'hover:shadow-sm'
             )}
           >
             <CardContent className="flex min-h-24 items-start gap-3 p-4">

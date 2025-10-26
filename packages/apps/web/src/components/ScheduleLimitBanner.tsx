@@ -37,11 +37,11 @@ export function ScheduleLimitBanner() {
   if (!atCapacity || dismissed) return null;
 
   return (
-    <div className="border-b border-amber-200 bg-amber-50 shadow-sm dark:border-amber-900 dark:bg-amber-950/20">
+    <div className="bg-muted border-b shadow-sm">
       {/* Match AppLayout nav container sizing (height + paddings) */}
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center gap-2 text-amber-900 dark:text-amber-200">
-          <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="text-foreground flex min-w-0 items-center gap-2">
+          <AlertTriangle className="text-foreground h-4 w-4 flex-shrink-0" />
           <span className="truncate text-sm font-medium">
             You've reached your plan's scheduling limit
           </span>
@@ -52,7 +52,7 @@ export function ScheduleLimitBanner() {
             size="sm"
             variant="outline"
             onClick={() => (window.location.href = '/limits')}
-            className="h-9 border-amber-300 text-amber-900 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/30"
+            className="h-9"
           >
             Learn More
           </Button>
@@ -69,7 +69,7 @@ export function ScheduleLimitBanner() {
               }
               setDismissed(true);
             }}
-            className="h-9 w-9 p-2 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+            className="hover:bg-accent h-9 w-9 p-2"
           >
             <X className="h-4 w-4" />
           </Button>

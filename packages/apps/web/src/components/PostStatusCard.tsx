@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { Badge } from './ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
 
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
@@ -40,8 +40,8 @@ export function PostStatusCard({
       : format(createdAt, "MMM d, yyyy 'at' h:mm a");
 
   return (
-    <div className={`rounded-lg bg-gray-50 p-4 ${className}`}>
-      <div className="mb-2 text-sm font-medium text-gray-700">Post Status</div>
+    <div className={`bg-muted rounded-lg p-4 ${className}`}>
+      <div className="text-foreground mb-2 text-sm font-medium">Post Status</div>
       <div className="flex items-center gap-2">
         {processing ? (
           <Badge variant="secondary" className="gap-1">
@@ -52,7 +52,7 @@ export function PostStatusCard({
             {status.charAt(0).toUpperCase() + status.slice(1)}
           </Badge>
         )}
-        <span className="text-xs text-gray-500">Created: {formattedDate}</span>
+        <span className="text-muted-foreground text-xs">Created: {formattedDate}</span>
       </div>
     </div>
   );

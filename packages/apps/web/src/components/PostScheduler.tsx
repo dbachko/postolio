@@ -1,7 +1,8 @@
 import { useRef, useCallback } from 'react';
 import { format } from 'date-fns';
-import { Label } from './ui/label';
-import { Input } from './ui/input';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { usePostSchedulerStore } from '../stores/postSchedulerStore';
 
 interface PostSchedulerProps {
@@ -102,14 +103,15 @@ export function PostScheduler({
       <div className="flex items-center justify-between">
         <Label htmlFor="scheduledAt">Scheduled Time</Label>
         {showClearButton && displayValue && (
-          <button
+          <Button
             type="button"
+            variant="link"
             onClick={handleClear}
-            className="text-xs text-gray-500 hover:text-red-600"
+            className="text-xs"
             disabled={disabled}
           >
             Clear
-          </button>
+          </Button>
         )}
       </div>
       <Input
@@ -124,7 +126,7 @@ export function PostScheduler({
         disabled={disabled}
       />
       {showFormattedDate && displayValue && (
-        <div className="text-xs text-gray-500">
+        <div className="text-muted-foreground text-xs">
           Scheduled for: {format(new Date(displayValue), "EEEE, MMMM d, yyyy 'at' h:mm a")}
         </div>
       )}

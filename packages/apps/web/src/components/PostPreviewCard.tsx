@@ -21,9 +21,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from './ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import { Copy, Trash2 } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 
 interface PostPreviewCardProps {
@@ -71,23 +72,23 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
     navigate(`/posts/${item.id}`);
   };
 
-  // Visual styles by status
+  // Visual styles by status (subtle tints)
   const statusStyles: Record<string, string> = {
-    draft: 'bg-white border-gray-300',
-    scheduled: 'bg-white border-blue-300',
-    published: 'bg-green-50 border-green-300',
-    failed: 'bg-red-50 border-red-300',
-    skipped: 'bg-yellow-50 border-yellow-300',
-    placeholder: 'bg-amber-50 border-amber-300',
+    draft: 'bg-muted hover:bg-accent/50',
+    scheduled: 'bg-info/10 hover:bg-info/15',
+    published: 'bg-success/10 hover:bg-success/15',
+    failed: 'bg-destructive/10 hover:bg-destructive/15',
+    skipped: 'bg-warning/10 hover:bg-warning/15',
+    placeholder: 'bg-info/10 hover:bg-info/15',
   };
 
   const iconByStatus: Record<string, ReactNode> = {
-    draft: <Clock className="h-3.5 w-3.5 text-gray-500" />,
-    scheduled: <Clock className="h-3.5 w-3.5 text-blue-600" />,
-    published: <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />,
-    failed: <AlertTriangle className="h-3.5 w-3.5 text-red-600" />,
-    skipped: <AlertTriangle className="h-3.5 w-3.5 text-yellow-600" />,
-    placeholder: <Clock className="h-3.5 w-3.5 text-amber-600" />,
+    draft: <Clock className="h-3.5 w-3.5" />,
+    scheduled: <Clock className="h-3.5 w-3.5" />,
+    published: <CheckCircle2 className="h-3.5 w-3.5" />,
+    failed: <AlertTriangle className="h-3.5 w-3.5" />,
+    skipped: <AlertTriangle className="h-3.5 w-3.5" />,
+    placeholder: <Clock className="h-3.5 w-3.5" />,
   };
 
   // Campaign accent (thin left border)
@@ -134,7 +135,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
           handleOpen();
         }
       }}
-      className={`group w-full rounded-md border px-2 py-2 text-left shadow-sm transition-colors hover:bg-gray-50 ${
+      className={`hover:bg-muted group w-full rounded-md border px-2 py-2 text-left shadow-sm transition-colors ${
         statusStyles[status] || statusStyles.draft
       }`}
       style={campaignAccent}
@@ -144,7 +145,19 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex items-center gap-1.5 text-[11px] leading-none text-gray-600">
+              <div
+                className={`flex items-center gap-1.5 text-[11px] leading-none ${
+                  status === 'published'
+                    ? 'text-success'
+                    : status === 'scheduled' || status === 'placeholder'
+                      ? 'text-info'
+                      : status === 'failed'
+                        ? 'text-destructive'
+                        : status === 'skipped'
+                          ? 'text-warning'
+                          : 'text-muted-foreground'
+                }`}
+              >
                 {iconByStatus[status]}
                 {displayTime && <span className="font-medium">{displayTime}</span>}
               </div>
@@ -163,7 +176,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
       </div>
 
       {/* Caption, clamped to two lines */}
-      <div className="line-clamp-2 text-[12px] leading-snug text-gray-900">
+      <div className="text-foreground line-clamp-2 text-[12px] leading-snug">
         {(item as any)?.caption || ''}
       </div>
 
@@ -198,9 +211,10 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <Button
                   type="button"
-                  className="inline-flex items-center justify-center rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-gray-200"
+                  variant="ghost"
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 w-7 items-center justify-center p-1.5"
                   aria-label="Edit post"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -208,7 +222,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
                   }}
                 >
                   <Pencil className="h-4 w-4" />
-                </button>
+                </Button>
               </TooltipTrigger>
               <TooltipContent>Edit post</TooltipContent>
             </Tooltip>
@@ -217,7 +231,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <span
-              className="inline-flex cursor-pointer rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-gray-200"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex cursor-pointer rounded p-1.5 focus:outline-none focus-visible:ring-2"
               title="More options"
               onClick={(e) => {
                 e.stopPropagation();
@@ -252,7 +266,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
             <DropdownMenuSeparator />
             {item.type !== 'placeholder' && (
               <DropdownMenuItem
-                className="gap-2 text-red-600"
+                className="text-destructive gap-2"
                 onClick={() => deleteMutation.mutate((item as any).id)}
               >
                 <Trash2 className="h-4 w-4" />

@@ -88,7 +88,7 @@ export function Dashboard() {
   if (brandsLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-gray-900"></div>
+        <div className="border-foreground h-8 w-8 animate-spin rounded-full border-b-2"></div>
       </div>
     );
   }
@@ -159,7 +159,11 @@ export function Dashboard() {
                       <p className="text-muted-foreground text-sm">
                         Status:{' '}
                         <span
-                          className={`capitalize ${campaign.status === 'active' ? 'text-green-600' : 'text-gray-600'}`}
+                          className={`capitalize ${
+                            campaign.status === 'active'
+                              ? 'text-foreground'
+                              : 'text-muted-foreground'
+                          }`}
                         >
                           {campaign.status}
                         </span>{' '}
@@ -201,7 +205,7 @@ export function Dashboard() {
             <CardTitle className="text-lg">Active Campaigns</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-green-600">{activeCampaigns}</p>
+            <p className="text-foreground text-3xl font-bold">{activeCampaigns}</p>
           </CardContent>
         </Card>
 
@@ -210,7 +214,7 @@ export function Dashboard() {
             <CardTitle className="text-lg">Scheduled Posts</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-blue-600">{scheduledPosts}</p>
+            <p className="text-foreground text-3xl font-bold">{scheduledPosts}</p>
           </CardContent>
         </Card>
 
@@ -219,7 +223,7 @@ export function Dashboard() {
             <CardTitle className="text-lg">Published Posts</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-purple-600">{publishedPosts}</p>
+            <p className="text-foreground text-3xl font-bold">{publishedPosts}</p>
           </CardContent>
         </Card>
       </div>

@@ -17,7 +17,7 @@ export function FrequencyToggleGroup({ value, onChange }: FrequencyToggleGroupPr
     <div className="space-y-2">
       <Label>
         Frequency{' '}
-        <span className="text-red-600" aria-hidden>
+        <span className="text-destructive" aria-hidden>
           *
         </span>
       </Label>
@@ -42,7 +42,7 @@ export function FrequencyToggleGroup({ value, onChange }: FrequencyToggleGroupPr
               htmlFor={id}
               className={cn(
                 'flex h-full min-h-16 cursor-pointer items-center justify-center gap-2 rounded-md border p-2 text-sm transition-colors',
-                checked ? 'border-blue-500 bg-blue-50 text-blue-700' : 'hover:bg-gray-50'
+                checked ? 'ring-ring bg-muted ring-1' : 'hover:bg-muted'
               )}
             >
               <RadioGroupItem id={id} value={opt.value} className="sr-only" />
@@ -55,9 +55,7 @@ export function FrequencyToggleGroup({ value, onChange }: FrequencyToggleGroupPr
           htmlFor="freq-custom"
           className={cn(
             'flex h-full min-h-16 cursor-pointer items-center gap-2 rounded-md border p-2 text-sm transition-colors sm:col-span-3',
-            selectedValue === 'custom'
-              ? 'border-blue-500 bg-blue-50 text-blue-700'
-              : 'hover:bg-gray-50'
+            selectedValue === 'custom' ? 'ring-ring bg-muted ring-1' : 'hover:bg-muted'
           )}
         >
           <RadioGroupItem id="freq-custom" value="custom" className="sr-only" />

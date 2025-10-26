@@ -7,7 +7,7 @@ export function AutoSaveIndicator() {
   if (saveStatus === 'idle') return null;
 
   return (
-    <div className="flex items-center gap-2 text-xs text-gray-500">
+    <div className="text-muted-foreground flex items-center gap-2 text-xs">
       {saveStatus === 'saving' && (
         <>
           <Loader2 className="h-3 w-3 animate-spin" />
@@ -16,13 +16,13 @@ export function AutoSaveIndicator() {
       )}
       {saveStatus === 'saved' && (
         <>
-          <CheckCircle2 className="h-3 w-3 text-green-600" />
+          <CheckCircle2 className="text-foreground h-3 w-3" />
           <span>Saved</span>
         </>
       )}
       {saveStatus === 'error' && (
         <>
-          <AlertTriangle className="h-3 w-3 text-amber-600" />
+          <AlertTriangle className="text-foreground h-3 w-3" />
           <span>Save failed</span>
         </>
       )}

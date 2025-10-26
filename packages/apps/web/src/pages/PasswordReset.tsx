@@ -213,7 +213,7 @@ export function PasswordReset() {
                 <div className="text-muted-foreground text-sm">Password requirements:</div>
                 <div className="space-y-1">
                   <div
-                    className={`flex items-center text-sm ${passwordStrength.length ? 'text-green-600' : 'text-muted-foreground'}`}
+                    className={`flex items-center text-sm ${passwordStrength.length ? 'text-foreground' : 'text-muted-foreground'}`}
                   >
                     {passwordStrength.length ? (
                       <Check className="mr-2 h-4 w-4" />
@@ -223,7 +223,7 @@ export function PasswordReset() {
                     At least 15 characters
                   </div>
                   <div
-                    className={`flex items-center text-sm ${passwordStrength.uppercase ? 'text-green-600' : 'text-muted-foreground'}`}
+                    className={`flex items-center text-sm ${passwordStrength.uppercase ? 'text-foreground' : 'text-muted-foreground'}`}
                   >
                     {passwordStrength.uppercase ? (
                       <Check className="mr-2 h-4 w-4" />
@@ -233,7 +233,7 @@ export function PasswordReset() {
                     One uppercase letter
                   </div>
                   <div
-                    className={`flex items-center text-sm ${passwordStrength.lowercase ? 'text-green-600' : 'text-muted-foreground'}`}
+                    className={`flex items-center text-sm ${passwordStrength.lowercase ? 'text-foreground' : 'text-muted-foreground'}`}
                   >
                     {passwordStrength.lowercase ? (
                       <Check className="mr-2 h-4 w-4" />
@@ -243,7 +243,7 @@ export function PasswordReset() {
                     One lowercase letter
                   </div>
                   <div
-                    className={`flex items-center text-sm ${passwordStrength.number ? 'text-green-600' : 'text-muted-foreground'}`}
+                    className={`flex items-center text-sm ${passwordStrength.number ? 'text-foreground' : 'text-muted-foreground'}`}
                   >
                     {passwordStrength.number ? (
                       <Check className="mr-2 h-4 w-4" />

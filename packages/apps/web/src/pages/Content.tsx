@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBrandStore } from '../stores/brandStore';
 import { ContentCalendar } from '../components/ContentCalendar';
-import { Alert, AlertDescription } from '../components/ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 
 export function Content() {

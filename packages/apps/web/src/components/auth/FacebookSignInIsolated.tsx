@@ -31,7 +31,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
         onError?.(errorMsg);
         toast.error('Facebook sign-in failed', {
           description: errorMsg,
-          icon: <AlertCircle className="text-red-500" />,
+          icon: <AlertCircle />,
         });
         return;
       }
@@ -65,7 +65,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
           const actionText = data.isNewUser ? 'Account created' : 'Signed in';
           toast.success(`${actionText} successfully!`, {
             description: 'Welcome to Postolio! Redirecting...',
-            icon: <CheckCircle className="text-green-500" />,
+            icon: <CheckCircle />,
             duration: TIMEOUTS.TOAST_DURATION,
           });
 
@@ -75,7 +75,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
         } else {
           toast.success('Facebook account linked!', {
             description: 'You can now sign in with Facebook',
-            icon: <CheckCircle className="text-green-500" />,
+            icon: <CheckCircle />,
           });
         }
 
@@ -85,7 +85,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
         onError?.(errorMsg);
         toast.error('Authentication failed', {
           description: errorMsg,
-          icon: <AlertCircle className="text-red-500" />,
+          icon: <AlertCircle />,
         });
       } finally {
         setIsLoading(false);
@@ -98,7 +98,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
     if (!window.FB || !isSDKLoaded) {
       toast.error('Facebook SDK not loaded', {
         description: 'Please try again in a moment',
-        icon: <AlertCircle className="text-red-500" />,
+        icon: <AlertCircle />,
       });
       return;
     }
@@ -114,7 +114,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
             setIsLoading(false);
             if (response.status !== 'unknown') {
               toast.error('Facebook sign-in cancelled', {
-                icon: <AlertCircle className="text-red-500" />,
+                icon: <AlertCircle />,
               });
             }
           }
@@ -126,7 +126,7 @@ export function FacebookSignInIsolated({ mode, onSuccess, onError }: FacebookSig
       console.error('Facebook login error:', error);
       toast.error('Facebook sign-in failed', {
         description: 'An unexpected error occurred',
-        icon: <AlertCircle className="text-red-500" />,
+        icon: <AlertCircle />,
       });
     }
   }, [isSDKLoaded, handleFacebookResponse]);

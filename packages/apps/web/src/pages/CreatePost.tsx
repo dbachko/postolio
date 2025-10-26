@@ -4,13 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { campaign as campaignApi, content as contentApi } from '../lib/api';
 import { useBrandStore } from '../stores/brandStore';
-import { Card } from '../components/ui/card';
-import { Button } from '../components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload, Hash, Type, AlertCircle, Calendar, Clock } from 'lucide-react';
-import { Label } from '../components/ui/label';
-import { Textarea } from '../components/ui/textarea';
-import { Input } from '../components/ui/input';
-import { Alert, AlertDescription } from '../components/ui/alert';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { validateImageFile } from '../lib/fileUtils';
 import {
   Select,
@@ -18,7 +18,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../components/ui/select';
+} from '@/components/ui/select';
 
 export function CreatePost() {
   const navigate = useNavigate();
@@ -277,13 +277,13 @@ export function CreatePost() {
               type="file"
               accept="image/*"
               onChange={handleImageChange}
-              className={`cursor-pointer ${errors.image ? 'border-red-500' : ''}`}
+              className="cursor-pointer"
               aria-label="Upload post image"
               aria-describedby={errors.image ? 'image-error' : 'image-help'}
               aria-invalid={!!errors.image}
             />
             {errors.image && (
-              <p id="image-error" className="mt-1 text-sm text-red-500" role="alert">
+              <p id="image-error" className="text-destructive mt-1 text-sm" role="alert">
                 {errors.image}
               </p>
             )}
@@ -307,7 +307,7 @@ export function CreatePost() {
           <div className="space-y-2">
             <Label htmlFor="caption" className="flex items-center gap-2">
               <Type className="h-4 w-4" />
-              Caption <span className="text-red-500">*</span>
+              Caption <span className="text-destructive">*</span>
             </Label>
             <Textarea
               id="caption"
@@ -320,7 +320,7 @@ export function CreatePost() {
                 }
               }}
               placeholder="Write your caption here..."
-              className={`min-h-[150px] ${errors.caption ? 'border-red-500' : ''}`}
+              className="min-h-[150px]"
               maxLength={2200}
               required
               aria-label="Post caption"
@@ -329,13 +329,13 @@ export function CreatePost() {
               aria-required="true"
             />
             {errors.caption && (
-              <p id="caption-error" className="text-sm text-red-500" role="alert">
+              <p id="caption-error" className="text-destructive text-sm" role="alert">
                 {errors.caption}
               </p>
             )}
             <p
               id="caption-help"
-              className={`text-sm ${caption.length > 2000 ? 'text-orange-500' : 'text-muted-foreground'}`}
+              className={`text-sm ${caption.length > 2000 ? 'text-destructive' : 'text-muted-foreground'}`}
               aria-live="polite"
             >
               {caption.length}/2200 characters
@@ -359,13 +359,13 @@ export function CreatePost() {
                 }
               }}
               placeholder="Enter hashtags separated by spaces or commas"
-              className={errors.hashtags ? 'border-red-500' : ''}
+              className=""
               aria-label="Post hashtags"
               aria-describedby={errors.hashtags ? 'hashtags-error' : 'hashtags-help'}
               aria-invalid={!!errors.hashtags}
             />
             {errors.hashtags && (
-              <p id="hashtags-error" className="text-sm text-red-500" role="alert">
+              <p id="hashtags-error" className="text-destructive text-sm" role="alert">
                 {errors.hashtags}
               </p>
             )}
@@ -438,7 +438,7 @@ export function CreatePost() {
               aria-invalid={!!scheduleError}
             />
             {scheduleError ? (
-              <p id="schedule-error" className="text-sm text-red-500" role="alert">
+              <p id="schedule-error" className="text-destructive text-sm" role="alert">
                 {scheduleError}
               </p>
             ) : (

@@ -1,11 +1,17 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
 import { ThemeChipInput } from '../shared/ThemeChipInput';
-import { Button } from '../../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { Label } from '../../ui/label';
-import { Input } from '../../ui/input';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../ui/select';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import { AutoSaveIndicator } from '../shared/AutoSaveIndicator';
 import { StyleCardGroup } from '../shared/StyleCardGroup';
 import { FrequencyToggleGroup } from '../shared/FrequencyToggleGroup';
@@ -62,7 +68,9 @@ export function Step2CampaignBrief() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Campaign Brief</h2>
-          <p className="text-sm text-gray-600">Tell us about your goals, timing, and themes.</p>
+          <p className="text-muted-foreground text-sm">
+            Tell us about your goals, timing, and themes.
+          </p>
         </div>
         <AutoSaveIndicator />
       </div>
@@ -106,7 +114,7 @@ export function Step2CampaignBrief() {
           <div className="space-y-1">
             <Label htmlFor="start-date">
               Start Date{' '}
-              <span className="text-red-600" aria-hidden>
+              <span className="text-destructive" aria-hidden>
                 *
               </span>
             </Label>
@@ -127,7 +135,7 @@ export function Step2CampaignBrief() {
           <div className="space-y-1">
             <Label htmlFor="end-date">
               End Date{' '}
-              <span className="text-red-600" aria-hidden>
+              <span className="text-destructive" aria-hidden>
                 *
               </span>
             </Label>
@@ -146,7 +154,7 @@ export function Step2CampaignBrief() {
             />
           </div>
           {timeline?.startDate && timeline?.endDate && (
-            <div className="col-span-2 text-sm text-gray-600">
+            <div className="text-muted-foreground col-span-2 text-sm">
               {Math.ceil(
                 (new Date(timeline.endDate).getTime() - new Date(timeline.startDate).getTime()) /
                   (1000 * 60 * 60 * 24)
@@ -165,7 +173,7 @@ export function Step2CampaignBrief() {
           <div className="space-y-2">
             <Label>
               Themes{' '}
-              <span className="text-red-600" aria-hidden>
+              <span className="text-destructive" aria-hidden>
                 *
               </span>
             </Label>

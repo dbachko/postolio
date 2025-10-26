@@ -58,12 +58,12 @@ export function EngagementChart({ data, type = 'bar' }: EngagementChartProps) {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="rounded-lg border bg-white p-3 shadow-lg">
+        <div className="bg-background rounded-lg border p-3 shadow-lg">
           <p className="font-medium">{`${label} (${data.date})`}</p>
           <p className="text-muted-foreground mb-2 text-sm">{data.caption}</p>
-          <p className="text-blue-600">Impressions: {payload[0].value.toLocaleString()}</p>
-          <p className="text-green-600">Engagement: {payload[1].value.toLocaleString()}</p>
-          <p className="text-purple-600">Rate: {data.engagementRate.toFixed(1)}%</p>
+          <p className="text-foreground">Impressions: {payload[0].value.toLocaleString()}</p>
+          <p className="text-foreground">Engagement: {payload[1].value.toLocaleString()}</p>
+          <p className="text-foreground">Rate: {data.engagementRate.toFixed(1)}%</p>
         </div>
       );
     }
@@ -88,7 +88,7 @@ export function EngagementChart({ data, type = 'bar' }: EngagementChartProps) {
             <Line
               type="monotone"
               dataKey="impressions"
-              stroke="#3b82f6"
+              stroke="var(--chart-1)"
               strokeWidth={2}
               dot={{ r: 4 }}
               name="Impressions"
@@ -96,7 +96,7 @@ export function EngagementChart({ data, type = 'bar' }: EngagementChartProps) {
             <Line
               type="monotone"
               dataKey="engagement"
-              stroke="#10b981"
+              stroke="var(--chart-2)"
               strokeWidth={2}
               dot={{ r: 4 }}
               name="Engagement"
@@ -115,8 +115,13 @@ export function EngagementChart({ data, type = 'bar' }: EngagementChartProps) {
           <XAxis dataKey="name" tick={{ fontSize: 12 }} angle={-45} textAnchor="end" height={60} />
           <YAxis tick={{ fontSize: 12 }} />
           <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="impressions" fill="#3b82f6" name="Impressions" radius={[2, 2, 0, 0]} />
-          <Bar dataKey="engagement" fill="#10b981" name="Engagement" radius={[2, 2, 0, 0]} />
+          <Bar
+            dataKey="impressions"
+            fill="var(--chart-1)"
+            name="Impressions"
+            radius={[2, 2, 0, 0]}
+          />
+          <Bar dataKey="engagement" fill="var(--chart-2)" name="Engagement" radius={[2, 2, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

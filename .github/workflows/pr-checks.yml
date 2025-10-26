@@ -15,7 +15,7 @@ permissions:
 
 env:
   NODE_VERSION: '22'
-  PNPM_VERSION: '9.9.0'
+  PNPM_VERSION: '10.19.0'
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
 
@@ -95,6 +95,8 @@ jobs:
           # Try typecheck first, fallback to build if not available
           npx turbo typecheck --filter='...[origin/${{ github.base_ref }}]' || \
           npx turbo build --filter='...[origin/${{ github.base_ref }}]'
+
+
 
       - name: Check formatting
         run: |

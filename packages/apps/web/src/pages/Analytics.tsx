@@ -6,6 +6,14 @@ import AnalyticsChart from '../components/AnalyticsChart';
 import SchedulingPanel from '../components/SchedulingPanel';
 import { useBrandStore } from '../stores/brandStore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { MetricsCard } from '../components/analytics/MetricsCard';
 import { EngagementChart as IGEngagementChart } from '../components/analytics/EngagementChart';
 import { Eye, Heart, Users } from 'lucide-react';
@@ -261,13 +269,15 @@ export default function Analytics() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
+    <div className="min-h-screen p-4 sm:p-8">
       <div className="mx-auto max-w-6xl">
         <PageHeader title="Analytics" description="Performance metrics and scheduling" />
 
         {error && (
-          <div className="mb-6 mt-6 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700">
-            {error}
+          <div className="mb-6 mt-6">
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           </div>
         )}
 
@@ -290,50 +300,51 @@ export default function Analytics() {
           <TabsContent value="overview" className="space-y-6">
             <div className="flex flex-wrap items-center gap-3">
               {selectedBrand && (
-                <div className="text-sm text-gray-600">
+                <div className="text-muted-foreground text-sm">
                   Analytics for: <span className="font-medium">{selectedBrand.name}</span>
                 </div>
               )}
-              <select
-                value={daysPeriod}
-                onChange={(e) => setDaysPeriod(Number(e.target.value))}
-                className="rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={7}>Last 7 days</option>
-                <option value={30}>Last 30 days</option>
-                <option value={90}>Last 90 days</option>
-              </select>
+              <Select value={String(daysPeriod)} onValueChange={(v) => setDaysPeriod(Number(v))}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Select range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">Last 7 days</SelectItem>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                  <SelectItem value="90">Last 90 days</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {loading && (
               <div className="py-8 text-center">
-                <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-                <p className="mt-2 text-gray-600">Loading analytics...</p>
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2"></div>
+                <p className="text-muted-foreground mt-2">Loading analytics...</p>
               </div>
             )}
 
             {report && !loading && (
               <>
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-                  <div className="rounded-lg bg-white p-6 shadow-md">
-                    <h3 className="text-sm font-medium text-gray-500">Total Posts</h3>
-                    <p className="text-2xl font-bold text-gray-900">{report.totalPosts}</p>
+                  <div className="rounded-lg border p-6 shadow-sm">
+                    <h3 className="text-muted-foreground text-sm font-medium">Total Posts</h3>
+                    <p className="text-2xl font-bold">{report.totalPosts}</p>
                   </div>
-                  <div className="rounded-lg bg-white p-6 shadow-md">
-                    <h3 className="text-sm font-medium text-gray-500">Total Impressions</h3>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {formatNumber(report.totalImpressions)}
-                    </p>
+                  <div className="rounded-lg border p-6 shadow-sm">
+                    <h3 className="text-muted-foreground text-sm font-medium">Total Impressions</h3>
+                    <p className="text-2xl font-bold">{formatNumber(report.totalImpressions)}</p>
                   </div>
-                  <div className="rounded-lg bg-white p-6 shadow-md">
-                    <h3 className="text-sm font-medium text-gray-500">Total Reach</h3>
-                    <p className="text-2xl font-bold text-gray-900">
+                  <div className="bg-card rounded-lg p-6 shadow-md">
+                    <h3 className="text-muted-foreground text-sm font-medium">Total Reach</h3>
+                    <p className="text-foreground text-2xl font-bold">
                       {formatNumber(report.totalReach)}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-white p-6 shadow-md">
-                    <h3 className="text-sm font-medium text-gray-500">Avg. Engagement Rate</h3>
-                    <p className="text-2xl font-bold text-green-600">
+                  <div className="bg-card rounded-lg p-6 shadow-md">
+                    <h3 className="text-muted-foreground text-sm font-medium">
+                      Avg. Engagement Rate
+                    </h3>
+                    <p className="text-foreground text-2xl font-bold">
                       {report.averageEngagementRate.toFixed(1)}%
                     </p>
                   </div>
@@ -352,24 +363,26 @@ export default function Analytics() {
                   />
                 </div>
 
-                <div className="rounded-lg bg-white p-6 shadow-md">
+                <div className="bg-card rounded-lg p-6 shadow-md">
                   <h3 className="mb-4 text-lg font-semibold">Top Performing Posts</h3>
                   {report.topPerformingPosts && report.topPerformingPosts.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="min-w-full">
                         <thead>
                           <tr className="border-b">
-                            <th className="px-4 py-3 text-left font-medium text-gray-500">
+                            <th className="text-muted-foreground px-4 py-3 text-left font-medium">
                               Post ID
                             </th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-500">
+                            <th className="text-muted-foreground px-4 py-3 text-left font-medium">
                               Impressions
                             </th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-500">Reach</th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-500">
+                            <th className="text-muted-foreground px-4 py-3 text-left font-medium">
+                              Reach
+                            </th>
+                            <th className="text-muted-foreground px-4 py-3 text-left font-medium">
                               Engagement
                             </th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-500">
+                            <th className="text-muted-foreground px-4 py-3 text-left font-medium">
                               Engagement Rate
                             </th>
                           </tr>
@@ -377,21 +390,21 @@ export default function Analytics() {
                         <tbody>
                           {report.topPerformingPosts.slice(0, 5).map((post, index) => (
                             <tr key={index} className="border-b">
-                              <td className="max-w-32 truncate px-4 py-3 text-sm text-gray-900">
+                              <td className="text-foreground max-w-32 truncate px-4 py-3 text-sm">
                                 {post.postId}
                               </td>
-                              <td className="px-4 py-3 text-sm text-gray-900">
+                              <td className="text-foreground px-4 py-3 text-sm">
                                 {formatNumber(post.impressions)}
                               </td>
-                              <td className="px-4 py-3 text-sm text-gray-900">
+                              <td className="text-foreground px-4 py-3 text-sm">
                                 {formatNumber(post.reach)}
                               </td>
-                              <td className="px-4 py-3 text-sm text-gray-900">
+                              <td className="text-foreground px-4 py-3 text-sm">
                                 {formatNumber(
                                   post.likes + post.comments + post.saves + post.shares
                                 )}
                               </td>
-                              <td className="px-4 py-3 text-sm font-medium text-green-600">
+                              <td className="text-foreground px-4 py-3 text-sm font-medium">
                                 {post.engagementRate.toFixed(1)}%
                               </td>
                             </tr>
@@ -400,7 +413,7 @@ export default function Analytics() {
                       </table>
                     </div>
                   ) : (
-                    <div className="py-8 text-center text-gray-500">
+                    <div className="text-muted-foreground py-8 text-center">
                       No top performing posts available for this period
                     </div>
                   )}
@@ -410,7 +423,7 @@ export default function Analytics() {
 
             {!loading && !report && selectedBrand && (
               <div className="py-12 text-center">
-                <div className="mb-4 text-gray-400">
+                <div className="text-muted-foreground mb-4">
                   <svg
                     className="mx-auto h-12 w-12"
                     fill="none"
@@ -425,10 +438,8 @@ export default function Analytics() {
                     />
                   </svg>
                 </div>
-                <h3 className="mb-2 text-lg font-medium text-gray-900">
-                  No analytics data available
-                </h3>
-                <p className="text-gray-500">
+                <h3 className="mb-2 text-lg font-medium">No analytics data available</h3>
+                <p className="text-muted-foreground">
                   Start posting content to see analytics and insights.
                 </p>
               </div>
@@ -438,19 +449,16 @@ export default function Analytics() {
           <TabsContent value="instagram" className="space-y-6">
             {igLoading ? (
               <div className="py-8 text-center">
-                <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-                <p className="mt-2 text-gray-600">Loading Instagram analytics...</p>
+                <div className="border-foreground inline-block h-8 w-8 animate-spin rounded-full border-b-2"></div>
+                <p className="text-muted-foreground mt-2">Loading Instagram analytics...</p>
               </div>
             ) : igConfigured === false ? (
-              <div className="rounded-lg bg-white p-6 text-center shadow-md">
+              <div className="rounded-lg border p-6 text-center shadow-sm">
                 <h3 className="mb-2 text-lg font-semibold">Instagram Not Connected</h3>
-                <p className="mb-4 text-gray-600">
+                <p className="text-muted-foreground mb-4">
                   Connect your Instagram account to view analytics data for {selectedBrand?.name}.
                 </p>
-                <a
-                  href="/brands"
-                  className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-                >
+                <a href="/brands" className="inline-flex items-center rounded-md px-4 py-2">
                   Connect Instagram
                 </a>
               </div>
@@ -480,16 +488,16 @@ export default function Analytics() {
                 </div>
 
                 {igPosts.posts.length > 0 && (
-                  <div className="rounded-lg bg-white p-6 shadow-md">
+                  <div className="rounded-lg border p-6 shadow-sm">
                     <h3 className="mb-1 text-lg font-semibold">Recent Posts Performance</h3>
-                    <p className="mb-4 text-gray-500">
+                    <p className="text-muted-foreground mb-4">
                       Engagement metrics for your last {igPosts.posts.length} posts
                     </p>
                     <IGEngagementChart data={igPosts.posts} />
                   </div>
                 )}
 
-                <div className="rounded-lg bg-white p-6 shadow-md">
+                <div className="rounded-lg border p-6 shadow-sm">
                   <h3 className="mb-4 text-lg font-semibold">Top Performing Posts</h3>
                   {igPosts.posts && igPosts.posts.length > 0 ? (
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -519,7 +527,7 @@ export default function Analytics() {
                                   {post.engagement.toLocaleString()}
                                 </span>
                               </div>
-                              <span className="text-gray-500">
+                              <span className="text-muted-foreground">
                                 {new Date(post.posted_at).toLocaleDateString()}
                               </span>
                             </div>
@@ -528,7 +536,9 @@ export default function Analytics() {
                       ))}
                     </div>
                   ) : (
-                    <div className="py-8 text-center text-gray-500">No posts data available</div>
+                    <div className="text-muted-foreground py-8 text-center">
+                      No posts data available
+                    </div>
                   )}
                 </div>
               </>
@@ -538,21 +548,21 @@ export default function Analytics() {
           <TabsContent value="scheduling" className="space-y-6">
             {schedulingStats && (
               <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-                <div className="rounded-lg bg-white p-6 shadow-md">
-                  <h3 className="text-sm font-medium text-gray-500">Scheduled</h3>
-                  <p className="text-2xl font-bold text-blue-600">{schedulingStats.scheduled}</p>
+                <div className="bg-card rounded-lg p-6 shadow-md">
+                  <h3 className="text-muted-foreground text-sm font-medium">Scheduled</h3>
+                  <p className="text-foreground text-2xl font-bold">{schedulingStats.scheduled}</p>
                 </div>
-                <div className="rounded-lg bg-white p-6 shadow-md">
-                  <h3 className="text-sm font-medium text-gray-500">Posted</h3>
-                  <p className="text-2xl font-bold text-green-600">{schedulingStats.posted}</p>
+                <div className="bg-card rounded-lg p-6 shadow-md">
+                  <h3 className="text-muted-foreground text-sm font-medium">Posted</h3>
+                  <p className="text-foreground text-2xl font-bold">{schedulingStats.posted}</p>
                 </div>
-                <div className="rounded-lg bg-white p-6 shadow-md">
-                  <h3 className="text-sm font-medium text-gray-500">Failed</h3>
-                  <p className="text-2xl font-bold text-red-600">{schedulingStats.failed}</p>
+                <div className="bg-card rounded-lg p-6 shadow-md">
+                  <h3 className="text-muted-foreground text-sm font-medium">Failed</h3>
+                  <p className="text-foreground text-2xl font-bold">{schedulingStats.failed}</p>
                 </div>
-                <div className="rounded-lg bg-white p-6 shadow-md">
-                  <h3 className="text-sm font-medium text-gray-500">Draft</h3>
-                  <p className="text-2xl font-bold text-yellow-600">{schedulingStats.draft}</p>
+                <div className="bg-card rounded-lg p-6 shadow-md">
+                  <h3 className="text-muted-foreground text-sm font-medium">Draft</h3>
+                  <p className="text-foreground text-2xl font-bold">{schedulingStats.draft}</p>
                 </div>
               </div>
             )}

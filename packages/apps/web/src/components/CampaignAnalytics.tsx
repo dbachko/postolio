@@ -3,10 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { campaign as campaignApi } from '../lib/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
-import { Button } from './ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   BarChart,
   TrendingUp,
@@ -71,7 +71,7 @@ export function CampaignAnalytics({
     return (
       <Card>
         <CardContent className="py-8">
-          <div className="flex items-center justify-center text-red-600">
+          <div className="text-destructive flex items-center justify-center">
             <AlertCircle className="mr-2 h-5 w-5" />
             Failed to load analytics data
           </div>
@@ -88,7 +88,7 @@ export function CampaignAnalytics({
     return (
       <Card>
         <CardContent className="py-8">
-          <div className="text-center text-gray-600">No analytics data available yet</div>
+          <div className="text-muted-foreground text-center">No analytics data available yet</div>
         </CardContent>
       </Card>
     );
@@ -101,26 +101,20 @@ export function CampaignAnalytics({
   };
 
   const getPerformanceColor = (rate: number) => {
-    if (rate >= 3) return 'text-green-600';
-    if (rate >= 1.5) return 'text-yellow-600';
-    return 'text-red-600';
+    if (rate >= 3) return '';
+    if (rate >= 1.5) return '';
+    return '';
   };
 
   const getPerformanceIcon = (rate: number) => {
     return rate >= 2 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />;
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low':
-        return 'bg-green-100 text-green-800 border-green-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
+  const getPriorityVariant = (priority: string): 'warning' | 'info' | 'secondary' => {
+    const p = String(priority).toLowerCase();
+    if (p === 'high') return 'warning';
+    if (p === 'medium') return 'info';
+    return 'secondary';
   };
 
   return (
@@ -148,8 +142,8 @@ export function CampaignAnalytics({
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <Card>
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="rounded-lg bg-blue-100 p-2">
-                  <BarChart className="h-5 w-5 text-blue-600" />
+                <div className="bg-muted rounded-lg p-2">
+                  <BarChart className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-muted-foreground text-sm">Total Posts</p>
@@ -160,8 +154,8 @@ export function CampaignAnalytics({
 
             <Card>
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="rounded-lg bg-purple-100 p-2">
-                  <Eye className="h-5 w-5 text-purple-600" />
+                <div className="bg-muted rounded-lg p-2">
+                  <Eye className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-muted-foreground text-sm">Impressions</p>
@@ -172,8 +166,8 @@ export function CampaignAnalytics({
 
             <Card>
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="rounded-lg bg-green-100 p-2">
-                  <Heart className="h-5 w-5 text-green-600" />
+                <div className="bg-muted rounded-lg p-2">
+                  <Heart className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-muted-foreground text-sm">Engagement</p>
@@ -184,8 +178,8 @@ export function CampaignAnalytics({
 
             <Card>
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="rounded-lg bg-orange-100 p-2">
-                  <Users className="h-5 w-5 text-orange-600" />
+                <div className="bg-muted rounded-lg p-2">
+                  <Users className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-muted-foreground text-sm">Reach</p>
@@ -345,20 +339,24 @@ export function CampaignAnalytics({
                 </div>
               ) : recommendations.length === 0 ? (
                 <div className="py-8 text-center">
-                  <Lightbulb className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                  <h3 className="mb-2 font-medium text-gray-900">No recommendations yet</h3>
-                  <p className="text-gray-600">
+                  <Lightbulb className="mx-auto mb-4 h-12 w-12" />
+                  <h3 className="mb-2 font-medium">No recommendations yet</h3>
+                  <p className="text-muted-foreground">
                     We'll provide optimization insights once your campaign has more data.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {recommendations.map((rec: any, index: number) => (
-                    <Card key={index} className="border-l-4 border-l-blue-500">
+                    <Card
+                      key={index}
+                      className="border-l-4"
+                      style={{ borderLeftColor: 'hsl(var(--info))' }}
+                    >
                       <CardContent className="p-4">
                         <div className="mb-2 flex items-start justify-between">
                           <div className="flex items-center gap-2">
-                            <Badge className={getPriorityColor(rec.priority)}>
+                            <Badge variant={getPriorityVariant(rec.priority)}>
                               {rec.priority} priority
                             </Badge>
                             <Badge variant="outline">{rec.type}</Badge>
@@ -402,9 +400,7 @@ export function CampaignAnalytics({
               ) : (
                 <div className="space-y-6">
                   <div className="text-center">
-                    <div className="text-4xl font-bold text-green-600">
-                      ${roi.estimatedValue.toFixed(2)}
-                    </div>
+                    <div className="text-4xl font-bold">${roi.estimatedValue.toFixed(2)}</div>
                     <p className="text-muted-foreground text-sm">Estimated campaign value</p>
                   </div>
 
@@ -444,7 +440,7 @@ export function CampaignAnalytics({
                     </div>
                   </div>
 
-                  <div className="text-muted-foreground rounded bg-gray-50 p-3 text-xs">
+                  <div className="text-muted-foreground bg-muted rounded p-3 text-xs">
                     <strong>Methodology:</strong> {roi.methodology}
                   </div>
                 </div>

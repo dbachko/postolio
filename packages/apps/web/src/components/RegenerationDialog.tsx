@@ -6,9 +6,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from './ui/dialog';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface RegenerationDialogProps {
@@ -42,7 +42,7 @@ const RegenerationDialog = memo(
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <RefreshCw className="h-5 w-5 text-blue-600" />
+              <RefreshCw className="text-foreground h-5 w-5" />
               <DialogTitle>Confirm Content Regeneration</DialogTitle>
             </div>
             <DialogDescription>
@@ -52,12 +52,12 @@ const RegenerationDialog = memo(
 
           <div className="space-y-4">
             {/* Impact Summary */}
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="bg-muted rounded-lg border p-4">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+                <AlertTriangle className="text-foreground mt-0.5 h-5 w-5 flex-shrink-0" />
                 <div>
-                  <h4 className="font-medium text-amber-900">Regeneration Impact</h4>
-                  <p className="mt-1 text-sm text-amber-700">
+                  <h4 className="text-foreground font-medium">Regeneration Impact</h4>
+                  <p className="text-muted-foreground mt-1 text-sm">
                     This action will regenerate <strong>{contentCount} existing posts</strong> with
                     new content.
                     <span className="mt-1 block font-medium">This cannot be undone.</span>
@@ -68,13 +68,13 @@ const RegenerationDialog = memo(
 
             {/* Changed Fields */}
             <div>
-              <h4 className="mb-2 text-sm font-medium text-gray-900">
+              <h4 className="text-foreground mb-2 text-sm font-medium">
                 Changes triggering regeneration:
               </h4>
               <div className="space-y-2">
                 {hasThemeChanges && (
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600">Themes:</span>
+                    <span className="text-muted-foreground text-sm">Themes:</span>
                     <div className="flex flex-wrap gap-1">
                       {changedFields.themes!.map((theme) => (
                         <Badge key={theme} variant="secondary" className="text-xs">
@@ -86,7 +86,7 @@ const RegenerationDialog = memo(
                 )}
                 {hasStyleChanges && (
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600">Style:</span>
+                    <span className="text-muted-foreground text-sm">Style:</span>
                     <Badge variant="secondary" className="text-xs">
                       {changedFields.style}
                     </Badge>
@@ -96,19 +96,19 @@ const RegenerationDialog = memo(
             </div>
 
             {/* Process Details */}
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <div className="bg-muted rounded-lg border p-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-blue-700">Estimated time:</span>
-                <span className="font-medium text-blue-900">~{estimatedTime} seconds</span>
+                <span className="text-muted-foreground">Estimated time:</span>
+                <span className="text-foreground font-medium">~{estimatedTime} seconds</span>
               </div>
               <div className="mt-1 flex items-center justify-between text-sm">
-                <span className="text-blue-700">Processing method:</span>
-                <span className="font-medium text-blue-900">Batch of 5 posts</span>
+                <span className="text-muted-foreground">Processing method:</span>
+                <span className="text-foreground font-medium">Batch of 5 posts</span>
               </div>
             </div>
 
             {/* Warning */}
-            <div className="rounded bg-gray-50 p-2 text-xs text-gray-500">
+            <div className="bg-muted text-muted-foreground rounded p-2 text-xs">
               💡 <strong>Tip:</strong> You can monitor progress and make other edits while
               regeneration runs in the background.
             </div>

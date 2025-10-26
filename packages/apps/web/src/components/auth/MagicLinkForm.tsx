@@ -75,7 +75,7 @@ export function MagicLinkForm({ mode, onSuccess }: MagicLinkFormProps) {
       setIsSent(true);
       toast.success('Magic link sent!', {
         description: 'Check your email to continue',
-        icon: <CheckCircle className="text-green-500" />,
+        icon: <CheckCircle />,
         duration: TIMEOUTS.TOAST_DURATION,
       });
 
@@ -85,7 +85,7 @@ export function MagicLinkForm({ mode, onSuccess }: MagicLinkFormProps) {
       setError(errorMsg);
       toast.error('Failed to send magic link', {
         description: errorMsg,
-        icon: <AlertCircle className="text-red-500" />,
+        icon: <AlertCircle />,
       });
     } finally {
       setIsLoading(false);
@@ -100,9 +100,9 @@ export function MagicLinkForm({ mode, onSuccess }: MagicLinkFormProps) {
   if (isSent) {
     return (
       <div className="space-y-4">
-        <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/20">
-          <Mail className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-800 dark:text-blue-200">
+        <Alert>
+          <Mail className="h-4 w-4" />
+          <AlertDescription>
             <strong>Check your email!</strong>
             <br />
             We've sent a magic link to <strong>{email}</strong>

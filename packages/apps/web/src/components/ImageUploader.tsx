@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Upload, X, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from './ui/button';
-import { Alert, AlertDescription } from './ui/alert';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface ImageUploaderProps {
   value?: string;
@@ -177,24 +177,24 @@ export function ImageUploader({
           onClick={handleClickUpload}
           className={cn(
             'relative cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-all',
-            isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400',
+            isDragging ? 'border-ring bg-muted' : 'border-border hover:border-foreground/30 border',
             isUploading && 'cursor-not-allowed opacity-50'
           )}
         >
           <div className="flex flex-col items-center space-y-4">
             {isUploading ? (
               <>
-                <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600" />
-                <p className="text-sm text-gray-600">Uploading image...</p>
+                <div className="border-foreground h-12 w-12 animate-spin rounded-full border-b-2" />
+                <p className="text-muted-foreground text-sm">Uploading image...</p>
               </>
             ) : (
               <>
-                <Upload className="h-12 w-12 text-gray-400" />
+                <Upload className="text-muted-foreground h-12 w-12" />
                 <div>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-foreground text-sm font-medium">
                     Drop your image here or click to browse
                   </p>
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="text-muted-foreground mt-1 text-xs">
                     Supports: JPEG, PNG, WebP, GIF (max {maxSizeInMB}MB)
                   </p>
                 </div>
@@ -207,7 +207,7 @@ export function ImageUploader({
         <div className="group relative">
           {/* Drag overlay when dragging over existing image */}
           {isDragging && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-blue-500 bg-opacity-90">
+            <div className="bg-primary/90 absolute inset-0 z-20 flex items-center justify-center rounded-lg">
               <div className="text-center text-white">
                 <Upload className="mx-auto mb-2 h-12 w-12" />
                 <p className="text-sm font-medium">Drop to replace image</p>
@@ -215,7 +215,7 @@ export function ImageUploader({
             </div>
           )}
 
-          <div className="relative aspect-square overflow-hidden rounded-lg bg-gray-100">
+          <div className="bg-muted relative aspect-square overflow-hidden rounded-lg">
             {/* Loading state for preview */}
             {isUploading && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-black bg-opacity-50">
@@ -271,7 +271,7 @@ export function ImageUploader({
 
           {/* Image Info */}
           {selectedFile && (
-            <div className="mt-2 text-xs text-gray-600">
+            <div className="text-muted-foreground mt-2 text-xs">
               <p>File: {selectedFile.name}</p>
               <p>Size: {(selectedFile.size / (1024 * 1024)).toFixed(2)}MB</p>
             </div>
@@ -281,7 +281,7 @@ export function ImageUploader({
 
       {/* Alternative Upload Button (when image exists) */}
       {previewUrl && !isUploading && (
-        <div className="flex items-center justify-center text-sm text-gray-600">
+        <div className="text-muted-foreground flex items-center justify-center text-sm">
           <ImageIcon className="mr-1 h-4 w-4" />
           <span>Image ready for post</span>
         </div>

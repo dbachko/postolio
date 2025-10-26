@@ -21,7 +21,7 @@ export function CampaignTypeCard({ type, selected, onSelect }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-gray-600">{type.description}</p>
+        <p className="text-muted-foreground text-sm">{type.description}</p>
       </CardContent>
     </Card>
   );

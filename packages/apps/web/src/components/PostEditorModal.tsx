@@ -12,9 +12,15 @@ import { PostStatusCard } from './PostStatusCard';
 import { PostSaveIndicator, type SaveStatus } from './PostSaveIndicator';
 import { PostLearningFeedback } from './PostLearningFeedback';
 import { usePostSchedulerStore } from '../stores/postSchedulerStore';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
-import { Label } from './ui/label';
-import { Button } from './ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { Save } from 'lucide-react';
 import { toast } from 'sonner';
 
