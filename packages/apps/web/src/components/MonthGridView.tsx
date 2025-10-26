@@ -110,7 +110,7 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
             <div
               key={key}
               className={
-                `group relative min-h-[140px] border-r border-b border-border p-2 transition-colors ` +
+                `group relative flex min-h-[140px] flex-col border-r border-b border-border p-2 transition-colors ` +
                 (isPastDay ? 'bg-muted/40' : 'bg-background hover:bg-accent/40')
               }
             >
@@ -134,32 +134,8 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
                 )}
               </div>
 
-              {/* Hover create button - don't show for past days */}
-              {!isPastDay && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCreateForDate}
-                  className="absolute right-2 top-2 hidden items-center gap-1 px-2 py-0.5 text-[11px] font-medium group-hover:flex"
-                  title="Create post"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-3.5 w-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  New
-                </Button>
-              )}
-
               {/* Items stacked vertically */}
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-1 flex-col gap-2">
                 {dayItems.map((it) => (
                   <PostPreviewCard
                     key={`${it.type}-${it.id}`}
@@ -173,6 +149,29 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
                   />
                 ))}
               </div>
+
+              {/* Bottom "Add New Post" button - don't show for past days */}
+              {!isPastDay && (
+                <button
+                  type="button"
+                  onClick={handleCreateForDate}
+                  className="hover:bg-accent/40 text-primary/90 border-primary/30 mt-2 hidden w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed p-2 text-xs font-medium transition-colors group-hover:flex"
+                  title="Add New Post"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Add New Post
+                </button>
+              )}
             </div>
           );
         })}
@@ -198,4 +197,3 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
     </div>
   );
 }
-import { Button } from '@/components/ui/button';
