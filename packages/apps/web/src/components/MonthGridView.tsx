@@ -90,7 +90,7 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
       </div>
 
       {/* Month grid */}
-      <div className="bg-muted grid grid-cols-7 gap-px">
+      <div className="grid grid-cols-7">
         {days.map((date) => {
           const isInMonth = isSameMonth(date, currentDate);
           const key = format(date, 'yyyy-MM-dd');
@@ -110,7 +110,7 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
             <div
               key={key}
               className={
-                `group relative min-h-[140px] p-2 transition-colors ` +
+                `group relative min-h-[140px] border-r border-b border-border p-2 transition-colors ` +
                 (isPastDay ? 'bg-muted/40' : 'bg-background hover:bg-accent/40')
               }
             >
