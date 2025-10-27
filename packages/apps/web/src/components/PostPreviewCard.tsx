@@ -79,7 +79,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
     published: 'bg-success/10 hover:bg-success/15',
     failed: 'bg-destructive/10 hover:bg-destructive/15',
     skipped: 'bg-warning/10 hover:bg-warning/15',
-    placeholder: 'bg-info/10 hover:bg-info/15',
+    placeholder: 'bg-warning/10 hover:bg-warning/15',
   };
 
   const iconByStatus: Record<string, ReactNode> = {
@@ -91,10 +91,8 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
     placeholder: <Clock className="h-3.5 w-3.5" />,
   };
 
-  // Campaign accent (thin left border)
-  const campaignAccent = campaignColor
-    ? { borderLeftColor: campaignColor, borderLeftWidth: 3, borderLeftStyle: 'solid' as const }
-    : {};
+  // Campaign accent removed - no longer using left border
+  const campaignAccent = {};
 
   // Mutations
   const queryClient = useQueryClient();
@@ -149,13 +147,15 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
                 className={`flex items-center gap-1.5 text-[11px] leading-none ${
                   status === 'published'
                     ? 'text-success'
-                    : status === 'scheduled' || status === 'placeholder'
+                    : status === 'scheduled'
                       ? 'text-info'
-                      : status === 'failed'
-                        ? 'text-destructive'
-                        : status === 'skipped'
-                          ? 'text-warning'
-                          : 'text-muted-foreground'
+                      : status === 'placeholder'
+                        ? 'text-warning'
+                        : status === 'failed'
+                          ? 'text-destructive'
+                          : status === 'skipped'
+                            ? 'text-warning'
+                            : 'text-muted-foreground'
                 }`}
               >
                 {iconByStatus[status]}
@@ -189,17 +189,13 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
               if (!item.campaignId) return;
               e.stopPropagation();
             }}
-            className="inline-flex max-w-full items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+            className="inline-flex max-w-full items-center gap-2 rounded-full px-2 py-0.5 text-[11px] font-medium"
             style={{
-              borderColor: campaignColor || 'hsl(var(--ring))',
-              color: 'hsl(var(--foreground))',
+              backgroundColor: campaignColor || 'hsl(var(--muted))',
+              color: campaignColor ? 'white' : 'hsl(var(--foreground))',
             }}
             title={item.campaignName}
           >
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: campaignColor || 'hsl(var(--ring))' }}
-            />
             <span className="truncate">{item.campaignName}</span>
           </a>
         </div>
@@ -207,27 +203,29 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
 
       {/* Bottom row: edit (hidden for published) + menu */}
       <div className="mt-1 flex items-center justify-between">
-        {item.type !== 'placeholder' && status !== 'published' && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 w-7 items-center justify-center p-1.5"
-                  aria-label="Edit post"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.location.href = `/posts/${(item as any).id}?edit=1`;
-                  }}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Edit post</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
+        <div>
+          {item.type !== 'placeholder' && status !== 'published' && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-7 w-7 items-center justify-center p-1.5"
+                    aria-label="Edit post"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.location.href = `/posts/${(item as any).id}?edit=1`;
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Edit post</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <span
