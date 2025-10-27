@@ -35,16 +35,11 @@ import {
   Home,
   Shield,
   Plus,
-  Sun,
-  Moon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
 import { RightHelpDrawer } from './help/RightHelpDrawer';
 import { ScheduleLimitBanner } from './ScheduleLimitBanner';
-import { useTheme } from 'next-themes';
-import { auth as authApi } from '@/lib/api';
-import { toast } from 'sonner';
 
 interface LayoutProps {
   children: ReactNode;
@@ -117,29 +112,6 @@ export function AppLayout({ children }: LayoutProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpDrawerOpen, setHelpDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { theme, systemTheme, setTheme } = useTheme();
-  const effectiveTheme =
-    theme === 'system'
-      ? (systemTheme as 'light' | 'dark' | undefined)
-      : (theme as 'light' | 'dark' | undefined);
-
-  const handleThemeToggle = async () => {
-    const next: 'light' | 'dark' =
-      theme === 'system'
-        ? effectiveTheme === 'dark'
-          ? 'light'
-          : 'dark'
-        : theme === 'dark'
-          ? 'light'
-          : 'dark';
-    setTheme(next);
-    try {
-      await authApi.updateUserTheme({ theme: next });
-    } catch (_e) {
-      // Non-blocking error
-      toast.error('Failed to save theme preference');
-    }
-  };
 
   const handleLogout = () => {
     logout();
@@ -279,23 +251,6 @@ export function AppLayout({ children }: LayoutProps) {
                 <Plus className="h-5 w-5" aria-hidden="true" />
               </Button>
 
-              {/* Theme toggle */}
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={
-                  effectiveTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
-                }
-                onClick={handleThemeToggle}
-                className="h-9 w-9"
-                title={effectiveTheme === 'dark' ? 'Light mode' : 'Dark mode'}
-              >
-                {effectiveTheme === 'dark' ? (
-                  <Sun className="h-4 w-4" aria-hidden="true" />
-                ) : (
-                  <Moon className="h-4 w-4" aria-hidden="true" />
-                )}
-              </Button>
               {/* Search Button */}
               <Button
                 variant="ghost"

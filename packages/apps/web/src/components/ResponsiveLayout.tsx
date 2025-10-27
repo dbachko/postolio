@@ -37,13 +37,8 @@ import {
   Search,
   // BarChart3,
   Megaphone,
-  Sun,
-  Moon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useTheme } from 'next-themes';
-import { auth as authApi } from '@/lib/api';
-import { toast } from 'sonner';
 
 interface LayoutProps {
   children: ReactNode;
@@ -79,28 +74,6 @@ export function ResponsiveLayout({ children }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { theme, systemTheme, setTheme } = useTheme();
-  const effectiveTheme =
-    theme === 'system'
-      ? (systemTheme as 'light' | 'dark' | undefined)
-      : (theme as 'light' | 'dark' | undefined);
-
-  const handleThemeToggle = async () => {
-    const next: 'light' | 'dark' =
-      theme === 'system'
-        ? effectiveTheme === 'dark'
-          ? 'light'
-          : 'dark'
-        : theme === 'dark'
-          ? 'light'
-          : 'dark';
-    setTheme(next);
-    try {
-      await authApi.updateUserTheme({ theme: next });
-    } catch (_e) {
-      toast.error('Failed to save theme preference');
-    }
-  };
 
   const handleLogout = () => {
     logout();
@@ -199,22 +172,6 @@ export function ResponsiveLayout({ children }: LayoutProps) {
 
             {/* Right Side Actions */}
             <div className="flex items-center space-x-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={
-                  effectiveTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
-                }
-                onClick={handleThemeToggle}
-                className="h-9 w-9"
-                title={effectiveTheme === 'dark' ? 'Light mode' : 'Dark mode'}
-              >
-                {effectiveTheme === 'dark' ? (
-                  <Sun className="h-4 w-4" aria-hidden="true" />
-                ) : (
-                  <Moon className="h-4 w-4" aria-hidden="true" />
-                )}
-              </Button>
               {/* Search Button */}
               <Button
                 variant="outline"

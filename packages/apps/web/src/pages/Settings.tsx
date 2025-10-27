@@ -371,7 +371,11 @@ export function Settings() {
                 <Label htmlFor="appearance">Theme</Label>
                 <RadioGroup
                   value={appearanceMode}
-                  onValueChange={(val) => setAppearanceMode(val as 'system' | 'light' | 'dark')}
+                  onValueChange={(val) => {
+                    const newTheme = val as 'system' | 'light' | 'dark';
+                    setAppearanceMode(newTheme);
+                    setTheme(newTheme);
+                  }}
                   className="grid grid-cols-3 gap-2 sm:max-w-md"
                 >
                   <label
@@ -412,11 +416,10 @@ export function Settings() {
                   onClick={async () => {
                     setIsSaving(true);
                     try {
-                      setTheme(appearanceMode);
                       await authApi.updateUserTheme({ theme: appearanceMode });
-                      toast.success('Theme settings saved successfully');
+                      toast.success('Theme preference saved successfully');
                     } catch (_e) {
-                      toast.error('Failed to save theme settings');
+                      toast.error('Failed to save theme preference');
                     } finally {
                       setIsSaving(false);
                     }
