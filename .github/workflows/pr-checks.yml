@@ -96,8 +96,6 @@ jobs:
           npx turbo typecheck --filter='...[origin/${{ github.base_ref }}]' || \
           npx turbo build --filter='...[origin/${{ github.base_ref }}]'
 
-
-
       - name: Check formatting
         run: |
           # Determine changed files against the PR base branch
