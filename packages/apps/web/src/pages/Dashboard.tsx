@@ -114,19 +114,6 @@ export function Dashboard() {
         description={
           activeBrand ? `Managing content for ${activeBrand.name}` : 'No active brand selected'
         }
-        actions={
-          <>
-            <Button variant="outline" asChild>
-              <Link to="/brands">Manage Brands</Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to="/campaigns">Campaigns</Link>
-            </Button>
-            <Button asChild>
-              <Link to="/content">Generate Content</Link>
-            </Button>
-          </>
-        }
       />
 
       {allCampaigns.length > 0 && (

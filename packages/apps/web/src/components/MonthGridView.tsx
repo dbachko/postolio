@@ -110,7 +110,7 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
             <div
               key={key}
               className={
-                `group relative flex min-h-[140px] flex-col border-r border-b border-border p-2 transition-colors ` +
+                `border-border group relative flex min-h-[140px] flex-col border-b border-r p-2 transition-colors ` +
                 (isPastDay ? 'bg-muted/40' : 'bg-background hover:bg-accent/40')
               }
             >

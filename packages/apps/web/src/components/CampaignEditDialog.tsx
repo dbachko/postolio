@@ -25,6 +25,7 @@ import { getStableColorFromId } from '../utils/campaign-colors';
 import { getStoredCampaignColor, setStoredCampaignColor } from '@/utils/campaign-color-storage';
 import { campaign as campaignApi, type Campaign } from '../lib/api';
 import { GoalsListInput } from './campaign-wizard/shared/GoalsListInput';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface CampaignEditDialogProps {
   open: boolean;
@@ -157,6 +158,10 @@ export function CampaignEditDialog({
   const [saving, setSaving] = useState(false);
 
   const perms = useMemo(() => getEditPermissions(campaign.status), [campaign.status]);
+  const startedStatuses = useMemo(() => new Set(['active', 'paused']), []);
+  const lockedMsg = startedStatuses.has(campaign.status)
+    ? 'This field can’t be edited once the campaign has started.'
+    : perms.reason;
 
   useEffect(() => {
     if (!open) return;
@@ -274,7 +279,7 @@ export function CampaignEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Edit Campaign</DialogTitle>
           <DialogDescription>
@@ -314,93 +319,159 @@ export function CampaignEditDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="startDate">Start Date</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                disabled={!perms.dates}
-              />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className={!perms.dates ? 'cursor-not-allowed' : ''}>
+                      <Input
+                        id="startDate"
+                        type="date"
+                        placeholder="YYYY-MM-DD (optional)"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        disabled={!perms.dates}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  {!perms.dates ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                </Tooltip>
+              </TooltipProvider>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="endDate">End Date</Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                disabled={!perms.dates}
-              />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className={!perms.dates ? 'cursor-not-allowed' : ''}>
+                      <Input
+                        id="endDate"
+                        type="date"
+                        placeholder="YYYY-MM-DD (optional)"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        disabled={!perms.dates}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  {!perms.dates ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="frequency">Frequency</Label>
-              <Select
-                value={frequency || undefined}
-                onValueChange={(v) => setFrequency(v)}
-                disabled={!perms.frequency}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select frequency" />
-                </SelectTrigger>
-                <SelectContent>
-                  {frequencyOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className={!perms.frequency ? 'cursor-not-allowed' : ''}>
+                      <Select
+                        value={frequency || undefined}
+                        onValueChange={(v) => setFrequency(v)}
+                        disabled={!perms.frequency}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select frequency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {frequencyOptions.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TooltipTrigger>
+                  {!perms.frequency ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                </Tooltip>
+              </TooltipProvider>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="postingTime">Posting Time</Label>
-              <Input
-                id="postingTime"
-                type="time"
-                value={postingTime}
-                onChange={(e) => setPostingTime(e.target.value)}
-                disabled={!perms.postingTime}
-              />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className={!perms.postingTime ? 'cursor-not-allowed' : ''}>
+                      <Input
+                        id="postingTime"
+                        type="time"
+                        value={postingTime}
+                        onChange={(e) => setPostingTime(e.target.value)}
+                        disabled={!perms.postingTime}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  {!perms.postingTime ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="themes">Themes (comma separated)</Label>
-            <Textarea
-              id="themes"
-              value={themes}
-              onChange={(e) => setThemes(e.target.value)}
-              disabled={!perms.themes}
-              rows={2}
-            />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className={!perms.themes ? 'cursor-not-allowed' : ''}>
+                    <Textarea
+                      id="themes"
+                      value={themes}
+                      onChange={(e) => setThemes(e.target.value)}
+                      disabled={!perms.themes}
+                      placeholder="e.g. Product launch, Summer sale"
+                      rows={2}
+                    />
+                  </div>
+                </TooltipTrigger>
+                {!perms.themes ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="style">Style</Label>
-            <Select
-              value={style || undefined}
-              onValueChange={(v) => setStyle(v)}
-              disabled={!perms.style}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select style" />
-              </SelectTrigger>
-              <SelectContent>
-                {styleOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className={!perms.style ? 'cursor-not-allowed' : ''}>
+                    <Select
+                      value={style || undefined}
+                      onValueChange={(v) => setStyle(v)}
+                      disabled={!perms.style}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select style" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {styleOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </TooltipTrigger>
+                {!perms.style ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
         <div className="grid gap-2">
           <Label>Goals</Label>
-          <GoalsListInput goals={goals} onChange={setGoals} disabled={!perms.all} />
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className={!perms.all ? 'cursor-not-allowed' : ''}>
+                  <GoalsListInput goals={goals} onChange={setGoals} disabled={!perms.all} />
+                </div>
+              </TooltipTrigger>
+              {!perms.all ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <div className="grid grid-cols-2 items-center gap-2">
@@ -409,11 +480,20 @@ export function CampaignEditDialog({
             <div className="text-muted-foreground text-xs">Use seasons/holidays when relevant</div>
           </div>
           <div className="flex justify-end">
-            <Switch
-              checked={seasonalityAssist}
-              onCheckedChange={(v) => setSeasonalityAssist(!!v)}
-              disabled={!perms.all}
-            />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className={!perms.all ? 'cursor-not-allowed' : ''}>
+                    <Switch
+                      checked={seasonalityAssist}
+                      onCheckedChange={(v) => setSeasonalityAssist(!!v)}
+                      disabled={!perms.all}
+                    />
+                  </div>
+                </TooltipTrigger>
+                {!perms.all ? <TooltipContent>{lockedMsg}</TooltipContent> : null}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
@@ -431,20 +511,20 @@ export function CampaignEditDialog({
             </SelectTrigger>
             <SelectContent className="w-56">
               {palette.map((hex) => (
-                <SelectItem key={hex} value={hex}>
-                  <div
-                    className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+                <SelectItem key={hex} value={hex} className="justify-start">
+                  <span
+                    className="flex items-center justify-start rounded-full px-2 py-0.5 text-[11px] font-medium"
                     style={{ backgroundColor: hex, color: 'hsl(var(--foreground))', opacity: 0.85 }}
                   >
                     {campaign.name || 'Preview'}
-                  </div>
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="bg-background sticky bottom-0 pt-3">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
