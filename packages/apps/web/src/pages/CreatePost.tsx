@@ -358,6 +358,11 @@ export function CreatePost() {
                   setErrors((prev) => ({ ...prev, hashtags: error }));
                 }
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault(); // Prevent form submission
+                }
+              }}
               placeholder="Enter hashtags separated by spaces or commas"
               className=""
               aria-label="Post hashtags"
