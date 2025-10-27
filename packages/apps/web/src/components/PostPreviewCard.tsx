@@ -204,7 +204,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
       {/* Bottom row: edit (hidden for published) + menu */}
       <div className="mt-1 flex items-center justify-between">
         <div>
-          {item.type !== 'placeholder' && status !== 'published' && (
+          {status !== 'published' && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -215,7 +215,16 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
                     aria-label="Edit post"
                     onClick={(e) => {
                       e.stopPropagation();
-                      window.location.href = `/posts/${(item as any).id}?edit=1`;
+                      if (item.type === 'placeholder') {
+                        const params = new URLSearchParams();
+                        if ((item as any).campaignId)
+                          params.set('campaignId', (item as any).campaignId);
+                        if ((item as any).scheduledAt)
+                          params.set('scheduledAt', (item as any).scheduledAt);
+                        navigate(`/posts/create?${params.toString()}`);
+                      } else {
+                        window.location.href = `/posts/${(item as any).id}?edit=1`;
+                      }
                     }}
                   >
                     <Pencil className="h-4 w-4" />

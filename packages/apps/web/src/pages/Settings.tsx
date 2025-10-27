@@ -20,6 +20,7 @@ import { COMMON_TIMEZONES, getUserTimezone, getTimezoneAbbr } from '../lib/timez
 import { Globe, Clock, Info, Save, RefreshCw, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useBrandStore } from '../stores/brandStore';
+import { useAuthStore } from '../stores/authStore';
 import { brand as brandApi } from '../lib/api';
 import { auth as authApi } from '../lib/api';
 import { useTheme } from 'next-themes';
@@ -34,6 +35,7 @@ export function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   const [detectedTimezone] = useState(getUserTimezone());
   const { theme, setTheme } = useTheme();
+  const { user, setUser } = useAuthStore();
   const [appearanceMode, setAppearanceMode] = useState<'system' | 'light' | 'dark'>(
     (theme as 'system' | 'light' | 'dark') || 'system'
   );
@@ -374,7 +376,10 @@ export function Settings() {
                   onValueChange={(val) => {
                     const newTheme = val as 'system' | 'light' | 'dark';
                     setAppearanceMode(newTheme);
+                    // Apply theme immediately
                     setTheme(newTheme);
+                    // Reflect selection in local user state so bootstrapper won't override
+                    if (user) setUser({ ...user, theme: newTheme });
                   }}
                   className="grid grid-cols-3 gap-2 sm:max-w-md"
                 >
@@ -434,6 +439,8 @@ export function Settings() {
                   variant="outline"
                   onClick={() => {
                     setAppearanceMode('system');
+                    setTheme('system');
+                    if (user) setUser({ ...user, theme: 'system' });
                   }}
                   className="flex items-center gap-2"
                 >

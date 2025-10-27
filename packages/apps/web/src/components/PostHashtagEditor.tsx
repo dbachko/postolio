@@ -27,21 +27,19 @@ export function PostHashtagEditor({
 
     // Sanitize and validate the input
     const newTag = sanitize(input);
-    
+
     if (!newTag) {
       setInput('');
       return;
     }
 
     // Check if hashtag already exists (case-insensitive)
-    const exists = hashtags.some(
-      (tag) => sanitize(tag).toLowerCase() === newTag.toLowerCase()
-    );
+    const exists = hashtags.some((tag) => sanitize(tag).toLowerCase() === newTag.toLowerCase());
 
     if (!exists) {
       onChange([...hashtags, newTag]);
     }
-    
+
     setInput('');
   };
 
@@ -72,7 +70,7 @@ export function PostHashtagEditor({
             disabled={disabled}
             className="pr-16"
           />
-          <kbd className="bg-muted pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 select-none items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-70">
+          <kbd className="bg-muted pointer-events-none absolute right-2 top-1/2 inline-flex h-5 -translate-y-1/2 select-none items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-70">
             ↵
           </kbd>
         </div>

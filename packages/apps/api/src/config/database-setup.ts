@@ -35,9 +35,35 @@ export async function ensureDatabaseSchema(): Promise<void> {
     const existingTables = tables.map((row) => row.table_name);
     const missingTables = requiredTables.filter((table) => !existingTables.includes(table));
 
-    if (missingTables.length > 0) {
-      console.log(`⚠️  Missing database tables: ${missingTables.join(', ')}`);
-      console.log('🚀 Running database migrations to create missing tables...');
+    // Also check for required columns that recent releases depend on
+    // Currently: users.themePreference
+    type ColumnRow = { column_name: string };
+    let missingColumns: string[] = [];
+    try {
+      const columnCheck = await prisma.$queryRaw<ColumnRow[]>`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'users'
+          AND column_name IN ('themePreference')
+      `;
+      const existingColumns = (Array.isArray(columnCheck) ? columnCheck : []).map(
+        (r) => r.column_name
+      );
+      missingColumns = ['themePreference'].filter((c) => !existingColumns.includes(c));
+    } catch {
+      // If this fails, proceed conservatively and attempt to sync schema below
+      missingColumns = ['themePreference'];
+    }
+
+    if (missingTables.length > 0 || missingColumns.length > 0) {
+      if (missingTables.length > 0) {
+        console.log(`⚠️  Missing database tables: ${missingTables.join(', ')}`);
+      }
+      if (missingColumns.length > 0) {
+        console.log(`⚠️  Missing required columns: ${missingColumns.join(', ')}`);
+      }
+      console.log('🚀 Running database migrations to synchronize schema...');
 
       try {
         // Resolve Prisma schema path in the monorepo regardless of current working directory
@@ -56,7 +82,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
           );
         }
 
-        // Use migrate deploy in production, db push in development
+        // Use migrate deploy when using migrations (prod) and db push in development
         const baseCmd =
           process.env.NODE_ENV === 'prod' ? 'npx prisma migrate deploy' : 'npx prisma db push';
         const migrateCommand = schemaPath ? `${baseCmd} --schema ${schemaPath}` : baseCmd;

@@ -22,7 +22,7 @@ import UiKitchenSink from './pages/UiKitchenSink';
 import { MagicLinkVerify } from './pages/MagicLinkVerify';
 import { EmailVerify } from './pages/EmailVerify';
 import { PasswordReset } from './pages/PasswordReset';
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, lazy, Suspense, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { ErrorBoundary } from './components/ErrorBoundary';
 const PostDetail = lazy(() => import('./pages/PostDetail'));
@@ -304,8 +304,11 @@ export default App;
 function ThemeBootstrapper() {
   const { user } = useAuthStore();
   const { setTheme } = useTheme();
+  const didInit = useRef(false);
   useEffect(() => {
-    if (!user) return;
+    // Only set theme from user once when the user data becomes available
+    if (!user || didInit.current) return;
+    didInit.current = true;
     if (user.theme) setTheme(user.theme);
   }, [user, setTheme]);
   return null;

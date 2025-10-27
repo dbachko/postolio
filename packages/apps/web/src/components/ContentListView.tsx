@@ -26,6 +26,7 @@ import {
   Image as ImageIcon,
   Loader2,
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ListItem {
   id: string;
@@ -148,62 +149,61 @@ export function ContentListView({
     });
   };
 
-  const getStatusBadge = (status: string, type: string, processing?: boolean) => {
-    if (type === 'placeholder') {
-      return (
-        <Badge variant="info" className="gap-1">
-          <Clock className="h-3 w-3" />
-          Future AI
-        </Badge>
-      );
-    }
-    if (processing) {
-      return (
-        <Badge variant="info" className="gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Scheduling...
-        </Badge>
-      );
-    }
-    switch (status) {
-      case 'published':
-        return (
-          <Badge variant="success" className="gap-1">
-            <CheckCircle className="h-3 w-3" />
-            Published
-          </Badge>
-        );
-      case 'scheduled':
-        return (
-          <Badge variant="info" className="gap-1">
-            <Calendar className="h-3 w-3" />
-            Scheduled
-          </Badge>
-        );
-      case 'failed':
-        return (
-          <Badge variant="destructive" className="gap-1">
-            <AlertCircle className="h-3 w-3" />
-            Failed
-          </Badge>
-        );
-      case 'skipped':
-        return (
-          <Badge variant="warning" className="gap-1">
-            <AlertCircle className="h-3 w-3" />
-            Skipped
-          </Badge>
-        );
-      case 'draft':
-        return (
-          <Badge variant="secondary" className="gap-1">
-            <Clock className="h-3 w-3" />
-            Draft
-          </Badge>
-        );
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
+  const getStatusIndicator = (status: string, type: string, processing?: boolean) => {
+    // Map to icon + color token for compact indicator
+    const cfg = (() => {
+      if (type === 'placeholder')
+        return { icon: Clock, color: 'warning', label: 'Future AI' } as const;
+      if (processing)
+        return { icon: Loader2, color: 'info', label: 'Scheduling…', spinning: true } as const;
+      switch (status) {
+        case 'published':
+          return { icon: CheckCircle, color: 'success', label: 'Published' } as const;
+        case 'scheduled':
+          return { icon: Calendar, color: 'info', label: 'Scheduled' } as const;
+        case 'failed':
+          return { icon: AlertCircle, color: 'destructive', label: 'Failed' } as const;
+        case 'skipped':
+          return { icon: AlertCircle, color: 'warning', label: 'Skipped' } as const;
+        case 'draft':
+          return { icon: Clock, color: 'secondary', label: 'Draft' } as const;
+        default:
+          return { icon: Clock, color: 'muted', label: status } as const;
+      }
+    })();
+
+    const Icon = cfg.icon;
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={`ring-border inline-flex h-6 w-6 items-center justify-center rounded-full ring-1 ${
+                cfg.color === 'success'
+                  ? 'bg-success/15 text-success'
+                  : cfg.color === 'info'
+                    ? 'bg-info/15 text-info'
+                    : cfg.color === 'destructive'
+                      ? 'bg-destructive/15 text-destructive'
+                      : cfg.color === 'warning'
+                        ? 'bg-warning/15 text-warning'
+                        : cfg.color === 'secondary'
+                          ? 'bg-secondary text-secondary-foreground'
+                          : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              <Icon
+                className={`h-3.5 w-3.5 ${cfg.label === 'Scheduling…' ? 'animate-spin' : ''}`}
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <span>{cfg.label}</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
   };
 
   return (
@@ -306,31 +306,16 @@ export function ContentListView({
               return (
                 <div
                   key={item.id}
-                  className={`hover:bg-accent/40 grid grid-cols-12 gap-4 rounded-lg p-3 transition-colors ${
-                    item.type === 'placeholder' ? 'border border-dashed' : 'cursor-pointer border'
+                  className={`hover:bg-accent/40 grid grid-cols-12 gap-4 rounded-lg border p-3 transition-colors ${
+                    item.type === 'placeholder' ? 'border-dashed' : 'cursor-pointer'
                   }`}
-                  style={
-                    item.campaignColor
-                      ? {
-                          borderLeftWidth: '4px',
-                          borderLeftStyle: 'solid',
-                          borderLeftColor: item.campaignColor,
-                        }
-                      : {}
-                  }
                   onClick={() => {
                     if (item.type === 'content') {
                       navigate(`/posts/${item.id}`);
                     }
                   }}
                 >
-                  <div className="col-span-1 flex items-center gap-2">
-                    {item.campaignColor && (
-                      <div
-                        className="h-8 w-1 rounded-full"
-                        style={{ backgroundColor: item.campaignColor }}
-                      />
-                    )}
+                  <div className="col-span-1 flex items-center">
                     {item.type === 'placeholder' ? (
                       <div className="bg-muted flex h-8 w-8 items-center justify-center rounded">
                         <Clock className="text-muted-foreground h-4 w-4" />
@@ -355,8 +340,8 @@ export function ContentListView({
                     </div>
                   </div>
 
-                  <div className="col-span-2">
-                    {getStatusBadge(item.status, item.type, item.processing)}
+                  <div className="col-span-2 flex items-center">
+                    {getStatusIndicator(item.status, item.type, item.processing)}
                   </div>
 
                   <div className="col-span-5">
@@ -406,8 +391,26 @@ export function ContentListView({
                     )}
                   </div>
 
-                  <div className="text-muted-foreground col-span-2 text-sm">
-                    {item.campaignName || '-'}
+                  <div className="col-span-2 text-sm">
+                    {item.campaignName ? (
+                      <a
+                        href={item.campaignId ? `/campaigns/${item.campaignId}` : undefined}
+                        onClick={(e) => {
+                          if (!item.campaignId) return;
+                          e.stopPropagation();
+                        }}
+                        className="inline-flex max-w-full items-center gap-2 rounded-full px-2 py-0.5"
+                        style={{
+                          backgroundColor: item.campaignColor || 'hsl(var(--muted))',
+                          color: item.campaignColor ? 'white' : 'hsl(var(--foreground))',
+                        }}
+                        title={item.campaignName}
+                      >
+                        <span className="truncate">{item.campaignName}</span>
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </div>
                 </div>
               );
