@@ -39,6 +39,9 @@ export function Settings() {
   const [appearanceMode, setAppearanceMode] = useState<'system' | 'light' | 'dark'>(
     (theme as 'system' | 'light' | 'dark') || 'system'
   );
+  const [weekStart, setWeekStart] = useState<'monday' | 'sunday'>(
+    (user?.weekStart as 'monday' | 'sunday') || 'monday'
+  );
 
   // Load brand-specific timezone if a brand is selected
   useEffect(() => {
@@ -316,6 +319,68 @@ export function Settings() {
               </CardContent>
             </Card>
           )}
+
+          {/* Calendar Preferences */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Calendar Preferences
+              </CardTitle>
+              <CardDescription>Choose which day your weeks start on</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Week starts on</Label>
+                <RadioGroup
+                  value={weekStart}
+                  onValueChange={(val) => setWeekStart(val as 'monday' | 'sunday')}
+                  className="grid grid-cols-2 gap-2 sm:max-w-sm"
+                >
+                  <label
+                    htmlFor="weekstart-monday"
+                    className="border-border bg-card hover:bg-accent hover:text-accent-foreground inline-flex cursor-pointer items-center justify-between rounded-lg border p-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem id="weekstart-monday" value="monday" />
+                      <span>Monday</span>
+                    </div>
+                  </label>
+                  <label
+                    htmlFor="weekstart-sunday"
+                    className="border-border bg-card hover:bg-accent hover:text-accent-foreground inline-flex cursor-pointer items-center justify-between rounded-lg border p-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem id="weekstart-sunday" value="sunday" />
+                      <span>Sunday</span>
+                    </div>
+                  </label>
+                </RadioGroup>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={async () => {
+                    setIsSaving(true);
+                    try {
+                      await authApi.updateUserWeekStart({ weekStart });
+                      if (user) setUser({ ...user, weekStart });
+                      toast.success('Calendar preference saved');
+                    } catch (_e) {
+                      toast.error('Failed to save calendar preference');
+                    } finally {
+                      setIsSaving(false);
+                    }
+                  }}
+                  disabled={isSaving}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {isSaving ? 'Saving...' : 'Save Preferences'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="account">

@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
+import { useAuthStore } from '../../stores/authStore';
 import { Search, X, Filter, Calendar as CalendarIcon } from 'lucide-react';
 
 interface CalendarFiltersProps {
@@ -48,6 +49,8 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
     start: filters.dateRange.start,
     end: filters.dateRange.end,
   });
+  const user = useAuthStore((s) => s.user);
+  const weekStartsOn = user?.weekStart === 'monday' ? 1 : 0;
 
   // Fetch campaigns for filter dropdown
   const { data: campaignsData } = useQuery({
@@ -267,6 +270,7 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
                         }))
                       }
                       className="rounded-md border"
+                      weekStartsOn={weekStartsOn as any}
                     />
                   </div>
                   <div>
@@ -281,6 +285,7 @@ export function CalendarFilters({ brandId, compact = false }: CalendarFiltersPro
                         }))
                       }
                       className="rounded-md border"
+                      weekStartsOn={weekStartsOn as any}
                     />
                   </div>
                 </div>

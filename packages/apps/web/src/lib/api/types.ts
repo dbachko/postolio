@@ -7,6 +7,7 @@ export interface User {
   timezone?: string | null;
   timezoneAutoDetected?: boolean;
   theme?: 'system' | 'light' | 'dark';
+  weekStart?: 'monday' | 'sunday';
   createdAt: string;
 }
 

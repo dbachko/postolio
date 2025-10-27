@@ -1,6 +1,6 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
-import type { ThemePreference } from '@postolio/database';
+import type { ThemePreference, WeekStartPreference } from '@postolio/database';
 import { TimezoneService } from '../services/timezone.js';
 
 const prisma = getDatabaseClient();
@@ -32,6 +32,13 @@ function isThemeUpdateBody(body: unknown): body is { theme: 'system' | 'light' |
   return theme === 'system' || theme === 'light' || theme === 'dark';
 }
 
+// Week start update body guard
+function isWeekStartUpdateBody(body: unknown): body is { weekStart: 'monday' | 'sunday' } {
+  if (!body || typeof body !== 'object') return false;
+  const obj = body as Record<string, unknown>;
+  return obj.weekStart === 'monday' || obj.weekStart === 'sunday';
+}
+
 // Validation helpers using type guards
 function validateTimezoneUpdate(
   body: unknown
@@ -51,6 +58,11 @@ function validateBrandTimezoneUpdate(body: unknown): { timezone: string | null }
 
 function validateThemeUpdate(body: unknown): { theme: 'system' | 'light' | 'dark' } | null {
   if (isThemeUpdateBody(body)) return body as { theme: 'system' | 'light' | 'dark' };
+  return null;
+}
+
+function validateWeekStartUpdate(body: unknown): { weekStart: 'monday' | 'sunday' } | null {
+  if (isWeekStartUpdateBody(body)) return body as { weekStart: 'monday' | 'sunday' };
   return null;
 }
 
@@ -137,6 +149,45 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         };
       } catch (err: unknown) {
         request.log.error({ err }, 'Failed to update user theme');
+        return reply.code(500).send({ error: 'Internal server error' });
+      }
+    }
+  );
+
+  // Update user week start preference (monday|sunday)
+  fastify.patch(
+    '/api/users/week-start',
+    { preHandler: fastify.authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user!.id;
+
+      try {
+        const validated = validateWeekStartUpdate(request.body);
+        if (!validated) {
+          return reply.status(400).send({
+            error: 'Invalid request body. Expected { weekStart: "monday"|"sunday" }',
+          });
+        }
+
+        const { weekStart } = validated;
+
+        const updatedUser = await prisma.user.update({
+          where: { id: userId },
+          data: {
+            weekStartPreference: weekStart as WeekStartPreference,
+          },
+          select: { id: true, weekStartPreference: true },
+        });
+
+        return {
+          success: true,
+          user: {
+            id: updatedUser.id,
+            weekStart: updatedUser.weekStartPreference,
+          },
+        };
+      } catch (err: unknown) {
+        request.log.error({ err }, 'Failed to update user week start');
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }

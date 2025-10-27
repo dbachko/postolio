@@ -5,6 +5,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { useTimezone } from '../contexts/TimezoneContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Clock, Calendar, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
 
 interface TimelineItem {
   id: string;
@@ -31,10 +32,12 @@ export function TimelineView({ items, currentDate, timezone: tzOverride }: Timel
   const navigate = useNavigate();
   const { timezone: ctxTz } = useTimezone();
   const timezone = tzOverride || ctxTz;
+  const user = useAuthStore((s) => s.user);
+  const weekStartsOn = user?.weekStart === 'monday' ? 1 : 0;
 
   // Group items by day for the current week
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
+  const weekStart = startOfWeek(currentDate, { weekStartsOn });
+  const weekEnd = endOfWeek(currentDate, { weekStartsOn });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
   const itemsByDay = useMemo(() => {

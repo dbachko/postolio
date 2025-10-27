@@ -31,6 +31,8 @@ model User {
   timezoneAutoDetected Boolean            @default(true) // Whether to auto-detect timezone
   // Theme preference (system, light, dark)
   themePreference     ThemePreference    @default(system)
+  // Calendar week start preference (monday or sunday)
+  weekStartPreference WeekStartPreference @default(monday)
   
   // OAuth fields
   googleId          String?            @unique @map("googleid") // Google OAuth ID
@@ -172,6 +174,12 @@ enum CampaignStatus {
   completed
   failed
   processing
+}
+
+// Week start preference for calendar views
+enum WeekStartPreference {
+  monday
+  sunday
 }
 
 model Session {

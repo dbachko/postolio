@@ -20,6 +20,7 @@ import { format } from 'date-fns';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { convertLocalToUTC } from '@/lib/timezone';
+import { useAuthStore } from '../stores/authStore';
 
 interface RescheduleDialogProps {
   open: boolean;
@@ -42,6 +43,8 @@ export function RescheduleDialog({
   const [minute, setMinute] = useState<string>('');
   const [ampm, setAmPm] = useState<'am' | 'pm'>(() => (baseDate.getHours() >= 12 ? 'pm' : 'am'));
   const [saving, setSaving] = useState(false);
+  const user = useAuthStore((s) => s.user);
+  const weekStartsOn = user?.weekStart === 'monday' ? 1 : 0;
 
   useEffect(() => {
     const h24 = baseDate.getHours();
@@ -105,6 +108,7 @@ export function RescheduleDialog({
                   selected={date}
                   onSelect={(d) => d && setDate(d)}
                   initialFocus
+                  weekStartsOn={weekStartsOn as any}
                 />
               </PopoverContent>
             </Popover>

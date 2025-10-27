@@ -19,6 +19,7 @@ import { RescheduleDialog } from './RescheduleDialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuthStore } from '../stores/authStore';
 
 interface MonthGridViewProps {
   items: CalendarItem[];
@@ -57,8 +58,10 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
   const queryClient = useQueryClient();
   const [rescheduleItem, setRescheduleItem] = useState<CalendarItem | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
-  const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 });
-  const end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 0 });
+  const user = useAuthStore((s) => s.user);
+  const weekStartsOn = user?.weekStart === 'monday' ? 1 : 0;
+  const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn });
+  const end = endOfWeek(endOfMonth(currentDate), { weekStartsOn });
 
   const days: Date[] = [];
   for (let d = start; d <= end; d = addDays(d, 1)) {
@@ -68,15 +71,8 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
   const byDay = useMemo(() => groupByLocalDay(items, timezone), [items, timezone]);
   const startOfToday = startOfDay(new Date());
 
-  const weekdayLabels = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-  ];
+  const baseLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const weekdayLabels = weekStartsOn === 1 ? [...baseLabels.slice(1), baseLabels[0]] : baseLabels;
 
   return (
     <div className="bg-card rounded-lg border shadow-sm">

@@ -485,6 +485,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           timezone: true,
           timezoneAutoDetected: true,
           themePreference: true,
+          weekStartPreference: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -503,6 +504,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         timezone: dbUser.timezone,
         timezoneAutoDetected: dbUser.timezoneAutoDetected,
         theme: dbUser.themePreference,
+        weekStart: dbUser.weekStartPreference,
         createdAt: dbUser.createdAt,
         updatedAt: dbUser.updatedAt,
       };

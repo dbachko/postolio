@@ -43,6 +43,13 @@ export class AuthClient {
   updateUserTheme(data: { theme: 'system' | 'light' | 'dark' }) {
     return this.request('/api/users/theme', { method: 'PATCH', body: JSON.stringify(data) });
   }
+
+  updateUserWeekStart(data: { weekStart: 'monday' | 'sunday' }) {
+    return this.request('/api/users/week-start', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 export class SessionClient {
