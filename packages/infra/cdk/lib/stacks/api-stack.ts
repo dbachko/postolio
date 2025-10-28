@@ -9,6 +9,7 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -453,6 +454,8 @@ export class ApiStack extends cdk.Stack {
         cpu: environment === 'prod' ? 1024 : 512,
         memoryLimitMiB: environment === 'prod' ? 2048 : 1024,
         desiredCount: environment === 'prod' ? 2 : 1,
+        // Enable ECS deployment circuit breaker with automatic rollback
+        circuitBreaker: { enable: true, rollback: true },
         taskImageOptions: {
           image: ecs.ContainerImage.fromEcrRepository(ecrRepository, containerImageTag),
           containerPort: 3000,
@@ -531,6 +534,29 @@ export class ApiStack extends cdk.Stack {
       minimumHealthyPercent: 100, // Maintain 100% of desired tasks during deployment
       maximumPercent: 200, // Allow up to 200% of desired tasks during deployment
     };
+
+    // Add a deployment alarm to fail and rollback faster if new tasks remain
+    // unhealthy for an extended period during a deployment.
+    // This triggers rollback if the target group reports >=1 unhealthy host
+    // continuously for 10 minutes while a deployment is in progress.
+    const tgUnhealthyAlarm = new cloudwatch.Alarm(this, 'ApiTgUnhealthyHostsAlarm', {
+      alarmName: `${prefix}-tg-unhealthy-rollback`,
+      metric: this.apiService.targetGroup.metricUnhealthyHostCount({
+        period: cdk.Duration.minutes(1),
+        statistic: 'Average',
+      }),
+      threshold: 1,
+      evaluationPeriods: 10,
+      datapointsToAlarm: 10,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    // Monitor the alarm during deployments and rollback on alarm
+    this.apiService.service.enableDeploymentAlarms([tgUnhealthyAlarm.alarmName], {
+      behavior: ecs.AlarmBehavior.ROLLBACK_ON_ALARM,
+    });
 
     // Enable ALB access logs to satisfy CDK Nag AwsSolutions-ELB2
     this.loadBalancer.logAccessLogs(logBucket, 'alb-logs');
