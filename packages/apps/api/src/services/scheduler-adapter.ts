@@ -170,6 +170,8 @@ export class SchedulerAdapter {
     // Store original state for rollback
     let originalStatus: ContentStatus | null = null;
     let originalScheduledAt: Date | null = null;
+    // Minimal content info for notifications in catch
+    let fetchedContent: { brandId: string; brand: { userId: string } } | null = null;
 
     try {
       // 1. Get content with brand and user info
@@ -188,6 +190,7 @@ export class SchedulerAdapter {
       if (!content) {
         return { success: false, error: 'Content not found' };
       }
+      fetchedContent = { brandId: content.brandId, brand: { userId: content.brand.userId } };
 
       // 🔥 CRITICAL: Validate campaign association to prevent validation bypass
       if (!content.campaignId) {
@@ -540,6 +543,27 @@ export class SchedulerAdapter {
               schedulingError: `Scheduling failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
             },
           });
+          // Emit notification about scheduling failure
+          try {
+            const { notificationsService } = await import('./notifications.js');
+            await notificationsService.emitEvent({
+              userId: fetchedContent?.brand.userId || userId || '',
+              brandId: fetchedContent?.brandId,
+              type: 'publishing.scheduling_failed',
+              category: 'publishing',
+              severity: 'error',
+              title: 'Scheduling failed',
+              body:
+                error instanceof Error
+                  ? error.message
+                  : 'An unknown error occurred while scheduling your post.',
+              linkUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/posts/${contentId}`,
+              resource: { type: 'post', id: contentId },
+              dedupeKey: `content:${contentId}:scheduling_failed`,
+            });
+          } catch (e) {
+            logger.error('Failed to emit scheduling failure notification', { error: e });
+          }
         } catch (restoreError) {
           logger.error('Failed to restore original state', { error: restoreError });
         }

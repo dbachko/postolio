@@ -6,7 +6,14 @@ import { getRedisUrl } from '../utils/redis-url.js';
 
 // Email job types
 export interface EmailJob {
-  type: 'welcome' | 'verification' | 'password_reset' | 'two_factor' | 'generic';
+  type:
+    | 'welcome'
+    | 'verification'
+    | 'password_reset'
+    | 'two_factor'
+    | 'generic'
+    | 'notification'
+    | 'digest';
   to: string;
   subject: string;
   html?: string;

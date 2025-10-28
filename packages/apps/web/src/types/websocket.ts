@@ -80,14 +80,39 @@ export interface WebSocketMessage {
     | 'status_update'
     | 'batch_status_update'
     | 'campaign_status_update'
-    | 'campaign_error';
+    | 'campaign_error'
+    | 'notification_created'
+    | 'unread_count';
   room?: string;
   brandId?: string;
   campaignId?: string;
   rooms?: string[];
   error?: string;
-  data?: StatusUpdateData | StatusUpdateData[] | CampaignStatusUpdateData | CampaignErrorData;
+  data?:
+    | StatusUpdateData
+    | StatusUpdateData[]
+    | CampaignStatusUpdateData
+    | CampaignErrorData
+    | NotificationCreatedData
+    | UnreadCountData;
   timestamp?: number; // For latency measurement in ping/pong
+}
+
+export interface NotificationCreatedData {
+  id: string;
+  type: string;
+  category: string;
+  severity: 'info' | 'warning' | 'error' | string;
+  title: string;
+  body?: string | null;
+  linkUrl?: string | null;
+  resource?: { type?: string | null; id?: string | null };
+  createdAt: string;
+  readAt?: string | null;
+}
+
+export interface UnreadCountData {
+  count: number;
 }
 
 export interface UseSchedulingWebSocketOptions {

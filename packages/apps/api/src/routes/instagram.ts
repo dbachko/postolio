@@ -543,6 +543,23 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           return reply.status(404).send({ error: 'Brand not found' });
         }
 
+        try {
+          // Notify user of account disconnect
+          const { notificationsService } = await import('../services/notifications.js');
+          await notificationsService.emitEvent({
+            userId: request.user.id,
+            brandId,
+            type: 'accounts.account_disconnected',
+            category: 'accounts',
+            severity: 'warning',
+            title: 'Instagram account disconnected',
+            body: 'Your Instagram account was disconnected from this brand. Reconnect to resume publishing.',
+            linkUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/brands`,
+          });
+        } catch (e) {
+          request.log.error({ e }, 'Failed to emit disconnect notification');
+        }
+
         reply.send({ success: true });
       } catch (error) {
         reply.status(500).send({

@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ChevronDown, Settings, LogOut, Check, Building2 } from 'lucide-react';
+import { Bell } from '@/components/notifications/Bell';
 
 interface LayoutProps {
   children: ReactNode;
@@ -88,6 +89,8 @@ export function Layout({ children }: LayoutProps) {
             </div>
 
             <div className="flex items-center space-x-4">
+              {/* Notifications */}
+              <Bell />
               {/* User Profile Dropdown */}
               {user && (
                 <DropdownMenu>

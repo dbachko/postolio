@@ -193,7 +193,7 @@ export function useSchedulingWebSocket({
         }
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = async (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
 
@@ -208,13 +208,23 @@ export function useSchedulingWebSocket({
             isAuthenticatedRef.current = true;
             reconnectAttemptsRef.current = 0;
             handleConnectionChange('connected');
-            // Subscribe to brand room after authentication
-            ws.send(
-              JSON.stringify({
-                type: 'subscribe',
-                brandId: selectedBrand.id,
-              })
-            );
+            // Subscribe to brand room and user notifications room after authentication
+            try {
+              const rooms: string[] = [];
+              if (selectedBrand?.id) rooms.push(`brand:${selectedBrand.id}`);
+              const anyMsg: any = message as any;
+              if (anyMsg.userId) rooms.push(`user:${anyMsg.userId}`);
+              if (rooms.length > 0) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'subscribe',
+                    rooms,
+                  })
+                );
+              }
+            } catch (e) {
+              console.warn('Failed to subscribe to rooms', e);
+            }
             return;
           }
 
@@ -240,6 +250,30 @@ export function useSchedulingWebSocket({
             console.log('Campaign error received:', message.data);
             if (onCampaignError && message.data) {
               onCampaignError(message.data as import('../types/websocket').CampaignErrorData);
+            }
+          }
+
+          // Notifications stream (user room)
+          if (message.type === 'notification_created') {
+            try {
+              const { useNotificationsStore } = await import('../stores/notificationsStore');
+              const data: any = (message as any).data;
+              // Prepend new item and increment unread
+              useNotificationsStore.setState((state: any) => ({
+                items: [data, ...state.items].slice(0, 50),
+                unreadCount: (state.unreadCount || 0) + 1,
+              }));
+            } catch (e) {
+              console.warn('Failed to process notification_created message', e);
+            }
+          }
+          if (message.type === 'unread_count') {
+            try {
+              const { useNotificationsStore } = await import('../stores/notificationsStore');
+              const count = (message as any)?.data?.count ?? 0;
+              useNotificationsStore.setState({ unreadCount: count });
+            } catch (e) {
+              console.warn('Failed to process unread_count message', e);
             }
           }
         } catch (error) {

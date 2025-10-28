@@ -132,6 +132,29 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
                 fastify.log.warn(
                   `Instagram token for brand ${brandId} expires in ${daysUntilExpiry} days`
                 );
+
+                // Emit notification for token expiring
+                try {
+                  const { notificationsService } = await import('../services/notifications.js');
+                  await notificationsService.emitEvent({
+                    userId: brand.user.id,
+                    brandId: brand.id,
+                    type: 'accounts.token_expiring',
+                    category: 'accounts',
+                    severity: daysUntilExpiry <= 1 ? 'error' : 'warning',
+                    title:
+                      daysUntilExpiry <= 1
+                        ? 'Instagram token expiring soon'
+                        : 'Instagram token expiring',
+                    body:
+                      daysUntilExpiry <= 1
+                        ? 'Your Instagram access token expires within 24 hours. Reconnect to avoid publishing failures.'
+                        : `Your Instagram access token expires in ${daysUntilExpiry} days. Consider reconnecting to avoid disruptions.`,
+                    linkUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/brands`,
+                  });
+                } catch (e) {
+                  fastify.log.error({ e }, 'Failed to emit token expiring notification');
+                }
               }
 
               tokenData.expiresAt = tokenExpiresAt;

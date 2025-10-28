@@ -43,6 +43,7 @@ import themeSuggestionRoutes from './routes/theme-suggestions.js';
 import accountRoutes from './routes/account.js';
 import brandAnalysisNested from './routes/brand-analysis-nested.js';
 import brandsInstagram from './routes/brands-instagram.js';
+import notificationsRoutes from './routes/notifications.js';
 import { ensureDatabaseSchema } from './config/database-setup.js';
 import { getRetentionManager } from './services/retention-manager.js';
 import Redis from 'ioredis';
@@ -229,6 +230,7 @@ export function buildFastify(): FastifyInstance {
   // Use /api/brands/:brandId/analysis/* for brand analysis
   app.register(brandAnalysisNested, { prefix: '/api/brands' });
   app.register(brandStyleRoutes, { prefix: '/api/brands' });
+  app.register(notificationsRoutes, { prefix: '/api/notifications' });
 
   // Add brand-nested Instagram wrappers under /api/brands
   app.register(brandsInstagram, { prefix: '/api/brands' });
@@ -348,6 +350,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // Make broadcaster available to background jobs
       const { setStatusBroadcaster } = await import('./services/broadcast-registry.js');
       setStatusBroadcaster(statusBroadcaster);
+
+      // Initialize notifications broadcaster for user-level notifications
+      const { NotificationsBroadcaster } = await import('./services/notifications-broadcaster.js');
+      const notificationsBroadcaster = new NotificationsBroadcaster(app, redis);
+      const { setNotificationsBroadcaster } = await import('./services/broadcast-registry.js');
+      setNotificationsBroadcaster(notificationsBroadcaster);
 
       app.log.info('✅ WebSocket real-time updates initialized');
 

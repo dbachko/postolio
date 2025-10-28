@@ -3,6 +3,7 @@ import { AuthClient, SessionClient } from './auth-client';
 import { BrandClient } from './brand-client';
 import { CampaignClient } from './campaign-client';
 import { ContentClient } from './content-client';
+import { NotificationsClient } from './notifications-client';
 
 const http = createHttp();
 const { get: httpGet, post: httpPost, put: httpPut, del: httpDelete } = createHttpMethods(http);
@@ -12,6 +13,7 @@ export const session = new SessionClient(http);
 export const brand = new BrandClient(http);
 export const campaign = new CampaignClient(http);
 export const content = new ContentClient(http);
+export const notifications = new NotificationsClient(http);
 
 export { http, httpGet, httpPost, httpPut, httpDelete };
 
@@ -28,4 +30,6 @@ export type {
   CampaignConfig,
   CampaignPreview,
   Campaign,
+  Notification,
+  NotificationPreference,
 } from './types';

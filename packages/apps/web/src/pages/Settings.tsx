@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom';
 import { useBrandStore } from '../stores/brandStore';
 import { useAuthStore } from '../stores/authStore';
 import { brand as brandApi } from '../lib/api';
+import { notifications as notificationsApi } from '../lib/api';
 import { auth as authApi } from '../lib/api';
 import { useTheme } from 'next-themes';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -419,10 +420,13 @@ export function Settings() {
           <Card>
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Configure how you receive notifications</CardDescription>
+              <CardDescription>
+                Configure channels for each notification type. Critical events default to email if
+                not configured.
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">Notification settings coming soon...</p>
+              <NotificationPreferencesPanel />
             </CardContent>
           </Card>
         </TabsContent>
@@ -522,3 +526,142 @@ export function Settings() {
 }
 
 export default Settings;
+
+function NotificationPreferencesPanel() {
+  const { selectedBrand } = useBrandStore();
+  const [rows, setRows] = useState<
+    Array<{
+      category: string;
+      type: string;
+      in_app: boolean;
+      email: boolean;
+    }>
+  >([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await notificationsApi.getPreferences(selectedBrand?.id);
+      const map = new Map<string, { in_app: boolean; email: boolean }>();
+      for (const p of res.items) {
+        const key = `${p.category}:${p.type}`;
+        const entry = map.get(key) || { in_app: false, email: false };
+        if (p.channel === 'in_app') entry.in_app = p.enabled;
+        if (p.channel === 'email') entry.email = p.enabled;
+        map.set(key, entry);
+      }
+      // Merge defaults
+      const keys = new Set<string>([
+        ...Array.from(map.keys()),
+        ...res.defaults.map((d) => `${d.category}:${d.type}`),
+      ]);
+      const newRows: typeof rows = Array.from(keys).map((key) => {
+        const [category, type] = key.split(':');
+        const entry = map.get(key) || { in_app: false, email: false };
+        // If default says enabled for a channel and no explicit pref, show as enabled
+        const defaultsForKey = res.defaults.filter(
+          (d) => d.category === category && d.type === type
+        );
+        const defaultInApp = defaultsForKey.find((d) => d.channel === 'in_app')?.enabled ?? false;
+        const defaultEmail = defaultsForKey.find((d) => d.channel === 'email')?.enabled ?? false;
+        return {
+          category,
+          type,
+          in_app: entry.in_app || defaultInApp,
+          email: entry.email || defaultEmail,
+        };
+      });
+      newRows.sort((a, b) => a.category.localeCompare(b.category) || a.type.localeCompare(b.type));
+      setRows(newRows);
+    } catch (_e) {
+      console.error('Failed to load notification preferences', _e);
+      toast.error('Failed to load preferences');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, [selectedBrand?.id]);
+
+  const toggle = async (idx: number, channel: 'in_app' | 'email') => {
+    const next = [...rows];
+    const row = next[idx];
+    row[channel] = !row[channel];
+    setRows(next);
+    try {
+      setSaving(true);
+      await notificationsApi.updatePreferences([
+        {
+          category: row.category,
+          type: row.type,
+          brandId: selectedBrand?.id,
+          channel: channel,
+          enabled: row[channel],
+        },
+      ]);
+      toast.success('Preferences saved');
+    } catch (_e) {
+      toast.error('Failed to save preferences');
+      // revert
+      row[channel] = !row[channel];
+      setRows([...next]);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSendTest = async () => {
+    try {
+      await notificationsApi.sendTest(selectedBrand?.id);
+      toast.success('Test notification sent');
+    } catch (_e) {
+      toast.error('Failed to send test notification');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-muted-foreground text-sm">
+          {selectedBrand ? `Preferences for ${selectedBrand.name}` : 'Account-level preferences'}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => load()} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button onClick={handleSendTest} disabled={saving}>
+            Send test notification
+          </Button>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-2">
+        <div className="text-muted-foreground text-xs font-medium">Toggle channels</div>
+        {rows.map((r, i) => (
+          <div
+            key={`${r.category}:${r.type}`}
+            className="flex items-center justify-between rounded-md border p-3"
+          >
+            <div>
+              <div className="text-sm font-medium">{r.type}</div>
+              <div className="text-muted-foreground text-xs">{r.category}</div>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <Switch checked={r.in_app} onCheckedChange={() => toggle(i, 'in_app')} />
+                <Label>In‑app</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={r.email} onCheckedChange={() => toggle(i, 'email')} />
+                <Label>Email</Label>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

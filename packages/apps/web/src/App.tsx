@@ -26,6 +26,7 @@ import { PasswordReset } from './pages/PasswordReset';
 import { useEffect, lazy, Suspense, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import NotificationsPage from './pages/Notifications';
 import { RouteError } from './components/RouteError';
 const PostDetail = lazy(() => import('./pages/PostDetail'));
 const CreatePost = lazy(() =>
@@ -69,6 +70,16 @@ const router = createBrowserRouter([
   { path: '/privacy-policy', element: <PrivacyPolicy />, errorElement: <RouteError /> },
   { path: '/terms-of-service', element: <TermsOfService />, errorElement: <RouteError /> },
   { path: '/legal/data-deletion', element: <DataDeletion />, errorElement: <RouteError /> },
+  {
+    path: '/notifications',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <NotificationsPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+  },
   {
     path: '/',
     element: (

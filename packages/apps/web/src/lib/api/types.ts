@@ -158,3 +158,28 @@ export interface Campaign {
   lastModifiedAt?: string;
   lastModifiedBy?: string;
 }
+
+export interface Notification {
+  id: string;
+  type: string;
+  category: string;
+  severity: 'info' | 'warning' | 'error' | string;
+  title: string;
+  body?: string | null;
+  linkUrl?: string | null;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  createdAt: string;
+  readAt?: string | null;
+}
+
+export interface NotificationPreference {
+  id?: string;
+  brandId?: string | null;
+  category: string;
+  type: string;
+  channel: 'in_app' | 'email' | 'digest' | 'push' | 'slack';
+  enabled: boolean;
+  frequency?: 'instant' | 'daily' | 'weekly' | null;
+  digestTime?: string | null;
+}
