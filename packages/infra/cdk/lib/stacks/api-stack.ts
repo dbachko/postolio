@@ -494,6 +494,14 @@ export class ApiStack extends cdk.Stack {
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
             ...(openaiApiKey && { OPENAI_API_KEY: openaiApiKey }),
             ...oauthEnvVars,
+            // Signup gating (optional; server falls back to defaults if unset)
+            ...(process.env.AUTH_SIGNUPS_MODE && {
+              AUTH_SIGNUPS_MODE: process.env.AUTH_SIGNUPS_MODE,
+            }),
+            ...(process.env.AUTH_ALLOWLIST_EMAILS && {
+              AUTH_ALLOWLIST_EMAILS: process.env.AUTH_ALLOWLIST_EMAILS,
+            }),
+            ...(process.env.WAITLIST_URL && { WAITLIST_URL: process.env.WAITLIST_URL }),
           },
           secrets: databaseSecret
             ? {
@@ -548,8 +556,7 @@ export class ApiStack extends cdk.Stack {
       threshold: 1,
       evaluationPeriods: 10,
       datapointsToAlarm: 10,
-      comparisonOperator:
-        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 

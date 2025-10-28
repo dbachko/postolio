@@ -7,6 +7,7 @@ import { RefreshTokenService } from '../services/refresh-token.js';
 import { AuditLogger, AuditEventType } from '../services/audit-logger.js';
 import { ensureDeviceId } from '../utils/device-id.js';
 import { revokeSameDeviceSessions } from '../utils/session-dedup.js';
+import { signupsAllowedForEmail } from '../utils/access-control.js';
 
 interface SendMagicLinkBody {
   email: string;
@@ -43,6 +44,16 @@ const magicLinkRoutes: FastifyPluginAsync = async (fastify) => {
           error: 'Email service not configured',
           message: 'Magic link authentication is not available at this time',
         });
+      }
+
+      // If this is a sign-up flow, enforce signup restrictions
+      if (isSignUp) {
+        const gate = signupsAllowedForEmail(email);
+        if (!gate.allowed) {
+          return reply
+            .code(403)
+            .send({ error: gate.message, code: gate.code, waitlistUrl: gate.waitlistUrl });
+        }
       }
 
       const result = await MagicLinkService.sendMagicLink(email, isSignUp);

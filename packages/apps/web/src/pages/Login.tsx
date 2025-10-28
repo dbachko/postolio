@@ -36,6 +36,14 @@ export function Login() {
   const showFacebook = facebookEnabled && facebookConfigured;
   const showOAuthProviders = showGoogle || showFacebook;
 
+  // UI: hide register link when signups are restricted
+  const signupsMode = (import.meta.env.VITE_SIGNUPS_MODE || 'open') as
+    | 'open'
+    | 'closed'
+    | 'allowlist'
+    | 'invite_only';
+  const showRegisterLink = signupsMode === 'open';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -57,12 +65,29 @@ export function Login() {
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-1">
             <CardTitle className="text-center text-2xl">Sign in to your account</CardTitle>
-            <CardDescription className="text-center">
-              Or{' '}
-              <Link to="/register" className="text-primary font-medium hover:underline">
-                create a new account
-              </Link>
-            </CardDescription>
+            {showRegisterLink && (
+              <CardDescription className="text-center">
+                Or{' '}
+                <Link to="/register" className="text-primary font-medium hover:underline">
+                  create a new account
+                </Link>
+              </CardDescription>
+            )}
+            {signupsMode !== 'open' && (
+              <div className="text-muted-foreground text-center text-xs">
+                Don’t have access?{' '}
+                {(import.meta.env.VITE_WAITLIST_URL as string | undefined) ? (
+                  <a
+                    href={(import.meta.env.VITE_WAITLIST_URL as string) || '#'}
+                    className="text-primary underline"
+                  >
+                    Request invite
+                  </a>
+                ) : (
+                  'Contact us for access.'
+                )}
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {/* OAuth Providers */}

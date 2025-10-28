@@ -46,6 +46,14 @@ export function Register() {
   const showFacebook = facebookEnabled && facebookConfigured;
   const showOAuthProviders = showGoogle || showFacebook;
 
+  // UI messaging for signup restrictions (server enforces)
+  const signupsMode = (import.meta.env.VITE_SIGNUPS_MODE || 'open') as
+    | 'open'
+    | 'closed'
+    | 'allowlist'
+    | 'invite_only';
+  const waitlistUrl = import.meta.env.VITE_WAITLIST_URL as string | undefined;
+
   const {
     register,
     handleSubmit,
@@ -109,6 +117,47 @@ export function Register() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Access control notice */}
+            {signupsMode !== 'open' && (
+              <Alert className="mb-6">
+                <AlertDescription>
+                  {signupsMode === 'closed' && (
+                    <>
+                      Signups are currently closed.{' '}
+                      {waitlistUrl ? (
+                        <a href={waitlistUrl} className="text-primary underline">
+                          Join the waitlist
+                        </a>
+                      ) : (
+                        'Please contact us for access.'
+                      )}
+                    </>
+                  )}
+                  {signupsMode === 'allowlist' && (
+                    <>
+                      Invite-only access. Use an allowlisted email to sign up.{' '}
+                      {waitlistUrl && (
+                        <a href={waitlistUrl} className="text-primary underline">
+                          Request an invite
+                        </a>
+                      )}
+                      .
+                    </>
+                  )}
+                  {signupsMode === 'invite_only' && (
+                    <>
+                      Registration requires an invite.{' '}
+                      {waitlistUrl && (
+                        <a href={waitlistUrl} className="text-primary underline">
+                          Request access
+                        </a>
+                      )}
+                      .
+                    </>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
             {/* OAuth Providers */}
             {showOAuthProviders && (
               <div className="mb-6 space-y-3">

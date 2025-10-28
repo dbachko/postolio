@@ -484,6 +484,10 @@ jobs:
           NODE_ENV: ${{ vars.NODE_ENV }}
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
           ENABLE_MONITORING: ${{ vars.ENABLE_MONITORING }}
+          # Signup gating variables (optional)
+          AUTH_SIGNUPS_MODE: ${{ vars.AUTH_SIGNUPS_MODE }}
+          AUTH_ALLOWLIST_EMAILS: ${{ vars.AUTH_ALLOWLIST_EMAILS }}
+          WAITLIST_URL: ${{ vars.WAITLIST_URL }}
         run: |
           ENV="${{ needs.detect-changes.outputs.environment }}"
           STACK="${{ matrix.stack }}"

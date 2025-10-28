@@ -16,11 +16,12 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug",
-    "test:e2e:ws": "playwright test tests/e2e/websocket",
-    "playwright:install": "playwright install"
+    "test:e2e": "npx playwright test",
+    "test:screenshots": "npx playwright test -c playwright.screenshots.config.ts --project=chromium",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:debug": "npx playwright test --debug",
+    "test:e2e:ws": "npx playwright test tests/e2e/websocket",
+    "playwright:install": "npx playwright install"
   },
   "dependencies": {
     "@postolio/csrf-client": "workspace:^",

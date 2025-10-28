@@ -8,6 +8,7 @@ import { revokeSameDeviceSessions } from '../utils/session-dedup.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { RefreshTokenService } from '../services/refresh-token.js';
+import { signupsAllowedForEmail } from '../utils/access-control.js';
 import { AuditLogger, AuditEventType } from '../services/audit-logger.js';
 
 const prisma = getDatabaseClient();
@@ -107,6 +108,13 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
       } else {
+        // New user via Google OAuth — enforce signup restrictions
+        const gate = signupsAllowedForEmail(googleUserInfo.email);
+        if (!gate.allowed) {
+          return reply
+            .code(403)
+            .send({ error: gate.message, code: gate.code, waitlistUrl: gate.waitlistUrl });
+        }
         // Create new user with Google OAuth
         // Generate a cryptographically secure random password for OAuth users
         const secureRandomPassword = randomBytes(32).toString('hex');

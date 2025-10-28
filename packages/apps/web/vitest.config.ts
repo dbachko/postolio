@@ -7,7 +7,14 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    exclude: ['**/node_modules/**', '**/dist/**', '**/tests/e2e/**', '**/.ignored/**'],
+    // Exclude E2E/Playwright tests so Vitest doesn't attempt to run them
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/tests/e2e/**',
+      '**/tests/screenshots/**',
+      '**/.ignored/**',
+    ],
   },
   resolve: {
     alias: {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -17,7 +18,16 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { useTimezone } from '../contexts/TimezoneContext';
 import { COMMON_TIMEZONES, getUserTimezone, getTimezoneAbbr } from '../lib/timezone';
-import { Globe, Clock, Info, Save, RefreshCw, Shield } from 'lucide-react';
+import {
+  Globe,
+  Clock,
+  Info,
+  Save,
+  RefreshCw,
+  Shield,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useBrandStore } from '../stores/brandStore';
 import { useAuthStore } from '../stores/authStore';
@@ -539,15 +549,67 @@ function NotificationPreferencesPanel() {
   >([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  // Map known notification types to human-friendly titles and descriptions
+  const categoryTitle = (category: string) => {
+    const map: Record<string, string> = {
+      publishing: 'Publishing',
+      accounts: 'Accounts',
+      billing: 'Billing',
+      collaboration: 'Collaboration',
+      system: 'System',
+    };
+    return map[category] ?? category.charAt(0).toUpperCase() + category.slice(1);
+  };
+
+  const humanizeType = (type: string) => {
+    // Use segment after last dot, replace underscores with spaces, Title Case
+    const last = type.split('.').pop() || type;
+    const words = last.replace(/[_-]+/g, ' ').split(' ');
+    return words.map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(' ');
+  };
+
+  const getMeta = (category: string, type: string) => {
+    const byType: Record<string, { title: string; description: string }> = {
+      'publishing.post_failed': {
+        title: 'Post Failed',
+        description: 'A scheduled post failed to publish. Review details and retry.',
+      },
+      'accounts.account_disconnected': {
+        title: 'Account Disconnected',
+        description:
+          'A connected social account lost authorization. Reconnect to resume publishing.',
+      },
+      'accounts.token_expiring': {
+        title: 'Token Expiring',
+        description: 'A connected account token is expiring soon. Refresh credentials.',
+      },
+      'billing.payment_failed': {
+        title: 'Payment Failed',
+        description: 'A payment attempt failed. Update your billing method.',
+      },
+      'system.test_notification': {
+        title: 'Test Notification',
+        description: 'Used to verify your notification setup and preferences.',
+      },
+    };
+    const meta = byType[type] ?? {
+      title: humanizeType(type),
+      description: 'Notification about: ' + humanizeType(type).toLowerCase(),
+    };
+    return { categoryLabel: categoryTitle(category), ...meta };
+  };
 
   const load = async () => {
     setLoading(true);
     try {
       const res = await notificationsApi.getPreferences(selectedBrand?.id);
-      const map = new Map<string, { in_app: boolean; email: boolean }>();
+      // Track only explicitly set preferences; fall back to defaults later
+      const map = new Map<string, Partial<{ in_app: boolean; email: boolean }>>();
       for (const p of res.items) {
         const key = `${p.category}:${p.type}`;
-        const entry = map.get(key) || { in_app: false, email: false };
+        const entry = map.get(key) ?? {};
         if (p.channel === 'in_app') entry.in_app = p.enabled;
         if (p.channel === 'email') entry.email = p.enabled;
         map.set(key, entry);
@@ -559,7 +621,7 @@ function NotificationPreferencesPanel() {
       ]);
       const newRows: typeof rows = Array.from(keys).map((key) => {
         const [category, type] = key.split(':');
-        const entry = map.get(key) || { in_app: false, email: false };
+        const entry = map.get(key) ?? {};
         // If default says enabled for a channel and no explicit pref, show as enabled
         const defaultsForKey = res.defaults.filter(
           (d) => d.category === category && d.type === type
@@ -569,8 +631,9 @@ function NotificationPreferencesPanel() {
         return {
           category,
           type,
-          in_app: entry.in_app || defaultInApp,
-          email: entry.email || defaultEmail,
+          // Prefer explicit user setting; otherwise fall back to defaults
+          in_app: entry.in_app ?? defaultInApp,
+          email: entry.email ?? defaultEmail,
         };
       });
       newRows.sort((a, b) => a.category.localeCompare(b.category) || a.type.localeCompare(b.type));
@@ -614,6 +677,56 @@ function NotificationPreferencesPanel() {
     }
   };
 
+  const toggleTypeMaster = async (key: string, enabled: boolean) => {
+    const idx = rows.findIndex((r) => `${r.category}:${r.type}` === key);
+    if (idx === -1) return;
+    const next = [...rows];
+    const row = { ...next[idx] };
+    const prev = { in_app: row.in_app, email: row.email };
+    row.in_app = enabled;
+    row.email = enabled;
+    next[idx] = row;
+    setRows(next);
+    try {
+      setSaving(true);
+      const updates: Array<{
+        category: string;
+        type: string;
+        brandId?: string;
+        channel: 'in_app' | 'email';
+        enabled: boolean;
+      }> = [];
+      if (prev.in_app !== enabled)
+        updates.push({
+          category: row.category,
+          type: row.type,
+          brandId: selectedBrand?.id,
+          channel: 'in_app',
+          enabled,
+        });
+      if (prev.email !== enabled)
+        updates.push({
+          category: row.category,
+          type: row.type,
+          brandId: selectedBrand?.id,
+          channel: 'email',
+          enabled,
+        });
+      if (updates.length > 0) await notificationsApi.updatePreferences(updates);
+      toast.success(`Preferences ${enabled ? 'enabled' : 'disabled'} for ${row.type}`);
+    } catch (_e) {
+      // revert
+      const revert = [...rows];
+      if (revert[idx]) {
+        revert[idx] = { ...revert[idx], ...prev } as any;
+        setRows(revert);
+      }
+      toast.error('Failed to update preferences');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSendTest = async () => {
     try {
       await notificationsApi.sendTest(selectedBrand?.id);
@@ -639,28 +752,55 @@ function NotificationPreferencesPanel() {
         </div>
       </div>
       <div className="grid grid-cols-1 gap-2">
-        <div className="text-muted-foreground text-xs font-medium">Toggle channels</div>
-        {rows.map((r, i) => (
-          <div
-            key={`${r.category}:${r.type}`}
-            className="flex items-center justify-between rounded-md border p-3"
-          >
-            <div>
-              <div className="text-sm font-medium">{r.type}</div>
-              <div className="text-muted-foreground text-xs">{r.category}</div>
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <Switch checked={r.in_app} onCheckedChange={() => toggle(i, 'in_app')} />
-                <Label>In‑app</Label>
+        <div className="text-muted-foreground text-xs font-medium">Notification types</div>
+        {rows.map((r, i) => {
+          const key = `${r.category}:${r.type}`;
+          const meta = getMeta(r.category, r.type);
+          const isOpen = !!expanded[key];
+          const anyEnabled = r.in_app || r.email;
+          return (
+            <div key={key} className="rounded-md border">
+              <div className="flex items-center justify-between p-3">
+                <button
+                  type="button"
+                  onClick={() => setExpanded((s) => ({ ...s, [key]: !isOpen }))}
+                  className="hover:bg-accent/50 group -ml-1 flex flex-1 items-center gap-2 rounded px-1 py-1 text-left"
+                  aria-expanded={isOpen}
+                >
+                  {isOpen ? (
+                    <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform" />
+                  ) : (
+                    <ChevronRight className="text-muted-foreground h-4 w-4 transition-transform" />
+                  )}
+                  <Badge variant="secondary" className="uppercase">
+                    {meta.categoryLabel}
+                  </Badge>
+                  <div className="text-sm font-medium">{meta.title}</div>
+                </button>
+                <div className="flex items-center gap-2 pr-1">
+                  <Label className="text-xs">Enabled</Label>
+                  <Switch checked={anyEnabled} onCheckedChange={(v) => toggleTypeMaster(key, v)} />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={r.email} onCheckedChange={() => toggle(i, 'email')} />
-                <Label>Email</Label>
-              </div>
+              {isOpen && (
+                <div className="border-t p-3">
+                  <div className="text-muted-foreground mb-2 text-xs">{meta.description}</div>
+                  <div className="text-muted-foreground mb-3 font-mono text-[10px]">{r.type}</div>
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <Switch checked={r.in_app} onCheckedChange={() => toggle(i, 'in_app')} />
+                      <Label>In‑app</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch checked={r.email} onCheckedChange={() => toggle(i, 'email')} />
+                      <Label>Email</Label>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

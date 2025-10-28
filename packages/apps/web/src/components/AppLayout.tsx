@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
 import { RightHelpDrawer } from './help/RightHelpDrawer';
 import { ScheduleLimitBanner } from './ScheduleLimitBanner';
+import { Bell } from '@/components/notifications/Bell';
 
 interface LayoutProps {
   children: ReactNode;
@@ -230,7 +231,7 @@ export function AppLayout({ children }: LayoutProps) {
               </div>
             </div>
 
-            {/* Right Section: Search + Menu + Brand Dropdown */}
+            {/* Right Section: Search + Notifications + Menu + Brand Dropdown */}
             <div className="flex items-center space-x-2">
               {/* Primary action: New Post (permanent in top bar) */}
               <Button
@@ -265,6 +266,9 @@ export function AppLayout({ children }: LayoutProps) {
                   <span className="text-xs">⌘</span>K
                 </kbd>
               </Button>
+
+              {/* Notifications Bell */}
+              <Bell />
 
               {/* Grid Menu Dropdown (hidden on desktop when main nav is visible) */}
               <div className="relative md:hidden" ref={menuRef}>

@@ -18,6 +18,7 @@ import { isProductionEnv } from '../utils/env-mode.js';
 import { getClientIp, getUserAgent, parseDeviceName } from '../utils/request-info.js';
 import { ensureDeviceId } from '../utils/device-id.js';
 import { revokeSameDeviceSessions } from '../utils/session-dedup.js';
+import { signupsAllowedForEmail } from '../utils/access-control.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
@@ -40,6 +41,14 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { email, password, name, timezone, deviceFingerprint, deviceName } = request.body;
+
+      // Enforce signup mode restrictions before proceeding
+      const gate = signupsAllowedForEmail(email);
+      if (!gate.allowed) {
+        return reply
+          .code(403)
+          .send({ error: gate.message, code: gate.code, waitlistUrl: gate.waitlistUrl });
+      }
 
       // Check if user exists
       const existingUser = await prisma.user.findUnique({
@@ -159,6 +168,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // If using allowlist for logins too, optionally block here for unknown users
+      // Current behavior: only restrict signups; existing users may log in.
       // Find user with password for verification
       const user = await prisma.user.findUnique({
         where: { email },
