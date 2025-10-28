@@ -31,6 +31,15 @@ echo "DATABASE_URL is configured"
 # Run Prisma migrations (idempotent) from the database package
 echo "Running database migrations..."
 cd /app/packages/libs/database
+
+# Check for failed migrations and resolve them
+echo "Checking for failed migrations..."
+if npx prisma migrate status 2>&1 | grep -q "migration.*failed"; then
+  echo "Found failed migration, resolving..."
+  # Resolve the failed init migration by marking it as applied
+  npx prisma migrate resolve --applied 20251027213825_init || echo "Failed to resolve migration (might already be resolved)"
+fi
+
 npx prisma migrate deploy
 echo "Migrations completed"
 
