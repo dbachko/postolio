@@ -404,9 +404,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Logout endpoint
   fastify.post('/logout', async (request, reply) => {
-    // Try to get user info for audit log
+    // Try to get user info and session ID for audit log and session revocation
     let userId: string | undefined;
     let email: string | undefined;
+    let sessionId: string | undefined;
     const ipAddress = getClientIp(request);
     const userAgent = getUserAgent(request);
 
@@ -414,9 +415,14 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const token = request.cookies?.auth_token || request.headers.authorization?.substring(7);
       if (token) {
         try {
-          const decoded = fastify.jwt.verify(token) as { id: string; email: string };
+          const decoded = fastify.jwt.verify(token) as {
+            id: string;
+            email: string;
+            sid?: string;
+          };
           userId = decoded.id;
           email = decoded.email;
+          sessionId = decoded.sid;
         } catch {
           // Invalid token, still allow logout
         }
@@ -427,10 +433,31 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Invalidate refresh token if present
     const refreshToken = request.cookies?.refresh_token;
+    let sessionRevoked = false;
+
     if (refreshToken) {
-      await RefreshTokenService.invalidateRefreshToken(refreshToken);
-    } else if (userId) {
-      // Fallback: try to find the most likely current session by matching IP and User-Agent
+      const invalidated = await RefreshTokenService.invalidateRefreshToken(refreshToken);
+      // Check if session was actually revoked by checking if it still exists
+      if (invalidated && sessionId && userId) {
+        const { SessionService } = await import('../services/session.service.js');
+        const session = await SessionService.getSessionById(sessionId, userId);
+        sessionRevoked = !session || session.revokedAt !== null;
+      }
+    }
+
+    // If refresh token method didn't revoke the session, try using session ID from JWT
+    if (!sessionRevoked && sessionId) {
+      try {
+        const { SessionService } = await import('../services/session.service.js');
+        await SessionService.revokeSession(sessionId, 'user_logout');
+        sessionRevoked = true;
+      } catch (e) {
+        request.log.error(e, 'Failed to revoke session via session ID');
+      }
+    }
+
+    // Final fallback: try to find the most likely current session by matching IP and User-Agent
+    if (!sessionRevoked && userId) {
       try {
         const { SessionService } = await import('../services/session.service.js');
         const sessions = await SessionService.getUserSessions(userId);
