@@ -13,6 +13,11 @@
         transition: none !important;
         animation: none !important;
       }
+      /* Ensure background matches OS theme before CSS/JS load */
+      html { background: #ffffff; }
+      @media (prefers-color-scheme: dark) {
+        html { background: #232323; }
+      }
     </style>
     <script>
       (function () {
@@ -72,7 +77,9 @@
     <link rel="manifest" href="/manifest.json" />
 
     <!-- Theme Color -->
-    <meta name="theme-color" content="#8B5CF6" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#232323" />
     <meta name="msapplication-TileColor" content="#8B5CF6" />
 
     <!-- Open Graph / Facebook -->

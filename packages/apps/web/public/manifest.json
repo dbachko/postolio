@@ -4,7 +4,7 @@
   "description": "AI-Powered Instagram Content Management Platform. Automate your Instagram growth with AI-generated content, smart scheduling, and advanced analytics.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#232323",
   "theme_color": "#8B5CF6",
   "orientation": "portrait-primary",
   "categories": ["business", "productivity", "social"],
