@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +19,7 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
   const { setUser } = useAuthStore();
   const navigate = useNavigate();
   const buttonRef = useRef<HTMLDivElement>(null);
+  const { resolvedTheme } = useTheme();
 
   // Check if Google OAuth is configured
   const isConfigured =
@@ -114,10 +116,13 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
             cancel_on_tap_outside: true,
           });
 
-          // Render the button
+          // Render the button with theme-aware styling
+          const isDark = resolvedTheme === 'dark';
+          // In dark mode, use filled_black and disable personalization to avoid the white
+          // "Sign in as <name>" variant which ignores dark themes.
           window.google.accounts.id.renderButton(buttonRef.current, {
             type: 'standard',
-            theme: 'outline',
+            theme: isDark ? 'filled_black' : 'outline',
             size: 'large',
             text:
               mode === 'signin'
@@ -127,6 +132,7 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
                   : 'continue_with',
             width: buttonRef.current.offsetWidth || 400,
             locale: 'en',
+            personalization: isDark ? 'off' : 'on',
           });
 
           setIsInitialized(true);
@@ -144,32 +150,32 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
       script.remove();
       delete window.handleGoogleCallback;
     };
-  }, [isConfigured, isInitialized, handleGoogleResponse, mode, onError]);
+  }, [isConfigured, isInitialized, handleGoogleResponse, mode, onError, resolvedTheme]);
 
   // Ensure the Google button remains visible after auth attempts
   useEffect(() => {
-    if (
-      !isLoading &&
-      isInitialized &&
-      buttonRef.current &&
-      buttonRef.current.childElementCount === 0 &&
-      window.google?.accounts?.id
-    ) {
-      try {
-        window.google.accounts.id.renderButton(buttonRef.current, {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          text:
-            mode === 'signin' ? 'signin_with' : mode === 'signup' ? 'signup_with' : 'continue_with',
-          width: buttonRef.current.offsetWidth || 400,
-          locale: 'en',
-        });
-      } catch (err) {
-        console.warn('Re-rendering Google Sign-In button failed:', err);
-      }
+    // Re-render button when theme changes or after auth attempts clear the DOM
+    if (!isInitialized || !window.google?.accounts?.id || !buttonRef.current) return;
+
+    try {
+      // Clear any previous render (Google injects an iframe/button)
+      buttonRef.current.innerHTML = '';
+
+      const isDark = resolvedTheme === 'dark';
+      window.google.accounts.id.renderButton(buttonRef.current, {
+        type: 'standard',
+        theme: isDark ? 'filled_black' : 'outline',
+        size: 'large',
+        text:
+          mode === 'signin' ? 'signin_with' : mode === 'signup' ? 'signup_with' : 'continue_with',
+        width: buttonRef.current.offsetWidth || 400,
+        locale: 'en',
+        personalization: isDark ? 'off' : 'on',
+      });
+    } catch (err) {
+      console.warn('Re-rendering Google Sign-In button failed:', err);
     }
-  }, [isLoading, isInitialized, mode]);
+  }, [isLoading, isInitialized, mode, resolvedTheme]);
 
   if (!isConfigured) {
     return (
