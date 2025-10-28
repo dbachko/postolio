@@ -1,7 +1,9 @@
 import { FastifyPluginAsync } from 'fastify';
 import { getDatabaseClient } from '../config/database.js';
 import { instagramService } from '../services/instagram.js';
-import { redisService } from '../services/redis.js';
+import { instagramBestTimeService } from '../services/instagram-best-time.js';
+import type { BestTimePayload } from '../services/instagram-best-time.js';
+import { getRedisClient, redisService } from '../services/redis.js';
 
 const prisma = getDatabaseClient();
 
@@ -117,6 +119,84 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
         success: true,
         results,
         message: `Synced ${results.synced} posts, skipped ${results.skipped}, failed ${results.failed}`,
+      });
+    }
+  );
+
+  // GET /api/brands/:brandId/instagram/best-time
+  fastify.get(
+    '/:brandId/instagram/best-time',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { brandId } = request.params as { brandId: string };
+      const userId = request.user!.id;
+      const { force } = request.query as { force?: string };
+
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      if (!instagramService.isConfigured(brand))
+        return reply.code(400).send({ error: 'Instagram not connected' });
+
+      try {
+        const rec = await instagramBestTimeService.getRecommendations(brandId, force === 'true');
+        reply.send(rec);
+      } catch (e) {
+        request.log.error({ err: e }, 'Failed to get best-time recommendations');
+        reply.code(500).send({ error: 'Failed to compute recommendations' });
+      }
+    }
+  );
+
+  // POST /api/brands/:brandId/instagram/best-time/refresh
+  fastify.post(
+    '/:brandId/instagram/best-time/refresh',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { brandId } = request.params as { brandId: string };
+      const userId = request.user!.id;
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      if (!instagramService.isConfigured(brand))
+        return reply.code(400).send({ error: 'Instagram not connected' });
+
+      try {
+        const rec = await instagramBestTimeService.getRecommendations(brandId, true);
+        reply.send({ success: true, recommendations: rec });
+      } catch (e) {
+        request.log.error({ err: e }, 'Failed to refresh best-time recommendations');
+        reply.code(500).send({ success: false, error: 'Failed to recompute recommendations' });
+      }
+    }
+  );
+
+  // GET /api/brands/:brandId/instagram/best-time/status
+  fastify.get(
+    '/:brandId/instagram/best-time/status',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { brandId } = request.params as { brandId: string };
+      const userId = request.user!.id;
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+
+      const key = `ig_best_time:${brandId}`;
+      const redis = getRedisClient();
+      let ttl = -1;
+      let meta: BestTimePayload | null = null;
+      try {
+        if (redis) ttl = await redis.ttl(key);
+        const cached = await redisService.get(key);
+        if (cached) meta = JSON.parse(cached) as BestTimePayload;
+      } catch (e) {
+        request.log.warn({ err: e }, 'Failed to read cache status');
+      }
+      reply.send({
+        cacheTTL: ttl,
+        cached: !!meta,
+        source: meta?.source,
+        confidence: meta?.confidence,
+        generatedAt: meta?.generatedAt,
+        nextRefreshAt: ttl > 0 ? new Date(Date.now() + ttl * 1000).toISOString() : null,
       });
     }
   );
