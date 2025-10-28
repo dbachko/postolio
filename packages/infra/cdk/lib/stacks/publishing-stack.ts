@@ -414,7 +414,7 @@ export class PublishingStack extends cdk.Stack {
               ? [
                   new iam.PolicyStatement({
                     effect: iam.Effect.ALLOW,
-                    actions: ['lambda:InvokeFunctionUrl'],
+                    actions: ['lambda:InvokeFunction', 'lambda:InvokeFunctionUrl'],
                     resources: [tokenServiceArn],
                   }),
                 ]
