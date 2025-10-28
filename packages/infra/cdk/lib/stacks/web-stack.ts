@@ -188,6 +188,24 @@ export class WebStack extends cdk.Stack {
     // CloudFront doesn't allow custom forwarding of Upgrade/Connection headers - these are
     // automatically handled by the ALL_VIEWER policy which forwards all viewer headers
 
+    // ==================== CloudFront Function: SPA rewrite (viewer-request) ====================
+    // Rewrites non-file, non-/api/* paths to /index.html to enable SPA deep links
+    const spaRewriteFunction = new cloudfront.Function(this, 'SpaRewriteFunction', {
+      code: cloudfront.FunctionCode.fromInline(`function handler(event) {
+  var request = event.request;
+  var uri = request.uri || '/';
+  // Pass API calls straight through
+  if (uri.indexOf('/api/') === 0) { return request; }
+  // Treat URIs with a dot as direct asset requests
+  if (uri.indexOf('.') !== -1) { return request; }
+  // Rewrite to SPA entry
+  request.uri = '/index.html';
+  return request;
+}`),
+      runtime: cloudfront.FunctionRuntime.JS_1_0,
+      comment: 'SPA rewrite to /index.html for non-/api routes',
+    });
+
     // ==================== CloudFront Distribution ====================
     const distributionProps: cloudfront.DistributionProps = {
       comment: `${prefix} - Frontend Distribution`,
@@ -218,6 +236,12 @@ export class WebStack extends cdk.Stack {
           queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
           cookieBehavior: cloudfront.CacheCookieBehavior.none(),
         }),
+        functionAssociations: [
+          {
+            function: spaRewriteFunction,
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          },
+        ],
       },
       additionalBehaviors: {
         // Special handling for index.html - no caching
@@ -256,12 +280,6 @@ export class WebStack extends cdk.Stack {
       errorResponses: [
         {
           httpStatus: 404,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-          ttl: cdk.Duration.minutes(5),
-        },
-        {
-          httpStatus: 403,
           responseHttpStatus: 200,
           responsePagePath: '/index.html',
           ttl: cdk.Duration.minutes(5),
