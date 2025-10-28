@@ -20,11 +20,13 @@ import { TermsOfService } from './pages/TermsOfService';
 import { DataDeletion } from './pages/DataDeletion';
 import UiKitchenSink from './pages/UiKitchenSink';
 import { MagicLinkVerify } from './pages/MagicLinkVerify';
+import NotFound from './pages/NotFound';
 import { EmailVerify } from './pages/EmailVerify';
 import { PasswordReset } from './pages/PasswordReset';
 import { useEffect, lazy, Suspense, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { RouteError } from './components/RouteError';
 const PostDetail = lazy(() => import('./pages/PostDetail'));
 const CreatePost = lazy(() =>
   import('./pages/CreatePost').then((module) => ({
@@ -59,38 +61,14 @@ const LazyLoadingFallback = ({ minHeight = '200px' }: { minHeight?: string }) =>
 
 // Create router with data router API
 const router = createBrowserRouter([
-  {
-    path: '/login',
-    element: <Login />,
-  },
-  {
-    path: '/register',
-    element: <Register />,
-  },
-  {
-    path: '/auth/magic-link',
-    element: <MagicLinkVerify />,
-  },
-  {
-    path: '/auth/verify-email',
-    element: <EmailVerify />,
-  },
-  {
-    path: '/password/reset',
-    element: <PasswordReset />,
-  },
-  {
-    path: '/privacy-policy',
-    element: <PrivacyPolicy />,
-  },
-  {
-    path: '/terms-of-service',
-    element: <TermsOfService />,
-  },
-  {
-    path: '/legal/data-deletion',
-    element: <DataDeletion />,
-  },
+  { path: '/login', element: <Login />, errorElement: <RouteError /> },
+  { path: '/register', element: <Register />, errorElement: <RouteError /> },
+  { path: '/auth/magic-link', element: <MagicLinkVerify />, errorElement: <RouteError /> },
+  { path: '/auth/verify-email', element: <EmailVerify />, errorElement: <RouteError /> },
+  { path: '/password/reset', element: <PasswordReset />, errorElement: <RouteError /> },
+  { path: '/privacy-policy', element: <PrivacyPolicy />, errorElement: <RouteError /> },
+  { path: '/terms-of-service', element: <TermsOfService />, errorElement: <RouteError /> },
+  { path: '/legal/data-deletion', element: <DataDeletion />, errorElement: <RouteError /> },
   {
     path: '/',
     element: (
@@ -100,6 +78,7 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
   },
   {
     path: '/dashboard',
@@ -110,6 +89,7 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
   },
   {
     path: '/brands',
@@ -120,6 +100,7 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
   },
   {
     path: '/content',
@@ -130,6 +111,7 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
   },
   // {
   //   path: '/analytics',
@@ -194,6 +176,7 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
   },
   {
     path: '/posts/:postId',
@@ -208,6 +191,7 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
   },
   {
     path: '/posts/create',
@@ -222,6 +206,7 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
   },
   {
     path: '/settings',
@@ -232,6 +217,7 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
   },
   {
     path: '/security',
@@ -242,6 +228,7 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
   },
   {
     path: '/limits',
@@ -256,6 +243,7 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
   },
   {
     path: '/_ui',
@@ -266,6 +254,12 @@ const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouteError />,
+  },
+  // Catch-all 404 for unmatched routes
+  {
+    path: '*',
+    element: <NotFound />,
   },
 ]);
 
