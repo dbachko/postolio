@@ -32,9 +32,6 @@ export interface GoogleButtonOptions {
   logo_alignment?: 'left' | 'center';
   width?: number | string;
   locale?: string;
-  // When 'on', Google may show a personalized "Sign in as <name>" white button.
-  // Turn 'off' to force the generic button styling (useful for dark mode).
-  personalization?: 'on' | 'off';
 }
 
 export interface GoogleAccounts {

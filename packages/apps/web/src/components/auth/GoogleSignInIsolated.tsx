@@ -118,12 +118,13 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
 
           // Render the button with theme-aware styling
           const isDark = resolvedTheme === 'dark';
-          // In dark mode, use filled_black and disable personalization to avoid the white
-          // "Sign in as <name>" variant which ignores dark themes.
+          // Note: GIS does not support a `personalization` option. To prevent the
+          // white "personalized" variant in dark mode, use size "medium" which
+          // explicitly disables personalization per Google docs.
           window.google.accounts.id.renderButton(buttonRef.current, {
             type: 'standard',
             theme: isDark ? 'filled_black' : 'outline',
-            size: 'large',
+            size: isDark ? 'medium' : 'large',
             text:
               mode === 'signin'
                 ? 'signin_with'
@@ -132,7 +133,6 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
                   : 'continue_with',
             width: buttonRef.current.offsetWidth || 400,
             locale: 'en',
-            personalization: isDark ? 'off' : 'on',
           });
 
           setIsInitialized(true);
@@ -165,12 +165,12 @@ export function GoogleSignInIsolated({ mode, onSuccess, onError }: GoogleSignInI
       window.google.accounts.id.renderButton(buttonRef.current, {
         type: 'standard',
         theme: isDark ? 'filled_black' : 'outline',
-        size: 'large',
+        // Use medium in dark mode to disable personalization
+        size: isDark ? 'medium' : 'large',
         text:
           mode === 'signin' ? 'signin_with' : mode === 'signup' ? 'signup_with' : 'continue_with',
         width: buttonRef.current.offsetWidth || 400,
         locale: 'en',
-        personalization: isDark ? 'off' : 'on',
       });
     } catch (err) {
       console.warn('Re-rendering Google Sign-In button failed:', err);
