@@ -2,10 +2,11 @@ import { useEffect } from 'react';
 import { Bell as BellIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNotificationsStore } from '@/stores/notificationsStore';
-import { NotificationsDropdown } from './NotificationsDropdown';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 
 export function Bell() {
-  const { unreadCount, isOpen, setOpen, fetchLatest } = useNotificationsStore();
+  const { unreadCount, fetchLatest } = useNotificationsStore();
+  const { openSidebar } = useRightSidebarRouter();
 
   useEffect(() => {
     // Initial fetch when bell mounts
@@ -18,7 +19,7 @@ export function Bell() {
         variant="ghost"
         className="relative h-9 w-9 p-0"
         aria-label="Open notifications"
-        onClick={() => setOpen(!isOpen)}
+        onClick={() => openSidebar('notifications')}
       >
         <BellIcon className="h-5 w-5" />
         {unreadCount > 0 && (
@@ -27,7 +28,6 @@ export function Bell() {
           </span>
         )}
       </Button>
-      {isOpen && <NotificationsDropdown />}
     </div>
   );
 }

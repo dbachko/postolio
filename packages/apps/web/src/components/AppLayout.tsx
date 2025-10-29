@@ -39,6 +39,8 @@ import {
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
 import { RightHelpDrawer } from './help/RightHelpDrawer';
+import { RightSidebarRoot } from '@/right-sidebar/RightSidebarRoot';
+import '@/right-sidebar/register';
 import { ScheduleLimitBanner } from './ScheduleLimitBanner';
 import { Bell } from '@/components/notifications/Bell';
 
@@ -533,9 +535,9 @@ export function AppLayout({ children }: LayoutProps) {
       {/* Email Verification Banner */}
       <EmailVerificationBanner />
 
-      {/* Main Content */}
+      {/* Main Content + Universal Right Sidebar */}
       <main id="main-content" className={cn('flex-1 py-6', containerCls)}>
-        {children}
+        <RightSidebarRoot>{children}</RightSidebarRoot>
       </main>
 
       {/* Footer */}

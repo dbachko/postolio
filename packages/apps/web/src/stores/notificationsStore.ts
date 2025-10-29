@@ -6,20 +6,17 @@ interface NotificationsState {
   items: Notification[];
   nextCursor?: string;
   unreadCount: number;
-  isOpen: boolean;
   loading: boolean;
   fetchLatest: () => Promise<void>;
   fetchMore: () => Promise<void>;
   markRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
-  setOpen: (open: boolean) => void;
 }
 
 export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   items: [],
   nextCursor: undefined,
   unreadCount: 0,
-  isOpen: false,
   loading: false,
 
   fetchLatest: async () => {
@@ -55,6 +52,4 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     }));
     await notificationsApi.markAllRead();
   },
-
-  setOpen: (open: boolean) => set({ isOpen: open }),
 }));

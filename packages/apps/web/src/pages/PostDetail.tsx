@@ -151,6 +151,7 @@ export default function PostDetail() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
+  const editingInitializedRef = useRef(false);
   const [formData, setFormData] = useState<FormData>({
     caption: '',
     hashtags: [],
@@ -238,6 +239,16 @@ export default function PostDetail() {
     refetchInterval: 60000,
     staleTime: 30000,
   });
+
+  // Default to editing mode when the post loads, unless it's published (then keep disabled)
+  useEffect(() => {
+    if (editingInitializedRef.current) return;
+    if (!post) return;
+    editingInitializedRef.current = true;
+    if (post.status !== 'published') {
+      setIsEditing(true);
+    }
+  }, [post]);
 
   // Fetch comments
   const { data: commentsData } = useQuery<{
