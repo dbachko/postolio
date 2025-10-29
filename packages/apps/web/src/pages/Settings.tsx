@@ -550,6 +550,8 @@ function NotificationPreferencesPanel() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // Group master preferences keyed by category (e.g., 'accounts')
+  const [masters, setMasters] = useState<Record<string, boolean>>({});
 
   // Map known notification types to human-friendly titles and descriptions
   const categoryTitle = (category: string) => {
@@ -577,6 +579,7 @@ function NotificationPreferencesPanel() {
         description: 'A scheduled post failed to publish. Review details and retry.',
       },
       'accounts.account_disconnected': {
+        // In grouped view this will be rendered as "Account is connected" item label
         title: 'Account Disconnected',
         description:
           'A connected social account lost authorization. Reconnect to resume publishing.',
@@ -607,7 +610,13 @@ function NotificationPreferencesPanel() {
       const res = await notificationsApi.getPreferences(selectedBrand?.id);
       // Track only explicitly set preferences; fall back to defaults later
       const map = new Map<string, Partial<{ in_app: boolean; email: boolean }>>();
+      const masterMap: Record<string, boolean> = {};
       for (const p of res.items) {
+        if (p.channel === 'all' && p.type === 'all') {
+          // Store category-level master enabled flag
+          masterMap[p.category] = !!p.enabled;
+          continue;
+        }
         const key = `${p.category}:${p.type}`;
         const entry = map.get(key) ?? {};
         if (p.channel === 'in_app') entry.in_app = p.enabled;
@@ -638,6 +647,7 @@ function NotificationPreferencesPanel() {
       });
       newRows.sort((a, b) => a.category.localeCompare(b.category) || a.type.localeCompare(b.type));
       setRows(newRows);
+      setMasters(masterMap);
     } catch (_e) {
       console.error('Failed to load notification preferences', _e);
       toast.error('Failed to load preferences');
@@ -645,6 +655,90 @@ function NotificationPreferencesPanel() {
       setLoading(false);
     }
   };
+
+  // Derived grouping for UI presentation.
+  // We currently have two account-related types that should be shown
+  // inside one expandable group labeled "Account Settings" with a master toggle.
+  type Group = {
+    key: string;
+    category: string;
+    title: string;
+    // indices into rows
+    indices: number[];
+    // Item presentation info per row
+    items: Array<{
+      index: number;
+      key: string;
+      title: string;
+      description: string;
+    }>;
+  };
+
+  const buildGroups = (): Group[] => {
+    const groups: Group[] = [];
+    // Accounts group: combine all rows that have category === 'accounts'
+    const accountIndices: number[] = [];
+    rows.forEach((r, i) => {
+      if (r.category === 'accounts') accountIndices.push(i);
+    });
+    if (accountIndices.length > 0) {
+      const items = accountIndices.map((i) => {
+        const r = rows[i];
+        const meta = getMeta(r.category, r.type);
+        // Display titles inside group
+        const displayTitle =
+          r.type === 'accounts.account_disconnected' ? 'Account is connected' : meta.title;
+        return {
+          index: i,
+          key: `${r.category}:${r.type}`,
+          title: displayTitle,
+          description: meta.description,
+        };
+      });
+      groups.push({
+        key: 'group:accounts:account_settings',
+        category: 'accounts',
+        title: 'Account Settings',
+        indices: accountIndices,
+        items,
+      });
+    }
+
+    // All other rows render as their own group (1:1)
+    rows.forEach((r, i) => {
+      if (r.category === 'accounts') return; // already grouped
+      const meta = getMeta(r.category, r.type);
+      groups.push({
+        key: `${r.category}:${r.type}`,
+        category: r.category,
+        title: meta.title,
+        indices: [i],
+        items: [
+          {
+            index: i,
+            key: `${r.category}:${r.type}`,
+            title: meta.title,
+            description: meta.description,
+          },
+        ],
+      });
+    });
+
+    return groups.sort(
+      (a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title)
+    );
+  };
+
+  // Open all notification groups by default once rows are loaded.
+  // This only runs once per mount (when expanded is still empty).
+  useEffect(() => {
+    if (rows.length > 0 && Object.keys(expanded).length === 0) {
+      const defaults: Record<string, boolean> = {};
+      for (const g of buildGroups()) defaults[g.key] = true;
+      setExpanded(defaults);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   useEffect(() => {
     void load();
@@ -678,6 +772,7 @@ function NotificationPreferencesPanel() {
   };
 
   const toggleTypeMaster = async (key: string, enabled: boolean) => {
+    // This function still supports the 1:1 groups (non-accounts)
     const idx = rows.findIndex((r) => `${r.category}:${r.type}` === key);
     if (idx === -1) return;
     const next = [...rows];
@@ -727,6 +822,33 @@ function NotificationPreferencesPanel() {
     }
   };
 
+  const toggleGroupMaster = async (category: string, enabled: boolean) => {
+    // Do not change individual toggles; only persist a category/type-wide master preference
+    const prev = masters[category];
+    setMasters((m) => ({ ...m, [category]: enabled }));
+    try {
+      setSaving(true);
+      await notificationsApi.updatePreferences([
+        {
+          category,
+          type: 'all',
+          brandId: selectedBrand?.id,
+          channel: 'all',
+          enabled,
+        },
+      ]);
+      toast.success(
+        `Notifications ${enabled ? 'enabled' : 'disabled'} for ${categoryTitle(category)}`
+      );
+    } catch (_e) {
+      // revert UI state
+      setMasters((m) => ({ ...m, [category]: prev }));
+      toast.error('Failed to update preferences');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSendTest = async () => {
     try {
       await notificationsApi.sendTest(selectedBrand?.id);
@@ -753,11 +875,15 @@ function NotificationPreferencesPanel() {
       </div>
       <div className="grid grid-cols-1 gap-2">
         <div className="text-muted-foreground text-xs font-medium">Notification types</div>
-        {rows.map((r, i) => {
-          const key = `${r.category}:${r.type}`;
-          const meta = getMeta(r.category, r.type);
+        {buildGroups().map((g) => {
+          const key = g.key;
           const isOpen = !!expanded[key];
-          const anyEnabled = r.in_app || r.email;
+          const groupMasterEnabled =
+            g.category === 'accounts' ? (masters['accounts'] ?? true) : undefined;
+          const anyEnabled =
+            groupMasterEnabled !== undefined
+              ? groupMasterEnabled
+              : g.indices.some((idx) => rows[idx]?.in_app || rows[idx]?.email);
           return (
             <div key={key} className="rounded-md border">
               <div className="flex items-center justify-between p-3">
@@ -773,29 +899,67 @@ function NotificationPreferencesPanel() {
                     <ChevronRight className="text-muted-foreground h-4 w-4 transition-transform" />
                   )}
                   <Badge variant="secondary" className="uppercase">
-                    {meta.categoryLabel}
+                    {categoryTitle(g.category)}
                   </Badge>
-                  <div className="text-sm font-medium">{meta.title}</div>
+                  <div className="text-sm font-medium">
+                    {g.category === 'accounts' ? 'Account Settings' : g.title}
+                  </div>
                 </button>
                 <div className="flex items-center gap-2 pr-1">
                   <Label className="text-xs">Enabled</Label>
-                  <Switch checked={anyEnabled} onCheckedChange={(v) => toggleTypeMaster(key, v)} />
+                  {g.category === 'accounts' ? (
+                    <Switch
+                      checked={anyEnabled}
+                      onCheckedChange={(v) => toggleGroupMaster('accounts', v)}
+                    />
+                  ) : (
+                    <Switch
+                      checked={anyEnabled}
+                      onCheckedChange={(v) =>
+                        toggleTypeMaster(
+                          `${rows[g.indices[0]].category}:${rows[g.indices[0]].type}`,
+                          v
+                        )
+                      }
+                    />
+                  )}
                 </div>
               </div>
               {isOpen && (
                 <div className="border-t p-3">
-                  <div className="text-muted-foreground mb-2 text-xs">{meta.description}</div>
-                  <div className="text-muted-foreground mb-3 font-mono text-[10px]">{r.type}</div>
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                      <Switch checked={r.in_app} onCheckedChange={() => toggle(i, 'in_app')} />
-                      <Label>In‑app</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Switch checked={r.email} onCheckedChange={() => toggle(i, 'email')} />
-                      <Label>Email</Label>
-                    </div>
-                  </div>
+                  {g.items.map((item, idx) => {
+                    const r = rows[item.index];
+                    if (!r) return null;
+                    const disabled =
+                      g.category === 'accounts' ? !(masters['accounts'] ?? true) : false;
+                    return (
+                      <div key={item.key} className={idx > 0 ? 'mt-4 border-t pt-4' : ''}>
+                        <div className="mb-1 text-sm font-medium">{item.title}</div>
+                        <div className="text-muted-foreground mb-2 text-xs">{item.description}</div>
+                        <div className="text-muted-foreground mb-3 font-mono text-[10px]">
+                          {r.type}
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={r.in_app}
+                              disabled={disabled}
+                              onCheckedChange={() => toggle(item.index, 'in_app')}
+                            />
+                            <Label>In‑app</Label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={r.email}
+                              disabled={disabled}
+                              onCheckedChange={() => toggle(item.index, 'email')}
+                            />
+                            <Label>Email</Label>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

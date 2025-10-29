@@ -26,7 +26,8 @@ export interface NotificationPreferenceItem {
   brandId?: string | null;
   category: string;
   type: string;
-  channel: 'in_app' | 'email' | 'digest' | 'push' | 'slack';
+  // 'all' represents a master toggle for a type/category
+  channel: 'in_app' | 'email' | 'digest' | 'push' | 'slack' | 'all';
   enabled: boolean;
   frequency?: 'instant' | 'daily' | 'weekly' | null;
   digestTime?: string | null;

@@ -101,7 +101,7 @@ const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
         linkUrl: 'https://postolio.example/notifications',
       });
 
-      return reply.send({ success: true, id: n.id });
+      return reply.send({ success: true, id: n?.id || null });
     }
   );
 };

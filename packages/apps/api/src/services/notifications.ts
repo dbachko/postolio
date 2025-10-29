@@ -49,6 +49,25 @@ class NotificationsServiceImpl {
   }
 
   async emitEvent(input: EmitEventInput) {
+    // Check master preference (category/type-wide disable) before creating anything
+    try {
+      const master = await prisma.notificationPreference.findFirst({
+        where: {
+          userId: input.userId,
+          category: input.category,
+          type: 'all',
+          channel: 'all',
+          OR: [{ brandId: input.brandId || null }, { brandId: null }],
+        },
+        orderBy: { brandId: 'desc' },
+      });
+      if (master && master.enabled === false) {
+        // Suppressed by master preference: do not create/broadcast/email
+        return null;
+      }
+    } catch (err) {
+      this.logger.error({ err }, 'Failed to check master notification preference');
+    }
     const notification = await prisma.notification
       .upsert({
         where: input.dedupeKey ? { dedupeKey: input.dedupeKey } : { id: '___noop___' },
@@ -229,7 +248,8 @@ class NotificationsServiceImpl {
       category: string;
       type: string;
       brandId?: string;
-      channel: 'in_app' | 'email' | 'digest' | 'push' | 'slack';
+      // 'all' represents a master toggle across channels for the category/type
+      channel: 'in_app' | 'email' | 'digest' | 'push' | 'slack' | 'all';
       enabled: boolean;
       frequency?: 'instant' | 'daily' | 'weekly';
       digestTime?: string;

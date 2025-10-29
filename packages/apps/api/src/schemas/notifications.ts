@@ -23,7 +23,8 @@ export const updatePreferencesSchema = z.object({
         category: z.string(),
         type: z.string(),
         brandId: z.string().optional(),
-        channel: z.enum(['in_app', 'email', 'digest', 'push', 'slack']),
+        // 'all' represents a master toggle for a category/type that disables all channels
+        channel: z.enum(['in_app', 'email', 'digest', 'push', 'slack', 'all']),
         enabled: z.boolean(),
         frequency: z.enum(['instant', 'daily', 'weekly']).optional(),
         digestTime: z.string().optional(), // 'HH:mm'

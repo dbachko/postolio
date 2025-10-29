@@ -24,6 +24,23 @@ export async function maybeSendImmediateEmail(params: {
   body?: string | null;
   linkUrl?: string | null;
 }): Promise<void> {
+  // Master preference check: if disabled for this category/type, skip all outbound email
+  try {
+    const master = await prisma.notificationPreference.findFirst({
+      where: {
+        userId: params.userId,
+        category: params.category,
+        type: 'all',
+        channel: 'all',
+        OR: [{ brandId: params.brandId || null }, { brandId: null }],
+      },
+      orderBy: { brandId: 'desc' },
+    });
+    if (master && master.enabled === false) return;
+  } catch {
+    // ignore and continue to channel-level checks
+  }
+
   // Load user email
   const user = await prisma.user.findUnique({
     where: { id: params.userId },
