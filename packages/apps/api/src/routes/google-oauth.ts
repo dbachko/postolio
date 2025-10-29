@@ -44,35 +44,52 @@ function ensureAuth(
 }
 
 const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
-  // Google OAuth callback - handles the ID token from frontend
-  fastify.post<{ Body: GoogleTokenBody }>('/google/verify', async (request, reply) => {
+  // OAuth2 Authorization Code exchange (custom UI)
+  // Frontend uses @react-oauth/google with flow="auth-code" (popup)
+  // This endpoint exchanges the code for tokens, verifies the ID token,
+  // and performs the same user/session handling used by legacy flows.
+  fastify.post<{ Body: { code: string } }>('/google/code', async (request, reply) => {
     try {
-      const { credential } = request.body;
+      const { code } = request.body;
+      if (!code) return reply.code(400).send({ error: 'No authorization code provided' });
 
-      if (!credential) {
-        return reply.code(400).send({ error: 'No credential provided' });
+      // GIS code flow with popup uses the ORIGIN of the calling page as redirect_uri
+      const redirectOrigin =
+        (request.headers.origin as string | undefined) ||
+        (request.headers.referer ? new URL(request.headers.referer).origin : undefined) ||
+        process.env.GOOGLE_REDIRECT_ORIGIN ||
+        'http://localhost:5173';
+
+      const codeClient = new OAuth2Client(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        redirectOrigin
+      );
+
+      const { tokens } = await codeClient.getToken(code);
+      if (!tokens?.id_token) {
+        return reply.code(401).send({ error: 'Failed to exchange Google code' });
       }
 
-      // Verify the Google ID token
-      const ticket = await googleClient.verifyIdToken({
-        idToken: credential,
+      const ticket = await codeClient.verifyIdToken({
+        idToken: tokens.id_token,
         audience: process.env.GOOGLE_CLIENT_ID || '',
       });
 
       const payload = ticket.getPayload();
-      if (!payload) {
+      if (!payload || !payload.email) {
         return reply.code(401).send({ error: 'Invalid Google token' });
       }
 
       const googleUserInfo: GoogleUserInfo = {
         id: payload.sub || '',
-        email: payload.email!,
-        name: payload.name || payload.email?.split('@')[0] || 'User',
+        email: payload.email,
+        name: payload.name || payload.email.split('@')[0] || 'User',
         picture: payload.picture,
         email_verified: payload.email_verified,
       };
 
-      // Check if user exists with this email
+      // ——— User handling ———
       let user = await prisma.user.findUnique({
         where: { email: googleUserInfo.email },
         select: {
@@ -88,15 +105,10 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       let isNewUser = false;
 
       if (user) {
-        // User exists - update Google ID if not set
         if (!user.googleId) {
           user = await prisma.user.update({
             where: { id: user.id },
-            data: {
-              googleId: googleUserInfo.id,
-              // Google OAuth emails are always verified (Google has already verified them)
-              emailVerified: true,
-            },
+            data: { googleId: googleUserInfo.id, emailVerified: true },
             select: {
               id: true,
               email: true,
@@ -108,15 +120,13 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
       } else {
-        // New user via Google OAuth — enforce signup restrictions
         const gate = signupsAllowedForEmail(googleUserInfo.email);
         if (!gate.allowed) {
           return reply
             .code(403)
             .send({ error: gate.message, code: gate.code, waitlistUrl: gate.waitlistUrl });
         }
-        // Create new user with Google OAuth
-        // Generate a cryptographically secure random password for OAuth users
+
         const secureRandomPassword = randomBytes(32).toString('hex');
         const hashedPassword = await bcrypt.hash(secureRandomPassword, 10);
 
@@ -126,10 +136,8 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
             password: hashedPassword,
             name: googleUserInfo.name,
             googleId: googleUserInfo.id,
-            profilePicture: googleUserInfo.picture || null,
-            // Google OAuth emails are always verified (Google has already verified them)
             emailVerified: true,
-            subscriptionTier: 'free',
+            profilePicture: googleUserInfo.picture || null,
           },
           select: {
             id: true,
@@ -140,18 +148,14 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
             emailVerified: true,
           },
         });
+
         isNewUser = true;
       }
 
-      // Resolve stable device identifier and set cookie if needed
-      const stableFingerprint = ensureDeviceId(request, reply);
+      // Create device-bound session and cookies
+      const stableFingerprint = await ensureDeviceId(request, reply);
+      await revokeSameDeviceSessions(user.id, stableFingerprint, request);
 
-      // Revoke any existing active session for this device to avoid duplicates
-      if (stableFingerprint) {
-        await revokeSameDeviceSessions(user.id, stableFingerprint, request);
-      }
-
-      // Issue refresh + access tokens and create session
       const ipAddress = getClientIp(request);
       const userAgent = getUserAgent(request);
       const humanDeviceName = parseDeviceName(userAgent);
@@ -168,30 +172,27 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         }
       );
 
-      // Set access token cookie (short-lived)
       reply.setCookie('auth_token', accessToken, {
         httpOnly: true,
         secure: isProductionEnv(),
         sameSite: 'strict',
         path: '/',
-        maxAge: 60 * 60, // 1 hour
+        maxAge: 60 * 60,
       });
 
-      // Set refresh token cookie (scoped to /api/auth so logout can read it)
       reply.setCookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: isProductionEnv(),
         sameSite: 'strict',
         path: '/api/auth',
-        maxAge: 30 * 24 * 60 * 60, // 30 days
+        maxAge: 30 * 24 * 60 * 60,
       });
 
-      // Log OAuth login
       await AuditLogger.logAuth(AuditEventType.OAUTH_LOGIN, user.id, user.email, request);
 
-      return reply.send({ user, isNewUser, message: 'Signed in with Google' });
+      return reply.send({ user, isNewUser, message: 'Signed in with Google (code)' });
     } catch (error) {
-      console.error('Google OAuth error:', error);
+      fastify.log.error({ err: error }, 'Google OAuth code exchange failed');
       return reply.code(500).send({
         error: 'Authentication failed',
         details: error instanceof Error ? error.message : 'Unknown error',
@@ -200,6 +201,74 @@ const googleOAuthRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Link existing account with Google
+  // Alternative endpoint that accepts OAuth code from custom UI
+  fastify.post<{ Body: { code: string } }>(
+    '/google/link-code',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      if (!ensureAuth(request, reply)) return;
+      try {
+        const { code } = request.body;
+        if (!code) return reply.code(400).send({ error: 'No authorization code provided' });
+
+        const redirectOrigin =
+          (request.headers.origin as string | undefined) ||
+          (request.headers.referer ? new URL(request.headers.referer).origin : undefined) ||
+          process.env.GOOGLE_REDIRECT_ORIGIN ||
+          'http://localhost:5173';
+
+        const codeClient = new OAuth2Client(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET,
+          redirectOrigin
+        );
+        const { tokens } = await codeClient.getToken(code);
+        if (!tokens?.id_token) return reply.code(401).send({ error: 'Invalid Google token' });
+        const ticket = await codeClient.verifyIdToken({
+          idToken: tokens.id_token,
+          audience: process.env.GOOGLE_CLIENT_ID || '',
+        });
+        const payload = ticket.getPayload();
+        if (!payload) return reply.code(401).send({ error: 'Invalid Google token' });
+
+        // Check if this Google account is already linked to another user
+        const existingGoogleUser = await prisma.user.findFirst({
+          where: { googleId: payload.sub, NOT: { id: request.user.id } },
+        });
+        if (existingGoogleUser) {
+          return reply.code(409).send({
+            error: 'This Google account is already linked to another user',
+          });
+        }
+
+        const updatedUser = await prisma.user.update({
+          where: { id: request.user.id },
+          data: {
+            googleId: payload.sub || '',
+            emailVerified: true,
+            profilePicture: payload.picture || null,
+          },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            googleId: true,
+            emailVerified: true,
+            profilePicture: true,
+          },
+        });
+
+        return reply.send({ user: updatedUser, message: 'Google account linked successfully' });
+      } catch (error) {
+        fastify.log.error({ err: error }, 'Google link via code failed');
+        return reply.code(500).send({
+          error: 'Failed to link Google account',
+          details: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+  );
+
   fastify.post<{ Body: GoogleTokenBody }>(
     '/google/link',
     {

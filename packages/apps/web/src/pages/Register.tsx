@@ -16,6 +16,7 @@ import { TIMEOUTS } from '../constants/timeouts';
 import { getUserTimezone } from '../lib/timezone';
 import { Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { SiteFooter } from '@/components/SiteFooter';
 
 interface RegisterFormData {
   email: string;
@@ -304,24 +305,7 @@ export function Register() {
         </Card>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t px-4 py-6">
-        <div className="text-muted-foreground flex items-center justify-center space-x-4 text-sm">
-          <span>© {new Date().getFullYear()} Postolio</span>
-          <span>•</span>
-          <Link to="/privacy-policy" className="hover:text-foreground transition-colors">
-            Privacy Policy
-          </Link>
-          <span>•</span>
-          <Link to="/terms-of-service" className="hover:text-foreground transition-colors">
-            Terms of Service
-          </Link>
-          <span>•</span>
-          <a href="mailto:legal@postolio.example" className="hover:text-foreground transition-colors">
-            Legal
-          </a>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

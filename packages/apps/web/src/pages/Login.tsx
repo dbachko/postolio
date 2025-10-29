@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { GoogleSignInIsolated } from '@/components/auth/GoogleSignInIsolated';
 import { FacebookSignInIsolated } from '@/components/auth/FacebookSignInIsolated';
 import { MagicLinkForm } from '@/components/auth/MagicLinkForm';
+import { SiteFooter } from '@/components/SiteFooter';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -196,24 +197,7 @@ export function Login() {
         </Card>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t px-4 py-6">
-        <div className="text-muted-foreground flex items-center justify-center space-x-4 text-sm">
-          <span>© {new Date().getFullYear()} Postolio</span>
-          <span>•</span>
-          <Link to="/privacy-policy" className="hover:text-foreground transition-colors">
-            Privacy Policy
-          </Link>
-          <span>•</span>
-          <Link to="/terms-of-service" className="hover:text-foreground transition-colors">
-            Terms of Service
-          </Link>
-          <span>•</span>
-          <a href="mailto:legal@postolio.example" className="hover:text-foreground transition-colors">
-            Legal
-          </a>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

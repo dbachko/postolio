@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle, XCircle, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { TIMEOUTS } from '@/constants/timeouts';
+import { SiteFooter } from '@/components/SiteFooter';
 
 export function EmailVerify() {
   const [searchParams] = useSearchParams();
@@ -146,12 +147,7 @@ export function EmailVerify() {
         </Card>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t px-4 py-6">
-        <div className="text-muted-foreground flex items-center justify-center space-x-4 text-sm">
-          <span>© {new Date().getFullYear()} Postolio</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

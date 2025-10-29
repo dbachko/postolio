@@ -27,7 +27,8 @@ const CSRF_SKIP_PATHS = [
 
   // OAuth callbacks & verification
   '/api/auth/google/callback',
-  '/api/auth/google/verify',
+  '/api/auth/google/code',
+  '/api/auth/google/link-code',
   '/api/auth/facebook/callback',
   '/api/auth/instagram/authorize',
   '/api/auth/instagram/callback',
