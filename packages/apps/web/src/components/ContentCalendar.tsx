@@ -11,22 +11,14 @@ import { CampaignColorLegend } from './CampaignColorLegend';
 import { useFilteredContent } from '../hooks/useFilteredContent';
 import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { useURLFilterSync } from '../hooks/useURLFilterSync';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { content as contentApi, campaign as campaignApi, type Content } from '@/lib/api';
+import { content as contentApi, type Content } from '@/lib/api';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 import { getStableColorFromId } from '@/utils/campaign-colors';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { CalendarItem, Placeholder } from '../types/calendar';
-import {
-  Calendar,
-  List,
-  Clock,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  ChevronDown,
-} from 'lucide-react';
+import { Calendar, List, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 
 // type guard no longer needed for the month grid only
 
@@ -47,7 +39,6 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [showProgress, setShowProgress] = useState(false);
   // Keep timeline icon import referenced while the control is hidden
   const __keepTimelineIcon = Clock;
   void __keepTimelineIcon;
@@ -138,41 +129,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     [calendarQuery.data?.data?.placeholders]
   );
 
-  // Fetch campaigns for progress visualization
-  const campaignsQuery = useQuery({
-    queryKey: ['campaigns', brandId],
-    queryFn: () => campaignApi.listCampaigns(brandId),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const campaigns = useMemo(
-    () => campaignsQuery.data?.campaigns || [],
-    [campaignsQuery.data?.campaigns]
-  );
-
   // Schedule-ahead capacity banner is now shown globally in AppLayout
-
-  // Calculate campaign progress
-  const campaignProgress = useMemo(() => {
-    return (campaigns as any[]).map((campaign: any) => {
-      const campaignContent = content.filter((c) => c.campaignId === campaign.id);
-      const campaignPlaceholders = placeholders.filter((p) => p.campaignId === campaign.id);
-      const total = campaignContent.length + campaignPlaceholders.length;
-      const published = campaignContent.filter((c) => c.status === 'published').length;
-      const scheduled = campaignContent.filter((c) => c.status === 'scheduled').length;
-
-      return {
-        id: campaign.id,
-        name: campaign.name,
-        status: campaign.status,
-        total,
-        published,
-        scheduled,
-        pending: campaignPlaceholders.length,
-        progress: total > 0 ? Math.round((published / total) * 100) : 0,
-      };
-    });
-  }, [campaigns, content, placeholders]);
 
   // Combine content and placeholders for unified handling
   type ContentItem = Content & { type: 'content'; scheduledAt?: string | null };
@@ -388,60 +345,6 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       />
 
       {/* Filter results summary removed for cleaner filtered state */}
-
-      {/* Campaign Progress (collapsed by default) */}
-      {campaignProgress.length > 0 && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-medium">Campaign Progress</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-expanded={showProgress}
-              aria-controls="campaign-progress"
-              onClick={() => setShowProgress((v) => !v)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${showProgress ? 'rotate-180' : ''}`}
-              />
-            </Button>
-          </CardHeader>
-          {showProgress && (
-            <CardContent id="campaign-progress">
-              <div className="space-y-3">
-                {campaignProgress.map((campaign) => (
-                  <div key={campaign.id} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{campaign.name}</span>
-                      <span className="text-muted-foreground">{campaign.progress}%</span>
-                    </div>
-                    <div className="bg-muted h-2 w-full rounded-full">
-                      <div
-                        className="h-2 rounded-full transition-all duration-300"
-                        style={{
-                          width: `${campaign.progress}%`,
-                          backgroundColor:
-                            campaign.status === 'active'
-                              ? '#22c55e'
-                              : campaign.status === 'paused'
-                                ? '#6b7280'
-                                : '#3b82f6',
-                        }}
-                      />
-                    </div>
-                    <div className="text-muted-foreground flex gap-4 text-xs">
-                      <span>{campaign.published} published</span>
-                      <span>{campaign.scheduled} scheduled</span>
-                      <span>{campaign.pending} pending</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          )}
-        </Card>
-      )}
 
       {/* Statistics removed to reduce header/footer noise */}
 

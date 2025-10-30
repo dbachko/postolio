@@ -1,17 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { brand as brandApi, campaign as campaignApi, content as contentApi } from '../lib/api';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
+import { CampaignProgress } from '@/components/CampaignProgress';
 
 export function Dashboard() {
-  const navigate = useNavigate();
-  const { brands, selectedBrand, setBrands, initializeSelectedBrand, setSelectedBrand } =
-    useBrandStore();
+  const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore();
 
   // WebSocket connection active in background for real-time updates
 
@@ -69,22 +67,6 @@ export function Dashboard() {
   const scheduledPosts = contentMetrics.scheduled;
   const publishedPosts = contentMetrics.published;
 
-  // Handle campaign viewing with auto brand-switching
-  const handleViewCampaign = (campaign: any) => {
-    const campaignBrandId = campaign.brandId;
-
-    // Auto-switch brand if campaign belongs to different brand
-    if (campaignBrandId && selectedBrand?.id !== campaignBrandId) {
-      const targetBrand = brands.find((brand) => brand.id === campaignBrandId);
-      if (targetBrand) {
-        setSelectedBrand(targetBrand);
-      }
-    }
-
-    // Navigate to campaign details
-    navigate(`/campaigns/${campaign.id}`);
-  };
-
   if (brandsLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -117,64 +99,15 @@ export function Dashboard() {
       />
 
       {allCampaigns.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>All Campaigns ({allCampaigns.length})</CardTitle>
-              <Button variant="link" asChild className="text-primary text-sm hover:underline">
-                <Link to="/campaigns">View All →</Link>
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {allCampaigns.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className="text-muted-foreground mb-4">No campaigns created yet.</p>
-                <Button asChild>
-                  <Link to="/campaigns/create">Create Campaign</Link>
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {allCampaigns.slice(0, 3).map((campaign) => (
-                  <div
-                    key={campaign.id}
-                    className="flex items-center justify-between rounded-lg border p-4"
-                  >
-                    <div>
-                      <h4 className="font-medium">{campaign.name}</h4>
-                      <p className="text-muted-foreground text-sm">
-                        Status:{' '}
-                        <span
-                          className={`capitalize ${
-                            campaign.status === 'active'
-                              ? 'text-foreground'
-                              : 'text-muted-foreground'
-                          }`}
-                        >
-                          {campaign.status}
-                        </span>{' '}
-                        • Brand: {campaign.brandId}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleViewCampaign(campaign)}
-                    >
-                      View
-                    </Button>
-                  </div>
-                ))}
-                {allCampaigns.length > 3 && (
-                  <p className="text-muted-foreground pt-2 text-center text-sm">
-                    And {allCampaigns.length - 3} more campaigns...
-                  </p>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Active Campaigns ({allCampaigns.length})</h2>
+            <Button variant="link" asChild className="text-primary text-sm hover:underline">
+              <Link to="/campaigns">View All →</Link>
+            </Button>
+          </div>
+          <CampaignProgress allBrands={true} />
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
