@@ -1,10 +1,6 @@
 name: 'Setup Node.js and pnpm'
 description: 'Setup Node.js and pnpm with caching'
 inputs:
-  pnpm-version:
-    description: 'pnpm version to use'
-    required: false
-    default: '10.19.0'
   node-version:
     description: 'Node.js version to use'
     required: false
@@ -14,8 +10,6 @@ runs:
   steps:
     - name: Setup pnpm
       uses: pnpm/action-setup@v4
-      with:
-        version: ${{ inputs.pnpm-version }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v4

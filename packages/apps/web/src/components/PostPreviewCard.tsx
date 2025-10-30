@@ -27,6 +27,7 @@ import { Copy, Trash2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
+import { getPostImageOrPlaceholder } from '@/lib/placeholders';
 
 interface PostPreviewCardProps {
   item: CalendarItem;
@@ -167,12 +168,16 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        {item.imageUrl ? (
-          <div className="ml-2 h-6 w-8 shrink-0 overflow-hidden rounded-sm">
-            {/* Use native img to avoid pulling in heavier components */}
-            <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
-          </div>
-        ) : null}
+        <div className="ml-2 h-6 w-8 shrink-0 overflow-hidden rounded-sm">
+          {/* Use native img to avoid pulling in heavier components; fallback to placeholder */}
+          <img
+            src={getPostImageOrPlaceholder((item as any)?.imageUrl)}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
       </div>
 
       {/* Caption, clamped to two lines */}

@@ -38,6 +38,7 @@ import { PostStatusCard } from '../components/PostStatusCard';
 import { PostSaveIndicator, type SaveStatus } from '../components/PostSaveIndicator';
 import { PostLearningFeedback } from '../components/PostLearningFeedback';
 import { ImageUploader } from '../components/ImageUploader';
+import { getPostImageOrPlaceholder } from '@/lib/placeholders';
 
 interface PostDetailData {
   id: string;
@@ -708,17 +709,15 @@ export default function PostDetail() {
             ) : (
               <>
                 {/* Image */}
-                {post.imageUrl && (
-                  <div className="bg-muted mb-4 overflow-hidden rounded-lg">
-                    <img
-                      src={post.imageUrl}
-                      alt="Post content"
-                      className="h-auto max-h-[400px] w-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                )}
+                <div className="bg-muted mb-4 overflow-hidden rounded-lg">
+                  <img
+                    src={getPostImageOrPlaceholder(post.imageUrl)}
+                    alt="Post content"
+                    className="h-auto max-h-[400px] w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
 
                 {/* Caption and Hashtags */}
                 <div className="space-y-4">

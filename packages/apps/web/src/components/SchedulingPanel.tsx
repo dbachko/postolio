@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { getPostImageOrPlaceholder } from '@/lib/placeholders';
 
 interface ScheduledPost {
   id: string;
@@ -69,13 +70,13 @@ export default function SchedulingPanel({
           {scheduledPosts.map((post) => (
             <div key={post.id} className="rounded-lg border p-4">
               <div className="flex items-start space-x-4">
-                {post.imageUrl && (
-                  <img
-                    src={post.imageUrl}
-                    alt="Post preview"
-                    className="h-16 w-16 rounded-lg object-cover"
-                  />
-                )}
+                <img
+                  src={getPostImageOrPlaceholder(post.imageUrl)}
+                  alt="Post preview"
+                  className="h-16 w-16 rounded-lg object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
 
                 <div className="flex-1">
                   <p className="text-foreground mb-2 line-clamp-2 text-sm">{post.caption}</p>

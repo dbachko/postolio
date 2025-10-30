@@ -24,10 +24,10 @@ import {
   Filter,
   ChevronUp,
   ChevronDown,
-  Image as ImageIcon,
   Loader2,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { getPostImageOrPlaceholder } from '@/lib/placeholders';
 
 interface ListItem {
   id: string;
@@ -322,13 +322,15 @@ export function ContentListView({
                       <div className="bg-muted flex h-8 w-8 items-center justify-center rounded">
                         <Clock className="text-muted-foreground h-4 w-4" />
                       </div>
-                    ) : item.imageUrl ? (
-                      <div className="bg-muted h-8 w-8 overflow-hidden rounded">
-                        <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
-                      </div>
                     ) : (
-                      <div className="bg-muted flex h-8 w-8 items-center justify-center rounded">
-                        <ImageIcon className="text-muted-foreground h-4 w-4" />
+                      <div className="bg-muted h-8 w-8 overflow-hidden rounded">
+                        <img
+                          src={getPostImageOrPlaceholder(item.imageUrl)}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
                       </div>
                     )}
                   </div>
