@@ -43,6 +43,7 @@ import { RightSidebarRoot } from '@/right-sidebar/RightSidebarRoot';
 import '@/right-sidebar/register';
 import { ScheduleLimitBanner } from './ScheduleLimitBanner';
 import { Bell } from '@/components/notifications/Bell';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 
 interface LayoutProps {
   children: ReactNode;
@@ -115,6 +116,7 @@ export function AppLayout({ children }: LayoutProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpDrawerOpen, setHelpDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { openSidebar } = useRightSidebarRouter();
 
   const handleLogout = () => {
     logout();
@@ -240,7 +242,7 @@ export function AppLayout({ children }: LayoutProps) {
               <Button
                 size="sm"
                 className="hidden gap-2 sm:inline-flex"
-                onClick={() => navigate('/posts/create')}
+                onClick={() => openSidebar('post-create')}
                 aria-label="Create new post"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
@@ -249,7 +251,7 @@ export function AppLayout({ children }: LayoutProps) {
               <Button
                 size="icon"
                 className="sm:hidden"
-                onClick={() => navigate('/posts/create')}
+                onClick={() => openSidebar('post-create')}
                 aria-label="Create new post"
               >
                 <Plus className="h-5 w-5" aria-hidden="true" />

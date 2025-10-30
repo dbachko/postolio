@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { formatInUserTimezone } from '../lib/timezone';
 import { useTimezone } from '../contexts/TimezoneContext';
@@ -59,7 +60,8 @@ export function ContentListView({
   currentDate,
   timezone: tzOverride,
 }: ContentListViewProps) {
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
+  const { openSidebar } = useRightSidebarRouter();
   const { timezone: ctxTz } = useTimezone();
   const timezone = tzOverride || ctxTz;
   const [searchQuery, setSearchQuery] = useState('');
@@ -311,7 +313,7 @@ export function ContentListView({
                   }`}
                   onClick={() => {
                     if (item.type === 'content') {
-                      navigate(`/posts/${item.id}`);
+                      openSidebar('post', { id: item.id });
                     }
                   }}
                 >
@@ -369,7 +371,7 @@ export function ContentListView({
                             const params = new URLSearchParams();
                             if (item.campaignId) params.set('campaignId', item.campaignId);
                             if (item.scheduledAt) params.set('scheduledAt', item.scheduledAt);
-                            navigate(`/posts/create?${params.toString()}`);
+                            openSidebar('post-create');
                           }}
                         >
                           Create Post for this slot

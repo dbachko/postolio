@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Mail, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TIMEOUTS } from '@/constants/timeouts';
@@ -64,9 +65,8 @@ export function EmailVerificationBanner() {
   }
 
   return (
-    <div className="bg-muted border-b shadow-sm">
-      {/* Match AppLayout nav container sizing (height + paddings) */}
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+    <Alert className="border-b shadow-sm">
+      <AlertDescription className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="text-foreground flex min-w-0 items-center gap-2">
           <Mail className="text-foreground h-4 w-4 flex-shrink-0" />
           <div className="truncate text-sm">
@@ -75,34 +75,35 @@ export function EmailVerificationBanner() {
               Check your inbox for {status.email} or request a new verification email.
             </span>
           </div>
+          <div className="ml-4 flex items-center gap-2">
+            {status.canResend && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={sendVerificationEmail}
+                disabled={isSending}
+                className="hover:bg-muted"
+              >
+                {isSending ? (
+                  <>
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="mr-2 h-3 w-3" />
+                    Resend Email
+                  </>
+                )}
+              </Button>
+            )}
+            {!status.canResend && !isSending && (
+              <span className="text-muted-foreground text-sm">Email sent! Check your inbox</span>
+            )}
+            {/* Intentionally non-dismissible */}
+          </div>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
-          {status.canResend && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={sendVerificationEmail}
-              disabled={isSending}
-              className="h-9"
-            >
-              {isSending ? (
-                <>
-                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Mail className="mr-2 h-3 w-3" />
-                  Resend Email
-                </>
-              )}
-            </Button>
-          )}
-          {!status.canResend && !isSending && (
-            <span className="text-muted-foreground text-sm">Email sent! Check your inbox</span>
-          )}
-        </div>
-      </div>
-    </div>
+      </AlertDescription>
+    </Alert>
   );
 }

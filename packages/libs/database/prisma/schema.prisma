@@ -33,6 +33,8 @@ model User {
   themePreference     ThemePreference    @default(system)
   // Calendar week start preference (monday or sunday)
   weekStartPreference WeekStartPreference @default(monday)
+  // UI preferences (JSON), e.g., { "rightSidebar": { "notifications": 460, "post": 560 } }
+  uiPreferences       Json?
   
   // OAuth fields
   googleId          String?            @unique @map("googleid") // Google OAuth ID

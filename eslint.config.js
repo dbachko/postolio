@@ -14,5 +14,7 @@ export default tseslint.config(eslint.configs.recommended, ...tseslint.configs.r
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'warn',
     'react-refresh/only-export-components': 'warn',
+    // Allow intentionally-empty catch blocks (we sometimes ignore benign errors)
+    'no-empty': ['error', { allowEmptyCatch: true }],
   },
 });

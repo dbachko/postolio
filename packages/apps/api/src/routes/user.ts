@@ -67,6 +67,42 @@ function validateWeekStartUpdate(body: unknown): { weekStart: 'monday' | 'sunday
 }
 
 const userRoutes: FastifyPluginAsync = async (fastify) => {
+  // Update user UI preferences: right sidebar width per type
+  fastify.patch(
+    '/api/users/ui/sidebar-width',
+    { preHandler: fastify.authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user!.id;
+      try {
+        const body = request.body as { type?: string; width?: number };
+        const type = typeof body?.type === 'string' ? (body.type as string) : null;
+        const width = Number(body?.width);
+        if (!type || !Number.isFinite(width) || width <= 0) {
+          return reply
+            .status(400)
+            .send({ error: 'Invalid body. Expected { type: string, width: number }' });
+        }
+        const existing = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { uiPreferences: true },
+        });
+        const prefs = (existing?.uiPreferences as Record<string, unknown>) || {};
+        const right: Record<string, unknown> =
+          (prefs.rightSidebar as Record<string, unknown>) || {};
+        right[type] = width;
+        const newPrefs: Record<string, unknown> = { ...prefs, rightSidebar: right };
+        await prisma.user.update({
+          where: { id: userId },
+          data: { uiPreferences: newPrefs as any },
+        });
+        return { success: true };
+      } catch (err) {
+        request.log.error({ err }, 'Failed to update right sidebar width');
+        return reply.code(500).send({ error: 'Internal server error' });
+      }
+    }
+  );
+
   // Update user timezone preferences
   fastify.patch(
     '/api/users/timezone',

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
 import {
   addDays,
   endOfMonth,
@@ -13,13 +13,14 @@ import {
   isBefore,
 } from 'date-fns';
 import type { CalendarItem } from '../types/calendar';
-import { convertUTCToLocal, convertLocalToUTC } from '../lib/timezone';
+import { convertUTCToLocal } from '../lib/timezone';
 import { PostPreviewCard } from './PostPreviewCard';
 import { RescheduleDialog } from './RescheduleDialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { content as contentApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuthStore } from '../stores/authStore';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 
 interface MonthGridViewProps {
   items: CalendarItem[];
@@ -54,7 +55,8 @@ function groupByLocalDay(items: CalendarItem[], timezone: string) {
 }
 
 export function MonthGridView({ items, currentDate, timezone }: MonthGridViewProps) {
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
+  const { openSidebar } = useRightSidebarRouter();
   const queryClient = useQueryClient();
   const [rescheduleItem, setRescheduleItem] = useState<CalendarItem | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
@@ -94,12 +96,7 @@ export function MonthGridView({ items, currentDate, timezone }: MonthGridViewPro
           const today = isToday(date);
           const isPastDay = isBefore(date, startOfToday);
           const handleCreateForDate = () => {
-            const local = new Date(date);
-            // Default to 9:00 AM in brand timezone for clarity
-            local.setHours(9, 0, 0, 0);
-            const utc = convertLocalToUTC(local, timezone);
-            const params = new URLSearchParams({ scheduledAt: utc.toISOString() });
-            navigate(`/posts/create?${params.toString()}`);
+            openSidebar('post-create');
           };
 
           return (

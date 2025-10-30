@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { useTimezone } from '../contexts/TimezoneContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Clock, Calendar, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 
 interface TimelineItem {
   id: string;
@@ -29,11 +29,11 @@ interface TimelineViewProps {
 }
 
 export function TimelineView({ items, currentDate, timezone: tzOverride }: TimelineViewProps) {
-  const navigate = useNavigate();
   const { timezone: ctxTz } = useTimezone();
   const timezone = tzOverride || ctxTz;
   const user = useAuthStore((s) => s.user);
   const weekStartsOn = user?.weekStart === 'monday' ? 1 : 0;
+  const { openSidebar } = useRightSidebarRouter();
 
   // Group items by day for the current week
   const weekStart = startOfWeek(currentDate, { weekStartsOn });
@@ -151,12 +151,20 @@ export function TimelineView({ items, currentDate, timezone: tzOverride }: Timel
                         }}
                         onClick={() => {
                           if (item.type === 'content') {
-                            navigate(`/posts/${item.id}`);
+                            openSidebar('post', { id: item.id });
                           } else if (item.type === 'placeholder') {
+                            // Preserve relevant query for create page if user switches to full page later
                             const params = new URLSearchParams();
                             if (item.campaignId) params.set('campaignId', item.campaignId);
                             if (item.scheduledAt) params.set('scheduledAt', item.scheduledAt);
-                            navigate(`/posts/create?${params.toString()}`);
+                            // We only open sidebar; App routes still support full page at /posts/create
+                            openSidebar('post-create');
+                            if (params.toString()) {
+                              // Update URL query without leaving current page
+                              const url = new URL(window.location.href);
+                              params.forEach((v, k) => url.searchParams.set(k, v));
+                              window.history.replaceState({}, '', url.toString());
+                            }
                           }
                         }}
                       >

@@ -36,7 +36,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
     const missingTables = requiredTables.filter((table) => !existingTables.includes(table));
 
     // Also check for required columns that recent releases depend on
-    // Currently: users.themePreference
+    // Currently: users.themePreference, users.uiPreferences
     type ColumnRow = { column_name: string };
     let missingColumns: string[] = [];
     try {
@@ -45,15 +45,17 @@ export async function ensureDatabaseSchema(): Promise<void> {
         FROM information_schema.columns
         WHERE table_schema = 'public'
           AND table_name = 'users'
-          AND column_name IN ('themePreference')
+          AND column_name IN ('themePreference', 'uiPreferences')
       `;
       const existingColumns = (Array.isArray(columnCheck) ? columnCheck : []).map(
         (r) => r.column_name
       );
-      missingColumns = ['themePreference'].filter((c) => !existingColumns.includes(c));
+      missingColumns = ['themePreference', 'uiPreferences'].filter(
+        (c) => !existingColumns.includes(c)
+      );
     } catch {
       // If this fails, proceed conservatively and attempt to sync schema below
-      missingColumns = ['themePreference'];
+      missingColumns = ['themePreference', 'uiPreferences'];
     }
 
     if (missingTables.length > 0 || missingColumns.length > 0) {

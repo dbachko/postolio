@@ -1,6 +1,7 @@
 import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { parseISO } from 'date-fns';
 import { BROWSER_DETECTION_FALLBACK } from '../constants/timezone';
+import { getLocalSetting, setLocalSetting, removeLocalSetting } from '@/lib/settings/localSettings';
 
 // Session-based cache for timezone detection
 let cachedUserTimezone: string | null = null;
@@ -17,7 +18,7 @@ export const getUserTimezone = (): string => {
 
   // Check localStorage for persisted detected timezone (only once per session)
   if (!hasCheckedLocalStorage) {
-    const storedTimezone = localStorage.getItem('detectedTimezone');
+    const storedTimezone = getLocalSetting<string>('detectedTimezone');
     hasCheckedLocalStorage = true;
     if (storedTimezone) {
       cachedUserTimezone = storedTimezone;
@@ -28,12 +29,12 @@ export const getUserTimezone = (): string => {
   try {
     cachedUserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     // Persist to localStorage for next session
-    localStorage.setItem('detectedTimezone', cachedUserTimezone);
+    setLocalSetting('detectedTimezone', cachedUserTimezone);
     return cachedUserTimezone;
   } catch {
     // Fallback to UTC if browser doesn't support timezone detection
     cachedUserTimezone = BROWSER_DETECTION_FALLBACK;
-    localStorage.setItem('detectedTimezone', cachedUserTimezone);
+    setLocalSetting('detectedTimezone', cachedUserTimezone);
     return cachedUserTimezone;
   }
 };
@@ -44,7 +45,7 @@ export const getUserTimezone = (): string => {
 export const clearTimezoneCache = (): void => {
   cachedUserTimezone = null;
   hasCheckedLocalStorage = false;
-  localStorage.removeItem('detectedTimezone');
+  removeLocalSetting('detectedTimezone');
 };
 
 /**

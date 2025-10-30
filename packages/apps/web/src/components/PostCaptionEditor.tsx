@@ -1,5 +1,6 @@
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Type } from 'lucide-react';
 
 interface PostCaptionEditorProps {
   value: string;
@@ -7,7 +8,9 @@ interface PostCaptionEditorProps {
   placeholder?: string;
   minHeight?: string;
   showCharacterCount?: boolean;
+  maxLength?: number;
   disabled?: boolean;
+  showIcon?: boolean;
 }
 
 export function PostCaptionEditor({
@@ -16,21 +19,34 @@ export function PostCaptionEditor({
   placeholder = 'Write your caption...',
   minHeight = 'min-h-32',
   showCharacterCount = true,
+  maxLength = 2200,
   disabled = false,
+  showIcon = false,
 }: PostCaptionEditorProps) {
   return (
     <div className="space-y-2">
-      <Label htmlFor="caption">Caption</Label>
+      <Label htmlFor="caption" className="flex items-center gap-2">
+        {showIcon && <Type className="h-4 w-4" />}
+        Caption <span className="text-destructive">*</span>
+      </Label>
       <Textarea
         id="caption"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const newValue = e.target.value;
+          if (newValue.length <= maxLength) {
+            onChange(newValue);
+          }
+        }}
         placeholder={placeholder}
         className={`${minHeight} resize-none`}
         disabled={disabled}
+        maxLength={maxLength}
       />
       {showCharacterCount && (
-        <div className="text-muted-foreground text-right text-xs">{value.length} characters</div>
+        <div className="text-muted-foreground text-right text-xs">
+          {value.length}/{maxLength} characters
+        </div>
       )}
     </div>
   );

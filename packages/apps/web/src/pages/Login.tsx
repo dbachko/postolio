@@ -53,8 +53,10 @@ export function Login() {
     try {
       await login(email, password, rememberMe);
       navigate('/dashboard');
-    } catch {
-      setError('Invalid email or password');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Something went wrong';
+      // Only show invalid-credentials copy when backend actually says so; otherwise show server error
+      setError(message || 'Internal server error. Please try again later.');
     } finally {
       setIsLoading(false);
     }

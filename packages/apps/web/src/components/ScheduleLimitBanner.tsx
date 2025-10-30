@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { campaign as campaignApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { getLocalSetting, setLocalSetting } from '@/lib/settings/localSettings';
 import { AlertTriangle, X } from 'lucide-react';
 
 const DISMISS_TTL_DAYS = 7;
@@ -10,10 +11,8 @@ const DISMISS_KEY = 'schedule-limit-banner-dismissed-at';
 export function ScheduleLimitBanner() {
   const [dismissed, setDismissed] = useState<boolean>(() => {
     try {
-      const raw = localStorage.getItem(DISMISS_KEY);
-      if (!raw) return false;
-      const ts = Number(raw);
-      if (!Number.isFinite(ts)) return false;
+      const ts = getLocalSetting<number>(DISMISS_KEY);
+      if (!ts || !Number.isFinite(ts)) return false;
       const ageMs = Date.now() - ts;
       return ageMs < DISMISS_TTL_DAYS * 24 * 60 * 60 * 1000;
     } catch {
@@ -62,11 +61,8 @@ export function ScheduleLimitBanner() {
             aria-label="Dismiss banner"
             onClick={() => {
               try {
-                localStorage.setItem(DISMISS_KEY, String(Date.now()));
-              } catch (_e) {
-                // noop: best-effort persistence only
-                void 0;
-              }
+                setLocalSetting<number>(DISMISS_KEY, Date.now());
+              } catch {}
               setDismissed(true);
             }}
             className="hover:bg-accent h-9 w-9 p-2"

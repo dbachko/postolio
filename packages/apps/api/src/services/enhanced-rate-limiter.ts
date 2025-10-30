@@ -4,6 +4,8 @@ import { getDatabaseClient } from '../config/database.js';
 import { getRedisUrl } from '../utils/redis-url.js';
 
 const redis = new Redis(getRedisUrl());
+const RATE_LIMIT_ENABLED =
+  process.env.RATE_LIMIT_ENABLED === 'true' || process.env.NODE_ENV === 'prod';
 const prisma = getDatabaseClient();
 
 interface RateLimitConfig {
@@ -94,6 +96,10 @@ export class EnhancedRateLimiter {
    */
   static createLimiter(config: RateLimitConfig) {
     return async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!RATE_LIMIT_ENABLED) {
+        // In local/dev, bypass rate limiting entirely unless explicitly enabled
+        return;
+      }
       // Get identifier (IP address or user ID)
       const identifier = this.getIdentifier(request);
       const key = `${config.keyPrefix || 'rl'}:${identifier}`;
@@ -176,6 +182,9 @@ export class EnhancedRateLimiter {
     }
   ) {
     return async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!RATE_LIMIT_ENABLED) {
+        return;
+      }
       // Get user tier if authenticated
       let multiplier = 1;
       if (request.user?.id) {

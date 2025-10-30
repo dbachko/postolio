@@ -6,7 +6,7 @@ import { campaign as campaignApi, content as contentApi } from '../lib/api';
 import { useBrandStore } from '../stores/brandStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload, Hash, Type, AlertCircle, Calendar, Clock } from 'lucide-react';
+import { Upload, Hash, Type, AlertCircle, Calendar, Clock } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -247,13 +247,8 @@ export function CreatePost() {
 
   return (
     <div className="container mx-auto p-6">
-      <div className="mb-6 flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Create New Post</h1>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Create New Post</h1>
       </div>
 
       <Card className="p-6">

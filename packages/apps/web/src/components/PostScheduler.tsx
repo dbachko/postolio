@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { usePostSchedulerStore } from '../stores/postSchedulerStore';
+import { Clock } from 'lucide-react';
 
 interface PostSchedulerProps {
   contentId?: string; // Optional content ID for store-based management
@@ -12,6 +13,7 @@ interface PostSchedulerProps {
   disabled?: boolean;
   showClearButton?: boolean;
   showFormattedDate?: boolean;
+  showIcon?: boolean;
 }
 
 export function PostScheduler({
@@ -21,6 +23,7 @@ export function PostScheduler({
   disabled = false,
   showClearButton = true,
   showFormattedDate = true,
+  showIcon = false,
 }: PostSchedulerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -101,7 +104,10 @@ export function PostScheduler({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label htmlFor="scheduledAt">Scheduled Time</Label>
+        <Label htmlFor="scheduledAt" className="flex items-center gap-2">
+          {showIcon && <Clock className="h-4 w-4" />}
+          Scheduled Time
+        </Label>
         {showClearButton && displayValue && (
           <Button
             type="button"

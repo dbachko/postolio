@@ -6,6 +6,10 @@
 import { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { errorResponse } from '../utils/api-response.js';
 
+// Enable/disable rate limiting in non-prod. Always enabled in prod.
+const RATE_LIMIT_ENABLED =
+  process.env.RATE_LIMIT_ENABLED === 'true' || process.env.NODE_ENV === 'prod';
+
 // Rate limit configurations for different endpoint categories
 export const RateLimitTiers = {
   // Strict limits for expensive AI operations
@@ -174,6 +178,10 @@ function parseTimeWindow(window: string): number {
  * Apply rate limiting to specific routes
  */
 export function applyRateLimiting(app: FastifyInstance, redisClient: RedisLikeClient) {
+  if (!RATE_LIMIT_ENABLED) {
+    // Bypass rate limiting entirely in local/dev unless explicitly enabled
+    return;
+  }
   // AI Generation endpoints
   app.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
     const aiEndpoints = [

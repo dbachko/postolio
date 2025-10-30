@@ -4,7 +4,8 @@ export default [
   ...baseConfig,
   {
     rules: {
-      // Add package-specific rules here
+      // Allow pragmatic JSON typing for Prisma JSON fields in this package
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
 ];

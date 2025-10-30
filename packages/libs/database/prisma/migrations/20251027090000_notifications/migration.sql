@@ -26,11 +26,11 @@ CREATE TABLE IF NOT EXISTS "notifications" (
 
 -- Foreign keys
 ALTER TABLE "notifications"
-  ADD CONSTRAINT IF NOT EXISTS "notifications_userId_fkey"
+  ADD CONSTRAINT "notifications_userId_fkey"
   FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "notifications"
-  ADD CONSTRAINT IF NOT EXISTS "notifications_brandId_fkey"
+  ADD CONSTRAINT "notifications_brandId_fkey"
   FOREIGN KEY ("brandId") REFERENCES "brands"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- Indexes
@@ -56,11 +56,11 @@ CREATE TABLE IF NOT EXISTS "notification_preferences" (
 );
 
 ALTER TABLE "notification_preferences"
-  ADD CONSTRAINT IF NOT EXISTS "notification_preferences_userId_fkey"
+  ADD CONSTRAINT "notification_preferences_userId_fkey"
   FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "notification_preferences"
-  ADD CONSTRAINT IF NOT EXISTS "notification_preferences_brandId_fkey"
+  ADD CONSTRAINT "notification_preferences_brandId_fkey"
   FOREIGN KEY ("brandId") REFERENCES "brands"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- Unique composite index (note: brandId may be NULL; Postgres treats NULLs as distinct)
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS "notification_deliveries" (
 );
 
 ALTER TABLE "notification_deliveries"
-  ADD CONSTRAINT IF NOT EXISTS "notification_deliveries_notificationId_fkey"
+  ADD CONSTRAINT "notification_deliveries_notificationId_fkey"
   FOREIGN KEY ("notificationId") REFERENCES "notifications"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 CREATE INDEX IF NOT EXISTS "notification_deliveries_notificationId_idx" ON "notification_deliveries" ("notificationId");
@@ -95,6 +95,5 @@ CREATE TABLE IF NOT EXISTS "user_notification_state" (
 );
 
 ALTER TABLE "user_notification_state"
-  ADD CONSTRAINT IF NOT EXISTS "user_notification_state_userId_fkey"
+  ADD CONSTRAINT "user_notification_state_userId_fkey"
   FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-

@@ -12,7 +12,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { InstagramConnect } from '../components/InstagramConnect';
 import { BrandAnalysisPanel } from '@/components/BrandAnalysisPanel';
-import { BrandProfileDrawer } from '@/components/BrandProfileDrawer';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -34,7 +34,6 @@ export function Brands() {
     description: '',
     countryCode: '',
   });
-  const [viewProfileBrandId, setViewProfileBrandId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const {
@@ -222,9 +221,7 @@ export function Brands() {
         actions={
           <div className="flex items-center gap-2">
             {selectedBrand && profileAvailable[selectedBrand.id] && (
-              <Button variant="outline" onClick={() => setViewProfileBrandId(selectedBrand.id)}>
-                View Profile
-              </Button>
+              <SidebarViewProfileButton brandId={selectedBrand.id} />
             )}
             <Button
               variant={isCreating ? 'outline' : 'neutral'}
@@ -626,10 +623,7 @@ export function Brands() {
           </div>
         )}
       </div>
-      <BrandProfileDrawer
-        brandId={viewProfileBrandId}
-        onClose={() => setViewProfileBrandId(null)}
-      />
+      {/* Brand profile now opens in the universal right sidebar */}
     </div>
   );
 }
@@ -710,5 +704,15 @@ function CountrySelect({ value, onChange }: { value: string; onChange: (code: st
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// Small wrapper to open the universal right sidebar for brand profile
+function SidebarViewProfileButton({ brandId }: { brandId: string }) {
+  const { openSidebar } = useRightSidebarRouter();
+  return (
+    <Button variant="outline" onClick={() => openSidebar('brand-profile', { id: brandId })}>
+      View Profile
+    </Button>
   );
 }

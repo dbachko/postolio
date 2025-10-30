@@ -50,6 +50,14 @@ export class AuthClient {
       body: JSON.stringify(data),
     });
   }
+
+  // UI preferences: save right sidebar width per type
+  updateRightSidebarWidth(data: { type: string; width: number }) {
+    return this.request('/api/users/ui/sidebar-width', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 export class SessionClient {

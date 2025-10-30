@@ -1,5 +1,6 @@
 import { type ReactNode, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CalendarItem } from '../types/calendar';
 import { formatCompact } from '../lib/timezone';
 import {
@@ -36,6 +37,7 @@ interface PostPreviewCardProps {
 // Lightweight preview card shown inside the Month grid
 export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCardProps) {
   const navigate = useNavigate();
+  const { openSidebar } = useRightSidebarRouter();
 
   const { status, displayTime, campaignColor } = useMemo(() => {
     const isPlaceholder = item.type === 'placeholder' || (item as any)?.isPlaceholder;
@@ -63,13 +65,11 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
   const handleOpen = () => {
     // Navigate to post details or create from placeholder
     if (item.type === 'placeholder') {
-      const params = new URLSearchParams();
-      if (item.campaignId) params.set('campaignId', item.campaignId);
-      if (item.scheduledAt) params.set('scheduledAt', item.scheduledAt);
-      navigate(`/posts/create?${params.toString()}`);
+      // Open create in sidebar; CreatePost reads current location query if needed
+      openSidebar('post-create');
       return;
     }
-    navigate(`/posts/${item.id}`);
+    openSidebar('post', { id: (item as any).id });
   };
 
   // Visual styles by status (subtle tints)
@@ -221,9 +221,9 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
                           params.set('campaignId', (item as any).campaignId);
                         if ((item as any).scheduledAt)
                           params.set('scheduledAt', (item as any).scheduledAt);
-                        navigate(`/posts/create?${params.toString()}`);
+                        openSidebar('post-create');
                       } else {
-                        window.location.href = `/posts/${(item as any).id}?edit=1`;
+                        openSidebar('post', { id: (item as any).id });
                       }
                     }}
                   >
@@ -249,7 +249,7 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
             <DropdownMenuItem
-              onClick={() => navigate(`/posts/${(item as any).id}`)}
+              onClick={() => openSidebar('post', { id: (item as any).id })}
               className="gap-2"
             >
               <ExternalLink className="h-4 w-4" />

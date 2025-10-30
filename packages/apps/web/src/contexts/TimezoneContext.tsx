@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { getUserTimezone } from '../lib/timezone';
+import { getLocalSetting, setLocalSetting, removeLocalSetting } from '@/lib/settings/localSettings';
 import { useAuthStore } from '../stores/authStore';
 import { auth as authApi, brand as brandApi } from '../lib/api';
 
@@ -48,7 +49,7 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
       const detected = getUserTimezone();
       setTimezoneState(detected);
       setIsAutoDetected(true);
-      window.localStorage.setItem('userTimezone', detected);
+      setLocalSetting('userTimezone', detected);
     }
   }, [user]);
 
@@ -72,12 +73,12 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     // Store previous values for rollback
     const previousTimezone = timezone;
     const previousIsAutoDetected = isAutoDetected;
-    const previousLocalStorage = window.localStorage.getItem('userTimezone');
+    const previousLocalStorage = getLocalSetting<string>('userTimezone');
 
     // Update local state optimistically
     setTimezoneState(newTimezone);
     setIsAutoDetected(isAuto);
-    window.localStorage.setItem('userTimezone', newTimezone);
+    setLocalSetting('userTimezone', newTimezone);
 
     try {
       await authApi.updateUserTimezone({
@@ -88,11 +89,8 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
       // Rollback local state on failure
       setTimezoneState(previousTimezone);
       setIsAutoDetected(previousIsAutoDetected);
-      if (previousLocalStorage) {
-        window.localStorage.setItem('userTimezone', previousLocalStorage);
-      } else {
-        window.localStorage.removeItem('userTimezone');
-      }
+      if (previousLocalStorage) setLocalSetting('userTimezone', previousLocalStorage);
+      else removeLocalSetting('userTimezone');
 
       // Re-throw error for caller to handle
       throw error instanceof Error ? error : new Error('Failed to update timezone');

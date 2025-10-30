@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Hash, Plus } from 'lucide-react';
 
 interface PostHashtagEditorProps {
   hashtags: string[];
   onChange: (hashtags: string[]) => void;
   placeholder?: string;
   disabled?: boolean;
+  showIcon?: boolean;
 }
 
 export function PostHashtagEditor({
@@ -17,6 +18,7 @@ export function PostHashtagEditor({
   onChange,
   placeholder = 'Type a hashtag and press Enter to add',
   disabled = false,
+  showIcon = false,
 }: PostHashtagEditorProps) {
   const [input, setInput] = useState('');
 
@@ -58,29 +60,26 @@ export function PostHashtagEditor({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="hashtags">Hashtags</Label>
+      <Label htmlFor="hashtags" className="flex items-center gap-2">
+        {showIcon && <Hash className="h-4 w-4" />}
+        Hashtags
+      </Label>
       <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Input
-            id="hashtags"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={disabled}
-            className="pr-16"
-          />
-          <kbd className="bg-muted pointer-events-none absolute right-2 top-1/2 inline-flex h-5 -translate-y-1/2 select-none items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-70">
-            ↵
-          </kbd>
-        </div>
+        <Input
+          id="hashtags"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          disabled={disabled}
+          className="flex-1"
+        />
         <Button
           type="button"
           variant="outline"
-          size="icon"
           onClick={addHashtag}
           disabled={disabled || !input.trim()}
-          aria-label="Add hashtag"
+          className="shrink-0"
         >
           <Plus className="h-4 w-4" />
         </Button>

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, RefreshCw, XCircle, AlertCircle } from 'lucide-react';
+import { httpGet } from '@/lib/api';
 
 interface RegenerationProgressProps {
   isOpen: boolean;
@@ -44,18 +45,8 @@ const RegenerationProgress = memo(
       setIsPolling(true);
       const pollProgress = async () => {
         try {
-          const response = await fetch(`/api/campaigns/regeneration-jobs/${jobId}`, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-
-          if (!response.ok) {
-            throw new Error('Failed to fetch progress');
-          }
-
-          const result = await response.json();
-          setProgressData(result.data);
+          const result = await httpGet(`/api/campaigns/regeneration-jobs/${jobId}`);
+          setProgressData(result?.data);
 
           // Stop polling if completed or failed
           if (result.data.status === 'completed' || result.data.status === 'failed') {
