@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Mail, X, CheckCircle, Loader2 } from 'lucide-react';
+import { Mail, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TIMEOUTS } from '@/constants/timeouts';
+import { httpGet, httpPost } from '@/lib/api';
 
 interface VerificationStatus {
   verified: boolean;
@@ -15,7 +15,6 @@ export function EmailVerificationBanner() {
   const [status, setStatus] = useState<VerificationStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     checkVerificationStatus();
@@ -23,26 +22,8 @@ export function EmailVerificationBanner() {
 
   const checkVerificationStatus = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch('/api/auth/email/verification-status', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setStatus(data);
-
-        // Check if user has previously dismissed the banner
-        const dismissedKey = `email-verification-dismissed-${data.email}`;
-        const wasDismissed = localStorage.getItem(dismissedKey);
-        if (wasDismissed) {
-          setDismissed(true);
-        }
-      }
+      const data = await httpGet('/api/auth/email/verification-status');
+      setStatus(data);
     } catch (error) {
       console.error('Failed to check verification status:', error);
     } finally {
@@ -53,18 +34,8 @@ export function EmailVerificationBanner() {
   const sendVerificationEmail = async () => {
     setIsSending(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/auth/email/send-verification', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
+      const data = await httpPost('/api/auth/email/send-verification', {});
+      if (data?.success) {
         toast.success('Verification email sent!', {
           description: 'Check your inbox for the verification link.',
           icon: <CheckCircle className="text-foreground" />,
@@ -75,79 +46,63 @@ export function EmailVerificationBanner() {
         setStatus((prev) => (prev ? { ...prev, canResend: false } : null));
       } else {
         toast.error('Failed to send email', {
-          description: data.error || 'Please try again later',
+          description: data?.error || 'Please try again later',
         });
       }
-    } catch {
+    } catch (e: any) {
       toast.error('Network error', {
-        description: 'Failed to send verification email',
+        description: e?.message || 'Failed to send verification email',
       });
     } finally {
       setIsSending(false);
     }
   };
 
-  const handleDismiss = () => {
-    setDismissed(true);
-    // Remember dismissal in localStorage
-    if (status?.email) {
-      const dismissedKey = `email-verification-dismissed-${status.email}`;
-      localStorage.setItem(dismissedKey, 'true');
-    }
-  };
-
-  // Don't show banner if loading, verified, or dismissed
-  if (isLoading || !status || status.verified || dismissed) {
+  // Don't show banner if loading, verified, or no status
+  if (isLoading || !status || status.verified) {
     return null;
   }
 
   return (
-    <div className="border-b p-4">
-      <Alert className="mx-auto max-w-7xl bg-transparent">
-        <Mail className="h-4 w-4" />
-        <AlertDescription className="flex items-center justify-between">
-          <div className="flex-1">
+    <div className="bg-muted border-b shadow-sm">
+      {/* Match AppLayout nav container sizing (height + paddings) */}
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="text-foreground flex min-w-0 items-center gap-2">
+          <Mail className="text-foreground h-4 w-4 flex-shrink-0" />
+          <div className="truncate text-sm">
             <span className="font-medium">Verify your email to unlock all features</span>
             <span className="text-muted-foreground ml-2">
               Check your inbox for {status.email} or request a new verification email.
             </span>
           </div>
-          <div className="ml-4 flex items-center gap-2">
-            {status.canResend && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={sendVerificationEmail}
-                disabled={isSending}
-                className="hover:bg-muted"
-              >
-                {isSending ? (
-                  <>
-                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Mail className="mr-2 h-3 w-3" />
-                    Resend Email
-                  </>
-                )}
-              </Button>
-            )}
-            {!status.canResend && !isSending && (
-              <span className="text-muted-foreground text-sm">Email sent! Check your inbox</span>
-            )}
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {status.canResend && (
             <Button
               size="sm"
-              variant="ghost"
-              onClick={handleDismiss}
-              className="hover:bg-muted p-1"
+              variant="outline"
+              onClick={sendVerificationEmail}
+              disabled={isSending}
+              className="h-9"
             >
-              <X className="h-4 w-4" />
+              {isSending ? (
+                <>
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-2 h-3 w-3" />
+                  Resend Email
+                </>
+              )}
             </Button>
-          </div>
-        </AlertDescription>
-      </Alert>
+          )}
+          {!status.canResend && !isSending && (
+            <span className="text-muted-foreground text-sm">Email sent! Check your inbox</span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

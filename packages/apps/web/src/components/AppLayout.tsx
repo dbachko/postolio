@@ -189,7 +189,8 @@ export function AppLayout({ children }: LayoutProps) {
         Skip to main content
       </a>
 
-      {/* Capacity banner above top nav */}
+      {/* Banners above top nav */}
+      <EmailVerificationBanner />
       <ScheduleLimitBanner />
 
       {/* Ultra-thin navigation bar */}
@@ -531,9 +532,6 @@ export function AppLayout({ children }: LayoutProps) {
       {/* Global Help Modal and Sidebar (scaffolded) */}
       <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <RightHelpDrawer open={helpDrawerOpen} onOpenChange={setHelpDrawerOpen} />
-
-      {/* Email Verification Banner */}
-      <EmailVerificationBanner />
 
       {/* Main Content + Universal Right Sidebar */}
       <main id="main-content" className={cn('flex-1 py-6', containerCls)}>

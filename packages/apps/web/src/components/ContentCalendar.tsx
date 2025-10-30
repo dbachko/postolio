@@ -251,7 +251,6 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
   return (
     <div className="space-y-4">
-      {/* Capacity banner moved to global top nav area */}
       {/* Compact Header Bar: navigation, current month, view toggles, filters toggle */}
       <div className="bg-card rounded-lg border px-3 py-2 shadow-sm">
         <div className="flex items-center justify-between gap-3">
