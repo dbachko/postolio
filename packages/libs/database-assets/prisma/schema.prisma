@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("ASSETS_DATABASE_URL")
+}
+
+model Asset {
+  id                String        @id @default(cuid())
+  brandId           String        // Reference to main DB (no FK)
+  uploadedBy        String        // userId from main DB
+  folderId          String?
+
+  // File metadata
+  fileName          String
+  fileType          AssetType     // image, video
+  mimeType          String
+  fileSize          Int
+  width             Int?
+  height            Int?
+  duration          Int?          // for videos
+
+  // S3 storage
+  s3Key             String        @unique
+  s3Bucket          String
+  thumbnailKey      String?       // Medium thumbnail (primary)
+  thumbnailSmallKey String?       // 150x150
+  thumbnailLargeKey String?       // 800x800
+
+  // User metadata
+  title             String?
+  altText           String?       // WCAG required
+  description       String?
+  tags              String[]
+
+  // AI analysis (cached)
+  aiDescription           String?
+  aiTags                  String[]
+  aiPrimaryColors         String[]
+  aiMood                  String?
+  aiSubjects              String[]
+  aiDescriptionEmbedding  Float[]   @default([]) // Embedding for AI image selection
+  analyzedAt              DateTime?
+
+  // Usage tracking
+  usageCount        Int           @default(0)
+  lastUsedAt        DateTime?
+
+  // Processing
+  processingStatus  ProcessingStatus @default(pending)
+  processingError   String?
+
+  // Lifecycle
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  archivedAt        DateTime?
+
+  folder            AssetFolder?  @relation(fields: [folderId], references: [id])
+  campaignAssets    CampaignAsset[]
+
+  @@index([brandId, processingStatus])
+  @@index([brandId, fileType])
+  @@index([brandId, createdAt])
+  @@index([tags])
+  @@map("assets")
+}
+
+model AssetFolder {
+  id          String    @id @default(cuid())
+  brandId     String
+  name        String
+  parentId    String?
+  color       String?
+  folderType  FolderType @default(general)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  parent      AssetFolder?  @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children    AssetFolder[] @relation("FolderHierarchy")
+  assets      Asset[]
+
+  @@index([brandId])
+  @@map("asset_folders")
+}
+
+model CampaignAsset {
+  id                String    @id @default(cuid())
+  campaignId        String    // From main DB
+  assetId           String
+
+  // AI Selection metadata
+  timesUsed         Int       @default(0)
+  lastUsedAt        DateTime?
+  selectionScore    Float?
+  manuallySelected  Boolean   @default(false)
+
+  aiDescription     String?
+  aiTags            String[]
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  asset             Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, assetId])
+  @@index([campaignId])
+  @@map("campaign_assets")
+}
+
+enum AssetType {
+  image
+  video
+}
+
+enum ProcessingStatus {
+  pending
+  processing
+  thumbnails_complete
+  ai_analyzed
+  completed
+  thumbnail_failed
+  ai_analysis_failed
+  failed
+}
+
+enum FolderType {
+  general
+  campaign_pool
+  brand_assets
+}

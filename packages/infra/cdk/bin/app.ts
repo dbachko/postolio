@@ -9,6 +9,7 @@ import { PublishingStack } from '../lib/stacks/publishing-stack';
 import { ApiStack } from '../lib/stacks/api-stack';
 import { BrandAnalysisStack } from '../lib/stacks/brand-analysis-stack';
 import { WebStack } from '../lib/stacks/web-stack';
+import { AssetLibraryStack } from '../lib/stacks/asset-library-stack';
 import { getOAuthConfig } from '../lib/utils/oauth-config';
 
 const app = new cdk.App();
@@ -194,7 +195,26 @@ if (!onlyStack) {
   webStack.addDependency(apiStackRef);
 }
 
-// 7. Brand Analysis Stack - Profiles + Jobs + Lambda
+// 7. Asset Library Stack - Asset Management Microservice
+const assetLibraryStack = new AssetLibraryStack(app, `Postolio-AssetLibrary-${environment}`, {
+  env: stackEnv,
+  environment: environment as 'dev' | 'staging' | 'prod',
+  vpc: foundationStack.vpc,
+  lambdaSecurityGroup: foundationStack.lambdaSecurityGroup,
+  ecsSecurityGroup: foundationStack.ecsSecurityGroup,
+  encryptionKey: foundationStack.encryptionKey,
+  openaiApiKey: app.node.tryGetContext('openaiApiKey'),
+  description: `Postolio Asset Library microservice - ${environment} environment`,
+  tags: {
+    ...stackTags,
+    Service: 'AssetLibrary',
+  },
+});
+
+// Asset Library depends on Foundation
+assetLibraryStack.addDependency(foundationStack);
+
+// 8. Brand Analysis Stack - Profiles + Jobs + Lambda
 const brandAnalysisStack = new BrandAnalysisStack(app, `Postolio-BrandAnalysis-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',

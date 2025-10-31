@@ -10,6 +10,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Brands } from './pages/Brands';
+import { Assets } from './pages/Assets';
 // import Analytics from './pages/Analytics';
 import Campaigns from './pages/Campaigns';
 import { Content } from './pages/Content';
@@ -108,6 +109,19 @@ const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout>
           <Brands />
+        </Layout>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/assets',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ErrorBoundary>
+            <Assets />
+          </ErrorBoundary>
         </Layout>
       </ProtectedRoute>
     ),

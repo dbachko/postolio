@@ -35,6 +35,7 @@ import {
   Home,
   Shield,
   Plus,
+  Images,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
@@ -71,6 +72,13 @@ const mainNavItems: NavigationItem[] = [
     path: '/content',
     icon: FileText,
     description: 'Content library',
+    matchType: 'exact',
+  },
+  {
+    label: 'Assets',
+    path: '/assets',
+    icon: Images,
+    description: 'Image & video library',
     matchType: 'exact',
   },
   {

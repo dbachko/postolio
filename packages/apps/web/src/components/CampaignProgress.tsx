@@ -82,7 +82,7 @@ export function CampaignProgress({ brandId, allBrands = false }: CampaignProgres
                   {campaign.brandId && <span> • Brand: {campaign.brandId}</span>}
                 </p>
                 {campaign.description && (
-                  <p className="text-muted-foreground mt-1 text-sm line-clamp-2">
+                  <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
                     {campaign.description}
                   </p>
                 )}
