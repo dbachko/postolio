@@ -149,6 +149,7 @@ if (!onlyStack) {
   apiStackRef = new ApiStack(app, `Postolio-API-${environment}`, {
     env: stackEnv,
     environment,
+    jwtSecret: foundationStack.jwtSecret,
     domainName,
     hostedZoneId,
     hostedZoneName,
@@ -203,6 +204,9 @@ const assetLibraryStack = new AssetLibraryStack(app, `Postolio-AssetLibrary-${en
   lambdaSecurityGroup: foundationStack.lambdaSecurityGroup,
   ecsSecurityGroup: foundationStack.ecsSecurityGroup,
   encryptionKey: foundationStack.encryptionKey,
+  repository: foundationStack.repository,
+  jwtSecret: foundationStack.jwtSecret,
+  imageTag: imageTag,
   openaiApiKey: app.node.tryGetContext('openaiApiKey'),
   description: `Postolio Asset Library microservice - ${environment} environment`,
   tags: {

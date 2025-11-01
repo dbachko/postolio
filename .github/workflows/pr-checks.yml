@@ -84,6 +84,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma clients
+        run: |
+          pnpm --filter=@postolio/database build
+          pnpm --filter=@postolio/database-assets build
+
       - name: Run linting
         run: npx turbo lint --filter='...[origin/${{ github.base_ref }}]'
 
@@ -141,6 +146,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma clients
+        run: |
+          pnpm --filter=@postolio/database build
+          pnpm --filter=@postolio/database-assets build
 
       - name: Run tests with coverage
         run: npx turbo test --filter='...[origin/${{ github.base_ref }}]'

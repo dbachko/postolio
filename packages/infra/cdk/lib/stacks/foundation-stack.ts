@@ -52,6 +52,7 @@ export class FoundationStack extends cdk.Stack {
   public readonly imagesBucket: s3.IBucket;
   public readonly encryptionKey: kms.IKey;
   public readonly repository: ecr.IRepository;
+  public readonly jwtSecret: secretsmanager.ISecret;
   public readonly databaseSecurityGroup: ec2.ISecurityGroup;
   public readonly lambdaSecurityGroup: ec2.ISecurityGroup;
   public readonly ecsSecurityGroup: ec2.ISecurityGroup;
@@ -211,6 +212,25 @@ export class FoundationStack extends cdk.Stack {
         excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
       },
     });
+
+    // JWT Secret for API and Assets authentication (shared across all services)
+    this.jwtSecret = new secretsmanager.Secret(this, 'JwtSecret', {
+      secretName: `${prefix}/jwt-secret`,
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ purpose: 'api-authentication' }),
+        generateStringKey: 'secret',
+        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+        passwordLength: 64,
+      },
+      description: 'Shared JWT secret for API and Assets authentication',
+    });
+
+    NagSuppressions.addResourceSuppressions(this.jwtSecret, [
+      {
+        id: 'AwsSolutions-SMG4',
+        reason: 'JWT secret rotation handled manually for now. Can be automated in production.',
+      },
+    ]);
 
     this.database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.postgres({
@@ -500,6 +520,12 @@ export class FoundationStack extends cdk.Stack {
       parameterName: `/postolio/${environment}/database/secret-arn`,
       stringValue: databaseSecret.secretArn,
       description: 'ARN of the database credentials secret',
+    });
+
+    new ssm.StringParameter(this, 'JwtSecretArnParameter', {
+      parameterName: `/postolio/${environment}/jwt-secret-arn`,
+      stringValue: this.jwtSecret.secretArn,
+      description: 'ARN of the shared JWT secret for authentication',
     });
 
     new ssm.StringParameter(this, 'DatabaseSecurityGroupParameter', {

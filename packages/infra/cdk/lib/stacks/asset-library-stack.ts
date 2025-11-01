@@ -24,6 +24,10 @@ import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
 import * as path from 'path';
@@ -34,6 +38,9 @@ export interface AssetLibraryStackProps extends cdk.StackProps {
   lambdaSecurityGroup: ec2.ISecurityGroup;
   ecsSecurityGroup: ec2.ISecurityGroup;
   encryptionKey: kms.IKey;
+  repository: ecr.IRepository;
+  jwtSecret: secretsmanager.ISecret;
+  imageTag?: string;
   openaiApiKey?: string;
 }
 
@@ -46,9 +53,24 @@ export class AssetLibraryStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AssetLibraryStackProps) {
     super(scope, id, props);
 
-    const { environment, vpc, lambdaSecurityGroup, ecsSecurityGroup, encryptionKey, openaiApiKey } =
-      props;
+    const {
+      environment,
+      vpc,
+      lambdaSecurityGroup,
+      ecsSecurityGroup,
+      encryptionKey,
+      repository,
+      jwtSecret,
+      imageTag,
+      openaiApiKey,
+    } = props;
     const prefix = `postolio-${environment}-assets`;
+
+    // Image tag resolution: props > context > default
+    const contextImageTag = imageTag ?? (this.node.tryGetContext('imageTag') as string | undefined);
+    const defaultImageTag = `assets-${environment}-latest`;
+    const containerImageTag =
+      contextImageTag && contextImageTag.trim().length > 0 ? contextImageTag : defaultImageTag;
 
     // ==================== Security Groups ====================
     this.databaseSecurityGroup = new ec2.SecurityGroup(this, 'AssetsDatabaseSecurityGroup', {
@@ -88,6 +110,9 @@ export class AssetLibraryStack extends cdk.Stack {
         excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
       },
     });
+
+    // Use shared JWT Secret from Foundation stack (passed via props)
+    // This enables unified authentication between main API and Assets API
 
     this.assetsDatabase = new rds.DatabaseInstance(this, 'AssetsDatabase', {
       engine: rds.DatabaseInstanceEngine.postgres({
@@ -420,6 +445,211 @@ export class AssetLibraryStack extends cdk.Stack {
       description: 'AI analyzer Lambda ARN',
     });
 
+    // ==================== ECS Cluster ====================
+    const ecsCluster = new ecs.Cluster(this, 'AssetsEcsCluster', {
+      clusterName: `${prefix}-cluster`,
+      vpc: vpc,
+      containerInsightsV2: ecs.ContainerInsights.ENABLED, // Enable for all environments to satisfy CDK Nag AwsSolutions-ECS4
+    });
+
+    // ==================== ECS Execution Role ====================
+    const executionRole = new iam.Role(this, 'AssetsEcsExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy'),
+      ],
+      inlinePolicies: {
+        SecretAccess: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['secretsmanager:GetSecretValue'],
+              resources: [
+                databaseSecret.secretArn,
+                jwtSecret.secretArn,
+                `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['kms:Decrypt'],
+              resources: [`arn:aws:kms:${this.region}:${this.account}:key/*`],
+              conditions: {
+                StringEquals: {
+                  'kms:ViaService': `secretsmanager.${this.region}.amazonaws.com`,
+                },
+              },
+            }),
+          ],
+        }),
+      },
+    });
+
+    // ==================== ECS Task Role ====================
+    const taskRole = new iam.Role(this, 'AssetsEcsTaskRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMReadOnlyAccess')],
+      inlinePolicies: {
+        AssetsTaskPolicy: new iam.PolicyDocument({
+          statements: [
+            // Secrets Manager permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
+              resources: [
+                databaseSecret.secretArn,
+                jwtSecret.secretArn,
+                `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
+              ],
+            }),
+            // SSM Parameter Store permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['ssm:GetParameter', 'ssm:GetParameters', 'ssm:GetParametersByPath'],
+              resources: [
+                `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
+              ],
+            }),
+            // KMS permissions for encryption
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+              resources: [`arn:aws:kms:${this.region}:${this.account}:key/*`],
+            }),
+            // S3 permissions for assets bucket
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                's3:GetObject',
+                's3:PutObject',
+                's3:PutObjectTagging',
+                's3:DeleteObject',
+                's3:ListBucket',
+                's3:GetBucketLocation',
+              ],
+              resources: [this.assetsBucket.bucketArn, `${this.assetsBucket.bucketArn}/*`],
+            }),
+            // EventBridge permissions for asset events
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['events:PutEvents'],
+              resources: [assetEventBus.eventBusArn],
+            }),
+            // CloudFront invalidation permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['cloudfront:CreateInvalidation'],
+              resources: [
+                `arn:aws:cloudfront::${this.account}:distribution/${this.assetsCdn.distributionId}`,
+              ],
+            }),
+          ],
+        }),
+      },
+    });
+
+    // ==================== S3 Bucket for ALB Access Logs ====================
+    const albLogsBucket = new s3.Bucket(this, 'AssetsAlbAccessLogsBucket', {
+      bucketName: `${prefix}-alb-logs-${this.account}`,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      lifecycleRules: [
+        {
+          id: 'DeleteOldLogs',
+          expiration: cdk.Duration.days(30),
+        },
+      ],
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    NagSuppressions.addResourceSuppressions(albLogsBucket, [
+      {
+        id: 'AwsSolutions-S1',
+        reason:
+          'ALB access log bucket should not have server access logging to avoid infinite recursion',
+      },
+    ]);
+
+    // ==================== Application Load Balanced Fargate Service ====================
+    const assetsApiService = new ecsPatterns.ApplicationLoadBalancedFargateService(
+      this,
+      'AssetsApiService',
+      {
+        serviceName: `${prefix}-api-service`,
+        cluster: ecsCluster,
+        cpu: environment === 'prod' ? 512 : 256,
+        memoryLimitMiB: environment === 'prod' ? 1024 : 512,
+        desiredCount: environment === 'prod' ? 2 : 1,
+        circuitBreaker: { enable: true, rollback: true },
+        taskImageOptions: {
+          image: ecs.ContainerImage.fromEcrRepository(repository, containerImageTag),
+          containerPort: 3002,
+          taskRole: taskRole,
+          executionRole: executionRole,
+          environment: {
+            NODE_ENV: environment,
+            PORT: '3002',
+            LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+            AWS_REGION: this.region,
+            S3_BUCKET: this.assetsBucket.bucketName,
+            S3_REGION: this.region,
+            CDN_DOMAIN: this.assetsCdn.distributionDomainName,
+            EVENT_BUS_NAME: assetEventBus.eventBusName,
+          },
+          secrets: {
+            ASSETS_DB_HOST: ecs.Secret.fromSecretsManager(databaseSecret, 'host'),
+            ASSETS_DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),
+            ASSETS_DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, 'password'),
+            ASSETS_DB_PORT: ecs.Secret.fromSecretsManager(databaseSecret, 'port'),
+            JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret, 'secret'),
+          },
+          logDriver: ecs.LogDrivers.awsLogs({
+            streamPrefix: `${prefix}-api`,
+            logRetention: logs.RetentionDays.TWO_WEEKS,
+          }),
+        },
+        assignPublicIp: false,
+        taskSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        publicLoadBalancer: true,
+        listenerPort: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        platformVersion: ecs.FargatePlatformVersion.LATEST,
+      }
+    );
+
+    // Enable ALB access logs
+    assetsApiService.loadBalancer.logAccessLogs(albLogsBucket, 'alb-logs');
+
+    // Add ECS security group to the service
+    assetsApiService.service.connections.addSecurityGroup(ecsSecurityGroup);
+
+    // Configure deployment settings
+    const cfnService = assetsApiService.service.node.defaultChild as ecs.CfnService;
+    cfnService.deploymentConfiguration = {
+      minimumHealthyPercent: 100,
+      maximumPercent: 200,
+    };
+
+    // Configure health check
+    assetsApiService.targetGroup.configureHealthCheck({
+      path: '/health',
+      interval: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(10),
+      healthyThresholdCount: 2,
+      unhealthyThresholdCount: 3,
+    });
+
+    // Export ECS service endpoint
+    new ssm.StringParameter(this, 'AssetsApiEndpoint', {
+      parameterName: `/postolio/${environment}/assets/api-endpoint`,
+      stringValue: `http://${assetsApiService.loadBalancer.loadBalancerDnsName}`,
+      description: 'Assets API load balancer endpoint',
+    });
+
     // ==================== CDK Nag Suppressions ====================
     NagSuppressions.addStackSuppressions(this, [
       {
@@ -465,16 +695,34 @@ export class AssetLibraryStack extends cdk.Stack {
       {
         id: 'AwsSolutions-IAM4',
         reason:
-          'AWS managed policies (AWSLambdaBasicExecutionRole, AWSLambdaVPCAccessExecutionRole) are appropriate for Lambda functions',
+          'AWS managed policies (AWSLambdaBasicExecutionRole, AWSLambdaVPCAccessExecutionRole, AmazonECSTaskExecutionRolePolicy, AmazonSSMReadOnlyAccess) are appropriate for Lambda and ECS',
       },
       {
         id: 'AwsSolutions-IAM5',
         reason:
-          'Wildcard permissions required for Lambda to access S3 objects with dynamic keys and database connections',
+          'Wildcard permissions required for Lambda and ECS tasks to access S3 objects with dynamic keys, database connections, and SSM parameters',
       },
       {
         id: 'AwsSolutions-L1',
         reason: 'Using latest Lambda runtime (Node.js 22) as specified in package configurations',
+      },
+      {
+        id: 'AwsSolutions-ECS2',
+        reason:
+          'Environment variables for non-sensitive configuration are acceptable. Secrets use ECS secrets integration.',
+      },
+      {
+        id: 'AwsSolutions-ECS4',
+        reason: 'Container Insights enabled for monitoring',
+      },
+      {
+        id: 'AwsSolutions-ELB2',
+        reason: 'ALB access logs enabled',
+      },
+      {
+        id: 'AwsSolutions-EC23',
+        reason:
+          'Public-facing ALB is required for assets API. Security group rules are properly configured.',
       },
     ]);
 

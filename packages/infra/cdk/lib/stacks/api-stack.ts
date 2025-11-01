@@ -24,6 +24,7 @@ import { getOAuthEnvironmentVariables, type OAuthConfig } from '../utils/oauth-c
 
 export interface ApiStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod';
+  jwtSecret: secretsmanager.ISecret;
   domainName?: string;
   hostedZoneId?: string;
   hostedZoneName?: string;
@@ -221,28 +222,8 @@ export class ApiStack extends cdk.Stack {
       // API service (ECS) maintains persistent connections, doesn't need proxy
     }
 
-    // Create JWT Secret
-    const jwtSecret = new secretsmanager.Secret(this, 'JwtSecret', {
-      secretName: `postolio-${environment}/jwt-secret`,
-      description: 'JWT secret for token signing',
-      generateSecretString: {
-        secretStringTemplate: '{}',
-        generateStringKey: 'secret',
-        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
-        passwordLength: 32,
-      },
-    });
-
-    // CDK Nag suppression for JWT secret rotation
-    // JWT secrets don't typically need automatic rotation as they're used for token signing
-    // and rotation would invalidate all existing tokens
-    NagSuppressions.addResourceSuppressions(jwtSecret, [
-      {
-        id: 'AwsSolutions-SMG4',
-        reason:
-          'JWT secret does not require automatic rotation. Token expiry provides security, and rotation would invalidate all existing sessions.',
-      },
-    ]);
+    // Use shared JWT Secret from Foundation stack
+    const { jwtSecret } = props;
 
     // Import ECR repository from Foundation stack - use repository name
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
