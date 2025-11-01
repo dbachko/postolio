@@ -234,6 +234,19 @@ export class FoundationStack extends cdk.Stack {
       },
     });
 
+    // cdk-nag: Allow wildcard for CreateSecret (cannot be resource-scoped)
+    NagSuppressions.addResourceSuppressions(
+      jwtSecretEnsurer.role!,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'secretsmanager:CreateSecret does not support resource-level permissions; policy is limited to Describe/Create with name provided via env. Custom resource code checks and only creates when missing.',
+          appliesTo: ['Resource::*', 'Action::secretsmanager:CreateSecret', 'Action::secretsmanager:DescribeSecret'],
+        },
+      ]
+    );
+
     jwtSecretEnsurer.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -245,6 +258,19 @@ export class FoundationStack extends cdk.Stack {
     const jwtSecretProvider = new cr.Provider(this, 'JwtSecretEnsurerProvider', {
       onEventHandler: jwtSecretEnsurer,
     });
+
+    // cdk-nag: Provider framework function needs wildcard suffix to invoke versioned Lambda
+    NagSuppressions.addResourceSuppressions(
+      jwtSecretProvider,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'Custom Resource provider framework uses lambda:InvokeFunction with version-qualified ARNs; wildcard suffix is required by AWS pattern and scoped to the target function only.',
+        },
+      ],
+      true
+    );
 
     const jwtSecretResource = new cdk.CustomResource(this, 'JwtSecretEnsurer', {
       serviceToken: jwtSecretProvider.serviceToken,
