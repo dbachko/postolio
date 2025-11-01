@@ -1,5 +1,5 @@
 import { memo, useState, useCallback } from 'react';
-import '@postolio/calendar/dist/styles.css';
+import '@postolio/calendar/styles.css';
 import { Calendar as PostolioCalendar, luxon } from '@postolio/calendar';
 import { TouchBackend } from 'react-dnd-touch-backend';
 import { useQueryClient } from '@tanstack/react-query';
@@ -133,7 +133,7 @@ function FullCalendarImpl({
         onEventDrop={handleEventDrop}
         onMoreClick={handleMoreClick}
         components={{
-          event: ({ event }) => (
+          event: ({ event }: { event: CalendarEvent }) => (
             <EventRenderer
               event={event as CalendarEvent}
               timezone={tzRef.current}

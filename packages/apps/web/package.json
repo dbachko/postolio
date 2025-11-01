@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "prebuild": "pnpm -C ../../libs/calendar run build",
     "build": "tsc -b && vite build",
     "lint": "eslint src",
     "preview": "vite preview",
