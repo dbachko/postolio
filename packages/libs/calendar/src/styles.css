@@ -437,17 +437,29 @@
         padding: 2px 4px;
     }
 
+    /*
+     * Timegrid (week / three‑day) on small screens
+     * - Remove legacy time gutter (48px) that we no longer render
+     * - Give each day a sensible min-width so the grid can scroll horizontally
+     * - Make the parent container handle horizontal scroll; body only scrolls vertically
+     */
+    .pc-timegrid {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
     .pc-timegrid-head {
-        grid-template-columns: 48px repeat(var(--pc-days, 7), 1fr);
+        grid-template-columns: repeat(var(--pc-days, 7), minmax(220px, 1fr));
     }
 
     .pc-timegrid-body {
-        grid-template-columns: 48px repeat(var(--pc-days, 7), 1fr);
-        height: calc(24 * 88px + 48px);
+        grid-template-columns: repeat(var(--pc-days, 7), minmax(220px, 1fr));
+        overflow-y: auto;
+        overflow-x: visible;
     }
 
+    /* The hour gutter isn't used on mobile; keep hidden */
     .pc-hour {
-        height: 88px;
-        font-size: 11px;
+        display: none;
     }
 }
