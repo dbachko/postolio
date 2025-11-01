@@ -35,8 +35,6 @@ import * as path from 'path';
 export interface AssetLibraryStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
   vpc: ec2.IVpc;
-  lambdaSecurityGroup: ec2.ISecurityGroup;
-  ecsSecurityGroup: ec2.ISecurityGroup;
   encryptionKey: kms.IKey;
   repository: ecr.IRepository;
   jwtSecret: secretsmanager.ISecret;
@@ -53,17 +51,8 @@ export class AssetLibraryStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AssetLibraryStackProps) {
     super(scope, id, props);
 
-    const {
-      environment,
-      vpc,
-      lambdaSecurityGroup,
-      ecsSecurityGroup,
-      encryptionKey,
-      repository,
-      jwtSecret,
-      imageTag,
-      openaiApiKey,
-    } = props;
+    const { environment, vpc, encryptionKey, repository, jwtSecret, imageTag, openaiApiKey } =
+      props;
     const prefix = `postolio-${environment}-assets`;
 
     // Image tag resolution: props > context > default
@@ -79,15 +68,20 @@ export class AssetLibraryStack extends cdk.Stack {
       allowAllOutbound: false,
     });
 
-    // Allow Lambda (from Foundation) to connect to assets database
+    // Create a dedicated Lambda Security Group for this stack to avoid
+    // cross-stack coupling with Foundation's SGs.
+    const assetsLambdaSecurityGroup = new ec2.SecurityGroup(this, 'AssetsLambdaSecurityGroup', {
+      vpc,
+      description: 'Security group for Asset Library Lambda functions',
+      allowAllOutbound: true,
+    });
+
+    // Allow only this stack's Lambda functions to connect to the assets database
     this.databaseSecurityGroup.addIngressRule(
-      lambdaSecurityGroup,
+      assetsLambdaSecurityGroup,
       ec2.Port.tcp(5432),
-      'Allow Lambda functions to connect to assets database'
+      'Allow Asset Library Lambdas to connect to assets database'
     );
-    // Do NOT add Foundation ECS SG here; the service created in this stack
-    // will use its own Security Group. We'll explicitly allow that SG below
-    // after the service is created to avoid cross-stack SG coupling.
 
     // ==================== Database Configuration ====================
     const dbSubnetGroup = new rds.SubnetGroup(this, 'AssetsDatabaseSubnetGroup', {
@@ -301,7 +295,7 @@ export class AssetLibraryStack extends cdk.Stack {
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
-        securityGroups: [lambdaSecurityGroup],
+        securityGroups: [assetsLambdaSecurityGroup],
         environment: {
           NODE_ENV: environment,
           SERVICE_NAME: 'asset-thumbnail-generator',
@@ -353,7 +347,7 @@ export class AssetLibraryStack extends cdk.Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
-      securityGroups: [lambdaSecurityGroup],
+      securityGroups: [assetsLambdaSecurityGroup],
       environment: {
         NODE_ENV: environment,
         SERVICE_NAME: 'asset-ai-analyzer',

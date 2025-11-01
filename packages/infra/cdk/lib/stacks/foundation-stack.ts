@@ -29,6 +29,10 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as cr from 'aws-cdk-lib/custom-resources';
+import * as path from 'path';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 // (No custom DB-grant Lambda; RDS Proxy uses Secrets to connect DB)
 import { Construct } from 'constructs';
@@ -214,23 +218,43 @@ export class FoundationStack extends cdk.Stack {
     });
 
     // JWT Secret for API and Assets authentication (shared across all services)
-    this.jwtSecret = new secretsmanager.Secret(this, 'JwtSecret', {
-      secretName: `${prefix}/jwt-secret`,
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ purpose: 'api-authentication' }),
-        generateStringKey: 'secret',
-        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
-        passwordLength: 64,
+    // Ensure the secret exists: if missing, create; if present, reuse. Kept on stack deletion.
+    const jwtSecretName = `${prefix}/jwt-secret`;
+    const jwtSecretEnsurer = new lambdaNodejs.NodejsFunction(this, 'JwtSecretEnsurerFn', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambdas/foundation/jwt-secret-ensurer.ts'),
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(30),
+      description: 'Ensures the JWT secret exists; creates it if missing and returns its ARN.',
+      environment: {
+        SECRET_NAME: jwtSecretName,
       },
-      description: 'Shared JWT secret for API and Assets authentication',
     });
 
-    NagSuppressions.addResourceSuppressions(this.jwtSecret, [
-      {
-        id: 'AwsSolutions-SMG4',
-        reason: 'JWT secret rotation handled manually for now. Can be automated in production.',
+    jwtSecretEnsurer.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['secretsmanager:DescribeSecret', 'secretsmanager:CreateSecret'],
+        resources: ['*'],
+      })
+    );
+
+    const jwtSecretProvider = new cr.Provider(this, 'JwtSecretEnsurerProvider', {
+      onEventHandler: jwtSecretEnsurer,
+    });
+
+    const jwtSecretResource = new cdk.CustomResource(this, 'JwtSecretEnsurer', {
+      serviceToken: jwtSecretProvider.serviceToken,
+      properties: {
+        SecretName: jwtSecretName,
+        Description: 'Shared JWT secret for API and Assets authentication',
       },
-    ]);
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    const jwtSecretArn = jwtSecretResource.getAttString('SecretArn');
+    this.jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(this, 'JwtSecret', jwtSecretArn);
 
     this.database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.postgres({

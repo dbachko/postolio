@@ -201,8 +201,6 @@ const assetLibraryStack = new AssetLibraryStack(app, `Postolio-AssetLibrary-${en
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
   vpc: foundationStack.vpc,
-  lambdaSecurityGroup: foundationStack.lambdaSecurityGroup,
-  ecsSecurityGroup: foundationStack.ecsSecurityGroup,
   encryptionKey: foundationStack.encryptionKey,
   repository: foundationStack.repository,
   jwtSecret: foundationStack.jwtSecret,
