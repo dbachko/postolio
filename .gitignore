@@ -77,3 +77,4 @@ coverage/
 # Claude
 .claude
 aws-infrastructure/
+/package-lock.json
