@@ -256,6 +256,24 @@ export class FoundationStack extends cdk.Stack {
       })
     );
 
+    // cdk-nag: also suppress on the inline DefaultPolicy resource attached to the role
+    const ensurerRole = jwtSecretEnsurer.role as iam.Role;
+    const ensurerDefaultPolicy = ensurerRole?.node.tryFindChild('DefaultPolicy');
+    if (ensurerDefaultPolicy) {
+      NagSuppressions.addResourceSuppressions(ensurerDefaultPolicy, [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'Inline role policy requires wildcard Resource for CreateSecret/DescribeSecret; CreateSecret cannot be resource-scoped in IAM. Custom resource limits behavior by name and Describe-first check.',
+          appliesTo: [
+            'Resource::*',
+            'Action::secretsmanager:CreateSecret',
+            'Action::secretsmanager:DescribeSecret',
+          ],
+        },
+      ]);
+    }
+
     const jwtSecretProvider = new cr.Provider(this, 'JwtSecretEnsurerProvider', {
       onEventHandler: jwtSecretEnsurer,
     });
