@@ -235,17 +235,18 @@ export class FoundationStack extends cdk.Stack {
     });
 
     // cdk-nag: Allow wildcard for CreateSecret (cannot be resource-scoped)
-    NagSuppressions.addResourceSuppressions(
-      jwtSecretEnsurer.role!,
-      [
-        {
-          id: 'AwsSolutions-IAM5',
-          reason:
-            'secretsmanager:CreateSecret does not support resource-level permissions; policy is limited to Describe/Create with name provided via env. Custom resource code checks and only creates when missing.',
-          appliesTo: ['Resource::*', 'Action::secretsmanager:CreateSecret', 'Action::secretsmanager:DescribeSecret'],
-        },
-      ]
-    );
+    NagSuppressions.addResourceSuppressions(jwtSecretEnsurer.role!, [
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          'secretsmanager:CreateSecret does not support resource-level permissions; policy is limited to Describe/Create with name provided via env. Custom resource code checks and only creates when missing.',
+        appliesTo: [
+          'Resource::*',
+          'Action::secretsmanager:CreateSecret',
+          'Action::secretsmanager:DescribeSecret',
+        ],
+      },
+    ]);
 
     jwtSecretEnsurer.addToRolePolicy(
       new iam.PolicyStatement({
