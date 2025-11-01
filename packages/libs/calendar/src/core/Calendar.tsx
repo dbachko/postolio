@@ -15,16 +15,8 @@ export function Calendar<E extends { id: string | number; start: Date; end?: Dat
     view,
     events,
     localizer,
-    formats,
     components,
     weekStartsOn,
-    timezoneLabel,
-    timezoneTitle,
-    dayStartHour = 6,
-    dayEndHour = 22,
-    stepMinutes = 60,
-    virtualize = false,
-    overscanPx = 200,
     dragAndDrop = true,
     useInternalDndProvider = true,
     dndBackend,
@@ -62,18 +54,10 @@ export function Calendar<E extends { id: string | number; start: Date; end?: Dat
           events={events}
           localizer={loc}
           weekStartsOn={weekStartsOn}
-          timezoneLabel={timezoneLabel}
-          timezoneTitle={timezoneTitle}
           eventComponent={components?.event}
           onEventDrop={onEventDrop}
-          formats={formats}
           dragAndDrop={dragAndDrop}
           onBackgroundClick={onBackgroundClick}
-          dayStartHour={dayStartHour}
-          dayEndHour={dayEndHour}
-          stepMinutes={stepMinutes}
-          virtualize={virtualize}
-          overscanPx={overscanPx}
         />
       )}
       {view === 'agenda' && (

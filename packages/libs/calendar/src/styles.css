@@ -1,465 +1,473 @@
 /* Base container */
 .pc-calendar {
-    background: var(--card);
-    color: var(--foreground);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    /* clip inner grid lines to rounded corners */
-    /* Sizing variables */
-    --pc-card-h: 112px;
-    /* month cell content height baseline */
-    --pc-hour-h: 112px;
-    /* timegrid hour height baseline */
-    --pc-row-extra-h: 28px;
-    /* extra height for month header row inside cells */
-    --pc-weekday-pad: 8px;
-    --pc-weekday-font: 12px;
-    --pc-day-pad: 4px;
-    --pc-day-label-font: 12px;
-    --pc-events-gap: 4px;
-    --pc-events-pad-top: 2px;
-    --pc-events-pad-bottom: 6px;
-    --pc-separator-w: 1px;
-    /* grid line thickness */
-    /* Action pill */
-    --pc-pill-h: 18px;
-    --pc-pill-pad-x: 8px;
-    --pc-pill-font: 11px;
-    /* More button */
-    --pc-more-pad-y: 2px;
-    --pc-more-pad-x: 6px;
-    --pc-more-font: 12px;
-    /* Create CTA */
-    --pc-cta-offset: 6px;
-    --pc-cta-size: 32px;
-    --pc-cta-plus-size: 16px;
-    --pc-cta-font: 12px;
-    --pc-cta-expand-pad-x: 10px;
-    --pc-cta-expand-gap: 6px;
-    /* Timegrid */
-    --pc-daycol-gap: 4px;
-    --pc-daycol-pad: 6px;
-    /* Agenda */
-    --pc-agenda-gap: 12px;
-    --pc-agenda-pad: 8px;
-    --pc-agenda-date-mb: 6px;
-    --pc-agenda-item-pad: 6px;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  /* clip inner grid lines to rounded corners */
+  /* Sizing variables */
+  --pc-card-h: 112px;
+  /* month cell content height baseline */
+  --pc-row-extra-h: 28px;
+  /* extra height for month header row inside cells */
+  --pc-weekday-pad: 8px;
+  --pc-weekday-font: 12px;
+  --pc-day-pad: 4px;
+  --pc-day-label-font: 12px;
+  --pc-events-gap: 4px;
+  --pc-events-pad-top: 2px;
+  --pc-events-pad-bottom: 6px;
+  --pc-separator-w: 1px;
+  /* grid line thickness */
+  /* Action pill */
+  --pc-pill-h: 18px;
+  --pc-pill-pad-x: 8px;
+  --pc-pill-font: 11px;
+  /* More button */
+  --pc-more-pad-y: 2px;
+  --pc-more-pad-x: 6px;
+  --pc-more-font: 12px;
+  /* Create CTA */
+  --pc-cta-offset: 6px;
+  --pc-cta-size: 32px;
+  --pc-cta-plus-size: 16px;
+  --pc-cta-font: 12px;
+  --pc-cta-expand-pad-x: 10px;
+  --pc-cta-expand-gap: 6px;
+  /* Timegrid */
+  --pc-daycol-gap: 4px;
+  --pc-daycol-pad: 6px;
+  /* Agenda */
+  --pc-agenda-gap: 12px;
+  --pc-agenda-pad: 8px;
+  --pc-agenda-date-mb: 6px;
+  --pc-agenda-item-pad: 6px;
 }
 
 /* Weekday header */
 .pc-weekdays {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
 }
 
 .pc-weekday {
-    padding: var(--pc-weekday-pad);
-    font-size: var(--pc-weekday-font);
-    color: var(--muted-foreground);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    text-align: center;
+  padding: var(--pc-weekday-pad);
+  font-size: var(--pc-weekday-font);
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-align: center;
 }
 
 /* Month grid */
 .pc-weeks {
-    display: grid;
-    grid-auto-rows: minmax(calc(var(--pc-card-h) + var(--pc-row-extra-h)), auto);
+  display: grid;
+  grid-auto-rows: minmax(calc(var(--pc-card-h) + var(--pc-row-extra-h)), auto);
 }
 
 .pc-week-row {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    position: relative;
-    border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  position: relative;
+  border-top: 1px solid var(--border);
 }
 
 .pc-week-row::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: linear-gradient(to right, var(--border) var(--pc-separator-w), transparent var(--pc-separator-w));
-    background-size: calc(100% / 7) 100%;
-    background-repeat: repeat-x;
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    to right,
+    var(--border) var(--pc-separator-w),
+    transparent var(--pc-separator-w)
+  );
+  background-size: calc(100% / 7) 100%;
+  background-repeat: repeat-x;
 }
 
 .pc-week-row:first-child {
-    border-top: none;
+  border-top: none;
 }
 
 .pc-day {
-    position: relative;
-    padding: var(--pc-day-pad);
-    min-height: calc(var(--pc-card-h) + var(--pc-row-extra-h));
-    min-width: 0;
+  position: relative;
+  padding: var(--pc-day-pad);
+  min-height: calc(var(--pc-card-h) + var(--pc-row-extra-h));
+  min-width: 0;
 }
 
 .pc-day--muted {
-    background: color-mix(in oklch, var(--muted) 10%, transparent);
-    color: var(--muted-foreground);
+  background: color-mix(in oklch, var(--muted) 10%, transparent);
+  color: var(--muted-foreground);
 }
 
 .pc-day--past {
-    background: color-mix(in oklch, var(--muted) 20%, var(--background));
+  background: color-mix(in oklch, var(--muted) 20%, var(--background));
 }
 
 .pc-day--today {
-    background: color-mix(in oklch, var(--primary) 10%, var(--background));
+  background: color-mix(in oklch, var(--primary) 10%, var(--background));
 }
 
 .pc-day--drop {
-    outline: 1px dashed var(--primary);
-    outline-offset: -1px;
+  outline: 1px dashed var(--primary);
+  outline-offset: -1px;
 }
 
 .pc-day-header {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 6px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
 }
 
 .pc-day-label {
-    font-weight: 500;
-    font-size: var(--pc-day-label-font);
-    color: var(--muted-foreground);
+  font-weight: 500;
+  font-size: var(--pc-day-label-font);
+  color: var(--muted-foreground);
 }
 
 .pc-today-pill {
-    display: inline-flex;
-    align-items: center;
-    height: var(--pc-pill-h);
-    padding: 0 var(--pc-pill-pad-x);
-    border-radius: 9999px;
-    background: var(--muted);
-    color: var(--muted-foreground);
-    border: 1px solid var(--border);
-    font-weight: 500;
-    font-size: var(--pc-pill-font);
-    line-height: 1;
-    pointer-events: none;
-    box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  height: var(--pc-pill-h);
+  padding: 0 var(--pc-pill-pad-x);
+  border-radius: 9999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  font-weight: 500;
+  font-size: var(--pc-pill-font);
+  line-height: 1;
+  pointer-events: none;
+  box-shadow: none;
 }
 
 .pc-day-events {
-    display: flex;
-    flex-direction: column;
-    gap: var(--pc-events-gap);
-    padding: var(--pc-events-pad-top) 0 var(--pc-events-pad-bottom);
-    min-width: 0;
-    overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-events-gap);
+  padding: var(--pc-events-pad-top) 0 var(--pc-events-pad-bottom);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .pc-event-row {
-    display: block;
-    min-width: 0;
+  display: block;
+  min-width: 0;
 }
 
-.pc-event-row>* {
-    max-width: 100%;
+.pc-event-row > * {
+  max-width: 100%;
 }
 
 .pc-event-default {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--card);
-    color: var(--foreground);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 2px 6px;
-    font-size: 12px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .pc-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 9999px;
-    background: var(--primary);
-    display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--primary);
+  display: inline-block;
 }
 
 .pc-more {
-    background: color-mix(in oklch, var(--muted) 30%, transparent);
-    color: var(--foreground);
-    border: 1px dashed var(--border);
-    border-radius: var(--radius-sm);
-    padding: var(--pc-more-pad-y) var(--pc-more-pad-x);
-    font-size: var(--pc-more-font);
-    cursor: pointer;
+  background: color-mix(in oklch, var(--muted) 30%, transparent);
+  color: var(--foreground);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--pc-more-pad-y) var(--pc-more-pad-x);
+  font-size: var(--pc-more-font);
+  cursor: pointer;
 }
 
 /* Hover create CTA (month cells, today/future only) */
 .pc-create-cta {
-    position: absolute;
-    right: var(--pc-cta-offset);
-    bottom: var(--pc-cta-offset);
-    width: var(--pc-cta-size);
-    height: var(--pc-cta-size);
-    min-width: var(--pc-cta-size);
-    min-height: var(--pc-cta-size);
-    padding: 0;
-    border-radius: 9999px;
-    background: var(--primary);
-    color: var(--primary-foreground);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    overflow: hidden;
-    font-weight: 600;
-    font-size: var(--pc-cta-font);
-    line-height: 1;
-    box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 20%, transparent);
-    opacity: 0;
-    transform: translateY(2px);
-    transition: opacity 140ms ease, transform 140ms ease, width 180ms ease, padding 180ms ease, gap 120ms ease;
-    pointer-events: none;
-    will-change: width, padding;
+  position: absolute;
+  right: var(--pc-cta-offset);
+  bottom: var(--pc-cta-offset);
+  width: var(--pc-cta-size);
+  height: var(--pc-cta-size);
+  min-width: var(--pc-cta-size);
+  min-height: var(--pc-cta-size);
+  padding: 0;
+  border-radius: 9999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+  font-weight: 600;
+  font-size: var(--pc-cta-font);
+  line-height: 1;
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 20%, transparent);
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    width 180ms ease,
+    padding 180ms ease,
+    gap 120ms ease;
+  pointer-events: none;
+  will-change: width, padding;
 }
 
-.pc-create-cta:hover, .pc-create-cta:focus-visible {
-    width: auto;
-    padding: 0 var(--pc-cta-expand-pad-x);
-    gap: var(--pc-cta-expand-gap);
+.pc-create-cta:hover,
+.pc-create-cta:focus-visible {
+  width: auto;
+  padding: 0 var(--pc-cta-expand-pad-x);
+  gap: var(--pc-cta-expand-gap);
 }
 
 .pc-create-cta-plus {
-    display: inline-block;
-    width: var(--pc-cta-plus-size);
-    height: var(--pc-cta-plus-size);
-    background: none;
-    border-radius: 0;
-    color: var(--primary-foreground);
-    font-size: var(--pc-cta-plus-size);
-    font-weight: 700;
-    line-height: var(--pc-cta-plus-size);
-    text-align: center;
-    flex-shrink: 0;
+  display: inline-block;
+  width: var(--pc-cta-plus-size);
+  height: var(--pc-cta-plus-size);
+  background: none;
+  border-radius: 0;
+  color: var(--primary-foreground);
+  font-size: var(--pc-cta-plus-size);
+  font-weight: 700;
+  line-height: var(--pc-cta-plus-size);
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .pc-create-cta-text {
-    max-width: 0;
-    opacity: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    transform: translateX(-4px);
-    transition: max-width 180ms ease, opacity 140ms ease, transform 140ms ease;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transform: translateX(-4px);
+  transition:
+    max-width 180ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
-.pc-create-cta:hover .pc-create-cta-text, .pc-create-cta:focus-visible .pc-create-cta-text {
-    max-width: 120px;
-    opacity: 1;
-    transform: translateX(0);
+.pc-create-cta:hover .pc-create-cta-text,
+.pc-create-cta:focus-visible .pc-create-cta-text {
+  max-width: 120px;
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .pc-day:not(.pc-day--past):hover .pc-create-cta {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .pc-daycol:not(.pc-daycol--past):hover .pc-create-cta {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .pc-agenda-group:hover .pc-create-cta {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 /* Time grid */
 .pc-timegrid {
-    display: grid;
-    grid-template-rows: auto 1fr;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overscroll-behavior: contain;
 }
 
 .pc-timegrid-head {
-    display: grid;
-    grid-template-columns: repeat(var(--pc-days, 7), minmax(0, 1fr));
-    border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(var(--pc-days, 7), minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
 }
 
-.pc-gutter {
-    display: none;
-}
+/* No separate time gutter in this design */
 
 .pc-col-head {
-    padding: var(--pc-weekday-pad);
-    text-align: center;
-    color: var(--muted-foreground);
+  padding: var(--pc-weekday-pad);
+  text-align: center;
+  color: var(--muted-foreground);
 }
 
 .pc-col-label {
-    font-weight: 500;
+  font-weight: 500;
 }
 
 .pc-timegrid-body {
-    display: grid;
-    grid-template-columns: repeat(var(--pc-days, 7), minmax(0, 1fr));
-    overflow: auto;
-    position: relative;
-    min-height: var(--pc-min-h, 420px);
+  display: grid;
+  grid-template-columns: repeat(var(--pc-days, 7), minmax(0, 1fr));
+  overflow: auto;
+  position: relative;
+  min-height: var(--pc-min-h, 420px);
 }
 
-.pc-tz {
-    display: none;
-}
+/* No timezone label column in timegrid */
 
-.pc-hour {
-    display: none;
-}
+/* No hourly rows; list-style columns only */
 
 .pc-daycol {
-    position: relative;
-    border-left: 1px solid var(--border);
-    min-width: 0;
+  position: relative;
+  border-left: 1px solid var(--border);
+  min-width: 0;
 }
 
-.pc-timegrid-body>.pc-daycol:last-of-type {
-    border-right: 1px solid var(--border);
+.pc-timegrid-body > .pc-daycol:last-of-type {
+  border-right: 1px solid var(--border);
 }
 
 .pc-daycol-inner {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: var(--pc-daycol-gap);
-    padding: var(--pc-daycol-pad);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-daycol-gap);
+  padding: var(--pc-daycol-pad);
 }
 
 .pc-daycol--past {
-    background: color-mix(in oklch, var(--muted) 16%, transparent);
+  background: color-mix(in oklch, var(--muted) 16%, transparent);
 }
 
 .pc-daycol--drop {
-    outline: 1px dashed var(--primary);
-    outline-offset: -1px;
+  outline: 1px dashed var(--primary);
+  outline-offset: -1px;
 }
 
 .pc-event-block {
-    position: relative;
-    padding: 0;
+  position: relative;
+  padding: 0;
 }
 
-.pc-event-block>* {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-    overflow: hidden;
+.pc-event-block > * {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .pc-event-default {
-    width: 100%;
-    background: var(--card);
-    color: var(--foreground);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--primary);
-    border-radius: var(--radius-sm);
-    padding: 4px 6px;
-    font-size: 12px;
-    overflow: hidden;
+  width: 100%;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  font-size: 12px;
+  overflow: hidden;
 }
 
 /* Agenda */
 .pc-agenda {
-    display: flex;
-    flex-direction: column;
-    gap: var(--pc-agenda-gap);
-    padding: var(--pc-agenda-pad);
-    min-height: var(--pc-min-h, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-agenda-gap);
+  padding: var(--pc-agenda-pad);
+  min-height: var(--pc-min-h, 420px);
 }
 
 .pc-agenda-group {
-    position: relative;
-    border-top: 1px solid var(--border);
-    padding-top: var(--pc-agenda-pad);
+  position: relative;
+  border-top: 1px solid var(--border);
+  padding-top: var(--pc-agenda-pad);
 }
 
 .pc-agenda-group:first-child {
-    border-top: none;
+  border-top: none;
 }
 
 .pc-agenda-date {
-    font-weight: 600;
-    color: var(--muted-foreground);
-    margin-bottom: var(--pc-agenda-date-mb);
+  font-weight: 600;
+  color: var(--muted-foreground);
+  margin-bottom: var(--pc-agenda-date-mb);
 }
 
 .pc-agenda-items {
-    display: flex;
-    flex-direction: column;
-    gap: var(--pc-agenda-item-pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-agenda-item-pad);
 }
 
 .pc-agenda-item {
-    padding: var(--pc-agenda-item-pad);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--card);
+  padding: var(--pc-agenda-item-pad);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
 }
 
 /* Mobile responsiveness */
 @media (max-width: 640px) {
-    .pc-calendar {
-        border-left-width: 0;
-        border-right-width: 0;
-        --pc-card-h: 88px;
-    }
+  .pc-calendar {
+    border-left-width: 0;
+    border-right-width: 0;
+    --pc-card-h: 88px;
+  }
 
-    .pc-weekday {
-        font-size: 11px;
-        padding: 6px;
-    }
+  .pc-weekday {
+    font-size: 11px;
+    padding: 6px;
+  }
 
-    .pc-day {
-        min-height: calc(var(--pc-card-h) + 18px);
-    }
+  .pc-day {
+    min-height: calc(var(--pc-card-h) + 18px);
+  }
 
-    .pc-event-default {
-        font-size: 11px;
-        padding: 2px 4px;
-    }
+  .pc-event-default {
+    font-size: 11px;
+    padding: 2px 4px;
+  }
 
-    .pc-more {
-        font-size: 11px;
-        padding: 2px 4px;
-    }
+  .pc-more {
+    font-size: 11px;
+    padding: 2px 4px;
+  }
 
-    /*
+  /*
      * Timegrid (week / three‑day) on small screens
      * - Remove legacy time gutter (48px) that we no longer render
      * - Give each day a sensible min-width so the grid can scroll horizontally
      * - Make the parent container handle horizontal scroll; body only scrolls vertically
      */
-    .pc-timegrid {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
+  .pc-timegrid {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 
-    .pc-timegrid-head {
-        grid-template-columns: repeat(var(--pc-days, 7), minmax(220px, 1fr));
-    }
+  .pc-timegrid-head {
+    grid-template-columns: repeat(var(--pc-days, 7), minmax(220px, 1fr));
+  }
 
-    .pc-timegrid-body {
-        grid-template-columns: repeat(var(--pc-days, 7), minmax(220px, 1fr));
-        overflow-y: auto;
-        overflow-x: visible;
-    }
+  .pc-timegrid-body {
+    grid-template-columns: repeat(var(--pc-days, 7), minmax(220px, 1fr));
+    overflow-y: auto;
+    overflow-x: visible;
+  }
 
-    /* The hour gutter isn't used on mobile; keep hidden */
-    .pc-hour {
-        display: none;
-    }
+  /* No hourly rows on mobile either (not rendered) */
 }

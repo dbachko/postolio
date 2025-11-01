@@ -246,7 +246,12 @@ export class CampaignConsistencyHandler {
     const prisma = await this.getPrismaClient();
 
     try {
-      const campaign = await prisma.campaign.findUnique({
+      // Cast to any to avoid relying on generated Prisma delegate typings during DTS build
+      // The `campaign` delegate exists at runtime based on the schema.
+      const campaignDelegate = (prisma as any).campaign as {
+        findUnique: (args: { where: { id: string } }) => Promise<PrismaCampaign | null>;
+      };
+      const campaign = await campaignDelegate.findUnique({
         where: { id: campaignId },
       });
       return campaign;

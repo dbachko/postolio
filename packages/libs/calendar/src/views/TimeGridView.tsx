@@ -1,6 +1,6 @@
 import React, { useMemo, useRef } from 'react';
 import type { Localizer } from '../localizers';
-import type { CalendarEventBase, CalendarFormats } from '../types';
+import type { CalendarEventBase } from '../types';
 import { useDrop, useDrag } from 'react-dnd';
 import { CreateCta } from '../components/CreateCta';
 
@@ -12,18 +12,10 @@ type Props<E extends CalendarEventBase> = {
   events: E[];
   localizer: Localizer;
   weekStartsOn?: 0 | 1;
-  timezoneLabel?: string;
-  timezoneTitle?: string;
   eventComponent?: React.ComponentType<{ event: E }>;
-  formats?: CalendarFormats;
   onEventDrop?: (args: { event: E; start: Date; end?: Date }) => void | Promise<void>;
   onBackgroundClick?: (date: Date) => void;
   dragAndDrop?: boolean;
-  dayStartHour: number;
-  dayEndHour: number;
-  stepMinutes: number;
-  virtualize?: boolean;
-  overscanPx?: number;
 };
 
 export function TimeGridView<E extends CalendarEventBase>({

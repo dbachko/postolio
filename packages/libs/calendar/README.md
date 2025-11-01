@@ -8,7 +8,7 @@ Features:
 - Pluggable localizer (default: Luxon)
 - Drag-and-drop (react-dnd) with optional internal provider
 - CSS-variable theme (no hard-coded colors)
-- Mobile-friendly: responsive CSS and optional touch DnD backend
+- Mobile-friendly: responsive CSS (no hourly gutter) and optional touch DnD backend
 
 Quick start:
 
@@ -29,6 +29,11 @@ const localizer = luxon.create();
   }}
 />;
 ```
+
+Notes
+
+- The time-grid views (week/three-day) are list-style columns without an hour gutter. The CSS uses Grid with responsive min track widths and a sticky header on small screens.
+- Month view is built with CSS Grid as well; no table markup.
 
 Mobile drag-and-drop (optional)
 

@@ -1,56 +1,325 @@
 @import 'tailwindcss';
 /* Calendar library styles (inlined for now to ensure Vite bundles them) */
 /* BEGIN: @postolio/calendar styles */
-.pc-calendar{background:var(--card);color:var(--foreground);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;--pc-card-h:112px;--pc-hour-h:112px}
-.pc-weekdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-bottom:1px solid var(--border)}
-.pc-weekday{padding:8px;font-size:12px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.03em;text-align:center}
-.pc-weeks{display:grid;grid-auto-rows:minmax(calc(var(--pc-card-h) + 28px),auto)}
-.pc-week-row{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));position:relative;border-top:1px solid var(--border)}
-.pc-week-row::after{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(to right,var(--border) 1px,transparent 1px);background-size:calc(100% / 7) 100%;background-repeat:repeat-x}
-.pc-week-row:first-child{border-top:none}
-.pc-day{position:relative;padding:4px;min-height:calc(var(--pc-card-h) + 28px);min-width:0}
-.pc-day--muted{background:color-mix(in oklch,var(--muted) 10%,transparent);color:var(--muted-foreground)}
-.pc-day--past{background:color-mix(in oklch,var(--muted) 20%,var(--background))}
-.pc-day--today{background:color-mix(in oklch,var(--primary) 10%,var(--background))}
-.pc-day--drop{outline:1px dashed var(--primary);outline-offset:-1px}
-.pc-day-header{display:flex;justify-content:center}
-.pc-day-label{font-weight:500;font-size:12px;color:var(--muted-foreground)}
-.pc-today-pill{position:absolute;top:6px;left:6px;height:18px;padding:0 8px;border-radius:9999px;background:var(--muted);color:var(--muted-foreground);border:1px solid var(--border);font-weight:500;font-size:11px;line-height:18px;pointer-events:none;box-shadow:none}
-.pc-day-events{display:flex;flex-direction:column;gap:4px;padding:2px 0 6px;min-width:0;overflow:hidden}
-.pc-event-row{display:block;min-width:0}
-.pc-event-row>*{max-width:100%}
-.pc-event-default{display:inline-flex;align-items:center;gap:6px;background:var(--card);color:var(--foreground);border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px 6px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
-.pc-dot{width:6px;height:6px;border-radius:9999px;background:var(--primary);display:inline-block}
-.pc-more{background:color-mix(in oklch,var(--muted) 30%,transparent);color:var(--foreground);border:1px dashed var(--border);border-radius:var(--radius-sm);padding:2px 6px;font-size:12px;cursor:pointer}
-.pc-create-cta{position:absolute;right:6px;bottom:6px;width:32px;height:32px;min-width:32px;min-height:32px;padding:0;border-radius:9999px;background:var(--primary);color:var(--primary-foreground);display:inline-flex;align-items:center;justify-content:center;gap:0;overflow:hidden;font-weight:600;font-size:12px;line-height:1;box-shadow:0 1px 2px color-mix(in oklch,var(--foreground) 20%,transparent);opacity:0;transform:translateY(2px);transition:opacity .14s ease,transform .14s ease,width .18s ease,padding .18s ease,gap .12s ease;pointer-events:none;will-change:width,padding}
-.pc-create-cta:hover,.pc-create-cta:focus-visible{width:auto;padding:0 10px;gap:6px}
-.pc-create-cta-plus{display:inline-block;width:16px;height:16px;background:none;border-radius:0;color:var(--primary-foreground);font-size:16px;font-weight:700;line-height:16px;text-align:center;flex-shrink:0}
-.pc-create-cta-text{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transform:translateX(-4px);transition:max-width .18s ease,opacity .14s ease,transform .14s ease}
-.pc-create-cta:hover .pc-create-cta-text,.pc-create-cta:focus-visible .pc-create-cta-text{max-width:120px;opacity:1;transform:translateX(0)}
-.pc-day:not(.pc-day--past):hover .pc-create-cta{opacity:1;transform:translateY(0);pointer-events:auto}
-.pc-timegrid{display:grid;grid-template-rows:auto 1fr}
-.pc-timegrid-head{display:grid;grid-template-columns:repeat(var(--pc-days, 7),minmax(0,1fr));border-bottom:1px solid var(--border)}
-.pc-gutter{display:none}
-.pc-col-head{padding:8px;text-align:center;color:var(--muted-foreground)}
-.pc-col-label{font-weight:500}
-.pc-timegrid-body{display:grid;grid-template-columns:repeat(var(--pc-days, 7),minmax(0,1fr));overflow:auto;position:relative;min-height:var(--pc-min-h, 420px)}
-.pc-timegrid-body::after{content:none}
-.pc-tz{display:none}
-.pc-hour{display:none}
-.pc-daycol{position:relative;border-left:1px solid var(--border);min-width:0}
-.pc-timegrid-body>.pc-daycol:last-of-type{border-right:1px solid var(--border)}
-.pc-daycol-inner{position:relative;display:flex;flex-direction:column;gap:4px;padding:6px}
-.pc-daycol--past{background:color-mix(in oklch,var(--muted) 16%,transparent)}
-.pc-daycol--drop{outline:1px dashed var(--primary);outline-offset:-1px}
-.pc-event-block{position:absolute;padding:2px}
-.pc-event-block>*{width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow:hidden}
-.pc-event-default{height:100%;width:100%;background:var(--card);color:var(--foreground);border:1px solid var(--border);border-left:3px solid var(--primary);border-radius:var(--radius-sm);padding:4px 6px;font-size:12px;overflow:hidden}
-.pc-agenda{display:flex;flex-direction:column;gap:12px;padding:8px;min-height:var(--pc-min-h, 420px)}
-.pc-agenda-group{border-top:1px solid var(--border);padding-top:8px}
-.pc-agenda-group:first-child{border-top:none}
-.pc-agenda-date{font-weight:600;color:var(--muted-foreground);margin-bottom:6px}
-.pc-agenda-items{display:flex;flex-direction:column;gap:6px}
-.pc-agenda-item{padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--card)}
+.pc-calendar {
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  --pc-card-h: 112px;
+  --pc-hour-h: 112px;
+}
+.pc-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+}
+.pc-weekday {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+.pc-weeks {
+  display: grid;
+  grid-auto-rows: minmax(calc(var(--pc-card-h) + 28px), auto);
+}
+.pc-week-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  position: relative;
+  border-top: 1px solid var(--border);
+}
+.pc-week-row::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(to right, var(--border) 1px, transparent 1px);
+  background-size: calc(100% / 7) 100%;
+  background-repeat: repeat-x;
+}
+.pc-week-row:first-child {
+  border-top: none;
+}
+.pc-day {
+  position: relative;
+  padding: 4px;
+  min-height: calc(var(--pc-card-h) + 28px);
+  min-width: 0;
+}
+.pc-day--muted {
+  background: color-mix(in oklch, var(--muted) 10%, transparent);
+  color: var(--muted-foreground);
+}
+.pc-day--past {
+  background: color-mix(in oklch, var(--muted) 20%, var(--background));
+}
+.pc-day--today {
+  background: color-mix(in oklch, var(--primary) 10%, var(--background));
+}
+.pc-day--drop {
+  outline: 1px dashed var(--primary);
+  outline-offset: -1px;
+}
+.pc-day-header {
+  display: flex;
+  justify-content: center;
+}
+.pc-day-label {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.pc-today-pill {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 9999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 18px;
+  pointer-events: none;
+  box-shadow: none;
+}
+.pc-day-events {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+.pc-event-row {
+  display: block;
+  min-width: 0;
+}
+.pc-event-row > * {
+  max-width: 100%;
+}
+.pc-event-default {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.pc-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--primary);
+  display: inline-block;
+}
+.pc-more {
+  background: color-mix(in oklch, var(--muted) 30%, transparent);
+  color: var(--foreground);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pc-create-cta {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 9999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 20%, transparent);
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease,
+    width 0.18s ease,
+    padding 0.18s ease,
+    gap 0.12s ease;
+  pointer-events: none;
+  will-change: width, padding;
+}
+.pc-create-cta:hover,
+.pc-create-cta:focus-visible {
+  width: auto;
+  padding: 0 10px;
+  gap: 6px;
+}
+.pc-create-cta-plus {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background: none;
+  border-radius: 0;
+  color: var(--primary-foreground);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.pc-create-cta-text {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transform: translateX(-4px);
+  transition:
+    max-width 0.18s ease,
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+.pc-create-cta:hover .pc-create-cta-text,
+.pc-create-cta:focus-visible .pc-create-cta-text {
+  max-width: 120px;
+  opacity: 1;
+  transform: translateX(0);
+}
+.pc-day:not(.pc-day--past):hover .pc-create-cta {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.pc-timegrid {
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+.pc-timegrid-head {
+  display: grid;
+  grid-template-columns: repeat(var(--pc-days, 7), minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+}
+.pc-gutter {
+  display: none;
+}
+.pc-col-head {
+  padding: 8px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+.pc-col-label {
+  font-weight: 500;
+}
+.pc-timegrid-body {
+  display: grid;
+  grid-template-columns: repeat(var(--pc-days, 7), minmax(0, 1fr));
+  overflow: auto;
+  position: relative;
+  min-height: var(--pc-min-h, 420px);
+}
+.pc-timegrid-body::after {
+  content: none;
+}
+.pc-tz {
+  display: none;
+}
+.pc-hour {
+  display: none;
+}
+.pc-daycol {
+  position: relative;
+  border-left: 1px solid var(--border);
+  min-width: 0;
+}
+.pc-timegrid-body > .pc-daycol:last-of-type {
+  border-right: 1px solid var(--border);
+}
+.pc-daycol-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+}
+.pc-daycol--past {
+  background: color-mix(in oklch, var(--muted) 16%, transparent);
+}
+.pc-daycol--drop {
+  outline: 1px dashed var(--primary);
+  outline-offset: -1px;
+}
+.pc-event-block {
+  position: absolute;
+  padding: 2px;
+}
+.pc-event-block > * {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.pc-event-default {
+  height: 100%;
+  width: 100%;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  font-size: 12px;
+  overflow: hidden;
+}
+.pc-agenda {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px;
+  min-height: var(--pc-min-h, 420px);
+}
+.pc-agenda-group {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.pc-agenda-group:first-child {
+  border-top: none;
+}
+.pc-agenda-date {
+  font-weight: 600;
+  color: var(--muted-foreground);
+  margin-bottom: 6px;
+}
+.pc-agenda-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pc-agenda-item {
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+}
 /* END: @postolio/calendar styles */
 
 @plugin 'tailwindcss-animate';

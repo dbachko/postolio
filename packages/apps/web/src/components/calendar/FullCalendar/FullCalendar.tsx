@@ -42,7 +42,7 @@ function FullCalendarImpl({
 
   const [reschedule, setReschedule] = useState<RescheduleState>({ open: false, item: null });
 
-  const { tzRef, tzLabel, tzTitle, weekStartsOn } = useTimezoneMeta(brandTimezone);
+  const { tzRef, weekStartsOn } = useTimezoneMeta(brandTimezone);
   const items = useCalendarItems(content, placeholders);
   const filters = useCalendarFilters();
   const events = useFilteredEvents(items, filters, tzRef.current);
@@ -122,11 +122,7 @@ function FullCalendarImpl({
         view={calendarView as never}
         date={calendarView === 'agenda' ? new Date() : calendarDate}
         events={events as never}
-        formats={{ timeGutter: 'h:mm a' }}
         weekStartsOn={weekStartsOn}
-        timezoneLabel={tzLabel}
-        timezoneTitle={tzTitle}
-        virtualize
         dragAndDrop
         dndBackend={isTouch ? TouchBackend : undefined}
         dndOptions={isTouch ? { enableMouseEvents: true } : undefined}
