@@ -224,6 +224,8 @@ export class FoundationStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'handler',
       entry: path.join(__dirname, '../lambdas/foundation/jwt-secret-ensurer.ts'),
+      // Explicitly point to the workspace lockfile to avoid bundling ambiguity
+      depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
       description: 'Ensures the JWT secret exists; creates it if missing and returns its ARN.',
