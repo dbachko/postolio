@@ -18,6 +18,20 @@ To run any script for only this application from the monorepo root, use the `--f
 pnpm --filter=@postolio/api dev
 ```
 
+### First run after a clean checkout (build deps)
+
+If you’ve just cleaned caches or removed `dist/` outputs, build the API’s workspace dependencies once so the watcher can resolve them:
+
+```bash
+# Build all libraries the API depends on (one-time per clean)
+pnpm --filter api run build:deps
+
+# Then start the API in watch mode
+pnpm --filter api dev
+```
+
+If you encounter an error like `Cannot find module '@postolio/aws/dist/index.cjs'`, it means a workspace library hasn’t been built yet—run the `build:deps` step above and retry.
+
 ## Seeding Local Data
 
 Use the development seeder to create a user, a brand, rich demo posts, and multiple sample campaigns for local testing.

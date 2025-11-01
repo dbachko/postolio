@@ -65,8 +65,9 @@ export function EmailVerificationBanner() {
   }
 
   return (
-    <Alert className="border-b shadow-sm">
-      <AlertDescription className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+    <Alert className="bg-card/95 rounded-none border-0 border-b shadow-sm">
+      <AlertDescription className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        {/* Left: message */}
         <div className="text-foreground flex min-w-0 items-center gap-2">
           <Mail className="text-foreground h-4 w-4 flex-shrink-0" />
           <div className="truncate text-sm">
@@ -75,33 +76,34 @@ export function EmailVerificationBanner() {
               Check your inbox for {status.email} or request a new verification email.
             </span>
           </div>
-          <div className="ml-4 flex items-center gap-2">
-            {status.canResend && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={sendVerificationEmail}
-                disabled={isSending}
-                className="hover:bg-muted"
-              >
-                {isSending ? (
-                  <>
-                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Mail className="mr-2 h-3 w-3" />
-                    Resend Email
-                  </>
-                )}
-              </Button>
-            )}
-            {!status.canResend && !isSending && (
-              <span className="text-muted-foreground text-sm">Email sent! Check your inbox</span>
-            )}
-            {/* Intentionally non-dismissible */}
-          </div>
+        </div>
+
+        {/* Right: action */}
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {status.canResend && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={sendVerificationEmail}
+              disabled={isSending}
+              className="hover:bg-muted"
+            >
+              {isSending ? (
+                <>
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-2 h-3 w-3" />
+                  Resend Email
+                </>
+              )}
+            </Button>
+          )}
+          {!status.canResend && !isSending && (
+            <span className="text-muted-foreground text-sm">Email sent! Check your inbox</span>
+          )}
         </div>
       </AlertDescription>
     </Alert>

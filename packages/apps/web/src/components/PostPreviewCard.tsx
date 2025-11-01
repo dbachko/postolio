@@ -93,7 +93,17 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
   };
 
   // Campaign accent removed - no longer using left border
-  const campaignAccent = {};
+  const campaignAccent: Record<string, string> = {};
+
+  // Status-tinted border to match calendar cards
+  const borderColor = (() => {
+    if (status === 'failed') return 'var(--destructive)';
+    if (status === 'published') return 'var(--success)';
+    if (status === 'scheduled') return 'var(--info)';
+    if (status === 'placeholder' || status === 'skipped')
+      return 'color-mix(in oklch, var(--warning) 55%, var(--border))';
+    return 'var(--border)';
+  })();
 
   // Mutations
   const queryClient = useQueryClient();
@@ -134,10 +144,10 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
           handleOpen();
         }
       }}
-      className={`hover:bg-muted group w-full rounded-md border px-2 py-2 text-left shadow-sm transition-colors ${
+      className={`hover:bg-muted group h-[var(--calendar-card-h)] w-full rounded-md border px-2 py-2 text-left shadow-sm transition-colors ${
         statusStyles[status] || statusStyles.draft
       }`}
-      style={campaignAccent}
+      style={{ ...campaignAccent, borderColor }}
     >
       {/* Top row: status icon + time, and tiny image thumbnail if present */}
       <div className="mb-1 flex items-start justify-between">

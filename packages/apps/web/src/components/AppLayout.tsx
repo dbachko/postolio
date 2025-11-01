@@ -205,7 +205,7 @@ export function AppLayout({ children }: LayoutProps) {
 
       {/* Ultra-thin navigation bar */}
       <nav
-        className="bg-card sticky top-0 z-40 h-14 border-b shadow-sm"
+        className="bg-card sticky top-0 z-40 h-12 border-b shadow-sm"
         role="navigation"
         aria-label="Main navigation"
       >

@@ -3,6 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { encodeFiltersToURL, decodeFiltersFromURL, areFiltersEqual } from '../utils/filterUrlUtils';
 
+const haveSameMembers = <T extends string>(a: readonly T[], b: readonly T[]): boolean => {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((value, index) => value === sortedB[index]);
+};
+
 /**
  * Synchronizes calendar filter state between URL and Zustand store
  * - On mount/URL change: Updates store from URL
@@ -11,24 +18,17 @@ import { encodeFiltersToURL, decodeFiltersFromURL, areFiltersEqual } from '../ut
 export function useURLFilterSync() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const filterStore = useCalendarFilterStore();
+  const campaigns = useCalendarFilterStore((state) => state.campaigns);
+  const statuses = useCalendarFilterStore((state) => state.statuses);
+  const contentTypes = useCalendarFilterStore((state) => state.contentTypes);
+  const dateRange = useCalendarFilterStore((state) => state.dateRange);
+  const searchQuery = useCalendarFilterStore((state) => state.searchQuery);
 
   // Track if we're updating from URL to prevent infinite loops
   const isUpdatingFromURL = useRef(false);
   const isUpdatingFromStore = useRef(false);
 
-  // Extract current filter state from store
-  const currentFilters = {
-    campaigns: filterStore.campaigns,
-    statuses: filterStore.statuses,
-    contentTypes: filterStore.contentTypes,
-    dateRange: filterStore.dateRange,
-    searchQuery: filterStore.searchQuery,
-  };
-
   // Sync URL → Store (on mount and URL changes)
-  // URL -> Store sync is intentionally decoupled from store changes
-
   useEffect(() => {
     if (isUpdatingFromStore.current) {
       isUpdatingFromStore.current = false;
@@ -36,68 +36,44 @@ export function useURLFilterSync() {
     }
 
     const urlFilters = decodeFiltersFromURL(searchParams);
+    const store = useCalendarFilterStore.getState();
+    const currentState = {
+      campaigns: store.campaigns,
+      statuses: store.statuses,
+      contentTypes: store.contentTypes,
+      dateRange: store.dateRange,
+      searchQuery: store.searchQuery,
+    };
 
-    // Only update store if URL filters differ from current store state
-    if (!areFiltersEqual(urlFilters, currentFilters)) {
+    if (!areFiltersEqual(urlFilters, currentState)) {
       isUpdatingFromURL.current = true;
 
-      // Update each filter in the store
-      if (
-        JSON.stringify(urlFilters.campaigns.sort()) !==
-        JSON.stringify(currentFilters.campaigns.sort())
-      ) {
-        filterStore.setCampaigns(urlFilters.campaigns);
+      if (!haveSameMembers(urlFilters.campaigns, currentState.campaigns)) {
+        store.setCampaigns(urlFilters.campaigns);
+      }
+
+      if (!haveSameMembers(urlFilters.statuses, currentState.statuses)) {
+        store.setStatuses(urlFilters.statuses);
+      }
+
+      if (!haveSameMembers(urlFilters.contentTypes, currentState.contentTypes)) {
+        store.setContentTypes(urlFilters.contentTypes);
       }
 
       if (
-        JSON.stringify(urlFilters.statuses.sort()) !==
-        JSON.stringify(currentFilters.statuses.sort())
+        urlFilters.dateRange.start?.getTime() !== currentState.dateRange.start?.getTime() ||
+        urlFilters.dateRange.end?.getTime() !== currentState.dateRange.end?.getTime()
       ) {
-        // Clear and set statuses
-        currentFilters.statuses.forEach((status) => {
-          if (!urlFilters.statuses.includes(status)) {
-            filterStore.toggleStatus(status);
-          }
-        });
-        urlFilters.statuses.forEach((status) => {
-          if (!currentFilters.statuses.includes(status)) {
-            filterStore.toggleStatus(status);
-          }
-        });
+        store.setDateRange(urlFilters.dateRange.start, urlFilters.dateRange.end);
       }
 
-      if (
-        JSON.stringify(urlFilters.contentTypes.sort()) !==
-        JSON.stringify(currentFilters.contentTypes.sort())
-      ) {
-        // Clear and set content types
-        currentFilters.contentTypes.forEach((type) => {
-          if (!urlFilters.contentTypes.includes(type)) {
-            filterStore.toggleContentType(type);
-          }
-        });
-        urlFilters.contentTypes.forEach((type) => {
-          if (!currentFilters.contentTypes.includes(type)) {
-            filterStore.toggleContentType(type);
-          }
-        });
-      }
-
-      if (
-        urlFilters.dateRange.start?.getTime() !== currentFilters.dateRange.start?.getTime() ||
-        urlFilters.dateRange.end?.getTime() !== currentFilters.dateRange.end?.getTime()
-      ) {
-        filterStore.setDateRange(urlFilters.dateRange.start, urlFilters.dateRange.end);
-      }
-
-      if (urlFilters.searchQuery !== currentFilters.searchQuery) {
-        filterStore.setSearchQuery(urlFilters.searchQuery);
+      if (urlFilters.searchQuery !== currentState.searchQuery) {
+        store.setSearchQuery(urlFilters.searchQuery);
       }
     }
-  }, [searchParams]); // Only depend on searchParams changes
+  }, [searchParams]);
 
   // Sync Store → URL (when store changes)
-
   useEffect(() => {
     if (isUpdatingFromURL.current) {
       isUpdatingFromURL.current = false;
@@ -105,35 +81,32 @@ export function useURLFilterSync() {
     }
 
     isUpdatingFromStore.current = true;
-    // Preserve non-filter params like view/date while updating filter params
-    const merged = new URLSearchParams(searchParams);
+    const currentParams = new URLSearchParams(window.location.search);
 
-    // Remove existing filter keys first
-    ['campaigns', 'statuses', 'types', 'dateStart', 'dateEnd', 'search'].forEach((k) =>
-      merged.delete(k)
+    ['campaigns', 'statuses', 'types', 'dateStart', 'dateEnd', 'search'].forEach((key) =>
+      currentParams.delete(key)
     );
 
-    const encoded = encodeFiltersToURL(currentFilters);
-    encoded.forEach((v, k) => merged.set(k, v));
+    const currentState = {
+      campaigns,
+      statuses,
+      contentTypes,
+      dateRange,
+      searchQuery,
+    };
 
-    if (merged.toString() !== searchParams.toString()) {
-      navigate(`?${merged.toString()}`, { replace: true });
+    const encoded = encodeFiltersToURL(currentState);
+    encoded.forEach((value, key) => currentParams.set(key, value));
+
+    const newSearch = currentParams.toString();
+    const currentSearch = window.location.search.slice(1);
+
+    if (newSearch !== currentSearch) {
+      navigate(`?${newSearch}`, { replace: true });
     }
-  }, [
-    currentFilters.campaigns,
-    currentFilters.statuses,
-    currentFilters.contentTypes,
-    currentFilters.dateRange.start,
-    currentFilters.dateRange.end,
-    currentFilters.searchQuery,
-    navigate,
-    searchParams,
-  ]);
+  }, [campaigns, statuses, contentTypes, dateRange, searchQuery, navigate]);
 }
 
-/**
- * Hook to programmatically set filters via URL navigation
- */
 export function useNavigateWithFilters() {
   const navigate = useNavigate();
 

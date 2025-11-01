@@ -2,27 +2,33 @@ import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addMonths, subMonths } from 'date-fns';
-import { MonthGridView } from './MonthGridView';
-import { TimelineView } from './TimelineView';
-import { ContentListView } from './ContentListView';
-import { CalendarFilters } from './calendar/CalendarFilters';
-import { CalendarExport } from './calendar/CalendarExport';
+import { FullCalendar } from './calendar/FullCalendar';
+import { ErrorBoundary } from './ErrorBoundary';
+import { CalendarFilters } from './calendar/CalendarFilters/index';
+import { CalendarExport } from './calendar/CalendarExport/index';
 import { CampaignColorLegend } from './CampaignColorLegend';
 import { useFilteredContent } from '../hooks/useFilteredContent';
 import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { useURLFilterSync } from '../hooks/useURLFilterSync';
-import { Card, CardContent } from '@/components/ui/card';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
 import { content as contentApi, type Content } from '@/lib/api';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 import { getStableColorFromId } from '@/utils/campaign-colors';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { CalendarItem, Placeholder } from '../types/calendar';
-import { Calendar, List, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // type guard no longer needed for the month grid only
 
-type ViewMode = 'month' | 'timeline' | 'list';
+type ViewMode = 'month' | 'week' | 'three-day' | 'schedule';
 
 interface ContentCalendarProps {
   brandId: string;
@@ -39,9 +45,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  // Keep timeline icon import referenced while the control is hidden
-  const __keepTimelineIcon = Clock;
-  void __keepTimelineIcon;
+  // no-op
 
   // Resolve brand posting timezone (fallback to user timezone)
   useEffect(() => {
@@ -62,16 +66,26 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   // Read view + date from URL once
   useEffect(() => {
     const v = searchParams.get('view');
-    if (v === 'month' || v === 'timeline' || v === 'list') {
+    if (v === 'month' || v === 'week' || v === 'three-day' || v === 'schedule') {
       setViewMode(v as ViewMode);
+    } else {
+      // Default to a mobile-friendly Schedule view on small screens
+      if (typeof window !== 'undefined' && window.innerWidth < 640) {
+        setViewMode('schedule');
+      }
     }
     const dateParam = searchParams.get('date');
     if (dateParam) {
-      // Support yyyy-MM or full ISO
-      const d = /\d{4}-\d{2}$/.test(dateParam)
-        ? new Date(`${dateParam}-01T00:00:00`)
-        : new Date(dateParam);
-      if (!isNaN(d.getTime())) setCurrentDate(d);
+      const isYm = /\d{4}-\d{2}$/.test(dateParam);
+      const d = isYm ? new Date(`${dateParam}-01T00:00:00`) : new Date(dateParam);
+      if (!isNaN(d.getTime())) {
+        // For week/3-day views, if the URL only carries year-month, prefer today's date
+        if ((v === 'week' || v === 'three-day') && isYm) {
+          setCurrentDate(new Date());
+        } else {
+          setCurrentDate(d);
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -92,7 +106,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
   });
 
-  // Prefetch adjacent months for smooth navigation
+  // Prefetch adjacent months for smooth navigation (kept for export and misc)
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -153,22 +167,56 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   }, [content, placeholders]);
 
   // Apply filters to content
-  const filters = useCalendarFilterStore();
+  const selectFilters = useShallow((s: ReturnType<typeof useCalendarFilterStore.getState>) => ({
+    campaigns: s.campaigns,
+    statuses: s.statuses,
+    contentTypes: s.contentTypes,
+    dateRange: s.dateRange,
+    searchQuery: s.searchQuery,
+  }));
+  const { campaigns, statuses, contentTypes, dateRange, searchQuery } =
+    useCalendarFilterStore(selectFilters);
+  const clearAll = useCalendarFilterStore((s) => s.clearAll);
+  const hasAnyActiveFilters = useMemo(
+    () =>
+      campaigns.length > 0 ||
+      statuses.length > 0 ||
+      contentTypes.length !== 2 ||
+      !!dateRange.start ||
+      !!dateRange.end ||
+      !!searchQuery,
+    [campaigns, statuses, contentTypes, dateRange, searchQuery]
+  );
   const { filteredItems } = useFilteredContent(allItems as any);
+  useEffect(() => {
+    try {
+      (window as any).__pc_filtered_items = (filteredItems || []).length;
+    } catch {}
+  }, [filteredItems]);
 
-  // Navigation handlers
-  const handlePreviousMonth = () => {
+  // Navigation handlers (step depends on current view)
+  const handlePrevious = () => {
     setCurrentDate((prev) => {
-      const next = subMonths(prev, 1);
-      setParam('date', format(next, 'yyyy-MM'));
+      let next = prev;
+      if (viewMode === 'month') next = subMonths(prev, 1);
+      else if (viewMode === 'week' || viewMode === 'schedule')
+        next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7);
+      else if (viewMode === 'three-day')
+        next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 3);
+      setParam('date', format(next, viewMode === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd'));
       return next;
     });
   };
 
-  const handleNextMonth = () => {
+  const handleNext = () => {
     setCurrentDate((prev) => {
-      const next = addMonths(prev, 1);
-      setParam('date', format(next, 'yyyy-MM'));
+      let next = prev;
+      if (viewMode === 'month') next = addMonths(prev, 1);
+      else if (viewMode === 'week' || viewMode === 'schedule')
+        next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7);
+      else if (viewMode === 'three-day')
+        next = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 3);
+      setParam('date', format(next, viewMode === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd'));
       return next;
     });
   };
@@ -176,55 +224,40 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   const handleToday = () => {
     const t = new Date();
     setCurrentDate(t);
-    setParam('date', format(t, 'yyyy-MM'));
+    setParam('date', format(t, viewMode === 'month' ? 'yyyy-MM' : 'yyyy-MM-dd'));
   };
 
-  // Statistics (based on filtered items)
-  // Stats removed from UI; keep placeholder for potential future use
-
-  if (calendarQuery.isLoading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-12">
-          <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-          Loading calendar...
-        </CardContent>
-      </Card>
-    );
-  }
-
   // Add a stable fallback color for items without a campaign color
-  const enrichWithCampaignColor = (items: any[]): any[] =>
-    items.map((i) => {
-      const campaignId = i.campaignId || i.campaign?.id || null;
-      const direct = i.campaignColor || null;
-      const stored = campaignId ? getStoredCampaignColor(campaignId) : null;
-      const fallback = campaignId ? getStableColorFromId(campaignId) : null;
-      return {
-        ...i,
-        campaignColor: direct || stored || fallback,
-      };
-    });
+  const enrichWithCampaignColor = useMemo(
+    () =>
+      (items: any[]): any[] =>
+        items.map((i) => {
+          const campaignId = i.campaignId || i.campaign?.id || null;
+          const direct = i.campaignColor || null;
+          const stored = campaignId ? getStoredCampaignColor(campaignId) : null;
+          const fallback = campaignId ? getStableColorFromId(campaignId) : null;
+          return {
+            ...i,
+            campaignColor: direct || stored || fallback,
+          };
+        }),
+    []
+  );
 
   return (
     <div className="space-y-4">
       {/* Compact Header Bar: navigation, current month, view toggles, filters toggle */}
       <div className="bg-card rounded-lg border px-3 py-2 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           {/* Left: Navigation + current month */}
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handlePreviousMonth}
-              aria-label="Previous"
-            >
+            <Button variant="outline" size="icon" onClick={handlePrevious} aria-label="Previous">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button variant="outline" size="sm" onClick={handleToday}>
               Today
             </Button>
-            <Button variant="outline" size="icon" onClick={handleNextMonth} aria-label="Next">
+            <Button variant="outline" size="icon" onClick={handleNext} aria-label="Next">
               <ChevronRight className="h-4 w-4" />
             </Button>
             <span className="text-foreground ml-2 text-sm font-medium">
@@ -232,52 +265,40 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
             </span>
           </div>
 
-          {/* Right: view toggles + Filters button + New Post */}
+          {/* Right: view dropdown + Filters + Export (wraps below on mobile) */}
           <div className="flex items-center gap-2">
-            <div className="bg-muted flex gap-1 rounded-md p-1">
-              <Button
-                variant={viewMode === 'month' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => {
-                  setViewMode('month');
-                  setParam('view', 'month');
-                }}
-                className="gap-1"
-                data-testid="view-month"
-              >
-                <Calendar className="h-4 w-4" />
-                <span className="hidden sm:inline">Month</span>
-              </Button>
-              {/* Timeline temporarily disabled
-              <Button
-                variant={viewMode === 'timeline' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => {
-                  setViewMode('timeline');
-                  setParam('view', 'timeline');
-                }}
-                className="gap-1"
-              >
-                <Clock className="h-4 w-4" />
-                <span className="hidden sm:inline">Timeline</span>
-              </Button>
-              */}
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => {
-                  setViewMode('list');
-                  setParam('view', 'list');
-                }}
-                className="gap-1"
-              >
-                <List className="h-4 w-4" />
-                <span className="hidden sm:inline">List</span>
-              </Button>
-            </div>
+            <Select
+              value={viewMode}
+              onValueChange={(v) => {
+                const next = v as ViewMode;
+                setViewMode(next);
+                setParam('view', next);
+              }}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="View" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">Month</SelectItem>
+                <SelectItem value="week">Week</SelectItem>
+                <SelectItem value="three-day">3 Days</SelectItem>
+                <SelectItem value="schedule">Schedule</SelectItem>
+              </SelectContent>
+            </Select>
             {(() => {
-              const hasActive = filters.hasActiveFilters();
-              const count = filters.getActiveFilterCount();
+              const hasActive =
+                campaigns.length > 0 ||
+                statuses.length > 0 ||
+                contentTypes.length !== 2 ||
+                !!dateRange.start ||
+                !!dateRange.end ||
+                !!searchQuery;
+              const count =
+                (campaigns.length > 0 ? 1 : 0) +
+                (statuses.length > 0 ? 1 : 0) +
+                (contentTypes.length !== 2 ? 1 : 0) +
+                (dateRange.start || dateRange.end ? 1 : 0) +
+                (searchQuery ? 1 : 0);
               const active = showFilters || hasActive;
               return (
                 <Button
@@ -316,13 +337,13 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                 instagramPermalink: item.instagramPermalink || undefined,
               }))}
               brandName={brandName || 'Brand'}
-              dateRange={filters.dateRange}
+              dateRange={dateRange}
             />
-            {filters.hasActiveFilters() && (
+            {hasAnyActiveFilters && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => filters.clearAll()}
+                onClick={() => clearAll()}
                 aria-label="Clear all filters"
                 className="text-muted-foreground hover:text-foreground"
               >
@@ -341,77 +362,40 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
       {/* Campaign Color Legend */}
       <CampaignColorLegend
         items={enrichWithCampaignColor(filteredItems as any) as any as CalendarItem[]}
-        className="px-4"
+        className="hidden px-4 sm:flex"
       />
 
       {/* Filter results summary removed for cleaner filtered state */}
 
-      {/* Statistics removed to reduce header/footer noise */}
-
-      {/* View content based on selected mode */}
-      {viewMode === 'month' && (
-        <MonthGridView
-          items={
-            enrichWithCampaignColor(
-              (filteredItems as any).map((i: any) => ({
-                ...i,
-                type: i.type || 'content',
-              }))
-            ) as any
+      {/* FullCalendar (no extra wrapper card/border) */}
+      <div className="p-2">
+        {(() => {
+          const params = new URLSearchParams(
+            typeof window !== 'undefined' ? window.location.search : ''
+          );
+          const disable = params.get('calendar') === 'off' || params.get('disableCalendar') === '1';
+          if (disable) {
+            return (
+              <div className="text-muted-foreground text-sm">Calendar disabled (safe mode)</div>
+            );
           }
-          currentDate={currentDate}
-          timezone={brandTimezone}
-        />
-      )}
-
-      {viewMode === 'timeline' && (
-        <TimelineView
-          items={
-            enrichWithCampaignColor(
-              (filteredItems as any).map((i: any) => ({
-                id: i.id,
-                type: i.type,
-                caption: i.caption || '',
-                scheduledAt: i.scheduledAt || undefined,
-                postedAt: i.postedAt || undefined,
-                status: i.status,
-                hashtags: i.hashtags,
-                imageUrl: i.imageUrl || undefined,
-                campaignName: i.campaignName || i.campaign?.name,
-                campaignId: i.campaignId || i.campaign?.id,
-                processing: Boolean(i?.generationParams?.processing?.active),
-              }))
-            ) as any
-          }
-          currentDate={currentDate}
-          timezone={brandTimezone}
-        />
-      )}
-
-      {viewMode === 'list' && (
-        <ContentListView
-          items={
-            enrichWithCampaignColor(
-              (filteredItems as any).map((i: any) => ({
-                id: i.id,
-                type: i.type,
-                caption: i.caption || '',
-                scheduledAt: i.scheduledAt || undefined,
-                postedAt: i.postedAt || undefined,
-                createdAt: i.createdAt,
-                status: i.status,
-                hashtags: i.hashtags,
-                imageUrl: i.imageUrl || undefined,
-                campaignName: i.campaignName || i.campaign?.name,
-                campaignId: i.campaignId || i.campaign?.id,
-                processing: Boolean(i?.generationParams?.processing?.active),
-              }))
-            ) as any
-          }
-          currentDate={currentDate}
-          timezone={brandTimezone}
-        />
-      )}
+          return (
+            <ErrorBoundary
+              fallback={<div className="text-destructive text-sm">Failed to load calendar</div>}
+            >
+              <FullCalendar
+                brandId={brandId}
+                brandTimezone={brandTimezone}
+                view={viewMode}
+                date={currentDate}
+                content={content}
+                placeholders={placeholders}
+                theme="monarch"
+              />
+            </ErrorBoundary>
+          );
+        })()}
+      </div>
     </div>
   );
 }

@@ -9,7 +9,7 @@ interface DateRange {
   end: Date | null;
 }
 
-interface CalendarFilterState {
+export interface CalendarFilterState {
   // Filter values
   campaigns: string[];
   statuses: ContentStatus[];
@@ -19,7 +19,9 @@ interface CalendarFilterState {
 
   // Actions
   setCampaigns: (campaigns: string[]) => void;
+  setStatuses: (statuses: ContentStatus[]) => void;
   toggleStatus: (status: ContentStatus) => void;
+  setContentTypes: (types: ContentType[]) => void;
   toggleContentType: (type: ContentType) => void;
   setDateRange: (start: Date | null, end: Date | null) => void;
   setSearchQuery: (query: string) => void;
@@ -43,30 +45,83 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
     (set, get) => ({
       ...initialState,
 
-      setCampaigns: (campaigns) => set({ campaigns }),
+      setCampaigns: (campaigns) => {
+        const prev = get().campaigns;
+        try {
+          if (isDebugFiltersEnabled())
+            console.debug('[filters] setCampaigns', { prev, next: campaigns });
+        } catch {}
+        set({ campaigns });
+      },
+
+      setStatuses: (statuses) => {
+        const prev = get().statuses;
+        if (haveSameMembers(prev, statuses)) return;
+        try {
+          if (isDebugFiltersEnabled())
+            console.debug('[filters] setStatuses', { prev, next: statuses });
+        } catch {}
+        set({ statuses });
+      },
 
       toggleStatus: (status) =>
-        set((state) => ({
-          statuses: state.statuses.includes(status)
+        set((state) => {
+          const next = state.statuses.includes(status)
             ? state.statuses.filter((s) => s !== status)
-            : [...state.statuses, status],
-        })),
-
-      toggleContentType: (type) =>
-        set((state) => ({
-          contentTypes: state.contentTypes.includes(type)
-            ? state.contentTypes.filter((t) => t !== type)
-            : [...state.contentTypes, type],
-        })),
-
-      setDateRange: (start, end) =>
-        set({
-          dateRange: { start, end },
+            : [...state.statuses, status];
+          try {
+            if (isDebugFiltersEnabled())
+              console.debug('[filters] toggleStatus', { status, prev: state.statuses, next });
+          } catch {}
+          return { statuses: next };
         }),
 
-      setSearchQuery: (query) => set({ searchQuery: query }),
+      setContentTypes: (types) => {
+        const prev = get().contentTypes;
+        if (haveSameMembers(prev, types)) return;
+        try {
+          if (isDebugFiltersEnabled())
+            console.debug('[filters] setContentTypes', { prev, next: types });
+        } catch {}
+        set({ contentTypes: types });
+      },
 
-      clearAll: () => set(initialState),
+      toggleContentType: (type) =>
+        set((state) => {
+          const next = state.contentTypes.includes(type)
+            ? state.contentTypes.filter((t) => t !== type)
+            : [...state.contentTypes, type];
+          try {
+            if (isDebugFiltersEnabled())
+              console.debug('[filters] toggleContentType', {
+                type,
+                prev: state.contentTypes,
+                next,
+              });
+          } catch {}
+          return { contentTypes: next };
+        }),
+
+      setDateRange: (start, end) => {
+        try {
+          if (isDebugFiltersEnabled()) console.debug('[filters] setDateRange', { start, end });
+        } catch {}
+        set({ dateRange: { start, end } });
+      },
+
+      setSearchQuery: (query) => {
+        try {
+          if (isDebugFiltersEnabled()) console.debug('[filters] setSearchQuery', { query });
+        } catch {}
+        set({ searchQuery: query });
+      },
+
+      clearAll: () => {
+        try {
+          if (isDebugFiltersEnabled()) console.debug('[filters] clearAll');
+        } catch {}
+        set(initialState);
+      },
 
       hasActiveFilters: () => {
         const state = get();
@@ -118,3 +173,22 @@ export const useCalendarFilterStore = create<CalendarFilterState>()(
     }
   )
 );
+
+function haveSameMembers<T extends string>(a: T[], b: T[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((value, index) => value === sortedB[index]);
+}
+
+function isDebugFiltersEnabled(): boolean {
+  try {
+    // Enable via localStorage or ?debugFilters=1
+    if (typeof window === 'undefined') return false;
+    const ls = (window.localStorage && localStorage.getItem('debugFilters')) === '1';
+    const sp = new URLSearchParams(window.location.search);
+    return ls || sp.get('debugFilters') === '1';
+  } catch {
+    return false;
+  }
+}

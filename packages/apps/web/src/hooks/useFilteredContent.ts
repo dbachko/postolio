@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { useCalendarFilterStore } from '../stores/calendarFilterStore';
+import { useCalendarFilterStore, type CalendarFilterState } from '../stores/calendarFilterStore';
+import { useShallow } from 'zustand/react/shallow';
 
 interface ContentItem {
   id: string;
@@ -18,52 +19,60 @@ interface ContentItem {
 }
 
 export function useFilteredContent(items: ContentItem[]) {
-  const filters = useCalendarFilterStore();
+  const selectFilters = useShallow((s: CalendarFilterState) => ({
+    campaigns: s.campaigns,
+    statuses: s.statuses,
+    contentTypes: s.contentTypes,
+    dateRange: s.dateRange,
+    searchQuery: s.searchQuery,
+  }));
+  const { campaigns, statuses, contentTypes, dateRange, searchQuery } =
+    useCalendarFilterStore(selectFilters);
 
   const filteredItems = useMemo(() => {
     let filtered = [...items];
 
     // Filter by campaigns
-    if (filters.campaigns.length > 0) {
+    if (campaigns.length > 0) {
       // Special case: 'none' means show only posts without campaigns
-      if (filters.campaigns.includes('none')) {
+      if (campaigns.includes('none')) {
         filtered = filtered.filter((item) => !item.campaignId);
       } else {
         filtered = filtered.filter(
-          (item) => item.campaignId && filters.campaigns.includes(item.campaignId)
+          (item) => item.campaignId && campaigns.includes(item.campaignId)
         );
       }
     }
 
     // Filter by status
-    if (filters.statuses.length > 0) {
+    if (statuses.length > 0) {
       filtered = filtered.filter(
         (item) =>
           item.status &&
-          filters.statuses.includes(
+          statuses.includes(
             item.status as 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'
           )
       );
     }
 
     // Filter by content type
-    if (filters.contentTypes.length > 0 && filters.contentTypes.length < 2) {
+    if (contentTypes.length > 0 && contentTypes.length < 2) {
       filtered = filtered.filter((item) => {
         const itemType = item.type === 'placeholder' ? 'placeholder' : 'post';
-        return filters.contentTypes.includes(itemType as 'post' | 'placeholder');
+        return contentTypes.includes(itemType as 'post' | 'placeholder');
       });
     }
 
     // Filter by date range
-    if (filters.dateRange.start || filters.dateRange.end) {
+    if (dateRange.start || dateRange.end) {
       filtered = filtered.filter((item) => {
         if (!item.scheduledAt) return false;
         const itemDate = new Date(item.scheduledAt);
 
-        if (filters.dateRange.start && itemDate < filters.dateRange.start) {
+        if (dateRange.start && itemDate < dateRange.start) {
           return false;
         }
-        if (filters.dateRange.end && itemDate > filters.dateRange.end) {
+        if (dateRange.end && itemDate > dateRange.end) {
           return false;
         }
         return true;
@@ -71,8 +80,8 @@ export function useFilteredContent(items: ContentItem[]) {
     }
 
     // Filter by search query
-    if (filters.searchQuery) {
-      const query = filters.searchQuery.toLowerCase();
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
       filtered = filtered.filter((item) => {
         const caption = (item.caption || '').toLowerCase();
         const hashtags = (item.hashtags || []).join(' ').toLowerCase();
@@ -83,19 +92,18 @@ export function useFilteredContent(items: ContentItem[]) {
     }
 
     return filtered;
-  }, [
-    items,
-    filters.campaigns,
-    filters.statuses,
-    filters.contentTypes,
-    filters.dateRange,
-    filters.searchQuery,
-  ]);
+  }, [items, campaigns, statuses, contentTypes, dateRange, searchQuery]);
 
   return {
     filteredItems,
     totalItems: items.length,
     filteredCount: filteredItems.length,
-    isFiltered: filters.hasActiveFilters(),
+    isFiltered:
+      campaigns.length > 0 ||
+      statuses.length > 0 ||
+      contentTypes.length !== 2 ||
+      !!dateRange.start ||
+      !!dateRange.end ||
+      !!searchQuery,
   };
 }

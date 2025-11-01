@@ -1,0 +1,12 @@
+{
+  "extends": "@postolio/tsconfig/react-library.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "outDir": "dist",
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "moduleResolution": "bundler",
+    "types": ["react", "react-dom"]
+  },
+  "include": ["src"]
+}

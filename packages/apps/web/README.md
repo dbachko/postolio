@@ -19,6 +19,20 @@ To run any script for only this application from the monorepo root, use the `--f
 pnpm --filter=@postolio/web dev
 ```
 
+### First run after a clean checkout (build deps)
+
+This app depends on workspace libraries (e.g., `@postolio/csrf-client`) that publish built files in their `dist/` directories. After cleaning caches or on a fresh clone, build those dependencies once, then start Vite:
+
+```bash
+# Build only web’s dependencies (not the web bundle)
+pnpm --filter @postolio/web^... run build
+
+# Start the Vite dev server
+pnpm --filter @postolio/web dev
+```
+
+If Vite shows an error about a missing `@postolio/*/dist/*` file, it means that library hasn’t been built yet—run the dependency build step above and retry.
+
 ## UI Components (shadcn/ui)
 
 - We standardize on shadcn/ui primitives installed locally under `src/components/ui`.

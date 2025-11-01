@@ -84,10 +84,39 @@ pnpm dev
 
 To run a specific application (e.g., only the frontend):
 
-```bash
+````bash
 # The "..." syntax tells Turborepo to also run the dev script for all dependencies of "web"
 pnpm dev --filter=@postolio/web...
+
+#### API dev quick start (after a clean checkout or cache purge)
+
+If you recently cleared build artifacts (e.g., deleted `dist/` folders or ran a clean), build the API’s workspace dependencies once so their `dist` outputs exist for the watcher:
+
+```bash
+# Build all libraries the API depends on (one-time per clean)
+pnpm --filter api run build:deps
+
+# Then start the API in watch mode
+pnpm --filter api dev
+````
+
+If you see errors like “Cannot find module '@postolio/aws/dist/index.cjs'”, it means a workspace library hasn’t been built yet—run the `build:deps` step above and retry.
+
+#### Web dev quick start (after a clean checkout or cache purge)
+
+The web app imports workspace libraries (for example `@postolio/csrf-client`) that export built files from their `dist/` folders. After cleaning caches or in a fresh clone, build those dependencies once, then start Vite:
+
+```bash
+# Build only web’s workspace dependencies (not the web bundle)
+pnpm --filter @postolio/web^... run build
+
+# Then start the web app
+pnpm --filter @postolio/web dev
 ```
+
+Tip: If Vite reports it cannot resolve a `@postolio/*` package’s `dist/*` file, it means that library hasn’t been built yet—run the dependency build command above and retry.
+
+````
 
 ### d. Building for Production
 
@@ -95,7 +124,7 @@ To build all apps and services, run the following command from the root. Turbore
 
 ```bash
 pnpm build
-```
+````
 
 To build only a specific app and its dependencies:
 

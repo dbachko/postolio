@@ -526,8 +526,37 @@ async function main() {
     }
   }
 
+  // Normalize statuses so there are no nonsensical cases (e.g., scheduled in the past)
+  const normalizeStatuses = (items: any[]) => {
+    const nowTs = Date.now();
+    const pick = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
+    return items.map((it) => {
+      if (
+        it?.status === 'scheduled' &&
+        it?.scheduledAt &&
+        new Date(it.scheduledAt).getTime() < nowTs
+      ) {
+        const newStatus = pick(['published', 'failed', 'skipped']);
+        it.status = newStatus;
+        if (newStatus === 'published') {
+          const postTs = new Date(it.scheduledAt).getTime() + hours(1);
+          it.postedAt = new Date(postTs);
+          it.instagramPermalink = `https://instagram.com/p/${Math.random().toString(36).slice(2, 10)}`;
+          it.instagramPostId = `IG_${Math.random().toString(36).slice(2, 12)}`;
+        } else if (newStatus === 'failed') {
+          it.schedulingError = it.schedulingError || 'Auto-adjusted: failed to post in time';
+          it.postedAt = null;
+        } else {
+          // skipped
+          it.postedAt = null;
+        }
+      }
+      return it;
+    });
+  };
+
   if (campaignContentPayload.length > 0) {
-    await prisma.content.createMany({ data: campaignContentPayload });
+    await prisma.content.createMany({ data: normalizeStatuses(campaignContentPayload) });
   }
 
   // Keep the original brand-only content generation (draft/scheduled),
@@ -599,7 +628,9 @@ async function main() {
     },
   ];
 
-  await prisma.content.createMany({ data: contentPayload.concat(brandCoverage) });
+  await prisma.content.createMany({
+    data: normalizeStatuses(contentPayload.concat(brandCoverage)),
+  });
 
   console.log('\n✅ Seed complete');
   console.log('--- Credentials ---');

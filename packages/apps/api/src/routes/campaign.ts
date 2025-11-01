@@ -749,6 +749,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
             status: campaign.status,
             brandId: campaign.brandId,
             brand: campaign.brand,
+            color: (campaign as any).color || null,
             contentCount: countsMap.get(campaign.id)?.total ?? 0,
             scheduledCount: countsMap.get(campaign.id)?.scheduled ?? 0,
             publishedCount: countsMap.get(campaign.id)?.published ?? 0,
