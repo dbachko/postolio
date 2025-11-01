@@ -79,18 +79,15 @@ export class AssetLibraryStack extends cdk.Stack {
       allowAllOutbound: false,
     });
 
-    // Allow Lambda and ECS to connect to assets database
+    // Allow Lambda (from Foundation) to connect to assets database
     this.databaseSecurityGroup.addIngressRule(
       lambdaSecurityGroup,
       ec2.Port.tcp(5432),
       'Allow Lambda functions to connect to assets database'
     );
-
-    this.databaseSecurityGroup.addIngressRule(
-      ecsSecurityGroup,
-      ec2.Port.tcp(5432),
-      'Allow ECS tasks to connect to assets database'
-    );
+    // Do NOT add Foundation ECS SG here; the service created in this stack
+    // will use its own Security Group. We'll explicitly allow that SG below
+    // after the service is created to avoid cross-stack SG coupling.
 
     // ==================== Database Configuration ====================
     const dbSubnetGroup = new rds.SubnetGroup(this, 'AssetsDatabaseSubnetGroup', {
@@ -624,8 +621,13 @@ export class AssetLibraryStack extends cdk.Stack {
     // Enable ALB access logs
     assetsApiService.loadBalancer.logAccessLogs(albLogsBucket, 'alb-logs');
 
-    // Add ECS security group to the service
-    assetsApiService.service.connections.addSecurityGroup(ecsSecurityGroup);
+    // Allow the service Security Group to reach the Assets database
+    // This avoids attaching the Foundation ECS Security Group to the service,
+    // which can introduce cross-stack coupling and potential dependency cycles.
+    this.assetsDatabase.connections.allowDefaultPortFrom(
+      assetsApiService.service,
+      'Allow Assets API service to connect to assets database'
+    );
 
     // Configure deployment settings
     const cfnService = assetsApiService.service.node.defaultChild as ecs.CfnService;
