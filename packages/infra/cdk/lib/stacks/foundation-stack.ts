@@ -301,7 +301,12 @@ export class FoundationStack extends cdk.Stack {
     });
 
     const jwtSecretArn = jwtSecretResource.getAttString('SecretArn');
-    this.jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(this, 'JwtSecret', jwtSecretArn);
+    // Import the JWT secret by name to avoid pinning task definitions
+    // to Secrets Manager ARNs with random suffixes. The custom resource
+    // above guarantees the secret exists (and creates it if missing).
+    // Using name-based import keeps references resilient across suffix
+    // changes that can occur when a secret is recreated.
+    this.jwtSecret = secretsmanager.Secret.fromSecretNameV2(this, 'JwtSecret', jwtSecretName);
 
     this.database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.postgres({
