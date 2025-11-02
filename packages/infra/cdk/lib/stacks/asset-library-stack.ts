@@ -38,7 +38,6 @@ export interface AssetLibraryStackProps extends cdk.StackProps {
   encryptionKey: kms.IKey;
   repository: ecr.IRepository;
   jwtSecret: secretsmanager.ISecret;
-  jwtSecretName?: string;
   imageTag?: string;
   openaiApiKey?: string;
 }
@@ -52,16 +51,8 @@ export class AssetLibraryStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AssetLibraryStackProps) {
     super(scope, id, props);
 
-    const {
-      environment,
-      vpc,
-      encryptionKey,
-      repository,
-      jwtSecret,
-      jwtSecretName,
-      imageTag,
-      openaiApiKey,
-    } = props;
+    const { environment, vpc, encryptionKey, repository, jwtSecret, imageTag, openaiApiKey } =
+      props;
     const prefix = `postolio-${environment}-assets`;
 
     // Image tag resolution: props > context > default
@@ -603,16 +594,7 @@ export class AssetLibraryStack extends cdk.Stack {
             ASSETS_DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),
             ASSETS_DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, 'password'),
             ASSETS_DB_PORT: ecs.Secret.fromSecretsManager(databaseSecret, 'port'),
-            JWT_SECRET: ecs.Secret.fromSecretsManager(
-              jwtSecretName
-                ? secretsmanager.Secret.fromSecretNameV2(
-                    this,
-                    'JwtSecretByNameForAssets',
-                    jwtSecretName
-                  )
-                : jwtSecret,
-              'secret'
-            ),
+            JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret, 'secret'),
           },
           logDriver: ecs.LogDrivers.awsLogs({
             streamPrefix: `${prefix}-api`,

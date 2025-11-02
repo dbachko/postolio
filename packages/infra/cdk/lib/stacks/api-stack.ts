@@ -25,7 +25,6 @@ import { getOAuthEnvironmentVariables, type OAuthConfig } from '../utils/oauth-c
 export interface ApiStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod';
   jwtSecret: secretsmanager.ISecret;
-  jwtSecretName?: string;
   domainName?: string;
   hostedZoneId?: string;
   hostedZoneName?: string;
@@ -67,7 +66,6 @@ export class ApiStack extends cdk.Stack {
       useExternalDns,
       openaiApiKey,
       imageTag,
-      jwtSecretName,
     } = props;
     const prefix = `postolio-${environment}-api`;
 
@@ -493,17 +491,8 @@ export class ApiStack extends cdk.Stack {
                 DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),
                 DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, 'password'),
                 DB_PORT: ecs.Secret.fromSecretsManager(databaseSecret, 'port'),
-                // JWT secret from dedicated secret (prefer name-based reference if provided)
-                JWT_SECRET: ecs.Secret.fromSecretsManager(
-                  jwtSecretName
-                    ? secretsmanager.Secret.fromSecretNameV2(
-                        this,
-                        'JwtSecretByNameForApi',
-                        jwtSecretName
-                      )
-                    : jwtSecret,
-                  'secret'
-                ),
+                // JWT secret from dedicated secret (use stable ARN export)
+                JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret, 'secret'),
               }
             : undefined,
           logDriver: ecs.LogDrivers.awsLogs({
