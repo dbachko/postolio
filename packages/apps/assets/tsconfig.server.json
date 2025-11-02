@@ -11,9 +11,11 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "skipLibCheck": true,
-    "sourceMap": false
+    "sourceMap": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false
   },
   "include": ["server/**/*"],
   "exclude": ["node_modules", "dist"]
 }
-
