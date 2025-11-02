@@ -61,8 +61,7 @@ export class AssetLibraryStack extends cdk.Stack {
       jwtSecretName,
       imageTag,
       openaiApiKey,
-    } =
-      props;
+    } = props;
     const prefix = `postolio-${environment}-assets`;
 
     // Image tag resolution: props > context > default
