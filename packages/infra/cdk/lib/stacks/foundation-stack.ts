@@ -57,6 +57,7 @@ export class FoundationStack extends cdk.Stack {
   public readonly encryptionKey: kms.IKey;
   public readonly repository: ecr.IRepository;
   public readonly jwtSecret: secretsmanager.ISecret;
+  public readonly jwtSecretName: string;
   public readonly databaseSecurityGroup: ec2.ISecurityGroup;
   public readonly lambdaSecurityGroup: ec2.ISecurityGroup;
   public readonly ecsSecurityGroup: ec2.ISecurityGroup;
@@ -301,12 +302,11 @@ export class FoundationStack extends cdk.Stack {
     });
 
     const jwtSecretArn = jwtSecretResource.getAttString('SecretArn');
-    // Import the JWT secret by name to avoid pinning task definitions
-    // to Secrets Manager ARNs with random suffixes. The custom resource
-    // above guarantees the secret exists (and creates it if missing).
-    // Using name-based import keeps references resilient across suffix
-    // changes that can occur when a secret is recreated.
-    this.jwtSecret = secretsmanager.Secret.fromSecretNameV2(this, 'JwtSecret', jwtSecretName);
+    // Keep ARN-based import for cross-stack references to avoid breaking
+    // existing exports. We still expose the name separately so consuming
+    // stacks can reference the secret by name for ECS runtime wiring.
+    this.jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(this, 'JwtSecret', jwtSecretArn);
+    this.jwtSecretName = jwtSecretName;
 
     this.database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.postgres({
