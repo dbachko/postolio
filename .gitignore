@@ -48,6 +48,12 @@ packages/**/cdk.out*/
 
 # Stray compiled artifacts (source is TypeScript; output should live in dist/)
 packages/libs/errors/index.js
+packages/apps/assets/server/**/*.js
+packages/apps/assets/server/**/*.js.map
+packages/apps/assets/server/**/*.d.ts
+packages/apps/assets/server/**/*.d.ts.map
+td.json
+new-td.json
 
 # Logs
 *.log
