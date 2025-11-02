@@ -43,7 +43,9 @@ COPY --from=pruner /app/out/full/ ./
 RUN mkdir -p packages/libs/database-assets/.turbo packages/libs/errors/.turbo packages/libs/logger/.turbo packages/apps/assets/.turbo
 
 # Build the assets app server (and any required deps per turbo pipeline)
-RUN pnpm --filter=@postolio/assets run build:server
+# Generate Prisma client for assets DB and build server
+RUN pnpm --filter=@postolio/database-assets run db:generate \
+  && pnpm --filter=@postolio/assets run build:server
 
 
 # Stage 4: Runner

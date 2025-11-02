@@ -28,7 +28,7 @@ fi
 
 echo "ASSETS_DATABASE_URL is configured"
 
-# Run Prisma migrations (idempotent) from the database-assets package
+# Ensure Prisma client is generated and run migrations (idempotent) from the database-assets package
 echo "Running database migrations..."
 cd /app/packages/libs/database-assets
 
@@ -39,6 +39,10 @@ if npx prisma migrate status 2>&1 | grep -q "migration.*failed"; then
   npx prisma migrate resolve --applied $(npx prisma migrate status 2>&1 | grep "migration.*failed" | awk '{print $1}') || echo "Failed to resolve migration (might already be resolved)"
 fi
 
+# Generate client (safe if already generated)
+npx prisma generate
+
+# Apply migrations
 npx prisma migrate deploy
 echo "Migrations completed"
 
