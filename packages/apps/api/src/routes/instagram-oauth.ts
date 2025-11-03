@@ -7,6 +7,7 @@ import { PublisherCredentialsService } from '../services/publisher-credentials.j
 import { TokenServiceClient } from '../clients/token-service-client.js';
 import { instagramService } from '../services/instagram.js';
 import { uploadImageToS3, buildCdnUrl } from '../services/s3-image.js';
+import { redisService } from '../services/redis.js';
 
 const prisma = getDatabaseClient();
 const tokenServiceClient = new TokenServiceClient();
@@ -389,6 +390,10 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
 
       // Trigger initial sync in background (non-blocking)
       console.log(`[Instagram OAuth] Triggering initial sync for brand ${brand.id}`);
+      try {
+        // Set user-facing cooldown so UI disables the button immediately
+        await redisService.set(`ig-sync-${brand.id}`, Date.now().toString(), 900);
+      } catch {}
       instagramService
         .syncPublishedPosts(
           {

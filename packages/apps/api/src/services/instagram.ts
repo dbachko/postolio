@@ -854,6 +854,25 @@ class InstagramService {
       throw new Error('Instagram not connected for this brand');
     }
 
+    // Concurrency guard: acquire a short-lived Redis lock to ensure only one sync per brand
+    const lockKey = `instagram_sync_lock:${brand.id}`;
+    const redis = redisService.getClient();
+    let acquiredLock = false;
+    try {
+      if (redis) {
+        // Use string overload: EX first, then TTL number, then NX
+        const lockResult = await redis.set(lockKey, String(Date.now()), 'EX', 900, 'NX');
+        if (lockResult !== 'OK') {
+          // If lock exists, surface a clear error for the route/UI to handle
+          throw new Error('Sync already in progress');
+        }
+        acquiredLock = true;
+      }
+    } catch (e) {
+      // If Redis not available, continue without a lock
+      if ((e as Error).message === 'Sync already in progress') throw e;
+    }
+
     // Check rate limit
     await this.checkRateLimit(brand.instagramAccountId!);
 
@@ -960,6 +979,19 @@ class InstagramService {
     } catch (error) {
       console.error('Failed to sync Instagram posts:', error);
       throw error;
+    } finally {
+      // Release lock ASAP
+      if (acquiredLock && redis) {
+        try {
+          await redis.del(lockKey);
+        } catch (e) {
+          console.warn('Failed to release Instagram sync lock', {
+            brandId: brand.id,
+            lockKey,
+            error: (e as Error)?.message,
+          });
+        }
+      }
     }
   }
 
@@ -1287,7 +1319,21 @@ class InstagramService {
     }
 
     // No matching draft found; create a new content record
-    await prisma.content.create({ data: contentData });
+    try {
+      await prisma.content.create({ data: contentData });
+    } catch (e) {
+      // Handle race conditions via DB uniqueness
+      const code = (e as any)?.code;
+      if (code === 'P2002') {
+        // Unique constraint violation -> treat as already imported
+        console.log('[Instagram Sync] Skipped duplicate by unique constraint', {
+          postId: post.id,
+          brandId: brand.id,
+        });
+        return;
+      }
+      throw e;
+    }
 
     console.log(`[Instagram Sync] ✨ Synced post ${post.id}`, {
       postId: post.id,

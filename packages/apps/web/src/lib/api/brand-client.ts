@@ -61,6 +61,10 @@ export class BrandClient {
     });
   }
 
+  getInstagramSyncStatus(brandId: string) {
+    return this.request(`/api/brands/${brandId}/instagram/sync-status`);
+  }
+
   // Brand analysis
   hasBrandProfileProjection(brandId: string) {
     // Use centralized request to keep headers/credentials consistent

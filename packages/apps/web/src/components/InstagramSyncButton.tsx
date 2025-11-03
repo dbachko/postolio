@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -31,6 +31,23 @@ export function InstagramSyncButton({
 }: InstagramSyncButtonProps) {
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  // Poll backend for sync status to disable button if another sync is running
+  const statusQuery = useQuery<{
+    inProgress: boolean;
+    lockTtl?: number | null;
+    cooldownRemaining?: number;
+  }>({
+    queryKey: ['instagram-sync-status', brandId],
+    queryFn: async () => brandApi.getInstagramSyncStatus(brandId),
+    refetchInterval: (q) => {
+      const data = q.state.data as any;
+      // Poll frequently only when a sync is in progress or cooldown is active
+      if (data?.inProgress) return 1500;
+      if ((data?.cooldownRemaining || 0) > 0) return 5000;
+      return false;
+    },
+  });
 
   const syncMutation = useMutation<SyncResponse, Error>({
     mutationFn: async () => {
@@ -74,7 +91,11 @@ export function InstagramSyncButton({
       setSyncProgress(null);
       const errorMessage = error.message || 'Failed to sync Instagram posts';
 
-      if (errorMessage.includes('wait') || errorMessage.includes('minutes')) {
+      if (
+        errorMessage.includes('wait') ||
+        errorMessage.includes('minutes') ||
+        /already in progress/i.test(errorMessage)
+      ) {
         // Rate limit error
         toast.warning('Sync cooldown active', {
           description: errorMessage,
@@ -96,24 +117,37 @@ export function InstagramSyncButton({
   };
 
   const isLoading = syncMutation.isPending;
+  const inProgress = statusQuery.data?.inProgress;
+  const cooldownRemaining = statusQuery.data?.cooldownRemaining || 0;
+  const disabled = isLoading || !!inProgress || cooldownRemaining > 0;
+
+  const buttonText = useMemo(() => {
+    if (isLoading || inProgress) return 'Syncing...';
+    if (cooldownRemaining > 0) {
+      const mins = Math.floor(cooldownRemaining / 60);
+      const secs = cooldownRemaining % 60;
+      return `Cooldown ${mins}m ${secs}s`;
+    }
+    return 'Sync Instagram Posts';
+  }, [isLoading, inProgress, cooldownRemaining]);
 
   return (
     <Button
       onClick={handleSync}
-      disabled={isLoading}
+      disabled={disabled}
       variant={variant}
       size={size}
       className={className}
     >
-      {isLoading ? (
+      {isLoading || inProgress ? (
         <>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          {syncProgress || 'Syncing...'}
+          {syncProgress || buttonText}
         </>
       ) : (
         <>
           <RefreshCw className="mr-2 h-4 w-4" />
-          Sync Instagram Posts
+          {buttonText}
         </>
       )}
     </Button>

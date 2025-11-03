@@ -5,6 +5,7 @@ import { instagramService, InstagramWebhookEvent } from '../services/instagram.j
 import crypto from 'crypto';
 import { buildCdnUrl } from '../services/s3-image.js';
 import { redisService } from '../services/redis.js';
+import { getRedisClient } from '../services/redis.js';
 
 import { getDatabaseClient } from '../config/database.js';
 
@@ -357,7 +358,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
     }
   );
 
-  // Get sync status for a brand
+  // Get sync status for a brand (legacy path) — align with brand-nested route keys
   fastify.get(
     '/sync-status/:brandId',
     { preHandler: fastify.authenticate },
@@ -381,20 +382,50 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           });
         }
 
-        // Check cooldown status
-        const cooldownKey = `instagram_sync:${brandId}`;
-        const lastSyncTime = await redisService.get(cooldownKey);
+        const redis = getRedisClient();
+        const lockKey = `instagram_sync_lock:${brandId}`;
+        const cooldownKeyNew = `ig-sync-${brandId}`;
+        const cooldownKeyLegacy = `instagram_sync:${brandId}`;
 
         let cooldownRemaining = 0;
         let canSync = true;
+        let inProgress = false;
+        let lockTtl: number | null = null;
 
-        if (lastSyncTime) {
-          const timeSinceSync = Date.now() - parseInt(lastSyncTime);
-          const cooldownMs = 15 * 60 * 1000; // 15 minutes
-
-          if (timeSinceSync < cooldownMs) {
-            cooldownRemaining = Math.ceil((cooldownMs - timeSinceSync) / 1000);
-            canSync = false;
+        if (redis) {
+          try {
+            const ttl = await redis.ttl(lockKey);
+            if (typeof ttl === 'number' && ttl > 0) {
+              inProgress = true;
+              canSync = false;
+              lockTtl = ttl;
+            }
+          } catch (e) {
+            request.log.warn({ err: e }, 'Failed to check sync lock TTL');
+          }
+          try {
+            // Prefer new cooldown key TTL, fallback to legacy
+            let cdTtl = await redis.ttl(cooldownKeyNew);
+            if (typeof cdTtl !== 'number' || cdTtl < 0) {
+              cdTtl = await redis.ttl(cooldownKeyLegacy);
+            }
+            if (typeof cdTtl === 'number' && cdTtl > 0) {
+              cooldownRemaining = cdTtl;
+              canSync = false;
+            }
+          } catch (e) {
+            request.log.warn({ err: e }, 'Failed to check cooldown TTL');
+          }
+        } else {
+          // Minimal fallback using stored timestamp on legacy key
+          const lastSyncTime = await redisService.get(cooldownKeyLegacy);
+          if (lastSyncTime) {
+            const timeSinceSync = Date.now() - parseInt(lastSyncTime);
+            const cooldownMs = 15 * 60 * 1000;
+            if (timeSinceSync < cooldownMs) {
+              cooldownRemaining = Math.ceil((cooldownMs - timeSinceSync) / 1000);
+              canSync = false;
+            }
           }
         }
 
@@ -419,6 +450,8 @@ const instagram: FastifyPluginAsync = async function (fastify) {
 
         reply.send({
           canSync,
+          inProgress,
+          lockTtl,
           cooldownRemaining,
           lastSync,
           instagram: {
@@ -436,7 +469,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
     }
   );
 
-  // Sync published Instagram posts
+  // Sync published Instagram posts (legacy path) — align with brand-nested logic
   fastify.post(
     '/sync-posts/:brandId',
     { preHandler: fastify.authenticate },
@@ -470,15 +503,32 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           });
         }
 
-        // Check sync cooldown using Redis
-        const cooldownKey = `instagram_sync:${brandId}`;
+        const redis = getRedisClient();
+        const lockKey = `instagram_sync_lock:${brandId}`;
+        const cooldownKey = `ig-sync-${brandId}`;
+
+        // If a lock exists, indicate in-progress and return 429 with TTL
+        if (redis) {
+          try {
+            const ttl = await redis.ttl(lockKey);
+            if (typeof ttl === 'number' && ttl > 0) {
+              return reply.status(429).send({
+                error: 'Sync already in progress',
+                retryAfterSeconds: ttl,
+              });
+            }
+          } catch (e) {
+            request.log.warn({ err: e }, 'Failed to check sync lock');
+          }
+        }
+
+        // Check sync cooldown (avoid rapid repeats)
         const lastSync = await redisService.get(cooldownKey);
         if (lastSync) {
-          const timeSinceSync = Date.now() - parseInt(lastSync);
-          const cooldownMs = 15 * 60 * 1000; // 15 minutes
-
-          if (timeSinceSync < cooldownMs) {
-            const remainingMinutes = Math.ceil((cooldownMs - timeSinceSync) / 60000);
+          const timeSince = Date.now() - parseInt(lastSync);
+          const cooldownMs = 15 * 60 * 1000;
+          if (timeSince < cooldownMs) {
+            const remainingMinutes = Math.ceil((cooldownMs - timeSince) / 60000);
             return reply.status(429).send({
               error: 'Sync already in progress or completed recently',
               message: `Please wait ${remainingMinutes} more minutes before syncing again`,
@@ -487,21 +537,38 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           }
         }
 
-        // Set sync timestamp
-        await redisService.set(cooldownKey, Date.now().toString(), 900); // 15 min TTL
+        // Set cooldown prior to starting sync; the service enforces lock too
+        await redisService.set(cooldownKey, Date.now().toString(), 900);
 
-        // Perform sync
-        const results = await instagramService.syncPublishedPosts(brand, {
-          maxPosts: maxPosts || 100,
-          maxDays: maxDays || 30,
-        });
-
-        // Return results
-        reply.send({
-          success: true,
-          results,
-          message: `Synced ${results.synced} posts, skipped ${results.skipped}, failed ${results.failed}`,
-        });
+        try {
+          const results = await instagramService.syncPublishedPosts(brand, {
+            maxPosts: maxPosts || 100,
+            maxDays: maxDays || 30,
+          });
+          reply.send({
+            success: true,
+            results,
+            message: `Synced ${results.synced} posts, skipped ${results.skipped}, failed ${results.failed}`,
+          });
+        } catch (e) {
+          const msg = (e as Error)?.message || '';
+          if (/already in progress/i.test(msg)) {
+            let ttl: number | null = null;
+            if (redis) {
+              try {
+                const t = await redis.ttl(lockKey);
+                ttl = typeof t === 'number' ? t : null;
+              } catch {}
+            }
+            return reply
+              .status(429)
+              .send({ error: 'Sync already in progress', retryAfterSeconds: ttl });
+          }
+          request.log.error({ err: e }, 'Sync posts endpoint error');
+          reply
+            .status(500)
+            .send({ error: 'Failed to sync Instagram posts', message: msg || 'Unknown error' });
+        }
       } catch (error) {
         console.error('Sync posts endpoint error:', error);
         reply.status(500).send({
