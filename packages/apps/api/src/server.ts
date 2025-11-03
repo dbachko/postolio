@@ -24,7 +24,7 @@ import twoFactorRoutes from './routes/two-factor.js';
 import monitoringRoutes from './routes/monitoring.js';
 import instagramOAuthRoutes from './routes/instagram-oauth.js';
 import brandsRoutes from './routes/brands.js';
-import contentRoutes from './routes/content.js';
+import contentRoutes from './routes/content/index.js';
 import analyticsRoutes from './routes/analytics.js';
 import instagramAnalyticsRoutes from './routes/instagram-analytics.js';
 import autopilotRoutes from './routes/autopilot.js';
