@@ -53,17 +53,21 @@ get_cfn_output() {
     --query "Stacks[0].Outputs[?OutputKey=='$key'].OutputValue" --output text 2>/dev/null || true
 }
 
-echo -e "${BLUE}Resolving Assets bucket and CDN...${NC}"
-BUCKET_NAME="$(get_ssm "/postolio/$ENVIRONMENT/assets/bucket-name")"
-CDN_DOMAIN="$(get_ssm "/postolio/$ENVIRONMENT/assets/cdn-domain")"
-DIST_ID="$(get_ssm "/postolio/$ENVIRONMENT/assets/cdn-distribution-id")"
+echo -e "${BLUE}Resolving Assets bucket and CDN (via CloudFormation)...${NC}"
+BUCKET_NAME="$(get_cfn_output "AssetsBucketNameOutput")"
+CDN_DOMAIN="$(get_cfn_output "AssetsCdnDomainOutput")"
+DIST_ID="$(get_cfn_output "AssetsCdnDistributionId")"
 WEB_DIST_ID="$(get_ssm "/postolio/$ENVIRONMENT/web/distribution-id")"
 
 if [[ -z "$BUCKET_NAME" || "$BUCKET_NAME" == "None" ]]; then
-  BUCKET_NAME="$(get_cfn_output "AssetsBucketNameOutput")"
+  echo -e "${RED}Could not resolve Assets bucket name from CloudFormation outputs. Ensure the stack $STACK_NAME is deployed.${NC}"
+  exit 1
 fi
 if [[ -z "$CDN_DOMAIN" || "$CDN_DOMAIN" == "None" ]]; then
-  CDN_DOMAIN="$(get_cfn_output "AssetsCdnDomainOutput")"
+  # Fallback: derive CDN domain from stack resources
+  CDN_DOMAIN="$(aws cloudformation list-stack-resources --stack-name "$STACK_NAME" --region "$AWS_REGION" \
+    --query "StackResourceSummaries[?ResourceType=='AWS::CloudFront::Distribution'].PhysicalResourceId" \
+    --output text 2>/dev/null || true)"
 fi
 if [[ -z "$DIST_ID" || "$DIST_ID" == "None" ]]; then
   # Fallback: derive distribution id from stack resources

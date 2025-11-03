@@ -11,16 +11,14 @@ export function Assets() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if the assets microservice is running
     const checkAssetsService = async () => {
       const remoteUrl =
         (import.meta.env.VITE_ASSETS_REMOTE_URL as string | undefined) ||
         (import.meta.env.DEV ? 'http://localhost:3001/assets/remoteEntry.js' : undefined);
 
-      // If we don't have a remote URL in production, surface a generic message
+      // Generic user-facing message; internal hints only in console
       if (!remoteUrl) {
         setError('Asset Library is temporarily unavailable. Please try again later.');
-        // Internal hint for operators without exposing implementation details to users
         console.warn(
           '[AssetLibrary] Remote not configured. In production, ensure /assets/remoteEntry.js is accessible via the app CDN or set VITE_ASSETS_REMOTE_URL at build time.'
         );
