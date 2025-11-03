@@ -55,7 +55,7 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   const pagination = data?.pagination;
 
   return (
-    <div className="space-y-6">
+    <div className="pl-assets space-y-6">
       {/* Search Bar */}
       <div className="flex gap-4">
         <input

@@ -47,11 +47,16 @@ export function buildFastify(): FastifyInstance {
   // CORS - Allow main app to call assets API
   server.register(cors, {
     origin: (origin, cb) => {
+      const envOrigins = (process.env.ALLOWED_ORIGINS || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       const allowedOrigins = [
         'https://ai.localhost:5173',
         'http://localhost:5173',
         'https://postolio.example',
         'https://postolio.example',
+        ...envOrigins,
       ];
 
       // Allow requests with no origin (like mobile apps or Postman)

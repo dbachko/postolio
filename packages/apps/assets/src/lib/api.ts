@@ -1,5 +1,7 @@
 // Assets API client
-const API_BASE_URL = import.meta.env.VITE_ASSETS_API_URL || 'http://localhost:3002/assets-api/v1';
+// Prefer a relative path by default so production uses the page origin
+// and avoids accidental localhost calls when env vars are missing.
+const API_BASE_URL = import.meta.env.VITE_ASSETS_API_URL || '/assets-api/v1';
 
 interface Asset {
   id: string;

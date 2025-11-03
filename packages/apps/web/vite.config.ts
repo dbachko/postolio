@@ -71,6 +71,20 @@ export default defineConfig({
           });
         },
       },
+      // Proxy Assets API routes to the local assets service in dev
+      // Frontend: /assets-api/v1/* → Assets Service: /assets-api/v1/*
+      '/assets-api': {
+        target: 'https://ai.localhost:3002',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            console.log(
+              `🖼️  Proxying assets: ${req.method} ${req.url} → https://ai.localhost:3002${proxyReq.path}`
+            );
+          });
+        },
+      },
       // Proxy legal routes to backend for privacy policy and terms
       '/legal': {
         target: 'https://ai.localhost:3000',

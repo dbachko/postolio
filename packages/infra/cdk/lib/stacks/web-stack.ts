@@ -209,6 +209,85 @@ export class WebStack extends cdk.Stack {
       comment: 'SPA rewrite to /index.html for non-/api routes',
     });
 
+    // ==================== Resolve Assets API Origin (ALB) ====================
+    // The Asset Library microservice exposes an ALB endpoint stored in SSM at
+    // /postolio/{env}/assets/api-endpoint (e.g., http://<alb-dns>)
+    const assetsApiUrlValue = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/assets/api-endpoint`
+    );
+    let assetsApiOrigin: origins.HttpOrigin;
+    // Try to fully resolve URL at synth; if unresolved token, fall back to Fn.split parsing
+    if (
+      assetsApiUrlValue &&
+      (assetsApiUrlValue.startsWith('http://') || assetsApiUrlValue.startsWith('https://'))
+    ) {
+      try {
+        const assetsApiUrl = new URL(assetsApiUrlValue);
+        const normalizedPath = assetsApiUrl.pathname.endsWith('/')
+          ? assetsApiUrl.pathname.slice(0, -1)
+          : assetsApiUrl.pathname;
+
+        let originProps: origins.HttpOriginProps = {
+          originPath: normalizedPath !== '/' ? normalizedPath : undefined,
+          protocolPolicy:
+            assetsApiUrl.protocol === 'http:'
+              ? cloudfront.OriginProtocolPolicy.HTTP_ONLY
+              : cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+        };
+
+        if (assetsApiUrl.port) {
+          const portNumber = Number(assetsApiUrl.port);
+          if (Number.isNaN(portNumber)) {
+            throw new Error(`Invalid port in Assets API URL: ${assetsApiUrl.port}`);
+          }
+
+          if (assetsApiUrl.protocol === 'http:') {
+            originProps = {
+              ...originProps,
+              httpPort: portNumber,
+            };
+          } else {
+            originProps = {
+              ...originProps,
+              httpsPort: portNumber,
+            };
+          }
+        }
+
+        if (assetsApiUrl.protocol === 'https:') {
+          originProps = {
+            ...originProps,
+            originSslProtocols: [cloudfront.OriginSslPolicy.TLS_V1_2],
+          };
+        } else if (assetsApiUrl.protocol !== 'http:') {
+          throw new Error(`Unsupported protocol for Assets API URL: ${assetsApiUrl.protocol}`);
+        }
+
+        assetsApiOrigin = new origins.HttpOrigin(assetsApiUrl.hostname, originProps);
+      } catch {
+        // Fall through to token-based parsing
+        const rest = cdk.Fn.select(1, cdk.Fn.split('://', assetsApiUrlValue));
+        const hostWithPath = rest;
+        const hostWithPort = cdk.Fn.select(0, cdk.Fn.split('/', hostWithPath));
+        const hostname = cdk.Fn.select(0, cdk.Fn.split(':', hostWithPort));
+        assetsApiOrigin = new origins.HttpOrigin(hostname, {
+          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+          httpPort: 80,
+        });
+      }
+    } else {
+      const rest = cdk.Fn.select(1, cdk.Fn.split('://', assetsApiUrlValue));
+      const hostWithPath = rest;
+      const hostWithPort = cdk.Fn.select(0, cdk.Fn.split('/', hostWithPath));
+      const hostname = cdk.Fn.select(0, cdk.Fn.split(':', hostWithPort));
+
+      assetsApiOrigin = new origins.HttpOrigin(hostname, {
+        protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+        httpPort: 80,
+      });
+    }
+
     // ==================== CloudFront Distribution ====================
     const distributionProps: cloudfront.DistributionProps = {
       comment: `${prefix} - Frontend Distribution`,
@@ -299,6 +378,15 @@ export class WebStack extends cdk.Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
         },
+        // Assets API proxy behavior - serves Asset Library service under the app domain
+        '/assets-api/*': {
+          origin: assetsApiOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+        },
         // WebSocket behavior - uses ALL_VIEWER to forward all headers including upgrade headers
         '/ws': {
           origin: apiOrigin,
@@ -308,14 +396,8 @@ export class WebStack extends cdk.Stack {
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
         },
       },
-      errorResponses: [
-        {
-          httpStatus: 404,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-          ttl: cdk.Duration.minutes(5),
-        },
-      ],
+      // Do not remap 404s globally; the SPA rewrite function handles app routes.
+      // Keeping 404s intact avoids API paths (e.g., /api/*, /assets-api/*) returning HTML.
       geoRestriction:
         environment === 'prod' ? undefined : cloudfront.GeoRestriction.denylist('CN', 'RU'), // Block certain countries in non-prod
     };

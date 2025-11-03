@@ -6,7 +6,7 @@ interface UploadModalProps {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function UploadModal({ onClose, brandId }: UploadModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="pl-assets fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-background mx-4 w-full max-w-2xl rounded-lg p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-2xl font-bold">Upload Assets</h2>
