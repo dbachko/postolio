@@ -675,31 +675,7 @@ jobs:
         run: |
           set -e
           ENV="${{ needs.detect-changes.outputs.environment }}"
-
-          STACK_NAME="Postolio-AssetLibrary-$ENV"
-          ASSETS_BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name "$STACK_NAME" \
-            --query "Stacks[0].Outputs[?OutputKey=='AssetsBucketNameOutput'].OutputValue" \
-            --output text)
-          ASSETS_CDN_ID=$(aws cloudformation describe-stacks \
-            --stack-name "$STACK_NAME" \
-            --query "Stacks[0].Outputs[?OutputKey=='AssetsCdnDistributionId'].OutputValue" \
-            --output text)
-
-          if [[ -z "$ASSETS_BUCKET" || "$ASSETS_BUCKET" == "None" ]]; then
-            echo "Error: Assets bucket not found from CloudFormation outputs"
-            exit 1
-          fi
-
-          # Publish MF remote under /assets/
-          aws s3 sync packages/apps/assets/dist/assets/ s3://$ASSETS_BUCKET/assets/ \
-            --delete \
-            --cache-control "public, max-age=300, stale-while-revalidate=86400"
-
-          # Invalidate CDN path to pick up latest
-          if [[ -n "$ASSETS_CDN_ID" && "$ASSETS_CDN_ID" != "None" ]]; then
-            aws cloudfront create-invalidation --distribution-id "$ASSETS_CDN_ID" --paths "/assets/*"
-          fi
+          bash scripts/publish-assets-remote.sh -e "$ENV"
 
   # ============================================
   # STEP 5: Deploy Frontend to S3 (Web Stack)
@@ -749,11 +725,11 @@ jobs:
       - name: Prepare Asset Library remote URL for web build
         shell: bash
         run: |
-          # Default to app domain route served by Web CDN (/assets/*)
+          # Default to app domain route served by Web CDN for MF
           if [ -n "${{ vars.VITE_ASSETS_REMOTE_URL }}" ]; then
             echo "VITE_ASSETS_REMOTE_URL=${{ vars.VITE_ASSETS_REMOTE_URL }}" >> $GITHUB_ENV
           else
-            echo "VITE_ASSETS_REMOTE_URL=/assets/remoteEntry.js" >> $GITHUB_ENV
+            echo "VITE_ASSETS_REMOTE_URL=/mf/asset-library/latest/remoteEntry.js" >> $GITHUB_ENV
           fi
 
       - name: Build frontend

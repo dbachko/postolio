@@ -85,25 +85,25 @@ echo -e "${GREEN}Bucket: ${BUCKET_NAME}${NC}"
 [[ -n "$CDN_DOMAIN" && "$CDN_DOMAIN" != "None" ]] && echo -e "${GREEN}CDN:    https://${CDN_DOMAIN}${NC}"
 [[ -n "$DIST_ID" && "$DIST_ID" != "None" ]] && echo -e "${GREEN}DistID: ${DIST_ID}${NC}"
 
-echo -e "${BLUE}Uploading remote to s3://${BUCKET_NAME}/assets/...${NC}"
-aws s3 sync "$ASSETS_PAYLOAD_DIR" "s3://${BUCKET_NAME}/assets/" \
+echo -e "${BLUE}Uploading remote to s3://${BUCKET_NAME}/mf/asset-library/latest/...${NC}"
+aws s3 sync "$ASSETS_PAYLOAD_DIR" "s3://${BUCKET_NAME}/mf/asset-library/latest/" \
   --delete \
   --cache-control "public,max-age=300,stale-while-revalidate=86400" \
   --metadata-directive REPLACE
 
 if [[ -n "$DIST_ID" && "$DIST_ID" != "None" ]]; then
-  echo -e "${BLUE}Creating CloudFront invalidation for /assets/* ...${NC}"
-  aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/assets/*" >/dev/null
+  echo -e "${BLUE}Creating CloudFront invalidation for /mf/asset-library/latest/* ...${NC}"
+  aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/mf/asset-library/latest/*" >/dev/null
 fi
 
 if [[ -n "$WEB_DIST_ID" && "$WEB_DIST_ID" != "None" ]]; then
-  echo -e "${BLUE}Creating Web CDN invalidation for /assets/* ...${NC}"
-  aws cloudfront create-invalidation --distribution-id "$WEB_DIST_ID" --paths "/assets/*" >/dev/null
+  echo -e "${BLUE}Creating Web CDN invalidation for /mf/asset-library/latest/* ...${NC}"
+  aws cloudfront create-invalidation --distribution-id "$WEB_DIST_ID" --paths "/mf/asset-library/latest/*" >/dev/null
 fi
 
 REMOTE_URL=""
 if [[ -n "$CDN_DOMAIN" && "$CDN_DOMAIN" != "None" ]]; then
-  REMOTE_URL="https://${CDN_DOMAIN}/assets/remoteEntry.js"
+  REMOTE_URL="https://${CDN_DOMAIN}/mf/asset-library/latest/remoteEntry.js"
   echo -e "${GREEN}Remote published: ${REMOTE_URL}${NC}"
   echo -e "Set VITE_ASSETS_REMOTE_URL=${REMOTE_URL} in Web env to consume it."
 else

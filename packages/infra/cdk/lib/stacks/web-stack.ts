@@ -263,8 +263,8 @@ export class WebStack extends cdk.Stack {
           }),
         },
         // Proxy Module Federation remote through the app domain
-        // The assets micro-frontend is served from the Assets CDN; route /assets/* there
-        '/assets/*': {
+        // Route only MF traffic; keep web static assets (/assets/*) served by S3 default origin
+        '/mf/asset-library/*': {
           origin: new origins.HttpOrigin(
             ssm.StringParameter.valueForStringParameter(
               this,

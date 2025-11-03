@@ -9,7 +9,7 @@ import fs from 'fs';
 const remoteUrl =
   process.env.VITE_ASSETS_REMOTE_URL ||
   (process.env.NODE_ENV === 'production'
-    ? '/assets/remoteEntry.js'
+    ? '/mf/asset-library/latest/remoteEntry.js'
     : 'http://localhost:3001/assets/remoteEntry.js');
 
 export default defineConfig({
