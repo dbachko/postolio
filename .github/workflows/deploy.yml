@@ -676,30 +676,29 @@ jobs:
           set -e
           ENV="${{ needs.detect-changes.outputs.environment }}"
 
-          # Resolve Assets bucket and CDN
-          ASSETS_BUCKET=$(aws ssm get-parameter --name "/postolio/$ENV/assets/bucket-name" --query 'Parameter.Value' --output text)
-          ASSETS_CDN_ID=$(aws ssm get-parameter --name "/postolio/$ENV/assets/cdn-distribution-id" --query 'Parameter.Value' --output text)
-          if [[ -z "$ASSETS_BUCKET" ]]; then
-            echo "Error: Assets bucket not found in SSM"
+          STACK_NAME="Postolio-AssetLibrary-$ENV"
+          ASSETS_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='AssetsBucketNameOutput'].OutputValue" \
+            --output text)
+          ASSETS_CDN_ID=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='AssetsCdnDistributionId'].OutputValue" \
+            --output text)
+
+          if [[ -z "$ASSETS_BUCKET" || "$ASSETS_BUCKET" == "None" ]]; then
+            echo "Error: Assets bucket not found from CloudFormation outputs"
             exit 1
           fi
 
-          # Publish MF remote under a stable path for simplicity
-          # Note: We use 'latest' to keep it simple; CloudFront invalidation ensures freshness
-          aws s3 sync packages/apps/assets/dist/assets/ s3://$ASSETS_BUCKET/mf/asset-library/latest/ \
+          # Publish MF remote under /assets/
+          aws s3 sync packages/apps/assets/dist/assets/ s3://$ASSETS_BUCKET/assets/ \
             --delete \
-            --cache-control "public, max-age=31536000, immutable" \
-            --content-type "application/javascript" --exclude "*.css" || true
-          # Upload CSS with correct content-type
-          aws s3 sync packages/apps/assets/dist/assets/ s3://$ASSETS_BUCKET/mf/asset-library/latest/ \
-            --exclude "*" --include "*.css" \
-            --cache-control "public, max-age=31536000, immutable" \
-            --content-type "text/css" || true
+            --cache-control "public, max-age=300, stale-while-revalidate=86400"
 
           # Invalidate CDN path to pick up latest
-          if [[ -n "$ASSETS_CDN_ID" ]]; then
-            aws cloudfront create-invalidation --distribution-id "$ASSETS_CDN_ID" --paths \
-              "/mf/asset-library/latest/*"
+          if [[ -n "$ASSETS_CDN_ID" && "$ASSETS_CDN_ID" != "None" ]]; then
+            aws cloudfront create-invalidation --distribution-id "$ASSETS_CDN_ID" --paths "/assets/*"
           fi
 
   # ============================================
@@ -750,15 +749,11 @@ jobs:
       - name: Prepare Asset Library remote URL for web build
         shell: bash
         run: |
-          ENV="${{ needs.detect-changes.outputs.environment }}"
+          # Default to app domain route served by Web CDN (/assets/*)
           if [ -n "${{ vars.VITE_ASSETS_REMOTE_URL }}" ]; then
             echo "VITE_ASSETS_REMOTE_URL=${{ vars.VITE_ASSETS_REMOTE_URL }}" >> $GITHUB_ENV
           else
-            ASSETS_CDN=$(aws ssm get-parameter --name "/postolio/$ENV/assets/cdn-domain" --query 'Parameter.Value' --output text)
-            if [[ -z "$ASSETS_CDN" || "$ASSETS_CDN" == "None" ]]; then
-              echo "Error: Assets CDN domain not found in SSM" && exit 1
-            fi
-            echo "VITE_ASSETS_REMOTE_URL=https://$ASSETS_CDN/mf/asset-library/latest/remoteEntry.js" >> $GITHUB_ENV
+            echo "VITE_ASSETS_REMOTE_URL=/assets/remoteEntry.js" >> $GITHUB_ENV
           fi
 
       - name: Build frontend
