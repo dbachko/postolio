@@ -55,6 +55,7 @@ export class WebStack extends cdk.Stack {
         },
       ],
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: environment !== 'prod',
     });
 
     // ==================== S3 Bucket for Frontend ====================
@@ -74,6 +75,7 @@ export class WebStack extends cdk.Stack {
         },
       ],
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: environment !== 'prod',
     });
 
     // ==================== CloudFront Logs Bucket ====================
@@ -102,6 +104,7 @@ export class WebStack extends cdk.Stack {
         },
       ],
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: environment !== 'prod',
     });
 
     const originAccessControl = new cloudfront.S3OriginAccessControl(

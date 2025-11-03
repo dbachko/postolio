@@ -1,8 +1,11 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "public"."AssetType" AS ENUM ('image', 'video');
 
 -- CreateEnum
-CREATE TYPE "public"."ProcessingStatus" AS ENUM ('pending', 'processing', 'completed', 'failed');
+CREATE TYPE "public"."ProcessingStatus" AS ENUM ('pending', 'processing', 'thumbnails_complete', 'ai_analyzed', 'completed', 'thumbnail_failed', 'ai_analysis_failed', 'failed');
 
 -- CreateEnum
 CREATE TYPE "public"."FolderType" AS ENUM ('general', 'campaign_pool', 'brand_assets');
@@ -23,6 +26,8 @@ CREATE TABLE "public"."assets" (
     "s3Key" TEXT NOT NULL,
     "s3Bucket" TEXT NOT NULL,
     "thumbnailKey" TEXT,
+    "thumbnailSmallKey" TEXT,
+    "thumbnailLargeKey" TEXT,
     "title" TEXT,
     "altText" TEXT,
     "description" TEXT,
@@ -108,3 +113,4 @@ ALTER TABLE "public"."asset_folders" ADD CONSTRAINT "asset_folders_parentId_fkey
 
 -- AddForeignKey
 ALTER TABLE "public"."campaign_assets" ADD CONSTRAINT "campaign_assets_assetId_fkey" FOREIGN KEY ("assetId") REFERENCES "public"."assets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+

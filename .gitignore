@@ -54,6 +54,8 @@ packages/apps/assets/server/**/*.d.ts
 packages/apps/assets/server/**/*.d.ts.map
 td.json
 new-td.json
+api-td.json
+api-new-td.json
 
 # Logs
 *.log

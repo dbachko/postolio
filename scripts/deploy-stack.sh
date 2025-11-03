@@ -38,6 +38,7 @@ Stacks:
   brand-analysis  - Brand Analysis services (profiles/jobs + lambdas)
   publishing      - Publisher and retry handlers
   api             - Backend API (ECS Fargate)
+  asset-library   - Asset Library microservice (ECS + RDS + CDN)
   web             - Frontend (S3 + CloudFront)
   all             - Deploy all stacks in dependency order
 
@@ -104,7 +105,7 @@ while [[ $# -gt 0 ]]; do
             show_help
             exit 0
             ;;
-        foundation|auth|scheduling|brand-analysis|publishing|api|web|all)
+        foundation|auth|scheduling|brand-analysis|publishing|api|asset-library|web|all)
             STACK_NAME="$1"
             shift
             ;;
@@ -181,6 +182,9 @@ deploy_stack() {
         api)
             cdk_stack_name="Postolio-API-$ENVIRONMENT"
             ;;
+        asset-library)
+            cdk_stack_name="Postolio-AssetLibrary-$ENVIRONMENT"
+            ;;
         web)
             cdk_stack_name="Postolio-Web-$ENVIRONMENT"
             ;;
@@ -208,6 +212,11 @@ deploy_stack() {
             pnpm --filter=@postolio/errors build || true
             pnpm --filter=@postolio/csrf-client build || true
             pnpm --filter=api build
+            ;;
+        asset-library)
+            echo -e "${BLUE}Preparing Asset Library dependencies...${NC}"
+            pnpm --filter=@postolio/database-assets build || true
+            pnpm --filter=@postolio/errors build || true
             ;;
         web)
             echo -e "${BLUE}Building frontend dependencies...${NC}"
@@ -309,10 +318,26 @@ if ! aws sts get-caller-identity &> /dev/null; then
     exit 1
 fi
 
+# Optional deploy freeze (pause)
+# If DEPLOY_FREEZE=true, or SSM parameter /postolio/{env}/deploy/freeze == 'true', skip deployment
+FREEZE_FLAG=${DEPLOY_FREEZE:-}
+if [[ -z "$FREEZE_FLAG" ]]; then
+  FREEZE_SSM=$(aws ssm get-parameter --name "/postolio/$ENVIRONMENT/deploy/freeze" --query 'Parameter.Value' --output text 2>/dev/null || echo "false")
+  FREEZE_FLAG=$FREEZE_SSM
+fi
+
+# Normalize to lowercase in a portable way (macOS bash is 3.x)
+FREEZE_NORM=$(printf '%s' "$FREEZE_FLAG" | tr '[:upper:]' '[:lower:]')
+if [[ "$FREEZE_NORM" == "true" || "$FREEZE_NORM" == "1" ]]; then
+  echo -e "${YELLOW}⚠️  Deployment is paused (freeze flag detected). Skipping deploy.${NC}"
+  echo -e "${YELLOW}Unset DEPLOY_FREEZE or SSM parameter /postolio/$ENVIRONMENT/deploy/freeze to resume.${NC}"
+  exit 0
+fi
+
 # Deploy stack(s)
 if [[ "$STACK_NAME" == "all" ]]; then
     # Deploy all stacks in dependency order
-    STACKS=("foundation" "auth" "scheduling" "brand-analysis" "publishing" "api" "web")
+    STACKS=("foundation" "auth" "scheduling" "brand-analysis" "publishing" "api" "asset-library" "web")
     for stack in "${STACKS[@]}"; do
         deploy_stack "$stack"
         echo

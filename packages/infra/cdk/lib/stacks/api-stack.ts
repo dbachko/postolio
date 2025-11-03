@@ -12,6 +12,7 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
@@ -24,7 +25,6 @@ import { getOAuthEnvironmentVariables, type OAuthConfig } from '../utils/oauth-c
 
 export interface ApiStackProps extends cdk.StackProps, OAuthConfig {
   environment: 'dev' | 'staging' | 'prod';
-  jwtSecret: secretsmanager.ISecret;
   domainName?: string;
   hostedZoneId?: string;
   hostedZoneName?: string;
@@ -68,6 +68,8 @@ export class ApiStack extends cdk.Stack {
       imageTag,
     } = props;
     const prefix = `postolio-${environment}-api`;
+
+    // Initialized with SSM-based secret references (no cross-stack export imports)
 
     const contextImageTag = imageTag ?? (this.node.tryGetContext('imageTag') as string | undefined);
     const defaultImageTag = `api-${environment}-latest`;
@@ -119,12 +121,9 @@ export class ApiStack extends cdk.Stack {
           ).stringValue
         : `postolio-${environment}-brand-analysis-jobs`);
 
-    // Optional: Scheduling EventBridge bus name used by API to emit domain events
-    const schedulingEventBusNameParam = ssm.StringParameter.fromStringParameterName(
-      this,
-      'SchedulingEventBusNameParam',
-      `/postolio/${environment}/scheduling/event-bus-name`
-    );
+    // Optional Scheduling EventBridge bus name is no longer resolved at deploy time to avoid
+    // hard dependency on the Scheduling stack's SSM parameter. The API falls back to 'default'
+    // when EVENT_BUS_NAME is not provided.
 
     // ==================== Import Foundation Resources ====================
     // Import VPC from Foundation stack (for CDK lookup, synth-safe via context)
@@ -158,6 +157,7 @@ export class ApiStack extends cdk.Stack {
     let databaseSecurityGroup: ec2.ISecurityGroup | undefined;
     let cacheSecurityGroup: ec2.ISecurityGroup | undefined;
     let databaseSecret: secretsmanager.ISecret | undefined;
+    let databaseEndpointValue: string | undefined;
     let redisEndpointParam: ssm.IStringParameter | undefined;
     let redisPortParam: ssm.IStringParameter | undefined;
 
@@ -194,6 +194,11 @@ export class ApiStack extends cdk.Stack {
         'DatabaseSecret',
         databaseSecretArn
       );
+      // Database endpoint as "host:port" (from Foundation stack)
+      databaseEndpointValue = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/database/endpoint`
+      );
 
       const cacheSecurityGroupId = ssm.StringParameter.valueForStringParameter(
         this,
@@ -222,8 +227,16 @@ export class ApiStack extends cdk.Stack {
       // API service (ECS) maintains persistent connections, doesn't need proxy
     }
 
-    // Use shared JWT Secret from Foundation stack
-    const { jwtSecret } = props;
+    // Resolve JWT secret via SSM-provided ARN (ensured by Foundation custom resource)
+    const jwtSecretArn = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/jwt-secret-arn`
+    );
+    const jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(
+      this,
+      'JwtSecretByArn',
+      jwtSecretArn
+    );
 
     // Import ECR repository from Foundation stack - use repository name
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
@@ -237,6 +250,7 @@ export class ApiStack extends cdk.Stack {
 
     // ==================== ECS Execution Role ====================
     // This role is used by ECS to pull container images and fetch secrets
+    // Renamed to force policy/resource replacement and drop legacy imports
     const executionRole = new iam.Role(this, 'EcsExecutionRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [
@@ -250,9 +264,7 @@ export class ApiStack extends cdk.Stack {
               actions: ['secretsmanager:GetSecretValue'],
               resources: [
                 databaseSecret?.secretArn || '',
-                jwtSecret.secretArn,
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
-                `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio/${environment}/*`,
               ],
             }),
             new iam.PolicyStatement({
@@ -283,9 +295,7 @@ export class ApiStack extends cdk.Stack {
               actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
               resources: [
                 databaseSecret?.secretArn || '',
-                jwtSecret.secretArn,
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
-                `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio/${environment}/*`,
               ],
             }),
             // Allow sending emails via AWS SES (used for magic links, verification, etc.)
@@ -344,14 +354,11 @@ export class ApiStack extends cdk.Stack {
               ],
               resources: [`arn:aws:s3:::${imagesBucketName}`, `arn:aws:s3:::${imagesBucketName}/*`],
             }),
-            // EventBridge permissions for domain events (default and scheduling bus)
+            // EventBridge permissions for domain events (default bus)
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['events:PutEvents'],
-              resources: [
-                `arn:aws:events:${this.region}:${this.account}:event-bus/default`,
-                `arn:aws:events:${this.region}:${this.account}:event-bus/${schedulingEventBusNameParam.stringValue}`,
-              ],
+              resources: [`arn:aws:events:${this.region}:${this.account}:event-bus/default`],
             }),
             // DynamoDB permissions for Brand Analysis tables (read-only for API routes)
             new iam.PolicyStatement({
@@ -380,24 +387,17 @@ export class ApiStack extends cdk.Stack {
     // ==================== Application Load Balanced Fargate Service ====================
     const useHttps = domainName && hostedZoneId;
 
-    // Create S3 bucket for ALB access logs
-    const logBucket = new cdk.aws_s3.Bucket(this, 'AlbAccessLogsBucket', {
+    // Create S3 bucket for ALB access logs (single definition used below)
+    const logBucket = new s3.Bucket(this, 'AlbAccessLogsBucket', {
       bucketName: `postolio-alb-logs-${environment}-${this.account}`,
-      blockPublicAccess: cdk.aws_s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true, // Require SSL for all requests
-      lifecycleRules: [
-        {
-          id: 'DeleteOldLogs',
-          expiration: cdk.Duration.days(30),
-        },
-      ],
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      lifecycleRules: [{ id: 'DeleteOldLogs', expiration: cdk.Duration.days(30) }],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
 
-    // CDK Nag suppression for S3 bucket access logs
-    // ALB access log buckets should not have their own access logs to avoid infinite loops
     NagSuppressions.addResourceSuppressions(logBucket, [
       {
         id: 'AwsSolutions-S1',
@@ -466,8 +466,8 @@ export class ApiStack extends cdk.Stack {
                 .toLowerCase() === 'true'
                 ? 'true'
                 : 'false',
-            // EventBridge bus for platform events; API code falls back to 'default' if unset
-            EVENT_BUS_NAME: schedulingEventBusNameParam.stringValue,
+            // EventBridge bus for platform events; use 'default' to avoid SSM dependency
+            EVENT_BUS_NAME: 'default',
             BRAND_STYLE_PROFILES_TABLE: brandProfilesTableName,
             BRAND_ANALYSIS_JOBS_TABLE: brandJobsTableName,
             ...(redisEndpointParam && { REDIS_HOST: redisEndpointParam.stringValue }),
@@ -483,16 +483,21 @@ export class ApiStack extends cdk.Stack {
               AUTH_ALLOWLIST_EMAILS: process.env.AUTH_ALLOWLIST_EMAILS,
             }),
             ...(process.env.WAITLIST_URL && { WAITLIST_URL: process.env.WAITLIST_URL }),
+            // Database endpoint parts as plain env vars (avoid relying on secret JSON shape)
+            ...(databaseEndpointValue
+              ? {
+                  DB_HOST: cdk.Fn.select(0, cdk.Fn.split(':', databaseEndpointValue)),
+                  DB_PORT: cdk.Fn.select(1, cdk.Fn.split(':', databaseEndpointValue)),
+                }
+              : {}),
           },
           secrets: databaseSecret
             ? {
-                // Database credentials and endpoint from RDS-managed secret
-                DB_HOST: ecs.Secret.fromSecretsManager(databaseSecret, 'host'),
+                // Database credentials only; host/port provided above
                 DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),
                 DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, 'password'),
-                DB_PORT: ecs.Secret.fromSecretsManager(databaseSecret, 'port'),
-                // JWT secret from dedicated secret (use stable ARN export)
-                JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret, 'secret'),
+                // JWT secret from ARN (full secret string)
+                JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret),
               }
             : undefined,
           logDriver: ecs.LogDrivers.awsLogs({
@@ -513,6 +518,9 @@ export class ApiStack extends cdk.Stack {
         platformVersion: ecs.FargatePlatformVersion.LATEST,
       }
     );
+
+    // Ensure ALB access logs are enabled
+    this.apiService.loadBalancer.logAccessLogs(logBucket, 'alb-logs');
 
     this.loadBalancer = this.apiService.loadBalancer;
 
@@ -547,7 +555,7 @@ export class ApiStack extends cdk.Stack {
     });
 
     // Enable ALB access logs to satisfy CDK Nag AwsSolutions-ELB2
-    this.loadBalancer.logAccessLogs(logBucket, 'alb-logs');
+    // Access logs configured once below via 'logBucket'
 
     // ==================== Security Group Configuration ====================
     // Note: The ApplicationLoadBalancedFargateService pattern automatically creates

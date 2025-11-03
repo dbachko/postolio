@@ -96,6 +96,7 @@ const foundationStack = new FoundationStack(app, `Postolio-Foundation-${environm
   domainName: domainName, // e.g., 'postolio.example' - used for CDN custom domain
   enableVpcFlowLogs: environment === 'prod',
   enableDatabaseProxy: true,
+  alertEmail: alertEmail,
   description: `Postolio Foundation infrastructure - ${environment} environment`,
   tags: {
     ...stackTags,
@@ -149,7 +150,6 @@ if (!onlyStack) {
   apiStackRef = new ApiStack(app, `Postolio-API-${environment}`, {
     env: stackEnv,
     environment,
-    jwtSecret: foundationStack.jwtSecret,
     domainName,
     hostedZoneId,
     hostedZoneName,
@@ -200,10 +200,6 @@ if (!onlyStack) {
 const assetLibraryStack = new AssetLibraryStack(app, `Postolio-AssetLibrary-${environment}`, {
   env: stackEnv,
   environment: environment as 'dev' | 'staging' | 'prod',
-  vpc: foundationStack.vpc,
-  encryptionKey: foundationStack.encryptionKey,
-  repository: foundationStack.repository,
-  jwtSecret: foundationStack.jwtSecret,
   imageTag: imageTag,
   openaiApiKey: app.node.tryGetContext('openaiApiKey'),
   description: `Postolio Asset Library microservice - ${environment} environment`,

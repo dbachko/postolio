@@ -84,9 +84,8 @@ export async function ensureDatabaseSchema(): Promise<void> {
           );
         }
 
-        // Use migrate deploy when using migrations (prod) and db push in development
-        const baseCmd =
-          process.env.NODE_ENV === 'prod' ? 'npx prisma migrate deploy' : 'npx prisma db push';
+        // Prefer globally-installed prisma CLI (baked into the container)
+        const baseCmd = 'prisma migrate deploy --skip-generate';
         const migrateCommand = schemaPath ? `${baseCmd} --schema ${schemaPath}` : baseCmd;
 
         console.log(`🔧 Running: ${migrateCommand}`);

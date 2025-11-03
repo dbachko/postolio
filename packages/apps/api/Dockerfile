@@ -54,6 +54,13 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
 
+# Install prisma CLI globally for runtime migration commands
+RUN npm i -g prisma@6.16.2
+
+# Ensure prisma can write a local cache (avoid writing to global path)
+RUN mkdir -p /app/.prisma && chown -R nodejs:nodejs /app/.prisma
+ENV PRISMA_HOME=/app/.prisma
+
 # Copy pruned workspace (built output + node_modules)
 COPY --from=builder --chown=nodejs:nodejs /app/ .
 

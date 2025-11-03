@@ -24,6 +24,10 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as eventTargets from 'aws-cdk-lib/aws-events-targets';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -43,6 +47,7 @@ export interface FoundationStackProps extends cdk.StackProps {
   domainName?: string; // e.g., 'postolio.example'
   enableVpcFlowLogs?: boolean;
   enableDatabaseProxy?: boolean;
+  alertEmail?: string;
 }
 
 export class FoundationStack extends cdk.Stack {
@@ -65,7 +70,13 @@ export class FoundationStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: FoundationStackProps) {
     super(scope, id, props);
 
-    const { environment, domainName, enableVpcFlowLogs = true, enableDatabaseProxy = true } = props;
+    const {
+      environment,
+      domainName,
+      enableVpcFlowLogs = true,
+      enableDatabaseProxy = true,
+      alertEmail,
+    } = props;
     const prefix = `postolio-${environment}`;
     const cdnSubdomain = 'cdn'; // CDN subdomain for images
 
@@ -85,6 +96,53 @@ export class FoundationStack extends cdk.Stack {
     // Import the existing ECR repository
     // The repository was created outside of this stack and must be imported
     this.repository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', repositoryName);
+
+    // ==================== Alerts (SNS + EventBridge for CFN status) ====================
+    const alertsTopic = new sns.Topic(this, 'AlertsTopic', {
+      topicName: `postolio-${environment}-alerts`,
+      displayName: `Postolio ${environment} Alerts`,
+    });
+    // Enforce TLS for publishers (AwsSolutions-SNS3)
+    const alertsTopicPolicy = new sns.TopicPolicy(this, 'AlertsTopicPolicy', {
+      topics: [alertsTopic],
+    });
+    alertsTopicPolicy.document.addStatements(
+      new iam.PolicyStatement({
+        sid: 'DenyPublishWithoutTLS',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['sns:Publish'],
+        resources: [alertsTopic.topicArn],
+        conditions: {
+          Bool: { 'aws:SecureTransport': 'false' },
+        },
+      })
+    );
+    if (alertEmail) {
+      alertsTopic.addSubscription(new subs.EmailSubscription(alertEmail));
+    }
+
+    new events.Rule(this, 'CloudFormationFailureRule', {
+      ruleName: `postolio-${environment}-cfn-failures`,
+      eventPattern: {
+        source: ['aws.cloudformation'],
+        detailType: ['CloudFormation Stack Status Change'],
+        detail: {
+          'status-details': {
+            status: [
+              'UPDATE_ROLLBACK_IN_PROGRESS',
+              'UPDATE_ROLLBACK_FAILED',
+              'DELETE_FAILED',
+              'ROLLBACK_IN_PROGRESS',
+              'ROLLBACK_FAILED',
+              'CREATE_FAILED',
+              'UPDATE_FAILED',
+            ],
+          },
+        },
+      },
+      targets: [new eventTargets.SnsTopic(alertsTopic)],
+    });
 
     // ==================== VPC Configuration ====================
     const vpcFlowLogsRole = enableVpcFlowLogs
@@ -292,20 +350,28 @@ export class FoundationStack extends cdk.Stack {
       true
     );
 
+    // Optional force-update knob to refresh the custom resource and export value
+    const jwtSecretForceUpdate =
+      (this.node.tryGetContext('jwtSecretForceUpdate') as string | undefined) ||
+      process.env.JWT_SECRET_FORCE_UPDATE;
+
     const jwtSecretResource = new cdk.CustomResource(this, 'JwtSecretEnsurer', {
       serviceToken: jwtSecretProvider.serviceToken,
       properties: {
         SecretName: jwtSecretName,
         Description: 'Shared JWT secret for API and Assets authentication',
+        // Changing this value forces an Update on the custom resource so it
+        // re-describes the secret and returns its current ARN (e.g., after
+        // manual secret recreation that changed the ARN suffix).
+        ForceUpdate: jwtSecretForceUpdate ?? '0',
       },
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     const jwtSecretArn = jwtSecretResource.getAttString('SecretArn');
-    // Keep ARN-based import for cross-stack references to avoid breaking
-    // existing exports. We still expose the name separately so consuming
-    // stacks can reference the secret by name for ECS runtime wiring.
-    this.jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(this, 'JwtSecret', jwtSecretArn);
+    // Import secret by name, not ARN, to be resilient to suffix changes.
+    // Keep the ARN returned by the custom resource for SSM publishing.
+    this.jwtSecret = secretsmanager.Secret.fromSecretNameV2(this, 'JwtSecret', jwtSecretName);
     this.jwtSecretName = jwtSecretName;
 
     this.database = new rds.DatabaseInstance(this, 'Database', {
@@ -585,6 +651,12 @@ export class FoundationStack extends cdk.Stack {
       description: 'Public subnet IDs for ALB deployments',
     });
 
+    new ssm.StringListParameter(this, 'IsolatedSubnetIdsParameter', {
+      parameterName: `/postolio/${environment}/vpc/isolated-subnet-ids`,
+      stringListValue: this.vpc.isolatedSubnets.map((subnet) => subnet.subnetId),
+      description: 'Isolated (database) subnet IDs for RDS deployments',
+    });
+
     // Database Parameters
     new ssm.StringParameter(this, 'DatabaseEndpointParameter', {
       parameterName: `/postolio/${environment}/database/endpoint`,
@@ -600,7 +672,7 @@ export class FoundationStack extends cdk.Stack {
 
     new ssm.StringParameter(this, 'JwtSecretArnParameter', {
       parameterName: `/postolio/${environment}/jwt-secret-arn`,
-      stringValue: this.jwtSecret.secretArn,
+      stringValue: jwtSecretArn,
       description: 'ARN of the shared JWT secret for authentication',
     });
 

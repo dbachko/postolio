@@ -32,20 +32,26 @@ echo "DATABASE_URL is configured"
 echo "Running database migrations..."
 cd /app/packages/libs/database
 
-# Check for failed migrations and resolve them
+# Check for failed migrations and resolve them by marking as rolled back (so deploy will re-apply)
 echo "Checking for failed migrations..."
-if npx prisma migrate status 2>&1 | grep -q "migration.*failed"; then
-  echo "Found failed migration, resolving..."
-  # Resolve the failed init migration by marking it as applied
-  npx prisma migrate resolve --applied 20251027213825_init || echo "Failed to resolve migration (might already be resolved)"
+FAILED=$(prisma migrate status 2>&1 | grep -Eo '[0-9]{14}_[A-Za-z0-9_]+' | sort -u || true)
+if [ -n "$FAILED" ]; then
+  echo "Found failed migrations: $FAILED"
+  for MID in $FAILED; do
+    echo "Resolving failed migration as rolled-back: $MID"
+    prisma migrate resolve --rolled-back "$MID" || true
+  done
 fi
 
-npx prisma migrate deploy
-echo "Migrations completed"
+# Apply all migrations for main DB (idempotent). If failing (e.g., P3009), do a clean reset for dev.
+if ! prisma migrate deploy; then
+  echo "migrate deploy failed; attempting clean reset (dev) ..."
+  prisma migrate reset --force --skip-seed || true
+  prisma migrate deploy
+fi
 
 # Return to API app directory
 cd /app/packages/apps/api
 
 # Execute main command (CMD)
 exec "$@"
-

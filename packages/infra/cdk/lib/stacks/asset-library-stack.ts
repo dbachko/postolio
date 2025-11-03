@@ -34,10 +34,6 @@ import * as path from 'path';
 
 export interface AssetLibraryStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
-  vpc: ec2.IVpc;
-  encryptionKey: kms.IKey;
-  repository: ecr.IRepository;
-  jwtSecret: secretsmanager.ISecret;
   imageTag?: string;
   openaiApiKey?: string;
 }
@@ -51,15 +47,33 @@ export class AssetLibraryStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AssetLibraryStackProps) {
     super(scope, id, props);
 
-    const { environment, vpc, encryptionKey, repository, jwtSecret, imageTag, openaiApiKey } =
-      props;
+    const { environment, imageTag, openaiApiKey } = props;
     const prefix = `postolio-${environment}-assets`;
+
+    // Initialized with SSM-based secret references (no cross-stack export imports)
+
+    // Resolve VPC and KMS from SSM to avoid cross-stack imports
+    // Import the full VPC configuration by lookup using the Foundation-set VPC name.
+    // This avoids AZ/subnet index mismatches that can occur with fromVpcAttributes and
+    // does not depend on SSM for synth-time context.
+    const vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', {
+      vpcName: `postolio-${environment}-vpc`,
+    });
+
+    const kmsKeyArn = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/kms/key-arn`
+    );
+    const encryptionKey = kms.Key.fromKeyArn(this, 'FoundationKmsKey', kmsKeyArn);
 
     // Image tag resolution: props > context > default
     const contextImageTag = imageTag ?? (this.node.tryGetContext('imageTag') as string | undefined);
     const defaultImageTag = `assets-${environment}-latest`;
     const containerImageTag =
       contextImageTag && contextImageTag.trim().length > 0 ? contextImageTag : defaultImageTag;
+
+    // Import ECR repository by NAME (no cross-stack import)
+    const repository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
 
     // ==================== Security Groups ====================
     this.databaseSecurityGroup = new ec2.SecurityGroup(this, 'AssetsDatabaseSecurityGroup', {
@@ -235,15 +249,12 @@ export class AssetLibraryStack extends cdk.Stack {
         description: 'OpenAI API key for asset AI analysis',
       });
     } else {
-      // Import existing secret from main stack
-      const openaiSecretArn = ssm.StringParameter.valueForStringParameter(
-        this,
-        `/postolio/${environment}/openai-secret-arn`
-      );
-      openaiSecret = secretsmanager.Secret.fromSecretCompleteArn(
+      // Import by secret NAME to avoid hard dependency on an SSM parameter
+      // Operators should ensure this secret exists: `${prefix}/openai-api-key`
+      openaiSecret = secretsmanager.Secret.fromSecretNameV2(
         this,
         'OpenAIApiKey',
-        openaiSecretArn
+        `${prefix}/openai-api-key`
       );
     }
 
@@ -287,7 +298,6 @@ export class AssetLibraryStack extends cdk.Stack {
         runtime: lambda.Runtime.NODEJS_22_X,
         handler: 'index.handler',
         entry: path.join(__dirname, '../../../../services/asset-thumbnail-generator/src/index.ts'),
-        depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
         timeout: cdk.Duration.minutes(5),
         memorySize: 2048, // Sharp requires more memory for image processing
         role: assetProcessingRole,
@@ -312,7 +322,8 @@ export class AssetLibraryStack extends cdk.Stack {
         },
         bundling: {
           // Sharp requires special handling for native modules
-          nodeModules: ['sharp', '@prisma/client'],
+          externalModules: ['@prisma/client', 'prisma'],
+          nodeModules: ['sharp'],
           commandHooks: {
             beforeBundling: () => [],
             beforeInstall: () => [],
@@ -320,6 +331,8 @@ export class AssetLibraryStack extends cdk.Stack {
               // Ensure Sharp is compiled for Lambda (linux-x64)
               `cd ${outputDir}`,
               `npm install --arch=x64 --platform=linux sharp`,
+              // Ensure no prisma client artifacts remain in asset
+              `bash -lc "cd ${outputDir} && rm -rf node_modules/@prisma || true"`,
             ],
           },
         },
@@ -339,7 +352,6 @@ export class AssetLibraryStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       entry: path.join(__dirname, '../../../../services/asset-ai-analyzer/src/index.ts'),
-      depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
       timeout: cdk.Duration.minutes(3),
       memorySize: 1024,
       role: assetProcessingRole,
@@ -367,7 +379,8 @@ export class AssetLibraryStack extends cdk.Stack {
         CDN_DOMAIN: this.assetsCdn.distributionDomainName,
       },
       bundling: {
-        nodeModules: ['@prisma/client', 'openai'],
+        // Do not package prisma; esbuild will bundle openai
+        externalModules: ['@prisma/client', 'prisma'],
       },
       logGroup: new logs.LogGroup(this, 'AIAnalyzerLogGroup', {
         logGroupName: `/aws/lambda/${prefix}-ai-analyzer`,
@@ -436,6 +449,17 @@ export class AssetLibraryStack extends cdk.Stack {
       description: 'AI analyzer Lambda ARN',
     });
 
+    // Resolve JWT secret via SSM-provided ARN (ensured by Foundation)
+    const jwtSecretArnAssets = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/jwt-secret-arn`
+    );
+    const jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(
+      this,
+      'JwtSecretByArnAssets',
+      jwtSecretArnAssets
+    );
+
     // ==================== ECS Cluster ====================
     const ecsCluster = new ecs.Cluster(this, 'AssetsEcsCluster', {
       clusterName: `${prefix}-cluster`,
@@ -457,7 +481,6 @@ export class AssetLibraryStack extends cdk.Stack {
               actions: ['secretsmanager:GetSecretValue'],
               resources: [
                 databaseSecret.secretArn,
-                jwtSecret.secretArn,
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
               ],
             }),
@@ -489,7 +512,6 @@ export class AssetLibraryStack extends cdk.Stack {
               actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
               resources: [
                 databaseSecret.secretArn,
-                jwtSecret.secretArn,
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:postolio-${environment}/*`,
               ],
             }),
@@ -588,13 +610,15 @@ export class AssetLibraryStack extends cdk.Stack {
             S3_REGION: this.region,
             CDN_DOMAIN: this.assetsCdn.distributionDomainName,
             EVENT_BUS_NAME: assetEventBus.eventBusName,
+            // Non-sensitive DB connection details provided as plain env vars
+            ASSETS_DB_HOST: this.assetsDatabase.dbInstanceEndpointAddress,
+            ASSETS_DB_PORT: this.assetsDatabase.dbInstanceEndpointPort,
           },
           secrets: {
-            ASSETS_DB_HOST: ecs.Secret.fromSecretsManager(databaseSecret, 'host'),
             ASSETS_DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),
             ASSETS_DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, 'password'),
-            ASSETS_DB_PORT: ecs.Secret.fromSecretsManager(databaseSecret, 'port'),
-            JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret, 'secret'),
+            // Provide full JWT secret string; do not require JSON key shape
+            JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret),
           },
           logDriver: ecs.LogDrivers.awsLogs({
             streamPrefix: `${prefix}-api`,
