@@ -6,14 +6,19 @@ import path from 'path';
 import fs from 'fs';
 
 // https://vite.dev/config/
+const remoteUrl =
+  process.env.VITE_ASSETS_REMOTE_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? '/assets/remoteEntry.js'
+    : 'http://localhost:3001/assets/remoteEntry.js');
+
 export default defineConfig({
   plugins: [
     react(),
     federation({
       name: 'mainApp',
       remotes: {
-        assetLibrary:
-          process.env.VITE_ASSETS_REMOTE_URL || 'http://localhost:3001/assets/remoteEntry.js',
+        assetLibrary: remoteUrl,
       },
       shared: ['react', 'react-dom', '@tanstack/react-query'],
     }),

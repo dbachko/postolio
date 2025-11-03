@@ -13,19 +13,31 @@ export function Assets() {
   useEffect(() => {
     // Check if the assets microservice is running
     const checkAssetsService = async () => {
+      const remoteUrl =
+        (import.meta.env.VITE_ASSETS_REMOTE_URL as string | undefined) ||
+        (import.meta.env.DEV ? 'http://localhost:3001/assets/remoteEntry.js' : undefined);
+
+      // If we don't have a remote URL in production, surface a generic message
+      if (!remoteUrl) {
+        setError('Asset Library is temporarily unavailable. Please try again later.');
+        // Internal hint for operators without exposing implementation details to users
+        console.warn(
+          '[AssetLibrary] Remote not configured. In production, ensure /assets/remoteEntry.js is accessible via the app CDN or set VITE_ASSETS_REMOTE_URL at build time.'
+        );
+        return;
+      }
+
       try {
-        const response = await fetch('http://localhost:3001/assets/remoteEntry.js', {
-          method: 'HEAD',
-        });
+        const response = await fetch(remoteUrl, { method: 'HEAD' });
         if (!response.ok) {
-          setError(
-            'Assets microservice is not running. Please start it with: pnpm --filter=@postolio/assets dev'
+          setError('Asset Library is temporarily unavailable. Please try again later.');
+          console.warn(
+            `[AssetLibrary] Remote returned status ${response.status}. Verify remote availability and CDN route.`
           );
         }
       } catch (_err) {
-        setError(
-          'Assets microservice is not running. Please start it with: pnpm --filter=@postolio/assets dev'
-        );
+        setError('Asset Library is temporarily unavailable. Please try again later.');
+        console.warn('[AssetLibrary] Remote fetch failed. Check network/CDN configuration.', _err);
       }
     };
 

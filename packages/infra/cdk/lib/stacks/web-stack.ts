@@ -262,6 +262,34 @@ export class WebStack extends cdk.Stack {
             cookieBehavior: cloudfront.CacheCookieBehavior.none(),
           }),
         },
+        // Proxy Module Federation remote through the app domain
+        // The assets micro-frontend is served from the Assets CDN; route /assets/* there
+        '/assets/*': {
+          origin: new origins.HttpOrigin(
+            ssm.StringParameter.valueForStringParameter(
+              this,
+              `/postolio/${environment}/assets/cdn-domain`
+            ),
+            {
+              protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+              originSslProtocols: [cloudfront.OriginSslPolicy.TLS_V1_2],
+            }
+          ),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+          cachePolicy: new cloudfront.CachePolicy(this, 'MfRemoteCachePolicy', {
+            cachePolicyName: `${prefix}-mf-remote-cache`,
+            comment: 'Cache policy for MF remote /assets/*',
+            defaultTtl: cdk.Duration.minutes(5),
+            minTtl: cdk.Duration.seconds(0),
+            maxTtl: cdk.Duration.days(1),
+            headerBehavior: cloudfront.CacheHeaderBehavior.none(),
+            queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
+            cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+          }),
+          compress: true,
+        },
         // API proxy behavior (optional - for same-domain API calls)
         '/api/*': {
           origin: apiOrigin,

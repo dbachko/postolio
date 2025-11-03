@@ -232,6 +232,11 @@ deploy_stack() {
         --context "imageTag=$IMAGE_TAG"
     )
 
+    # Limit synth to selected stack to avoid unnecessary context lookups
+    if [[ "$STACK_NAME" != "all" ]]; then
+        context_params+=(--context "onlyStack=$stack")
+    fi
+
     # Add optional context parameters if they exist
     [[ -n "$DOMAIN_NAME" ]] && context_params+=(--context "domainName=$DOMAIN_NAME")
     [[ -n "$VITE_API_URL" ]] && context_params+=(--context "corsOrigin=$VITE_API_URL")

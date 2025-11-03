@@ -15,6 +15,14 @@ import { getOAuthConfig } from '../lib/utils/oauth-config';
 const app = new cdk.App();
 const onlyStack = app.node.tryGetContext('onlyStack');
 
+// Helper to decide if a stack should be created based on --context onlyStack
+const isSelected = (name: string) => {
+  if (!onlyStack) return true;
+  // normalize to kebab-case comparisons
+  const norm = (s: string) => String(s).toLowerCase();
+  return norm(onlyStack) === norm(name);
+};
+
 // Get environment from context or default to 'dev'
 const environment = app.node.tryGetContext('environment') || 'dev';
 const alertEmail = app.node.tryGetContext('alertEmail');
@@ -107,8 +115,11 @@ const foundationStack = new FoundationStack(app, `Postolio-Foundation-${environm
 // 2. Auth Stack - token-service microservice
 let schedulingStackRef: SchedulingStack | undefined;
 let apiStackRef: ApiStack | undefined;
-if (!onlyStack) {
-  const authStack = new AuthStack(app, `Postolio-Auth-${environment}`, {
+
+// 2. Auth Stack - token-service microservice
+let authStackRef: AuthStack | undefined;
+if (!onlyStack || isSelected('auth')) {
+  authStackRef = new AuthStack(app, `Postolio-Auth-${environment}`, {
     env: stackEnv,
     environment: environment as 'dev' | 'staging' | 'prod',
     alertEmail: alertEmail,
@@ -120,8 +131,10 @@ if (!onlyStack) {
       Service: 'Auth',
     },
   });
+}
 
-  // 3. Scheduling Stack - schedule-management, schedule-cleanup, status-sync
+// 3. Scheduling Stack
+if (!onlyStack || isSelected('scheduling')) {
   schedulingStackRef = new SchedulingStack(app, `Postolio-Scheduling-${environment}`, {
     env: stackEnv,
     environment: environment as 'dev' | 'staging' | 'prod',
@@ -132,9 +145,12 @@ if (!onlyStack) {
       Service: 'Scheduling',
     },
   });
+}
 
-  // 4. Publishing Stack - publisher, retry-handler, dlq-processor, campaign-event-dlq-processor
-  const publishingStack = new PublishingStack(app, `Postolio-Publishing-${environment}`, {
+// 4. Publishing Stack
+let publishingStackRef: PublishingStack | undefined;
+if (!onlyStack || isSelected('publishing')) {
+  publishingStackRef = new PublishingStack(app, `Postolio-Publishing-${environment}`, {
     env: stackEnv,
     environment: environment as 'dev' | 'staging' | 'prod',
     alertEmail: alertEmail,
@@ -145,8 +161,10 @@ if (!onlyStack) {
       Service: 'Publishing',
     },
   });
+}
 
-  // 5. API Stack - Backend API (ECS)
+// 5. API Stack
+if (!onlyStack || isSelected('api')) {
   apiStackRef = new ApiStack(app, `Postolio-API-${environment}`, {
     env: stackEnv,
     environment,
@@ -167,9 +185,12 @@ if (!onlyStack) {
       Service: 'API',
     },
   });
+}
 
-  // 6. Web Stack - Frontend (React)
-  const webStack = new WebStack(app, `Postolio-Web-${environment}`, {
+// 6. Web Stack - Frontend (React)
+let webStackRef: WebStack | undefined;
+if (!onlyStack || isSelected('web')) {
+  webStackRef = new WebStack(app, `Postolio-Web-${environment}`, {
     env: stackEnv,
     environment,
     domainName,
@@ -183,50 +204,60 @@ if (!onlyStack) {
       Service: 'Web',
     },
   });
-
-  // Dependencies for full app
-  authStack.addDependency(foundationStack);
-  schedulingStackRef.addDependency(foundationStack);
-  publishingStack.addDependency(foundationStack);
-  apiStackRef.addDependency(foundationStack);
-  webStack.addDependency(foundationStack);
-  schedulingStackRef.addDependency(authStack);
-  publishingStack.addDependency(authStack);
-  publishingStack.addDependency(schedulingStackRef);
-  webStack.addDependency(apiStackRef);
 }
 
+// Conditional dependencies
+if (authStackRef) authStackRef.addDependency(foundationStack);
+if (schedulingStackRef) schedulingStackRef.addDependency(foundationStack);
+if (publishingStackRef) publishingStackRef.addDependency(foundationStack);
+if (apiStackRef) apiStackRef.addDependency(foundationStack);
+if (webStackRef) webStackRef.addDependency(foundationStack);
+if (schedulingStackRef && authStackRef) schedulingStackRef.addDependency(authStackRef);
+if (publishingStackRef && authStackRef) publishingStackRef.addDependency(authStackRef);
+if (publishingStackRef && schedulingStackRef) publishingStackRef.addDependency(schedulingStackRef);
+if (webStackRef && apiStackRef) webStackRef.addDependency(apiStackRef);
+
 // 7. Asset Library Stack - Asset Management Microservice
-const assetLibraryStack = new AssetLibraryStack(app, `Postolio-AssetLibrary-${environment}`, {
-  env: stackEnv,
-  environment: environment as 'dev' | 'staging' | 'prod',
-  imageTag: imageTag,
-  openaiApiKey: app.node.tryGetContext('openaiApiKey'),
-  description: `Postolio Asset Library microservice - ${environment} environment`,
-  tags: {
-    ...stackTags,
-    Service: 'AssetLibrary',
-  },
-});
+let assetLibraryStack: AssetLibraryStack | undefined;
+if (!onlyStack || isSelected('asset-library')) {
+  assetLibraryStack = new AssetLibraryStack(app, `Postolio-AssetLibrary-${environment}`, {
+    env: stackEnv,
+    environment: environment as 'dev' | 'staging' | 'prod',
+    imageTag: imageTag,
+    openaiApiKey: app.node.tryGetContext('openaiApiKey'),
+    description: `Postolio Asset Library microservice - ${environment} environment`,
+    tags: {
+      ...stackTags,
+      Service: 'AssetLibrary',
+    },
+  });
+}
 
 // Asset Library depends on Foundation
-assetLibraryStack.addDependency(foundationStack);
+if (assetLibraryStack) {
+  assetLibraryStack.addDependency(foundationStack);
+}
 
 // 8. Brand Analysis Stack - Profiles + Jobs + Lambda
-const brandAnalysisStack = new BrandAnalysisStack(app, `Postolio-BrandAnalysis-${environment}`, {
-  env: stackEnv,
-  environment: environment as 'dev' | 'staging' | 'prod',
-  description: `Postolio Brand Analysis services - ${environment} environment`,
-  tags: {
-    ...stackTags,
-    Service: 'BrandAnalysis',
-  },
-});
+let brandAnalysisStack: BrandAnalysisStack | undefined;
+if (!onlyStack || isSelected('brand-analysis')) {
+  brandAnalysisStack = new BrandAnalysisStack(app, `Postolio-BrandAnalysis-${environment}`, {
+    env: stackEnv,
+    environment: environment as 'dev' | 'staging' | 'prod',
+    description: `Postolio Brand Analysis services - ${environment} environment`,
+    tags: {
+      ...stackTags,
+      Service: 'BrandAnalysis',
+    },
+  });
+}
 
 // Brand analysis depends on foundation always; on scheduling when present
-brandAnalysisStack.addDependency(foundationStack);
-if (schedulingStackRef) {
-  brandAnalysisStack.addDependency(schedulingStackRef);
+if (brandAnalysisStack) {
+  brandAnalysisStack.addDependency(foundationStack);
+  if (schedulingStackRef) {
+    brandAnalysisStack.addDependency(schedulingStackRef);
+  }
 }
 
 // API stack is intentionally decoupled from Brand Analysis; no dependency here.
