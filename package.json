@@ -7,7 +7,7 @@
     "dev": "turbo dev --parallel",
     "dev:api": "pnpm --filter api run build:deps && pnpm --filter api dev",
     "dev:web": "pnpm --filter @postolio/web^... run build && pnpm --filter @postolio/web dev",
-    "dev:all": "pnpm --filter api run build:deps && pnpm --filter @postolio/web^... run build && pnpm dev",
+    "dev:stack": "bash scripts/dev-all.sh",
     "test": "turbo test",
     "lint": "turbo lint",
     "clean": "turbo clean && rm -rf node_modules",

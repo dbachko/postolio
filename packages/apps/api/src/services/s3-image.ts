@@ -442,6 +442,10 @@ export async function deleteExpiredImages(s3Keys: string[]): Promise<void> {
 export function buildCdnUrl(s3Key: string | null | undefined): string | null {
   if (!s3Key) return null;
 
+  if (/^https?:\/\//i.test(s3Key)) {
+    return s3Key;
+  }
+
   // If CloudFront is configured, use it; otherwise fall back to S3
   if (CLOUDFRONT_DOMAIN) {
     return `https://${CLOUDFRONT_DOMAIN}/${s3Key}`;

@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { getOpenAIClient, getDefaultOpenAIModel } from './openai-client.js';
+import { shouldUsePlaceholderImages, generatePlaceholderImageUrl } from './image-placeholders.js';
 import { generateMidjourneyImage } from './midjourney.js';
 import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
 import { getBrandProfileContext, type BrandProfileContext } from './brand-profile.js';
@@ -476,6 +477,8 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
     }
 
     // Generate images for each post using Midjourney (with DALL-E fallback)
+    const usePlaceholderImages = shouldUsePlaceholderImages();
+
     const contentWithImages = await Promise.all(
       diversified.map(async (item, index) => {
         try {
@@ -500,6 +503,15 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
               urlLength: imageUrl?.length || 0,
             })
           );
+
+          if (usePlaceholderImages && imageUrl) {
+            return {
+              ...item,
+              s3ImageKey: imageUrl,
+              imageRegion: 'placeholder',
+              retentionExpiresAt: undefined,
+            };
+          }
 
           // Upload to S3 if image was generated successfully
           if (imageUrl && process.env.S3_IMAGES_BUCKET) {
@@ -744,6 +756,10 @@ function enforceHashtagDiversity(
 }
 
 export async function generateContentImage(prompt: string): Promise<string> {
+  if (shouldUsePlaceholderImages()) {
+    return generatePlaceholderImageUrl('1024x1024', `content-${Date.now()}`);
+  }
+
   const openai = getOpenAIClient();
 
   if (!openai) {
@@ -778,6 +794,10 @@ export async function generateBrandContentImage(
   brandContext: BrandProfileContext | null,
   brandName: string
 ): Promise<string> {
+  if (shouldUsePlaceholderImages()) {
+    return generatePlaceholderImageUrl('1024x1024', `${brandName}-${Date.now()}`);
+  }
+
   try {
     // Try Midjourney first for higher quality, brand-consistent images
     console.log('Attempting Midjourney generation for brand content...');

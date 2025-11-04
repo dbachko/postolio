@@ -116,6 +116,58 @@ pnpm --filter @postolio/web dev
 
 Tip: If Vite reports it cannot resolve a `@postolio/*` package’s `dist/*` file, it means that library hasn’t been built yet—run the dependency build command above and retry.
 
+#### Shared Docker Compose project name
+
+When you keep multiple clones of the repo checked out, Docker Compose uses the directory name as the project/container prefix and you end up with duplicated `postgres` / `redis` containers. Export a shared project name once in your shell profile (e.g. `~/.zshrc` or `~/.bash_profile`) so every terminal session reuses the same containers:
+
+```bash
+echo 'export COMPOSE_PROJECT_NAME=postolio' >> ~/.zshrc
+# reload your shell after editing the profile
+```
+
+For Fish shell, append the equivalent to `~/.config/fish/config.fish`:
+
+```fish
+set -x COMPOSE_PROJECT_NAME postolio
+```
+
+You can override the name for one-off tasks with `COMPOSE_PROJECT_NAME=custom-name <command>`. The helper script `scripts/restart-dev-stack.sh` respects this variable and will stop/start the shared Postgres + Redis pair.
+
+#### One-command dev stack (API + Assets API + Web)
+
+Use the bundler script to restart Docker infrastructure and launch all dev servers (Fastify API, assets API, and the web dashboard) in one shot:
+
+```bash
+pnpm run dev:stack
+```
+
+What it does:
+
+- Stops any lingering pnpm/tsx/vite processes and frees the local dev ports.
+- Sets `COMPOSE_PROJECT_NAME` (default `postolio`) so all clones share the same containers.
+- Runs `scripts/restart-dev-stack.sh` to down/up the Docker services.
+- Spins up both Postgres containers (`postgres` on 5432 for the main API, `postgres_assets` on 5433 for the assets service) plus Redis via Docker Compose.
+- Loads environment variables from `.env`, drops the local Postgres database, reapplies Prisma migrations, and seeds a deterministic dev user (`dev@postolio.test` / `Test123!@#`). Skip this by exporting `SKIP_DB_RESET=1`. Customize the seed via `DEV_SEED_EMAIL`, `DEV_SEED_PASSWORD`, `DEV_SEED_NAME`, `DEV_SEED_BRAND`, or `DEV_SEED_POSTS`. The assets database is also reset on every run (set `SKIP_ASSETS_DB_RESET=1` to keep its data), migrations are reapplied, and assets seeding runs unless you export `SKIP_ASSETS_SEED=1`.
+- Post/media thumbnails use placeholder CDN URLs by default: `POST_SEED_IMAGE_BASE=https://picsum.photos` for generated campaign posts and `ASSETS_SEED_CDN_BASE=https://picsum.photos` for the Assets service. Override either env var if you want to point at an S3 bucket or custom CDN. At runtime, dev also skips OpenAI/Midjourney image generation when `SKIP_IMAGE_GENERATION=1` (default) and returns `PLACEHOLDER_IMAGE_BASE` URLs instead of hitting external providers.
+- Automatically looks up the seeded brand ID (based on `ASSETS_SEED_BRAND_EMAIL` / `ASSETS_SEED_BRAND_NAME`, defaulting to the main seed user) and runs the assets seeder with that ID. Tweak the payload via `ASSETS_SEED_COUNT` and `ASSETS_SEED_CDN_BASE`.
+- Builds the API and web workspace dependencies (skip with `SKIP_DEP_BUILDS=1 pnpm run dev:stack`).
+- Starts the API (`pnpm --filter api dev`), assets API (`pnpm --filter @postolio/assets-api dev`), and web (`pnpm --filter @postolio/web dev`) watchers concurrently. Press `Ctrl+C` to stop everything.
+- Forces the assets API to use `ASSETS_API_PORT` (default `3002`) so it never collides with the main API port (`3000`). Override by exporting `ASSETS_API_PORT=<port>` before running the stack.
+
+The assets service connects via `ASSETS_DATABASE_URL` (default `postgresql://postgres:postgres@localhost:5433/postolio_assets_dev`). Docker Compose exposes that secondary Postgres on host port `5433`, so make sure your `.env` carries the matching URL if you previously pointed it elsewhere.
+
+> DB reset wipes your local data on every run. Export `SKIP_DB_RESET=1` before running the stack if you need to keep state for debugging. To wipe the assets database as well, export `RESET_ASSETS_DB=1` (ensure `ASSETS_DATABASE_URL` points at a running instance).
+
+#### Freeing stuck dev ports
+
+If you bounce between multiple clones or crash a watcher, Node/Vite can leave the usual ports (`3000`, `3002`, `5173`) occupied and you’ll see `EADDRINUSE`. Run the cleanup helper to stop lingering processes (it also respects `api.dev.pid` / `web.dev.pid` files):
+
+```bash
+bash scripts/kill-dev-processes.sh
+```
+
+To target additional ports, pass them via `DEV_PORTS="4173 6006" bash scripts/kill-dev-processes.sh`.
+
 ````
 
 ### d. Building for Production

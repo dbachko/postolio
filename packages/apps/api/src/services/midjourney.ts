@@ -1,5 +1,6 @@
 import { Midjourney } from 'midjourney';
 import { getOpenAIClient } from './openai-client.js';
+import { shouldUsePlaceholderImages, generatePlaceholderImageUrl } from './image-placeholders.js';
 import type { BrandProfileContext } from './brand-profile.js';
 
 // Midjourney client configuration
@@ -86,6 +87,10 @@ export class MidjourneyService {
     brandContext: BrandProfileContext | null,
     _brandName: string
   ): Promise<string> {
+    if (shouldUsePlaceholderImages()) {
+      return generatePlaceholderImageUrl('1024x1024', `${_brandName || 'brand'}-${Date.now()}`);
+    }
+
     void _brandName;
     try {
       const openai = getOpenAIClient();
@@ -179,6 +184,14 @@ export class MidjourneyService {
     brandContext: BrandProfileContext | null,
     brandName: string
   ): Promise<MidjourneyImageResult> {
+    if (shouldUsePlaceholderImages()) {
+      return {
+        imageUrl: generatePlaceholderImageUrl('1024x1024', `${brandName}-${Date.now()}`),
+        id: `placeholder_${Date.now()}`,
+        progress: 'completed',
+      };
+    }
+
     // Always try to initialize if not already done
     if (!this.initialized) {
       await this.init();

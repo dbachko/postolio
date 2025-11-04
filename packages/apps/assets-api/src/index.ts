@@ -13,7 +13,7 @@ import healthRoutes from './routes/health.js';
 // Load environment variables
 dotenv.config();
 
-const PORT = parseInt(process.env.PORT || '3002', 10);
+const PORT = parseInt(process.env.ASSETS_API_PORT || '3002', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 

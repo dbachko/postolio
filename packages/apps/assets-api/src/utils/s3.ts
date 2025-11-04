@@ -71,6 +71,9 @@ export async function generateUploadUrl(params: UploadUrlParams): Promise<Upload
  * Get public CDN URL for an asset
  */
 export function getAssetUrl(s3Key: string): string {
+  if (/^https?:\/\//i.test(s3Key)) {
+    return s3Key;
+  }
   const cdnDomain = process.env.ASSETS_CDN_DOMAIN || `https://${ASSETS_S3_BUCKET}.s3.amazonaws.com`;
   return `${cdnDomain}/${s3Key}`;
 }

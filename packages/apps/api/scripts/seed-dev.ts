@@ -15,29 +15,44 @@ type Args = {
 function parseArgs(): Partial<Args> {
   const out: Partial<Args> = {};
   for (let i = 2; i < process.argv.length; i++) {
-    const arg = process.argv[i];
-    const [k, vRaw] = arg.includes('=') ? arg.split('=') : [arg, process.argv[i + 1]];
-    const v = vRaw as string | undefined;
-    switch (k) {
+    const token = process.argv[i];
+
+    if (token === '--' || !token.startsWith('--')) {
+      continue;
+    }
+
+    let key = token;
+    let value: string | undefined;
+    const eqIndex = token.indexOf('=');
+    if (eqIndex >= 0) {
+      key = token.slice(0, eqIndex);
+      value = token.slice(eqIndex + 1);
+    } else {
+      value = process.argv[i + 1];
+      i++;
+    }
+
+    if (!value) continue;
+
+    switch (key) {
       case '--email':
-        if (v) out.email = v;
+        out.email = value;
         break;
       case '--password':
-        if (v) out.password = v;
+        out.password = value;
         break;
       case '--name':
-        if (v) out.name = v;
+        out.name = value;
         break;
       case '--brand':
-        if (v) out.brand = v;
+        out.brand = value;
         break;
       case '--posts':
-        if (v) out.posts = Number(v);
+        out.posts = Number(value);
         break;
       default:
         break;
     }
-    if (!arg.includes('=')) i++; // skip value token for --k v style
   }
   return out;
 }
@@ -126,6 +141,10 @@ async function main() {
     startedAt?: Date | null;
     completedAt?: Date | null;
   };
+
+  const POST_SEED_IMAGE_BASE = process.env.POST_SEED_IMAGE_BASE
+    ? process.env.POST_SEED_IMAGE_BASE.replace(/\/$/, '')
+    : 'https://picsum.photos';
 
   const campaignSpecs: SeedCampaignSpec[] = [
     {
@@ -326,9 +345,11 @@ async function main() {
 
     const s3 = withImage
       ? {
-          s3ImageKey: `images/${toYMD(baseTime)}/${brand.id}/${campaign.id}-${Math.random().toString(36).slice(2, 7)}.jpg`,
-          imageRegion: pick(imageRegions),
-          retentionExpiresAt: new Date(baseTime.getTime() + days(90)),
+          s3ImageKey: `${POST_SEED_IMAGE_BASE}/1080/1080?random=${campaign.id}-${Math.random()
+            .toString(36)
+            .slice(2, 7)}`,
+          imageRegion: 'cdn',
+          retentionExpiresAt: null,
         }
       : {
           s3ImageKey: null as string | null,

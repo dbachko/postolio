@@ -9,6 +9,7 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
+    "dev": "pnpm run dev:server",
     "dev:server": "tsx watch src/index.ts",
     "build:server": "tsc -p tsconfig.server.json || true",
     "lint": "eslint src",
@@ -26,8 +27,7 @@
     "@postolio/database-assets": "workspace:*",
     "dotenv": "^17.2.2",
     "fastify": "^5.2.0",
-    "nanoid": "^5.0.9",
-    "dotenv": "^17.2.2"
+    "nanoid": "^5.0.9"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",
