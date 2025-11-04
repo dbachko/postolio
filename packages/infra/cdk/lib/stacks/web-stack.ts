@@ -341,34 +341,7 @@ export class WebStack extends cdk.Stack {
             cookieBehavior: cloudfront.CacheCookieBehavior.none(),
           }),
         },
-        // Proxy Module Federation remote through the app domain
-        // Route only MF traffic; keep web static assets (/assets/*) served by S3 default origin
-        '/mf/asset-library/*': {
-          origin: new origins.HttpOrigin(
-            ssm.StringParameter.valueForStringParameter(
-              this,
-              `/postolio/${environment}/assets/cdn-domain`
-            ),
-            {
-              protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
-              originSslProtocols: [cloudfront.OriginSslPolicy.TLS_V1_2],
-            }
-          ),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
-          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
-          cachePolicy: new cloudfront.CachePolicy(this, 'MfRemoteCachePolicy', {
-            cachePolicyName: `${prefix}-mf-remote-cache`,
-            comment: 'Cache policy for MF remote /assets/*',
-            defaultTtl: cdk.Duration.minutes(5),
-            minTtl: cdk.Duration.seconds(0),
-            maxTtl: cdk.Duration.days(1),
-            headerBehavior: cloudfront.CacheHeaderBehavior.none(),
-            queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
-            cookieBehavior: cloudfront.CacheCookieBehavior.none(),
-          }),
-          compress: true,
-        },
+        // (Removed) MF remote behavior: All asset UI is now local to the web app.
         // API proxy behavior (optional - for same-domain API calls)
         '/api/*': {
           origin: apiOrigin,

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from './assets-client/index.js';
 
 // Prevent multiple instances in development
 const globalForPrisma = globalThis as unknown as {
@@ -16,8 +16,8 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Re-export Prisma types for convenience
-export * from '@prisma/client';
-export { PrismaClient, Prisma } from '@prisma/client';
+export * from './assets-client/index.js';
+export { PrismaClient as AssetsPrismaClient, Prisma } from './assets-client/index.js';
 
 // Export types
 export type {
@@ -27,4 +27,4 @@ export type {
   AssetType,
   ProcessingStatus,
   FolderType,
-} from '@prisma/client';
+} from './assets-client/index.js';

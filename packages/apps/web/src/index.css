@@ -1,4 +1,22 @@
 @import 'tailwindcss';
+/* Uppy styles (global to ensure stable load order in Vite) */
+@import '@uppy/core/css/style.css';
+@import '@uppy/dashboard/css/style.css';
+
+/* Ensure inline Dashboard is visible in modal context */
+.pl-assets .uppy-host {
+  position: relative;
+  min-height: 440px;
+}
+.pl-assets .uppy-host .uppy-Container,
+.pl-assets .uppy-host .uppy-Dashboard {
+  height: 100%;
+}
+
+/* Fallback: in some environments RO never flips visibility; force it visible */
+.pl-assets .uppy-Dashboard-innerWrap {
+  opacity: 1 !important;
+}
 /* Calendar library styles (inlined for now to ensure Vite bundles them) */
 /* BEGIN: @postolio/calendar styles */
 .pc-calendar {

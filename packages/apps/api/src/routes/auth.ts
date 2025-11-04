@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import bcrypt from 'bcryptjs';
-import { getDatabaseClient } from '../config/database.js';
+import { getDatabaseClient, getDatabaseUrl } from '../config/database.js';
+import { PrismaClient as PrismaClientDB } from '@postolio/database';
 import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 import { validateAndSanitize } from '../middleware/validation.js';
 import {
@@ -20,7 +21,14 @@ import { ensureDeviceId } from '../utils/device-id.js';
 import { revokeSameDeviceSessions } from '../utils/session-dedup.js';
 import { signupsAllowedForEmail } from '../utils/access-control.js';
 
-const prisma = getDatabaseClient();
+// Prefer shared Prisma client; in dev fallback to a fresh client if model accessors are missing
+const prismaShared = getDatabaseClient() as any;
+const prisma =
+  prismaShared && prismaShared.user && typeof prismaShared.user.findUnique === 'function'
+    ? prismaShared
+    : new PrismaClientDB({
+        datasources: { db: { url: process.env.DATABASE_URL || getDatabaseUrl() } },
+      });
 const redis = new Redis(getRedisUrl());
 
 /**

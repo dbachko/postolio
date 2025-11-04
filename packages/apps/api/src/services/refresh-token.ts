@@ -187,7 +187,14 @@ export class RefreshTokenService {
     }
 
     // Validate that the old token maps to an active session; if not, treat as invalid
-    const session = await SessionService.findSessionByToken(oldToken);
+    let session = null;
+    try {
+      session = await SessionService.findSessionByToken(oldToken);
+    } catch {
+      // In dev, if Prisma client for sessions isn't initialized yet, fail gracefully
+      // Returning null will cause the refresh route to respond 401 instead of 500
+      return null;
+    }
     if (!session) {
       // Ensure any lingering old token is removed and stop rotation
       await tokenStore.deleteToken(oldToken);

@@ -106,10 +106,9 @@ export async function ensureDatabaseSchema(): Promise<void> {
       console.log('✅ All required database tables exist');
     }
 
-    // Test basic connectivity
-    await prisma.user.findFirst().catch(() => {
-      // Ignore error, just testing connectivity
-    });
+    // Test basic connectivity without relying on generated model access
+    // Some environments may have client generation timing issues; a raw query is sufficient
+    await prisma.$queryRaw`SELECT 1`;
   } catch (error) {
     console.error('❌ Database connection failed:', error);
     throw new Error('Cannot connect to database. Please ensure PostgreSQL is running.');

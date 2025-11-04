@@ -1,46 +1,12 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { Card, CardContent } from '@/components/ui/card';
-
-// Dynamically import the AssetLibrary from the remote module
-const AssetLibrary = lazy(() => import('assetLibrary/AssetLibrary'));
+import AssetLibrary from '@/features/assets/components/AssetLibrary';
 
 export function Assets() {
   const { selectedBrand } = useBrandStore();
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const checkAssetsService = async () => {
-      const remoteUrl =
-        (import.meta.env.VITE_ASSETS_REMOTE_URL as string | undefined) ||
-        (import.meta.env.DEV ? 'http://localhost:3001/assets/remoteEntry.js' : undefined);
-
-      // Generic user-facing message; internal hints only in console
-      if (!remoteUrl) {
-        setError('Asset Library is temporarily unavailable. Please try again later.');
-        console.warn(
-          '[AssetLibrary] Remote not configured. In production, ensure /assets/remoteEntry.js is accessible via the app CDN or set VITE_ASSETS_REMOTE_URL at build time.'
-        );
-        return;
-      }
-
-      try {
-        const response = await fetch(remoteUrl, { method: 'HEAD' });
-        if (!response.ok) {
-          setError('Asset Library is temporarily unavailable. Please try again later.');
-          console.warn(
-            `[AssetLibrary] Remote returned status ${response.status}. Verify remote availability and CDN route.`
-          );
-        }
-      } catch (_err) {
-        setError('Asset Library is temporarily unavailable. Please try again later.');
-        console.warn('[AssetLibrary] Remote fetch failed. Check network/CDN configuration.', _err);
-      }
-    };
-
-    checkAssetsService();
-  }, []);
+  const [error] = useState<string | null>(null);
 
   if (!selectedBrand) {
     return (
@@ -77,23 +43,7 @@ export function Assets() {
         title="Asset Library"
         description="Manage your images and videos for content creation"
       />
-      <Suspense
-        fallback={
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex h-64 items-center justify-center">
-                <div className="text-center">
-                  <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
-                  <p className="text-muted-foreground mt-4">Loading Asset Library...</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        }
-      >
-        {/* @ts-expect-error - Remote module from Module Federation */}
-        <AssetLibrary brandId={selectedBrand.id} />
-      </Suspense>
+      <AssetLibrary brandId={selectedBrand.id} />
     </div>
   );
 }

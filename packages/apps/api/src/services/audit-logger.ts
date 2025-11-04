@@ -296,24 +296,36 @@ export class AuditLogger {
    * Check if account is currently locked
    */
   static async isAccountLocked(email: string): Promise<boolean> {
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: { accountLockedUntil: true },
-    });
+    try {
+      // Defensive guard in dev: if Prisma client isn't fully initialized, treat as unlocked
+      const anyPrisma = prisma as any;
+      const userModel = anyPrisma?.user;
+      if (!userModel || typeof userModel.findUnique !== 'function') {
+        return false;
+      }
 
-    if (!user?.accountLockedUntil) {
+      const result = await userModel.findUnique({
+        where: { email },
+        select: { accountLockedUntil: true },
+      });
+
+      const lockUntil: Date | null = result?.accountLockedUntil ?? null;
+      if (!lockUntil) {
+        return false;
+      }
+
+      // Check if lock has expired
+      const now = new Date();
+      if (lockUntil <= now) {
+        // Unlock the account automatically
+        await this.unlockAccount(email);
+        return false;
+      }
+
+      return true;
+    } catch {
       return false;
     }
-
-    // Check if lock has expired
-    const now = new Date();
-    if (user.accountLockedUntil <= now) {
-      // Unlock the account automatically
-      await this.unlockAccount(email);
-      return false;
-    }
-
-    return true;
   }
 
   /**

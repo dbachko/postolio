@@ -1185,7 +1185,7 @@ fastify.post('/api/auth/login', async (request, reply) => {
 **Assets API** (verifies cookie):
 
 ```typescript
-// packages/apps/assets/server/plugins/auth.ts
+// packages/apps/assets-api/src/plugins/auth.ts
 fastify.decorate('authenticate', async (request, reply) => {
   const token = request.cookies.jwt;
 

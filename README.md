@@ -193,3 +193,30 @@ These can be set in `.env` for dev, and configured per-environment in production
 
 - Brands page shows tones + top 3 palette swatches and includes a “View Profile” drawer.
 - Drawer provides a “Re-run Analysis” button to manually request a refresh.
+
+## Assets Microservice (dev quick start)
+
+Backend service lives at `packages/apps/assets-api` and exposes `/assets-api/v1/*`.
+
+- Run Postgres + Redis:
+  - `docker compose up -d`
+- Migrate DBs:
+  - Main DB: `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postolio pnpm --filter @postolio/database db:migrate`
+  - Assets DB: `ASSETS_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postolio_assets_dev pnpm --filter @postolio/database-assets db:migrate`
+- Start services:
+  - Assets API: `ASSETS_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postolio_assets_dev JWT_SECRET=<match API> pnpm --filter @postolio/assets-api dev:server`
+  - Main API: `pnpm --filter api dev`
+  - Web: `pnpm --filter @postolio/web dev`
+
+Seed demo assets (optional):
+
+```
+ASSETS_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postolio_assets_dev \
+  pnpm --filter @postolio/database-assets db:seed -- \
+  --brandId <yourBrandId> --count 12 --cdnBase https://picsum.photos
+```
+
+Notes:
+
+- UI for the Asset Library now lives in the web app at `src/features/assets` (no Module Federation).
+- The assets Prisma client is generated to `packages/libs/database-assets/assets-client` and is ignored by git.

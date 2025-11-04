@@ -1,28 +1,25 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import federation from '@originjs/vite-plugin-federation';
 import path from 'path';
 import fs from 'fs';
 
 // https://vite.dev/config/
-const remoteUrl =
-  process.env.VITE_ASSETS_REMOTE_URL ||
-  (process.env.NODE_ENV === 'production'
-    ? '/mf/asset-library/latest/remoteEntry.js'
-    : 'http://localhost:3001/assets/remoteEntry.js');
 
 export default defineConfig({
-  plugins: [
-    react(),
-    federation({
-      name: 'mainApp',
-      remotes: {
-        assetLibrary: remoteUrl,
-      },
-      shared: ['react', 'react-dom', '@tanstack/react-query'],
-    }),
-  ],
+  plugins: [react()],
+  optimizeDeps: {
+    include: [
+      '@uppy/core',
+      '@uppy/react',
+      '@uppy/react/dashboard',
+      '@uppy/dashboard',
+      '@uppy/aws-s3',
+      '@uppy/google-drive',
+      '@uppy/dropbox',
+      '@uppy/webcam',
+    ],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -72,15 +69,16 @@ export default defineConfig({
         },
       },
       // Proxy Assets API routes to the local assets service in dev
+      // Use HTTP locally to match the assets API default (no TLS in dev)
       // Frontend: /assets-api/v1/* → Assets Service: /assets-api/v1/*
       '/assets-api': {
-        target: 'https://ai.localhost:3002',
+        target: 'http://localhost:3002',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
             console.log(
-              `🖼️  Proxying assets: ${req.method} ${req.url} → https://ai.localhost:3002${proxyReq.path}`
+              `🖼️  Proxying assets: ${req.method} ${req.url} → http://localhost:3002${proxyReq.path}`
             );
           });
         },

@@ -20,6 +20,7 @@ reports
 **/.cache
 **/*.snap
 **/*.min.*
+packages/libs/database-assets/assets-client/
 
 # Env and misc
 .env*

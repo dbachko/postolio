@@ -20,6 +20,7 @@ certs/
 # Dependencies
 node_modules/
 packages/libs/database/lambda-client/
+packages/libs/database-assets/assets-client/
 
 # Environment variables
 .env

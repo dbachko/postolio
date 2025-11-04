@@ -114,9 +114,7 @@ async function tryFetchHolidays(
     // Lazy import so build doesn’t fail without dependency
 
     const HolidaysMod = (await import('date-holidays')) as unknown;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const HolidaysCtor = (HolidaysMod as any).default ?? (HolidaysMod as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const hd = new (HolidaysCtor as any)(countryCode);
     const items: HolidayItem[] = [];
     for (const y of years) {
