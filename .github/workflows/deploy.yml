@@ -161,6 +161,7 @@ jobs:
               - 'packages/libs/**'
             asset-library:
               - 'packages/apps/assets/**'
+              - 'packages/apps/assets-api/**'
               - 'packages/services/asset-thumbnail-generator/**'
               - 'packages/services/asset-ai-analyzer/**'
               - 'packages/libs/database-assets/**'
@@ -345,7 +346,7 @@ jobs:
           REPO_NAME: postolio
         with:
           context: .
-          file: packages/apps/assets/Dockerfile
+          file: packages/apps/assets-api/Dockerfile
           push: true
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:assets-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
