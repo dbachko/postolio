@@ -490,12 +490,10 @@ jobs:
               pnpm --filter=api build
               ;;
             "asset-library")
-              # Build assets app and its dependencies
+              # Build assets API and its dependencies
               pnpm --filter=@postolio/database-assets build || true
               pnpm --filter=@postolio/errors build || true
-              pnpm --filter=@postolio/assets run build:server || true
-              # Also build the MF remote bundle for publication to the assets CDN
-              pnpm --filter=@postolio/assets build || true
+              pnpm --filter=@postolio/assets-api run build:server || true
               ;;
             "web")
               # Build frontend dependencies
@@ -670,14 +668,6 @@ jobs:
             exit 1
           fi
 
-      - name: Publish Asset Library MF remote to Assets CDN
-        if: matrix.stack == 'asset-library'
-        shell: bash
-        run: |
-          set -e
-          ENV="${{ needs.detect-changes.outputs.environment }}"
-          bash scripts/publish-assets-remote.sh -e "$ENV"
-
   # ============================================
   # STEP 5: Deploy Frontend to S3 (Web Stack)
   # ============================================
@@ -723,16 +713,6 @@ jobs:
           pnpm --filter=@postolio/errors build || true
           pnpm --filter=@postolio/database build || true
 
-      - name: Prepare Asset Library remote URL for web build
-        shell: bash
-        run: |
-          # Default to app domain route served by Web CDN for MF
-          if [ -n "${{ vars.VITE_ASSETS_REMOTE_URL }}" ]; then
-            echo "VITE_ASSETS_REMOTE_URL=${{ vars.VITE_ASSETS_REMOTE_URL }}" >> $GITHUB_ENV
-          else
-            echo "VITE_ASSETS_REMOTE_URL=/mf/asset-library/latest/remoteEntry.js" >> $GITHUB_ENV
-          fi
-
       - name: Build frontend
         working-directory: packages/apps/web
         env:
@@ -746,7 +726,6 @@ jobs:
           VITE_FEATURE_AI_SUGGESTIONS: ${{ vars.VITE_FEATURE_AI_SUGGESTIONS }}
           VITE_FEATURE_VIDEO_SUPPORT: ${{ vars.VITE_FEATURE_VIDEO_SUPPORT }}
           VITE_ENVIRONMENT: ${{ needs.detect-changes.outputs.environment }}
-          VITE_ASSETS_REMOTE_URL: ${{ env.VITE_ASSETS_REMOTE_URL }}
         run: pnpm build
 
       - name: Deploy to S3
@@ -789,23 +768,6 @@ jobs:
             aws cloudfront create-invalidation \
               --distribution-id "$DISTRIBUTION_ID" \
               --paths "/*"
-          fi
-
-      - name: Publish Asset Library MF Remote
-        if: |
-          contains(needs.detect-changes.outputs.stack-matrix, 'asset-library') ||
-          needs.detect-changes.outputs.asset-library-changed == 'true'
-        run: |
-          ENV="${{ needs.detect-changes.outputs.environment }}"
-
-          # Only publish if the Asset Library stack exists in this environment
-          if aws cloudformation describe-stacks \
-            --stack-name "Postolio-AssetLibrary-$ENV" \
-            --query 'Stacks[0].StackStatus' --output text >/dev/null 2>&1; then
-            echo "Publishing Asset Library MF remote to CDN for $ENV..."
-            bash scripts/publish-assets-remote.sh -e "$ENV"
-          else
-            echo "AssetLibrary stack not found in $ENV; skipping MF remote publish."
           fi
 
   # ============================================
