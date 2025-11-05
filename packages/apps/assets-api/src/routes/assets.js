@@ -1,6 +1,5 @@
 import { prismaAssets } from '@postolio/database-assets';
-import process from 'node:process';
-import { generateUploadUrl, getAssetUrl } from '../utils/s3.js';
+import { generateUploadUrl, getAssetUrl, assetsBucketName } from '../utils/s3.js';
 const assetsRoutes = async (fastify) => {
   // Get presigned URL for upload
   fastify.post(
@@ -44,7 +43,7 @@ const assetsRoutes = async (fastify) => {
           uploadedBy: user.userId,
           fileName: body.fileName,
           s3Key: body.s3Key,
-          s3Bucket: process.env.ASSETS_S3_BUCKET || 'postolio-assets-dev-storage',
+          s3Bucket: assetsBucketName,
           fileSize: body.fileSize,
           mimeType: body.mimeType,
           fileType: body.fileType,

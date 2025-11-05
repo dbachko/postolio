@@ -1236,6 +1236,7 @@ class InstagramService {
     }
 
     // Create content record payload (used for create or patch existing)
+    const postedAt = post.timestamp ? new Date(post.timestamp) : new Date();
 
     const contentData = {
       brandId: brand.id!,
@@ -1246,7 +1247,8 @@ class InstagramService {
       status: 'published' as const,
       instagramPostId: post.id,
       instagramPermalink: post.permalink,
-      postedAt: post.timestamp ? new Date(post.timestamp) : new Date(),
+      postedAt,
+      scheduledAt: postedAt,
       s3ImageKey,
       imageRegion,
       retentionExpiresAt,
@@ -1276,6 +1278,7 @@ class InstagramService {
           imageRegion: true,
           retentionExpiresAt: true,
           campaignId: true,
+          scheduledAt: true,
         },
       });
       const existingParams = (current?.generationParams as Record<string, unknown>) || {};
@@ -1286,6 +1289,7 @@ class InstagramService {
         data: {
           status: 'published',
           postedAt: contentData.postedAt,
+          scheduledAt: current?.scheduledAt ?? contentData.postedAt,
           instagramPostId: contentData.instagramPostId,
           instagramPermalink: contentData.instagramPermalink,
           schedulingError: null,

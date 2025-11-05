@@ -1,14 +1,28 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { customAlphabet } from 'nanoid';
+import process from 'node:process';
 
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
+const DEFAULT_DEV_BUCKET = 'postolio-dev-assets-storage';
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
 });
 
-const ASSETS_S3_BUCKET = process.env.ASSETS_S3_BUCKET || 'postolio-assets-dev-storage';
+const allowDevFallback =
+  !process.env.NODE_ENV || process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'dev';
+
+const resolvedBucket =
+  process.env.ASSETS_S3_BUCKET ||
+  process.env.S3_BUCKET ||
+  (allowDevFallback ? DEFAULT_DEV_BUCKET : undefined);
+
+if (!resolvedBucket) {
+  throw new Error('ASSETS_S3_BUCKET (or S3_BUCKET) is not configured for the Assets API');
+}
+
+export const assetsBucketName = resolvedBucket;
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
 
@@ -50,7 +64,7 @@ export async function generateUploadUrl(params: UploadUrlParams): Promise<Upload
 
   // Create PutObject command
   const command = new PutObjectCommand({
-    Bucket: ASSETS_S3_BUCKET,
+    Bucket: assetsBucketName,
     Key: s3Key,
     ContentType: contentType,
     ContentLength: maxSize, // Maximum allowed size
@@ -74,6 +88,6 @@ export function getAssetUrl(s3Key: string): string {
   if (/^https?:\/\//i.test(s3Key)) {
     return s3Key;
   }
-  const cdnDomain = process.env.ASSETS_CDN_DOMAIN || `https://${ASSETS_S3_BUCKET}.s3.amazonaws.com`;
+  const cdnDomain = process.env.ASSETS_CDN_DOMAIN || `https://${assetsBucketName}.s3.amazonaws.com`;
   return `${cdnDomain}/${s3Key}`;
 }

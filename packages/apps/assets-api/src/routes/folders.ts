@@ -62,10 +62,11 @@ const foldersRoutes: FastifyPluginAsync = async (fastify) => {
 
           visitedIds.add(currentParentId);
 
-          const parent = await prismaAssets.assetFolder.findUnique({
-            where: { id: currentParentId },
-            select: { parentId: true },
-          });
+          const parent: { parentId: string | null } | null =
+            await prismaAssets.assetFolder.findUnique({
+              where: { id: currentParentId },
+              select: { parentId: true },
+            });
 
           if (!parent) {
             return reply.code(404).send({ error: 'Parent folder not found' });
@@ -119,10 +120,11 @@ const foldersRoutes: FastifyPluginAsync = async (fastify) => {
 
           visitedIds.add(currentParentId);
 
-          const parent = await prismaAssets.assetFolder.findUnique({
-            where: { id: currentParentId },
-            select: { parentId: true },
-          });
+          const parent: { parentId: string | null } | null =
+            await prismaAssets.assetFolder.findUnique({
+              where: { id: currentParentId },
+              select: { parentId: true },
+            });
 
           if (!parent) {
             return reply.code(404).send({ error: 'Parent folder not found' });

@@ -606,6 +606,7 @@ export class AssetLibraryStack extends cdk.Stack {
             PORT: '3002',
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
             AWS_REGION: this.region,
+            ASSETS_S3_BUCKET: this.assetsBucket.bucketName,
             S3_BUCKET: this.assetsBucket.bucketName,
             S3_REGION: this.region,
             CDN_DOMAIN: this.assetsCdn.distributionDomainName,

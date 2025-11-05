@@ -110,7 +110,8 @@ async function main() {
       uploadedBy,
       fileName: baseName,
       s3Key,
-      s3Bucket: process.env.ASSETS_S3_BUCKET || 'postolio-assets-dev-storage',
+      s3Bucket:
+        process.env.ASSETS_S3_BUCKET || process.env.S3_BUCKET || 'postolio-dev-assets-storage',
       fileSize: Math.floor(400_000 + Math.random() * 1_200_000),
       mimeType: 'image/jpeg',
       fileType: 'image' as const,
