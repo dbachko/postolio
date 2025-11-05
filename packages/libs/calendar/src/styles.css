@@ -408,6 +408,16 @@
   margin-bottom: var(--pc-agenda-date-mb);
 }
 
+.pc-agenda-date--today {
+  color: var(--primary);
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  border-radius: var(--radius);
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in oklch, var(--primary) 40%, var(--border));
+}
+
 .pc-agenda-items {
   display: flex;
   flex-direction: column;

@@ -591,47 +591,12 @@ class CampaignService {
 
         // Trigger AWS scheduling in background if we have a valid date
         if (hasValidScheduledDate && scheduledDate) {
-          try {
-            // Fire and forget - let AWS sync handle the status updates
-            const scheduleResult = await schedulerService.scheduleContent(existingPost.id);
-
-            if (scheduleResult.success) {
-              console.log(
-                `Content ${existingPost.id} scheduling initiated in AWS - sync will update status`
-              );
-            } else {
-              console.error(
-                `Failed to create AWS schedule for content ${existingPost.id}:`,
-                scheduleResult.error
-              );
-
-              // Clear processing state and mark error since scheduling failed immediately
-              await prisma.content.update({
-                where: { id: existingPost.id },
-                data: {
-                  generationParams: {
-                    ...((content.generationParams as Record<string, unknown>) || {}),
-                    processing: null, // Clear processing state
-                    schedulingError: `AWS scheduling failed: ${scheduleResult.error}`,
-                  },
-                },
-              });
-            }
-          } catch (scheduleError) {
-            console.error(`Error scheduling content ${existingPost.id}:`, scheduleError);
-
-            // Clear processing state and mark error since scheduling failed
-            await prisma.content.update({
-              where: { id: existingPost.id },
-              data: {
-                generationParams: {
-                  ...((content.generationParams as Record<string, unknown>) || {}),
-                  processing: null, // Clear processing state
-                  schedulingError: `AWS scheduling error: ${scheduleError instanceof Error ? scheduleError.message : 'Unknown error'}`,
-                },
-              },
-            });
-          }
+          this.scheduleContentInBackground(
+            existingPost.id,
+            content.generationParams,
+            operationId,
+            campaign.id
+          );
         }
 
         createdContent.push(content);
@@ -1954,6 +1919,72 @@ class CampaignService {
     // Session expired, remove it
     editSessions.delete(campaignId);
     return { hasConflict: false };
+  }
+
+  /**
+   * Kick off AWS scheduling without blocking the HTTP response.
+   */
+  private scheduleContentInBackground(
+    contentId: string,
+    generationParams: Prisma.JsonValue | null | undefined,
+    operationId: string,
+    campaignId: string
+  ): void {
+    (async () => {
+      try {
+        const scheduleResult = await schedulerService.scheduleContent(contentId);
+
+        if (scheduleResult.success) {
+          console.log(
+            `Content ${contentId} scheduling initiated in AWS (campaign ${campaignId}, operation ${operationId})`
+          );
+          return;
+        }
+
+        console.error(
+          `Failed to create AWS schedule for content ${contentId}:`,
+          scheduleResult.error
+        );
+        await this.applySchedulingError(
+          contentId,
+          generationParams,
+          scheduleResult.error || 'Unknown error'
+        );
+      } catch (error) {
+        console.error(`Error scheduling content ${contentId}:`, error);
+        await this.applySchedulingError(
+          contentId,
+          generationParams,
+          error instanceof Error ? error.message : 'Unknown error'
+        );
+      }
+    })().catch((fatalError) => {
+      console.error(
+        `Fatal scheduling error for content ${contentId} (campaign ${campaignId}):`,
+        fatalError
+      );
+    });
+  }
+
+  private async applySchedulingError(
+    contentId: string,
+    baseParams: Prisma.JsonValue | null | undefined,
+    errorMessage: string
+  ): Promise<void> {
+    const params: Record<string, unknown> =
+      baseParams && typeof baseParams === 'object' && !Array.isArray(baseParams)
+        ? { ...(baseParams as Record<string, unknown>) }
+        : {};
+
+    params.processing = null;
+    params.schedulingError = `AWS scheduling failed: ${errorMessage}`;
+
+    await prisma.content.update({
+      where: { id: contentId },
+      data: {
+        generationParams: params as Prisma.InputJsonValue,
+      },
+    });
   }
 }
 

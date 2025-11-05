@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi, campaign as campaignApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import { PostHashtagEditor } from '@/components/PostHashtagEditor';
 import { PostScheduler } from '@/components/PostScheduler';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { convertLocalToUTC } from '@/lib/timezone';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import { X, Clock, Save, Upload, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { normalizeHashtags, stripHashtagPrefixes } from '@/utils/hashtags';
+import { cn } from '@/lib/utils';
 
 interface PostDetailData {
   id: string;
@@ -45,9 +46,24 @@ interface PostDetailData {
 const formatScheduledInput = (value?: string) =>
   value ? new Date(value).toISOString().slice(0, 16) : '';
 
-export function PostSidebar({ id }: { id?: string }) {
+type PostSidebarLayout = 'sidebar' | 'page';
+
+interface PostSidebarProps {
+  id?: string;
+  layout?: PostSidebarLayout;
+  onClose?: () => void;
+  showHeader?: boolean;
+}
+
+export function PostSidebar({
+  id,
+  layout = 'sidebar',
+  onClose,
+  showHeader = true,
+}: PostSidebarProps) {
   const { close } = useRightSidebarRouter();
   const navigate = useNavigate();
+  const location = useLocation();
   const { timezone, getBrandTimezone } = useTimezone();
   const { selectedBrand } = useBrandStore();
   const [brandTimezone, setBrandTimezone] = useState<string>(timezone);
@@ -282,19 +298,36 @@ export function PostSidebar({ id }: { id?: string }) {
     });
   };
 
-  const handleCloseSidebar = () => {
-    if (!disabled && hasChanges) {
-      handleSaveChanges();
-    }
-    close();
-  };
-
   // Campaign selection state
   const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  // Prefill from query params when creating
+  const prefillAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!isCreating || prefillAppliedRef.current === true) return;
+    if (!location.search) return;
+    const params = new URLSearchParams(location.search);
+    const qCaption = params.get('caption');
+    const qHashtags = params.get('hashtags');
+    const qScheduledAt = params.get('scheduledAt');
+    const qCampaignId = params.get('campaignId');
+    if (qCaption || qHashtags || qScheduledAt || qCampaignId) {
+      setFormData((prev) => ({
+        ...prev,
+        caption: qCaption ?? prev.caption,
+        hashtags: qHashtags
+          ? stripHashtagPrefixes(qHashtags.split(/[,\s]+/).filter(Boolean))
+          : prev.hashtags,
+        scheduledAt: qScheduledAt ? formatScheduledInput(qScheduledAt) : prev.scheduledAt,
+      }));
+      if (qCampaignId) setSelectedCampaign(qCampaignId);
+      prefillAppliedRef.current = true;
+    }
+  }, [isCreating, location.search]);
 
   // Fetch campaigns for the brand
   useEffect(() => {
@@ -327,51 +360,94 @@ export function PostSidebar({ id }: { id?: string }) {
     }
   };
 
+  const handleCloseSidebar = () => {
+    if (layout === 'sidebar') {
+      if (!disabled && hasChanges) {
+        handleSaveChanges();
+      }
+      close();
+    } else if (onClose) {
+      onClose();
+    }
+  };
+
+  const handleOpenCreatePage = () => {
+    if (layout === 'sidebar') {
+      close();
+    }
+    navigate('/posts/create');
+  };
+
+  const containerClass = useMemo(
+    () => cn('flex flex-col', layout === 'sidebar' ? 'h-full shadow-lg' : 'min-h-[60vh] w-full'),
+    [layout]
+  );
+
+  const headerClass = useMemo(
+    () =>
+      cn(
+        'bg-card flex h-14 items-center justify-between border-b px-4',
+        layout === 'sidebar' ? 'sticky top-0 z-10' : 'rounded-t'
+      ),
+    [layout]
+  );
+
+  const bodyClass =
+    layout === 'sidebar' ? 'flex-1 overflow-y-auto px-4 py-3' : 'flex-1 overflow-y-auto px-4 py-4';
+
   return (
-    <div
-      className="flex h-full flex-col shadow-lg"
-      role="complementary"
-      aria-labelledby="right-sidebar-title"
-    >
-      <div className="bg-card sticky top-0 z-10 flex h-14 items-center justify-between border-b px-4">
-        {id ? (
-          <Breadcrumb aria-label="right-sidebar-title">
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                {isLoading ? (
-                  <BreadcrumbPage>Loading…</BreadcrumbPage>
-                ) : (
-                  <BreadcrumbLink asChild>
-                    <Link to={disabled ? `/posts/${id}` : `/posts/${id}?edit=1`}>
-                      {disabled ? 'View Post' : 'Edit Post'}
-                    </Link>
-                  </BreadcrumbLink>
-                )}
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        ) : (
-          <Breadcrumb aria-label="right-sidebar-title">
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbPage>Create New Post</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        )}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleCloseSidebar}
-            aria-label="Close sidebar"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+    <div className={containerClass} role="complementary" aria-labelledby="right-sidebar-title">
+      {showHeader ? (
+        <div className={headerClass}>
+          {id ? (
+            <Breadcrumb aria-label="right-sidebar-title">
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  {isLoading ? (
+                    <BreadcrumbPage>Loading…</BreadcrumbPage>
+                  ) : (
+                    <BreadcrumbLink asChild>
+                      <Link to={disabled ? `/posts/${id}` : `/posts/${id}?edit=1`}>
+                        {disabled ? 'View Post' : 'Edit Post'}
+                      </Link>
+                    </BreadcrumbLink>
+                  )}
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          ) : (
+            <Breadcrumb aria-label="right-sidebar-title">
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  {layout === 'sidebar' ? (
+                    <BreadcrumbLink asChild>
+                      <Link to="/posts/create" onClick={handleOpenCreatePage}>
+                        Create New Post
+                      </Link>
+                    </BreadcrumbLink>
+                  ) : (
+                    <BreadcrumbPage>Create New Post</BreadcrumbPage>
+                  )}
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          )}
+          {layout === 'sidebar' ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleCloseSidebar}
+                aria-label="Close sidebar"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : null}
         </div>
-      </div>
-      <Separator />
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      ) : null}
+      {layout === 'sidebar' && showHeader ? <Separator /> : null}
+      <div className={bodyClass}>
         {isCreating ? (
           // Creation mode
           <div className="space-y-4">

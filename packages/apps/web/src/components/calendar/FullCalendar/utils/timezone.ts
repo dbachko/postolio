@@ -1,4 +1,3 @@
-import { formatInTimeZone } from 'date-fns-tz';
 import type { CalendarDataItem } from '../types';
 import { DEFAULT_EVENT_DURATION_MS } from '../constants';
 
@@ -15,37 +14,24 @@ export function formatGmtOffset(hours: number): string {
   return `GMT${sign}${whole}`;
 }
 
-export function toWallTimeDate(iso: string | null | undefined, timezone: string): Date | null {
+export function toWallTimeDate(iso: string | null | undefined): Date | null {
   if (!iso) return null;
-
-  const wall = formatInTimeZone(new Date(iso), timezone, "yyyy-MM-dd'T'HH:mm");
-  const [dStr, tStr] = wall.split('T');
-  if (!dStr || !tStr) return null;
-
-  const [yy, mm, dd] = dStr.split('-').map((n) => Number.parseInt(n, 10));
-  const [hh, mi] = tStr.split(':').map((n) => Number.parseInt(n, 10));
-
-  if ([yy, mm, dd, hh, mi].some((part) => Number.isNaN(part))) return null;
-
-  return new Date(yy, mm - 1, dd, hh, mi, 0, 0);
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function getEventBounds(
-  item: CalendarDataItem,
-  timezone: string
-): { start: Date; end: Date } | null {
+export function getEventBounds(item: CalendarDataItem): { start: Date; end: Date } | null {
   const baseIso =
     item.type === 'placeholder'
       ? item.scheduledAt
       : getContentIso(item, ['postedAt', 'scheduledAt', 'createdAt']);
 
-  const start = toWallTimeDate(baseIso ?? null, timezone);
+  const start = toWallTimeDate(baseIso ?? null);
   if (!start) return null;
 
   const endIso = item.type === 'content' ? getContentIso(item, ['endAt']) : undefined;
   const end =
-    toWallTimeDate(endIso ?? null, timezone) ??
-    new Date(start.getTime() + DEFAULT_EVENT_DURATION_MS);
+    toWallTimeDate(endIso ?? null) ?? new Date(start.getTime() + DEFAULT_EVENT_DURATION_MS);
 
   return { start, end };
 }

@@ -34,6 +34,7 @@ export interface CampaignWizardState {
   } | null;
   acceptedRecommendations?: string[];
   saveStatus: 'saved' | 'saving' | 'error' | 'idle';
+  skipUnsavedWarning: boolean;
   draftId?: string;
   seasonalityAssist: boolean;
   // Persisted AI strategy results to avoid losing them on refresh/navigation

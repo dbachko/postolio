@@ -10,12 +10,28 @@ type Props<E extends CalendarEventBase> = {
   eventComponent?: React.ComponentType<{ event: E }>;
 };
 
+const DAY_KEY = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(
+    2,
+    '0'
+  )}`;
+
+const parseDayKey = (key: string): Date => {
+  const [year, month, day] = key.split('-').map((part) => parseInt(part, 10));
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+    return new Date();
+  }
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+};
+
 export function AgendaView<E extends CalendarEventBase>({
   date,
   events,
   localizer,
   eventComponent: EventComp,
 }: Props<E>) {
+  const todayKey = DAY_KEY(new Date());
+
   const byDay = useMemo(() => {
     const startDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
     const endDay = new Date(startDay);
@@ -42,39 +58,51 @@ export function AgendaView<E extends CalendarEventBase>({
       date: new Date(d),
       items: [],
     }));
-    const keyOf = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const indexByKey = new Map<string, number>();
-    result.forEach((g, idx) => indexByKey.set(keyOf(g.date), idx));
+    result.forEach((g, idx) => indexByKey.set(DAY_KEY(g.date), idx));
     for (const e of filtered) {
       const d = new Date(e.start.getFullYear(), e.start.getMonth(), e.start.getDate());
-      const k = keyOf(d);
+      const k = DAY_KEY(d);
       const idx = indexByKey.get(k);
       if (idx != null) result[idx].items.push(e);
     }
-    // Skip days without items per requirements
-    return result.filter((g) => g.items.length > 0);
-  }, [events, date]);
+    const nonEmpty = result.filter((g) => g.items.length > 0);
+    if (nonEmpty.length > 0) {
+      return nonEmpty;
+    }
+
+    // If there are no events at all, show today's date as a fallback
+    const fallback = result.find((g) => DAY_KEY(g.date) === todayKey) ?? {
+      date: parseDayKey(todayKey),
+      items: [],
+    };
+    return [fallback];
+  }, [events, date, todayKey]);
 
   return (
     <div className="pc-agenda">
-      {byDay.map((g) => (
-        <div key={g.date.toISOString()} className="pc-agenda-group">
-          <div className="pc-agenda-date">{localizer.format(g.date, 'LLL d, yyyy')}</div>
-          <div className="pc-agenda-items">
-            {g.items.map((e) => (
-              <div key={e.id} className="pc-agenda-item">
-                {EventComp ? (
-                  <EventComp event={e} />
-                ) : (
-                  <span className="pc-title">{e.title || 'Event'}</span>
-                )}
-              </div>
-            ))}
+      {byDay.map((g) => {
+        const isToday = DAY_KEY(g.date) === todayKey;
+        const dateClasses = ['pc-agenda-date'];
+        if (isToday) dateClasses.push('pc-agenda-date--today');
+        return (
+          <div key={g.date.toISOString()} className="pc-agenda-group">
+            <div className={dateClasses.join(' ')}>{localizer.format(g.date, 'LLL d, yyyy')}</div>
+            <div className="pc-agenda-items">
+              {g.items.map((e) => (
+                <div key={e.id} className="pc-agenda-item">
+                  {EventComp ? (
+                    <EventComp event={e} />
+                  ) : (
+                    <span className="pc-title">{e.title || 'Event'}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <CreateCta date={g.date} />
           </div>
-          <CreateCta date={g.date} />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

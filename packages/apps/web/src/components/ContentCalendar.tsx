@@ -25,6 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { getTimezoneAbbr, getTimezoneOffset } from '@/lib/timezone';
+import { formatGmtOffset } from './calendar/FullCalendar/utils/timezone';
 
 // type guard no longer needed for the month grid only
 
@@ -46,6 +48,16 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [searchParams, setSearchParams] = useSearchParams();
   // no-op
+  const userTimezoneLabel = useMemo(() => {
+    const abbr = getTimezoneAbbr(userTz);
+    const offset = formatGmtOffset(getTimezoneOffset(userTz));
+    return `${abbr} · ${offset}`;
+  }, [userTz]);
+  const brandTimezoneLabel = useMemo(() => {
+    const abbr = getTimezoneAbbr(brandTimezone);
+    const offset = formatGmtOffset(getTimezoneOffset(brandTimezone));
+    return `${abbr} · ${offset}`;
+  }, [brandTimezone]);
 
   // Resolve brand posting timezone (fallback to user timezone)
   useEffect(() => {
@@ -69,9 +81,9 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     if (v === 'month' || v === 'week' || v === 'three-day' || v === 'schedule') {
       setViewMode(v as ViewMode);
     } else {
-      // Default to a mobile-friendly Schedule view on small screens
+      // Default to a mobile-friendly 3-day view on small screens
       if (typeof window !== 'undefined' && window.innerWidth < 640) {
-        setViewMode('schedule');
+        setViewMode('three-day');
       }
     }
     const dateParam = searchParams.get('date');
@@ -353,6 +365,14 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
 
             {/* New Post button removed (exists in tab navigation) */}
           </div>
+        </div>
+        <div className="text-muted-foreground mt-1 flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:text-sm">
+          <span>
+            Times shown in {userTimezoneLabel} ({userTz}).
+          </span>
+          <span>
+            Brand posting timezone: {brandTimezoneLabel} ({brandTimezone}).
+          </span>
         </div>
       </div>
 

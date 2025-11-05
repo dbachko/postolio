@@ -61,6 +61,7 @@ export default function CampaignsContainer() {
       onPauseCampaign={(id) => pauseCampaignMutation.mutate(id)}
       onDeleteCampaign={(id, _name) => deleteCampaignMutation.mutate(id)}
       startCampaignLoading={startCampaignMutation.isPending}
+      startCampaignLoadingId={(startCampaignMutation.variables as string | undefined) || null}
       pauseCampaignLoading={pauseCampaignMutation.isPending}
       deleteCampaignLoading={deleteCampaignMutation.isPending}
     />

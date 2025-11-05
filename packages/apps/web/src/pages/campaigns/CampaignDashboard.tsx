@@ -12,6 +12,7 @@ interface Props {
   onPauseCampaign: (id: string) => void;
   onDeleteCampaign: (id: string, name: string) => void;
   startCampaignLoading?: boolean;
+  startCampaignLoadingId?: string | null;
   pauseCampaignLoading?: boolean;
   deleteCampaignLoading?: boolean;
 }
@@ -23,6 +24,7 @@ export function CampaignDashboard({
   onPauseCampaign,
   onDeleteCampaign,
   startCampaignLoading,
+  startCampaignLoadingId,
   pauseCampaignLoading,
   deleteCampaignLoading,
 }: Props) {
@@ -47,6 +49,7 @@ export function CampaignDashboard({
             onPauseCampaign={onPauseCampaign}
             onDeleteCampaign={onDeleteCampaign}
             startCampaignLoading={!!startCampaignLoading}
+            startCampaignLoadingId={startCampaignLoadingId || null}
             pauseCampaignLoading={!!pauseCampaignLoading}
             deleteCampaignLoading={!!deleteCampaignLoading}
           />

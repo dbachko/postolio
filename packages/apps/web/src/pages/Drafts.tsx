@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
@@ -15,6 +14,7 @@ import { content as contentApi, type Content } from '@/lib/api';
 import { useBrandStore } from '@/stores/brandStore';
 import { ContentCard } from '@/components/ContentCard';
 import { PencilLine } from 'lucide-react';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 
 type SortOption = 'lastModifiedDesc' | 'lastModifiedAsc';
 
@@ -25,6 +25,8 @@ export default function Drafts() {
   const [showUnscheduledDrafts, setShowUnscheduledDrafts] = useState(true);
 
   const brandId = selectedBrand?.id;
+
+  const { openSidebar } = useRightSidebarRouter();
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['drafts', brandId],
@@ -130,13 +132,14 @@ export default function Drafts() {
         {/* Main content */}
         <section className="space-y-4">
           {/* Create Draft CTA */}
-          <Link
-            to="/posts/create"
+          <button
+            type="button"
+            onClick={() => openSidebar('post-create')}
             className="hover:bg-accent/40 text-primary/90 border-primary/30 group flex items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 transition-colors"
           >
             <PencilLine className="h-5 w-5" />
             <span className="text-sm font-medium">Create Draft</span>
-          </Link>
+          </button>
 
           {/* List */}
           {isLoading ? (

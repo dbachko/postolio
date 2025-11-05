@@ -17,6 +17,7 @@ type WizardActions = {
   loadDefaultsFromType: (cfg: CampaignTypeConfig) => void;
   updateField: <K extends keyof CampaignWizardState>(key: K, value: CampaignWizardState[K]) => void;
   updatePromotionDetails: (value: PromotionDetails | null) => void;
+  setSkipUnsavedWarning: (value: boolean) => void;
   reset: () => void;
 };
 
@@ -40,6 +41,7 @@ const initialState: CampaignWizardState = {
   strategyPredictions: null,
   strategyPredictionsMeta: null,
   strategySchedule: null,
+  skipUnsavedWarning: false,
 };
 
 export const useCampaignWizard = create<CampaignWizardState & WizardActions>()((set, get) => ({
@@ -69,6 +71,7 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()((
 
   updateField: (key, value) => set({ [key]: value } as unknown as Partial<CampaignWizardState>),
   updatePromotionDetails: (value) => set({ promotionDetails: value }),
+  setSkipUnsavedWarning: (value) => set({ skipUnsavedWarning: value }),
 
   reset: () => set({ ...initialState }),
 }));

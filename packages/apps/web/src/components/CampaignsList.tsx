@@ -9,6 +9,7 @@ interface CampaignsListProps {
   onPauseCampaign: (campaignId: string) => void;
   onDeleteCampaign: (campaignId: string, campaignName: string) => void;
   startCampaignLoading?: boolean;
+  startCampaignLoadingId?: string | null;
   pauseCampaignLoading?: boolean;
   deleteCampaignLoading?: boolean;
 }
@@ -22,6 +23,7 @@ const CampaignsList = memo(
     onPauseCampaign,
     onDeleteCampaign,
     startCampaignLoading = false,
+    startCampaignLoadingId = null,
     pauseCampaignLoading = false,
     deleteCampaignLoading = false,
   }: CampaignsListProps) => {
@@ -41,6 +43,7 @@ const CampaignsList = memo(
             onPauseCampaign={onPauseCampaign}
             onDeleteCampaign={onDeleteCampaign}
             startCampaignLoading={startCampaignLoading}
+            startCampaignLoadingId={startCampaignLoadingId}
             pauseCampaignLoading={pauseCampaignLoading}
             deleteCampaignLoading={deleteCampaignLoading}
           />

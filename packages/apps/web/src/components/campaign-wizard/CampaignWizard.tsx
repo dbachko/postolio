@@ -35,7 +35,7 @@ export function CampaignWizard() {
   }, []);
 
   // Determine if wizard has unsaved work to warn on navigation
-  const isDirty = useCampaignWizard((s) => {
+  const hasUnsavedChanges = useCampaignWizard((s) => {
     return (
       (s.name && s.name.trim().length > 0) ||
       s.campaignType !== null ||
@@ -52,6 +52,14 @@ export function CampaignWizard() {
       s.strategySchedule != null
     );
   });
+  const skipUnsavedWarning = useCampaignWizard((s) => s.skipUnsavedWarning);
+  const shouldWarn = hasUnsavedChanges && !skipUnsavedWarning;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges && skipUnsavedWarning) {
+      useCampaignWizard.setState({ skipUnsavedWarning: false });
+    }
+  }, [hasUnsavedChanges, skipUnsavedWarning]);
 
   // Block internal route transitions with a tiny confirm
   function useNavigationConfirm(when: boolean, message: string) {
@@ -65,18 +73,18 @@ export function CampaignWizard() {
     }, [blocker, message]);
   }
 
-  useNavigationConfirm(isDirty, "You'll lose your changes. Leave this page?");
+  useNavigationConfirm(shouldWarn, "You'll lose your changes. Leave this page?");
 
   // Warn on browser/tab close or hard navigation
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (!isDirty) return;
+      if (!shouldWarn) return;
       e.preventDefault();
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [isDirty]);
+  }, [shouldWarn]);
 
   // Ensure brand id is set when brand is available (already handled by useWizardBrandSync)
 

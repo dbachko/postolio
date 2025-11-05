@@ -61,8 +61,9 @@ export function Step5Review() {
         seasonalityAssist: state.seasonalityAssist,
       } as const;
       await campaignApi.createCampaign(payload as any);
-      // Invalidate campaigns list for this brand so the dashboard shows the new campaign immediately
+      // Invalidate campaigns list and brand calendar cache so new placeholders appear immediately
       queryClient.invalidateQueries({ queryKey: ['campaigns', brand.id] });
+      queryClient.invalidateQueries({ queryKey: ['calendar', brand.id] });
       // Log funnel event (fire-and-forget)
       try {
         await httpPost('/api/analytics/wizard-event', {
@@ -74,8 +75,9 @@ export function Step5Review() {
         // ignore telemetry errors
       }
       toast.success('Campaign created. Generating preview posts...');
-      reset();
+      useCampaignWizard.setState({ skipUnsavedWarning: true });
       navigate('/campaigns');
+      setTimeout(() => reset(), 0);
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : 'Failed to create campaign');

@@ -207,7 +207,7 @@ export function Settings() {
                         </div>
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-72 overflow-y-auto">
                       {Object.entries(
                         COMMON_TIMEZONES.reduce(
                           (groups, tz) => {
@@ -291,7 +291,7 @@ export function Settings() {
                           : 'Use account timezone'}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-72 overflow-y-auto">
                       <SelectItem value="default">Use account timezone</SelectItem>
                       {Object.entries(
                         COMMON_TIMEZONES.reduce(

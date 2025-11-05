@@ -2,12 +2,23 @@ import { memo, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { CalendarClock, Palette, Tag, Clock, Star, Pause, Play, Trash2 } from 'lucide-react';
+import {
+  CalendarClock,
+  Palette,
+  Tag,
+  Clock,
+  Star,
+  Pause,
+  Play,
+  Trash2,
+  Loader2,
+} from 'lucide-react';
 import type { Campaign } from '../lib/api';
 import { getStableColorFromId } from '../utils/campaign-colors';
 import { getStoredCampaignColor } from '@/utils/campaign-color-storage';
 // import { useNavigateWithFilters } from '@/hooks/useURLFilterSync';
 import { getFrequencyLabel, getPriorityLabel, getStyleLabel } from '@/utils/campaign';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface CampaignCardProps {
   campaign: Campaign;
@@ -16,6 +27,7 @@ interface CampaignCardProps {
   onPauseCampaign: (campaignId: string) => void;
   onDeleteCampaign: (campaignId: string, campaignName: string) => void;
   startCampaignLoading?: boolean;
+  startCampaignLoadingId?: string | null;
   pauseCampaignLoading?: boolean;
   deleteCampaignLoading?: boolean;
 }
@@ -28,6 +40,7 @@ const CampaignCard = memo(
     onPauseCampaign,
     onDeleteCampaign,
     startCampaignLoading = false,
+    startCampaignLoadingId = null,
     pauseCampaignLoading = false,
     deleteCampaignLoading = false,
   }: CampaignCardProps) => {
@@ -122,6 +135,13 @@ const CampaignCard = memo(
       return Array.isArray(campaign.content) ? campaign.content.length : undefined;
     }, [campaign]);
 
+    const isLaunching = startCampaignLoading && startCampaignLoadingId === campaign.id;
+    const launchTooltip = startCampaignLoading
+      ? isLaunching
+        ? 'Launching… We’re queuing new AI posts and placeholders.'
+        : 'Another campaign is launching right now. Please wait a moment.'
+      : 'Launch this campaign to start scheduling its AI posts.';
+
     return (
       <Card
         className="bg-card group relative cursor-pointer transition-all duration-200 hover:shadow-lg"
@@ -150,18 +170,34 @@ const CampaignCard = memo(
               {/* Quick actions - hover on desktop */}
               <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                 {campaign.status === 'preview' && (
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStartCampaign(campaign.id);
-                    }}
-                    disabled={startCampaignLoading}
-                    className="px-3 py-1 text-xs"
-                  >
-                    <Play className="mr-1 h-3 w-3" />
-                    Launch
-                  </Button>
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onStartCampaign(campaign.id);
+                          }}
+                          disabled={startCampaignLoading}
+                          className="px-3 py-1 text-xs"
+                        >
+                          {isLaunching ? (
+                            <>
+                              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              Launching…
+                            </>
+                          ) : (
+                            <>
+                              <Play className="mr-1 h-3 w-3" />
+                              Launch
+                            </>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{launchTooltip}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
 
                 {campaign.status === 'active' && (
