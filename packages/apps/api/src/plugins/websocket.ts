@@ -154,6 +154,11 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
 
         switch (message.type) {
           case 'ping':
+            // Treat explicit ping messages from the client as a heartbeat signal.
+            // Some edge proxies strip WebSocket control frames, so `socket.on('pong')`
+            // might never fire; updating `isAlive` here prevents the server heartbeat
+            // from closing otherwise healthy connections.
+            socket.isAlive = true;
             socket.send(JSON.stringify({ type: 'pong' }));
             break;
 

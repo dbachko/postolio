@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Loader2 } from 'lucide-react';
@@ -33,21 +33,58 @@ export function InstagramSyncButton({
   const queryClient = useQueryClient();
 
   // Poll backend for sync status to disable button if another sync is running
-  const statusQuery = useQuery<{
+  const {
+    data: statusData,
+    refetch: refetchStatus,
+    isFetching: statusFetching,
+  } = useQuery<{
     inProgress: boolean;
     lockTtl?: number | null;
     cooldownRemaining?: number;
   }>({
     queryKey: ['instagram-sync-status', brandId],
     queryFn: async () => brandApi.getInstagramSyncStatus(brandId),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
     refetchInterval: (q) => {
       const data = q.state.data as any;
-      // Poll frequently only when a sync is in progress or cooldown is active
+      // Only poll when sync is actively running; cooldown handled client-side
       if (data?.inProgress) return 1500;
-      if ((data?.cooldownRemaining || 0) > 0) return 5000;
       return false;
     },
   });
+
+  const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
+  useEffect(() => {
+    const remaining = statusData?.cooldownRemaining;
+    if (typeof remaining === 'number' && remaining > 0) {
+      setCooldownEndsAt(Date.now() + remaining * 1000);
+    } else {
+      setCooldownEndsAt(null);
+      setCooldownSeconds(0);
+    }
+  }, [statusData?.cooldownRemaining]);
+
+  useEffect(() => {
+    if (!cooldownEndsAt) {
+      setCooldownSeconds(0);
+      return;
+    }
+
+    const update = () => {
+      const diff = Math.max(0, Math.ceil((cooldownEndsAt - Date.now()) / 1000));
+      setCooldownSeconds(diff);
+      if (diff <= 0) {
+        setCooldownEndsAt(null);
+      }
+    };
+
+    update();
+    const intervalId = window.setInterval(update, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [cooldownEndsAt]);
 
   const syncMutation = useMutation<SyncResponse, Error>({
     mutationFn: async () => {
@@ -58,7 +95,7 @@ export function InstagramSyncButton({
       });
       return response;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setSyncProgress(null);
       const { synced, skipped, failed } = data.results;
 
@@ -86,8 +123,11 @@ export function InstagramSyncButton({
       if (failed > 0 && data.results.errors) {
         console.error('Sync errors:', data.results.errors);
       }
+
+      // Refresh status once to capture new cooldown info
+      await refetchStatus();
     },
-    onError: (error: Error) => {
+    onError: async (error: Error) => {
       setSyncProgress(null);
       const errorMessage = error.message || 'Failed to sync Instagram posts';
 
@@ -109,6 +149,8 @@ export function InstagramSyncButton({
           description: errorMessage,
         });
       }
+
+      await refetchStatus();
     },
   });
 
@@ -117,19 +159,18 @@ export function InstagramSyncButton({
   };
 
   const isLoading = syncMutation.isPending;
-  const inProgress = statusQuery.data?.inProgress;
-  const cooldownRemaining = statusQuery.data?.cooldownRemaining || 0;
-  const disabled = isLoading || !!inProgress || cooldownRemaining > 0;
+  const inProgress = statusData?.inProgress;
+  const disabled = isLoading || !!inProgress || cooldownSeconds > 0;
 
   const buttonText = useMemo(() => {
     if (isLoading || inProgress) return 'Syncing...';
-    if (cooldownRemaining > 0) {
-      const mins = Math.floor(cooldownRemaining / 60);
-      const secs = cooldownRemaining % 60;
+    if (cooldownSeconds > 0) {
+      const mins = Math.floor(cooldownSeconds / 60);
+      const secs = cooldownSeconds % 60;
       return `Cooldown ${mins}m ${secs}s`;
     }
     return 'Sync Instagram Posts';
-  }, [isLoading, inProgress, cooldownRemaining]);
+  }, [isLoading, inProgress, cooldownSeconds]);
 
   return (
     <Button
@@ -139,7 +180,7 @@ export function InstagramSyncButton({
       size={size}
       className={className}
     >
-      {isLoading || inProgress ? (
+      {isLoading || inProgress || statusFetching ? (
         <>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           {syncProgress || buttonText}

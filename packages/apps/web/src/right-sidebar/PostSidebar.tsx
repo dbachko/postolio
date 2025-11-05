@@ -15,7 +15,6 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { PostCaptionEditor } from '@/components/PostCaptionEditor';
 import { PostHashtagEditor } from '@/components/PostHashtagEditor';
 import { PostScheduler } from '@/components/PostScheduler';
-import { useDebounce } from '@/hooks/useDebounce';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { convertLocalToUTC } from '@/lib/timezone';
 import { Link, useNavigate } from 'react-router-dom';
@@ -31,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { normalizeHashtags, stripHashtagPrefixes } from '@/utils/hashtags';
 
 interface PostDetailData {
   id: string;
@@ -41,6 +41,9 @@ interface PostDetailData {
   scheduledAt?: string;
   brand: { id: string; name: string };
 }
+
+const formatScheduledInput = (value?: string) =>
+  value ? new Date(value).toISOString().slice(0, 16) : '';
 
 export function PostSidebar({ id }: { id?: string }) {
   const { close } = useRightSidebarRouter();
@@ -84,16 +87,20 @@ export function PostSidebar({ id }: { id?: string }) {
     imageUrl: '',
     scheduledAt: '',
   });
+  const [hasChanges, setHasChanges] = useState(false);
+  const formInitializedRef = useRef(false);
 
   // Initialize form from post
   useEffect(() => {
     if (!post) return;
     setFormData({
       caption: post.caption || '',
-      hashtags: (post.hashtags || []).map((t: string) => (t.startsWith('#') ? t.slice(1) : t)),
+      hashtags: stripHashtagPrefixes(post.hashtags || []),
       imageUrl: post.imageUrl || '',
-      scheduledAt: post.scheduledAt ? new Date(post.scheduledAt).toISOString().slice(0, 16) : '',
+      scheduledAt: formatScheduledInput(post.scheduledAt),
     });
+    setHasChanges(false);
+    formInitializedRef.current = true;
   }, [post]);
 
   // Clean up object URL on unmount
@@ -107,8 +114,8 @@ export function PostSidebar({ id }: { id?: string }) {
   }, []);
 
   const disabled = post?.status === 'published';
+  const canScheduleExisting = Boolean(!disabled && post && post.status !== 'scheduled');
 
-  const debouncedFormData = useDebounce(formData, 500);
   const { mutate: mutateContent, isPending: isSaving } = useMutation({
     mutationFn: async (data: {
       contentId: string;
@@ -127,39 +134,9 @@ export function PostSidebar({ id }: { id?: string }) {
           status: response.content?.status || oldData.status,
         } as PostDetailData;
       });
+      setHasChanges(false);
     },
     onError: () => toast.error('Failed to save changes'),
-  });
-
-  // Save as draft mutation
-  const { mutate: saveAsDraft, isPending: isSavingDraft } = useMutation({
-    mutationFn: async () => {
-      if (!id) throw new Error('No post ID');
-      const normalizeHashtags = (tags: string[] | undefined | null) =>
-        (tags || [])
-          .map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : ''))
-          .filter((t) => t.length > 0);
-
-      return contentApi.updateContent({
-        contentId: id,
-        caption: formData.caption.trim(),
-        hashtags: normalizeHashtags(formData.hashtags),
-        imageUrl: formData.imageUrl || undefined,
-        scheduledAt: undefined, // Clear schedule to make it a draft
-      });
-    },
-    onSuccess: (response) => {
-      toast.success('Saved as draft');
-      queryClient.setQueryData(['post', id], (oldData: PostDetailData | undefined) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          ...response.content,
-          status: 'draft',
-        } as PostDetailData;
-      });
-    },
-    onError: () => toast.error('Failed to save as draft'),
   });
 
   // Schedule post mutation
@@ -167,11 +144,6 @@ export function PostSidebar({ id }: { id?: string }) {
     mutationFn: async () => {
       if (!id) throw new Error('No post ID');
       if (!formData.scheduledAt) throw new Error('No scheduled time set');
-
-      const normalizeHashtags = (tags: string[] | undefined | null) =>
-        (tags || [])
-          .map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : ''))
-          .filter((t) => t.length > 0);
 
       const scheduledUtc = convertLocalToUTC(
         new Date(formData.scheduledAt),
@@ -204,11 +176,6 @@ export function PostSidebar({ id }: { id?: string }) {
   const { mutate: createPost, isPending: isCreatingPost } = useMutation({
     mutationFn: async (mode: 'draft' | 'schedule') => {
       if (!selectedBrand) throw new Error('No brand selected');
-
-      const normalizeHashtags = (tags: string[] | undefined | null) =>
-        (tags || [])
-          .map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : ''))
-          .filter((t) => t.length > 0);
 
       const hashtagArray = Array.from(new Set(normalizeHashtags(formData.hashtags)));
 
@@ -253,42 +220,34 @@ export function PostSidebar({ id }: { id?: string }) {
     },
   });
 
-  // Auto-save
   useEffect(() => {
-    if (!post || !id || disabled) return;
-    if (!debouncedFormData.caption || debouncedFormData.caption.trim().length === 0) return;
-    if (isSaving) return;
+    if (!id || !post || !formInitializedRef.current) {
+      if (!id) {
+        setHasChanges(false);
+      }
+      return;
+    }
 
-    const normalizeHashtags = (tags: string[] | undefined | null) =>
-      (tags || [])
-        .map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : ''))
-        .filter((t) => t.length > 0);
+    const trimmedCaption = (formData.caption || '').trim();
+    const originalCaption = (post.caption || '').trim();
 
-    const currentScheduledUtc = post.scheduledAt
-      ? new Date(post.scheduledAt).toISOString()
-      : undefined;
-    const formScheduledUtc = debouncedFormData.scheduledAt
-      ? convertLocalToUTC(new Date(debouncedFormData.scheduledAt), brandTimezone).toISOString()
-      : undefined;
-    const scheduledChanged = currentScheduledUtc !== formScheduledUtc;
+    const scheduledValue = formData.scheduledAt || '';
+    const originalScheduled = formatScheduledInput(post.scheduledAt);
 
-    const hasChanges =
-      debouncedFormData.caption.trim() !== (post.caption || '') ||
-      JSON.stringify(normalizeHashtags(debouncedFormData.hashtags)) !==
-        JSON.stringify(normalizeHashtags(post.hashtags as unknown as string[])) ||
-      debouncedFormData.imageUrl !== (post.imageUrl || '') ||
-      scheduledChanged;
+    const formHashtags = normalizeHashtags(formData.hashtags);
+    const postHashtags = normalizeHashtags(post.hashtags || []);
 
-    if (!hasChanges) return;
+    const formImage = formData.imageUrl || '';
+    const postImage = post.imageUrl || '';
 
-    mutateContent({
-      contentId: id,
-      caption: debouncedFormData.caption.trim(),
-      hashtags: normalizeHashtags(debouncedFormData.hashtags),
-      imageUrl: debouncedFormData.imageUrl || undefined,
-      ...(scheduledChanged ? { scheduledAt: formScheduledUtc } : {}),
-    });
-  }, [debouncedFormData, brandTimezone, post, id, disabled, isSaving, mutateContent]);
+    const changed =
+      trimmedCaption !== originalCaption ||
+      JSON.stringify(formHashtags) !== JSON.stringify(postHashtags) ||
+      scheduledValue !== originalScheduled ||
+      formImage !== postImage;
+
+    setHasChanges(changed);
+  }, [formData, id, post]);
 
   const handleImageChange = async (fileOrUrl?: File | string | null) => {
     if (!id || !fileOrUrl || disabled) return;
@@ -299,6 +258,35 @@ export function PostSidebar({ id }: { id?: string }) {
     const res = await contentApi.uploadContentImage(id, fileOrUrl);
     const url = res?.content?.imageUrl;
     if (url) setFormData((s) => ({ ...s, imageUrl: url }));
+  };
+
+  const handleSaveChanges = () => {
+    if (!id || !hasChanges) return;
+
+    const trimmedCaption = formData.caption?.trim() || '';
+    if (trimmedCaption.length === 0) {
+      toast.error('Caption cannot be empty');
+      return;
+    }
+
+    const scheduledAtPayload = formData.scheduledAt
+      ? convertLocalToUTC(new Date(formData.scheduledAt), brandTimezone).toISOString()
+      : undefined;
+
+    mutateContent({
+      contentId: id,
+      caption: trimmedCaption,
+      hashtags: normalizeHashtags(formData.hashtags),
+      imageUrl: formData.imageUrl || undefined,
+      ...(scheduledAtPayload ? { scheduledAt: scheduledAtPayload } : {}),
+    });
+  };
+
+  const handleCloseSidebar = () => {
+    if (!disabled && hasChanges) {
+      handleSaveChanges();
+    }
+    close();
   };
 
   // Campaign selection state
@@ -350,9 +338,15 @@ export function PostSidebar({ id }: { id?: string }) {
           <Breadcrumb aria-label="right-sidebar-title">
             <BreadcrumbList>
               <BreadcrumbItem>
-                <BreadcrumbLink asChild>
-                  <Link to={`/posts/${id}?edit=1`}>{isLoading ? 'Loading…' : 'Edit Post'}</Link>
-                </BreadcrumbLink>
+                {isLoading ? (
+                  <BreadcrumbPage>Loading…</BreadcrumbPage>
+                ) : (
+                  <BreadcrumbLink asChild>
+                    <Link to={disabled ? `/posts/${id}` : `/posts/${id}?edit=1`}>
+                      {disabled ? 'View Post' : 'Edit Post'}
+                    </Link>
+                  </BreadcrumbLink>
+                )}
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
@@ -366,7 +360,12 @@ export function PostSidebar({ id }: { id?: string }) {
           </Breadcrumb>
         )}
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={close} aria-label="Close sidebar">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleCloseSidebar}
+            aria-label="Close sidebar"
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -541,7 +540,7 @@ export function PostSidebar({ id }: { id?: string }) {
                     <img
                       src={formData.imageUrl}
                       alt="Post content"
-                      className="h-auto max-h-[400px] w-full object-cover"
+                      className="h-auto max-h-[250px] w-full object-cover"
                       loading="lazy"
                       decoding="async"
                     />
@@ -629,13 +628,9 @@ export function PostSidebar({ id }: { id?: string }) {
             {!disabled && (
               <div className="space-y-3 pt-4">
                 <Separator />
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => saveAsDraft()}
-                    disabled={isSavingDraft || !formData.caption?.trim()}
-                  >
-                    {isSavingDraft ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+                  <Button onClick={handleSaveChanges} disabled={!hasChanges || isSaving}>
+                    {isSaving ? (
                       <>
                         <Save className="mr-2 h-4 w-4 animate-pulse" />
                         Saving...
@@ -643,26 +638,28 @@ export function PostSidebar({ id }: { id?: string }) {
                     ) : (
                       <>
                         <Save className="mr-2 h-4 w-4" />
-                        Save as Draft
+                        Save Changes
                       </>
                     )}
                   </Button>
-                  <Button
-                    onClick={() => schedulePost()}
-                    disabled={isScheduling || !formData.caption?.trim() || !formData.scheduledAt}
-                  >
-                    {isScheduling ? (
-                      <>
-                        <Clock className="mr-2 h-4 w-4 animate-pulse" />
-                        Scheduling...
-                      </>
-                    ) : (
-                      <>
-                        <Clock className="mr-2 h-4 w-4" />
-                        Schedule Post
-                      </>
-                    )}
-                  </Button>
+                  {canScheduleExisting && (
+                    <Button
+                      onClick={() => schedulePost()}
+                      disabled={isScheduling || !formData.caption?.trim() || !formData.scheduledAt}
+                    >
+                      {isScheduling ? (
+                        <>
+                          <Clock className="mr-2 h-4 w-4 animate-pulse" />
+                          Scheduling...
+                        </>
+                      ) : (
+                        <>
+                          <Clock className="mr-2 h-4 w-4" />
+                          Schedule Post
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               </div>
             )}

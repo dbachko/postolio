@@ -2,7 +2,6 @@ import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, memo, useEffect, useRef } from 'react';
 import { content as contentApi } from '../lib/api';
-import { useDebounce } from '../hooks/useDebounce';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +38,7 @@ import { PostSaveIndicator, type SaveStatus } from '../components/PostSaveIndica
 import { PostLearningFeedback } from '../components/PostLearningFeedback';
 import { ImageUploader } from '../components/ImageUploader';
 import { getPostImageOrPlaceholder } from '@/lib/placeholders';
+import { normalizeHashtags, stripHashtagPrefixes } from '../utils/hashtags';
 
 interface PostDetailData {
   id: string;
@@ -101,6 +101,13 @@ interface FormData {
   scheduledAt: string;
 }
 
+const buildFormStateFromPost = (post: PostDetailData): FormData => ({
+  caption: post.caption || '',
+  hashtags: stripHashtagPrefixes(post.hashtags || []),
+  imageUrl: post.imageUrl || '',
+  scheduledAt: post.scheduledAt ? format(new Date(post.scheduledAt), "yyyy-MM-dd'T'HH:mm") : '',
+});
+
 // Memoized metrics component to prevent unnecessary re-renders
 const MetricsGrid = memo(({ insights }: { insights: PostInsights }) => (
   <div className="grid grid-cols-2 gap-3 md:gap-4">
@@ -161,7 +168,9 @@ export default function PostDetail() {
   });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [hasChanges, setHasChanges] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
+  const formInitializedRef = useRef(false);
   const [learningFeedback, setLearningFeedback] = useState<{
     isVisible: boolean;
     message: string;
@@ -264,14 +273,9 @@ export default function PostDetail() {
   // Initialize form data when post loads or editing starts
   useEffect(() => {
     if (post && isEditing) {
-      setFormData({
-        caption: post.caption || '',
-        hashtags: (post.hashtags || []).map((t: string) => (t.startsWith('#') ? t.slice(1) : t)),
-        imageUrl: post.imageUrl || '',
-        scheduledAt: post.scheduledAt
-          ? format(new Date(post.scheduledAt), "yyyy-MM-dd'T'HH:mm")
-          : '',
-      });
+      setFormData(buildFormStateFromPost(post));
+      setHasChanges(false);
+      formInitializedRef.current = true;
     }
   }, [post, isEditing]);
 
@@ -284,9 +288,6 @@ export default function PostDetail() {
       }
     };
   }, []);
-
-  // Debounced form data for auto-save
-  const debouncedFormData = useDebounce(formData, 500);
 
   // Update post mutation with learning feedback
   const { mutate: mutateContent, isPending: isSaving } = useMutation({
@@ -343,65 +344,33 @@ export default function PostDetail() {
     },
   });
 
-  // Track last submitted payload to avoid duplicate requests
-  const lastSubmittedRef = useRef<string | null>(null);
-
-  // Auto-save when debounced form data changes
   useEffect(() => {
-    if (!post || !isEditing || !postId) return;
-    // Avoid spamming while a save is in-flight
-    if (isSaving) return;
-
-    // Don't auto-save if caption is empty
-    if (!debouncedFormData.caption || debouncedFormData.caption.trim().length === 0) {
+    if (!post || !formInitializedRef.current) {
       return;
     }
 
-    // Normalize hashtags by stripping leading '#'
-    const normalizeHashtags = (tags: string[] | undefined | null) =>
-      (tags || [])
-        .map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : ''))
-        .filter((t) => t.length > 0);
+    const trimmedCaption = (formData.caption || '').trim();
+    const originalCaption = (post.caption || '').trim();
 
-    // Normalize caption for comparison (server trims on save)
-    const trimmedCaption = (debouncedFormData.caption || '').trim();
+    const scheduledValue = formData.scheduledAt || '';
+    const originalScheduled = post.scheduledAt
+      ? format(new Date(post.scheduledAt), "yyyy-MM-dd'T'HH:mm")
+      : '';
 
-    // Compute scheduledAt changes by comparing UTC instants
-    const currentScheduledUtc = post.scheduledAt
-      ? new Date(post.scheduledAt).toISOString()
-      : undefined;
-    const formScheduledUtc = debouncedFormData.scheduledAt
-      ? convertLocalToUTC(new Date(debouncedFormData.scheduledAt), brandTimezone).toISOString()
-      : undefined;
-    const scheduledChanged = currentScheduledUtc !== formScheduledUtc;
+    const formHashtags = normalizeHashtags(formData.hashtags);
+    const postHashtags = normalizeHashtags(post.hashtags || []);
 
-    // Check if form data has changed from original
-    const hasChanges =
-      trimmedCaption !== (post.caption || '') ||
-      JSON.stringify(normalizeHashtags(debouncedFormData.hashtags)) !==
-        JSON.stringify(normalizeHashtags(post.hashtags as unknown as string[])) ||
-      debouncedFormData.imageUrl !== (post.imageUrl || '') ||
-      scheduledChanged;
+    const formImage = formData.imageUrl || '';
+    const postImage = post.imageUrl || '';
 
-    if (hasChanges) {
-      const payload = {
-        contentId: postId,
-        caption: trimmedCaption,
-        // Send normalized hashtags to backend for consistency
-        hashtags: normalizeHashtags(debouncedFormData.hashtags),
-        imageUrl: debouncedFormData.imageUrl || undefined,
-        // Only send scheduledAt when it actually changes, in UTC
-        ...(scheduledChanged ? { scheduledAt: formScheduledUtc } : {}),
-      } as const;
+    const formChanged =
+      trimmedCaption !== originalCaption ||
+      JSON.stringify(formHashtags) !== JSON.stringify(postHashtags) ||
+      formImage !== postImage ||
+      scheduledValue !== originalScheduled;
 
-      const key = JSON.stringify(payload);
-      if (lastSubmittedRef.current === key) {
-        return;
-      }
-      lastSubmittedRef.current = key;
-      mutateContent(payload as any);
-    }
-  }, [debouncedFormData, post, isEditing, postId, brandTimezone, isSaving, mutateContent]);
+    setHasChanges(formChanged);
+  }, [formData, post]);
 
   const handleCaptionChange = (value: string) => {
     setFormData((prev) => ({ ...prev, caption: value }));
@@ -478,6 +447,30 @@ export default function PostDetail() {
     }
   };
 
+  const handleSaveChanges = () => {
+    if (!post || !postId || !hasChanges) {
+      return;
+    }
+
+    const trimmedCaption = (formData.caption || '').trim();
+    if (trimmedCaption.length === 0) {
+      toast.error('Caption cannot be empty');
+      return;
+    }
+
+    const scheduledAtPayload = formData.scheduledAt
+      ? convertLocalToUTC(new Date(formData.scheduledAt), brandTimezone).toISOString()
+      : undefined;
+
+    mutateContent({
+      contentId: postId,
+      caption: trimmedCaption,
+      hashtags: normalizeHashtags(formData.hashtags),
+      imageUrl: formData.imageUrl || undefined,
+      ...(scheduledAtPayload ? { scheduledAt: scheduledAtPayload } : {}),
+    });
+  };
+
   const handleEdit = () => {
     setIsEditing(true);
   };
@@ -487,6 +480,11 @@ export default function PostDetail() {
     setSaveStatus('idle');
     setLastSaved(null);
     setLearningFeedback({ isVisible: false, message: '' });
+    if (post) {
+      setFormData(buildFormStateFromPost(post));
+      setHasChanges(false);
+      formInitializedRef.current = true;
+    }
 
     // Clean up object URL
     if (objectUrlRef.current) {
@@ -588,7 +586,7 @@ export default function PostDetail() {
                   status={saveStatus}
                   lastSaved={lastSaved}
                   showAILearningMessage={saveStatus === 'saved'}
-                  idleHint="Edits save automatically"
+                  idleHint="Click Save to apply your edits"
                 />
               )}
             </div>
@@ -677,10 +675,15 @@ export default function PostDetail() {
                   Edit
                 </Button>
               ) : (
-                <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
-                  <X className="mr-2 h-4 w-4" />
-                  Cancel
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+                    <X className="mr-2 h-4 w-4" />
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleSaveChanges} disabled={!hasChanges || isSaving}>
+                    Save Changes
+                  </Button>
+                </div>
               )}
             </div>
 
@@ -690,6 +693,7 @@ export default function PostDetail() {
                 <div className="space-y-2">
                   <Label>Post Image</Label>
                   <ImageUploader
+                    className="w-full max-w-[260px]"
                     value={formData.imageUrl || undefined}
                     onChange={handleImageChange}
                     maxSizeInMB={10}
@@ -713,7 +717,7 @@ export default function PostDetail() {
                   <img
                     src={getPostImageOrPlaceholder(post.imageUrl)}
                     alt="Post content"
-                    className="h-auto max-h-[400px] w-full object-cover"
+                    className="h-auto max-h-[250px] w-full object-cover"
                     loading="lazy"
                     decoding="async"
                   />

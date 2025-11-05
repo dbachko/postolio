@@ -349,7 +349,6 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
   };
 
   const handleClose = async () => {
-    // Save changes on close if there are any
     if (hasChanges) {
       await saveChanges();
     }
@@ -365,7 +364,14 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
   if (!content) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          void handleClose();
+        }
+      }}
+    >
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Post</DialogTitle>
@@ -373,6 +379,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
             status={saveStatus}
             lastSaved={lastSaved}
             showAILearningMessage={showLearningMessage && hasChanges}
+            idleHint="Click Save to apply your edits"
           />
         </DialogHeader>
 

@@ -49,29 +49,29 @@ export function NotificationsSidebar() {
         </div>
       </div>
       <Separator />
-      <ScrollArea className="flex-1 px-4 py-2">
+      <ScrollArea className="flex-1 px-4 py-4">
         {loading ? (
           <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
             Loading...
           </div>
         ) : items.length === 0 ? (
-          <Empty className="from-muted/50 to-background h-full bg-gradient-to-b from-30%">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <BellIcon className="h-6 w-6" />
-              </EmptyMedia>
-              <EmptyTitle>No Notifications</EmptyTitle>
-              <EmptyDescription>
-                You&apos;re all caught up. New notifications will appear here.
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
+          <div className="flex h-full min-h-full items-center justify-center">
+            <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
+              <span className="text-muted-foreground/70">
+                <BellIcon className="h-8 w-8" />
+              </span>
+              <div>
+                <p className="text-foreground text-base font-semibold">No Notifications</p>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  You&apos;re all caught up. New notifications will appear here.
+                </p>
+              </div>
               <Button variant="outline" size="sm" onClick={() => fetchLatest()}>
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Refresh
               </Button>
-            </EmptyContent>
-          </Empty>
+            </div>
+          </div>
         ) : (
           <ul className="space-y-1">
             {items.map((n) => (
@@ -101,11 +101,3 @@ export function NotificationsSidebar() {
     </div>
   );
 }
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';

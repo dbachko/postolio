@@ -121,9 +121,20 @@ export class ApiStack extends cdk.Stack {
           ).stringValue
         : `postolio-${environment}-brand-analysis-jobs`);
 
-    // Optional Scheduling EventBridge bus name is no longer resolved at deploy time to avoid
-    // hard dependency on the Scheduling stack's SSM parameter. The API falls back to 'default'
-    // when EVENT_BUS_NAME is not provided.
+    // Resolve Scheduling EventBridge bus name so API publishes to the same bus as downstream
+    // consumers (brand-analysis, autopilot, etc.). Fall back to 'default' when the parameter
+    // isn't present to preserve local/dev bootstraps.
+    let schedulingEventBusName: string | undefined;
+    try {
+      schedulingEventBusName = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/scheduling/event-bus-name`
+      );
+    } catch (err) {
+      console.warn(
+        `Scheduling event bus parameter not found for ${environment}; falling back to default EventBridge bus`
+      );
+    }
 
     // ==================== Import Foundation Resources ====================
     // Import VPC from Foundation stack (for CDK lookup, synth-safe via context)
@@ -466,8 +477,8 @@ export class ApiStack extends cdk.Stack {
                 .toLowerCase() === 'true'
                 ? 'true'
                 : 'false',
-            // EventBridge bus for platform events; use 'default' to avoid SSM dependency
-            EVENT_BUS_NAME: 'default',
+            // EventBridge bus for platform events – align with Scheduling stack when available
+            EVENT_BUS_NAME: schedulingEventBusName || 'default',
             BRAND_STYLE_PROFILES_TABLE: brandProfilesTableName,
             BRAND_ANALYSIS_JOBS_TABLE: brandJobsTableName,
             ...(redisEndpointParam && { REDIS_HOST: redisEndpointParam.stringValue }),

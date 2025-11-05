@@ -182,11 +182,26 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
     '/:brandId/analysis/profile',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
-      if (!PROFILES_TABLE) {
-        // No profiles table configured in this environment -> behave as no profile found
-        return reply.code(404).send({ error: 'No profile found' });
-      }
       const { brandId } = request.params;
+      const respondWithProjection = async () => {
+        try {
+          const projection = await prisma.brandStyleProfileProjection.findUnique({
+            where: { brandId },
+          });
+          if (!projection || !projection.summaryProjection) {
+            return reply.code(404).send({ error: 'No profile found' });
+          }
+          return reply.send(projection.summaryProjection);
+        } catch (err) {
+          request.log.error({ err, brandId }, 'Failed to fetch profile projection');
+          return reply.code(500).send({ error: 'Failed to fetch latest profile' });
+        }
+      };
+
+      if (!PROFILES_TABLE) {
+        return respondWithProjection();
+      }
+
       try {
         const res = await doc.send(
           new QueryCommand({
@@ -198,11 +213,13 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
           })
         );
         const item = res.Items?.[0];
-        if (!item) return reply.code(404).send({ error: 'No profile found' });
+        if (!item) {
+          return respondWithProjection();
+        }
         return reply.send((item as { profile?: unknown }).profile || item);
       } catch (e) {
-        request.log.error({ err: e }, 'Failed to fetch latest profile');
-        return reply.code(500).send({ error: 'Failed to fetch latest profile' });
+        request.log.error({ err: e }, 'Failed to fetch latest profile from Dynamo');
+        return respondWithProjection();
       }
     }
   );

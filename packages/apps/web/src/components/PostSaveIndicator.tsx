@@ -48,7 +48,7 @@ export function PostSaveIndicator({
       default:
         return lastSaved
           ? `Last saved: ${format(lastSaved, 'HH:mm:ss')}`
-          : idleHint || 'Changes will be saved when you close the dialog';
+          : idleHint || 'No changes yet';
     }
   };
 
