@@ -13,8 +13,9 @@ interface SubscribeMessage extends BaseMessage<'subscribe'> {
   rooms?: string[]; // Support subscribing to multiple rooms
 }
 type UnsubscribeMessage = BaseMessage<'unsubscribe'>;
+type HeartbeatAckMessage = BaseMessage<'heartbeat_ack'>;
 
-type WebSocketMessage = PingMessage | SubscribeMessage | UnsubscribeMessage;
+type WebSocketMessage = PingMessage | SubscribeMessage | UnsubscribeMessage | HeartbeatAckMessage;
 
 type OutboundPayload =
   | { type: 'error'; message: string }
@@ -28,13 +29,15 @@ type OutboundPayload =
       timestamp: string;
     }
   | { type: 'unsubscribed'; timestamp: string }
-  | { type: 'pong' };
+  | { type: 'pong' }
+  | { type: 'heartbeat'; timestamp: string };
 
 interface AuthenticatedSocket extends WebSocket {
   userId?: string;
   brandId?: string | undefined;
   subscribedRooms?: Set<string>; // Track all subscribed rooms
   isAlive?: boolean;
+  missedHeartbeats?: number;
 }
 
 // Room management using Map
@@ -60,6 +63,9 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
 }
 
 const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
+  const HEARTBEAT_INTERVAL_MS = 45000; // ~45s, under AWS 10-min idle timeout
+  const MAX_MISSED_HEARTBEATS = 2; // Only disconnect after ~90s without acknowledgement
+
   // Register the base WebSocket plugin
   await fastify.register(fastifyWebsocket, {
     options: {
@@ -109,6 +115,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
   fastify.get(wsPath, { websocket: true }, async (connection, request) => {
     const socket = connection as AuthenticatedSocket;
     socket.isAlive = true;
+    socket.missedHeartbeats = 0;
 
     // Authenticate using cookie from handshake
     const cookies = parseCookies(request.headers.cookie);
@@ -159,7 +166,13 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
             // might never fire; updating `isAlive` here prevents the server heartbeat
             // from closing otherwise healthy connections.
             socket.isAlive = true;
+            socket.missedHeartbeats = 0;
             socket.send(JSON.stringify({ type: 'pong' }));
+            break;
+          case 'heartbeat_ack':
+            // Client confirms receipt of server heartbeat message
+            socket.isAlive = true;
+            socket.missedHeartbeats = 0;
             break;
 
           case 'subscribe':
@@ -199,15 +212,42 @@ const websocketPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => 
     heartbeatInterval = setInterval(() => {
       connections.forEach((sockets) => {
         sockets.forEach((socket) => {
-          if (socket.isAlive === false) {
+          if (socket.readyState !== WebSocket.OPEN) {
             cleanupSocket(socket);
             return;
           }
+
+          if (socket.isAlive === false) {
+            socket.missedHeartbeats = (socket.missedHeartbeats || 0) + 1;
+            if (socket.missedHeartbeats >= MAX_MISSED_HEARTBEATS) {
+              cleanupSocket(socket);
+              return;
+            }
+          } else {
+            socket.missedHeartbeats = 0;
+          }
+
           socket.isAlive = false;
-          socket.ping();
+
+          try {
+            socket.ping();
+          } catch (err) {
+            fastify.log.warn({ err }, 'Failed to send WebSocket ping frame');
+          }
+
+          try {
+            socket.send(
+              JSON.stringify({
+                type: 'heartbeat',
+                timestamp: new Date().toISOString(),
+              })
+            );
+          } catch (err) {
+            fastify.log.warn({ err }, 'Failed to send WebSocket heartbeat message');
+          }
         });
       });
-    }, 30000); // 30 seconds
+    }, HEARTBEAT_INTERVAL_MS);
   }
 
   // Cleanup on server close

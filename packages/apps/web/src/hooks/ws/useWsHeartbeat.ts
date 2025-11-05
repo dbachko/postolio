@@ -9,12 +9,16 @@ export function useWsHeartbeat() {
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
       }
-      heartbeatIntervalRef.current = setInterval(() => {
+      const sendPing = () => {
         const ws = wsRef.current;
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'ping' }));
         }
-      }, intervalMs);
+      };
+
+      // Send an immediate ping so the server marks this socket alive before the first heartbeat check.
+      sendPing();
+      heartbeatIntervalRef.current = setInterval(sendPing, intervalMs);
     },
     []
   );

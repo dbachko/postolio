@@ -76,6 +76,7 @@ export interface WebSocketMessage {
     | 'subscribe'
     | 'ping'
     | 'pong'
+    | 'heartbeat'
     | 'subscribed'
     | 'status_update'
     | 'batch_status_update'

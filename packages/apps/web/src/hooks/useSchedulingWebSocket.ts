@@ -22,7 +22,8 @@ export function useSchedulingWebSocket({
   onConnectionChange,
   onError,
   maxReconnectAttempts = 5,
-  heartbeatInterval = 30000,
+  // Server drops sockets after 30s without a heartbeat; stay safely under that threshold.
+  heartbeatInterval = 25000,
 }: UseSchedulingWebSocketOptions = {}) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -196,6 +197,20 @@ export function useSchedulingWebSocket({
       ws.onmessage = async (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
+
+          if (message.type === 'heartbeat') {
+            try {
+              ws.send(
+                JSON.stringify({
+                  type: 'heartbeat_ack',
+                  timestamp: Date.now(),
+                })
+              );
+            } catch (error) {
+              console.warn('Failed to send WebSocket heartbeat ack', error);
+            }
+            return;
+          }
 
           // Apply message filter to prevent unnecessary processing
           if (!messageFilter(message)) {
@@ -489,6 +504,35 @@ export function useSchedulingWebSocket({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, selectedBrand?.id]); // Intentionally omit connect/disconnect to prevent loops
+
+  // Ensure sockets are cleaned up when the provider unmounts (StrictMode, hot reload, etc).
+  useEffect(() => {
+    return () => {
+      isConnectingRef.current = false;
+
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = undefined;
+      }
+
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = undefined;
+      }
+
+      stopHeartbeat();
+
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch (error) {
+          console.warn('Failed to close WebSocket during unmount cleanup', error);
+        } finally {
+          wsRef.current = null;
+        }
+      }
+    };
+  }, [stopHeartbeat]);
 
   // Manual reconnect function (stable reference using react-use-websocket pattern)
   const reconnect = useCallback(() => {
