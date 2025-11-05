@@ -1,19 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 
-vi.mock('./timezone.js', () => {
-  const toLocal = (d: Date | string) => new Date(d);
-  const toUTC = (d: Date | string) => new Date(d);
-  const createDateInBrandTimezone = (dateString: string, timeString: string) =>
-    new Date(`${dateString}T${timeString}:00Z`);
-  return {
-    TimezoneService: {
-      toLocal,
-      toUTC,
-      createDateInBrandTimezone,
-    },
-  };
-});
-
 import { computeUpcomingSlots } from './slot-utils.js';
 
 describe('computeUpcomingSlots (utils)', () => {
@@ -50,5 +36,41 @@ describe('computeUpcomingSlots (utils)', () => {
       4
     );
     expect(slots.length).toBe(4);
+  });
+
+  it('keeps every2days cadence anchored to campaign start', async () => {
+    vi.setSystemTime(new Date('2025-01-05T08:00:00Z'));
+    const slots = await computeUpcomingSlots(
+      new Date('2025-01-01T00:00:00Z'),
+      new Date('2025-01-20T23:59:59Z'),
+      '12:00',
+      [],
+      'every2days',
+      'UTC',
+      5
+    );
+    const slotDates = slots.map((s) => s.toISOString().substring(0, 10));
+    expect(slotDates).toEqual([
+      '2025-01-05',
+      '2025-01-07',
+      '2025-01-09',
+      '2025-01-11',
+      '2025-01-13',
+    ]);
+  });
+
+  it('keeps first slot on the same local day when posting time is later today', async () => {
+    vi.setSystemTime(new Date('2025-01-10T18:40:00Z')); // 10:40 AM PT
+    const slots = await computeUpcomingSlots(
+      new Date('2025-01-10T00:00:00Z'),
+      new Date('2025-01-20T23:59:59Z'),
+      '14:00',
+      [],
+      'every2days',
+      'America/Los_Angeles',
+      3
+    );
+    expect(slots.length).toBeGreaterThan(0);
+    expect(slots[0]!.toISOString().startsWith('2025-01-10')).toBe(true);
   });
 });
