@@ -96,6 +96,18 @@ export class ApiStack extends cdk.Stack {
       `/postolio/${environment}/cdn/images-distribution-id`
     );
 
+    let frontendUrl: string | undefined;
+    try {
+      frontendUrl = ssm.StringParameter.valueForStringParameter(
+        this,
+        `/postolio/${environment}/web/url`
+      );
+    } catch (error) {
+      console.warn(
+        `Frontend URL parameter not found for environment ${environment}. Continuing without setting FRONTEND_URL.`
+      );
+    }
+
     // Brand Analysis table names (for Dynamo-backed read endpoints)
     // Decoupled approach with three options in priority order:
     // 1) Explicit table names via context/props
@@ -466,6 +478,7 @@ export class ApiStack extends cdk.Stack {
             S3_IMAGES_BUCKET: imagesBucketName,
             CLOUDFRONT_DOMAIN: imagesCdnDomain,
             CLOUDFRONT_DISTRIBUTION_ID: imagesCdnDistributionId,
+            ...(frontendUrl && { FRONTEND_URL: frontendUrl, APP_URL: frontendUrl }),
             // Feature flags (unified names)
             AUTH_MAGIC_LINK_ENABLED:
               (
