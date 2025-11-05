@@ -53,8 +53,9 @@ export function buildFastify(): FastifyInstance {
         .filter(Boolean);
       const allowedOrigins = [
         'https://ai.localhost:5173',
+        'http://ai.localhost:5173',
+        'https://ai.localhost',
         'http://localhost:5173',
-        'https://postolio.example',
         'https://postolio.example',
         ...envOrigins,
       ];
