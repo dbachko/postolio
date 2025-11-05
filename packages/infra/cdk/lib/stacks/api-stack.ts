@@ -148,6 +148,20 @@ export class ApiStack extends cdk.Stack {
       );
     }
 
+    const eventBridgeBusArns = new Set<string>([
+      `arn:aws:events:${this.region}:${this.account}:event-bus/default`,
+    ]);
+
+    if (schedulingEventBusName) {
+      eventBridgeBusArns.add(
+        cdk.Stack.of(this).formatArn({
+          service: 'events',
+          resource: 'event-bus',
+          resourceName: schedulingEventBusName,
+        })
+      );
+    }
+
     // ==================== Import Foundation Resources ====================
     // Import VPC from Foundation stack (for CDK lookup, synth-safe via context)
     const vpcId = ssm.StringParameter.valueFromLookup(this, `/postolio/${environment}/vpc/id`);
@@ -377,11 +391,11 @@ export class ApiStack extends cdk.Stack {
               ],
               resources: [`arn:aws:s3:::${imagesBucketName}`, `arn:aws:s3:::${imagesBucketName}/*`],
             }),
-            // EventBridge permissions for domain events (default bus)
+            // EventBridge permissions for domain + scheduling events
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['events:PutEvents'],
-              resources: [`arn:aws:events:${this.region}:${this.account}:event-bus/default`],
+              resources: Array.from(eventBridgeBusArns),
             }),
             // DynamoDB permissions for Brand Analysis tables (read-only for API routes)
             new iam.PolicyStatement({
