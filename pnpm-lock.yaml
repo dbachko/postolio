@@ -417,18 +417,15 @@ importers:
       '@uppy/dashboard':
         specifier: ^5.0.4
         version: 5.0.4(@uppy/core@5.1.1)
-      '@uppy/dropbox':
-        specifier: ^5.0.1
-        version: 5.0.1(@uppy/core@5.1.1)
-      '@uppy/google-drive':
-        specifier: ^5.0.1
-        version: 5.0.1(@uppy/core@5.1.1)
-      '@uppy/react':
-        specifier: ^5.1.1
-        version: 5.1.1(@uppy/core@5.1.1)(@uppy/dashboard@5.0.4(@uppy/core@5.1.1))(@uppy/webcam@5.0.2(@uppy/core@5.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
-      '@uppy/webcam':
+      '@uppy/drag-drop':
         specifier: ^5.0.2
         version: 5.0.2(@uppy/core@5.1.1)
+      '@uppy/file-input':
+        specifier: ^4.2.2
+        version: 4.2.2(@uppy/core@5.1.1)
+      '@uppy/react':
+        specifier: ^5.1.1
+        version: 5.1.1(@uppy/core@5.1.1)(@uppy/dashboard@5.0.4(@uppy/core@5.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       autoprefixer:
         specifier: ^10.4.21
         version: 10.4.21(postcss@8.5.6)
@@ -4831,15 +4828,15 @@ packages:
     peerDependencies:
       '@uppy/core': ^5.1.1
 
-  '@uppy/dropbox@5.0.1':
-    resolution: {integrity: sha512-TDF+K5APDorO67tr3u/y8rQxHIM66cIXy+1Uk4PfVPlFf5YSVdwYsKn9DEqDQZWsm3YmMdFI3iVJKOGsUlvD9Q==}
+  '@uppy/drag-drop@5.0.2':
+    resolution: {integrity: sha512-ZuupN+zOVDlAKMpEsTKxPilzxb/RlQyKx95WPlxgBraGO6zkKHt4B/KlGfxQ6d6Fi6gAvwKzZzxPZXerbw0rNA==}
     peerDependencies:
       '@uppy/core': ^5.0.2
 
-  '@uppy/google-drive@5.0.1':
-    resolution: {integrity: sha512-UkX322Z6V8P2/F+NH+v2APzEAtJJNH5bMBgTzk4v2oyAMFTL1wxkOm+/K8HGhwEOLiU3ta5JvXwuvVlC2uU49A==}
+  '@uppy/file-input@4.2.2':
+    resolution: {integrity: sha512-tQklK5C1slZWQlMQYQPBJuhfs0e5w1sRb0VwYMt8P297rB1BUcyOjkVH79DAYHkkgXo9aQKUiZSuVoN89tlLjQ==}
     peerDependencies:
-      '@uppy/core': ^5.0.2
+      '@uppy/core': ^4.5.2
 
   '@uppy/provider-views@5.1.2':
     resolution: {integrity: sha512-lslYaRvBP8Mk8C+mZWgGaFtSpzKIqHf8ptZcbS8kjjZudAF3LNk77ynegr2l/wSQnG/gQQCqiZbefDEql+DDuw==}
@@ -4874,16 +4871,14 @@ packages:
     peerDependencies:
       '@uppy/core': ^5.1.1
 
+  '@uppy/utils@6.2.2':
+    resolution: {integrity: sha512-9mYJtbcngv2HOJIECkyfmdXTI5dW/ObCyvWP1Iti3E5bKtsa4sMmbx5Yh/tGCj8k/lBNhfvWyZuYnvnjmzNLSQ==}
+
   '@uppy/utils@7.1.2':
     resolution: {integrity: sha512-fBfXk3gLg9yksM8p2QKYOyzLqvFbZ5No1oDwwnerbWtgy9PBE8xwbhf2br7HUYpOe7sdG+KLcLJ5v9Ic2RWHGQ==}
 
   '@uppy/utils@7.1.3':
     resolution: {integrity: sha512-075LfJXzPaolhAUnxhKUfLpzdlPXHX991PYFlooMYEiA7EvDfoW8EO88jDE2G/wLGUGAYLOIhOE9g/m4gW9pkg==}
-
-  '@uppy/webcam@5.0.2':
-    resolution: {integrity: sha512-22/mMef4bzvzVTBsetuK/B0Uj4NYjUvnygTiGZsV4nHNerLjKyd9aAORfSFpCGBs5r1lJpn22a0NPe5CEUArLg==}
-    peerDependencies:
-      '@uppy/core': ^5.1.1
 
   '@vitejs/plugin-react@4.7.0':
     resolution: {integrity: sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA==}
@@ -6237,9 +6232,6 @@ packages:
   is-glob@4.0.3:
     resolution: {integrity: sha512-xelSayHH36ZgE7ZWhli7pW34hNbNl8Ojv5KVmkJD4hBdD3th8Tfk9vYasLM+mXWOZhFkgZfxhLSnrwRr4elSSg==}
     engines: {node: '>=0.10.0'}
-
-  is-mobile@4.0.0:
-    resolution: {integrity: sha512-mlcHZA84t1qLSuWkt2v0I2l61PYdyQDt4aG1mLIXF5FDMm4+haBCxCPYSr/uwqQNRk1MiTizn0ypEuRAOLRAew==}
 
   is-network-error@1.3.0:
     resolution: {integrity: sha512-6oIwpsgRfnDiyEDLMay/GqCl3HoAtH5+RUKW29gYkL0QA+ipzpDLA16yQs7/RHCSu+BwgbJaOUqa4A99qNVQVw==}
@@ -13003,10 +12995,10 @@ snapshots:
     dependencies:
       '@types/yargs-parser': 21.0.3
 
-  '@typescript-eslint/eslint-plugin@8.43.0(@typescript-eslint/parser@8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.9.2))(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3)':
+  '@typescript-eslint/eslint-plugin@8.43.0(@typescript-eslint/parser@8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3))(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.1
-      '@typescript-eslint/parser': 8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.9.2)
+      '@typescript-eslint/parser': 8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3)
       '@typescript-eslint/scope-manager': 8.43.0
       '@typescript-eslint/type-utils': 8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3)
       '@typescript-eslint/utils': 8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3)
@@ -13183,24 +13175,22 @@ snapshots:
     dependencies:
       '@uppy/companion-client': 5.1.1(@uppy/core@5.1.1)
       '@uppy/core': 5.1.1
-      '@uppy/utils': 7.1.2
+      '@uppy/utils': 7.1.3
 
   '@uppy/companion-client@5.1.1(@uppy/core@5.1.1)':
     dependencies:
       '@uppy/core': 5.1.1
-      '@uppy/utils': 7.1.2
+      '@uppy/utils': 7.1.3
       namespace-emitter: 2.0.1
       p-retry: 6.2.1
 
-  '@uppy/components@1.1.0(@uppy/core@5.1.1)(@uppy/webcam@5.0.2(@uppy/core@5.1.1))':
+  '@uppy/components@1.1.0(@uppy/core@5.1.1)':
     dependencies:
       '@uppy/core': 5.1.1
       clsx: 2.1.1
       dequal: 2.0.3
       preact: 10.27.2
       pretty-bytes: 6.1.1
-    optionalDependencies:
-      '@uppy/webcam': 5.0.2(@uppy/core@5.1.1)
 
   '@uppy/core@5.1.1':
     dependencies:
@@ -13226,35 +13216,31 @@ snapshots:
       preact: 10.27.2
       shallow-equal: 3.1.0
 
-  '@uppy/dropbox@5.0.1(@uppy/core@5.1.1)':
+  '@uppy/drag-drop@5.0.2(@uppy/core@5.1.1)':
     dependencies:
-      '@uppy/companion-client': 5.1.1(@uppy/core@5.1.1)
       '@uppy/core': 5.1.1
-      '@uppy/provider-views': 5.1.2(@uppy/core@5.1.1)
-      '@uppy/utils': 7.1.2
+      '@uppy/utils': 7.1.3
       preact: 10.27.2
 
-  '@uppy/google-drive@5.0.1(@uppy/core@5.1.1)':
+  '@uppy/file-input@4.2.2(@uppy/core@5.1.1)':
     dependencies:
-      '@uppy/companion-client': 5.1.1(@uppy/core@5.1.1)
       '@uppy/core': 5.1.1
-      '@uppy/provider-views': 5.1.2(@uppy/core@5.1.1)
-      '@uppy/utils': 7.1.2
+      '@uppy/utils': 6.2.2
       preact: 10.27.2
 
   '@uppy/provider-views@5.1.2(@uppy/core@5.1.1)':
     dependencies:
       '@uppy/core': 5.1.1
-      '@uppy/utils': 7.1.2
+      '@uppy/utils': 7.1.3
       classnames: 2.5.1
       lodash: 4.17.21
       nanoid: 5.1.5
       p-queue: 8.1.1
       preact: 10.27.2
 
-  '@uppy/react@5.1.1(@uppy/core@5.1.1)(@uppy/dashboard@5.0.4(@uppy/core@5.1.1))(@uppy/webcam@5.0.2(@uppy/core@5.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
+  '@uppy/react@5.1.1(@uppy/core@5.1.1)(@uppy/dashboard@5.0.4(@uppy/core@5.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
     dependencies:
-      '@uppy/components': 1.1.0(@uppy/core@5.1.1)(@uppy/webcam@5.0.2(@uppy/core@5.1.1))
+      '@uppy/components': 1.1.0(@uppy/core@5.1.1)
       '@uppy/core': 5.1.1
       preact: 10.27.2
       react: 19.1.1
@@ -13262,7 +13248,6 @@ snapshots:
       use-sync-external-store: 1.5.0(react@19.1.1)
     optionalDependencies:
       '@uppy/dashboard': 5.0.4(@uppy/core@5.1.1)
-      '@uppy/webcam': 5.0.2(@uppy/core@5.1.1)
     transitivePeerDependencies:
       - '@uppy/image-editor'
 
@@ -13274,6 +13259,11 @@ snapshots:
       '@uppy/utils': 7.1.3
       exifr: 7.1.3
 
+  '@uppy/utils@6.2.2':
+    dependencies:
+      lodash: 4.17.21
+      preact: 10.27.2
+
   '@uppy/utils@7.1.2':
     dependencies:
       lodash: 4.17.21
@@ -13282,13 +13272,6 @@ snapshots:
   '@uppy/utils@7.1.3':
     dependencies:
       lodash: 4.17.21
-      preact: 10.27.2
-
-  '@uppy/webcam@5.0.2(@uppy/core@5.1.1)':
-    dependencies:
-      '@uppy/core': 5.1.1
-      '@uppy/utils': 7.1.2
-      is-mobile: 4.0.0
       preact: 10.27.2
 
   '@vitejs/plugin-react@4.7.0(vite@7.1.9(@types/node@24.4.0)(jiti@2.5.1)(lightningcss@1.30.1)(sass@1.93.2)(tsx@4.20.6))':
@@ -13356,7 +13339,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 2.0.0
-      vitest: 3.2.4(@types/node@22.18.3)(@vitest/ui@3.2.4)(jiti@2.5.1)(jsdom@26.1.0)(lightningcss@1.30.1)(sass@1.93.2)(tsx@4.20.5)
+      vitest: 3.2.4(@types/node@24.4.0)(@vitest/ui@3.2.4)(jiti@2.5.1)(jsdom@26.1.0)(lightningcss@1.30.1)(sass@1.93.2)(tsx@4.20.6)
 
   '@vitest/utils@3.2.4':
     dependencies:
@@ -14772,8 +14755,6 @@ snapshots:
   is-glob@4.0.3:
     dependencies:
       is-extglob: 2.1.1
-
-  is-mobile@4.0.0: {}
 
   is-network-error@1.3.0: {}
 
@@ -16760,7 +16741,7 @@ snapshots:
 
   typescript-eslint@8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3):
     dependencies:
-      '@typescript-eslint/eslint-plugin': 8.43.0(@typescript-eslint/parser@8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.9.2))(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3)
+      '@typescript-eslint/eslint-plugin': 8.43.0(@typescript-eslint/parser@8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3))(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3)
       '@typescript-eslint/parser': 8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3)
       '@typescript-eslint/typescript-estree': 8.43.0(typescript@5.8.3)
       '@typescript-eslint/utils': 8.43.0(eslint@9.35.0(jiti@2.5.1))(typescript@5.8.3)

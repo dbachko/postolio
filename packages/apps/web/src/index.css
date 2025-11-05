@@ -17,6 +17,12 @@
 .pl-assets .uppy-Dashboard-innerWrap {
   opacity: 1 !important;
 }
+.pl-assets .uppy-Dashboard-inner {
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
 /* Calendar library styles (inlined for now to ensure Vite bundles them) */
 /* BEGIN: @postolio/calendar styles */
 .pc-calendar {

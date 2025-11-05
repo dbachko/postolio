@@ -4,9 +4,6 @@ import { assetsApi } from '@/features/assets/api/client';
 import Uppy from '@uppy/core';
 import DashboardPlugin from '@uppy/dashboard';
 import AwsS3 from '@uppy/aws-s3';
-import GoogleDrive from '@uppy/google-drive';
-import Dropbox from '@uppy/dropbox';
-import Webcam from '@uppy/webcam';
 // Uppy v5 CSS is exported under the `css/` subpath via the package export map
 import '@uppy/core/css/style.css';
 import '@uppy/dashboard/css/style.css';
@@ -21,9 +18,12 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const s3KeyById = useRef<Map<string, string>>(new Map());
-  const companionUrl = (import.meta.env.VITE_UPPY_COMPANION_URL || '').trim();
   const dashboardContainerRef = useRef<HTMLDivElement | null>(null);
   const dashboardPluginRef = useRef<any>(null);
+  const dropCopy = 'Drop your image here or %{browseFiles}';
+  const browseCopy = 'click to browse';
+  const restrictionCopy = 'Supports: JPEG, PNG, WebP, GIF (max 10MB)';
+  const pluralize = (count: number) => (count === 1 ? 0 : 1);
 
   function inferS3KeyFromUploadURL(url?: string | null): string | undefined {
     if (!url) return undefined;
@@ -43,42 +43,38 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
       restrictions: {
         allowedFileTypes: ['image/*', 'video/*'],
       },
+      locale: {
+        strings: {
+          dropPasteFiles: dropCopy,
+          browseFiles: browseCopy,
+        },
+        pluralize,
+      },
     });
 
-    // If a Companion URL is configured, enable remote providers and Companion-backed S3 uploads
-    // Local webcam capture is always available
-    instance.use(Webcam, {});
-    if (companionUrl) {
-      (instance as any).use(GoogleDrive, { companionUrl });
-      (instance as any).use(Dropbox, { companionUrl });
-      // With Companion, AwsS3 can handle remote sources server-to-server
-      // In v5, pass Companion URL via `endpoint`
-      (instance as any).use(AwsS3, { endpoint: companionUrl });
-    } else {
-      // Fallback: browser → S3 via presigned PUT from our assets API
-      (instance as any).use(AwsS3, {
-        shouldUseMultipart: false,
-        // v5 signature includes RequestOptions second param; it's unused for presigned PUT
-        getUploadParameters: async (file: any) => {
-          const fileType = file.type?.startsWith('image/') ? 'image' : 'video';
-          const res = await assetsApi.getUploadUrl({
-            brandId,
-            fileName: file.name,
-            contentType: file.type,
-            fileType,
-          });
-          s3KeyById.current.set(file.id, res.s3Key);
-          return {
-            method: 'PUT',
-            url: res.uploadUrl,
-            headers: { 'Content-Type': file.type },
-          } as any;
-        },
-      });
-    }
+    // Presigned PUT uploads directly from the browser to S3
+    (instance as any).use(AwsS3, {
+      shouldUseMultipart: false,
+      // v5 signature includes RequestOptions second param; it's unused for presigned PUT
+      getUploadParameters: async (file: any) => {
+        const fileType = file.type?.startsWith('image/') ? 'image' : 'video';
+        const res = await assetsApi.getUploadUrl({
+          brandId,
+          fileName: file.name,
+          contentType: file.type,
+          fileType,
+        });
+        s3KeyById.current.set(file.id, res.s3Key);
+        return {
+          method: 'PUT',
+          url: res.uploadUrl,
+          headers: { 'Content-Type': file.type },
+        } as any;
+      },
+    });
 
     return instance;
-  }, [brandId, companionUrl]);
+  }, [brandId]);
 
   useEffect(() => {
     // Mount Dashboard plugin inline into our container
@@ -91,9 +87,7 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
         theme: 'auto',
         animateOpenClose: false,
         singleFileFullScreen: false,
-        note: companionUrl
-          ? 'Upload from your device, Google Drive, or Dropbox.'
-          : 'Upload from your device or use your camera.',
+        note: restrictionCopy,
         proudlyDisplayPoweredByUppy: false,
         showProgressDetails: true,
         hideUploadButton: false,
@@ -191,7 +185,7 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
         // no-op
       }
     };
-  }, [uppy, brandId, onUploaded, onClose, companionUrl]);
+  }, [uppy, brandId, onUploaded, onClose]);
 
   return (
     <div className="pl-assets fixed inset-0 z-50 flex items-center justify-center bg-black/50">
