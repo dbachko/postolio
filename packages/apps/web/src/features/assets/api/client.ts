@@ -48,6 +48,7 @@ export const assetsApi = {
     fileName: string;
     contentType: string;
     fileType: 'image' | 'video';
+    fileSize: number;
   }): Promise<UploadUrlResponse> {
     const response = await fetch(`${API_BASE_URL}/assets/upload-url`, {
       method: 'POST',

@@ -17,19 +17,22 @@ if (!resolvedBucket) {
   throw new Error('ASSETS_S3_BUCKET (or S3_BUCKET) is not configured for the Assets API');
 }
 export const assetsBucketName = resolvedBucket;
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
+export const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+export const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
 /**
  * Generate a presigned URL for direct browser → S3 upload
  */
 export async function generateUploadUrl(params) {
-  const { brandId, fileName, contentType, fileType } = params;
+  const { brandId, fileName, contentType, fileType, fileSize } = params;
   // Validate file type
   if (fileType === 'image' && !contentType.startsWith('image/')) {
     throw new Error('Invalid content type for image');
   }
   if (fileType === 'video' && !contentType.startsWith('video/')) {
     throw new Error('Invalid content type for video');
+  }
+  if (!Number.isFinite(fileSize) || fileSize <= 0) {
+    throw new Error('Invalid file size');
   }
   // Generate unique S3 key
   const timestamp = Date.now();
@@ -38,12 +41,15 @@ export async function generateUploadUrl(params) {
   const s3Key = `brands/${brandId}/uploads/${fileType}s/${timestamp}_${uniqueId}_${sanitizedFileName}`;
   // Determine max file size based on type
   const maxSize = fileType === 'image' ? MAX_IMAGE_SIZE : MAX_VIDEO_SIZE;
+  if (fileSize > maxSize) {
+    const maxSizeMb = Math.floor(maxSize / (1024 * 1024));
+    throw new Error(`File exceeds maximum allowed size of ${maxSizeMb}MB for ${fileType}s`);
+  }
   // Create PutObject command
   const command = new PutObjectCommand({
     Bucket: assetsBucketName,
     Key: s3Key,
     ContentType: contentType,
-    ContentLength: maxSize, // Maximum allowed size
   });
   // Generate presigned URL (valid for 15 minutes)
   const expiresIn = 900; // 15 minutes

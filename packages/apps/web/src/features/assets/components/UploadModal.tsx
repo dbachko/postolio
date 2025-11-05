@@ -8,6 +8,9 @@ import AwsS3 from '@uppy/aws-s3';
 import '@uppy/core/css/style.css';
 import '@uppy/dashboard/css/style.css';
 
+const IMAGE_UPLOAD_LIMIT = 10 * 1024 * 1024; // 10MB
+const VIDEO_UPLOAD_LIMIT = 500 * 1024 * 1024; // 500MB
+
 export interface UploadModalProps {
   onClose: () => void;
   brandId: string;
@@ -58,11 +61,20 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
       // v5 signature includes RequestOptions second param; it's unused for presigned PUT
       getUploadParameters: async (file: any) => {
         const fileType = file.type?.startsWith('image/') ? 'image' : 'video';
+        const limit = fileType === 'image' ? IMAGE_UPLOAD_LIMIT : VIDEO_UPLOAD_LIMIT;
+        if (file.size > limit) {
+          const limitMb = Math.floor(limit / (1024 * 1024));
+          const friendlyType = fileType === 'image' ? 'images' : 'videos';
+          const message = `Please upload ${friendlyType} smaller than ${limitMb}MB.`;
+          setError(message);
+          throw new Error(message);
+        }
         const res = await assetsApi.getUploadUrl({
           brandId,
           fileName: file.name,
           contentType: file.type,
           fileType,
+          fileSize: file.size,
         });
         s3KeyById.current.set(file.id, res.s3Key);
         return {
@@ -131,7 +143,10 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
       });
     }
 
-    const onUpload = () => setBusy(true);
+    const onUpload = () => {
+      setBusy(true);
+      setError(null);
+    };
     const onUploadSuccess = async (file: any) => {
       // Prefer explicit key from our presign flow; otherwise infer from uploadURL (Companion flow)
       const s3Key =

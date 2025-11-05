@@ -13,14 +13,18 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         fileName: string;
         contentType: string;
         fileType: 'image' | 'video';
+        fileSize: number;
       };
 
       try {
-        const { brandId, fileName, contentType, fileType } = body;
+        const { brandId, fileName, contentType, fileType, fileSize } = body;
 
         // Validate required fields
-        if (!brandId || !fileName || !contentType || !fileType) {
+        if (!brandId || !fileName || !contentType || !fileType || fileSize == null) {
           return reply.code(400).send({ error: 'Missing required fields' });
+        }
+        if (typeof fileSize !== 'number' || Number.isNaN(fileSize) || fileSize <= 0) {
+          return reply.code(400).send({ error: 'Invalid file size' });
         }
 
         // Generate presigned URL
@@ -29,6 +33,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           fileName,
           contentType,
           fileType,
+          fileSize,
         });
 
         return {
@@ -36,9 +41,17 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           message: 'Upload URL generated successfully',
         };
       } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({
-          error: error instanceof Error ? error.message : 'Failed to generate upload URL',
+        const message = error instanceof Error ? error.message : 'Failed to generate upload URL';
+        const isBadRequest =
+          error instanceof Error &&
+          (message.toLowerCase().includes('invalid') || message.toLowerCase().includes('exceeds'));
+        if (!isBadRequest) {
+          fastify.log.error(error);
+        } else {
+          fastify.log.warn(error);
+        }
+        return reply.code(isBadRequest ? 400 : 500).send({
+          error: message,
         });
       }
     }
