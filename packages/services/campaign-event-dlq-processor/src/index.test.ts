@@ -60,8 +60,8 @@ describe('Campaign Event DLQ Processor', () => {
 
       vi.mocked(campaignConsistency.checkConsistency).mockResolvedValue({
         isConsistent: true,
-        pgCampaign: {} as any,
-        dynamoCampaign: {} as any,
+        pgCampaign: {} as Record<string, unknown>,
+        dynamoCampaign: {} as Record<string, unknown>,
       });
 
       const sqsEvent: SQSEvent = {

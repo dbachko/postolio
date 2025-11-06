@@ -5,7 +5,8 @@ import { analyticsCache } from './analytics-cache.js';
 import { PublisherCredentialsService } from './publisher-credentials.js';
 import { prisma } from '../config/database.js';
 import type { Prisma } from '@postolio/database';
-import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
+import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
+import type { AssetRecord } from '@postolio/assets-client';
 
 export interface InstagramPost {
   id: string;
@@ -1190,34 +1191,24 @@ class InstagramService {
     }
 
     // Download image to S3
-    let s3ImageKey: string | null = null;
-    let imageRegion: string | null = null;
-    let retentionExpiresAt: Date | null = null;
+    let importedAsset: AssetRecord | null = null;
     let imageDownloadFailed = false;
 
     if (post.media_url) {
       try {
-        const tempContentId = `import-${post.id}`;
-        const imageMetadata: ImageMetadata = {
-          contentId: tempContentId,
+        const imageStartTime = Date.now();
+        importedAsset = await importImageFromExternalUrl(post.media_url, {
+          contentId: `import-${post.id}`,
           brandId: brand.id!,
           generatedAt: post.timestamp ? new Date(post.timestamp) : new Date(),
-          source: 'dalle3', // Generic source indicator for imported images
+          source: 'instagram',
           originalPrompt: post.caption || 'Imported from Instagram',
-        };
-
-        const imageStartTime = Date.now();
-        const uploadResult = await uploadImageToS3(post.media_url, imageMetadata);
-
-        s3ImageKey = uploadResult.s3Key;
-        imageRegion = uploadResult.region;
-        retentionExpiresAt = uploadResult.retentionExpiresAt;
+        });
 
         const imageDuration = Date.now() - imageStartTime;
-        console.log(`[Instagram Sync] 🖼️  Image uploaded to S3: ${s3ImageKey}`, {
+        console.log(`[Instagram Sync] 🖼️  Image cached via assets service: ${importedAsset.id}`, {
           postId: post.id,
-          s3Key: s3ImageKey,
-          region: imageRegion,
+          assetId: importedAsset.id,
           duration: `${imageDuration}ms`,
         });
       } catch (error) {
@@ -1249,15 +1240,12 @@ class InstagramService {
       instagramPermalink: post.permalink,
       postedAt,
       scheduledAt: postedAt,
-      s3ImageKey,
-      imageRegion,
-      retentionExpiresAt,
       generationParams: {
         source: 'instagram_import',
         importedAt: new Date().toISOString(),
         originalPostDate: post.timestamp,
         mediaType: post.media_type,
-        hasImage: !!s3ImageKey,
+        hasImage: !!importedAsset,
         imageDownloadFailed,
       },
       analytics: {
@@ -1274,16 +1262,15 @@ class InstagramService {
         where: { id: matchingDraft.id },
         select: {
           generationParams: true,
-          s3ImageKey: true,
-          imageRegion: true,
-          retentionExpiresAt: true,
+          primaryAssetCdnUrl: true,
+          primaryAssetId: true,
           campaignId: true,
           scheduledAt: true,
         },
       });
       const existingParams = (current?.generationParams as Record<string, unknown>) || {};
 
-      const finalHasImage = Boolean(current?.s3ImageKey || s3ImageKey);
+      const finalHasImage = Boolean(current?.primaryAssetCdnUrl || importedAsset);
       await prisma.content.update({
         where: { id: matchingDraft.id },
         data: {
@@ -1295,10 +1282,6 @@ class InstagramService {
           schedulingError: null,
 
           campaignId: current?.campaignId || null,
-          // Only set S3 fields if the existing draft doesn't have them
-          s3ImageKey: current?.s3ImageKey || s3ImageKey || undefined,
-          imageRegion: current?.imageRegion || imageRegion || undefined,
-          retentionExpiresAt: current?.retentionExpiresAt || retentionExpiresAt || undefined,
           analytics: contentData.analytics,
           generationParams: {
             ...existingParams,
@@ -1319,12 +1302,19 @@ class InstagramService {
         mergedInto: matchingDraft.id,
         reason: 'matched draft/scheduled by time/caption',
       });
+
+      if (importedAsset && !current?.primaryAssetCdnUrl) {
+        await attachAssetToContent({ contentId: matchingDraft.id, asset: importedAsset });
+      }
       return;
     }
 
     // No matching draft found; create a new content record
     try {
-      await prisma.content.create({ data: contentData });
+      const created = await prisma.content.create({ data: contentData });
+      if (importedAsset) {
+        await attachAssetToContent({ contentId: created.id, asset: importedAsset });
+      }
     } catch (e) {
       // Handle race conditions via DB uniqueness
       const code = (e as any)?.code;
@@ -1342,7 +1332,7 @@ class InstagramService {
     console.log(`[Instagram Sync] ✨ Synced post ${post.id}`, {
       postId: post.id,
       brandId: brand.id,
-      hasImage: !!s3ImageKey,
+      hasImage: !!importedAsset,
       hasHashtags: (post.hashtags?.length || 0) > 0,
       engagement: {
         likes: post.like_count || 0,

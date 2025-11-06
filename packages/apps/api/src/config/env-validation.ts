@@ -3,17 +3,19 @@
  */
 
 // Required environment variables
-const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
+const requiredEnvVars = [
+  'DATABASE_URL',
+  'JWT_SECRET',
+  'ASSETS_API_BASE_URL',
+  'ASSETS_API_SERVICE_TOKEN',
+] as const;
 
 // Optional but important environment variables
 const optionalEnvVars = [
   'OPENAI_API_KEY',
   'FACEBOOK_APP_ID',
   'FACEBOOK_APP_SECRET',
-  'S3_IMAGES_BUCKET',
   'AWS_REGION',
-  'CLOUDFRONT_DISTRIBUTION_ID',
-  'CLOUDFRONT_DOMAIN',
   'REDIS_URL',
   'SCHEDULER_API_URL',
 ] as const;
@@ -24,10 +26,9 @@ export interface EnvironmentConfig {
   OPENAI_API_KEY?: string | undefined;
   FACEBOOK_APP_ID?: string | undefined;
   FACEBOOK_APP_SECRET?: string | undefined;
-  S3_IMAGES_BUCKET?: string | undefined;
   AWS_REGION: string;
-  CLOUDFRONT_DISTRIBUTION_ID?: string | undefined;
-  CLOUDFRONT_DOMAIN?: string | undefined;
+  ASSETS_API_BASE_URL: string;
+  ASSETS_API_SERVICE_TOKEN: string;
   REDIS_URL?: string | undefined;
   SCHEDULER_API_URL?: string | undefined;
   NODE_ENV: 'dev' | 'prod' | 'test';
@@ -48,7 +49,13 @@ export function validateEnvironment(): EnvironmentConfig {
   }
 
   if (missingVars.length > 0) {
-    throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+    const messageParts = [`Missing required environment variables: ${missingVars.join(', ')}`];
+    if (missingVars.some((name) => name.startsWith('ASSETS_API_'))) {
+      messageParts.push(
+        'Assets API integration requires ASSETS_API_BASE_URL and ASSETS_API_SERVICE_TOKEN to be configured.'
+      );
+    }
+    throw new Error(messageParts.join(' '));
   }
 
   // Validate JWT_SECRET length
@@ -89,10 +96,9 @@ export function validateEnvironment(): EnvironmentConfig {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     FACEBOOK_APP_ID: process.env.FACEBOOK_APP_ID,
     FACEBOOK_APP_SECRET: process.env.FACEBOOK_APP_SECRET,
-    S3_IMAGES_BUCKET: process.env.S3_IMAGES_BUCKET,
     AWS_REGION: process.env.AWS_REGION || 'us-east-1',
-    CLOUDFRONT_DISTRIBUTION_ID: process.env.CLOUDFRONT_DISTRIBUTION_ID,
-    CLOUDFRONT_DOMAIN: process.env.CLOUDFRONT_DOMAIN,
+    ASSETS_API_BASE_URL: process.env.ASSETS_API_BASE_URL!,
+    ASSETS_API_SERVICE_TOKEN: process.env.ASSETS_API_SERVICE_TOKEN!,
     REDIS_URL: process.env.REDIS_URL,
     SCHEDULER_API_URL: process.env.SCHEDULER_API_URL,
     NODE_ENV: nodeEnv as 'dev' | 'prod' | 'test',

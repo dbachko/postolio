@@ -4,11 +4,12 @@
  */
 
 import { FastifyPluginAsync } from 'fastify';
-import { Prisma } from '@postolio/database';
-
-import { uploadImageBufferToS3, type ImageMetadata } from '../../services/s3-image.js';
 import { buildContentResponse } from '../../services/content-response-builder.js';
-import { validateAndConvertImage, validateMimeType } from '../../services/image-validator.js';
+import {
+  verifyAssetOwnership,
+  attachAssetToContent,
+  importImageFromExternalUrl,
+} from '../../services/assets-media.js';
 import { verifyContentEditable } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
 
@@ -19,24 +20,17 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Body: {
       contentId: string;
-      imageData: string; // Base64 encoded image data
-      mimeType: string;
+      assetId?: string;
+      externalUrl?: string;
     };
   }>('/upload-image', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
       const userId = request.user!.id;
 
-      const { contentId, imageData, mimeType } = request.body;
+      const { contentId, assetId, externalUrl } = request.body;
 
-      // Validate input
-      if (!contentId || !imageData || !mimeType) {
+      if (!contentId || (!assetId && !externalUrl)) {
         return reply.code(400).send({ error: 'Missing required fields' });
-      }
-
-      // Validate mime type
-      const mimeValidation = validateMimeType(mimeType);
-      if (!mimeValidation.valid) {
-        return reply.code(400).send({ error: mimeValidation.error });
       }
 
       // Verify user owns the content and it's editable (not published)
@@ -62,58 +56,28 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       try {
-        // Validate and convert image data using validator service
-        const validationResult = validateAndConvertImage(imageData, mimeType);
-
-        if (!validationResult.valid) {
-          return reply.code(400).send({ error: validationResult.error });
-        }
-
-        const buffer = validationResult.data!.buffer;
-
-        // Upload to S3
-        let uploadResult = null;
-
-        try {
-          const metadata: ImageMetadata = {
-            contentId: content.id,
+        let asset;
+        if (assetId) {
+          asset = await verifyAssetOwnership(assetId, content.brand.id);
+        } else {
+          asset = await importImageFromExternalUrl(externalUrl!, {
+            contentId,
             brandId: content.brand.id,
-            campaignId: content.campaignId || undefined,
-            generatedAt: new Date(),
-            source: 'dalle3', // Mark as user upload (we use dalle3 as default)
+            campaignId: content.campaignId,
             originalPrompt: 'User uploaded image',
-          };
-
-          console.log('Uploading user image to S3 for content:', contentId);
-          console.log('Image buffer size:', buffer.length, 'bytes');
-          console.log('MIME type:', mimeType);
-
-          uploadResult = await uploadImageBufferToS3(buffer, metadata);
-
-          console.log('Upload successful! S3 key:', uploadResult.s3Key);
-        } catch (s3Error) {
-          console.error('S3 upload failed:', s3Error);
-          // Fail gracefully instead of storing large base64 data URLs
-          return reply.code(500).send({
-            error: 'Failed to upload image to storage. Please try again.',
+            source: 'user_upload',
           });
         }
+        await attachAssetToContent({ contentId, asset });
 
-        // Update content with S3 data
-        const updateData: Record<string, unknown> = {
-          s3ImageKey: uploadResult.s3Key,
-          imageRegion: uploadResult.region,
-          retentionExpiresAt: uploadResult.retentionExpiresAt,
-        };
-
-        const updatedContent = await prisma.content.update({
+        const updatedContent = await prisma.content.findUnique({
           where: { id: contentId },
-          data: updateData as unknown as Prisma.ContentUpdateInput,
           select: {
             id: true,
             caption: true,
             hashtags: true,
-            s3ImageKey: true,
+            primaryAssetCdnUrl: true,
+            primaryAssetId: true,
             status: true,
             scheduledAt: true,
             createdAt: true,
@@ -121,7 +85,10 @@ const imagesRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
-        // Build CDN URL from S3 key and map to public response format
+        if (!updatedContent) {
+          return reply.code(404).send({ error: 'Content not found after linking asset' });
+        }
+
         const contentWithUrl = buildContentResponse(updatedContent);
 
         return reply.send({

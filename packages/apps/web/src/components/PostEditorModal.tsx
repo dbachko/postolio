@@ -293,7 +293,14 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       if (content) {
         setSaveStatus('saving');
         try {
-          const response = await contentApi.uploadContentImage(content.id, fileOrUrl);
+          if (!content.brandId) {
+            throw new Error('Missing brand information for upload');
+          }
+          const response = await contentApi.uploadContentImage(
+            content.id,
+            content.brandId,
+            fileOrUrl
+          );
           if (response.success && response.content) {
             // Update with the server's response - use imageUrl if available
             const newImageUrl = response.content.imageUrl || objectUrl;

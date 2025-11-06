@@ -1101,9 +1101,9 @@ async function getSignedVideoUrl(videoKey: string): Promise<string> {
 
 // Build a CDN URL for an image by key (no auth)
 async function getSignedImageUrlFromKey(key: string): Promise<string> {
-  const cdnDomain = process.env.IMAGES_CDN_DOMAIN;
+  const cdnDomain = process.env.ASSETS_CDN_DOMAIN;
   if (!cdnDomain) {
-    throw new Error('IMAGES_CDN_DOMAIN not configured for publisher');
+    throw new Error('ASSETS_CDN_DOMAIN not configured for publisher');
   }
   return `https://${cdnDomain}/${key.replace(/^\/+/, '')}`;
 }

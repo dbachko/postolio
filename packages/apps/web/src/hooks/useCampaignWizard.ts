@@ -84,5 +84,5 @@ export function useWizardBrandSync(): void {
     if (brand && state.brandId !== brand.id) {
       useCampaignWizard.setState({ brandId: brand.id });
     }
-  }, [brand?.id, state.brandId]);
+  }, [brand, state.brandId]);
 }

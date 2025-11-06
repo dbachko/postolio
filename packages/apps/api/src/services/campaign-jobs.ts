@@ -5,6 +5,7 @@ import {
   type GeneratedContent,
 } from './content-generator.js';
 import { getStatusBroadcaster } from './broadcast-registry.js';
+import { attachAssetToContent } from './assets-media.js';
 
 const prisma = getDatabaseClient();
 
@@ -146,8 +147,8 @@ class CampaignJobService {
           JSON.stringify({
             caption: post.caption?.substring(0, 50) + '...',
             hashtags: post.hashtags?.length || 0,
-            s3ImageKey: post.s3ImageKey || 'NOT SET',
-            hasS3Fields: !!post.s3ImageKey,
+            assetId: post.asset?.id || 'NOT SET',
+            hasAsset: !!post.asset,
           })
         );
 
@@ -155,9 +156,6 @@ class CampaignJobService {
           data: {
             caption: post.caption,
             hashtags: post.hashtags,
-            s3ImageKey: post.s3ImageKey ?? null,
-            imageRegion: post.imageRegion ?? null,
-            retentionExpiresAt: post.retentionExpiresAt ?? null,
             brandId: campaign.brandId,
             campaignId: campaign.id,
             status: 'draft', // Preview posts start as draft
@@ -172,6 +170,10 @@ class CampaignJobService {
             },
           },
         });
+
+        if (post.asset) {
+          await attachAssetToContent({ contentId: created.id, asset: post.asset });
+        }
 
         // Broadcast content created as draft
         try {

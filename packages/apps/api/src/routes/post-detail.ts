@@ -7,7 +7,6 @@ import {
   validateRequest,
 } from '../schemas/api-validation.js';
 import { successResponse, ErrorResponses, paginatedResponse } from '../utils/api-response.js';
-import { buildCdnUrl } from '../services/s3-image.js';
 
 const prisma = getDatabaseClient();
 
@@ -40,7 +39,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           id: true,
           caption: true,
           hashtags: true,
-          s3ImageKey: true,
+          primaryAssetCdnUrl: true,
           status: true,
           scheduledAt: true,
           postedAt: true,
@@ -89,8 +88,9 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         id: post.id,
         caption: post.caption,
         hashtags: post.hashtags,
-        imageUrl: buildCdnUrl(post.s3ImageKey),
+        imageUrl: post.primaryAssetCdnUrl,
         status: post.status,
+        brandId: post.brandId,
         scheduledAt: post.scheduledAt,
         postedAt: post.postedAt,
         instagramPostId: post.instagramPostId,

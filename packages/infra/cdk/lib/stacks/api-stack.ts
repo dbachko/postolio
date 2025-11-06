@@ -80,20 +80,26 @@ export class ApiStack extends cdk.Stack {
       Object.entries(getOAuthEnvironmentVariables(props)).filter(([, value]) => value)
     );
 
-    // Import images bucket name and CDN domain from Foundation stack
-    const imagesBucketName = ssm.StringParameter.valueForStringParameter(
+    // Import assets API endpoint, CDN domain, and service token secret from Assets stack
+    const assetsApiEndpoint = ssm.StringParameter.valueForStringParameter(
       this,
-      `/postolio/${environment}/s3/images-bucket`
+      `/postolio/${environment}/assets/api-endpoint`
+    );
+    const assetsApiBaseUrl = `${assetsApiEndpoint.replace(/\/$/, '')}/assets-api/v1`;
+
+    const assetsCdnDomain = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/assets/cdn-domain`
     );
 
-    const imagesCdnDomain = ssm.StringParameter.valueForStringParameter(
+    const assetsServiceTokenSecretArn = ssm.StringParameter.valueForStringParameter(
       this,
-      `/postolio/${environment}/cdn/images-domain`
+      `/postolio/${environment}/assets/service-token-arn`
     );
-
-    const imagesCdnDistributionId = ssm.StringParameter.valueForStringParameter(
+    const assetsServiceTokenSecret = secretsmanager.Secret.fromSecretCompleteArn(
       this,
-      `/postolio/${environment}/cdn/images-distribution-id`
+      'AssetsServiceTokenSecretImport',
+      assetsServiceTokenSecretArn
     );
 
     let frontendUrl: string | undefined;
@@ -275,6 +281,16 @@ export class ApiStack extends cdk.Stack {
       jwtSecretArn
     );
 
+    const containerSecrets: Record<string, ecs.Secret> = {
+      JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret),
+      ASSETS_API_SERVICE_TOKEN: ecs.Secret.fromSecretsManager(assetsServiceTokenSecret, 'token'),
+    };
+
+    if (databaseSecret) {
+      containerSecrets.DB_USERNAME = ecs.Secret.fromSecretsManager(databaseSecret, 'username');
+      containerSecrets.DB_PASSWORD = ecs.Secret.fromSecretsManager(databaseSecret, 'password');
+    }
+
     // Import ECR repository from Foundation stack - use repository name
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
 
@@ -378,19 +394,6 @@ export class ApiStack extends cdk.Stack {
                 `arn:aws:s3:::postolio-${environment}-shared-data-${this.account}/*`,
               ],
             }),
-            // S3 permissions for AI-generated images bucket
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-                's3:PutObject',
-                's3:PutObjectTagging',
-                's3:DeleteObject',
-                's3:ListBucket',
-                's3:GetBucketLocation',
-              ],
-              resources: [`arn:aws:s3:::${imagesBucketName}`, `arn:aws:s3:::${imagesBucketName}/*`],
-            }),
             // EventBridge permissions for domain + scheduling events
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -489,9 +492,8 @@ export class ApiStack extends cdk.Stack {
             // so magic link emails are actually sent instead of logged
             USE_AWS_SES: 'true',
             SES_FROM_EMAIL: 'noreply@postolio.example',
-            S3_IMAGES_BUCKET: imagesBucketName,
-            CLOUDFRONT_DOMAIN: imagesCdnDomain,
-            CLOUDFRONT_DISTRIBUTION_ID: imagesCdnDistributionId,
+            ASSETS_API_BASE_URL: assetsApiBaseUrl,
+            ASSETS_CDN_DOMAIN: assetsCdnDomain,
             ...(frontendUrl && { FRONTEND_URL: frontendUrl, APP_URL: frontendUrl }),
             // Feature flags (unified names)
             AUTH_MAGIC_LINK_ENABLED:
@@ -529,15 +531,7 @@ export class ApiStack extends cdk.Stack {
                 }
               : {}),
           },
-          secrets: databaseSecret
-            ? {
-                // Database credentials only; host/port provided above
-                DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),
-                DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, 'password'),
-                // JWT secret from ARN (full secret string)
-                JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret),
-              }
-            : undefined,
+          secrets: containerSecrets,
           logDriver: ecs.LogDrivers.awsLogs({
             streamPrefix: `${prefix}-api`,
             logRetention: logs.RetentionDays.TWO_WEEKS,

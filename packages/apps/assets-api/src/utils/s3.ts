@@ -6,7 +6,7 @@ import process from 'node:process';
 const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
 const DEFAULT_DEV_BUCKET = 'postolio-dev-assets-storage';
 
-const s3Client = new S3Client({
+export const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
 });
 

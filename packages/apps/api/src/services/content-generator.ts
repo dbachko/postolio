@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto';
 import { getOpenAIClient, getDefaultOpenAIModel } from './openai-client.js';
 import { shouldUsePlaceholderImages, generatePlaceholderImageUrl } from './image-placeholders.js';
 import { generateMidjourneyImage } from './midjourney.js';
-import { uploadImageToS3, type ImageMetadata } from './s3-image.js';
+import { importImageFromExternalUrl } from './assets-media.js';
+import type { AssetRecord } from '@postolio/assets-client';
 import { getBrandProfileContext, type BrandProfileContext } from './brand-profile.js';
 import { Prisma, type ContentStatus } from '@postolio/database';
 import { SeasonalityService } from './seasonality.js';
@@ -23,11 +24,7 @@ export interface GeneratedContent {
   caption: string;
   hashtags: string[];
   imagePrompt?: string;
-  imageUrl?: string;
-  s3ImageKey?: string;
-  cdnImageUrl?: string;
-  imageRegion?: string;
-  retentionExpiresAt?: Date;
+  asset?: AssetRecord;
 }
 
 export interface ContentBatch {
@@ -477,8 +474,6 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
     }
 
     // Generate images for each post using Midjourney (with DALL-E fallback)
-    const usePlaceholderImages = shouldUsePlaceholderImages();
-
     const contentWithImages = await Promise.all(
       diversified.map(async (item, index) => {
         try {
@@ -504,41 +499,25 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
             })
           );
 
-          if (usePlaceholderImages && imageUrl) {
-            return {
-              ...item,
-              s3ImageKey: imageUrl,
-              imageRegion: 'placeholder',
-              retentionExpiresAt: undefined,
-            };
-          }
-
-          // Upload to S3 if image was generated successfully
-          if (imageUrl && process.env.S3_IMAGES_BUCKET) {
+          if (imageUrl) {
             try {
-              const metadata: ImageMetadata = {
-                contentId: `${Date.now()}_${index}`, // Unique ID for content
+              const asset = await importImageFromExternalUrl(imageUrl, {
+                contentId: `${Date.now()}_${index}`,
                 brandId: request.brandId,
-                campaignId: undefined as string | undefined, // Will be set when content is saved
-                generatedAt: new Date(),
+                campaignId: request.campaignId,
                 source: imageUrl.includes('dalle') ? 'dalle3' : 'midjourney',
                 originalPrompt: finalPrompt,
-              };
-
-              const s3Result = await uploadImageToS3(imageUrl, metadata);
+              });
 
               return {
                 ...item,
-                s3ImageKey: s3Result.s3Key,
-                imageRegion: s3Result.region,
-                retentionExpiresAt: s3Result.retentionExpiresAt,
+                asset,
               };
-            } catch (s3Error) {
-              console.error('Failed to upload image to S3:', s3Error);
-              // If S3 upload fails, throw error - we can't save content without S3 image
+            } catch (assetError) {
+              console.error('Failed to store generated image via assets service:', assetError);
               throw new Error(
-                'Failed to upload image to S3: ' +
-                  (s3Error instanceof Error ? s3Error.message : 'Unknown error')
+                'Failed to store generated image: ' +
+                  (assetError instanceof Error ? assetError.message : 'Unknown error')
               );
             }
           }

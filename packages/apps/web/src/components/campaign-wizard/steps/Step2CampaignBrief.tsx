@@ -45,7 +45,7 @@ export function Step2CampaignBrief() {
     if (goals.join('\n') !== goalsList.join('\n')) {
       setGoalsList(goals.length ? goals : ['']);
     }
-  }, [goals]);
+  }, [goals, goalsList]);
 
   const canContinue = useMemo(() => {
     return (

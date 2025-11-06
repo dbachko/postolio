@@ -43,6 +43,18 @@ class NotificationsServiceImpl {
     this.logger = logger;
   }
 
+  private isFastifyLogger(logger: FastifyBaseLogger | Console): logger is FastifyBaseLogger {
+    return typeof (logger as FastifyBaseLogger).child === 'function';
+  }
+
+  private logError(meta: unknown, message: string) {
+    if (this.isFastifyLogger(this.logger)) {
+      this.logger.error(meta, message);
+    } else {
+      console.error(message, meta);
+    }
+  }
+
   private getBroadcaster(): NotificationsBroadcaster | null {
     if (!this.broadcaster) this.broadcaster = getNotificationsBroadcaster();
     return this.broadcaster;
@@ -66,7 +78,7 @@ class NotificationsServiceImpl {
         return null;
       }
     } catch (err) {
-      this.logger.error({ err }, 'Failed to check master notification preference');
+      this.logError({ err }, 'Failed to check master notification preference');
     }
     const notification = await prisma.notification
       .upsert({
@@ -141,7 +153,7 @@ class NotificationsServiceImpl {
         });
       }
     } catch (error) {
-      this.logger.error({ error }, 'Failed to broadcast notification');
+      this.logError({ error }, 'Failed to broadcast notification');
     }
 
     // Attempt immediate email for critical/default-enabled types
@@ -157,7 +169,7 @@ class NotificationsServiceImpl {
         linkUrl: notification.linkUrl || undefined,
       });
     } catch (error) {
-      this.logger.error({ error }, 'Failed to queue notification email');
+      this.logError({ error }, 'Failed to queue notification email');
     }
 
     return notification;

@@ -154,19 +154,3 @@ export function GoalsListInput({ goals, onChange, disabled }: GoalsListInputProp
     </div>
   );
 }
-
-export function parseGoalsString(text: string | null | undefined): string[] {
-  if (!text) return [];
-  // Split by newline or semicolon; trim and drop empties
-  return text
-    .split(/\n|;/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-export function joinGoals(goals: string[]): string {
-  return goals
-    .map((g) => g.trim())
-    .filter(Boolean)
-    .join('\n');
-}

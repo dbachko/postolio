@@ -3,7 +3,6 @@ import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { Prisma } from '@postolio/database';
 import { instagramService, InstagramWebhookEvent } from '../services/instagram.js';
 import crypto from 'crypto';
-import { buildCdnUrl } from '../services/s3-image.js';
 import { redisService } from '../services/redis.js';
 import { getRedisClient } from '../services/redis.js';
 
@@ -239,7 +238,7 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         }
 
         // Enhanced content validation
-        if (!content.s3ImageKey) {
+        if (!content.primaryAssetCdnUrl) {
           return reply.status(400).send({
             error: 'Image is required for Instagram posting',
             details: 'Content must have a valid image before publishing',
@@ -264,18 +263,9 @@ const instagram: FastifyPluginAsync = async function (fastify) {
         }
 
         // Build CDN URL from S3 key
-        const cdnImageUrl = buildCdnUrl(content.s3ImageKey);
-        if (!cdnImageUrl) {
-          return reply.status(500).send({
-            error: 'Failed to generate image URL',
-            details: 'Unable to construct CDN URL from S3 key',
-            retryable: false,
-          });
-        }
-
         // Publish to Instagram
         const publishResult = await instagramService.publishMedia(content.brand, {
-          cdnImageUrl,
+          cdnImageUrl: content.primaryAssetCdnUrl,
           caption: content.caption,
           hashtags: content.hashtags,
         });

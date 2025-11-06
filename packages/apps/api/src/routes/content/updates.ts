@@ -240,7 +240,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           caption: true,
           hashtags: true,
-          s3ImageKey: true,
+          primaryAssetCdnUrl: true,
           status: true,
           scheduledAt: true,
           postedAt: true,

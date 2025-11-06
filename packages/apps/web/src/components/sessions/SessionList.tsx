@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Session } from '../../lib/api';
 import { session as sessionApi } from '../../lib/api';
 import { SessionCard } from './SessionCard';
@@ -28,7 +28,7 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
   const [revokeAllDialogOpen, setRevokeAllDialogOpen] = useState(false);
   const [isRevokingAll, setIsRevokingAll] = useState(false);
 
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -41,11 +41,11 @@ export function SessionList({ onSessionsChange }: SessionListProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [onSessionsChange]);
 
   useEffect(() => {
     loadSessions();
-  }, []);
+  }, [loadSessions]);
 
   const handleRevoke = async (sessionId: string) => {
     const session = sessions.find((s) => s.id === sessionId);

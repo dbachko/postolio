@@ -40,6 +40,7 @@ interface PostDetailData {
   imageUrl?: string;
   status: string; // 'draft' | 'scheduled' | 'published' | ...
   scheduledAt?: string;
+  brandId?: string;
   brand: { id: string; name: string };
 }
 
@@ -75,7 +76,13 @@ export function PostSidebar({
 
   const { data: post, isLoading } = useQuery<PostDetailData>({
     queryKey: ['post', id],
-    queryFn: async () => (await contentApi.getPostDetail(id!)).data,
+    queryFn: async () => {
+      const response = await contentApi.getPostDetail(id!);
+      return {
+        ...response.data,
+        brandId: response.data.brand?.id,
+      };
+    },
     enabled: Boolean(id),
     staleTime: 10000,
   });
@@ -271,7 +278,12 @@ export function PostSidebar({
       setFormData((s) => ({ ...s, imageUrl: fileOrUrl }));
       return;
     }
-    const res = await contentApi.uploadContentImage(id, fileOrUrl);
+    const brandId = post?.brandId || selectedBrand?.id;
+    if (!brandId) {
+      toast.error('Unable to upload image: missing brand');
+      return;
+    }
+    const res = await contentApi.uploadContentImage(id, brandId, fileOrUrl);
     const url = res?.content?.imageUrl;
     if (url) setFormData((s) => ({ ...s, imageUrl: url }));
   };

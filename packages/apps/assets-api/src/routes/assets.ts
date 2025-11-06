@@ -1,6 +1,41 @@
 import { FastifyPluginAsync } from 'fastify';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { prismaAssets } from '@postolio/database-assets';
-import { generateUploadUrl, getAssetUrl, assetsBucketName } from '../utils/s3.js';
+import sharp from 'sharp';
+import { customAlphabet } from 'nanoid';
+import { generateUploadUrl, getAssetUrl, assetsBucketName, s3Client } from '../utils/s3.js';
+
+const nanoid = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 10);
+
+const MIME_EXTENSION_MAP: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+
+function sanitizeFileName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+function guessExtension(mimeType: string, fallback: string = 'bin'): string {
+  return MIME_EXTENSION_MAP[mimeType.toLowerCase()] || fallback;
+}
+
+async function fetchBufferFromUrl(
+  url: string
+): Promise<{ buffer: Buffer; fileName: string; mimeType?: string }> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch source asset: ${response.status} ${response.statusText}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const parsedUrl = new URL(url);
+  const path = parsedUrl.pathname.split('/').pop() || `asset-${nanoid()}`;
+  return { buffer, fileName: path, mimeType: response.headers.get('content-type') || undefined };
+}
 
 const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   // Get presigned URL for upload
@@ -293,6 +328,169 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
   });
+
+  fastify.post(
+    '/assets/import',
+    { preHandler: [fastify.authenticateService] },
+    async (request, reply) => {
+      const body = request.body as {
+        brandId: string;
+        uploadedBy?: string;
+        sourceUrl?: string;
+        dataBase64?: string;
+        fileName?: string;
+        mimeType?: string;
+        fileType?: 'image' | 'video';
+        title?: string;
+        altText?: string;
+        tags?: string[];
+      };
+
+      if (!body.brandId) {
+        return reply.code(400).send({ error: 'brandId is required' });
+      }
+
+      if (!body.sourceUrl && !body.dataBase64) {
+        return reply.code(400).send({ error: 'sourceUrl or dataBase64 is required' });
+      }
+
+      if (body.dataBase64 && !body.mimeType) {
+        return reply.code(400).send({ error: 'mimeType is required when sending base64 data' });
+      }
+
+      try {
+        let buffer: Buffer;
+        let derivedFileName = body.fileName;
+        let derivedMimeType = body.mimeType;
+
+        if (body.sourceUrl) {
+          const result = await fetchBufferFromUrl(body.sourceUrl);
+          buffer = result.buffer;
+          derivedFileName = derivedFileName || result.fileName;
+          derivedMimeType = derivedMimeType || result.mimeType;
+        } else {
+          const base64Source = body.dataBase64!;
+          const base64Data = base64Source.startsWith('data:')
+            ? base64Source.slice(base64Source.indexOf(',') + 1)
+            : base64Source;
+          buffer = Buffer.from(base64Data, 'base64');
+        }
+
+        if (!derivedMimeType) {
+          throw new Error('Unable to determine MIME type for imported asset');
+        }
+
+        if (!derivedFileName) {
+          const ext = guessExtension(derivedMimeType, 'bin');
+          derivedFileName = `asset-${nanoid()}.${ext}`;
+        }
+
+        const fileType =
+          body.fileType ||
+          (derivedMimeType.startsWith('image/')
+            ? 'image'
+            : derivedMimeType.startsWith('video/')
+              ? 'video'
+              : undefined);
+
+        if (!fileType) {
+          throw new Error('Unsupported MIME type for asset import');
+        }
+
+        const timestamp = Date.now();
+        const sanitized = sanitizeFileName(derivedFileName);
+        const s3Key = `brands/${body.brandId}/imports/${timestamp}_${nanoid()}_${sanitized}`;
+
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: assetsBucketName,
+            Key: s3Key,
+            Body: buffer,
+            ContentType: derivedMimeType,
+          })
+        );
+
+        let width: number | undefined;
+        let height: number | undefined;
+        if (fileType === 'image') {
+          const metadata = await sharp(buffer).metadata();
+          width = metadata.width ?? undefined;
+          height = metadata.height ?? undefined;
+        }
+
+        const asset = await prismaAssets.asset.create({
+          data: {
+            brandId: body.brandId,
+            uploadedBy: body.uploadedBy || 'system',
+            fileName: derivedFileName,
+            s3Key,
+            s3Bucket: assetsBucketName,
+            fileSize: buffer.byteLength,
+            mimeType: derivedMimeType,
+            fileType,
+            width,
+            height,
+            title: body.title,
+            altText: body.altText,
+            tags: body.tags || [],
+            processingStatus: 'pending',
+          },
+        });
+
+        return {
+          asset: {
+            ...asset,
+            url: getAssetUrl(asset.s3Key),
+          },
+          message: 'Asset imported successfully',
+        };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({
+          error: error instanceof Error ? error.message : 'Failed to import asset',
+        });
+      }
+    }
+  );
+
+  fastify.get(
+    '/assets/:id/ownership',
+    { preHandler: [fastify.authenticateService] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const query = request.query as { brandId?: string };
+
+      if (!query.brandId) {
+        return reply.code(400).send({ error: 'brandId query parameter is required' });
+      }
+
+      try {
+        const asset = await prismaAssets.asset.findUnique({
+          where: { id },
+        });
+
+        if (!asset) {
+          return reply.code(404).send({ error: 'Asset not found' });
+        }
+
+        const ownsAsset = asset.brandId === query.brandId;
+        return {
+          valid: ownsAsset,
+          asset: ownsAsset
+            ? {
+                ...asset,
+                url: getAssetUrl(asset.s3Key),
+              }
+            : null,
+        };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({
+          error: error instanceof Error ? error.message : 'Failed to verify asset ownership',
+        });
+      }
+    }
+  );
 };
 
 export default assetsRoutes;

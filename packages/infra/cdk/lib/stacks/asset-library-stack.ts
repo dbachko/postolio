@@ -66,11 +66,39 @@ export class AssetLibraryStack extends cdk.Stack {
     );
     const encryptionKey = kms.Key.fromKeyArn(this, 'FoundationKmsKey', kmsKeyArn);
 
-    // Image tag resolution: props > context > default
-    const contextImageTag = imageTag ?? (this.node.tryGetContext('imageTag') as string | undefined);
+    const redisEndpointParam = ssm.StringParameter.fromStringParameterName(
+      this,
+      'AssetsRedisEndpointParam',
+      `/postolio/${environment}/cache/endpoint`
+    );
+    const redisPortParam = ssm.StringParameter.fromStringParameterName(
+      this,
+      'AssetsRedisPortParam',
+      `/postolio/${environment}/cache/port`
+    );
+    const cacheSecurityGroupIdParam = ssm.StringParameter.fromStringParameterName(
+      this,
+      'AssetsCacheSecurityGroupParam',
+      `/postolio/${environment}/cache/security-group-id`
+    );
+    const cacheSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+      this,
+      'AssetsCacheSecurityGroup',
+      cacheSecurityGroupIdParam.stringValue
+    );
+
+    // Image tag resolution: prefer explicit assetsImageTag context, then props when it already
+    // points at an assets image, otherwise fall back to the stack default.
+    const explicitAssetsImageTag = this.node.tryGetContext('assetsImageTag') as string | undefined;
+    const normalizedPropImageTag =
+      imageTag && imageTag.startsWith('assets-') ? imageTag : undefined;
+    const selectedImageTag =
+      (explicitAssetsImageTag && explicitAssetsImageTag.trim().length > 0
+        ? explicitAssetsImageTag
+        : undefined) ?? normalizedPropImageTag;
     const defaultImageTag = `assets-${environment}-latest`;
     const containerImageTag =
-      contextImageTag && contextImageTag.trim().length > 0 ? contextImageTag : defaultImageTag;
+      selectedImageTag && selectedImageTag.trim().length > 0 ? selectedImageTag : defaultImageTag;
 
     // Import ECR repository by NAME (no cross-stack import)
     const repository = ecr.Repository.fromRepositoryName(this, 'PostolioRepository', 'postolio');
@@ -114,6 +142,17 @@ export class AssetLibraryStack extends cdk.Stack {
         generateStringKey: 'password',
         excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
       },
+    });
+
+    const assetsServiceTokenSecret = new secretsmanager.Secret(this, 'AssetsServiceTokenSecret', {
+      secretName: `/postolio/${environment}/assets/service-token`,
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({}),
+        generateStringKey: 'token',
+        passwordLength: 40,
+        excludePunctuation: true,
+      },
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
     // Use shared JWT Secret from Foundation stack (passed via props)
@@ -225,6 +264,12 @@ export class AssetLibraryStack extends cdk.Stack {
       parameterName: `/postolio/${environment}/assets/cdn-distribution-id`,
       stringValue: this.assetsCdn.distributionId,
       description: 'Assets CloudFront distribution ID',
+    });
+
+    new ssm.StringParameter(this, 'AssetsServiceTokenSecretArnParam', {
+      parameterName: `/postolio/${environment}/assets/service-token-arn`,
+      stringValue: assetsServiceTokenSecret.secretArn,
+      description: 'Secret ARN containing the Assets API service token',
     });
 
     // ==================== EventBridge Event Bus ====================
@@ -614,12 +659,30 @@ export class AssetLibraryStack extends cdk.Stack {
             // Non-sensitive DB connection details provided as plain env vars
             ASSETS_DB_HOST: this.assetsDatabase.dbInstanceEndpointAddress,
             ASSETS_DB_PORT: this.assetsDatabase.dbInstanceEndpointPort,
+            DATABASE_URL: `postgresql://${databaseSecret
+              .secretValueFromJson('username')
+              .unsafeUnwrap()}:${databaseSecret
+              .secretValueFromJson('password')
+              .unsafeUnwrap()}@${this.assetsDatabase.dbInstanceEndpointAddress}:${
+              this.assetsDatabase.dbInstanceEndpointPort
+            }/postolio_assets`,
+            ASSETS_DATABASE_URL: `postgresql://${databaseSecret
+              .secretValueFromJson('username')
+              .unsafeUnwrap()}:${databaseSecret
+              .secretValueFromJson('password')
+              .unsafeUnwrap()}@${this.assetsDatabase.dbInstanceEndpointAddress}:${
+              this.assetsDatabase.dbInstanceEndpointPort
+            }/postolio_assets`,
+            REDIS_HOST: redisEndpointParam.stringValue,
+            REDIS_PORT: redisPortParam.stringValue,
+            REDIS_URL: `redis://${redisEndpointParam.stringValue}:${redisPortParam.stringValue}`,
           },
           secrets: {
             ASSETS_DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, 'username'),
             ASSETS_DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, 'password'),
             // Provide full JWT secret string; do not require JSON key shape
             JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret),
+            ASSETS_SERVICE_TOKEN: ecs.Secret.fromSecretsManager(assetsServiceTokenSecret, 'token'),
           },
           logDriver: ecs.LogDrivers.awsLogs({
             streamPrefix: `${prefix}-api`,
@@ -647,6 +710,15 @@ export class AssetLibraryStack extends cdk.Stack {
       assetsApiService.service,
       'Allow Assets API service to connect to assets database'
     );
+
+    new ec2.CfnSecurityGroupIngress(this, 'AssetsCacheAccessRule', {
+      groupId: cacheSecurityGroup.securityGroupId,
+      ipProtocol: 'tcp',
+      fromPort: 6379,
+      toPort: 6379,
+      sourceSecurityGroupId: assetsApiService.service.connections.securityGroups[0].securityGroupId,
+      description: 'Allow Assets API service to connect to Redis cache',
+    });
 
     // Configure deployment settings
     const cfnService = assetsApiService.service.node.defaultChild as ecs.CfnService;

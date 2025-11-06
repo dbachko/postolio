@@ -6,12 +6,7 @@
  * - Shared S3 buckets and KMS keys
  * - Security groups
  * - ECR repository
- * - CloudFront CDN for AI-generated images
- *
- * Custom Domain Configuration:
- * If domainName context is provided and Route53 hosted zone exists,
- * automatically creates custom CDN domain (cdn.{rootDomain})
- * Falls back to CloudFront default domain if hosted zone not found
+ * - (Legacy image CDN has been removed; all media flows through the assets stack)
  */
 
 import * as cdk from 'aws-cdk-lib';
@@ -19,11 +14,6 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as acm from 'aws-cdk-lib/aws-certificatemanager';
-import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -44,7 +34,6 @@ import { NagSuppressions } from 'cdk-nag';
 
 export interface FoundationStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
-  domainName?: string; // e.g., 'postolio.example'
   enableVpcFlowLogs?: boolean;
   enableDatabaseProxy?: boolean;
   alertEmail?: string;
@@ -58,7 +47,6 @@ export class FoundationStack extends cdk.Stack {
   public readonly cache: elasticache.CfnCacheCluster;
   public readonly sharedBucket: s3.IBucket;
   public readonly logsBucket: s3.IBucket;
-  public readonly imagesBucket: s3.IBucket;
   public readonly encryptionKey: kms.IKey;
   public readonly repository: ecr.IRepository;
   public readonly jwtSecret: secretsmanager.ISecret;
@@ -70,15 +58,8 @@ export class FoundationStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: FoundationStackProps) {
     super(scope, id, props);
 
-    const {
-      environment,
-      domainName,
-      enableVpcFlowLogs = true,
-      enableDatabaseProxy = true,
-      alertEmail,
-    } = props;
+    const { environment, enableVpcFlowLogs = true, enableDatabaseProxy = true, alertEmail } = props;
     const prefix = `postolio-${environment}`;
-    const cdnSubdomain = 'cdn'; // CDN subdomain for images
 
     // ==================== KMS Encryption Key ====================
     this.encryptionKey = new kms.Key(this, 'FoundationEncryptionKey', {
@@ -497,134 +478,6 @@ export class FoundationStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // S3 Bucket for AI-generated images with intelligent tiering
-    this.imagesBucket = new s3.Bucket(this, 'AIImagesBucket', {
-      bucketName: `${prefix}-ai-images-${this.account}`,
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption:
-        environment === 'prod' ? s3.BucketEncryption.KMS_MANAGED : s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      lifecycleRules: [
-        {
-          id: 'intelligent-tiering-transition',
-          enabled: true,
-          transitions: [
-            {
-              storageClass: s3.StorageClass.INTELLIGENT_TIERING,
-              transitionAfter: cdk.Duration.days(0),
-            },
-          ],
-        },
-        {
-          id: 'expire-old-images',
-          enabled: true,
-          expiration: cdk.Duration.days(environment === 'prod' ? 365 : 90),
-        },
-      ],
-      cors: [
-        {
-          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
-          allowedOrigins: ['*'],
-          allowedHeaders: ['*'],
-          maxAge: 3600,
-        },
-      ],
-    });
-
-    // Custom domain setup - automatically extracts root domain from any domain format
-    // Examples: "postolio.example" -> root: "postolio.example", CDN: "postolio.example"
-    //           "postolio.example" -> root: "postolio.example", CDN: "postolio.example"
-    let hostedZone: route53.IHostedZone | undefined;
-    let certificate: acm.ICertificate | undefined;
-    let cdnDomainName: string | undefined;
-
-    if (domainName) {
-      // Extract root domain (last 2 parts) to find the Route53 hosted zone
-      // This handles subdomains: "postolio.example" -> "postolio.example"
-      const domainParts = domainName.split('.');
-      const rootDomain = domainParts.length >= 2 ? domainParts.slice(-2).join('.') : domainName;
-
-      cdnDomainName = `${cdnSubdomain}.${rootDomain}`;
-
-      try {
-        // Lookup Route53 hosted zone for ROOT domain
-        hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
-          domainName: rootDomain,
-        });
-
-        // Create ACM certificate for CloudFront (must be in us-east-1)
-        certificate = new acm.Certificate(this, 'CdnCertificate', {
-          domainName: cdnDomainName,
-          validation: acm.CertificateValidation.fromDns(hostedZone),
-        });
-      } catch (error) {
-        // If hosted zone lookup fails, just use CloudFront default domain
-        console.warn(
-          `Route53 hosted zone not found for ${rootDomain}, using CloudFront default domain`
-        );
-        cdnDomainName = undefined;
-        hostedZone = undefined;
-        certificate = undefined;
-      }
-    }
-
-    // CloudFront Distribution for AI-generated images
-    const imagesDistribution = new cloudfront.Distribution(this, 'ImagesDistribution', {
-      comment: `AI Images CDN for ${environment}`,
-      domainNames: cdnDomainName ? [cdnDomainName] : undefined,
-      certificate: certificate,
-      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
-      defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(this.imagesBucket),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
-        cachePolicy: new cloudfront.CachePolicy(this, 'ImagesCachePolicy', {
-          cachePolicyName: `${prefix}-images-cache-policy`,
-          comment: 'Cache policy for AI-generated images',
-          defaultTtl: cdk.Duration.days(365), // Images are immutable
-          maxTtl: cdk.Duration.days(365),
-          minTtl: cdk.Duration.days(30),
-          enableAcceptEncodingGzip: true,
-          enableAcceptEncodingBrotli: true,
-          headerBehavior: cloudfront.CacheHeaderBehavior.none(),
-          queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
-          cookieBehavior: cloudfront.CacheCookieBehavior.none(),
-        }),
-        compress: true,
-      },
-      priceClass:
-        environment === 'prod'
-          ? cloudfront.PriceClass.PRICE_CLASS_ALL
-          : cloudfront.PriceClass.PRICE_CLASS_100, // Use only North America and Europe for dev
-      // Logging disabled by default; enable later with a bucket allowing ACL log delivery
-      enableLogging: false,
-      httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
-    });
-
-    // Avoid CloudFormation timing out while waiting for CloudFront to finish deploying.
-    // This is especially useful when associating a freshly issued ACM certificate
-    // or when DNS validation/propagation is slow.
-    // Note: waitForDeployment handled via L2 prop above. No need to mutate L1.
-
-    // Create Route53 A record for custom domain
-    if (hostedZone && cdnDomainName) {
-      new route53.ARecord(this, 'CdnAliasRecord', {
-        zone: hostedZone,
-        recordName: cdnDomainName,
-        target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(imagesDistribution)),
-        comment: `CloudFront CDN for AI-generated images (${environment})`,
-      });
-      // Add IPv6 AAAA alias record to ensure dual-stack reachability
-      new route53.AaaaRecord(this, 'CdnAliasRecordAAAA', {
-        zone: hostedZone,
-        recordName: cdnDomainName,
-        target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(imagesDistribution)),
-        comment: `CloudFront CDN (AAAA) for AI-generated images (${environment})`,
-      });
-    }
-
     // ==================== SSM Parameters for Cross-Stack References ====================
     // VPC Parameters
     new ssm.StringParameter(this, 'VpcIdParameter', {
@@ -746,24 +599,6 @@ export class FoundationStack extends cdk.Stack {
       description: 'S3 bucket for shared application data',
     });
 
-    new ssm.StringParameter(this, 'ImagesBucketParameter', {
-      parameterName: `/postolio/${environment}/s3/images-bucket`,
-      stringValue: this.imagesBucket.bucketName,
-      description: 'S3 bucket for AI-generated images',
-    });
-
-    new ssm.StringParameter(this, 'ImagesCdnDomainParameter', {
-      parameterName: `/postolio/${environment}/cdn/images-domain`,
-      stringValue: cdnDomainName || imagesDistribution.distributionDomainName,
-      description: 'CDN domain for AI-generated images (custom or CloudFront)',
-    });
-
-    new ssm.StringParameter(this, 'ImagesCdnIdParameter', {
-      parameterName: `/postolio/${environment}/cdn/images-distribution-id`,
-      stringValue: imagesDistribution.distributionId,
-      description: 'CloudFront distribution ID for AI-generated images',
-    });
-
     // KMS Key Parameters
     new ssm.StringParameter(this, 'KmsKeyIdParameter', {
       parameterName: `/postolio/${environment}/kms/key-id`,
@@ -809,25 +644,6 @@ export class FoundationStack extends cdk.Stack {
       exportName: `${prefix}-ecr-uri`,
     });
 
-    new cdk.CfnOutput(this, 'ImagesCdnDomain', {
-      value: cdnDomainName || imagesDistribution.distributionDomainName,
-      description: 'CDN domain for AI-generated images (custom or CloudFront)',
-      exportName: `${prefix}-images-cdn-domain`,
-    });
-
-    new cdk.CfnOutput(this, 'ImagesCdnDistributionId', {
-      value: imagesDistribution.distributionId,
-      description: 'CloudFront distribution ID for AI-generated images',
-      exportName: `${prefix}-images-cdn-id`,
-    });
-
-    if (cdnDomainName) {
-      new cdk.CfnOutput(this, 'ImagesCdnCustomDomain', {
-        value: cdnDomainName,
-        description: 'Custom domain for CDN (e.g., postolio.example)',
-      });
-    }
-
     // ==================== CDK Nag Suppressions ====================
     NagSuppressions.addStackSuppressions(this, [
       {
@@ -858,24 +674,6 @@ export class FoundationStack extends cdk.Stack {
       {
         id: 'AwsSolutions-RDS3',
         reason: 'Multi-AZ not required for dev environment due to cost optimization',
-      },
-      {
-        id: 'AwsSolutions-CFR1',
-        reason: 'Geo restrictions not required for AI-generated images - global access is intended',
-      },
-      {
-        id: 'AwsSolutions-CFR2',
-        reason: 'WAF not required for images CDN - S3 bucket is private and content is immutable',
-      },
-      {
-        id: 'AwsSolutions-CFR3',
-        reason:
-          'CloudFront access logging disabled for cost optimization in dev/staging; can be enabled in production',
-      },
-      {
-        id: 'AwsSolutions-CFR4',
-        reason:
-          'Using CloudFront default certificate for dev environment; custom certificate with proper TLS policy is configured when domainName is provided',
       },
       {
         id: 'AwsSolutions-RDS10',

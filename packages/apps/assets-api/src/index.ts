@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
@@ -17,6 +18,13 @@ dotenv.config();
 const PORT = parseInt(process.env.ASSETS_API_PORT || '3002', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
+const SERVICE_API_TOKEN =
+  process.env.ASSETS_SERVICE_TOKEN || process.env.SERVICE_API_TOKEN || process.env.SERVICE_TOKEN;
+if (!SERVICE_API_TOKEN) {
+  throw new Error(
+    'ASSETS_SERVICE_TOKEN (or SERVICE_API_TOKEN / SERVICE_TOKEN) must be provided for internal authentication'
+  );
+}
 
 export function buildFastify(): FastifyInstance {
   const server = fastify({
@@ -135,6 +143,27 @@ export function buildFastify(): FastifyInstance {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
   });
+
+  server.decorate(
+    'authenticateService',
+    async function (request: FastifyRequest, reply: FastifyReply) {
+      const headerValue =
+        request.headers['x-postolio-service-token'] ||
+        request.headers['x-service-token'] ||
+        request.headers['x-internal-token'];
+      const token = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+      if (!token) {
+        request.log.warn('Service authentication failed');
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+      const provided = Buffer.from(token);
+      const expected = Buffer.from(SERVICE_API_TOKEN);
+      if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
+        request.log.warn('Service authentication failed');
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+    }
+  );
 
   // Register routes
   server.register(healthRoutes);

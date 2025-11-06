@@ -10,6 +10,7 @@ import {
   type ContentGenerationRequest,
 } from '../../services/content-generator.js';
 import { buildSimpleContentListResponse } from '../../services/content-response-builder.js';
+import { attachAssetToContent } from '../../services/assets-media.js';
 import { verifyBrandOwnership } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
 
@@ -69,14 +70,10 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
               console.error('Generated content has invalid hashtags:', content);
               throw new Error('Generated content has invalid hashtags');
             }
-
-            return prisma.content.create({
+            const created = await prisma.content.create({
               data: {
                 caption: content.caption,
                 hashtags: content.hashtags,
-                s3ImageKey: content.s3ImageKey || null,
-                imageRegion: content.imageRegion || null,
-                retentionExpiresAt: content.retentionExpiresAt || null,
                 status: 'draft',
                 brandId,
 
@@ -94,13 +91,23 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
                 id: true,
                 caption: true,
                 hashtags: true,
-                s3ImageKey: true,
-                imageRegion: true,
-                retentionExpiresAt: true,
                 status: true,
                 createdAt: true,
               },
             });
+
+            if (content.asset) {
+              await attachAssetToContent({ contentId: created.id, asset: content.asset });
+            }
+
+            return {
+              id: created.id,
+              caption: created.caption,
+              hashtags: created.hashtags,
+              primaryAssetCdnUrl: content.asset?.url ?? null,
+              status: created.status,
+              createdAt: created.createdAt,
+            };
           })
         );
 

@@ -23,10 +23,11 @@ export interface Content {
   id: string;
   caption: string;
   hashtags: string[];
-  s3ImageKey?: string | null;
+  primaryAssetId?: string | null;
   imageUrl?: string | null;
-  imageRegion?: string | null;
-  retentionExpiresAt?: string | null;
+  primaryAssetCdnUrl?: string | null;
+  primaryAssetWidth?: number | null;
+  primaryAssetHeight?: number | null;
   status: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
   scheduledAt: string | null;
   postedAt: string | null;

@@ -4,7 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import { getDatabaseClient } from '../config/database.js';
 import { instagramService } from '../services/instagram.js';
-import { uploadImageToS3, buildCdnUrl } from '../services/s3-image.js';
+import { importImageFromExternalUrl } from '../services/assets-media.js';
 
 const eventBridge = new EventBridge({});
 const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || 'default';
@@ -84,17 +84,19 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
             p.media_url
           ) {
             try {
-              const uploaded = await uploadImageToS3(p.media_url, {
-                source: 'midjourney',
+              const asset = await importImageFromExternalUrl(p.media_url, {
+                source: 'analysis_import',
                 brandId: brand.id,
                 contentId: p.id,
                 generatedAt: new Date(),
                 originalPrompt: 'brand-analysis cache',
               });
-              const cdn = buildCdnUrl(uploaded.s3Key);
-              if (cdn) mediaUrl = cdn;
+              mediaUrl = asset.url;
             } catch (e) {
-              request.log.warn({ err: e, postId: p.id }, 'Failed to cache image to S3');
+              request.log.warn(
+                { err: e, postId: p.id },
+                'Failed to cache image via assets service'
+              );
             }
           }
           return {

@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
-import { uploadImageToS3, buildCdnUrl } from '../services/s3-image.js';
+import { importImageFromExternalUrl } from '../services/assets-media.js';
 import { computePlaceholders } from '../services/placeholderService.js';
 import { instagramService } from '../services/instagram.js';
 
@@ -245,19 +245,18 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
                     p.media_url
                   ) {
                     try {
-                      const uploaded = await uploadImageToS3(p.media_url, {
+                      const asset = await importImageFromExternalUrl(p.media_url, {
                         source: 'midjourney',
                         brandId: updatedBrand.id,
                         contentId: p.id,
                         generatedAt: new Date(),
                         originalPrompt: 'brand-analysis cache',
                       });
-                      const cdn = buildCdnUrl(uploaded.s3Key);
-                      if (cdn) mediaUrl = cdn;
+                      mediaUrl = asset.url;
                     } catch (e) {
                       request.log.warn(
                         { err: e, postId: p.id },
-                        'Failed to cache image to S3 for analysis; using original URL'
+                        'Failed to cache image via assets service for analysis; using original URL'
                       );
                     }
                   }
@@ -423,7 +422,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           id: item.id,
           caption: item.caption,
           hashtags: item.hashtags,
-          imageUrl: buildCdnUrl(item.s3ImageKey),
+          imageUrl: item.primaryAssetCdnUrl,
           status: item.status,
           scheduledAt: item.scheduledAt,
           postedAt: item.postedAt,
@@ -467,9 +466,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             id: true,
             caption: true,
             hashtags: true,
-            s3ImageKey: true,
-            imageRegion: true,
-            retentionExpiresAt: true,
+            primaryAssetCdnUrl: true,
             status: true,
             scheduledAt: true,
             postedAt: true,
@@ -484,7 +481,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           id: item.id,
           caption: item.caption,
           hashtags: item.hashtags,
-          imageUrl: buildCdnUrl(item.s3ImageKey),
+          imageUrl: item.primaryAssetCdnUrl,
           status: item.status,
           scheduledAt: item.scheduledAt,
           postedAt: item.postedAt,

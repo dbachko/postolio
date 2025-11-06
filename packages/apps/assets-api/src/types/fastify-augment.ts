@@ -18,6 +18,10 @@ declare module 'fastify' {
       request: import('fastify').FastifyRequest,
       reply: import('fastify').FastifyReply
     ) => Promise<void>;
+    authenticateService: (
+      request: import('fastify').FastifyRequest,
+      reply: import('fastify').FastifyReply
+    ) => Promise<void>;
   }
 
   interface FastifyRequest {

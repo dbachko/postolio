@@ -27,7 +27,8 @@
     "@postolio/database-assets": "workspace:*",
     "dotenv": "^17.2.2",
     "fastify": "^5.2.0",
-    "nanoid": "^5.0.9"
+    "nanoid": "^5.0.9",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",

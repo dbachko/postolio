@@ -4,8 +4,6 @@
  * Centralizes CDN URL building and response structure
  */
 
-import { buildCdnUrl } from './s3-image.js';
-
 /**
  * Minimal content fields required for building a response
  */
@@ -13,7 +11,7 @@ export interface ContentBase {
   id: string;
   caption: string;
   hashtags: string[];
-  s3ImageKey: string | null;
+  primaryAssetCdnUrl: string | null;
   status: string;
   createdAt: Date;
 }
@@ -27,8 +25,9 @@ export interface ContentWithMetadata extends ContentBase {
   postedAt?: Date | null;
   brandId?: string;
   generationParams?: unknown;
-  imageRegion?: string | null;
-  retentionExpiresAt?: Date | null;
+  primaryAssetId?: string | null;
+  primaryAssetWidth?: number | null;
+  primaryAssetHeight?: number | null;
 }
 
 /**
@@ -63,7 +62,7 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
     id: content.id,
     caption: content.caption,
     hashtags: content.hashtags,
-    imageUrl: buildCdnUrl(content.s3ImageKey),
+    imageUrl: content.primaryAssetCdnUrl || null,
     status: content.status,
     createdAt: content.createdAt,
   };
@@ -121,7 +120,7 @@ export function buildSimpleContentResponse(content: ContentBase): {
     id: content.id,
     caption: content.caption,
     hashtags: content.hashtags,
-    imageUrl: buildCdnUrl(content.s3ImageKey),
+    imageUrl: content.primaryAssetCdnUrl || null,
     status: content.status,
     createdAt: content.createdAt,
   };

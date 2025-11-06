@@ -107,11 +107,13 @@ model Content {
   instagramPostId    String?
   analytics          Json?
   schedulingError    String?
-  s3ImageKey         String?       // S3 object key (e.g., images/2025-10-01/brandId/contentId.jpg)
-  imageRegion        String?       // User region for compliance (EU, US, UK, etc.)
-  retentionExpiresAt DateTime?     // Image retention expiry date based on region
+  primaryAssetId     String?       // Asset service identifier
+  primaryAssetCdnUrl String?       // Cached CDN URL for fast reads
+  primaryAssetWidth  Int?
+  primaryAssetHeight Int?
   brand              Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   campaign           Campaign?     @relation(fields: [campaignId], references: [id])
+  mediaAssets        PostMediaAsset[]
 
   @@index([brandId, status])
   @@index([scheduledAt])
@@ -162,6 +164,25 @@ model Campaign {
   @@index([campaignType])
   @@index([brandId, status])
   @@map("campaigns")
+}
+
+model PostMediaAsset {
+  id           String   @id @default(cuid())
+  contentId    String
+  assetId      String
+  cdnUrl       String
+  displayOrder Int      @default(0)
+  usageContext String   @default("primary")
+  width        Int?
+  height       Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([contentId])
+  @@unique([contentId, usageContext])
+  @@map("post_media_assets")
 }
 
 // CampaignDraft model removed; drafts feature fully deprecated

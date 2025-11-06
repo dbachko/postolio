@@ -1,5 +1,5 @@
 import type { HttpRequest } from '../http/http';
-import { convertFileToBase64 } from '@/lib/fileUtils';
+import { assetsApi } from '@/features/assets/api/client';
 
 export class ContentClient {
   constructor(private request: HttpRequest) {}
@@ -21,9 +21,23 @@ export class ContentClient {
     if (data.campaignId) body.campaignId = data.campaignId;
     if (data.scheduledAt) body.scheduledAt = data.scheduledAt;
     if (data.imageFile) {
-      const imageData = await convertFileToBase64(data.imageFile);
-      body.imageData = imageData;
-      body.mimeType = data.imageFile.type;
+      const uploadInfo = await assetsApi.getUploadUrl({
+        brandId: data.brandId,
+        fileName: data.imageFile.name,
+        contentType: data.imageFile.type || 'application/octet-stream',
+        fileType: data.imageFile.type.startsWith('video/') ? 'video' : 'image',
+        fileSize: data.imageFile.size,
+      });
+      await assetsApi.uploadToS3(data.imageFile, uploadInfo.uploadUrl);
+      const asset = await assetsApi.createAsset({
+        brandId: data.brandId,
+        fileName: data.imageFile.name,
+        s3Key: uploadInfo.s3Key,
+        fileSize: data.imageFile.size,
+        mimeType: data.imageFile.type || 'application/octet-stream',
+        fileType: data.imageFile.type.startsWith('video/') ? 'video' : 'image',
+      });
+      body.assetId = asset.asset.id;
     }
     return this.request('/api/content', { method: 'POST', body: JSON.stringify(body) });
   }
@@ -55,21 +69,35 @@ export class ContentClient {
     });
   }
 
-  async uploadContentImage(contentId: string, fileOrBase64: File | string) {
-    if (typeof fileOrBase64 === 'string') {
-      // If a URL string is passed, treat as no-op for upload endpoint
-      // Callers typically handle setting URL directly without upload
-      return {
-        success: true,
-        content: { id: contentId, imageUrl: fileOrBase64 },
-        message: 'ok',
-      } as any;
+  async uploadContentImage(contentId: string, brandId: string, fileOrUrl: File | string) {
+    if (typeof fileOrUrl === 'string') {
+      return this.request('/api/content/upload-image', {
+        method: 'POST',
+        body: JSON.stringify({ contentId, externalUrl: fileOrUrl }),
+      });
     }
-    const imageData = await convertFileToBase64(fileOrBase64);
-    const mimeType = fileOrBase64.type;
+
+    const uploadInfo = await assetsApi.getUploadUrl({
+      brandId,
+      fileName: fileOrUrl.name,
+      contentType: fileOrUrl.type || 'application/octet-stream',
+      fileType: fileOrUrl.type.startsWith('video/') ? 'video' : 'image',
+      fileSize: fileOrUrl.size,
+    });
+
+    await assetsApi.uploadToS3(fileOrUrl, uploadInfo.uploadUrl);
+    const asset = await assetsApi.createAsset({
+      brandId,
+      fileName: fileOrUrl.name,
+      s3Key: uploadInfo.s3Key,
+      fileSize: fileOrUrl.size,
+      mimeType: fileOrUrl.type || 'application/octet-stream',
+      fileType: fileOrUrl.type.startsWith('video/') ? 'video' : 'image',
+    });
+
     return this.request('/api/content/upload-image', {
       method: 'POST',
-      body: JSON.stringify({ contentId, imageData, mimeType }),
+      body: JSON.stringify({ contentId, assetId: asset.asset.id }),
     });
   }
 

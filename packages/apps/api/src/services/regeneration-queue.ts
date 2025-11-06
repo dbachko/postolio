@@ -2,6 +2,7 @@ import { Queue, Worker, Job } from 'bullmq';
 import Redis from 'ioredis';
 import { prisma } from '../config/database.js';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
+import { attachAssetToContent } from './assets-media.js';
 import { getRedisUrl } from '../utils/redis-url.js';
 
 // Fixed batch size as per product decision
@@ -114,9 +115,6 @@ const regenerationWorker = new Worker(
             data: {
               caption: newContent.caption,
               hashtags: newContent.hashtags,
-              s3ImageKey: newContent.s3ImageKey || null,
-              imageRegion: newContent.imageRegion || null,
-              retentionExpiresAt: newContent.retentionExpiresAt || null,
               generationParams: {
                 ...(((existingContent.generationParams as unknown) &&
                 typeof existingContent.generationParams === 'object'
@@ -131,6 +129,10 @@ const regenerationWorker = new Worker(
               },
             },
           });
+
+          if (newContent.asset) {
+            await attachAssetToContent({ contentId, asset: newContent.asset });
+          }
 
           results.completed++;
           return { contentId, status: 'success' };

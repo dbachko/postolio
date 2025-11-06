@@ -218,10 +218,10 @@ The platform separates scheduling from publishing via dedicated services and AWS
 
 ## 7) Images, Storage, and CDN
 
-- S3 upload, optimization, retention, and CDN URL building: `packages/apps/api/src/services/s3-image.ts`.
+- All uploads now flow through the Assets service client at `packages/apps/api/src/services/assets-media.ts`, which proxies to `packages/apps/assets-api`.
 - Environment variables used:
-  - `S3_IMAGES_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`, `CLOUDFRONT_DOMAIN`, `AWS_REGION`.
-- Images are optimized to 1080×1080 JPEG, padded (not cropped), cached for one year, and served via CloudFront when configured.
+  - `ASSETS_API_BASE_URL`, `ASSETS_API_SERVICE_TOKEN`, `ASSETS_CDN_DOMAIN`, `AWS_REGION`.
+- Assets are optimized by the assets pipeline, stored in the dedicated assets bucket, and served via the assets CloudFront distribution (exported through `/postolio/<env>/assets/cdn-domain`).
 
 ---
 

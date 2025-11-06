@@ -16,8 +16,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true };
   }
 
-  componentDidCatch(error: any) {
-    // eslint-disable-next-line no-console
+  componentDidCatch(error: unknown) {
     console.error('Calendar error boundary caught:', error);
   }
 

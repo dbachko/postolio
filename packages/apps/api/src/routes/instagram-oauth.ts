@@ -6,7 +6,7 @@ import { getDatabaseClient } from '../config/database.js';
 import { PublisherCredentialsService } from '../services/publisher-credentials.js';
 import { TokenServiceClient } from '../clients/token-service-client.js';
 import { instagramService } from '../services/instagram.js';
-import { uploadImageToS3, buildCdnUrl } from '../services/s3-image.js';
+import { importImageFromExternalUrl } from '../services/assets-media.js';
 import { redisService } from '../services/redis.js';
 
 const prisma = getDatabaseClient();
@@ -434,19 +434,18 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
                 p.media_url
               ) {
                 try {
-                  const uploaded = await uploadImageToS3(p.media_url, {
-                    source: 'midjourney',
+                  const asset = await importImageFromExternalUrl(p.media_url, {
+                    source: 'analysis_import',
                     brandId: updatedBrand.id,
                     contentId: p.id,
                     generatedAt: new Date(),
                     originalPrompt: 'brand-analysis cache',
                   });
-                  const cdn = buildCdnUrl(uploaded.s3Key);
-                  if (cdn) mediaUrl = cdn;
+                  mediaUrl = asset.url;
                 } catch (e) {
                   fastify.log.warn(
                     { err: e, postId: p.id },
-                    'Failed to cache image to S3 for analysis; using original URL'
+                    'Failed to cache image via assets service for analysis; using original URL'
                   );
                 }
               }

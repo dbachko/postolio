@@ -4,7 +4,6 @@
  */
 
 import { instagramService } from '../instagram.js';
-import { buildCdnUrl } from '../s3-image.js';
 import { getDatabaseClient } from '../../config/database.js';
 import type { Brand } from '@postolio/database';
 
@@ -34,7 +33,7 @@ export async function publishContentToInstagram(
       where: { id: contentId },
       select: {
         id: true,
-        s3ImageKey: true,
+        primaryAssetCdnUrl: true,
         caption: true,
         hashtags: true,
         status: true,
@@ -58,7 +57,7 @@ export async function publishContentToInstagram(
       };
     }
 
-    if (!content.s3ImageKey) {
+    if (!content.primaryAssetCdnUrl) {
       return {
         success: false,
         error: 'Image is required for Instagram posting',
@@ -92,18 +91,9 @@ export async function publishContentToInstagram(
     }
 
     // Get CDN URL
-    const cdnImageUrl = buildCdnUrl(content.s3ImageKey);
-    if (!cdnImageUrl) {
-      return {
-        success: false,
-        error: 'Failed to generate image URL',
-        retryable: false,
-      };
-    }
-
     // Publish to Instagram
     const publishResult = await instagramService.publishMedia(brand, {
-      cdnImageUrl,
+      cdnImageUrl: content.primaryAssetCdnUrl,
       caption: content.caption,
       hashtags: content.hashtags,
     });

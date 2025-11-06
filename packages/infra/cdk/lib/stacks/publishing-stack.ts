@@ -243,15 +243,10 @@ export class PublishingStack extends cdk.Stack {
       resourceName: schedulingEventBusName,
     });
 
-    // Import images bucket for generating media URLs
-    const imagesBucketName = ssm.StringParameter.valueForStringParameter(
-      this,
-      `/postolio/${environment}/s3/images-bucket`
-    );
     // Import CDN domain (custom domain or default distribution domain)
-    const imagesCdnDomain = ssm.StringParameter.valueForStringParameter(
+    const assetsCdnDomain = ssm.StringParameter.valueForStringParameter(
       this,
-      `/postolio/${environment}/cdn/images-domain`
+      `/postolio/${environment}/assets/cdn-domain`
     );
     // Import video bucket name for presigning video URLs
     const videoBucketName = ssm.StringParameter.valueForStringParameter(
@@ -471,10 +466,9 @@ export class PublishingStack extends cdk.Stack {
         KMS_KEY_ID: encryptionKey.keyId,
         ALERT_TOPIC_ARN: alertTopic.topicArn,
         // Buckets for generating pre-signed URLs
-        S3_IMAGES_BUCKET: imagesBucketName,
         VIDEO_BUCKET: videoBucketName,
         // Public CDN domain used for image URLs (no auth)
-        IMAGES_CDN_DOMAIN: imagesCdnDomain,
+        ASSETS_CDN_DOMAIN: assetsCdnDomain,
         ...(auditTableName ? { AUDIT_LOG_TABLE: auditTableName } : {}),
         // OAuth configuration
         FACEBOOK_APP_ID: props.facebookAppId || '',

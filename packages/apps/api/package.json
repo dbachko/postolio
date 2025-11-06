@@ -28,6 +28,7 @@
     "@fastify/helmet": "^12.0.1",
     "@fastify/jwt": "^9.0.1",
     "@fastify/websocket": "^11.2.0",
+    "@postolio/assets-client": "workspace:*",
     "@postolio/aws": "workspace:*",
     "@postolio/database": "workspace:*",
     "@postolio/errors": "workspace:*",

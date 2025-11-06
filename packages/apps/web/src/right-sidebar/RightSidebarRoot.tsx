@@ -134,7 +134,7 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [open, type, clamp, storageKey]);
+  }, [open, type, clamp, storageKey, applyWidth, persistedType]);
 
   // Mobile: render as Sheet; Desktop: resizable panel
   if (isSmall) {

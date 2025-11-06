@@ -46,6 +46,11 @@ interface PostDetailData {
   hashtags: string[];
   imageUrl?: string;
   status: string;
+  brandId: string;
+  brand: {
+    id: string;
+    name: string;
+  };
   // Normalize nullable backend fields: represent absence as undefined
   scheduledAt?: string;
   postedAt?: string;
@@ -68,10 +73,6 @@ interface PostDetailData {
     };
   };
   schedulingError?: string | null;
-  brand: {
-    id: string;
-    name: string;
-  };
   campaign?: {
     id: string;
     name: string;
@@ -205,6 +206,8 @@ export default function PostDetail() {
       const raw = response.data as any;
       return {
         ...raw,
+        brandId: raw.brand?.id,
+        brand: raw.brand || { id: '', name: '' },
         scheduledAt: raw.scheduledAt || undefined,
         postedAt: raw.postedAt || undefined,
         instagramPostId: raw.instagramPostId || undefined,
@@ -401,7 +404,10 @@ export default function PostDetail() {
       if (postId) {
         setSaveStatus('saving');
         try {
-          const response = await contentApi.uploadContentImage(postId, fileOrUrl);
+          if (!post?.brandId) {
+            throw new Error('Missing brand information for upload');
+          }
+          const response = await contentApi.uploadContentImage(postId, post.brandId, fileOrUrl);
           if (response.success && response.content) {
             const newImageUrl = response.content.imageUrl || objectUrl;
             setFormData((prev) => ({

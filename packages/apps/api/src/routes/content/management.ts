@@ -6,13 +6,12 @@
 import { FastifyPluginAsync } from 'fastify';
 import { Prisma } from '@postolio/database';
 
-import { uploadImageBufferToS3, type ImageMetadata } from '../../services/s3-image.js';
 import { schedulerService } from '../../services/scheduler.js';
 import {
   buildContentResponse,
   buildContentListResponse,
 } from '../../services/content-response-builder.js';
-import { validateAndConvertImage } from '../../services/image-validator.js';
+import { attachAssetToContent, verifyAssetOwnership } from '../../services/assets-media.js';
 import { normalizeHashtags } from '../../utils/hashtag-normalizer.js';
 import {
   verifyBrandOwnership,
@@ -28,8 +27,7 @@ interface CreateManualContentBody {
   brandId: string;
   caption: string;
   hashtags: string[];
-  imageData?: string;
-  mimeType?: string;
+  assetId?: string;
   campaignId?: string;
   scheduledAt?: string;
 }
@@ -48,7 +46,7 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const userId = request.user!.id;
 
-        const { brandId, caption, hashtags, imageData, campaignId, scheduledAt } = request.body;
+        const { brandId, caption, hashtags, assetId, campaignId, scheduledAt } = request.body;
 
         // Validate input
         if (!caption || caption.trim().length === 0) {
@@ -78,36 +76,13 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: authResult.error });
         }
 
-        let s3ImageKey: string | null = null;
-        let imageRegion: string | null = null;
-        let retentionExpiresAt: Date | null = null;
-
-        // Handle image upload if provided
-        if (imageData) {
+        let resolvedAsset = null;
+        if (assetId) {
           try {
-            // Validate and convert image data using validator service
-            const validationResult = validateAndConvertImage(imageData);
-            if (!validationResult.valid) {
-              return reply.code(400).send({ error: validationResult.error });
-            }
-
-            const buffer = validationResult.data!.buffer;
-
-            // Upload to S3
-            const uploadResult = await uploadImageBufferToS3(buffer, {
-              contentId: `manual-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-              brandId,
-              generatedAt: new Date(),
-              source: 'dalle3' as const, // Use dalle3 as placeholder for manual uploads
-              originalPrompt: '',
-            });
-
-            s3ImageKey = uploadResult.s3Key;
-            imageRegion = uploadResult.region;
-            retentionExpiresAt = uploadResult.retentionExpiresAt;
-          } catch (uploadError) {
-            console.error('Image upload error:', uploadError);
-            // Continue without image rather than failing entirely
+            resolvedAsset = await verifyAssetOwnership(assetId, brandId);
+          } catch (error) {
+            request.log.error(error);
+            return reply.code(400).send({ error: 'Invalid asset reference for this brand' });
           }
         }
 
@@ -125,32 +100,49 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
         const resolvedCampaignId = campaignId || null;
 
         // Create content record
-        const content = await prisma.content.create({
-          data: {
-            caption,
-            hashtags: normalizedHashtags,
-            s3ImageKey,
-            imageRegion,
-            retentionExpiresAt,
-            status,
-            brandId,
-            campaignId: resolvedCampaignId,
-            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-            generationParams: Prisma.JsonNull, // null indicates manual creation
-          },
-          select: {
-            id: true,
-            caption: true,
-            hashtags: true,
-            s3ImageKey: true,
-            imageRegion: true,
-            retentionExpiresAt: true,
-            status: true,
-            brandId: true,
-            generationParams: true,
-            createdAt: true,
-          },
+        const content = await prisma.$transaction(async (tx) => {
+          const created = await tx.content.create({
+            data: {
+              caption,
+              hashtags: normalizedHashtags,
+              status,
+              brandId,
+              campaignId: resolvedCampaignId,
+              scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+              generationParams: Prisma.JsonNull, // null indicates manual creation
+            },
+            select: {
+              id: true,
+              caption: true,
+              hashtags: true,
+              primaryAssetCdnUrl: true,
+              primaryAssetId: true,
+              primaryAssetHeight: true,
+              primaryAssetWidth: true,
+              status: true,
+              brandId: true,
+              generationParams: true,
+              createdAt: true,
+            },
+          });
+
+          if (resolvedAsset) {
+            await attachAssetToContent({ contentId: created.id, asset: resolvedAsset, prisma: tx });
+            return {
+              ...created,
+              primaryAssetId: resolvedAsset.id,
+              primaryAssetCdnUrl: resolvedAsset.url,
+              primaryAssetWidth: resolvedAsset.width ?? null,
+              primaryAssetHeight: resolvedAsset.height ?? null,
+            };
+          }
+
+          return created;
         });
+
+        if (!content) {
+          return reply.code(500).send({ error: 'Failed to create content' });
+        }
 
         // If scheduled time is provided, create AWS schedule
         let upsell: { upgradeRequired: boolean; message?: string } | null = null;
@@ -219,8 +211,7 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
             id: true,
             caption: true,
             hashtags: true,
-            s3ImageKey: true,
-            imageRegion: true,
+            primaryAssetCdnUrl: true,
             status: true,
             createdAt: true,
             updatedAt: true,

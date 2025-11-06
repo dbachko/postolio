@@ -4,6 +4,7 @@ import { TimezoneService } from './timezone.js';
 import { generateInstagramContent } from './content-generator.js';
 import { schedulerService } from './scheduler.js';
 import { computeUpcomingSlots } from './slot-utils.js';
+import { attachAssetToContent } from './assets-media.js';
 
 const prisma = getDatabaseClient();
 
@@ -297,9 +298,6 @@ export class CampaignSlidingWindowService {
             data: {
               caption: post.caption,
               hashtags: post.hashtags,
-              s3ImageKey: post.s3ImageKey ?? null,
-              imageRegion: post.imageRegion ?? null,
-              retentionExpiresAt: post.retentionExpiresAt ?? null,
               brandId: campaign.brandId,
               campaignId: campaign.id,
               status: 'draft',
@@ -320,6 +318,10 @@ export class CampaignSlidingWindowService {
             },
             select: { id: true, generationParams: true },
           });
+
+          if (created && post.asset) {
+            await attachAssetToContent({ contentId: created.id, asset: post.asset, prisma: tx });
+          }
         },
         { isolationLevel: 'Serializable' }
       );

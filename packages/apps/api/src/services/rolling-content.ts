@@ -1,4 +1,5 @@
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
+import { attachAssetToContent } from './assets-media.js';
 import { schedulerService } from './scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
 
@@ -246,9 +247,6 @@ class RollingContentService {
           data: {
             caption: content.caption,
             hashtags: content.hashtags,
-            s3ImageKey: content.s3ImageKey ?? null,
-            imageRegion: content.imageRegion ?? null,
-            retentionExpiresAt: content.retentionExpiresAt ?? null,
             brandId,
             campaignId: activeCampaign?.id || null,
             status: 'scheduled', // Auto-schedule rolling content
@@ -261,6 +259,10 @@ class RollingContentService {
             },
           },
         });
+
+        if (content.asset) {
+          await attachAssetToContent({ contentId: savedContent.id, asset: content.asset });
+        }
 
         // Schedule the content
         const nextSlot = await this.getNextAvailableSlot(brandId);

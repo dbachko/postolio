@@ -4,6 +4,7 @@
  */
 
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
+import { attachAssetToContent } from './assets-media.js';
 import { schedulerService } from './scheduler.js';
 import {
   SCHEDULER_TIME_INTERVALS,
@@ -307,12 +308,9 @@ class AutopilotService {
 
           // Save generated content to database
           for (const content of generatedContent) {
-            await prisma.content.create({
+            const created = await prisma.content.create({
               data: {
                 caption: content.caption,
-                s3ImageKey: content.s3ImageKey ?? null,
-                imageRegion: content.imageRegion ?? null,
-                retentionExpiresAt: content.retentionExpiresAt ?? null,
                 hashtags: content.hashtags,
                 status: 'scheduled', // Auto-schedule autopilot content
                 brandId: gap.brandId,
@@ -324,6 +322,9 @@ class AutopilotService {
                 },
               },
             });
+            if (content.asset) {
+              await attachAssetToContent({ contentId: created.id, asset: content.asset });
+            }
             totalGenerated++;
           }
         } catch (error) {

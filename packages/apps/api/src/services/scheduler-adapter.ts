@@ -370,11 +370,13 @@ export class SchedulerAdapter {
       } else {
         try {
           // Enforce presence of media key for image content
-          if ((!content.s3ImageKey || content.s3ImageKey.length === 0) && 'image' === 'image') {
+          if (
+            (!content.primaryAssetCdnUrl || content.primaryAssetCdnUrl.length === 0) &&
+            'image' === 'image'
+          ) {
             return {
               success: false,
-              error:
-                'Missing S3 image key for scheduling. Please re-upload or regenerate the image.',
+              error: 'Missing asset for scheduling. Please re-upload or regenerate the image.',
             };
           }
           const schedulePayload: CreateScheduleInput = {
@@ -395,8 +397,8 @@ export class SchedulerAdapter {
               campaignName: content.campaign?.name, // Include campaign context for debugging
             },
           };
-          if (content.s3ImageKey) {
-            schedulePayload.mediaKeys = [content.s3ImageKey];
+          if (content.primaryAssetCdnUrl) {
+            schedulePayload.mediaKeys = [content.primaryAssetCdnUrl];
           }
 
           const schedule = await (await this.client).createSchedule(schedulePayload);
@@ -886,8 +888,8 @@ export class SchedulerAdapter {
           hashtags: content.hashtags || [],
           // No metadata fallback for mediaKeys; upstream must supply keys
         };
-        if (content.s3ImageKey) {
-          updatePayload.mediaKeys = [content.s3ImageKey];
+        if (content.primaryAssetCdnUrl) {
+          updatePayload.mediaKeys = [content.primaryAssetCdnUrl];
         }
         await (await this.client).updateSchedule(scheduleId, updatePayload);
         awsRescheduleSuccess = true;

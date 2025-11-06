@@ -428,6 +428,8 @@ export function useSchedulingWebSocket({
     handleWebSocketError,
     messageFilter,
     offlineQueue,
+    startHeartbeat,
+    stopHeartbeat,
   ]);
 
   // Disconnect from WebSocket
@@ -453,7 +455,7 @@ export function useSchedulingWebSocket({
 
     setConnectionStatus('disconnected');
     setRetryIn(0);
-  }, []);
+  }, [stopHeartbeat]);
 
   // Effect to manage connection lifecycle - only reconnect on actual brand changes
   useEffect(() => {

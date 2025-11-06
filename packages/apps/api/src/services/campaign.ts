@@ -17,7 +17,7 @@ import {
   StatusBroadcaster,
   type CampaignStatus as StatusBroadcasterCampaignStatus,
 } from './status-broadcaster.js';
-import { buildCdnUrl } from './s3-image.js';
+import { attachAssetToContent } from './assets-media.js';
 import { eventEmitter } from './event-emitter.js';
 import { getDatabaseClient } from '../config/database.js';
 
@@ -420,9 +420,6 @@ class CampaignService {
           data: {
             caption: post.caption,
             hashtags: post.hashtags,
-            s3ImageKey: post.s3ImageKey ?? null,
-            imageRegion: post.imageRegion ?? null,
-            retentionExpiresAt: post.retentionExpiresAt ?? null,
             brandId: campaign.brandId,
             campaignId: campaignId,
             status: 'draft', // Preview posts start as draft
@@ -434,6 +431,10 @@ class CampaignService {
             },
           },
         });
+
+        if (post.asset) {
+          await attachAssetToContent({ contentId: savedPost.id, asset: post.asset });
+        }
         savedPosts.push({
           ...post,
           id: savedPost.id,
@@ -666,9 +667,7 @@ class CampaignService {
               id: true,
               caption: true,
               hashtags: true,
-              s3ImageKey: true,
-              imageRegion: true,
-              retentionExpiresAt: true,
+              primaryAssetCdnUrl: true,
               status: true,
               scheduledAt: true,
               postedAt: true,
@@ -697,7 +696,7 @@ class CampaignService {
           id: item.id,
           caption: item.caption,
           hashtags: item.hashtags,
-          imageUrl: buildCdnUrl(item.s3ImageKey),
+          imageUrl: item.primaryAssetCdnUrl,
           status: item.status,
           scheduledAt: item.scheduledAt,
           postedAt: item.postedAt,
@@ -985,9 +984,7 @@ class CampaignService {
               id: true,
               caption: true,
               hashtags: true,
-              s3ImageKey: true,
-              imageRegion: true,
-              retentionExpiresAt: true,
+              primaryAssetCdnUrl: true,
               status: true,
               scheduledAt: true,
               postedAt: true,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -604,7 +604,7 @@ function NotificationPreferencesPanel() {
     return { categoryLabel: categoryTitle(category), ...meta };
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await notificationsApi.getPreferences(selectedBrand?.id);
@@ -654,7 +654,7 @@ function NotificationPreferencesPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBrand?.id]);
 
   // Derived grouping for UI presentation.
   // We currently have two account-related types that should be shown
@@ -742,7 +742,7 @@ function NotificationPreferencesPanel() {
 
   useEffect(() => {
     void load();
-  }, [selectedBrand?.id]);
+  }, [load]);
 
   const toggle = async (idx: number, channel: 'in_app' | 'email') => {
     const next = [...rows];
