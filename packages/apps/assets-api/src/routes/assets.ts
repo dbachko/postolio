@@ -59,7 +59,11 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Create asset metadata after upload
   fastify.post('/assets', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const user = request.user as { userId: string };
+    const authUser = request.user as { userId?: string; id?: string } | undefined;
+    const userId = authUser?.userId || authUser?.id;
+    if (!userId) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
     const body = request.body as {
       brandId: string;
       fileName: string;
@@ -80,7 +84,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       const asset = await prismaAssets.asset.create({
         data: {
           brandId: body.brandId,
-          uploadedBy: user.userId,
+          uploadedBy: userId,
           fileName: body.fileName,
           s3Key: body.s3Key,
           s3Bucket: assetsBucketName,

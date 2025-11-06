@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
+import type { FastifyJWT } from '@fastify/jwt';
 import { prismaAssets } from '@postolio/database-assets';
 import assetsRoutes from './routes/assets.js';
 import foldersRoutes from './routes/folders.js';
@@ -101,16 +102,37 @@ export function buildFastify(): FastifyInstance {
         ?.auth_token;
       const header = request.headers['authorization'];
       const authHeader = Array.isArray(header) ? header[0] : header;
+      let decoded: FastifyJWT['user'] | null = null;
+
       if (cookieToken) {
-        await server.jwt.verify(cookieToken);
+        decoded = await server.jwt.verify(cookieToken);
       } else if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
-        await server.jwt.verify(token);
+        decoded = await server.jwt.verify(token);
       } else {
         throw new Error('No authentication token provided');
       }
-    } catch {
-      reply.code(401).send({ error: 'Unauthorized' });
+
+      if (!decoded) {
+        throw new Error('Invalid authentication payload');
+      }
+
+      const normalizedUserId = decoded.userId || decoded.id;
+      if (!normalizedUserId) {
+        throw new Error('Invalid authentication payload: missing user id');
+      }
+
+      const rest = { ...decoded };
+      delete rest.id;
+      delete rest.userId;
+
+      request.user = {
+        ...rest,
+        userId: normalizedUserId,
+      };
+    } catch (error) {
+      request.log.warn({ err: error }, 'Authentication failed');
+      return reply.code(401).send({ error: 'Unauthorized' });
     }
   });
 
