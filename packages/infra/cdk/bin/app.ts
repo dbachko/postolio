@@ -40,6 +40,37 @@ const resolveContext = <T>(key: string, envKey?: string): T | undefined => {
   return (envValue as unknown as T) ?? undefined;
 };
 
+const parseBooleanContext = (value: string | boolean | undefined): boolean | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  return ['true', '1', 'yes', 'y'].includes(value.toLowerCase());
+};
+
+const normalizeHostname = (value?: string): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  return value.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+};
+
+const deriveApexDomain = (value?: string): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  const trimmed = value.replace(/^https?:\/\//i, '').replace(/\.$/, '');
+  const parts = trimmed.split('.');
+  if (parts.length <= 2) {
+    return trimmed;
+  }
+  return parts.slice(-2).join('.');
+};
+
 const domainName = resolveContext<string>('domainName', 'DOMAIN_NAME');
 const hostedZoneId = resolveContext<string>('hostedZoneId', 'HOSTED_ZONE_ID');
 const hostedZoneName = resolveContext<string>('hostedZoneName', 'HOSTED_ZONE_NAME');
@@ -64,12 +95,46 @@ const useExternalDnsContext = resolveContext<string | boolean>(
   'useExternalDns',
   'USE_EXTERNAL_DNS'
 );
-const useExternalDns =
-  typeof useExternalDnsContext === 'boolean'
-    ? useExternalDnsContext
-    : typeof useExternalDnsContext === 'string'
-      ? ['true', '1', 'yes'].includes(useExternalDnsContext.toLowerCase())
-      : false;
+const useExternalDns = parseBooleanContext(useExternalDnsContext) ?? false;
+
+const assetsCdnDomainInput = normalizeHostname(
+  resolveContext<string>('assetsCdnDomain', 'ASSETS_CDN_DOMAIN')
+);
+const assetsCdnHostedZoneIdInput = resolveContext<string>(
+  'assetsCdnHostedZoneId',
+  'ASSETS_CDN_HOSTED_ZONE_ID'
+);
+const assetsCdnHostedZoneNameInput = normalizeHostname(
+  resolveContext<string>('assetsCdnHostedZoneName', 'ASSETS_CDN_HOSTED_ZONE_NAME')
+);
+const assetsCdnCertificateArnInput = resolveContext<string>(
+  'assetsCdnCertificateArn',
+  'ASSETS_CDN_CERTIFICATE_ARN'
+);
+const assetsCdnUseExternalDnsContext = resolveContext<string | boolean>(
+  'assetsCdnUseExternalDns',
+  'ASSETS_CDN_USE_EXTERNAL_DNS'
+);
+const assetsCdnUseExternalDns =
+  parseBooleanContext(assetsCdnUseExternalDnsContext) ?? useExternalDns;
+
+const normalizedHostedZoneName = hostedZoneName?.replace(/\.$/, '');
+const apexFallback =
+  assetsCdnHostedZoneNameInput || normalizedHostedZoneName || deriveApexDomain(domainName);
+const derivedAssetsCdnDomain =
+  assetsCdnDomainInput || (apexFallback ? `cdn.${apexFallback}` : undefined);
+const derivedAssetsCdnHostedZoneName = assetsCdnHostedZoneNameInput || apexFallback;
+const derivedAssetsCdnHostedZoneId = assetsCdnHostedZoneIdInput || hostedZoneId;
+
+const resolvedAssetsCdnDomainName = derivedAssetsCdnDomain;
+const resolvedAssetsCdnHostedZoneName = assetsCdnUseExternalDns
+  ? undefined
+  : derivedAssetsCdnHostedZoneName;
+const resolvedAssetsCdnHostedZoneId = assetsCdnUseExternalDns
+  ? undefined
+  : derivedAssetsCdnHostedZoneId;
+const resolvedAssetsCdnCertificateArn =
+  assetsCdnCertificateArnInput || (assetsCdnUseExternalDns ? webCertificateArn : undefined);
 
 // Environment-specific configuration
 const envConfig = {
@@ -224,6 +289,11 @@ if (!onlyStack || isSelected('asset-library')) {
     environment: environment as 'dev' | 'staging' | 'prod',
     imageTag: imageTag,
     openaiApiKey: app.node.tryGetContext('openaiApiKey'),
+    assetsCdnDomainName: resolvedAssetsCdnDomainName,
+    assetsCdnHostedZoneId: resolvedAssetsCdnHostedZoneId,
+    assetsCdnHostedZoneName: resolvedAssetsCdnHostedZoneName,
+    assetsCdnCertificateArn: resolvedAssetsCdnCertificateArn,
+    assetsCdnUseExternalDns,
     description: `Postolio Asset Library microservice - ${environment} environment`,
     tags: {
       ...stackTags,

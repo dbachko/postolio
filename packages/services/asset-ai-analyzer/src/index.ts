@@ -47,8 +47,16 @@ export const handler = async (
     }
 
     // Build CDN URL for the thumbnail (medium size)
-    const cdnDomain = process.env.ASSETS_CDN_DOMAIN || `https://${s3Bucket}.s3.amazonaws.com`;
-    const imageUrl = `${cdnDomain}/${thumbnailKey}`;
+    const rawCdnDomain =
+      process.env.ASSETS_CDN_DOMAIN ||
+      process.env.CDN_DOMAIN ||
+      `https://${s3Bucket}.s3.amazonaws.com`;
+    const normalizedCdnDomain = rawCdnDomain.replace(/\/+$/, '');
+    const cdnDomain = /^https?:\/\//i.test(normalizedCdnDomain)
+      ? normalizedCdnDomain
+      : `https://${normalizedCdnDomain}`;
+    const normalizedThumbnailKey = thumbnailKey.replace(/^\/+/, '');
+    const imageUrl = `${cdnDomain}/${normalizedThumbnailKey}`;
 
     logger.info('Analyzing image with OpenAI Vision', { imageUrl });
 

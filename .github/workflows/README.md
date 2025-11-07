@@ -130,6 +130,8 @@ TURBO_TEAM: your-turbo-team
 LOG_LEVEL: info
 ```
 
+> The Assets CDN domain defaults to `cdn.<apex-domain>` using the same hosted zone and certificate that power the app domain. Override via CDK context (`assetsCdnDomain`, `assetsCdnHostedZoneId`, etc.) only if you need a different hostname or DNS zone.
+
 ## Deployment Strategies
 
 ### Branch-Based Deployments

@@ -67,6 +67,14 @@ export function getAssetUrl(s3Key) {
   if (/^https?:\/\//i.test(s3Key)) {
     return s3Key;
   }
-  const cdnDomain = process.env.ASSETS_CDN_DOMAIN || `https://${assetsBucketName}.s3.amazonaws.com`;
-  return `${cdnDomain}/${s3Key}`;
+  const cdnDomain =
+    (process.env.ASSETS_CDN_DOMAIN && process.env.ASSETS_CDN_DOMAIN.trim()) ||
+    (process.env.CDN_DOMAIN && process.env.CDN_DOMAIN.trim()) ||
+    `https://${assetsBucketName}.s3.amazonaws.com`;
+  const normalizedDomain = cdnDomain.replace(/\/+$/, '');
+  const domainWithProtocol = /^https?:\/\//i.test(normalizedDomain)
+    ? normalizedDomain
+    : `https://${normalizedDomain}`;
+  const normalizedKey = s3Key.replace(/^\/+/, '');
+  return `${domainWithProtocol}/${normalizedKey}`;
 }

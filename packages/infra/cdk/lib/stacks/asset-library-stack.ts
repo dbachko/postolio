@@ -17,6 +17,9 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -36,6 +39,11 @@ export interface AssetLibraryStackProps extends cdk.StackProps {
   environment: 'dev' | 'staging' | 'prod';
   imageTag?: string;
   openaiApiKey?: string;
+  assetsCdnDomainName?: string;
+  assetsCdnHostedZoneId?: string;
+  assetsCdnHostedZoneName?: string;
+  assetsCdnCertificateArn?: string;
+  assetsCdnUseExternalDns?: boolean;
 }
 
 export class AssetLibraryStack extends cdk.Stack {
@@ -47,7 +55,16 @@ export class AssetLibraryStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AssetLibraryStackProps) {
     super(scope, id, props);
 
-    const { environment, imageTag, openaiApiKey } = props;
+    const {
+      environment,
+      imageTag,
+      openaiApiKey,
+      assetsCdnDomainName,
+      assetsCdnHostedZoneId,
+      assetsCdnHostedZoneName,
+      assetsCdnCertificateArn,
+      assetsCdnUseExternalDns,
+    } = props;
     const prefix = `postolio-${environment}-assets`;
 
     // Initialized with SSM-based secret references (no cross-stack export imports)
@@ -237,8 +254,55 @@ export class AssetLibraryStack extends cdk.Stack {
       description: 'Assets S3 bucket name',
     });
 
+    const normalizedAssetsCdnDomain = normalizeDomainName(assetsCdnDomainName);
+
+    let assetsCdnHostedZone: route53.IHostedZone | undefined;
+    let resolvedAssetsCdnHostedZoneName: string | undefined;
+    if (normalizedAssetsCdnDomain && !assetsCdnUseExternalDns) {
+      const lookupDomain = (
+        assetsCdnHostedZoneName || deriveHostedZoneName(normalizedAssetsCdnDomain)
+      ).replace(/\.$/, '');
+      resolvedAssetsCdnHostedZoneName = lookupDomain;
+
+      if (assetsCdnHostedZoneId) {
+        assetsCdnHostedZone = route53.HostedZone.fromHostedZoneAttributes(
+          this,
+          'AssetsCdnHostedZone',
+          {
+            hostedZoneId: assetsCdnHostedZoneId,
+            zoneName: lookupDomain,
+          }
+        );
+      } else {
+        assetsCdnHostedZone = route53.HostedZone.fromLookup(this, 'AssetsCdnHostedZone', {
+          domainName: lookupDomain,
+        });
+        resolvedAssetsCdnHostedZoneName = assetsCdnHostedZone.zoneName;
+      }
+    }
+
+    let assetsCdnCertificate: acm.ICertificate | undefined;
+    if (normalizedAssetsCdnDomain) {
+      if (assetsCdnCertificateArn) {
+        assetsCdnCertificate = acm.Certificate.fromCertificateArn(
+          this,
+          'AssetsCdnCertificateImport',
+          assetsCdnCertificateArn
+        );
+      } else if (assetsCdnHostedZone && !assetsCdnUseExternalDns) {
+        assetsCdnCertificate = new acm.Certificate(this, 'AssetsCdnCertificate', {
+          domainName: normalizedAssetsCdnDomain,
+          validation: acm.CertificateValidation.fromDns(assetsCdnHostedZone),
+        });
+      } else {
+        throw new Error(
+          'assetsCdnDomainName provided but no certificate configuration available. Provide assetsCdnCertificateArn or Route 53 details.'
+        );
+      }
+    }
+
     // ==================== CloudFront Distribution ====================
-    this.assetsCdn = new cloudfront.Distribution(this, 'AssetsDistribution', {
+    const distributionProps: cloudfront.DistributionProps = {
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.assetsBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -251,12 +315,42 @@ export class AssetLibraryStack extends cdk.Stack {
         environment === 'prod'
           ? cloudfront.PriceClass.PRICE_CLASS_ALL
           : cloudfront.PriceClass.PRICE_CLASS_100,
-    });
+      ...(normalizedAssetsCdnDomain && assetsCdnCertificate
+        ? {
+            domainNames: [normalizedAssetsCdnDomain],
+            certificate: assetsCdnCertificate,
+          }
+        : {}),
+    };
+
+    this.assetsCdn = new cloudfront.Distribution(this, 'AssetsDistribution', distributionProps);
+
+    if (normalizedAssetsCdnDomain && assetsCdnHostedZone && !assetsCdnUseExternalDns) {
+      const recordName = deriveRecordName(
+        normalizedAssetsCdnDomain,
+        resolvedAssetsCdnHostedZoneName || assetsCdnHostedZone.zoneName
+      );
+
+      new route53.ARecord(this, 'AssetsCdnAliasRecord', {
+        zone: assetsCdnHostedZone,
+        recordName,
+        target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(this.assetsCdn)),
+      });
+
+      new route53.AaaaRecord(this, 'AssetsCdnAliasRecordIpv6', {
+        zone: assetsCdnHostedZone,
+        recordName,
+        target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(this.assetsCdn)),
+      });
+    }
+
+    const resolvedPublicCdnDomain =
+      normalizedAssetsCdnDomain || this.assetsCdn.distributionDomainName;
 
     // Export CDN domain to SSM
     new ssm.StringParameter(this, 'AssetsCdnDomain', {
       parameterName: `/postolio/${environment}/assets/cdn-domain`,
-      stringValue: this.assetsCdn.distributionDomainName,
+      stringValue: resolvedPublicCdnDomain,
       description: 'Assets CloudFront domain',
     });
 
@@ -421,7 +515,8 @@ export class AssetLibraryStack extends cdk.Stack {
         // EventBridge
         EVENT_BUS_NAME: assetEventBus.eventBusName,
         // CloudFront for presigned URLs
-        CDN_DOMAIN: this.assetsCdn.distributionDomainName,
+        CDN_DOMAIN: resolvedPublicCdnDomain,
+        ASSETS_CDN_DOMAIN: resolvedPublicCdnDomain,
       },
       bundling: {
         // Do not package prisma; esbuild will bundle openai
@@ -654,7 +749,8 @@ export class AssetLibraryStack extends cdk.Stack {
             ASSETS_S3_BUCKET: this.assetsBucket.bucketName,
             S3_BUCKET: this.assetsBucket.bucketName,
             S3_REGION: this.region,
-            CDN_DOMAIN: this.assetsCdn.distributionDomainName,
+            CDN_DOMAIN: resolvedPublicCdnDomain,
+            ASSETS_CDN_DOMAIN: resolvedPublicCdnDomain,
             EVENT_BUS_NAME: assetEventBus.eventBusName,
             // Non-sensitive DB connection details provided as plain env vars
             ASSETS_DB_HOST: this.assetsDatabase.dbInstanceEndpointAddress,
@@ -833,7 +929,7 @@ export class AssetLibraryStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'AssetsCdnDomainOutput', {
-      value: this.assetsCdn.distributionDomainName,
+      value: resolvedPublicCdnDomain,
       description: 'Assets CloudFront domain',
       exportName: `${prefix}-cdn-domain`,
     });
@@ -856,4 +952,38 @@ export class AssetLibraryStack extends cdk.Stack {
       exportName: `${prefix}-ai-analyzer-arn`,
     });
   }
+}
+
+function normalizeDomainName(domainName?: string): string | undefined {
+  if (!domainName) {
+    return undefined;
+  }
+
+  return domainName.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+}
+
+function deriveHostedZoneName(domainName: string): string {
+  const trimmed = domainName.replace(/\.$/, '');
+  const parts = trimmed.split('.');
+  if (parts.length <= 2) {
+    return trimmed;
+  }
+
+  return parts.slice(-2).join('.');
+}
+
+function deriveRecordName(domainName: string, zoneName: string): string | undefined {
+  const normalizedDomain = domainName.replace(/\.$/, '');
+  const normalizedZone = zoneName.replace(/\.$/, '');
+
+  if (normalizedDomain === normalizedZone) {
+    return undefined;
+  }
+
+  if (normalizedDomain.endsWith(`.${normalizedZone}`)) {
+    const relative = normalizedDomain.slice(0, normalizedDomain.length - normalizedZone.length - 1);
+    return relative.length > 0 ? relative : undefined;
+  }
+
+  return normalizedDomain;
 }
