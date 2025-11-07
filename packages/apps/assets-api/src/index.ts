@@ -34,7 +34,7 @@ export function buildFastify(): FastifyInstance {
   });
 
   const server = fastify({
-    logger: fastifyLogger.toPino(),
+    loggerInstance: fastifyLogger.toPino(),
     requestIdLogLabel: 'reqId',
     disableRequestLogging: false,
     requestIdHeader: 'x-request-id',

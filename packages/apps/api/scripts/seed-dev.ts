@@ -327,8 +327,6 @@ async function main() {
   const pick = <T>(arr: T[]) => arr[rng(0, arr.length - 1)];
 
   const baseHashtags = ['#postolio', '#dev', '#demo', '#socialmedia', '#content'];
-  const imageRegions = ['US', 'EU', 'UK'];
-
   const campaignContentPayload: Parameters<typeof prisma.content.createMany>[0]['data'] = [];
 
   function pushContent(opts: {
@@ -364,18 +362,19 @@ async function main() {
       scheduledAt = new Date(baseTime.getTime() - hours(rng(2, 12)));
     }
 
-    const s3 = withImage
+    const assetSeed = Math.random().toString(36).slice(2, 7);
+    const assetData = withImage
       ? {
-          s3ImageKey: `${POST_SEED_IMAGE_BASE}/1080/1080?random=${campaign.id}-${Math.random()
-            .toString(36)
-            .slice(2, 7)}`,
-          imageRegion: 'cdn',
-          retentionExpiresAt: null,
+          primaryAssetId: `seed-${campaign.id}-${assetSeed}`,
+          primaryAssetCdnUrl: `${POST_SEED_IMAGE_BASE}/1080/1080?random=${campaign.id}-${assetSeed}`,
+          primaryAssetWidth: 1080,
+          primaryAssetHeight: 1080,
         }
       : {
-          s3ImageKey: null as string | null,
-          imageRegion: null as string | null,
-          retentionExpiresAt: null as Date | null,
+          primaryAssetId: null as string | null,
+          primaryAssetCdnUrl: null as string | null,
+          primaryAssetWidth: null as number | null,
+          primaryAssetHeight: null as number | null,
         };
 
     campaignContentPayload.push({
@@ -401,7 +400,7 @@ async function main() {
           ? { likes: rng(10, 500), comments: rng(0, 50), shares: rng(0, 20), reach: rng(500, 5000) }
           : null,
       schedulingError: err,
-      ...s3,
+      ...assetData,
     });
   }
 
@@ -610,7 +609,10 @@ async function main() {
     hashtags: string[];
     status: ContentStatus;
     scheduledAt?: Date | null;
-    s3ImageKey?: string | null;
+    primaryAssetId?: string | null;
+    primaryAssetCdnUrl?: string | null;
+    primaryAssetWidth?: number | null;
+    primaryAssetHeight?: number | null;
     campaignId?: string | null;
     postedAt?: Date | null;
     schedulingError?: string | null;
@@ -628,7 +630,10 @@ async function main() {
       hashtags: ['#postolio', '#dev', '#demo'],
       status: isScheduled ? ('scheduled' as ContentStatus) : ('draft' as ContentStatus),
       scheduledAt,
-      s3ImageKey: null,
+      primaryAssetId: null,
+      primaryAssetCdnUrl: null,
+      primaryAssetWidth: null,
+      primaryAssetHeight: null,
       campaignId: null,
     });
   }
@@ -644,7 +649,10 @@ async function main() {
       postedAt: new Date(Date.now() - days(2)),
       instagramPermalink: `https://instagram.com/p/${Math.random().toString(36).slice(2, 10)}`,
       instagramPostId: `IG_${Math.random().toString(36).slice(2, 12)}`,
-      s3ImageKey: null,
+      primaryAssetId: null,
+      primaryAssetCdnUrl: null,
+      primaryAssetWidth: null,
+      primaryAssetHeight: null,
       campaignId: null,
     },
     {
@@ -655,7 +663,10 @@ async function main() {
       scheduledAt: new Date(Date.now() - days(1)),
       postedAt: null,
       schedulingError: 'Network error while posting',
-      s3ImageKey: null,
+      primaryAssetId: null,
+      primaryAssetCdnUrl: null,
+      primaryAssetWidth: null,
+      primaryAssetHeight: null,
       campaignId: null,
     },
     {
@@ -665,7 +676,10 @@ async function main() {
       status: 'skipped',
       scheduledAt: new Date(Date.now() - days(2)),
       postedAt: null,
-      s3ImageKey: null,
+      primaryAssetId: null,
+      primaryAssetCdnUrl: null,
+      primaryAssetWidth: null,
+      primaryAssetHeight: null,
       campaignId: null,
     },
   ];
