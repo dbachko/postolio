@@ -23,6 +23,23 @@ import { getMaxScheduledAheadForTier } from '../constants/subscription.js';
 
 const prisma = getDatabaseClient();
 
+function normalizeMediaKey(reference?: string | null): string | null {
+  if (!reference) {
+    return null;
+  }
+  const trimmed = reference.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    const pathname = parsed.pathname.replace(/^\/+/, '');
+    return pathname || null;
+  } catch {
+    return trimmed.replace(/^\/+/, '');
+  }
+}
+
 export class SchedulerAdapter {
   private _client: ContentSchedulerClient | null = null;
   private _clientPromise: Promise<ContentSchedulerClient> | null = null;
@@ -397,8 +414,9 @@ export class SchedulerAdapter {
               campaignName: content.campaign?.name, // Include campaign context for debugging
             },
           };
-          if (content.primaryAssetCdnUrl) {
-            schedulePayload.mediaKeys = [content.primaryAssetCdnUrl];
+          const mediaKey = normalizeMediaKey(content.primaryAssetCdnUrl);
+          if (mediaKey) {
+            schedulePayload.mediaKeys = [mediaKey];
           }
 
           const schedule = await (await this.client).createSchedule(schedulePayload);
@@ -888,8 +906,9 @@ export class SchedulerAdapter {
           hashtags: content.hashtags || [],
           // No metadata fallback for mediaKeys; upstream must supply keys
         };
-        if (content.primaryAssetCdnUrl) {
-          updatePayload.mediaKeys = [content.primaryAssetCdnUrl];
+        const mediaKey = normalizeMediaKey(content.primaryAssetCdnUrl);
+        if (mediaKey) {
+          updatePayload.mediaKeys = [mediaKey];
         }
         await (await this.client).updateSchedule(scheduleId, updatePayload);
         awsRescheduleSuccess = true;

@@ -107,15 +107,11 @@ export function AppEmptyState({
   if (variant === 'minimal') {
     return (
       <div
-        className={cn(
-          'text-center',
-          'space-y-4 rounded-none border-0 bg-transparent',
-          className
-        )}
+        className={cn('text-center', 'space-y-4 rounded-none border-0 bg-transparent', className)}
         {...props}
       >
         {Icon ? (
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <div className="bg-muted text-muted-foreground mx-auto flex h-12 w-12 items-center justify-center rounded-full">
             <Icon className={iconClasses} />
           </div>
         ) : null}

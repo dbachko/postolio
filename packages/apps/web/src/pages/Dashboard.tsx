@@ -79,7 +79,7 @@ export function Dashboard() {
   if (brands.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-6 py-16 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <div className="bg-muted text-muted-foreground flex h-12 w-12 items-center justify-center rounded-full">
           <Sparkles className="h-5 w-5 shrink-0" />
         </div>
         <div className="space-y-2">

@@ -172,9 +172,7 @@ class CampaignService {
       const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
       const startDateInBrandTz = TimezoneService.toLocal(config.duration.start, brandTimezone);
       const toleranceMinutes = 5;
-      const earliestAllowedStart = new Date(
-        nowInBrandTz.getTime() - toleranceMinutes * 60 * 1000
-      );
+      const earliestAllowedStart = new Date(nowInBrandTz.getTime() - toleranceMinutes * 60 * 1000);
 
       if (startDateInBrandTz < earliestAllowedStart) {
         throw new Error('Campaign start date cannot be in the past');

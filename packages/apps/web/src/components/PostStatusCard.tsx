@@ -61,7 +61,9 @@ export function PostStatusCard({
         <Alert variant="destructive" className="mt-4">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Publishing failed</AlertTitle>
-          <AlertDescription className="whitespace-pre-line">{errorMessage}</AlertDescription>
+          <AlertDescription className="whitespace-pre-line break-all text-sm leading-relaxed">
+            {errorMessage}
+          </AlertDescription>
         </Alert>
       ) : null}
     </div>

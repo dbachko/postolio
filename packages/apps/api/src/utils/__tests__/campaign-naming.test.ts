@@ -8,7 +8,7 @@ describe('generateCampaignName', () => {
       themes: ['halloween', 'spooky'],
       startDate: '2025-10-15',
     });
-    expect(name).toBe('Promotional_Halloween_Oct2025');
+    expect(name).toBe('Promotional Halloween Oct 2025');
   });
 
   it('handles no themes with fallback', () => {
@@ -17,7 +17,7 @@ describe('generateCampaignName', () => {
       themes: [],
       startDate: '2025-02-01',
     });
-    expect(name).toBe('Educational_Campaign_Feb2025');
+    expect(name).toBe('Educational Campaign Feb 2025');
   });
 
   it('handles multi-word themes with PascalCase', () => {
@@ -26,7 +26,7 @@ describe('generateCampaignName', () => {
       themes: ['tips & tutorials'],
       startDate: '2025-03-10',
     });
-    expect(name).toBe('Seasonal_TipsTutorials_Mar2025');
+    expect(name).toBe('Seasonal Tips Tutorials Mar 2025');
   });
 
   it('capitalizes campaign type correctly', () => {
@@ -35,7 +35,7 @@ describe('generateCampaignName', () => {
       themes: ['industry insights'],
       startDate: '2025-01-15',
     });
-    expect(name).toBe('Thought_leadership_IndustryInsights_Jan2025');
+    expect(name).toBe('Thought Leadership Industry Insights Jan 2025');
   });
 
   it('truncates long themes to 20 characters', () => {
@@ -44,8 +44,9 @@ describe('generateCampaignName', () => {
       themes: ['this is a very long theme name that exceeds twenty characters'],
       startDate: '2025-06-01',
     });
-    expect(name).toBe('Promotional_ThisIsAVeryLongThe_Jun2025');
-    expect(name.split('_')[1].length).toBeLessThanOrEqual(20);
+    expect(name).toMatch(/^Promotional .+ Jun 2025$/);
+    const theme = name.replace('Promotional ', '').replace(' Jun 2025', '');
+    expect(theme.length).toBeLessThanOrEqual(30);
   });
 
   it('removes special characters from theme', () => {
@@ -54,7 +55,7 @@ describe('generateCampaignName', () => {
       themes: ['50% off!!!'],
       startDate: '2025-12-25',
     });
-    expect(name).toBe('Promotional_50Off_Dec2025');
+    expect(name).toBe('Promotional 50 Off Dec 2025');
   });
 
   it('handles empty theme string with fallback', () => {
@@ -63,7 +64,7 @@ describe('generateCampaignName', () => {
       themes: ['   '],
       startDate: '2025-04-10',
     });
-    expect(name).toBe('Custom_Campaign_Apr2025');
+    expect(name).toBe('Custom Campaign Apr 2025');
   });
 
   it('formats date correctly across different months', () => {
@@ -81,7 +82,7 @@ describe('generateCampaignName', () => {
         themes: ['test'],
         startDate: date,
       });
-      expect(name).toContain(`_${expectedMonth}2025`);
+      expect(name).toContain(` ${expectedMonth} 2025`);
     });
   });
 
@@ -91,7 +92,7 @@ describe('generateCampaignName', () => {
       themes: ['summer sale', 'beach vibes', 'sunshine'],
       startDate: '2025-07-01',
     });
-    expect(name).toBe('Promotional_SummerSale_Jul2025');
+    expect(name).toBe('Promotional Summer Sale Jul 2025');
   });
 
   it('handles theme with only special characters', () => {
@@ -100,6 +101,6 @@ describe('generateCampaignName', () => {
       themes: ['!!!'],
       startDate: '2025-05-01',
     });
-    expect(name).toBe('Promotional_Campaign_May2025');
+    expect(name).toBe('Promotional Campaign May 2025');
   });
 });

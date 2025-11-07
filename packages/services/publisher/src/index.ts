@@ -1101,11 +1101,26 @@ async function getSignedVideoUrl(videoKey: string): Promise<string> {
 
 // Build a CDN URL for an image by key (no auth)
 async function getSignedImageUrlFromKey(key: string): Promise<string> {
+  const candidate = key.trim();
+  if (!candidate) {
+    throw new Error('Media key is required for image publishing');
+  }
+
+  if (/^https?:\/\//i.test(candidate)) {
+    return candidate;
+  }
+
   const cdnDomain = process.env.ASSETS_CDN_DOMAIN;
   if (!cdnDomain) {
     throw new Error('ASSETS_CDN_DOMAIN not configured for publisher');
   }
-  return `https://${cdnDomain}/${key.replace(/^\/+/, '')}`;
+
+  const normalized = candidate.replace(/^\/+/, '');
+  if (normalized.startsWith(`${cdnDomain}/`)) {
+    return `https://${normalized}`;
+  }
+
+  return `https://${cdnDomain}/${normalized}`;
 }
 
 function extractS3Key(urlStr: string): string | null {

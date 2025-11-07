@@ -37,21 +37,49 @@ export interface CampaignNamingParams {
  * Helper function to extract and format theme name
  */
 function formatThemeName(themes: string[]): string {
-  let theme = 'Campaign';
-  if (themes.length > 0 && themes[0].trim().length > 0) {
-    theme = themes[0]
-      .split(/\s+/)
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join('')
-      .replace(/[^a-zA-Z0-9]/g, '')
-      .slice(0, 20);
+  const MAX_LENGTH = 30;
+  const rawTheme = themes.find((theme) => theme && theme.trim().length > 0)?.trim() ?? '';
 
-    // Fallback if theme becomes empty after sanitization
-    if (theme.length === 0) {
-      theme = 'Campaign';
-    }
+  if (!rawTheme) {
+    return 'Campaign';
   }
-  return theme;
+
+  const sanitized = rawTheme
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!sanitized) {
+    return 'Campaign';
+  }
+
+  let formatted = sanitized
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+
+  if (formatted.length > MAX_LENGTH) {
+    formatted = formatted.slice(0, MAX_LENGTH).trim();
+  }
+
+  return formatted || 'Campaign';
+}
+
+function formatCampaignType(campaignType: string): string {
+  const sanitized = campaignType
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/[_\s]+/g, ' ')
+    .trim();
+
+  if (!sanitized) {
+    return 'Campaign';
+  }
+
+  return sanitized
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 }
 
 export function generateCampaignName({
@@ -75,16 +103,16 @@ export function generateCampaignName({
       timeZone: timezone,
     });
     const year = fallback.toLocaleDateString('en-US', { year: 'numeric', timeZone: timezone });
-    const type = campaignType.charAt(0).toUpperCase() + campaignType.slice(1);
+    const type = formatCampaignType(campaignType);
     const theme = formatThemeName(themes);
-    return `${type}_${theme}_${month}${year}`;
+    return `${type} ${theme} ${month} ${year}`.trim();
   }
 
   // Format date in the specified timezone to get correct month/year
   const month = date.toLocaleDateString('en-US', { month: 'short', timeZone: timezone });
   const year = date.toLocaleDateString('en-US', { year: 'numeric', timeZone: timezone });
-  const type = campaignType.charAt(0).toUpperCase() + campaignType.slice(1);
+  const type = formatCampaignType(campaignType);
   const theme = formatThemeName(themes);
 
-  return `${type}_${theme}_${month}${year}`;
+  return `${type} ${theme} ${month} ${year}`.trim();
 }
