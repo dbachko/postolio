@@ -9,26 +9,19 @@ import assetsRoutes from './routes/assets.js';
 import foldersRoutes from './routes/folders.js';
 import campaignAssetsRoutes from './routes/campaign-assets.js';
 import healthRoutes from './routes/health.js';
+import { logger as sharedLogger } from '@postolio/logger';
 // Load environment variables
 dotenv.config();
 const PORT = parseInt(process.env.PORT || '3002', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 export function buildFastify() {
+  const fastifyLogger = sharedLogger.child({
+    service: 'assets-api',
+    environment: NODE_ENV,
+  });
   const server = fastify({
-    logger: {
-      level: NODE_ENV === 'production' ? 'info' : 'debug',
-      transport:
-        NODE_ENV !== 'production'
-          ? {
-              target: 'pino-pretty',
-              options: {
-                translateTime: 'HH:MM:ss Z',
-                ignore: 'pid,hostname',
-              },
-            }
-          : undefined,
-    },
+    logger: fastifyLogger.toPino(),
     requestIdLogLabel: 'reqId',
     disableRequestLogging: false,
     requestIdHeader: 'x-request-id',

@@ -1,4 +1,6 @@
 import axios, { AxiosError } from 'axios';
+import { logger as baseLogger } from '@postolio/logger';
+import { formatError } from '../utils/logging.js';
 import { redisService } from './redis.js';
 import * as crypto from 'crypto';
 import { analyticsCache } from './analytics-cache.js';
@@ -38,6 +40,8 @@ export interface PublishMediaRequest {
   caption: string;
   hashtags: string[];
 }
+
+const instagramLogger = baseLogger.child({ module: 'instagram-service' });
 
 export interface PublishMediaResult {
   id: string;
@@ -221,7 +225,7 @@ class InstagramService {
 
       return null;
     } catch (error) {
-      console.error('Token refresh failed:', error);
+      instagramLogger.error('Token refresh failed', formatError(error));
       return null;
     }
   }
@@ -279,7 +283,7 @@ class InstagramService {
         profile_picture_url: profile.profile_picture_url || this.getDefaultProfilePicture(),
       };
     } catch (error) {
-      console.error('Failed to fetch Instagram profile:', error);
+      instagramLogger.error('Failed to fetch Instagram profile', formatError(error));
       throw new Error(
         `Failed to fetch Instagram profile: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -339,7 +343,7 @@ class InstagramService {
         };
       });
     } catch (error) {
-      console.error('Failed to fetch Instagram posts:', error);
+      instagramLogger.error('Failed to fetch Instagram posts', formatError(error));
       throw new Error(
         `Failed to fetch Instagram posts: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -396,7 +400,7 @@ class InstagramService {
         published: true,
       };
     } catch (error) {
-      console.error('Failed to publish Instagram media:', error);
+      instagramLogger.error('Failed to publish Instagram media', formatError(error));
       throw new Error(
         `Failed to publish Instagram media: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -427,7 +431,7 @@ class InstagramService {
       const data = response.data?.data;
       return Array.isArray(data) ? (data as MediaInsightMetric[]) : [];
     } catch (error) {
-      console.error('Failed to fetch media insights:', error);
+      instagramLogger.error('Failed to fetch media insights', formatError(error));
       throw new Error(
         `Failed to fetch media insights: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -476,7 +480,7 @@ class InstagramService {
       });
       return { data: comments, total };
     } catch (error) {
-      console.error('Failed to fetch post comments:', error);
+      instagramLogger.error('Failed to fetch post comments', formatError(error));
       throw new Error(
         `Failed to fetch post comments: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -585,7 +589,7 @@ class InstagramService {
       const msg = axErr.response?.data?.error?.message || (error as Error).message;
       const code = axErr.response?.data?.error?.code;
       const subcode = axErr.response?.data?.error?.error_subcode;
-      console.error('Failed to fetch account insights:', { message: msg, code, subcode });
+      instagramLogger.error('Failed to fetch account insights:', { message: msg, code, subcode });
 
       // Map common Graph API errors to clearer messages for route handler
       if (code === 190 || /access token/i.test(msg)) {
@@ -709,7 +713,7 @@ class InstagramService {
         lastUpdated: new Date().toISOString(),
       };
     } catch (error) {
-      console.error('Failed to fetch recent posts performance:', error);
+      instagramLogger.error('Failed to fetch recent posts performance', formatError(error));
       throw new Error(
         `Failed to fetch recent posts performance: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -755,7 +759,7 @@ class InstagramService {
         nextRefreshAllowed: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes
       };
     } catch (error) {
-      console.error('Failed to refresh analytics data:', error);
+      instagramLogger.error('Failed to refresh analytics data', formatError(error));
       return {
         success: false,
         message: `Failed to refresh data: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -816,15 +820,12 @@ class InstagramService {
   async handleWebhookEvent(event: InstagramWebhookEvent): Promise<void> {
     try {
       // Process Instagram webhook events
-      console.log('Processing Instagram webhook event:', JSON.stringify(event));
+      instagramLogger.info('Processing Instagram webhook event', { event });
 
       // Implementation depends on specific webhook events you want to handle
       // Common events: media published, comments, mentions, etc.
     } catch (error: unknown) {
-      console.error(
-        'Failed to handle webhook event:',
-        JSON.stringify(error, Object.getOwnPropertyNames(error as object))
-      );
+      instagramLogger.error('Failed to handle webhook event', formatError(error));
     }
   }
 
@@ -886,7 +887,7 @@ class InstagramService {
 
     try {
       const startTime = Date.now();
-      console.log(`[Instagram Sync] Started for brand ${brand.id}`, {
+      instagramLogger.info(`[Instagram Sync] Started for brand ${brand.id}`, {
         brandId: brand.id,
         maxPosts,
         maxDays,
@@ -923,11 +924,14 @@ class InstagramService {
         }
       }
 
-      console.log(`[Instagram Sync] 📥 Fetched ${posts.length} posts for brand ${brand.id}`, {
-        brandId: brand.id,
-        totalPosts: posts.length,
-        dateThreshold: dateThreshold.toISOString(),
-      });
+      instagramLogger.info(
+        `[Instagram Sync] 📥 Fetched ${posts.length} posts for brand ${brand.id}`,
+        {
+          brandId: brand.id,
+          totalPosts: posts.length,
+          dateThreshold: dateThreshold.toISOString(),
+        }
+      );
 
       // Process each post
       for (const post of posts) {
@@ -941,7 +945,7 @@ class InstagramService {
           } else {
             results.failed++;
             results.errors.push(`Post ${post.id}: ${message}`);
-            console.error(`[Instagram Sync] ❌ Failed to sync post ${post.id}:`, {
+            instagramLogger.error(`[Instagram Sync] ❌ Failed to sync post ${post.id}:`, {
               postId: post.id,
               brandId: brand.id,
               error: message,
@@ -967,18 +971,21 @@ class InstagramService {
         86400 // 24 hour TTL
       );
 
-      console.log(`[Instagram Sync] ✅ Completed for brand ${brand.id}`, {
+      const durationSeconds = Math.max(duration / 1000, 0.001);
+      const totalAttempts = results.synced + results.failed + results.skipped || 1;
+      const successRate = (results.synced / totalAttempts) * 100;
+      instagramLogger.info(`[Instagram Sync] ✅ Completed for brand ${brand.id}`, {
         brandId: brand.id,
-        duration: `${duration}ms`,
-        durationSeconds: (duration / 1000).toFixed(2),
+        duration,
+        durationSeconds,
         results,
-        successRate: `${((results.synced / (results.synced + results.failed + results.skipped)) * 100).toFixed(1)}%`,
-        postsPerSecond: (posts.length / (duration / 1000)).toFixed(2),
+        successRate,
+        postsPerSecond: posts.length / durationSeconds,
       });
 
       return results;
     } catch (error) {
-      console.error('Failed to sync Instagram posts:', error);
+      instagramLogger.error('Failed to sync Instagram posts', formatError(error));
       throw error;
     } finally {
       // Release lock ASAP
@@ -986,7 +993,7 @@ class InstagramService {
         try {
           await redis.del(lockKey);
         } catch (e) {
-          console.warn('Failed to release Instagram sync lock', {
+          instagramLogger.warn('Failed to release Instagram sync lock', {
             brandId: brand.id,
             lockKey,
             error: (e as Error)?.message,
@@ -1186,7 +1193,7 @@ class InstagramService {
 
     // Skip non-image posts
     if (post.media_type !== 'IMAGE' && post.media_type !== 'CAROUSEL_ALBUM') {
-      console.log(`Skipping ${post.media_type} post ${post.id}`);
+      instagramLogger.info(`Skipping ${post.media_type} post ${post.id}`);
       throw new Error(`Unsupported media type: ${post.media_type}`);
     }
 
@@ -1206,14 +1213,17 @@ class InstagramService {
         });
 
         const imageDuration = Date.now() - imageStartTime;
-        console.log(`[Instagram Sync] 🖼️  Image cached via assets service: ${importedAsset.id}`, {
-          postId: post.id,
-          assetId: importedAsset.id,
-          duration: `${imageDuration}ms`,
-        });
+        instagramLogger.info(
+          `[Instagram Sync] 🖼️  Image cached via assets service: ${importedAsset.id}`,
+          {
+            postId: post.id,
+            assetId: importedAsset.id,
+            duration: imageDuration,
+          }
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`[Instagram Sync] ⚠️  Failed to download image for post ${post.id}:`, {
+        instagramLogger.error(`[Instagram Sync] ⚠️  Failed to download image for post ${post.id}`, {
           postId: post.id,
           mediaUrl: post.media_url,
           error: message,
@@ -1222,7 +1232,7 @@ class InstagramService {
         // Continue without image - store post metadata only
       }
     } else {
-      console.log(`[Instagram Sync] ℹ️  No media URL for post ${post.id}`);
+      instagramLogger.info(`[Instagram Sync] ℹ️  No media URL for post ${post.id}`);
       imageDownloadFailed = true;
     }
 
@@ -1296,7 +1306,7 @@ class InstagramService {
         },
       });
 
-      console.log(`[Instagram Sync] 🔄 Updated existing content with IG data`, {
+      instagramLogger.info(`[Instagram Sync] 🔄 Updated existing content with IG data`, {
         postId: post.id,
         brandId: brand.id,
         mergedInto: matchingDraft.id,
@@ -1320,7 +1330,7 @@ class InstagramService {
       const code = (e as any)?.code;
       if (code === 'P2002') {
         // Unique constraint violation -> treat as already imported
-        console.log('[Instagram Sync] Skipped duplicate by unique constraint', {
+        instagramLogger.info('[Instagram Sync] Skipped duplicate by unique constraint', {
           postId: post.id,
           brandId: brand.id,
         });
@@ -1329,7 +1339,7 @@ class InstagramService {
       throw e;
     }
 
-    console.log(`[Instagram Sync] ✨ Synced post ${post.id}`, {
+    instagramLogger.info(`[Instagram Sync] ✨ Synced post ${post.id}`, {
       postId: post.id,
       brandId: brand.id,
       hasImage: !!importedAsset,

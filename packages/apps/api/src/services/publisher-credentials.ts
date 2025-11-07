@@ -4,11 +4,14 @@
  * This ensures credentials are always up-to-date even if user reconnects their account
  */
 
+import { logger as baseLogger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
 import { getRedisClient } from '../services/redis.js';
 import { getTokenService } from './service-clients.js';
+import { formatError } from '../utils/logging.js';
 
 const prisma = getDatabaseClient();
+const credentialsLogger = baseLogger.child({ module: 'publisher-credentials' });
 
 export interface PublisherCredentials {
   accessToken: string | null;
@@ -37,11 +40,14 @@ export class PublisherCredentialsService {
         try {
           const cached = await redis.get(cacheKey);
           if (cached) {
-            console.log(`Cache hit for brand ${brandId} credentials`);
+            credentialsLogger.info(`Cache hit for brand ${brandId} credentials`);
             return JSON.parse(cached);
           }
         } catch (cacheError) {
-          console.warn('Redis cache read failed, falling back to Token Service:', cacheError);
+          credentialsLogger.warn('Redis cache read failed, falling back to Token Service', {
+            cacheKey,
+            ...formatError(cacheError),
+          });
         }
       }
 
@@ -58,7 +64,7 @@ export class PublisherCredentialsService {
       });
 
       if (!brand) {
-        console.error(`Brand not found: ${brandId}`);
+        credentialsLogger.error(`Brand not found: ${brandId}`);
         return null;
       }
 
@@ -67,13 +73,13 @@ export class PublisherCredentialsService {
       const tokenData = await tokenServiceClient.getToken(brand.userId, brand.id, 'instagram');
 
       if (!tokenData) {
-        console.error(`No Instagram token found for brand: ${brandId}`);
+        credentialsLogger.error(`No Instagram token found for brand: ${brandId}`);
         return null;
       }
 
       // Check if platform is connected
       if (!tokenData.accessToken) {
-        console.error(`No token found for brand: ${brandId}`);
+        credentialsLogger.error(`No token found for brand: ${brandId}`);
         return null;
       }
 
@@ -89,15 +95,20 @@ export class PublisherCredentialsService {
       if (redis) {
         try {
           await redis.setex(cacheKey, CACHE_TTL_SECONDS, JSON.stringify(credentials));
-          console.log(`Cached credentials for brand ${brandId} (TTL: ${CACHE_TTL_SECONDS}s)`);
+          credentialsLogger.info(
+            `Cached credentials for brand ${brandId} (TTL: ${CACHE_TTL_SECONDS}s)`
+          );
         } catch (cacheError) {
-          console.warn('Redis cache write failed:', cacheError);
+          credentialsLogger.warn('Redis cache write failed', {
+            cacheKey,
+            ...formatError(cacheError),
+          });
         }
       }
 
       return credentials;
     } catch (error) {
-      console.error('Error fetching publisher credentials:', error);
+      credentialsLogger.error('Error fetching publisher credentials', formatError(error));
       return null;
     }
   }
@@ -129,7 +140,7 @@ export class PublisherCredentialsService {
     const isValid = await this.validateCredentials(credentials);
 
     if (!isValid) {
-      console.error(`Invalid credentials for brand ${brandId}`);
+      credentialsLogger.error(`Invalid credentials for brand ${brandId}`);
       return null;
     }
 
@@ -147,9 +158,12 @@ export class PublisherCredentialsService {
     const cacheKey = `publisher:credentials:${brandId}`;
     try {
       await redis.del(cacheKey);
-      console.log(`Invalidated credential cache for brand ${brandId}`);
+      credentialsLogger.info(`Invalidated credential cache for brand ${brandId}`);
     } catch (error) {
-      console.error('Failed to invalidate cache:', error);
+      credentialsLogger.error('Failed to invalidate cache', {
+        cacheKey,
+        ...formatError(error),
+      });
     }
   }
 }

@@ -174,6 +174,13 @@ class Logger {
     (childLogger as any).pino = this.pino.child(context);
     return childLogger;
   }
+
+  /**
+   * Expose underlying pino logger for integrations that require it (e.g., Fastify)
+   */
+  toPino(): PinoLogger {
+    return this.pino;
+  }
 }
 
 // Factory function to create logger instances
@@ -201,6 +208,59 @@ const defaultConfig: LoggerConfig = {
 };
 
 export const logger = createLogger(defaultConfig);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function patchConsoleBridge(activeLogger: Logger): void {
+  const mappings: Array<['log' | 'info' | 'warn' | 'error' | 'debug', keyof Logger]> = [
+    ['log', 'info'],
+    ['info', 'info'],
+    ['warn', 'warn'],
+    ['error', 'error'],
+    ['debug', 'debug'],
+  ];
+
+  for (const [method, level] of mappings) {
+    const logMethod = (activeLogger as any)[level].bind(activeLogger);
+    (console as any)[method] = (...args: unknown[]) => {
+      if (!args.length) {
+        logMethod('console call with no arguments');
+        return;
+      }
+
+      const [first, ...rest] = args;
+
+      if (typeof first === 'string') {
+        if (rest.length === 0) {
+          logMethod(first);
+        } else if (rest.length === 1 && isPlainObject(rest[0])) {
+          logMethod(first, rest[0] as LogContext);
+        } else {
+          logMethod(first, { args: rest });
+        }
+        return;
+      }
+
+      if (isPlainObject(first)) {
+        logMethod('console output', first as LogContext);
+      } else {
+        logMethod('console output', { args });
+      }
+    };
+  }
+
+  (console as any).__postolioPatched = true;
+}
+
+if (typeof console !== 'undefined' && !(console as any).__postolioPatched) {
+  patchConsoleBridge(logger);
+}
 
 // Re-export types for convenience
 export type { Logger, PinoLogger };

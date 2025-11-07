@@ -1,5 +1,8 @@
 import type { Campaign, Content } from '@postolio/database';
+import { logger as baseLogger } from '@postolio/logger';
 import { TimezoneService } from './timezone.js';
+
+const placeholderLogger = baseLogger.child({ module: 'placeholder-service' });
 
 export interface CalendarPlaceholder {
   id: string;
@@ -22,10 +25,10 @@ export async function computePlaceholders(
   const now = new Date(); // Cache current time for consistent comparisons
   const CONFLICT_WINDOW_MS = 90 * 60 * 1000; // ±90 minutes conflict window
 
-  console.log(
+  placeholderLogger.info(
     `[Placeholders] Computing for month ${monthStart.toISOString()} to ${monthEnd.toISOString()}`
   );
-  console.log(`[Placeholders] Processing ${campaigns.length} campaigns`);
+  placeholderLogger.info(`[Placeholders] Processing ${campaigns.length} campaigns`);
 
   for (const campaign of campaigns) {
     const raw = campaign.config as unknown;
@@ -40,7 +43,7 @@ export async function computePlaceholders(
         : {};
 
     if (!config?.frequency || !config?.duration) {
-      console.log(
+      placeholderLogger.info(
         `[Placeholders] Skipping campaign ${campaign.name} - missing frequency or duration`
       );
       continue;
@@ -54,7 +57,9 @@ export async function computePlaceholders(
       parseInt(pm ?? '0', 10)
     ).padStart(2, '0')}`;
     if (!duration?.start || !duration?.end) {
-      console.log(`[Placeholders] Skipping campaign ${campaign.name} - invalid duration`);
+      placeholderLogger.info(
+        `[Placeholders] Skipping campaign ${campaign.name} - invalid duration`
+      );
       continue;
     }
 
@@ -91,7 +96,9 @@ export async function computePlaceholders(
 
     // Skip if campaign doesn't overlap with this month
     if (scheduleStart > scheduleEnd) {
-      console.log(`[Placeholders] Skipping campaign ${campaign.name} - doesn't overlap with month`);
+      placeholderLogger.info(
+        `[Placeholders] Skipping campaign ${campaign.name} - doesn't overlap with month`
+      );
       continue;
     }
 
@@ -114,7 +121,7 @@ export async function computePlaceholders(
       return isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59;
     })();
     if (invalidTime) {
-      console.error(
+      placeholderLogger.error(
         `[Placeholders] Invalid posting time format for campaign ${campaign.name}: ${primaryTime}`
       );
       continue;
@@ -183,21 +190,21 @@ export async function computePlaceholders(
 
       // Safety check to prevent infinite loops
       if (generatedCount > 100) {
-        console.warn(
+        placeholderLogger.warn(
           `[Placeholders] Generated over 100 placeholders for campaign ${campaign.name}, stopping`
         );
         break;
       }
     }
 
-    console.log(
+    placeholderLogger.info(
       `[Placeholders] Campaign ${campaign.name}: using primary postingTime ${primaryTime}, ` +
         `${occupiedLocalDates.size} campaign days occupied, ` +
         `${generatedCount} placeholders generated`
     );
   }
 
-  console.log(`[Placeholders] Total placeholders generated: ${placeholders.length}`);
+  placeholderLogger.info(`[Placeholders] Total placeholders generated: ${placeholders.length}`);
 
   // Sort by scheduled time
   return placeholders.sort(

@@ -1,5 +1,8 @@
 import { Redis } from 'ioredis';
+import { logger as baseLogger } from '@postolio/logger';
 import { getRedisUrl } from '../utils/redis-url.js';
+
+const redisLogger = baseLogger.child({ module: 'redis-service' });
 
 // Global Redis client instance
 let redisInstance: Redis | null = null;
@@ -29,16 +32,24 @@ class RedisService {
       });
 
       this.client.on('error', (err) => {
-        console.error('Redis connection error:', err);
+        const error = err instanceof Error ? err : new Error(String(err));
+        redisLogger.error('Redis connection error', {
+          error: { name: error.name, message: error.message, stack: error.stack },
+        });
       });
 
       this.client.on('connect', () => {
-        console.log(`Successfully connected to Redis at ${redisUrl.replace(/\/\/.*@/, '//***@')}`);
+        redisLogger.info('Successfully connected to Redis', {
+          url: redisUrl.replace(/\/\/.*@/, '//***@'),
+        });
       });
 
       redisInstance = this.client;
     } catch (error) {
-      console.warn('Redis connection failed, falling back to in-memory storage:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      redisLogger.warn('Redis connection failed, falling back to in-memory storage', {
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       this.client = null;
       redisInstance = null;
     }
@@ -52,7 +63,11 @@ class RedisService {
     try {
       return await this.client.get(key);
     } catch (error) {
-      console.error('Redis GET error:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      redisLogger.error('Redis GET error', {
+        key,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       return null;
     }
   }
@@ -70,7 +85,12 @@ class RedisService {
       }
       return true;
     } catch (error) {
-      console.error('Redis SET error:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      redisLogger.error('Redis SET error', {
+        key,
+        ttlSeconds,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       return false;
     }
   }
@@ -84,7 +104,11 @@ class RedisService {
       await this.client.del(key);
       return true;
     } catch (error) {
-      console.error('Redis DEL error:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      redisLogger.error('Redis DEL error', {
+        key,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       return false;
     }
   }
@@ -101,7 +125,12 @@ class RedisService {
       }
       return count;
     } catch (error) {
-      console.error('Redis INCR error:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      redisLogger.error('Redis INCR error', {
+        key,
+        ttlSeconds,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       return null;
     }
   }
@@ -130,7 +159,12 @@ class RedisService {
       await this.client.setex(key, ttl, value);
       return true;
     } catch (error) {
-      console.error('Redis SETEX error:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      redisLogger.error('Redis SETEX error', {
+        key,
+        ttl,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       return false;
     }
   }

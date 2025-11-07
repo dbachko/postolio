@@ -1,4 +1,5 @@
 import Bull from 'bull';
+import { logger as baseLogger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
 import Redis from 'ioredis';
 import { getRedisUrl } from '../utils/redis-url.js';
@@ -23,6 +24,7 @@ export class DeletionQueueService {
   private static instance: DeletionQueueService | null = null;
   private deletionQueue: Bull.Queue<DeletionJob>;
   private redis: Redis;
+  private logger = baseLogger.child({ module: 'deletion-queue' });
 
   private constructor() {
     // Use shared utility for Redis URL construction
@@ -53,7 +55,7 @@ export class DeletionQueueService {
 
     // Process deletion jobs
     this.deletionQueue.process('permanent-deletion', 5, async (job: Bull.Job<DeletionJob>) => {
-      console.log('Processing deletion job:', job.id);
+      this.logger.info('Processing deletion job', { jobId: job.id });
 
       try {
         const { userId, scheduledDeletionDate } = job.data;
@@ -79,7 +81,11 @@ export class DeletionQueueService {
           deletedAt: new Date(),
         } as DeletionJobResult;
       } catch (error) {
-        console.error('Deletion job failed:', error);
+        const err = error instanceof Error ? error : new Error(String(error));
+        this.logger.error('Deletion job failed', {
+          jobId: job.id,
+          error: { name: err.name, message: err.message, stack: err.stack },
+        });
         throw error; // Will trigger retry
       }
     });
@@ -156,7 +162,7 @@ export class DeletionQueueService {
     );
 
     this.deletionQueue.process('check-scheduled-deletions', async () => {
-      console.log('Checking for scheduled deletions...');
+      this.logger.info('Checking for scheduled deletions');
 
       // Find all users scheduled for deletion
       const usersToDelete = await prisma.user.findMany({
@@ -166,7 +172,9 @@ export class DeletionQueueService {
         },
       });
 
-      console.log(`Found ${usersToDelete.length} users scheduled for deletion`);
+      this.logger.info('Scheduled deletions discovered', {
+        count: usersToDelete.length,
+      });
 
       // Schedule deletion jobs for each user
       for (const user of usersToDelete) {

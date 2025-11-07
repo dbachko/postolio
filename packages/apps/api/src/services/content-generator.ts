@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { logger as baseLogger } from '@postolio/logger';
 import { getOpenAIClient, getDefaultOpenAIModel } from './openai-client.js';
 import { shouldUsePlaceholderImages, generatePlaceholderImageUrl } from './image-placeholders.js';
 import { generateMidjourneyImage } from './midjourney.js';
@@ -10,6 +11,7 @@ import { SeasonalityService } from './seasonality.js';
 import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
+const contentLogger = baseLogger.child({ module: 'content-generator' });
 
 export interface ContentGenerationRequest {
   brandId: string;
@@ -50,12 +52,18 @@ export async function generateInstagramContent(
 ): Promise<GeneratedContent[]> {
   const openai = getOpenAIClient();
   if (!openai) {
-    console.warn('OpenAI client is not configured. Returning fallback content batch.');
+    contentLogger.warn('OpenAI client is not configured. Returning fallback content batch.', {
+      brandId: request.brandId,
+    });
     let ctx: BrandProfileContext | null = null;
     try {
       ctx = await getBrandProfileContext(request.brandId);
     } catch (e) {
-      console.warn('Brand profile projection unavailable; using minimal context', e);
+      const err = e instanceof Error ? e : new Error(String(e));
+      contentLogger.warn('Brand profile projection unavailable; using minimal context', {
+        brandId: request.brandId,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
     }
     const safeCtx: Pick<BrandProfileContext, 'palette'> & {
       brandId: string;
@@ -106,17 +114,22 @@ export async function generateInstagramContent(
       });
       campaignCtx = raw as unknown as CampaignCtx;
     } catch (e) {
-      console.warn('Failed to load campaign context for generation; proceeding without it', e);
+      const err = e instanceof Error ? e : new Error(String(e));
+      contentLogger.warn('Failed to load campaign context for generation; proceeding without it', {
+        campaignId: request.campaignId,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
     }
   }
   let brandContext: BrandProfileContext | null = null;
   try {
     brandContext = await getBrandProfileContext(request.brandId);
   } catch (e) {
-    console.warn(
-      'Brand profile projection unavailable during generation; proceeding without it',
-      e
-    );
+    const err = e instanceof Error ? e : new Error(String(e));
+    contentLogger.warn('Brand profile projection unavailable during generation', {
+      brandId: request.brandId,
+      error: { name: err.name, message: err.message, stack: err.stack },
+    });
   }
 
   const tones = brandContext?.tones?.slice(0, 6) || [];
@@ -154,7 +167,13 @@ export async function generateInstagramContent(
       take: windowCount,
     });
   } catch (e) {
-    console.warn('Failed to fetch recent content window; continuing without it', e);
+    const err = e instanceof Error ? e : new Error(String(e));
+    contentLogger.warn('Failed to fetch recent content window; continuing without it', {
+      brandId: request.brandId,
+      windowCount,
+      windowDays,
+      error: { name: err.name, message: err.message, stack: err.stack },
+    });
   }
 
   function firstWords(text: string, n = 5): string {
@@ -337,7 +356,12 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
   };
 
   try {
-    console.log('Making OpenAI API call with structured output...');
+    contentLogger.info('Making OpenAI API call with structured output', {
+      brandId: request.brandId,
+      count,
+      theme,
+      style,
+    });
 
     // Create a timeout promise
     const timeoutPromise = new Promise((_, reject) => {
@@ -395,7 +419,10 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
       completionPromise,
       timeoutPromise,
     ])) as OpenAIChatCompletion;
-    console.log('OpenAI API call completed successfully');
+    contentLogger.info('OpenAI API call completed successfully', {
+      brandId: request.brandId,
+      count,
+    });
 
     const content = completion.choices[0]?.message?.content;
     if (!content) {
@@ -412,9 +439,11 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
     }
 
     const structuredResponse = JSON.parse(content) as StructuredResponse;
-    console.log(
-      `Received ${structuredResponse.posts.length} posts from structured output (expected ${count})`
-    );
+    contentLogger.info('Structured content received from OpenAI', {
+      posts: structuredResponse.posts.length,
+      expected: count,
+      brandId: request.brandId,
+    });
 
     // Validate structure
     if (!structuredResponse.posts || !Array.isArray(structuredResponse.posts)) {
@@ -422,9 +451,11 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
     }
 
     if (structuredResponse.posts.length !== count) {
-      console.warn(
-        `Received ${structuredResponse.posts.length} posts, expected ${count}. Using what was received.`
-      );
+      contentLogger.warn('OpenAI returned a different number of posts than requested', {
+        received: structuredResponse.posts.length,
+        expected: count,
+        brandId: request.brandId,
+      });
     }
 
     // Map structured response to GeneratedContent format
@@ -469,7 +500,10 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
         throw new Error(`Generated content item ${i + 1} has empty caption`);
       }
       if (!item.hashtags || item.hashtags.length === 0) {
-        console.warn(`Generated content item ${i + 1} has no hashtags`);
+        contentLogger.warn('Generated content item has no hashtags', {
+          index: i,
+          brandId: request.brandId,
+        });
       }
     }
 
@@ -490,14 +524,13 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
           }
 
           const imageUrl = await generateBrandContentImage(finalPrompt, brandContext, brandName);
-          console.log(
-            'Generated image for post:',
-            JSON.stringify({
-              prompt: finalPrompt?.substring(0, 50) + '...',
-              imageUrl: imageUrl?.substring(0, 80) + '...' || 'Failed to generate',
-              urlLength: imageUrl?.length || 0,
-            })
-          );
+          contentLogger.info('Generated image for content post', {
+            brandId: request.brandId,
+            index,
+            promptPreview: finalPrompt?.substring(0, 50) ?? '',
+            imagePreview: imageUrl ? imageUrl.substring(0, 80) : 'none',
+            hasImage: Boolean(imageUrl),
+          });
 
           if (imageUrl) {
             try {
@@ -514,7 +547,12 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
                 asset,
               };
             } catch (assetError) {
-              console.error('Failed to store generated image via assets service:', assetError);
+              const err = assetError instanceof Error ? assetError : new Error(String(assetError));
+              contentLogger.error('Failed to store generated image via assets service', {
+                brandId: request.brandId,
+                index,
+                error: { name: err.name, message: err.message, stack: err.stack },
+              });
               throw new Error(
                 'Failed to store generated image: ' +
                   (assetError instanceof Error ? assetError.message : 'Unknown error')
@@ -525,7 +563,12 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
           // No image was generated
           return item;
         } catch (error) {
-          console.error('Brand image generation failed:', error);
+          const err = error instanceof Error ? error : new Error(String(error));
+          contentLogger.error('Brand image generation failed', {
+            brandId: request.brandId,
+            index,
+            error: { name: err.name, message: err.message, stack: err.stack },
+          });
           return item; // Return without image if generation fails
         }
       })
@@ -533,31 +576,43 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
 
     return contentWithImages;
   } catch (error) {
-    console.error('Content generation error:', error);
+    const err = error instanceof Error ? error : new Error(String(error));
+    contentLogger.error('Content generation error', {
+      brandId: request.brandId,
+      error: { name: err.name, message: err.message, stack: err.stack },
+    });
 
     // Check for specific OpenAI errors that should fail hard
     if (error instanceof Error) {
       if (error.message.includes('API key') || error.message.includes('authentication')) {
-        console.error('OpenAI API key error - check OPENAI_API_KEY environment variable');
+        contentLogger.error('OpenAI API key error - check OPENAI_API_KEY environment variable', {
+          brandId: request.brandId,
+        });
         throw new Error('OpenAI API key configuration error');
       }
       if (error.message.includes('insufficient_quota')) {
-        console.error('OpenAI API quota exceeded');
+        contentLogger.error('OpenAI API quota exceeded', { brandId: request.brandId });
         throw new Error('OpenAI API quota exceeded');
       }
       if (error.message.includes('rate_limit')) {
-        console.error('OpenAI API rate limit exceeded');
+        contentLogger.error('OpenAI API rate limit exceeded', { brandId: request.brandId });
         throw new Error('OpenAI API rate limit exceeded');
       }
     }
 
     // Return fallback content for other errors
-    console.warn('Falling back to template content due to OpenAI error');
+    contentLogger.warn('Falling back to template content due to OpenAI error', {
+      brandId: request.brandId,
+    });
     let ctx: BrandProfileContext | null = null;
     try {
       ctx = await getBrandProfileContext(request.brandId);
     } catch (e) {
-      console.warn('Brand profile projection unavailable in fallback; using minimal context', e);
+      const err = e instanceof Error ? e : new Error(String(e));
+      contentLogger.warn('Brand profile projection unavailable in fallback', {
+        brandId: request.brandId,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
     }
     const safeCtx: Pick<BrandProfileContext, 'palette'> & {
       brandId: string;
@@ -742,7 +797,9 @@ export async function generateContentImage(prompt: string): Promise<string> {
   const openai = getOpenAIClient();
 
   if (!openai) {
-    console.warn('OpenAI client is not configured. Cannot generate content image.');
+    contentLogger.warn('OpenAI client is not configured. Cannot generate content image.', {
+      promptPreview: prompt.substring(0, 50),
+    });
     throw new Error('OpenAI API key configuration error');
   }
 
@@ -762,7 +819,11 @@ export async function generateContentImage(prompt: string): Promise<string> {
 
     return imageUrl;
   } catch (error) {
-    console.error('Image generation error:', error);
+    const err = error instanceof Error ? error : new Error(String(error));
+    contentLogger.error('Image generation error', {
+      promptPreview: prompt.substring(0, 50),
+      error: { name: err.name, message: err.message, stack: err.stack },
+    });
     // Return a placeholder or throw error based on requirements
     throw new Error('Image generation failed');
   }
@@ -779,19 +840,33 @@ export async function generateBrandContentImage(
 
   try {
     // Try Midjourney first for higher quality, brand-consistent images
-    console.log('Attempting Midjourney generation for brand content...');
+    contentLogger.info('Attempting Midjourney generation for brand content', {
+      brand: brandName,
+    });
     const imageUrl = await generateMidjourneyImage(prompt, brandContext, brandName);
-    console.log('Midjourney generation successful');
+    contentLogger.info('Midjourney generation successful', {
+      brand: brandName,
+      hasImage: Boolean(imageUrl),
+    });
     return imageUrl;
   } catch (error) {
-    console.error('Midjourney generation failed, falling back to DALL-E:', error);
+    const err = error instanceof Error ? error : new Error(String(error));
+    contentLogger.error('Midjourney generation failed, falling back to DALL-E', {
+      brand: brandName,
+      error: { name: err.name, message: err.message, stack: err.stack },
+    });
 
     // Fallback to DALL-E with enhanced prompt that includes brand characteristics
     try {
       const openai = getOpenAIClient();
 
       if (!openai) {
-        console.warn('OpenAI client is not configured. Cannot generate DALL-E fallback image.');
+        contentLogger.warn(
+          'OpenAI client is not configured. Cannot generate DALL-E fallback image.',
+          {
+            brand: brandName,
+          }
+        );
         throw new Error('OpenAI API key configuration error');
       }
 
@@ -813,7 +888,10 @@ export async function generateBrandContentImage(
       enhancedPrompt +=
         '. Professional photography style, visually appealing, social media optimized.';
 
-      console.log('Enhanced DALL-E prompt:', enhancedPrompt);
+      contentLogger.info('Enhanced DALL-E prompt prepared', {
+        brand: brandName,
+        promptPreview: enhancedPrompt.substring(0, 80),
+      });
 
       const response = await openai.images.generate({
         model: 'dall-e-3',
@@ -828,10 +906,17 @@ export async function generateBrandContentImage(
         throw new Error('No image URL received from DALL-E fallback');
       }
 
-      console.log('DALL-E fallback generation successful');
+      contentLogger.info('DALL-E fallback generation successful', {
+        brand: brandName,
+        hasImage: Boolean(imageUrl),
+      });
       return imageUrl;
     } catch (dalleError) {
-      console.error('Both Midjourney and DALL-E failed:', dalleError);
+      const errFallback = dalleError instanceof Error ? dalleError : new Error(String(dalleError));
+      contentLogger.error('Both Midjourney and DALL-E failed', {
+        brand: brandName,
+        error: { name: errFallback.name, message: errFallback.message, stack: errFallback.stack },
+      });
       throw new Error('Image generation failed for both Midjourney and DALL-E');
     }
   }

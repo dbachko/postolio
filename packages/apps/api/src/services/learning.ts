@@ -1,9 +1,12 @@
 import type { StyleProfile } from './ai.js';
+import { logger as baseLogger } from '@postolio/logger';
 import { getOpenAIClient } from './openai-client.js';
 import { getDatabaseClient } from '../config/database.js';
 import { eventEmitter } from './event-emitter.js';
+import { formatError } from '../utils/logging.js';
 
 const prisma = getDatabaseClient();
+const learningLogger = baseLogger.child({ module: 'learning-service' });
 
 export interface EditAnalysis {
   captionChanges: {
@@ -65,7 +68,7 @@ export class AILearningService {
       scheduledAt?: string;
     }
   ): Promise<EditAnalysis> {
-    console.log('Analyzing user edit for learning patterns...');
+    learningLogger.info('Analyzing user edit for learning patterns...');
 
     const analysis: EditAnalysis = {
       captionChanges: await this.analyzeCaptionChanges(
@@ -83,7 +86,7 @@ export class AILearningService {
       ),
     };
 
-    console.log('Edit analysis completed:', JSON.stringify(analysis));
+    learningLogger.info('Edit analysis completed', { analysis });
     return analysis;
   }
 
@@ -98,7 +101,7 @@ export class AILearningService {
     profileUpdates: StyleProfileUpdate[];
     appliedToFuturePosts: number;
   }> {
-    console.log('Applying learning to style profile...');
+    learningLogger.info('Applying learning to style profile...');
     // Use a default profile as baseline for suggestions (no DB dependency)
     const currentProfile = this.getDefaultStyleProfile();
     const insights: LearningInsight[] = [];
@@ -198,7 +201,7 @@ export class AILearningService {
     // Estimate how many future posts this will affect
     const appliedToFuturePosts = await this.estimateFuturePostImpact(brandId, profileUpdates);
 
-    console.log(
+    learningLogger.info(
       `Learning applied: ${insights.length} insights, ${profileUpdates.length} profile updates, affecting ~${appliedToFuturePosts} future posts`
     );
 
@@ -293,7 +296,7 @@ export class AILearningService {
 
     const openai = getOpenAIClient();
     if (!openai) {
-      console.warn('OpenAI client is not configured. Using default caption analysis.');
+      learningLogger.warn('OpenAI client is not configured. Using default caption analysis.');
       return fallback;
     }
 
@@ -329,10 +332,7 @@ Focus on significant changes only. Return only JSON.`;
         personalityShift: analysis.personalityShift || [],
       };
     } catch (error) {
-      console.error(
-        'Caption analysis error:',
-        JSON.stringify(error, Object.getOwnPropertyNames(error))
-      );
+      learningLogger.error('Caption analysis error', formatError(error));
       return fallback;
     }
   }
@@ -363,10 +363,7 @@ Focus on significant changes only. Return only JSON.`;
         popularityShift: this.analyzePopularityShift(added, removed),
       };
     } catch (error) {
-      console.error(
-        'Hashtag analysis error:',
-        JSON.stringify(error, Object.getOwnPropertyNames(error))
-      );
+      learningLogger.error('Hashtag analysis error', formatError(error));
       return {
         countChange,
         addedCategories: [],
@@ -442,7 +439,7 @@ Focus on significant changes only. Return only JSON.`;
 
     const openai = getOpenAIClient();
     if (!openai) {
-      console.warn('OpenAI client is not configured. Skipping hashtag categorization.');
+      learningLogger.warn('OpenAI client is not configured. Skipping hashtag categorization.');
       return [];
     }
 
@@ -464,10 +461,7 @@ Focus on the primary theme each hashtag represents. Return only the JSON array.`
       const categories = JSON.parse(response.choices[0]?.message?.content || '[]');
       return Array.isArray(categories) ? categories : [];
     } catch (error) {
-      console.error(
-        'Hashtag categorization error:',
-        JSON.stringify(error, Object.getOwnPropertyNames(error))
-      );
+      learningLogger.error('Hashtag categorization error', formatError(error));
       return [];
     }
   }

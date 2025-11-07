@@ -1,10 +1,12 @@
 import sharp from 'sharp';
+import { logger as baseLogger } from '@postolio/logger';
 import { AssetsServiceClient, type AssetRecord } from '@postolio/assets-client';
 import { config } from '../config/env-validation.js';
 import { getDatabaseClient } from '../config/database.js';
 import type { PrismaClient, Prisma } from '@postolio/database';
 import dns from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { formatError } from '../utils/logging.js';
 
 export interface AssetUploadMetadata {
   contentId: string;
@@ -26,6 +28,7 @@ export interface AttachAssetParams {
 let cachedClient: AssetsServiceClient | null = null;
 
 const PRIVATE_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
+const assetsLogger = baseLogger.child({ module: 'assets-media' });
 
 function getAssetsClient(): AssetsServiceClient {
   if (!cachedClient) {
@@ -244,7 +247,7 @@ async function optimizeImage(buffer: Buffer): Promise<Buffer> {
 
     return processedImage.jpeg({ quality: 85, progressive: true }).toBuffer();
   } catch (error) {
-    console.error('Error optimizing image:', error);
+    assetsLogger.error('Error optimizing image', formatError(error));
     return buffer;
   }
 }

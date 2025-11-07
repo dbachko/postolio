@@ -1,4 +1,5 @@
 import Bull from 'bull';
+import { logger as baseLogger } from '@postolio/logger';
 import { getRedisUrl } from '../utils/redis-url.js';
 import { RefreshTokenService } from './refresh-token.js';
 import { RedisTokenStore } from './redis-token-store.js';
@@ -31,6 +32,7 @@ interface CleanupResult {
 export class BackgroundJobQueue {
   private queue: Bull.Queue<JobData>;
   private tokenStore: RedisTokenStore;
+  private logger = baseLogger.child({ module: 'background-job-queue' });
 
   constructor() {
     // Initialize Bull queue with Redis connection
@@ -85,15 +87,26 @@ export class BackgroundJobQueue {
    */
   private registerEventHandlers(): void {
     this.queue.on('completed', (job, result) => {
-      console.log(`Job ${job.id} (${job.data.type}) completed:`, result);
+      this.logger.info('Background job completed', {
+        jobId: job.id,
+        type: job.data.type,
+        result,
+      });
     });
 
     this.queue.on('failed', (job, err) => {
-      console.error(`Job ${job.id} (${job.data.type}) failed:`, err);
+      this.logger.error('Background job failed', {
+        jobId: job?.id,
+        type: job?.data?.type,
+        error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
+      });
     });
 
     this.queue.on('stalled', (job) => {
-      console.warn(`Job ${job.id} (${job.data.type}) stalled`);
+      this.logger.warn('Background job stalled', {
+        jobId: job.id,
+        type: job.data.type,
+      });
     });
   }
 
@@ -384,7 +397,7 @@ export class BackgroundJobQueue {
       }
     );
 
-    console.log('Recurring background jobs scheduled');
+    this.logger.info('Recurring background jobs scheduled');
   }
 
   private async processCampaignWindowMaintenance(): Promise<{
@@ -459,12 +472,21 @@ export class BackgroundJobQueue {
         }
       }
 
-      console.log(
-        `Campaign window maintenance complete: processed=${processed}, generated=${generated}, duration=${Date.now() - start}ms`
-      );
+      this.logger.info('Campaign window maintenance completed', {
+        processed,
+        generated,
+        durationMs: Date.now() - start,
+      });
       return { processed, generated };
     } catch (error) {
-      console.error('Campaign window maintenance error:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.error('Campaign window maintenance error', {
+        error: {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        },
+      });
       return { processed, generated };
     }
   }

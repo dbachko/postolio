@@ -3,11 +3,14 @@
  * Emits events to AWS EventBridge for microservices communication
  */
 
-import { EventBridge } from '@aws-sdk/client-eventbridge';
+import { EventBridge, PutEventsCommandOutput } from '@aws-sdk/client-eventbridge';
+import { logger as baseLogger } from '@postolio/logger';
+import { formatError } from '../utils/logging.js';
 
 export class EventEmitter {
   private eventBridge: EventBridge;
   private static instance: EventEmitter | null = null;
+  private logger = baseLogger.child({ module: 'event-emitter' });
 
   constructor() {
     // Initialize EventBridge client
@@ -56,13 +59,17 @@ export class EventEmitter {
         ],
       });
 
-      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error('Failed to emit brand learning applied event:', result.Entries);
-      } else {
-        console.log(`🧠 Brand learning event emitted for ${brandId}`);
-      }
+      this.logPutEventsResult(
+        result,
+        '🧠 Brand learning event emitted',
+        'Failed to emit brand learning applied event',
+        { brandId }
+      );
     } catch (error) {
-      console.error('Error emitting brand learning applied event:', error);
+      this.logger.error('Error emitting brand learning applied event', {
+        brandId,
+        ...formatError(error),
+      });
     }
   }
 
@@ -109,14 +116,19 @@ export class EventEmitter {
         ],
       });
 
-      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error('Failed to emit content updated event:', result.Entries);
-      } else {
-        console.log(`Content updated event emitted for content ${contentId}`);
-      }
+      this.logPutEventsResult(
+        result,
+        'Content updated event emitted',
+        'Failed to emit content updated event',
+        { contentId, brandId }
+      );
     } catch (error) {
       // Log error but don't fail the request
-      console.error('Error emitting content updated event:', error);
+      this.logger.error('Error emitting content updated event', {
+        contentId,
+        brandId,
+        ...formatError(error),
+      });
     }
   }
 
@@ -149,13 +161,18 @@ export class EventEmitter {
         ],
       });
 
-      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error('Failed to emit content published event:', result.Entries);
-      } else {
-        console.log(`Content published event emitted for content ${contentId}`);
-      }
+      this.logPutEventsResult(
+        result,
+        'Content published event emitted',
+        'Failed to emit content published event',
+        { contentId, brandId, platform }
+      );
     } catch (error) {
-      console.error('Error emitting content published event:', error);
+      this.logger.error('Error emitting content published event', {
+        contentId,
+        brandId,
+        ...formatError(error),
+      });
     }
   }
 
@@ -186,13 +203,18 @@ export class EventEmitter {
         ],
       });
 
-      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error('Failed to emit content scheduled event:', result.Entries);
-      } else {
-        console.log(`Content scheduled event emitted for content ${contentId}`);
-      }
+      this.logPutEventsResult(
+        result,
+        'Content scheduled event emitted',
+        'Failed to emit content scheduled event',
+        { contentId, brandId, scheduleId }
+      );
     } catch (error) {
-      console.error('Error emitting content scheduled event:', error);
+      this.logger.error('Error emitting content scheduled event', {
+        contentId,
+        brandId,
+        ...formatError(error),
+      });
     }
   }
 
@@ -221,11 +243,18 @@ export class EventEmitter {
         ],
       });
 
-      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error('Failed to emit content scheduling failed event:', result.Entries);
-      }
+      this.logPutEventsResult(
+        result,
+        'Content scheduling failed event emitted',
+        'Failed to emit content scheduling failed event',
+        { contentId, brandId }
+      );
     } catch (error) {
-      console.error('Error emitting content scheduling failed event:', error);
+      this.logger.error('Error emitting content scheduling failed event', {
+        contentId,
+        brandId,
+        ...formatError(error),
+      });
     }
   }
 
@@ -261,16 +290,19 @@ export class EventEmitter {
         ],
       });
 
-      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error('Failed to emit campaign status changed event:', result.Entries);
-      } else {
-        console.log(
-          `🔔 Campaign status event emitted: ${campaignId} (${oldStatus} → ${newStatus})`
-        );
-      }
+      this.logPutEventsResult(
+        result,
+        'Campaign status event emitted',
+        'Failed to emit campaign status changed event',
+        { campaignId, brandId, oldStatus, newStatus }
+      );
     } catch (error) {
       // Log error but don't fail the request - this is non-blocking
-      console.error('Error emitting campaign status changed event:', error);
+      this.logger.error('Error emitting campaign status changed event', {
+        campaignId,
+        brandId,
+        ...formatError(error),
+      });
     }
   }
 
@@ -304,14 +336,19 @@ export class EventEmitter {
         ],
       });
 
-      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error('Failed to emit campaign created event:', result.Entries);
-      } else {
-        console.log(`🔔 Campaign created event emitted: ${campaignId} (status: ${status})`);
-      }
+      this.logPutEventsResult(
+        result,
+        'Campaign created event emitted',
+        'Failed to emit campaign created event',
+        { campaignId, brandId, status }
+      );
     } catch (error) {
       // Log error but don't fail the request - this is non-blocking
-      console.error('Error emitting campaign created event:', error);
+      this.logger.error('Error emitting campaign created event', {
+        campaignId,
+        brandId,
+        ...formatError(error),
+      });
     }
   }
 
@@ -345,14 +382,37 @@ export class EventEmitter {
         ],
       });
 
-      if (result.FailedEntryCount && result.FailedEntryCount > 0) {
-        console.error('Failed to emit campaign content association event:', result.Entries);
-      } else {
-        console.log(`🔗 Campaign content association event emitted: ${contentId} → ${campaignId}`);
-      }
+      this.logPutEventsResult(
+        result,
+        'Campaign content association event emitted',
+        'Failed to emit campaign content association event',
+        { campaignId, contentId, brandId }
+      );
     } catch (error) {
       // Log error but don't fail the request - this is non-blocking
-      console.error('Error emitting campaign content association event:', error);
+      this.logger.error('Error emitting campaign content association event', {
+        campaignId,
+        contentId,
+        brandId,
+        ...formatError(error),
+      });
+    }
+  }
+
+  private logPutEventsResult(
+    result: PutEventsCommandOutput,
+    successMessage: string,
+    failureMessage: string,
+    context: Record<string, unknown>
+  ): void {
+    if (result.FailedEntryCount && result.FailedEntryCount > 0) {
+      this.logger.error(failureMessage, {
+        ...context,
+        failedEntryCount: result.FailedEntryCount,
+        entries: result.Entries,
+      });
+    } else {
+      this.logger.info(successMessage, context);
     }
   }
 }

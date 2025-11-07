@@ -1,4 +1,5 @@
 import { Midjourney } from 'midjourney';
+import { logger as baseLogger } from '@postolio/logger';
 import { getOpenAIClient } from './openai-client.js';
 import { shouldUsePlaceholderImages, generatePlaceholderImageUrl } from './image-placeholders.js';
 import type { BrandProfileContext } from './brand-profile.js';
@@ -19,6 +20,8 @@ interface MidjourneyImageResult {
   error?: string;
 }
 
+const midjourneyLogger = baseLogger.child({ module: 'midjourney-service' });
+
 export class MidjourneyService {
   private client: Midjourney | null = null;
   private initialized = false;
@@ -37,10 +40,10 @@ export class MidjourneyService {
 
     // Validate configuration
     if (!this.config.salaiToken || !this.config.serverId || !this.config.channelId) {
-      console.warn('Midjourney API credentials not configured. Will fallback to DALL-E.');
+      midjourneyLogger.warn('Midjourney API credentials not configured. Falling back to DALL-E.');
       this.fallbackToDallE = true;
     } else {
-      console.log('Midjourney API credentials found, initializing client...');
+      midjourneyLogger.info('Midjourney API credentials found, initializing client');
     }
   }
 
@@ -63,10 +66,13 @@ export class MidjourneyService {
 
       await this.client.init();
       this.initialized = true;
-      console.log('Midjourney client initialized successfully');
+      midjourneyLogger.info('Midjourney client initialized successfully');
       return true;
     } catch (error) {
-      console.error('Failed to initialize Midjourney client:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      midjourneyLogger.error('Failed to initialize Midjourney client', {
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       this.fallbackToDallE = true;
       return false;
     }
@@ -96,7 +102,7 @@ export class MidjourneyService {
       const openai = getOpenAIClient();
 
       if (!openai) {
-        console.warn('OpenAI client is not configured. Cannot generate DALL-E image.');
+        midjourneyLogger.warn('OpenAI client is not configured. Cannot generate DALL-E image.');
         throw new Error('OpenAI API key configuration error');
       }
 
@@ -124,7 +130,9 @@ export class MidjourneyService {
       enhancedPrompt +=
         '. Professional photography style, visually appealing, social media optimized.';
 
-      console.log('Enhanced DALL-E prompt:', enhancedPrompt);
+      midjourneyLogger.info('Enhanced DALL-E prompt prepared', {
+        promptPreview: enhancedPrompt.substring(0, 80),
+      });
 
       const response = await openai.images.generate({
         model: 'dall-e-3',
@@ -139,10 +147,13 @@ export class MidjourneyService {
         throw new Error('No image URL received from DALL-E');
       }
 
-      console.log('DALL-E image generation successful');
+      midjourneyLogger.info('DALL-E image generation successful');
       return imageUrl;
     } catch (error) {
-      console.error('DALL-E image generation failed:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      midjourneyLogger.error('DALL-E image generation failed', {
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       throw new Error('DALL-E image generation failed');
     }
   }
@@ -172,7 +183,10 @@ export class MidjourneyService {
 
     enhancedPrompt += ' --ar 1:1 --style raw --quality 2';
 
-    console.log(`Generated Midjourney prompt for ${brandName}:`, enhancedPrompt);
+    midjourneyLogger.info('Generated Midjourney prompt', {
+      brand: brandName,
+      promptPreview: enhancedPrompt.substring(0, 120),
+    });
     return enhancedPrompt;
   }
 
@@ -199,7 +213,7 @@ export class MidjourneyService {
 
     // If Midjourney is not available, fallback to DALL-E
     if (!this.initialized || !this.client || this.fallbackToDallE) {
-      console.log('Falling back to DALL-E for image generation');
+      midjourneyLogger.info('Falling back to DALL-E for image generation');
       try {
         const dalleUrl = await this.generateDalleImage(prompt, brandContext, brandName);
         return {
@@ -208,7 +222,11 @@ export class MidjourneyService {
           progress: 'completed',
         };
       } catch (error) {
-        console.error('DALL-E fallback failed:', error);
+        const err = error instanceof Error ? error : new Error(String(error));
+        midjourneyLogger.error('DALL-E fallback failed', {
+          brand: brandName,
+          error: { name: err.name, message: err.message, stack: err.stack },
+        });
         throw new Error('Both Midjourney and DALL-E image generation failed');
       }
     }
@@ -217,7 +235,7 @@ export class MidjourneyService {
       // Generate brand-consistent prompt
       const brandPrompt = this.generateBrandPrompt(prompt, brandContext, brandName);
 
-      console.log('Generating image with Midjourney...');
+      midjourneyLogger.info('Generating image with Midjourney', { brand: brandName });
 
       // Create timeout for Midjourney generation (5 minutes)
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -226,7 +244,11 @@ export class MidjourneyService {
 
       // Generate image with progress tracking
       const imaginePromise = this.client.Imagine(brandPrompt, (uri, progress) => {
-        console.log(`Midjourney progress: ${progress}% - ${uri}`);
+        midjourneyLogger.debug('Midjourney progress update', {
+          brand: brandName,
+          progress,
+          uri,
+        });
       });
 
       const result = await Promise.race([imaginePromise, timeoutPromise]);
@@ -235,7 +257,10 @@ export class MidjourneyService {
         throw new Error('Midjourney returned invalid result');
       }
 
-      console.log('Midjourney image generated successfully:', result.uri);
+      midjourneyLogger.info('Midjourney image generated successfully', {
+        brand: brandName,
+        imageUrl: result.uri,
+      });
 
       return {
         imageUrl: result.uri,
@@ -243,10 +268,14 @@ export class MidjourneyService {
         progress: 'completed',
       };
     } catch (error) {
-      console.error('Midjourney generation failed:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      midjourneyLogger.error('Midjourney generation failed', {
+        brand: brandName,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
 
       // Fallback to DALL-E on any error
-      console.log('Falling back to DALL-E due to Midjourney error');
+      midjourneyLogger.info('Falling back to DALL-E due to Midjourney error');
       try {
         const dalleUrl = await this.generateDalleImage(prompt, brandContext, brandName);
         return {
@@ -256,7 +285,12 @@ export class MidjourneyService {
           error: `Midjourney failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         };
       } catch (dalleError) {
-        console.error('DALL-E fallback also failed:', dalleError);
+        const errFallback =
+          dalleError instanceof Error ? dalleError : new Error(String(dalleError));
+        midjourneyLogger.error('DALL-E fallback also failed', {
+          brand: brandName,
+          error: { name: errFallback.name, message: errFallback.message, stack: errFallback.stack },
+        });
         throw new Error('Both Midjourney and DALL-E image generation failed');
       }
     }
@@ -287,7 +321,12 @@ export class MidjourneyService {
           await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       } catch (error) {
-        console.error(`Failed to generate image variation ${i + 1}:`, error);
+        const err = error instanceof Error ? error : new Error(String(error));
+        midjourneyLogger.error('Failed to generate image variation', {
+          brand: brandName,
+          variation: i + 1,
+          error: { name: err.name, message: err.message, stack: err.stack },
+        });
         // Continue with other variations even if one fails
       }
     }
@@ -324,9 +363,12 @@ export class MidjourneyService {
         // but we can reset our state
         this.client = null;
         this.initialized = false;
-        console.log('Midjourney client destroyed');
+        midjourneyLogger.info('Midjourney client destroyed');
       } catch (error) {
-        console.error('Error destroying Midjourney client:', error);
+        const err = error instanceof Error ? error : new Error(String(error));
+        midjourneyLogger.error('Error destroying Midjourney client', {
+          error: { name: err.name, message: err.message, stack: err.stack },
+        });
       }
     }
   }
@@ -338,7 +380,10 @@ export const midjourneyService = new MidjourneyService();
 // Auto-initialize if configured
 if (process.env.MIDJOURNEY_SALAI_TOKEN) {
   midjourneyService.init().catch((error) => {
-    console.error('Failed to auto-initialize Midjourney service:', error);
+    const err = error instanceof Error ? error : new Error(String(error));
+    midjourneyLogger.error('Failed to auto-initialize Midjourney service', {
+      error: { name: err.name, message: err.message, stack: err.stack },
+    });
   });
 }
 

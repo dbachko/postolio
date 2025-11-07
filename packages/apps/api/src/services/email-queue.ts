@@ -1,8 +1,10 @@
 import Bull from 'bull';
 import type Mail from 'nodemailer/lib/mailer';
+import { logger as baseLogger } from '@postolio/logger';
 import { EmailService } from './email.js';
 import Redis from 'ioredis';
 import { getRedisUrl } from '../utils/redis-url.js';
+import { formatError } from '../utils/logging.js';
 
 // Email job types
 export interface EmailJob {
@@ -36,6 +38,7 @@ export class EmailQueueService {
   private static instance: EmailQueueService | null = null;
   private emailQueue: Bull.Queue<EmailJob>;
   private redis: Redis;
+  private logger = baseLogger.child({ module: 'email-queue' });
 
   private constructor() {
     // Use shared utility for Redis URL construction
@@ -88,7 +91,7 @@ export class EmailQueueService {
       const { type, to, subject, html, text, template, templateData } = job.data;
 
       try {
-        console.log(`Processing email job ${job.id}: ${type} to ${to}`);
+        this.logger.info(`Processing email job ${job.id}: ${type} to ${to}`);
 
         // Prepare email options
         const emailOptions: Mail.Options = {
@@ -113,14 +116,14 @@ export class EmailQueueService {
           throw new Error(result.error || 'Email sending failed');
         }
 
-        console.log(`Email job ${job.id} completed successfully`);
+        this.logger.info(`Email job ${job.id} completed successfully`);
 
         return {
           success: true,
           sentAt: new Date(),
         } as EmailJobResult;
       } catch (error) {
-        console.error(`Email job ${job.id} failed:`, error);
+        this.logger.error(`Email job ${job.id} failed`, formatError(error));
         throw error; // Re-throw to trigger retry mechanism
       }
     });
@@ -131,55 +134,47 @@ export class EmailQueueService {
    */
   private setupEventListeners(): void {
     this.emailQueue.on('completed', (job: Bull.Job, result: EmailJobResult) => {
-      console.log(
-        `✅ Email job ${job.id} completed:`,
-        JSON.stringify({
-          type: job.data.type,
-          to: job.data.to,
-          success: result.success,
-        })
-      );
+      this.logger.info(`✅ Email job ${job.id} completed`, {
+        jobId: job.id,
+        type: job.data.type,
+        to: job.data.to,
+        success: result.success,
+      });
     });
 
     this.emailQueue.on('failed', (job: Bull.Job, err: Error) => {
-      console.error(
-        `❌ Email job ${job.id} failed:`,
-        JSON.stringify({
-          type: job.data.type,
-          to: job.data.to,
-          error: err.message,
-          attempts: job.attemptsMade,
-          maxAttempts: job.opts.attempts,
-        })
-      );
+      this.logger.error(`❌ Email job ${job.id} failed`, {
+        jobId: job.id,
+        type: job.data.type,
+        to: job.data.to,
+        attempts: job.attemptsMade,
+        maxAttempts: job.opts.attempts,
+        ...formatError(err),
+      });
     });
 
     this.emailQueue.on('stalled', (job: Bull.Job) => {
-      console.warn(
-        `⚠️ Email job ${job.id} stalled:`,
-        JSON.stringify({
-          type: job.data.type,
-          to: job.data.to,
-        })
-      );
+      this.logger.warn(`⚠️ Email job ${job.id} stalled`, {
+        jobId: job.id,
+        type: job.data.type,
+        to: job.data.to,
+      });
     });
 
     this.emailQueue.on('error', (error: Error) => {
-      console.error('Email queue error:', error);
+      this.logger.error('Email queue error', formatError(error));
     });
 
     this.emailQueue.on('waiting', (jobId: number) => {
-      console.log(`📝 Email job ${jobId} waiting to be processed`);
+      this.logger.info('📝 Email job waiting to be processed', { jobId });
     });
 
     this.emailQueue.on('active', (job: Bull.Job) => {
-      console.log(
-        `🔄 Email job ${job.id} started processing:`,
-        JSON.stringify({
-          type: job.data.type,
-          to: job.data.to,
-        })
-      );
+      this.logger.info(`🔄 Email job ${job.id} started processing`, {
+        jobId: job.id,
+        type: job.data.type,
+        to: job.data.to,
+      });
     });
   }
 
@@ -209,15 +204,13 @@ export class EmailQueueService {
 
     const job = await this.emailQueue.add('send-email', jobData, jobOptions);
 
-    console.log(
-      `📧 Email job ${job.id} added to queue:`,
-      JSON.stringify({
-        type: jobData.type,
-        to: jobData.to,
-        priority,
-        delay: delay > 0 ? `${delay}ms` : 'immediate',
-      })
-    );
+    this.logger.info(`📧 Email job ${job.id} added to queue`, {
+      jobId: job.id,
+      type: jobData.type,
+      to: jobData.to,
+      priority,
+      delayMs: delay,
+    });
 
     return job;
   }
@@ -349,11 +342,14 @@ export class EmailQueueService {
         await job.retry();
         retriedCount++;
       } catch (error) {
-        console.error(`Failed to retry job ${job.id}:`, error);
+        this.logger.error(`Failed to retry job ${job.id}`, {
+          jobId: job.id,
+          ...formatError(error),
+        });
       }
     }
 
-    console.log(`Retried ${retriedCount} failed email jobs`);
+    this.logger.info(`Retried ${retriedCount} failed email jobs`);
     return retriedCount;
   }
 
@@ -370,7 +366,7 @@ export class EmailQueueService {
       this.emailQueue.clean(oneDayAgo, 'active'), // Clean stalled jobs
     ]);
 
-    console.log('Cleaned old email jobs');
+    this.logger.info('Cleaned old email jobs');
   }
 
   /**
@@ -378,7 +374,7 @@ export class EmailQueueService {
    */
   async pauseQueue(): Promise<void> {
     await this.emailQueue.pause();
-    console.log('Email queue paused');
+    this.logger.info('Email queue paused');
   }
 
   /**
@@ -386,7 +382,7 @@ export class EmailQueueService {
    */
   async resumeQueue(): Promise<void> {
     await this.emailQueue.resume();
-    console.log('Email queue resumed');
+    this.logger.info('Email queue resumed');
   }
 
   /**
@@ -395,7 +391,7 @@ export class EmailQueueService {
   async close(): Promise<void> {
     await this.emailQueue.close();
     await this.redis.quit();
-    console.log('Email queue closed');
+    this.logger.info('Email queue closed');
   }
 
   /**

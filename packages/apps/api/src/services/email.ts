@@ -1,8 +1,12 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
+import { logger as baseLogger } from '@postolio/logger';
 import { SESClient, SendEmailCommand, SESClientConfig } from '@aws-sdk/client-ses';
 import CircuitBreaker from 'opossum';
+import { formatError } from '../utils/logging.js';
+
+const emailLogger = baseLogger.child({ module: 'email-service' });
 
 /**
  * Centralized email service with AWS SES for production
@@ -37,19 +41,19 @@ export class EmailService {
 
       // Event listeners for monitoring
       this.sesCircuitBreaker.on('open', () => {
-        console.warn('⚠️ AWS SES circuit breaker opened - falling back to SMTP');
+        emailLogger.warn('⚠️ AWS SES circuit breaker opened - falling back to SMTP');
       });
 
       this.sesCircuitBreaker.on('halfOpen', () => {
-        console.info('🔄 AWS SES circuit breaker half-open - testing service');
+        emailLogger.info('🔄 AWS SES circuit breaker half-open - testing service');
       });
 
       this.sesCircuitBreaker.on('close', () => {
-        console.info('✅ AWS SES circuit breaker closed - service restored');
+        emailLogger.info('✅ AWS SES circuit breaker closed - service restored');
       });
 
       this.sesCircuitBreaker.on('fallback', () => {
-        console.warn('🔄 AWS SES fallback triggered');
+        emailLogger.warn('🔄 AWS SES fallback triggered');
       });
     }
     return this.sesCircuitBreaker;
@@ -76,11 +80,11 @@ export class EmailService {
 
       // Event listeners for monitoring
       this.smtpCircuitBreaker.on('open', () => {
-        console.error('❌ SMTP circuit breaker opened - email service unavailable');
+        emailLogger.error('❌ SMTP circuit breaker opened - email service unavailable');
       });
 
       this.smtpCircuitBreaker.on('close', () => {
-        console.info('✅ SMTP circuit breaker closed - email service restored');
+        emailLogger.info('✅ SMTP circuit breaker closed - email service restored');
       });
     }
     return this.smtpCircuitBreaker;
@@ -152,7 +156,7 @@ export class EmailService {
       ? options.to.map((addr) => (typeof addr === 'string' ? addr : addr.address))
       : [typeof options.to === 'string' ? options.to : options.to?.address];
 
-    console.log(`Sending email via SES from ${from} to ${to.join(', ')}`);
+    emailLogger.info(`Sending email via SES from ${from} to ${to.join(', ')}`);
 
     const command = new SendEmailCommand({
       Source: from,
@@ -186,7 +190,7 @@ export class EmailService {
 
     // Set up fallback to SMTP if SES fails
     sesCircuitBreaker.fallback(async () => {
-      console.warn('SES circuit breaker triggered, falling back to SMTP');
+      emailLogger.warn('SES circuit breaker triggered, falling back to SMTP');
       if (this.isConfigured()) {
         return await this.sendViaSMTP(options);
       }
@@ -194,10 +198,16 @@ export class EmailService {
     });
 
     try {
-      const result = await sesCircuitBreaker.fire(command);
-      console.log('Email sent successfully via SES', result);
+      const result = (await sesCircuitBreaker.fire(command)) as {
+        MessageId?: string;
+        $metadata?: { httpStatusCode?: number };
+      };
+      emailLogger.info('Email sent successfully via SES', {
+        messageId: result?.MessageId,
+        statusCode: result?.$metadata?.httpStatusCode,
+      });
     } catch (error) {
-      console.error('Failed to send email via SES:', error);
+      emailLogger.error('Failed to send email via SES', formatError(error));
       throw error;
     }
   }
@@ -216,7 +226,7 @@ export class EmailService {
   static async sendEmail(options: Mail.Options): Promise<{ success: boolean; error?: string }> {
     try {
       if (!this.isConfigured()) {
-        console.warn('Email service not configured');
+        emailLogger.warn('Email service not configured');
         return { success: false, error: 'Email service not configured' };
       }
 
@@ -238,7 +248,7 @@ export class EmailService {
       headers['Importance'] = 'Normal';
 
       // Use AWS SES in production, SMTP in development
-      console.log(`Email service configured to use: ${this.useAWSSES ? 'AWS SES' : 'SMTP'}`);
+      emailLogger.info(`Email service configured to use: ${this.useAWSSES ? 'AWS SES' : 'SMTP'}`);
       if (this.useAWSSES) {
         await this.sendViaSES(options);
       } else {
@@ -247,7 +257,7 @@ export class EmailService {
 
       return { success: true };
     } catch (error) {
-      console.error('Email send error:', error);
+      emailLogger.error('Email send error', formatError(error));
 
       // Provide more specific error messages for SES
       if (error instanceof Error && error.name === 'MessageRejected') {
@@ -498,7 +508,7 @@ If you didn't request this email, you can safely ignore it.
       await emailQueue.addTwoFactorEmail(email, code, { priority: 'critical' });
       return { success: true };
     } catch (error) {
-      console.error('Failed to queue 2FA email:', error);
+      emailLogger.error('Failed to queue 2FA email', formatError(error));
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -545,7 +555,7 @@ If you didn't request this email, you can safely ignore it.
       await emailQueue.addWelcomeEmail(email, name);
       return { success: true };
     } catch (error) {
-      console.error('Failed to queue welcome email:', error);
+      emailLogger.error('Failed to queue welcome email', formatError(error));
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -687,7 +697,7 @@ If you didn't request this email, you can safely ignore it.
         return true;
       }
     } catch (error) {
-      console.error('Email service verification failed:', error);
+      emailLogger.error('Email service verification failed', formatError(error));
       return false;
     }
   }

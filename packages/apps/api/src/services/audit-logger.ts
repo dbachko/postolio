@@ -1,6 +1,7 @@
-import { getDatabaseClient } from '../config/database.js';
 import { FastifyRequest } from 'fastify';
 import { Prisma } from '@postolio/database';
+import { logger } from '@postolio/logger';
+import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
 
@@ -84,17 +85,17 @@ export class AuditLogger {
     success?: boolean;
     errorMessage?: string;
   }): Promise<void> {
-    try {
-      const {
-        userId,
-        email,
-        eventType,
-        request,
-        metadata = {},
-        success = true,
-        errorMessage,
-      } = params;
+    const {
+      userId,
+      email,
+      eventType,
+      request,
+      metadata = {},
+      success = true,
+      errorMessage,
+    } = params;
 
+    try {
       // Extract request information if available
       const ipAddress = request ? this.getClientIp(request) : undefined;
       const userAgent = request?.headers['user-agent'] || undefined;
@@ -113,17 +114,28 @@ export class AuditLogger {
         },
       });
 
-      // Also log to console for monitoring
-      console.log(`[AUDIT] ${eventType}`, {
+      // Also log for monitoring using structured logger
+      logger.info('[AUDIT] event recorded', {
+        eventType,
         userId,
         email,
         ipAddress,
         success,
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       // Don't let audit logging failures break the application
-      console.error('Failed to write audit log:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to write audit log', {
+        eventType,
+        userId,
+        email,
+        success,
+        error: {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        },
+      });
     }
   }
 
@@ -284,7 +296,15 @@ export class AuditLogger {
 
         return true;
       } catch (error) {
-        console.error('Failed to lock account:', error);
+        const err = error instanceof Error ? error : new Error(String(error));
+        logger.error('Failed to lock account', {
+          email,
+          error: {
+            name: err.name,
+            message: err.message,
+            stack: err.stack,
+          },
+        });
         return false;
       }
     }
@@ -348,7 +368,15 @@ export class AuditLogger {
         success: true,
       });
     } catch (error) {
-      console.error('Failed to unlock account:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to unlock account', {
+        email,
+        error: {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        },
+      });
     }
   }
 
@@ -365,7 +393,15 @@ export class AuditLogger {
         },
       });
     } catch (error) {
-      console.error('Failed to reset failed login attempts:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to reset failed login attempts', {
+        email,
+        error: {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        },
+      });
     }
   }
 
@@ -381,7 +417,10 @@ export class AuditLogger {
       },
     });
 
-    console.log(`[AUDIT] Cleaned up ${result.count} old audit log entries`);
+    logger.info('[AUDIT] cleanup completed', {
+      deletedCount: result.count,
+      daysKept: daysToKeep,
+    });
     return result.count;
   }
 

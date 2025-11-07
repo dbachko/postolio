@@ -1,14 +1,17 @@
 import { nanoid } from 'nanoid';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
+import { logger as baseLogger } from '@postolio/logger';
 import { getDatabaseClient } from '../config/database.js';
 import { EmailService } from './email.js';
 import Redis from 'ioredis';
 import { getRedisUrl } from '../utils/redis-url.js';
 import { FastifyInstance } from 'fastify';
+import { formatError } from '../utils/logging.js';
 
 const prisma = getDatabaseClient();
 const redis = new Redis(getRedisUrl());
+const magicLinkLogger = baseLogger.child({ module: 'magic-link-service' });
 
 interface MagicLinkData {
   email: string;
@@ -83,7 +86,7 @@ export class MagicLinkService {
       if (!emailConfigured && (process.env.NODE_ENV === 'dev' || allowLoggingFallback)) {
         const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${token}`;
-        console.warn(
+        magicLinkLogger.warn(
           `\n[DEV] Magic link email service not configured. Logging link instead.\n` +
             `Email: ${email}\n` +
             `Mode: ${isSignUp ? 'signup' : 'signin'}\n` +
@@ -107,7 +110,7 @@ export class MagicLinkService {
         message: 'Magic link sent! Check your email to continue.',
       };
     } catch (error) {
-      console.error('Magic link error:', error);
+      magicLinkLogger.error('Magic link error', formatError(error));
       return {
         success: false,
         message: 'Failed to send magic link. Please try again.',
@@ -209,7 +212,7 @@ export class MagicLinkService {
         token: jwtToken,
       };
     } catch (error) {
-      console.error('Magic link verification error:', error);
+      magicLinkLogger.error('Magic link verification error', formatError(error));
       return {
         success: false,
         message: 'Failed to verify magic link',

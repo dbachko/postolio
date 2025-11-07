@@ -1,9 +1,12 @@
+import { logger as baseLogger } from '@postolio/logger';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
 import { attachAssetToContent } from './assets-media.js';
 import { schedulerService } from './scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
+import { formatError } from '../utils/logging.js';
 
 const prisma = getDatabaseClient();
+const rollingLogger = baseLogger.child({ module: 'rolling-content' });
 
 export interface QueueStatus {
   totalScheduled: number;
@@ -55,16 +58,18 @@ class RollingContentService {
       });
 
       if (!content || !content.brand) {
-        console.log(`Content ${contentId} or brand not found for rolling generation`);
+        rollingLogger.info(`Content ${contentId} or brand not found for rolling generation`);
         return;
       }
 
-      console.log(`Post published for ${content.brand.name}, checking rolling generation needs...`);
+      rollingLogger.info(
+        `Post published for ${content.brand.name}, checking rolling generation needs...`
+      );
 
       // Check if we need to generate more content
       await this.checkAndGenerateContent(content.brandId, content.campaignId);
     } catch (error) {
-      console.error('Error in rolling content generation:', error);
+      rollingLogger.error('Error in rolling content generation', formatError(error));
     }
   }
 
@@ -74,7 +79,7 @@ class RollingContentService {
   async checkAndGenerateContent(brandId: string, campaignId?: string | null): Promise<void> {
     // Prevent multiple simultaneous generations for the same brand
     if (this.isProcessing.has(brandId)) {
-      console.log(`Rolling generation already in progress for brand: ${brandId}`);
+      rollingLogger.info(`Rolling generation already in progress for brand: ${brandId}`);
       return;
     }
 
@@ -84,18 +89,15 @@ class RollingContentService {
       // Check queue status
       const queueStatus = await this.checkContentQueue(brandId);
 
-      console.log(
-        `Queue status for brand ${brandId}:`,
-        JSON.stringify({
-          totalScheduled: queueStatus.totalScheduled,
-          daysAhead: queueStatus.daysAhead,
-          needsGeneration: queueStatus.needsGeneration,
-          minRequired: queueStatus.minQueueSize,
-        })
-      );
+      rollingLogger.info(`Queue status for brand ${brandId}`, {
+        totalScheduled: queueStatus.totalScheduled,
+        daysAhead: queueStatus.daysAhead,
+        needsGeneration: queueStatus.needsGeneration,
+        minRequired: queueStatus.minQueueSize,
+      });
 
       if (!queueStatus.needsGeneration) {
-        console.log(
+        rollingLogger.info(
           `Brand ${brandId} has sufficient content (${queueStatus.daysAhead} days ahead)`
         );
         return;
@@ -186,7 +188,7 @@ class RollingContentService {
             : {};
         themes = config.themes || themes;
         style = config.style || style;
-        console.log(`Using campaign ${activeCampaign.name} for rolling generation`);
+        rollingLogger.info(`Using campaign ${activeCampaign.name} for rolling generation`);
       } else {
         // Use brand preferences if no active campaign
         const prefsRaw = brand.preferences as unknown;
@@ -211,7 +213,7 @@ class RollingContentService {
           themes = prefs.themes || themes;
           style = prefs.style || style;
         }
-        console.log(`Using brand preferences for rolling generation`);
+        rollingLogger.info(`Using brand preferences for rolling generation`);
       }
 
       // Get or generate style profile
@@ -222,7 +224,7 @@ class RollingContentService {
         DEFAULT_CONFIG.targetQueueSize - queueStatus.daysAhead
       );
 
-      console.log(`Generating ${postsNeeded} posts for brand: ${brand.name}`);
+      rollingLogger.info(`Generating ${postsNeeded} posts for brand: ${brand.name}`);
 
       // Generate content
       const generatedContent = [];
@@ -268,14 +270,14 @@ class RollingContentService {
         const nextSlot = await this.getNextAvailableSlot(brandId);
         await schedulerService.scheduleContent(savedContent.id, nextSlot);
 
-        console.log(
+        rollingLogger.info(
           `Generated and scheduled rolling content: ${savedContent.id} for ${nextSlot.toISOString()}`
         );
       }
 
-      console.log(`Rolling generation complete for brand: ${brand.name}`);
+      rollingLogger.info(`Rolling generation complete for brand: ${brand.name}`);
     } catch (error) {
-      console.error('Error generating rolling content:', error);
+      rollingLogger.error('Error generating rolling content', formatError(error));
       throw error;
     }
   }
@@ -344,7 +346,7 @@ class RollingContentService {
         generated: DEFAULT_CONFIG.batchSize,
       };
     } catch (error) {
-      console.error('Manual rolling generation failed:', error);
+      rollingLogger.error('Manual rolling generation failed', formatError(error));
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',

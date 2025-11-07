@@ -11,6 +11,7 @@ import assetsRoutes from './routes/assets.js';
 import foldersRoutes from './routes/folders.js';
 import campaignAssetsRoutes from './routes/campaign-assets.js';
 import healthRoutes from './routes/health.js';
+import { logger as sharedLogger } from '@postolio/logger';
 
 // Load environment variables
 dotenv.config();
@@ -27,20 +28,13 @@ if (!SERVICE_API_TOKEN) {
 }
 
 export function buildFastify(): FastifyInstance {
+  const fastifyLogger = sharedLogger.child({
+    service: 'assets-api',
+    environment: NODE_ENV,
+  });
+
   const server = fastify({
-    logger: {
-      level: NODE_ENV === 'production' ? 'info' : 'debug',
-      transport:
-        NODE_ENV !== 'production'
-          ? {
-              target: 'pino-pretty',
-              options: {
-                translateTime: 'HH:MM:ss Z',
-                ignore: 'pid,hostname',
-              },
-            }
-          : undefined,
-    },
+    logger: fastifyLogger.toPino(),
     requestIdLogLabel: 'reqId',
     disableRequestLogging: false,
     requestIdHeader: 'x-request-id',

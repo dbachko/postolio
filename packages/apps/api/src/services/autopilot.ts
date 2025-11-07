@@ -3,6 +3,7 @@
  * Removed node-cron dependency, now triggered by EventBridge rules
  */
 
+import { logger as baseLogger } from '@postolio/logger';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
 import { attachAssetToContent } from './assets-media.js';
 import { schedulerService } from './scheduler.js';
@@ -15,6 +16,7 @@ import type { EventBridgeScheduledEvent, LambdaResponse } from '../types/aws-eve
 import { getDatabaseClient } from '../config/database.js';
 
 const prisma = getDatabaseClient();
+const autopilotLogger = baseLogger.child({ module: 'autopilot-service' });
 
 export interface AutopilotConfig {
   enabled: boolean;
@@ -47,7 +49,7 @@ class AutopilotService {
     try {
       // 1. Detect content gaps for all active brands
       const gaps = await this.detectContentGaps();
-      console.log(`Found ${gaps.length} brands with content gaps`);
+      autopilotLogger.info('Detected content gaps for brands', { gapCount: gaps.length });
 
       let totalGenerated = 0;
 
@@ -56,16 +58,31 @@ class AutopilotService {
         try {
           const generated = await this.generateContentForBrand(gap);
           totalGenerated += generated;
-          console.log(`Generated ${generated} posts for brand: ${gap.brandName}`);
+          autopilotLogger.info('Generated content for brand', {
+            brandId: gap.brandId,
+            brandName: gap.brandName,
+            generatedCount: generated,
+          });
         } catch (error) {
-          console.error(`Failed to generate content for brand ${gap.brandName}:`, error);
+          const err = error instanceof Error ? error : new Error(String(error));
+          autopilotLogger.error('Failed to generate content for brand', {
+            brandId: gap.brandId,
+            brandName: gap.brandName,
+            error: { name: err.name, message: err.message, stack: err.stack },
+          });
         }
       }
 
-      console.log(`Autopilot generation complete. Total generated: ${totalGenerated}`);
+      autopilotLogger.info('Autopilot generation run completed', {
+        totalGenerated,
+        gapCount: gaps.length,
+      });
       return { totalGenerated, gaps };
     } catch (error) {
-      console.error('Autopilot generation failed:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      autopilotLogger.error('Autopilot generation failed', {
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       throw error;
     }
   }
@@ -75,15 +92,12 @@ class AutopilotService {
    * This will be called by AWS Lambda when triggered by EventBridge
    */
   async handleEventBridgeTrigger(event: EventBridgeScheduledEvent): Promise<LambdaResponse> {
-    console.log(
-      'Autopilot triggered by EventBridge:',
-      JSON.stringify({
-        id: event.id,
-        time: event.time,
-        detailType: event['detail-type'],
-        taskType: event.detail?.taskType,
-      })
-    );
+    autopilotLogger.info('Autopilot triggered by EventBridge', {
+      eventId: event.id,
+      time: event.time,
+      detailType: event['detail-type'],
+      taskType: event.detail?.taskType,
+    });
 
     const result = await this.runAutopilotGeneration();
 
@@ -108,7 +122,7 @@ class AutopilotService {
     generated: number;
   }> {
     try {
-      console.log('Manual autopilot trigger initiated...');
+      autopilotLogger.info('Manual autopilot trigger initiated');
       const result = await this.runAutopilotGeneration();
       return {
         success: true,
@@ -116,7 +130,10 @@ class AutopilotService {
         generated: result.totalGenerated,
       };
     } catch (error) {
-      console.error('Manual autopilot trigger failed:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      autopilotLogger.error('Manual autopilot trigger failed', {
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -158,7 +175,10 @@ class AutopilotService {
 
       return gaps;
     } catch (error) {
-      console.error('Error detecting content gaps:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      autopilotLogger.error('Error detecting content gaps', {
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       return [];
     }
   }
@@ -328,7 +348,12 @@ class AutopilotService {
             totalGenerated++;
           }
         } catch (error) {
-          console.error(`Failed to generate content batch for brand ${brand.name}:`, error);
+          const err = error instanceof Error ? error : new Error(String(error));
+          autopilotLogger.error('Failed to generate content batch', {
+            brandId: brand.id,
+            brandName: brand.name,
+            error: { name: err.name, message: err.message, stack: err.stack },
+          });
         }
       }
 
@@ -339,7 +364,11 @@ class AutopilotService {
 
       return totalGenerated;
     } catch (error) {
-      console.error(`Error generating content for brand ${gap.brandId}:`, error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      autopilotLogger.error('Error generating content for brand', {
+        brandId: gap.brandId,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       return 0;
     }
   }
@@ -384,9 +413,16 @@ class AutopilotService {
         nextScheduleTime = new Date(nextScheduleTime.getTime() + intervalMs);
       }
 
-      console.log(`Scheduled ${unscheduledContent.length} autopilot posts for brand ${brandId}`);
+      autopilotLogger.info('Scheduled autopilot posts for brand', {
+        brandId,
+        scheduledCount: unscheduledContent.length,
+      });
     } catch (error) {
-      console.error('Error scheduling generated content:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      autopilotLogger.error('Error scheduling generated content', {
+        brandId,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
     }
   }
 
@@ -465,7 +501,10 @@ class AutopilotService {
         brandStatuses,
       };
     } catch (error) {
-      console.error('Error getting autopilot status:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      autopilotLogger.error('Error getting autopilot status', {
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       return {
         brandStatuses: [],
       };
@@ -502,7 +541,11 @@ class AutopilotService {
 
       return true;
     } catch (error) {
-      console.error('Error updating autopilot config:', error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      autopilotLogger.error('Error updating autopilot config', {
+        brandId,
+        error: { name: err.name, message: err.message, stack: err.stack },
+      });
       return false;
     }
   }
