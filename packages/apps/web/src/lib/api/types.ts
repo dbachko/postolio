@@ -39,6 +39,7 @@ export interface Content {
   campaignColor?: string | null;
   instagramPostId?: string | null;
   instagramPermalink?: string | null;
+  schedulingError?: string | null;
 }
 
 export interface AuthResponse {

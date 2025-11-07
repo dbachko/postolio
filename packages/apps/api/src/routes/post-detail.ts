@@ -51,6 +51,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           updatedAt: true,
           brandId: true,
           campaignId: true,
+          schedulingError: true,
           brand: {
             select: {
               id: true,
@@ -97,6 +98,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         instagramPermalink: post.instagramPermalink,
         analytics: post.analytics,
         generationParams: post.generationParams,
+        schedulingError: post.schedulingError,
         brand: post.brand,
         campaign: post.campaign,
         createdAt: post.createdAt,

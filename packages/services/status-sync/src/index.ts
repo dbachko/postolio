@@ -4,11 +4,12 @@
  * Handles: post.published, post.failed, schedule.created, schedule.updated, schedule.canceled
  */
 
-import type { PrismaClient as LambdaPrismaClient } from '@postolio/database/lambda';
+import type { PrismaClient as LambdaPrismaClient, Prisma } from '@postolio/database/lambda';
 import { createLambdaPrismaClient, ContentStatus } from '@postolio/database/lambda';
 import type { Context, EventBridgeEvent } from 'aws-lambda';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { Pool } from 'pg';
 
 // EventBridge event detail structure matching what publisher/scheduler services emit
@@ -22,6 +23,7 @@ interface EventDetail {
   publishedAt?: string;
   scheduledAt?: string;
   error?: string;
+  attemptNumber?: number;
   reason?: string;
   status?: string;
   campaignId?: string;
@@ -55,6 +57,7 @@ function ensureProxyParams(urlString: string): string {
 
 const secrets = new SecretsManagerClient({});
 const ssm = new SSMClient({});
+const sesClient = new SESClient({});
 
 async function getDatabaseEndpoints(): Promise<{ endpoint?: string; proxy?: string }> {
   const environment = process.env.ENVIRONMENT || 'dev';
@@ -186,6 +189,254 @@ async function getClient(): Promise<LambdaPrismaClient> {
   }
 }
 
+function normalizeErrorMessage(error: unknown): string {
+  if (error instanceof Error) return normalizeErrorMessage(error.message);
+  const text = typeof error === 'string' ? error : error ? String(error) : '';
+  const trimmed = text.trim();
+  if (!trimmed) return 'Unknown error';
+  return trimmed.length > 500 ? `${trimmed.slice(0, 497)}...` : trimmed;
+}
+
+function buildPostLink(contentId: string): string {
+  const base = (process.env.FRONTEND_URL || 'https://postolio.example').replace(/\/?$/, '');
+  return `${base}/posts/${contentId}`;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      case "'":
+        return '&#39;';
+      default:
+        return ch;
+    }
+  });
+}
+
+async function recomputeUnreadCount(client: LambdaPrismaClient, userId: string): Promise<void> {
+  const unread = await client.notification.count({
+    where: { userId, readAt: null, archivedAt: null },
+  });
+
+  await client.userNotificationState.upsert({
+    where: { userId },
+    update: { unreadCount: unread, lastSeenAt: new Date() },
+    create: { userId, unreadCount: unread },
+  });
+}
+
+async function maybeSendFailureEmail(params: {
+  client: LambdaPrismaClient;
+  userId: string;
+  brandId: string;
+  email: string | null | undefined;
+  brandName?: string | null;
+  platform?: string;
+  contentId: string;
+  errorMessage: string;
+}): Promise<void> {
+  const { client, userId, brandId, email, brandName, platform, contentId, errorMessage } = params;
+
+  if (!email) {
+    return;
+  }
+
+  const preference = await client.notificationPreference.findFirst({
+    where: {
+      userId,
+      channel: 'email',
+      category: 'publishing',
+      type: 'publishing.post_failed',
+      OR: [{ brandId }, { brandId: null }],
+    },
+    orderBy: { brandId: 'desc' },
+  });
+
+  const shouldEmail = preference ? preference.enabled : true;
+  if (!shouldEmail) {
+    return;
+  }
+
+  const fromAddress =
+    process.env.SES_FROM_EMAIL || process.env.NOTIFICATIONS_FROM_EMAIL || 'noreply@postolio.example';
+  const link = buildPostLink(contentId);
+  const subject = `Post failed to publish${brandName ? ` – ${brandName}` : ''}`;
+  const sanitized = errorMessage;
+  const htmlBody = `
+    <p>Your scheduled post${platform ? ` for ${platform}` : ''} failed to publish.</p>
+    <p><strong>Reason:</strong><br/>${escapeHtml(sanitized).replace(/\n/g, '<br/>')}</p>
+    <p><a href="${link}">Review the post in Postolio</a></p>
+    <p style="margin-top:16px;">— The Postolio Team</p>
+  `;
+  const textBody = `Your scheduled post${platform ? ` for ${platform}` : ''} failed to publish.
+
+Reason:
+${sanitized}
+
+Review the post: ${link}
+`;
+
+  try {
+    await sesClient.send(
+      new SendEmailCommand({
+        Source: fromAddress,
+        Destination: { ToAddresses: [email] },
+        Message: {
+          Subject: { Data: subject, Charset: 'UTF-8' },
+          Body: {
+            Html: { Data: htmlBody, Charset: 'UTF-8' },
+            Text: { Data: textBody, Charset: 'UTF-8' },
+          },
+        },
+      })
+    );
+  } catch (error) {
+    console.error('Failed to send post failure email', {
+      userId,
+      brandId,
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+}
+
+async function createPostFailureNotification(
+  client: LambdaPrismaClient,
+  detail: EventDetail,
+  errorMessage: string
+): Promise<void> {
+  const contentId = detail.contentId;
+  if (!contentId) return;
+
+  const content = await client.content.findUnique({
+    where: { id: contentId },
+    select: {
+      id: true,
+      caption: true,
+      brandId: true,
+      brand: {
+        select: {
+          id: true,
+          name: true,
+          userId: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!content || !content.brand || !content.brand.user) {
+    console.warn('Skipping notification creation; content or brand missing', { contentId });
+    return;
+  }
+
+  const userId = content.brand.user.id;
+  const brandId = content.brandId;
+
+  const masterPreference = await client.notificationPreference.findFirst({
+    where: {
+      userId,
+      category: 'publishing',
+      type: 'all',
+      channel: 'all',
+      OR: [{ brandId }, { brandId: null }],
+    },
+    orderBy: { brandId: 'desc' },
+  });
+
+  if (masterPreference && masterPreference.enabled === false) {
+    console.info('Notification suppressed by master preference', { contentId, userId });
+    return;
+  }
+
+  const metadata: Record<string, unknown> = {
+    platform: detail.platform || null,
+    scheduleId: detail.scheduleId || null,
+    attemptNumber: detail.attemptNumber ?? null,
+  };
+
+  const linkUrl = buildPostLink(contentId);
+  const dedupeKey = `content:${contentId}:failed`;
+  const now = new Date();
+  const existing = await client.notification.findUnique({ where: { dedupeKey } });
+
+  let createdNotificationId: string;
+  let sendEmail = true;
+
+  if (existing) {
+    const updated = await client.notification.update({
+      where: { id: existing.id },
+      data: {
+        title: 'Post failed to publish',
+        body: errorMessage,
+        severity: 'error',
+        linkUrl,
+        metadata: metadata as Prisma.JsonValue,
+        resourceType: 'post',
+        resourceId: contentId,
+        createdAt: now,
+      },
+      select: { id: true },
+    });
+    createdNotificationId = updated.id;
+    sendEmail = false;
+  } else {
+    const created = await client.notification.create({
+      data: {
+        userId,
+        brandId,
+        type: 'publishing.post_failed',
+        category: 'publishing',
+        severity: 'error',
+        title: 'Post failed to publish',
+        body: errorMessage,
+        linkUrl,
+        resourceType: 'post',
+        resourceId: contentId,
+        metadata: metadata as Prisma.JsonValue,
+        dedupeKey,
+      },
+      select: { id: true },
+    });
+    createdNotificationId = created.id;
+  }
+
+  await recomputeUnreadCount(client, userId);
+
+  if (sendEmail) {
+    await maybeSendFailureEmail({
+      client,
+      userId,
+      brandId,
+      email: content.brand.user.email,
+      brandName: content.brand.name,
+      platform: detail.platform,
+      contentId,
+      errorMessage,
+    });
+  }
+
+  console.info('Created post failure notification', {
+    contentId,
+    userId,
+    brandId,
+    notificationId: createdNotificationId,
+  });
+}
+
 async function handlePostPublished(detail: EventDetail) {
   const { contentId, publishedAt, platformPostId, permalink } = detail;
   if (!contentId) return;
@@ -203,16 +454,27 @@ async function handlePostPublished(detail: EventDetail) {
 }
 
 async function handlePostFailed(detail: EventDetail) {
-  const { contentId, error } = detail;
+  const { contentId } = detail;
   if (!contentId) return;
   const client = await getClient();
+  const errorMessage = normalizeErrorMessage(detail.error);
+
   await client.content.update({
     where: { id: contentId },
     data: {
       status: 'failed' as ContentStatus,
-      schedulingError: error?.slice(0, 500) || 'Unknown error',
+      schedulingError: errorMessage,
     },
   });
+
+  try {
+    await createPostFailureNotification(client, detail, errorMessage);
+  } catch (notificationError) {
+    console.error('Failed to create failure notification', {
+      contentId,
+      error: notificationError instanceof Error ? notificationError.message : notificationError,
+    });
+  }
 }
 
 async function handlePostSkipped(detail: EventDetail) {

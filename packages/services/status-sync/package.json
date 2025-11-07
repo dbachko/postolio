@@ -12,6 +12,7 @@
     "@aws-lambda-powertools/tracer": "^2.25.1",
     "@aws-sdk/client-dynamodb": "^3.872.0",
     "@aws-sdk/client-scheduler": "^3.864.0",
+    "@aws-sdk/client-ses": "^3.888.0",
     "@aws-sdk/client-secrets-manager": "^3.883.0",
     "@aws-sdk/client-ssm": "^3.883.0",
     "@aws-sdk/lib-dynamodb": "^3.872.0",

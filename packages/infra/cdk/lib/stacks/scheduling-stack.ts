@@ -433,6 +433,12 @@ export class SchedulingStack extends cdk.Stack {
                 `arn:aws:ssm:${this.region}:${this.account}:parameter/postolio/${environment}/*`,
               ],
             }),
+            // SES permissions for customer notifications
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['ses:SendEmail', 'ses:SendRawEmail', 'ses:SendTemplatedEmail'],
+              resources: ['*'],
+            }),
             // Allow passing the Scheduler PutEvents role to EventBridge Scheduler
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -588,6 +594,7 @@ export class SchedulingStack extends cdk.Stack {
         SERVICE_NAME: 'status-sync',
         ENVIRONMENT: environment,
         LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
+        SES_FROM_EMAIL: 'noreply@postolio.example',
         // AWS_REGION is automatically provided by Lambda runtime
         SCHEDULES_TABLE: this.schedulesTable.tableName,
         SCHEDULES_TABLE_STATUS_INDEX: 'StatusIndex',

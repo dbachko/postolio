@@ -749,6 +749,7 @@ export default function PostDetail() {
                   status={post.status as 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'}
                   createdAt={post.createdAt}
                   processing={Boolean((post as any)?.generationParams?.processing?.active)}
+                  errorMessage={post.schedulingError || null}
                 />
               </div>
             )}

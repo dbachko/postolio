@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
 
@@ -9,6 +10,7 @@ interface PostStatusCardProps {
   createdAt: string | Date;
   className?: string;
   processing?: boolean;
+  errorMessage?: string | null;
 }
 
 export function PostStatusCard({
@@ -16,6 +18,7 @@ export function PostStatusCard({
   createdAt,
   className = '',
   processing = false,
+  errorMessage,
 }: PostStatusCardProps) {
   const getBadgeVariant = (status: PostStatus) => {
     switch (status) {
@@ -54,6 +57,13 @@ export function PostStatusCard({
         )}
         <span className="text-muted-foreground text-xs">Created: {formattedDate}</span>
       </div>
+      {status === 'failed' && errorMessage ? (
+        <Alert variant="destructive" className="mt-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Publishing failed</AlertTitle>
+          <AlertDescription className="whitespace-pre-line">{errorMessage}</AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   );
 }

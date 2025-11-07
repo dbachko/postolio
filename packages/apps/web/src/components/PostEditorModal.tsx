@@ -423,6 +423,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
           <PostStatusCard
             status={content.status as 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped'}
             createdAt={content.createdAt}
+            errorMessage={content.schedulingError || null}
           />
         </div>
 
