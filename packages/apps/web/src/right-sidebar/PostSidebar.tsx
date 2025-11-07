@@ -15,6 +15,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { PostCaptionEditor } from '@/components/PostCaptionEditor';
 import { PostHashtagEditor } from '@/components/PostHashtagEditor';
 import { PostScheduler } from '@/components/PostScheduler';
+import { PostStatusCard, type PostStatus } from '@/components/PostStatusCard';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { convertLocalToUTC } from '@/lib/timezone';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -42,6 +43,17 @@ interface PostDetailData {
   scheduledAt?: string;
   brandId?: string;
   brand: { id: string; name: string };
+  schedulingError?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  generationParams?: {
+    processing?: {
+      active: boolean;
+      operation: 'scheduling';
+      startedAt: string;
+      operationId?: string;
+    };
+  };
 }
 
 const formatScheduledInput = (value?: string) =>
@@ -620,6 +632,13 @@ export function PostSidebar({
           </div>
         ) : (
           <div className="space-y-4">
+            <PostStatusCard
+              status={(post.status as PostStatus) || 'draft'}
+              createdAt={post.createdAt || post.updatedAt || new Date().toISOString()}
+              processing={Boolean(post.generationParams?.processing?.active)}
+              errorMessage={post.schedulingError || null}
+            />
+
             <div className="space-y-2">
               <Label>Post Image</Label>
               {disabled ? (
