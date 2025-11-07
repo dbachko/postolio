@@ -217,7 +217,7 @@ const analytics: FastifyPluginAsync = async function (fastify) {
   // Wizard funnel event logging
   const WizardEventSchema = z.object({
     eventName: z.enum(['wizard.step', 'wizard.reset', 'wizard.launch']),
-    step: z.number().int().min(1).max(5).optional(),
+    step: z.number().int().min(1).max(7).optional(), // Updated to 7 for new wizard steps
     brandId: z.string().min(1).optional(),
   });
   fastify.post(

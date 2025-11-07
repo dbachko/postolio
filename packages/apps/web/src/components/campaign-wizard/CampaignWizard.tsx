@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 // import { useLocation } from 'react-router-dom';
 import { useBlocker } from 'react-router-dom';
 import { useCampaignWizard, useWizardBrandSync } from '../../hooks/useCampaignWizard';
@@ -25,6 +25,10 @@ export function CampaignWizard() {
   const reset = useCampaignWizard((s) => s.reset);
   const setBrandId = useCampaignWizard((s) => s.setBrandId);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  // Use ref to track intentional navigation (e.g., after successful campaign creation)
+  // Refs are synchronous, so no race condition with navigation
+  const allowNavigationRef = useRef(false);
 
   // Keep brand ID synced when user switches brand
   useWizardBrandSync();
@@ -55,7 +59,7 @@ export function CampaignWizard() {
     );
   });
   const skipUnsavedWarning = useCampaignWizard((s) => s.skipUnsavedWarning);
-  const shouldWarn = hasUnsavedChanges && !skipUnsavedWarning;
+  const shouldWarn = hasUnsavedChanges && !skipUnsavedWarning && !allowNavigationRef.current;
 
   useEffect(() => {
     if (!hasUnsavedChanges && skipUnsavedWarning) {
@@ -76,6 +80,11 @@ export function CampaignWizard() {
   }
 
   useNavigationConfirm(shouldWarn, "You'll lose your changes. Leave this page?");
+
+  // Expose the allowNavigationRef via the store so Step7 can set it
+  useEffect(() => {
+    useCampaignWizard.setState({ allowNavigationRef });
+  }, []);
 
   // Warn on browser/tab close or hard navigation
   useEffect(() => {
@@ -131,7 +140,7 @@ export function CampaignWizard() {
           </div>
         </CardHeader>
         <CardContent>
-          <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+          <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} currentStep={currentStep} />
           <WizardProgress currentStep={currentStep} />
           {currentStep === 1 && <Step1TypeSelection />}
           {currentStep === 2 && <Step2CampaignBrief />}

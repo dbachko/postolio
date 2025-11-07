@@ -233,183 +233,195 @@ export function Step5StrategyReview() {
         </Alert>
       )}
 
-      <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <WizardHelpDialog open={helpOpen} onOpenChange={setHelpOpen} currentStep={5} />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Content Pillars</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            {pillars.map((p, idx) => (
-              <div key={idx} className="grid grid-cols-5 items-end gap-2">
-                <div className="col-span-3 space-y-1">
-                  <Label>Pillar Name</Label>
-                  <Input value={p.name} onChange={(e) => setName(idx, e.target.value)} />
-                </div>
-                <div className="col-span-2 space-y-1">
-                  <Label>Percentage</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={p.percentage}
-                    onChange={(e) => setPct(idx, Number(e.target.value))}
-                  />
-                </div>
-                {pillars.length > 1 && (
-                  <div className="col-span-5">
-                    <Button variant="ghost" size="sm" onClick={() => removePillar(idx)}>
-                      Remove
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-            <div className="text-muted-foreground flex items-center justify-between text-xs">
-              <Button variant="outline" size="sm" onClick={addPillar}>
-                Add Pillar
-              </Button>
-              <div className="flex items-center gap-3">
-                <Button variant="link" className="h-auto px-0" onClick={() => setHelpOpen(true)}>
-                  Learn more
-                </Button>
-                <span className={total !== 100 ? 'text-destructive' : ''}>Total: {total}%</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Posting Schedule</CardTitle>
-          </CardHeader>
-          <CardContent className="text-muted-foreground space-y-2 text-sm">
-            {schedulePhases.length === 0 ? (
-              <>
-                <div className="bg-muted h-4 w-4/5 animate-pulse rounded" />
-                <div className="bg-muted h-4 w-1/2 animate-pulse rounded" />
-              </>
-            ) : (
-              <div className="space-y-2">
-                {schedulePhases.map((ph, idx) => (
-                  <div key={idx} className="rounded border p-2">
-                    <div className="font-medium">{ph.phase}</div>
-                    <div className="text-muted-foreground text-xs">
-                      Starts day +{ph.startOffsetDays} • {ph.frequency}
+      {/* Only show content cards after generation finishes (success or failure) */}
+      {!isGenerating && (
+        <>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader>
+                <CardTitle>Content Pillars</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {pillars.map((p, idx) => (
+                  <div key={idx} className="grid grid-cols-5 items-end gap-2">
+                    <div className="col-span-3 space-y-1">
+                      <Label>Pillar Name</Label>
+                      <Input value={p.name} onChange={(e) => setName(idx, e.target.value)} />
                     </div>
-                    <div className="text-muted-foreground text-xs">{ph.rationale}</div>
+                    <div className="col-span-2 space-y-1">
+                      <Label>Percentage</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={p.percentage}
+                        onChange={(e) => setPct(idx, Number(e.target.value))}
+                      />
+                    </div>
+                    {pillars.length > 1 && (
+                      <div className="col-span-5">
+                        <Button variant="ghost" size="sm" onClick={() => removePillar(idx)}>
+                          Remove
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Forecast</CardTitle>
-              <Badge variant={predictionsMeta?.basis === 'historical' ? 'default' : 'secondary'}>
-                {predictionsMeta?.basis === 'historical' ? 'From data' : 'Heuristic'}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="text-muted-foreground space-y-2 text-sm">
-            {!predictions ? (
-              <>
-                <div className="bg-muted h-4 w-1/2 animate-pulse rounded" />
-                <div className="bg-muted h-4 w-1/3 animate-pulse rounded" />
-              </>
-            ) : (
-              <div className="space-y-2 text-sm">
-                <div>Estimated posts: {predictions.estimatedPosts}</div>
-                {predictionsMeta?.basis === 'historical' ? (
+                <div className="text-muted-foreground flex items-center justify-between text-xs">
+                  <Button variant="outline" size="sm" onClick={addPillar}>
+                    Add Pillar
+                  </Button>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="link"
+                      className="h-auto px-0"
+                      onClick={() => setHelpOpen(true)}
+                    >
+                      Learn more
+                    </Button>
+                    <span className={total !== 100 ? 'text-destructive' : ''}>Total: {total}%</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Posting Schedule</CardTitle>
+              </CardHeader>
+              <CardContent className="text-muted-foreground space-y-2 text-sm">
+                {schedulePhases.length === 0 ? (
                   <>
-                    <div>
-                      Reach range: {predictions.reach.low.toLocaleString()} –{' '}
-                      {predictions.reach.high.toLocaleString()}
-                    </div>
-                    <div>Engagement rate: {(predictions.engagementRate * 100).toFixed(2)}%</div>
-                    <div className="text-muted-foreground text-xs">
-                      Based on your recent brand performance (samples:{' '}
-                      {predictionsMeta.samples.reach} reach, {predictionsMeta.samples.engagement}{' '}
-                      engagement).
-                    </div>
+                    <div className="bg-muted h-4 w-4/5 animate-pulse rounded" />
+                    <div className="bg-muted h-4 w-1/2 animate-pulse rounded" />
                   </>
                 ) : (
-                  <div className="text-muted-foreground text-xs">
-                    We’ll calibrate reach and engagement after your first scheduled/published posts.
+                  <div className="space-y-2">
+                    {schedulePhases.map((ph, idx) => (
+                      <div key={idx} className="rounded border p-2">
+                        <div className="font-medium">{ph.phase}</div>
+                        <div className="text-muted-foreground text-xs">
+                          Starts day +{ph.startOffsetDays} • {ph.frequency}
+                        </div>
+                        <div className="text-muted-foreground text-xs">{ph.rationale}</div>
+                      </div>
+                    ))}
                   </div>
                 )}
-
-                {/* Improve accuracy checklist */}
-                <div className="mt-3 space-y-2">
-                  <div className="text-foreground text-xs font-medium">Improve accuracy</div>
-                  <ul className="text-foreground list-disc space-y-1 pl-5 text-xs">
-                    <li>
-                      Connect Instagram for analytics{' '}
-                      <Button variant="link" type="button" onClick={() => navigate('/brands')}>
-                        Connect now
-                      </Button>
-                    </li>
-                    <li>
-                      Run brand analysis to enrich context{' '}
-                      <Button
-                        variant="link"
-                        type="button"
-                        onClick={async () => {
-                          if (!brand) return;
-                          try {
-                            await brandApi.startBrandAnalysis(brand.id, {
-                              force: true,
-                              maxPosts: 30,
-                            });
-                            toast.success('Brand analysis started');
-                          } catch (e) {
-                            console.error(e);
-                            toast.error('Failed to start brand analysis');
-                          }
-                        }}
-                      >
-                        Start
-                      </Button>
-                    </li>
-                    <li>
-                      Schedule & publish a few posts to unlock data{' '}
-                      <Button variant="link" type="button" onClick={() => navigate('/content')}>
-                        Go to content
-                      </Button>
-                    </li>
-                  </ul>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Forecast</CardTitle>
+                  <Badge
+                    variant={predictionsMeta?.basis === 'historical' ? 'default' : 'secondary'}
+                  >
+                    {predictionsMeta?.basis === 'historical' ? 'From data' : 'Heuristic'}
+                  </Badge>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              </CardHeader>
+              <CardContent className="text-muted-foreground space-y-2 text-sm">
+                {!predictions ? (
+                  <>
+                    <div className="bg-muted h-4 w-1/2 animate-pulse rounded" />
+                    <div className="bg-muted h-4 w-1/3 animate-pulse rounded" />
+                  </>
+                ) : (
+                  <div className="space-y-2 text-sm">
+                    <div>Estimated posts: {predictions.estimatedPosts}</div>
+                    {predictionsMeta?.basis === 'historical' ? (
+                      <>
+                        <div>
+                          Reach range: {predictions.reach.low.toLocaleString()} –{' '}
+                          {predictions.reach.high.toLocaleString()}
+                        </div>
+                        <div>Engagement rate: {(predictions.engagementRate * 100).toFixed(2)}%</div>
+                        <div className="text-muted-foreground text-xs">
+                          Based on your recent brand performance (samples:{' '}
+                          {predictionsMeta.samples.reach} reach,{' '}
+                          {predictionsMeta.samples.engagement} engagement).
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-muted-foreground text-xs">
+                        We’ll calibrate reach and engagement after your first scheduled/published
+                        posts.
+                      </div>
+                    )}
 
-      {/* Tips */}
-      <Card>
-        <CardContent className="flex items-start gap-3 pt-6 text-sm">
-          <Lightbulb className="mt-0.5 h-4 w-4" />
-          <div>
-            <div className="font-medium">Tips</div>
-            <p>
-              Your strategy is automatically generated based on your campaign goals and timeline.
-              You can manually edit content pillars (add, remove, or adjust percentages) to
-              fine-tune your campaign before continuing.
-            </p>
+                    {/* Improve accuracy checklist */}
+                    <div className="mt-3 space-y-2">
+                      <div className="text-foreground text-xs font-medium">Improve accuracy</div>
+                      <ul className="text-foreground list-disc space-y-1 pl-5 text-xs">
+                        <li>
+                          Connect Instagram for analytics{' '}
+                          <Button variant="link" type="button" onClick={() => navigate('/brands')}>
+                            Connect now
+                          </Button>
+                        </li>
+                        <li>
+                          Run brand analysis to enrich context{' '}
+                          <Button
+                            variant="link"
+                            type="button"
+                            onClick={async () => {
+                              if (!brand) return;
+                              try {
+                                await brandApi.startBrandAnalysis(brand.id, {
+                                  force: true,
+                                  maxPosts: 30,
+                                });
+                                toast.success('Brand analysis started');
+                              } catch (e) {
+                                console.error(e);
+                                toast.error('Failed to start brand analysis');
+                              }
+                            }}
+                          >
+                            Start
+                          </Button>
+                        </li>
+                        <li>
+                          Schedule & publish a few posts to unlock data{' '}
+                          <Button variant="link" type="button" onClick={() => navigate('/content')}>
+                            Go to content
+                          </Button>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      <div className="flex justify-between">
-        <Button variant="outline" onClick={prevStep}>
-          Back
-        </Button>
-        <Button onClick={onContinue} disabled={!valid}>
-          Continue
-        </Button>
-      </div>
+          {/* Tips */}
+          <Card>
+            <CardContent className="flex items-start gap-3 pt-6 text-sm">
+              <Lightbulb className="mt-0.5 h-4 w-4" />
+              <div>
+                <div className="font-medium">Tips</div>
+                <p>
+                  Your strategy is automatically generated based on your campaign goals and
+                  timeline. You can manually edit content pillars (add, remove, or adjust
+                  percentages) to fine-tune your campaign before continuing.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={prevStep}>
+              Back
+            </Button>
+            <Button onClick={onContinue} disabled={!valid}>
+              Continue
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

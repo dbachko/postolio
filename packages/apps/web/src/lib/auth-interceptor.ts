@@ -54,12 +54,27 @@ export class AuthInterceptor {
   }
 
   /**
+   * Check if user has auth cookies (indicating they're logged in)
+   * This is a simple heuristic to avoid noisy refresh attempts when not logged in
+   */
+  private static hasAuthCookies(): boolean {
+    // Check if auth_token or refresh_token cookies exist
+    return document.cookie.includes('auth_token') || document.cookie.includes('refresh_token');
+  }
+
+  /**
    * Refresh token if needed (throttled)
    * Only refreshes if:
+   * - User appears to be logged in (has auth cookies)
    * - More than 11 minutes since last refresh
    * - No refresh currently in progress
    */
   private static async refreshIfNeeded(): Promise<void> {
+    // Skip refresh if user doesn't appear to be logged in
+    if (!this.hasAuthCookies()) {
+      return;
+    }
+
     const now = Date.now();
     const timeSinceLastRefresh = now - this.lastRefreshTime;
 

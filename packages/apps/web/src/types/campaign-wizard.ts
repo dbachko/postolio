@@ -1,3 +1,5 @@
+import type { MutableRefObject } from 'react';
+
 export type CampaignType =
   | 'promotional'
   | 'educational'
@@ -38,6 +40,7 @@ export interface CampaignWizardState {
   acceptedRecommendations?: string[];
   saveStatus: 'saved' | 'saving' | 'error' | 'idle';
   skipUnsavedWarning: boolean;
+  allowNavigationRef?: MutableRefObject<boolean>; // Ref to allow navigation without warning
   draftId?: string;
   seasonalityAssist: boolean;
   // Persisted AI strategy results to avoid losing them on refresh/navigation

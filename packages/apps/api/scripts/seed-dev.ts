@@ -96,6 +96,12 @@ async function main() {
     }));
 
   console.log(`==> Creating brand "${brandName}" for user ${user.id}`);
+
+  // Generate realistic Instagram profile data
+  const instagramUsername = brandName.toLowerCase().replace(/\s+/g, '_') + '_official';
+  const instagramAccountId = `IG_${Math.random().toString(36).slice(2, 15)}`;
+  const instagramPageId = `FB_${Math.random().toString(36).slice(2, 15)}`;
+
   const brand = await prisma.brand.create({
     data: {
       name: brandName,
@@ -107,6 +113,21 @@ async function main() {
         hashtagStrategy: 'moderate',
       },
       postingTimezone: 'UTC',
+      // Instagram connection data
+      instagramPageId,
+      instagramAccountId,
+      instagramProfileData: {
+        id: instagramAccountId,
+        username: instagramUsername,
+        name: brandName,
+        account_type: 'BUSINESS',
+        media_count: Math.floor(Math.random() * 300) + 50,
+        followers_count: Math.floor(Math.random() * 10000) + 1000,
+        follows_count: Math.floor(Math.random() * 500) + 100,
+        biography: `Official account for ${brandName}. Sharing amazing content daily! 🚀`,
+        website: `https://${brandName.toLowerCase().replace(/\s+/g, '')}.com`,
+        profile_picture_url: `https://i.pravatar.cc/150?u=${instagramAccountId}`,
+      },
     },
   });
 

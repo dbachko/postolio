@@ -77,7 +77,12 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     return undefined;
   };
   const ConfigureSchema = z.object({
-    name: z.string().min(1).optional(), // Optional: Auto-generated if not provided
+    name: z
+      .string()
+      .min(1)
+      .optional()
+      .or(z.literal(''))
+      .transform((val) => (val === '' ? undefined : val)), // Transform empty string to undefined for auto-generation
     brandId: z.string().min(1),
     campaignType: z
       .enum(['promotional', 'educational', 'seasonal', 'thought_leadership', 'custom'])

@@ -90,6 +90,11 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
             };
           }
           setDetails(map);
+
+          // Auto-select the top theme if no themes are currently selected
+          if (themes.length === 0 && dedup.length > 0) {
+            onChange([dedup[0] as string]);
+          }
         }
       } catch (_err) {
         if (!isCancelled) setError('Failed to load suggestions');
@@ -109,6 +114,10 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
   const onAcceptTop = () => {
     const toAdd = chips.filter((t) => !themes.includes(t)).slice(0, 5);
     if (toAdd.length) onChange([...themes, ...toAdd]);
+  };
+  const onClearAndRoll = () => {
+    onChange([]);
+    setReloadNonce((n) => n + 1);
   };
 
   return (
@@ -135,6 +144,15 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
             disabled={isLoading || chips.length === 0}
           >
             Accept Top
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={onClearAndRoll}
+            disabled={isLoading}
+          >
+            Clear & Roll
           </Button>
           <div className="text-muted-foreground ml-auto flex items-center gap-1 text-xs">
             <TrendingUp className="h-3 w-3" />
