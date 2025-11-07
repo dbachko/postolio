@@ -13,6 +13,7 @@ import {
 import { TimezoneService } from './timezone.js';
 import { DEFAULT_TIMEZONE } from '../constants/timezone.js';
 import { schedulerService } from './scheduler.js';
+import { generateCampaignName } from '../utils/campaign-naming.js';
 import {
   StatusBroadcaster,
   type CampaignStatus as StatusBroadcasterCampaignStatus,
@@ -27,7 +28,7 @@ const prisma = getDatabaseClient();
 const editSessions = new Map<string, { userId: string; startedAt: Date }>();
 
 export interface CampaignConfig {
-  name: string;
+  name?: string; // Optional: Auto-generated if not provided
   brandId: string;
   duration: {
     start: Date;
@@ -246,10 +247,21 @@ class CampaignService {
       const { assignCampaignColor } = await import('../utils/campaign-colors.js');
       const assignedColor = assignCampaignColor(existingCampaigns.map((c) => c.color));
 
+      // Auto-generate campaign name if not provided
+      const campaignName =
+        config.name && config.name.trim().length > 0
+          ? config.name
+          : generateCampaignName({
+              campaignType: config.campaignType || 'custom',
+              themes: config.themes || [],
+              startDate: config.duration.start.toISOString(),
+              timezone: brandTimezone, // Use brand's timezone for accurate month/year
+            });
+
       // Create campaign with 'creating' status
       const campaign = await prisma.campaign.create({
         data: {
-          name: config.name,
+          name: campaignName,
           brandId: config.brandId,
           status: 'creating',
           priority: config.priority || 5,
@@ -1464,10 +1476,8 @@ class CampaignService {
   validateCampaignConfig(config: CampaignConfig): string[] {
     const errors: string[] = [];
 
-    if (!config.name || config.name.trim().length === 0) {
-      errors.push('Campaign name is required');
-    }
-
+    // Campaign name is now optional (auto-generated if not provided)
+    // Only validate length if a name is provided
     if (config.name && config.name.length > 100) {
       errors.push('Campaign name must be less than 100 characters');
     }

@@ -4,7 +4,7 @@ import { campaignService, type CampaignConfig } from '../services/campaign.js';
 import { CampaignStatus } from '@postolio/database';
 // import { campaignJobService } from '../services/campaign-jobs.js';
 import { pauseResumeRateLimiter, campaignRateLimiter } from '../services/rate-limiter.js';
-import { validateBody } from '../middleware/validation.js';
+import { validateBody, validateQuery } from '../middleware/validation.js';
 import { z } from 'zod';
 import { validateCampaignUpdateRequest } from '../utils/campaign-validation.js';
 import { regenerationService } from '../services/regeneration-queue.js';
@@ -15,6 +15,8 @@ import {
   analyzeGoal as analyzeGoalSvc,
   generateStrategy as generateStrategySvc,
 } from '../services/campaign-strategy.js';
+import { suggestGoals, ensureGoals } from '../services/goal-suggester.js';
+import type { CampaignType } from '../services/goal-templates.js';
 
 import { getDatabaseClient } from '../config/database.js';
 import { instagramService } from '../services/instagram.js';
@@ -23,7 +25,7 @@ import { campaignSlidingWindowService } from '../services/campaign-sliding-windo
 const prisma = getDatabaseClient();
 
 interface ConfigureCampaignBody {
-  name: string;
+  name?: string; // Optional: Auto-generated if not provided
   brandId: string;
   // NEW: Campaign type selection (Step 1 of wizard)
   campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
@@ -36,7 +38,7 @@ interface ConfigureCampaignBody {
   style?: string;
   postingTime: string;
   priority?: number;
-  goals?: string;
+  goals?: string | string[];
   seasonalityAssist?: boolean;
   // NEW: Optional structured data from wizard
   promotionDetails?: {
@@ -75,7 +77,7 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     return undefined;
   };
   const ConfigureSchema = z.object({
-    name: z.string().min(1),
+    name: z.string().min(1).optional(), // Optional: Auto-generated if not provided
     brandId: z.string().min(1),
     campaignType: z
       .enum(['promotional', 'educational', 'seasonal', 'thought_leadership', 'custom'])
@@ -198,8 +200,38 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           `Campaign configuration using timezone: ${brandTimezone} for brand ${body.brandId}`
         );
 
+        // Auto-generate goals if none provided (Lazy Defaults approach)
+        let finalGoals: string | string[] | undefined = body.goals;
+        if (
+          body.campaignType &&
+          (!finalGoals || (Array.isArray(finalGoals) && finalGoals.length === 0))
+        ) {
+          try {
+            // Convert string goals to array format for ensureGoals
+            const goalsArray: string[] | undefined = Array.isArray(finalGoals)
+              ? finalGoals
+              : typeof finalGoals === 'string'
+                ? [finalGoals]
+                : undefined;
+
+            const generatedGoals = await ensureGoals({
+              goals: goalsArray,
+              campaignType: body.campaignType as CampaignType,
+              brandId: body.brandId,
+            });
+            finalGoals = generatedGoals;
+            console.log(`Auto-generated ${generatedGoals.length} goals for campaign`, {
+              brandId: body.brandId,
+              campaignType: body.campaignType,
+              goals: generatedGoals,
+            });
+          } catch (error) {
+            console.error('Failed to auto-generate goals, proceeding without goals', { error });
+          }
+        }
+
         // Convert date strings to Date objects with timezone awareness
-        const goalsText = Array.isArray(body.goals) ? body.goals.join('; ') : body.goals;
+        const goalsText = Array.isArray(finalGoals) ? finalGoals.join('; ') : finalGoals;
 
         const config: CampaignConfig = {
           name: body.name,
@@ -379,6 +411,55 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (error) {
         request.log.error({ error }, 'generate-strategy failed');
         return reply.code(500).send({ error: 'Failed to generate strategy' });
+      }
+    }
+  );
+
+  // Suggest campaign goals (AI-powered suggestions)
+  const SuggestGoalsSchema = z.object({
+    brandId: z.string().min(1),
+    campaignType: z.enum([
+      'promotional',
+      'educational',
+      'seasonal',
+      'thought_leadership',
+      'custom',
+    ]),
+    limit: z
+      .string()
+      .optional()
+      .transform((val) => (val ? parseInt(val, 10) : undefined))
+      .refine((val) => val === undefined || (val >= 1 && val <= 20), {
+        message: 'Limit must be between 1 and 20',
+      }),
+  });
+
+  fastify.get<{ Querystring: z.infer<typeof SuggestGoalsSchema> }>(
+    '/suggest-goals',
+    { preHandler: [fastify.authenticate, validateQuery(SuggestGoalsSchema)] },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { brandId, campaignType, limit } = request.query;
+
+        // Verify brand ownership
+        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+        if (!brand) return reply.code(403).send({ error: 'Access denied' });
+
+        // Get goal suggestions
+        const suggestions = await suggestGoals({
+          brandId,
+          campaignType: campaignType as CampaignType,
+          limit,
+        });
+
+        return reply.send({
+          success: true,
+          suggestions,
+        });
+      } catch (error) {
+        request.log.error({ error }, 'suggest-goals failed');
+        return reply.code(500).send({ error: 'Failed to suggest goals' });
       }
     }
   );

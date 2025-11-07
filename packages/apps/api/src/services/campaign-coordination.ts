@@ -33,7 +33,7 @@ export interface ResourceAllocation {
 }
 
 export interface CampaignConfigWithPriority {
-  name: string;
+  name?: string; // Optional: Auto-generated if not provided
   brandId: string;
   config: {
     duration: { start: string; end: string };

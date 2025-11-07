@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/button';
 import { WizardProgress } from './WizardProgress';
 import { Step1TypeSelection } from './steps/Step1TypeSelection';
 import { Step2CampaignBrief } from './steps/Step2CampaignBrief';
-import { Step3StrategyReview } from './steps/Step3StrategyReview';
-import { Step4Timeline } from './steps/Step4Timeline';
-import { Step5Review } from './steps/Step5Review';
+import { Step3ContentThemes } from './steps/Step3ContentThemes';
+import { Step4ImagePreferences } from './steps/Step4ImagePreferences';
+import { Step5StrategyReview } from './steps/Step5StrategyReview';
+import { Step6TimelineReview } from './steps/Step6TimelineReview';
+import { Step7Review } from './steps/Step7Review';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { httpPost } from '../../lib/api';
 import { HelpCircle } from 'lucide-react';
@@ -133,9 +135,11 @@ export function CampaignWizard() {
           <WizardProgress currentStep={currentStep} />
           {currentStep === 1 && <Step1TypeSelection />}
           {currentStep === 2 && <Step2CampaignBrief />}
-          {currentStep === 3 && <Step3StrategyReview />}
-          {currentStep === 4 && <Step4Timeline />}
-          {currentStep === 5 && <Step5Review />}
+          {currentStep === 3 && <Step3ContentThemes />}
+          {currentStep === 4 && <Step4ImagePreferences />}
+          {currentStep === 5 && <Step5StrategyReview />}
+          {currentStep === 6 && <Step6TimelineReview />}
+          {currentStep === 7 && <Step7Review />}
         </CardContent>
       </Card>
     </div>

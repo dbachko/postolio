@@ -174,6 +174,40 @@ const brandAnalysisRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // Get brand-specific visual styles for AI image generation
+  fastify.get<{ Params: { brandId: string } }>(
+    '/:brandId/visual-styles',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { brandId } = request.params;
+      try {
+        const res = await doc.send(
+          new QueryCommand({
+            TableName: PROFILES_TABLE,
+            KeyConditionExpression: 'PK = :pk',
+            ExpressionAttributeValues: { ':pk': profilePk(brandId) },
+            ScanIndexForward: false,
+            Limit: 1,
+          })
+        );
+        const item = res.Items?.[0];
+        if (!item) {
+          return reply.send({ inferredStyles: [], hasAnalysis: false });
+        }
+        const profile = (item.profile || item) as {
+          visual?: {
+            inferredStyles?: Array<{ emoji: string; title: string; description: string }>;
+          };
+        };
+        const inferredStyles = profile.visual?.inferredStyles || [];
+        return reply.send({ inferredStyles, hasAnalysis: true });
+      } catch (e) {
+        request.log.error({ err: e }, 'Failed to fetch visual styles');
+        return reply.code(500).send({ error: 'Failed to fetch visual styles' });
+      }
+    }
+  );
+
   // Profile list
   fastify.get<{ Params: { brandId: string }; Querystring: { limit?: number; cursor?: string } }>(
     '/:brandId/profiles',

@@ -5,6 +5,8 @@ export type CampaignType =
   | 'thought_leadership'
   | 'custom';
 
+export type ImageSource = 'ai' | 'assets' | 'mix';
+
 export interface PromotionDetails {
   discountPercentage?: number;
   promoCode?: string;
@@ -17,7 +19,7 @@ export interface Timeline {
 }
 
 export interface CampaignWizardState {
-  currentStep: number; // 1..5
+  currentStep: number; // 1..6 (updated for 6-step wizard)
   brandId: string | null;
   name: string;
   campaignType: CampaignType | null;
@@ -25,6 +27,7 @@ export interface CampaignWizardState {
   timeline: Timeline | null;
   themes: string[];
   style: string;
+  imageSource: ImageSource | null; // NEW: Image source preference
   frequency: string; // allow custom schedules
   postingTime: string; // HH:mm
   priority: number;

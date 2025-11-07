@@ -41,7 +41,7 @@ function computeSchedule(start: string, end: string, frequency: string): string[
   return [];
 }
 
-export function Step4Timeline() {
+export function Step6TimelineReview() {
   const { timeline, frequency, postingTime, updateField, prevStep, nextStep } = useCampaignWizard();
 
   const items = useMemo(() => {

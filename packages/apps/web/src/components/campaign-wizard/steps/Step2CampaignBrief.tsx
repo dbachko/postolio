@@ -1,6 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
-import { ThemeChipInput } from '../shared/ThemeChipInput';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -13,19 +12,16 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { AutoSaveIndicator } from '../shared/AutoSaveIndicator';
-import { StyleCardGroup } from '../shared/StyleCardGroup';
 import { FrequencyToggleGroup } from '../shared/FrequencyToggleGroup';
 import { TimeQuickPick } from '../shared/TimeQuickPick';
-import { GoalsListInput } from '../shared/GoalsListInput';
+import { GoalCardGrid } from '../shared/GoalCardGrid';
 
 export function Step2CampaignBrief() {
   const {
-    name,
+    brandId,
     campaignType,
     goals,
     timeline,
-    themes,
-    style,
     frequency,
     postingTime,
     promotionDetails,
@@ -35,31 +31,17 @@ export function Step2CampaignBrief() {
     nextStep,
   } = useCampaignWizard();
 
-  const [goalsList, setGoalsList] = useState<string[]>(() =>
-    goals && goals.length ? goals : ['']
-  );
-
-  // Keep local list in sync if draft hydration changes wizard.goals externally
-  useEffect(() => {
-    if (!Array.isArray(goals)) return;
-    if (goals.join('\n') !== goalsList.join('\n')) {
-      setGoalsList(goals.length ? goals : ['']);
-    }
-  }, [goals, goalsList]);
-
   const canContinue = useMemo(() => {
     return (
-      goalsList.some((g) => g.trim().length > 0) &&
+      goals.length > 0 &&
       !!timeline?.startDate &&
       !!timeline?.endDate &&
       new Date(timeline.endDate) > new Date(timeline.startDate) &&
-      themes.length > 0 &&
       frequency !== ''
     );
-  }, [goalsList, timeline?.startDate, timeline?.endDate, themes.length, frequency]);
+  }, [goals, timeline?.startDate, timeline?.endDate, frequency]);
 
   const handleContinue = () => {
-    updateField('goals', goalsList);
     nextStep();
   };
 
@@ -67,9 +49,9 @@ export function Step2CampaignBrief() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Campaign Brief</h2>
+          <h2 className="text-xl font-semibold">Goals & Timeline</h2>
           <p className="text-muted-foreground text-sm">
-            Tell us about your goals, timing, and themes.
+            Define your campaign goals, timeline, and posting schedule
           </p>
         </div>
         <AutoSaveIndicator />
@@ -77,32 +59,22 @@ export function Step2CampaignBrief() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Basic Info</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Label htmlFor="campaign-name">Campaign Name</Label>
-          <Input
-            id="campaign-name"
-            type="text"
-            placeholder="e.g., Holiday Sale 2025"
-            value={name}
-            onChange={(e) => updateField('name', e.target.value)}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Goals</CardTitle>
+          <CardTitle>Campaign Goals</CardTitle>
         </CardHeader>
         <CardContent>
-          <GoalsListInput
-            goals={goalsList}
-            onChange={(g) => {
-              setGoalsList(g);
-              updateField('goals', g);
-            }}
-          />
+          {brandId && campaignType ? (
+            <GoalCardGrid
+              brandId={brandId}
+              campaignType={campaignType}
+              selectedGoals={goals}
+              onChange={(g) => updateField('goals', g)}
+              maxGoals={5}
+            />
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              Please select a campaign type first to see goal suggestions
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -167,26 +139,14 @@ export function Step2CampaignBrief() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Themes & Style</CardTitle>
+          <CardTitle>Posting Schedule</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>
-              Themes{' '}
-              <span className="text-destructive" aria-hidden>
-                *
-              </span>
-            </Label>
-            <ThemeChipInput themes={themes} onChange={(t) => updateField('themes', t)} />
-          </div>
-          <StyleCardGroup value={style} onChange={(v) => updateField('style', v)} />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <FrequencyToggleGroup
-              value={frequency}
-              onChange={(v) => updateField('frequency', v as any)}
-            />
-            <TimeQuickPick value={postingTime} onChange={(v) => updateField('postingTime', v)} />
-          </div>
+        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <FrequencyToggleGroup
+            value={frequency}
+            onChange={(v) => updateField('frequency', v as any)}
+          />
+          <TimeQuickPick value={postingTime} onChange={(v) => updateField('postingTime', v)} />
         </CardContent>
       </Card>
 

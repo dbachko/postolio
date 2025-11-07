@@ -5,10 +5,17 @@ export const TextSectionSchema = z.object({
   styleNotes: z.array(z.string()).default([]).optional(),
 });
 
+export const InferredStyleSchema = z.object({
+  emoji: z.string(),
+  title: z.string(),
+  description: z.string(),
+});
+
 export const VisualSectionSchema = z.object({
   palette: z.array(z.string()).default([]).optional(),
   motifs: z.array(z.string()).default([]).optional(),
   composition: z.array(z.string()).default([]).optional(),
+  inferredStyles: z.array(InferredStyleSchema).default([]).optional(),
 });
 
 export const OverlaySchema = z.object({

@@ -4,10 +4,12 @@ interface Props {
 
 const steps = [
   { id: 1, label: 'Type' },
-  { id: 2, label: 'Brief' },
-  { id: 3, label: 'Strategy' },
-  { id: 4, label: 'Timeline' },
-  { id: 5, label: 'Review' },
+  { id: 2, label: 'Goals & Timeline' },
+  { id: 3, label: 'Themes' },
+  { id: 4, label: 'Images' },
+  { id: 5, label: 'Strategy' },
+  { id: 6, label: 'Timeline' },
+  { id: 7, label: 'Review' },
 ];
 
 export function WizardProgress({ currentStep }: Props) {

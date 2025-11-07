@@ -5,6 +5,7 @@ import { runTextExtractor } from './pipeline/text-extractor';
 import { runTopicEntityExtractor } from './pipeline/topic-entity-extractor';
 import { runEngagementCorrelationFromPosts } from './pipeline/engagement-correlation';
 import { runVisualExtractor } from './pipeline/visual-extractor';
+import { inferVisualStyles } from './pipeline/style-inference';
 import { synthesizeProfile } from './pipeline/synthesis';
 import { LearningRepository } from './dynamo/learning-repo';
 import { validateProfile, type BrandStyleProfile } from './models/profile-schema';
@@ -129,6 +130,13 @@ export class BrandAnalysisOrchestrator {
         .filter((u: unknown): u is string => typeof u === 'string' && u.length > 0)
         .slice(0, 10);
       const visualOut = await runVisualExtractor({ mediaUrls });
+
+      // Infer brand-specific visual styles for AI image generation
+      const styleOut = await inferVisualStyles({
+        palette: visualOut.palette,
+        motifs: visualOut.motifs,
+        composition: visualOut.composition,
+      });
 
       // Determine next version
       const latestProfile = await this.profiles.getLatest(brandId);
@@ -287,6 +295,7 @@ export class BrandAnalysisOrchestrator {
           palette: visualOut.palette,
           motifs: visualOut.motifs,
           composition: visualOut.composition,
+          inferredStyles: styleOut.inferredStyles,
         };
       }
 

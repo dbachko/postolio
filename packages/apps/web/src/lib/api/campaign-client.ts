@@ -46,6 +46,19 @@ export class CampaignClient {
     return this.request('/api/campaigns/strategy', { method: 'POST', body: JSON.stringify(body) });
   }
 
+  suggestGoals(params: {
+    brandId: string;
+    campaignType: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
+    limit?: number;
+  }) {
+    const queryParams = new URLSearchParams({
+      brandId: params.brandId,
+      campaignType: params.campaignType,
+      ...(params.limit ? { limit: params.limit.toString() } : {}),
+    });
+    return this.request(`/api/campaigns/suggest-goals?${queryParams.toString()}`);
+  }
+
   listCampaigns(brandId?: string) {
     const url = brandId ? `/api/campaigns?brandId=${brandId}` : '/api/campaigns';
     return this.request(url);

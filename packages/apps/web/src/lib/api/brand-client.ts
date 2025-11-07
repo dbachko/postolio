@@ -91,6 +91,16 @@ export class BrandClient {
     return this.request(`/api/brands/${brandId}/analysis/profile`);
   }
 
+  getBrandVisualStyles(brandId: string): Promise<{
+    inferredStyles: Array<{ emoji: string; title: string; description: string }>;
+    hasAnalysis: boolean;
+  }> {
+    return this.request(`/api/brands/${brandId}/analysis/visual-styles`) as Promise<{
+      inferredStyles: Array<{ emoji: string; title: string; description: string }>;
+      hasAnalysis: boolean;
+    }>;
+  }
+
   // Style freeze core flag
   getFreezeCore(brandId: string) {
     return this.request(`/api/brands/${brandId}/style/freeze-core`);

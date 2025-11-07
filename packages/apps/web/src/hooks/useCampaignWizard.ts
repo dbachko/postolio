@@ -30,6 +30,7 @@ const initialState: CampaignWizardState = {
   timeline: null,
   themes: [],
   style: '',
+  imageSource: null, // NEW: Image source preference
   frequency: '',
   postingTime: '12:00',
   priority: 5,
@@ -48,8 +49,8 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()((
   ...initialState,
 
   setBrandId: (brandId) => set({ brandId }),
-  setStep: (step) => set({ currentStep: Math.max(1, Math.min(5, step)) }),
-  nextStep: () => set({ currentStep: Math.min(5, get().currentStep + 1) }),
+  setStep: (step) => set({ currentStep: Math.max(1, Math.min(7, step)) }),
+  nextStep: () => set({ currentStep: Math.min(7, get().currentStep + 1) }),
   prevStep: () => set({ currentStep: Math.max(1, get().currentStep - 1) }),
 
   setCampaignType: (type) => set({ campaignType: type }),

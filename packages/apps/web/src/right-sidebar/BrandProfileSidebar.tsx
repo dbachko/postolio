@@ -25,7 +25,12 @@ export function BrandProfileSidebar({ id }: { id?: string }) {
     createdAt: string;
     text?: { tone?: string[] };
     topics?: Array<{ value: string; count: number }>;
-    visual?: { palette?: string[]; motifs?: string[]; composition?: string[] };
+    visual?: {
+      palette?: string[];
+      motifs?: string[];
+      composition?: string[];
+      inferredStyles?: Array<{ emoji: string; title: string; description: string }>;
+    };
     overlays?: Array<{
       type: 'SEASONAL' | 'TRENDING' | 'CAMPAIGN';
       label?: string;
@@ -212,6 +217,26 @@ export function BrandProfileSidebar({ id }: { id?: string }) {
               <div className="text-muted-foreground text-xs">Composition</div>
               <div>{profile.visual?.composition?.join(', ') || '—'}</div>
             </div>
+            {profile.visual?.inferredStyles && profile.visual.inferredStyles.length > 0 && (
+              <div>
+                <div className="text-muted-foreground mb-2 text-xs">
+                  AI Image Styles (Brand-Matched)
+                </div>
+                <div className="space-y-2">
+                  {profile.visual.inferredStyles.map((style, idx) => (
+                    <div key={idx} className="rounded border p-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg" aria-hidden>
+                          {style.emoji}
+                        </span>
+                        <span className="text-sm font-medium">{style.title}</span>
+                      </div>
+                      <div className="text-muted-foreground mt-1 text-xs">{style.description}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {Array.isArray(profile.overlays) && profile.overlays.length > 0 && (
               <div>
                 <div className="text-foreground text-xs font-medium">Overlays</div>
