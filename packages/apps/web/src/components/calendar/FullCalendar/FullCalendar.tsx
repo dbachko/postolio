@@ -45,7 +45,7 @@ function FullCalendarImpl({
   const { tzRef, weekStartsOn } = useTimezoneMeta(brandTimezone);
   const items = useCalendarItems(content, placeholders);
   const filters = useCalendarFilters();
-  const events = useFilteredEvents(items, filters);
+  const events = useFilteredEvents(items, filters, tzRef.current);
 
   const calendarView = CALENDAR_VIEW_MAP[view] ?? 'month';
   const calendarDate = calendarView === 'agenda' ? new Date() : date;

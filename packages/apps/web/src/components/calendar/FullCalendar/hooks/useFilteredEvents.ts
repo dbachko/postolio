@@ -5,7 +5,8 @@ import { getEventBounds } from '../utils/timezone';
 
 export function useFilteredEvents(
   items: CalendarDataItem[],
-  filters: CalendarFilters
+  filters: CalendarFilters,
+  timezone: string
 ): CalendarEvent[] {
   const { campaigns, statuses, contentTypes, dateRange, searchQuery } = filters;
 
@@ -22,7 +23,7 @@ export function useFilteredEvents(
     const events: CalendarEvent[] = [];
 
     for (const item of filtered) {
-      const bounds = getEventBounds(item);
+      const bounds = getEventBounds(item, timezone);
       if (!bounds) continue;
 
       const record = item as unknown as Record<string, unknown>;
@@ -58,7 +59,7 @@ export function useFilteredEvents(
     }
 
     return events;
-  }, [items, campaigns, statuses, contentTypes, dateRange, searchQuery]);
+  }, [items, campaigns, statuses, contentTypes, dateRange, searchQuery, timezone]);
 }
 
 function buildTitle(item: CalendarDataItem, record: Record<string, unknown>): string {
