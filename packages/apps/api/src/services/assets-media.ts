@@ -16,6 +16,7 @@ export interface AssetUploadMetadata {
   source?: string;
   originalPrompt?: string;
   generatedAt?: Date;
+  publishedAt?: Date;
   tags?: string[];
   hideFromLibrary?: boolean;
   folderId?: string | null;
@@ -176,6 +177,7 @@ async function uploadBufferToAssets(
     title: metadata.originalPrompt,
     tags,
     folderId: metadata.folderId || undefined,
+    publishedAt: metadata.publishedAt?.toISOString(),
   });
 }
 

@@ -23,10 +23,6 @@ declare module 'fastify' {
       reply: import('fastify').FastifyReply
     ) => Promise<void>;
   }
-
-  interface FastifyRequest {
-    user?: import('@fastify/jwt').FastifyJWT['user'];
-  }
 }
 
 export {};

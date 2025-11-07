@@ -42,9 +42,9 @@ COPY --from=pruner /app/out/full/ ./
 # Create .turbo directories with proper permissions before building
 RUN mkdir -p packages/libs/database-assets/.turbo packages/libs/errors/.turbo packages/libs/logger/.turbo packages/apps/assets-api/.turbo
 
-# Build the assets app server (and any required deps per turbo pipeline)
-# Generate Prisma client for assets DB and build server
-RUN pnpm --filter=@postolio/database-assets run db:generate \
+# Build shared logger, generate Prisma client for assets DB, and build the server
+RUN pnpm --filter=@postolio/logger build \
+  && pnpm --filter=@postolio/database-assets run db:generate \
   && pnpm --filter=@postolio/assets-api run build:server
 
 

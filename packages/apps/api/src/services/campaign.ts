@@ -168,17 +168,15 @@ class CampaignService {
       const brandTimezone =
         overrideTimezone || (await TimezoneService.getBrandTimezone(config.brandId));
 
-      // Get today's date in the brand's timezone (start of day)
       const nowUTC = new Date();
-      const todayInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-      todayInBrandTz.setHours(0, 0, 0, 0);
-
-      // Convert the input start date to the same timezone for comparison
+      const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
       const startDateInBrandTz = TimezoneService.toLocal(config.duration.start, brandTimezone);
-      startDateInBrandTz.setHours(0, 0, 0, 0);
+      const toleranceMinutes = 5;
+      const earliestAllowedStart = new Date(
+        nowInBrandTz.getTime() - toleranceMinutes * 60 * 1000
+      );
 
-      // Compare dates in the same timezone context
-      if (startDateInBrandTz < todayInBrandTz) {
+      if (startDateInBrandTz < earliestAllowedStart) {
         throw new Error('Campaign start date cannot be in the past');
       }
 

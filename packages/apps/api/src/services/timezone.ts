@@ -95,7 +95,7 @@ export class TimezoneService {
       return brand.postingTimezone;
     }
 
-    if (brand?.user.timezone && !brand.user.timezoneAutoDetected) {
+    if (brand?.user.timezone && this.isValidTimezone(brand.user.timezone)) {
       return brand.user.timezone;
     }
 

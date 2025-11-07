@@ -199,14 +199,22 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         userExclude.forEach((tag) => excludeTags.add(tag));
       }
       if (excludeTags.size > 0) {
-        where.AND = where.AND || [];
-        where.AND.push({
+        const andConditions: Prisma.AssetWhereInput[] = [];
+        if (where.AND) {
+          if (Array.isArray(where.AND)) {
+            andConditions.push(...where.AND);
+          } else {
+            andConditions.push(where.AND);
+          }
+        }
+        andConditions.push({
           NOT: {
             tags: {
               hasSome: Array.from(excludeTags),
             },
           },
         });
+        where.AND = andConditions;
       }
 
       if (query.folderId) {
@@ -228,7 +236,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           include: {
             folder: true,
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { updatedAt: 'desc' },
           skip,
           take: limit,
         }),
@@ -369,6 +377,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         altText?: string;
         tags?: string[];
         folderId?: string;
+        publishedAt?: string;
       };
 
       if (!body.brandId) {
@@ -474,6 +483,18 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             folderId: resolvedFolderId,
           },
         });
+
+        if (body.publishedAt) {
+          const publishedDate = new Date(body.publishedAt);
+          if (!Number.isNaN(publishedDate.getTime())) {
+            await prismaAssets.$executeRaw`
+              UPDATE "assets"
+              SET "updatedAt" = ${publishedDate}
+              WHERE "id" = ${asset.id}
+            `;
+            asset.updatedAt = publishedDate;
+          }
+        }
 
         return {
           asset: {

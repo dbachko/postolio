@@ -55,6 +55,12 @@ interface PostDetailData {
       operationId?: string;
     };
   };
+  campaignId?: string | null;
+  campaign?: {
+    id: string;
+    name: string;
+    status?: string;
+  } | null;
 }
 
 const formatScheduledInput = (value?: string) =>
@@ -135,6 +141,7 @@ export function PostSidebar({
       imageUrl: post.imageUrl || '',
       scheduledAt: formatScheduledInput(post.scheduledAt),
     });
+    setSelectedCampaign(post.campaign?.id || post.campaignId || null);
     setHasChanges(false);
     formInitializedRef.current = true;
   }, [post]);
@@ -159,6 +166,7 @@ export function PostSidebar({
       hashtags?: string[];
       imageUrl?: string;
       scheduledAt?: string;
+      campaignId?: string | null;
     }) => contentApi.updateContent(data),
     onSuccess: (response) => {
       queryClient.setQueryData(['post', id], (oldData: PostDetailData | undefined) => {
@@ -191,6 +199,7 @@ export function PostSidebar({
         caption: formData.caption.trim(),
         hashtags: normalizeHashtags(formData.hashtags),
         imageUrl: formData.imageUrl || undefined,
+        campaignId: selectedCampaign || null,
         scheduledAt: scheduledUtc,
       });
     },
@@ -319,6 +328,7 @@ export function PostSidebar({
       caption: trimmedCaption,
       hashtags: normalizeHashtags(formData.hashtags),
       imageUrl: formData.imageUrl || undefined,
+      campaignId: selectedCampaign || null,
       ...(scheduledAtPayload ? { scheduledAt: scheduledAtPayload } : {}),
     });
   };

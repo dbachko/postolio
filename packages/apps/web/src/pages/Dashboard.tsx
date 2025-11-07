@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { CampaignProgress } from '@/components/CampaignProgress';
-import { AppEmptyState } from '@/components/AppEmptyState';
+import { Sparkles } from 'lucide-react';
 
 export function Dashboard() {
   const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore();
@@ -78,11 +78,20 @@ export function Dashboard() {
 
   if (brands.length === 0) {
     return (
-      <AppEmptyState
-        title="Welcome to Postolio"
-        description="Create your first brand to start campaigns, plan content, and track performance."
-        actions={[{ label: 'Create Your First Brand', to: '/brands', variant: 'default' }]}
-      />
+      <div className="flex flex-col items-center justify-center gap-6 py-16 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <Sparkles className="h-5 w-5 shrink-0" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-foreground text-xl font-semibold">Welcome to Postolio</h2>
+          <p className="text-muted-foreground text-sm">
+            Create your first brand to start campaigns, plan content, and track performance.
+          </p>
+        </div>
+        <Button size="lg" asChild>
+          <Link to="/brands">Create Your First Brand</Link>
+        </Button>
+      </div>
     );
   }
 

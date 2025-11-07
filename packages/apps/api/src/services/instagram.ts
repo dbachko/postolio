@@ -1210,6 +1210,7 @@ class InstagramService {
           generatedAt: post.timestamp ? new Date(post.timestamp) : new Date(),
           source: 'instagram',
           originalPrompt: post.caption || 'Imported from Instagram',
+          publishedAt: post.timestamp ? new Date(post.timestamp) : undefined,
         });
 
         const imageDuration = Date.now() - imageStartTime;

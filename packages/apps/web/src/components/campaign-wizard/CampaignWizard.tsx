@@ -59,7 +59,7 @@ export function CampaignWizard() {
     );
   });
   const skipUnsavedWarning = useCampaignWizard((s) => s.skipUnsavedWarning);
-  const shouldWarn = hasUnsavedChanges && !skipUnsavedWarning && !allowNavigationRef.current;
+  const shouldWarn = hasUnsavedChanges && !skipUnsavedWarning;
 
   useEffect(() => {
     if (!hasUnsavedChanges && skipUnsavedWarning) {
@@ -72,6 +72,11 @@ export function CampaignWizard() {
     const blocker = useBlocker(when);
     useEffect(() => {
       if (blocker.state === 'blocked') {
+        const currentAllowRef = useCampaignWizard.getState().allowNavigationRef;
+        if (currentAllowRef?.current) {
+          blocker.proceed();
+          return;
+        }
         const proceed = window.confirm(message);
         if (proceed) blocker.proceed();
         else blocker.reset();
@@ -90,6 +95,8 @@ export function CampaignWizard() {
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (!shouldWarn) return;
+      const currentAllowRef = useCampaignWizard.getState().allowNavigationRef;
+      if (currentAllowRef?.current) return;
       e.preventDefault();
       e.returnValue = '';
     };

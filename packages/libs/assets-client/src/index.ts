@@ -63,6 +63,7 @@ export interface ImportAssetBase {
   altText?: string;
   tags?: string[];
   folderId?: string;
+  publishedAt?: string;
 }
 
 export interface ImportAssetFromUrlParams extends ImportAssetBase {
@@ -134,6 +135,7 @@ export class AssetsServiceClient {
       altText: params.altText,
       tags: params.tags,
       folderId: params.folderId,
+      publishedAt: params.publishedAt,
     };
 
     const response = await this.post<{ asset: AssetRecord }>('/assets/import', payload);
@@ -152,6 +154,7 @@ export class AssetsServiceClient {
       altText: params.altText,
       tags: params.tags,
       folderId: params.folderId,
+      publishedAt: params.publishedAt,
     };
 
     const response = await this.post<{ asset: AssetRecord }>('/assets/import', payload);

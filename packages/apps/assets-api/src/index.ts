@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
-import fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import fastify, { FastifyReply, FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
@@ -19,15 +19,16 @@ dotenv.config();
 const PORT = parseInt(process.env.ASSETS_API_PORT || '3002', 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
-const SERVICE_API_TOKEN =
+const serviceTokenFromEnv =
   process.env.ASSETS_SERVICE_TOKEN || process.env.SERVICE_API_TOKEN || process.env.SERVICE_TOKEN;
-if (!SERVICE_API_TOKEN) {
+if (!serviceTokenFromEnv) {
   throw new Error(
     'ASSETS_SERVICE_TOKEN (or SERVICE_API_TOKEN / SERVICE_TOKEN) must be provided for internal authentication'
   );
 }
+const SERVICE_API_TOKEN = serviceTokenFromEnv;
 
-export function buildFastify(): FastifyInstance {
+export function buildFastify() {
   const fastifyLogger = sharedLogger.child({
     service: 'assets-api',
     environment: NODE_ENV,
@@ -104,19 +105,19 @@ export function buildFastify(): FastifyInstance {
         ?.auth_token;
       const header = request.headers['authorization'];
       const authHeader = Array.isArray(header) ? header[0] : header;
-      let decoded: FastifyJWT['user'] | null = null;
+      type JwtUserPayload = FastifyJWT['user'];
+      const verifyToken = (token: string) => server.jwt.verify<JwtUserPayload>(token);
+      let decoded: JwtUserPayload | undefined;
 
       if (cookieToken) {
-        decoded = await server.jwt.verify(cookieToken);
+        decoded = await verifyToken(cookieToken);
       } else if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
-        decoded = await server.jwt.verify(token);
-      } else {
-        throw new Error('No authentication token provided');
+        decoded = await verifyToken(token);
       }
 
       if (!decoded) {
-        throw new Error('Invalid authentication payload');
+        throw new Error('No authentication token provided');
       }
 
       const normalizedUserId = decoded.userId || decoded.id;
@@ -148,9 +149,10 @@ export function buildFastify(): FastifyInstance {
       const token = Array.isArray(headerValue) ? headerValue[0] : headerValue;
       if (!token) {
         request.log.warn('Service authentication failed');
-        return reply.code(401).send({ error: 'Unauthorized' });
+        reply.code(401).send({ error: 'Unauthorized' });
+        return;
       }
-      const provided = Buffer.from(token);
+      const provided = Buffer.from(token as string);
       const expected = Buffer.from(SERVICE_API_TOKEN);
       if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
         request.log.warn('Service authentication failed');
