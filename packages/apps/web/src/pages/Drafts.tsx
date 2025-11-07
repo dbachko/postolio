@@ -15,6 +15,7 @@ import { useBrandStore } from '@/stores/brandStore';
 import { ContentCard } from '@/components/ContentCard';
 import { PencilLine } from 'lucide-react';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { AppEmptyState } from '@/components/AppEmptyState';
 
 type SortOption = 'lastModifiedDesc' | 'lastModifiedAsc';
 
@@ -54,9 +55,11 @@ export default function Drafts() {
 
   if (!selectedBrand) {
     return (
-      <div className="text-muted-foreground bg-background rounded border p-6">
-        Select or create a brand to manage drafts.
-      </div>
+      <AppEmptyState
+        title="Drafts live inside each brand"
+        description="Pick a brand to review drafts, schedule posts, or start something new."
+        actions={[{ label: 'Choose Brand', to: '/brands' }]}
+      />
     );
   }
 

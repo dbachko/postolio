@@ -474,8 +474,15 @@ jobs:
 
       - name: Build stack dependencies
         run: |
+          STACK="${{ matrix.stack }}"
+
+          # Ensure shared logger package is compiled for stacks that import it
+          if [[ "$STACK" == "api" || "$STACK" == "asset-library" ]]; then
+            pnpm --filter=@postolio/logger build
+          fi
+
           # Build shared libraries and services based on stack
-          case "${{ matrix.stack }}" in
+          case "$STACK" in
             "auth"|"scheduling"|"publishing")
               # Build shared libraries for microservices
               pnpm --filter=@postolio/database build || true

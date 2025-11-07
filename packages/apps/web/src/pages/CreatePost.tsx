@@ -1,6 +1,6 @@
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useBrandStore } from '@/stores/brandStore';
 import { PostSidebar } from '@/right-sidebar/PostSidebar';
+import { AppEmptyState } from '@/components/AppEmptyState';
 
 export function CreatePost() {
   const { selectedBrand } = useBrandStore();
@@ -8,9 +8,11 @@ export function CreatePost() {
   if (!selectedBrand) {
     return (
       <div className="px-6 py-10">
-        <Alert>
-          <AlertDescription>Select a brand before creating a post.</AlertDescription>
-        </Alert>
+        <AppEmptyState
+          title="Choose a brand to create a post"
+          description="Post drafts, approvals, and analytics are tied to a single brand."
+          actions={[{ label: 'Select Brand', to: '/brands' }]}
+        />
       </div>
     );
   }

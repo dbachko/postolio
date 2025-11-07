@@ -1,27 +1,17 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useBrandStore } from '../stores/brandStore';
 import { ContentCalendar } from '../components/ContentCalendar';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AppEmptyState } from '@/components/AppEmptyState';
 
 export function Content() {
   const { selectedBrand } = useBrandStore();
-  const navigate = useNavigate();
-
-  // Redirect to dashboard if no brand selected
-  useEffect(() => {
-    if (!selectedBrand) {
-      navigate('/dashboard');
-    }
-  }, [selectedBrand, navigate]);
 
   if (!selectedBrand) {
     return (
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>Please select a brand to view content calendar</AlertDescription>
-      </Alert>
+      <AppEmptyState
+        title="Select a brand to view the content calendar"
+        description="Choose which brand you want to plan content for to unlock scheduling, drafts, and automation."
+        actions={[{ label: 'Choose Brand', to: '/brands' }]}
+      />
     );
   }
 

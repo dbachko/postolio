@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { CampaignProgress } from '@/components/CampaignProgress';
+import { AppEmptyState } from '@/components/AppEmptyState';
 
 export function Dashboard() {
   const { brands, selectedBrand, setBrands, initializeSelectedBrand } = useBrandStore();
@@ -77,15 +78,11 @@ export function Dashboard() {
 
   if (brands.length === 0) {
     return (
-      <div className="py-12 text-center">
-        <h2 className="text-foreground mb-4 text-2xl font-bold">Welcome to Postolio</h2>
-        <p className="text-muted-foreground mb-6">
-          Get started by creating your first brand to begin generating content.
-        </p>
-        <Button asChild size="lg">
-          <Link to="/brands">Create Your First Brand</Link>
-        </Button>
-      </div>
+      <AppEmptyState
+        title="Welcome to Postolio"
+        description="Create your first brand to start campaigns, plan content, and track performance."
+        actions={[{ label: 'Create Your First Brand', to: '/brands', variant: 'default' }]}
+      />
     );
   }
 

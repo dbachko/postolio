@@ -6,6 +6,7 @@ import { useCampaignMutations } from '@/hooks/useCampaignMutations';
 import { CampaignDashboard } from './CampaignDashboard';
 import { CampaignCreate } from './CampaignCreate';
 import { CampaignDetails } from './CampaignDetails';
+import { AppEmptyState } from '@/components/AppEmptyState';
 
 type View = 'dashboard' | 'create' | 'details';
 
@@ -85,6 +86,16 @@ export default function CampaignsContainer() {
       fillWindowLoading={fillWindowMutation.isPending}
     />
   );
+
+  if (!selectedBrand) {
+    return (
+      <AppEmptyState
+        title="Set up a brand to run campaigns"
+        description="Audience targeting, messaging, and AI automation all depend on a selected brand."
+        actions={[{ label: 'Choose Brand', to: '/brands' }]}
+      />
+    );
+  }
 
   return currentView === 'create' ? create : currentView === 'details' ? details : dashboard;
 }

@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/select';
 import { normalizeHashtags, stripHashtagPrefixes } from '@/utils/hashtags';
 import { cn } from '@/lib/utils';
+import { AppEmptyState } from '@/components/AppEmptyState';
 
 interface PostDetailData {
   id: string;
@@ -476,9 +477,12 @@ export function PostSidebar({
           // Creation mode
           <div className="space-y-4">
             {!selectedBrand ? (
-              <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-                Please select a brand first
-              </div>
+              <AppEmptyState
+                title="Select a brand to create this post"
+                description="Post drafts, scheduling rules, and insights are tied to the brand you choose."
+                actions={[{ label: 'Choose Brand', to: '/brands' }]}
+                className="min-h-[280px]"
+              />
             ) : (
               <>
                 {/* Image Upload */}

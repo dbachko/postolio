@@ -13,10 +13,10 @@ import { Step4ImagePreferences } from './steps/Step4ImagePreferences';
 import { Step5StrategyReview } from './steps/Step5StrategyReview';
 import { Step6TimelineReview } from './steps/Step6TimelineReview';
 import { Step7Review } from './steps/Step7Review';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { httpPost } from '../../lib/api';
 import { HelpCircle } from 'lucide-react';
 import { WizardHelpDialog } from './shared/WizardHelpDialog';
+import { AppEmptyState } from '@/components/AppEmptyState';
 
 export function CampaignWizard() {
   // const location = useLocation();
@@ -117,9 +117,11 @@ export function CampaignWizard() {
 
   if (!brand) {
     return (
-      <Alert>
-        <AlertDescription>Please select a brand to create a campaign.</AlertDescription>
-      </Alert>
+      <AppEmptyState
+        title="Pick a brand to launch a campaign"
+        description="Campaign briefs, automations, and results stay aligned to the brand you choose."
+        actions={[{ label: 'Select Brand', to: '/brands' }]}
+      />
     );
   }
 

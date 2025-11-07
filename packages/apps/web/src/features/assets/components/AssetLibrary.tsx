@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState, useCallback } from 'react';
 import { assetsApi, type AssetType } from '@/features/assets/api/client';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { AppEmptyState } from '@/components/AppEmptyState';
 
 export interface AssetLibraryProps {
   brandId?: string;
@@ -45,13 +46,12 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
 
   if (!brandId) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground">
-            Please select a brand to view assets, or pass a brandId prop.
-          </p>
-        </div>
-      </div>
+      <AppEmptyState
+        title="Select a brand to browse assets"
+        description="Asset searches, uploads, and folders are scoped to an individual brand."
+        actions={[{ label: 'Choose Brand', to: '/brands' }]}
+        className="min-h-[360px]"
+      />
     );
   }
 

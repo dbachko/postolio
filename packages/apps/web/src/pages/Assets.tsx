@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
-import { Card, CardContent } from '@/components/ui/card';
 import AssetLibrary from '@/features/assets/components/AssetLibrary';
+import { AppEmptyState } from '@/components/AppEmptyState';
+import { Card, CardContent } from '@/components/ui/card';
 
 export function Assets() {
   const { selectedBrand } = useBrandStore();
@@ -12,11 +13,11 @@ export function Assets() {
     return (
       <div className="container mx-auto p-6">
         <PageHeader title="Asset Library" description="Manage your images and videos" />
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-muted-foreground">Please select a brand to view its assets.</p>
-          </CardContent>
-        </Card>
+        <AppEmptyState
+          title="Choose a brand to view assets"
+          description="Assets are organized per brand. Pick one to browse, upload, or reuse creative."
+          actions={[{ label: 'Go to Brands', to: '/brands' }]}
+        />
       </div>
     );
   }
