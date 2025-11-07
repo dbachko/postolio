@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { EventBridge, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { importImageFromExternalUrl } from '../services/assets-media.js';
+import { buildAnalysisAssetMetadata } from '../services/brand-analysis-assets.js';
 import { computePlaceholders } from '../services/placeholderService.js';
 import { instagramService } from '../services/instagram.js';
 
@@ -245,13 +246,12 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
                     p.media_url
                   ) {
                     try {
-                      const asset = await importImageFromExternalUrl(p.media_url, {
-                        source: 'midjourney',
+                      const metadata = await buildAnalysisAssetMetadata({
                         brandId: updatedBrand.id,
                         contentId: p.id,
-                        generatedAt: new Date(),
-                        originalPrompt: 'brand-analysis cache',
+                        generatedAt: p.timestamp ? new Date(p.timestamp) : new Date(),
                       });
+                      const asset = await importImageFromExternalUrl(p.media_url, metadata);
                       mediaUrl = asset.url;
                     } catch (e) {
                       request.log.warn(

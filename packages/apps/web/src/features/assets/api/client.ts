@@ -140,6 +140,14 @@ export const assetsApi = {
       description?: string;
       tags?: string[];
       folderId?: string | null;
+      fileName?: string;
+      mimeType?: string;
+      fileType?: 'image' | 'video';
+      fileSize?: number;
+      s3Key?: string;
+      width?: number;
+      height?: number;
+      duration?: number;
     }
   ): Promise<{ asset: Asset; message: string }> {
     const response = await fetch(`${API_BASE_URL}/assets/${id}`, {

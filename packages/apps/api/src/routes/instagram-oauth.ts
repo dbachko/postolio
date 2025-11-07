@@ -7,6 +7,7 @@ import { PublisherCredentialsService } from '../services/publisher-credentials.j
 import { TokenServiceClient } from '../clients/token-service-client.js';
 import { instagramService } from '../services/instagram.js';
 import { importImageFromExternalUrl } from '../services/assets-media.js';
+import { buildAnalysisAssetMetadata } from '../services/brand-analysis-assets.js';
 import { redisService } from '../services/redis.js';
 
 const prisma = getDatabaseClient();
@@ -434,13 +435,12 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
                 p.media_url
               ) {
                 try {
-                  const asset = await importImageFromExternalUrl(p.media_url, {
-                    source: 'analysis_import',
+                  const metadata = await buildAnalysisAssetMetadata({
                     brandId: updatedBrand.id,
                     contentId: p.id,
-                    generatedAt: new Date(),
-                    originalPrompt: 'brand-analysis cache',
+                    generatedAt: p.timestamp ? new Date(p.timestamp) : new Date(),
                   });
+                  const asset = await importImageFromExternalUrl(p.media_url, metadata);
                   mediaUrl = asset.url;
                 } catch (e) {
                   fastify.log.warn(

@@ -1,45 +1,39 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
-import { assetsApi } from '@/features/assets/api/client';
 import Uppy from '@uppy/core';
 import DashboardPlugin from '@uppy/dashboard';
 import AwsS3 from '@uppy/aws-s3';
-// Uppy v5 CSS is exported under the `css/` subpath via the package export map
 import '@uppy/core/css/style.css';
 import '@uppy/dashboard/css/style.css';
+import { assetsApi } from '@/features/assets/api/client';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import { Button } from '@/components/ui/button';
+import { X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 const IMAGE_UPLOAD_LIMIT = 10 * 1024 * 1024; // 10MB
 const VIDEO_UPLOAD_LIMIT = 500 * 1024 * 1024; // 500MB
 
-export interface UploadModalProps {
-  onClose: () => void;
-  brandId: string;
-  onUploaded?: () => void;
+interface AssetUploadSidebarProps {
+  id?: string; // brandId passed via sidebar router
 }
 
-export default function UploadModal({ onClose, brandId, onUploaded }: UploadModalProps) {
+export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
+  const { close } = useRightSidebarRouter();
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const s3KeyById = useRef<Map<string, string>>(new Map());
   const dashboardContainerRef = useRef<HTMLDivElement | null>(null);
   const dashboardPluginRef = useRef<any>(null);
-  const dropCopy = 'Drop your image here or %{browseFiles}';
+
+  const dropCopy = 'Drop files here or %{browseFiles}';
   const browseCopy = 'click to browse';
-  const restrictionCopy = 'Supports: JPEG, PNG, WebP, GIF (max 10MB)';
+  const restrictionCopy = 'Supports: JPEG, PNG, WebP, GIF (max 10MB) • Video up to 500MB';
   const pluralize = (count: number) => (count === 1 ? 0 : 1);
 
-  function inferS3KeyFromUploadURL(url?: string | null): string | undefined {
-    if (!url) return undefined;
-    try {
-      const u = new URL(url);
-      // '/bucket-key' → 'bucket-key'
-      return decodeURIComponent(u.pathname.replace(/^\//, ''));
-    } catch {
-      return undefined;
-    }
-  }
-
   const uppy = useMemo(() => {
+    if (!brandId) return null;
     const instance = new Uppy({
       autoProceed: false,
       debug: !!import.meta.env.DEV,
@@ -55,10 +49,8 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
       },
     });
 
-    // Presigned PUT uploads directly from the browser to S3
     (instance as any).use(AwsS3, {
       shouldUseMultipart: false,
-      // v5 signature includes RequestOptions second param; it's unused for presigned PUT
       getUploadParameters: async (file: any) => {
         const fileType = file.type?.startsWith('image/') ? 'image' : 'video';
         const limit = fileType === 'image' ? IMAGE_UPLOAD_LIMIT : VIDEO_UPLOAD_LIMIT;
@@ -89,17 +81,15 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
   }, [brandId]);
 
   useEffect(() => {
-    // Mount Dashboard plugin inline into our container
+    if (!uppy || !brandId) return;
     if (dashboardContainerRef.current && !dashboardPluginRef.current) {
       const opts: any = {
         inline: true,
         target: dashboardContainerRef.current,
         width: '100%',
         height: 440,
-        theme: 'auto',
-        animateOpenClose: false,
-        singleFileFullScreen: false,
         note: restrictionCopy,
+        theme: 'auto',
         proudlyDisplayPoweredByUppy: false,
         showProgressDetails: true,
         hideUploadButton: false,
@@ -107,23 +97,28 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
       (uppy as any).use(DashboardPlugin, opts);
       dashboardPluginRef.current = (uppy as any).getPlugin('Dashboard');
 
-      // Workaround for inline Dashboard staying hidden (ResizeObserver timing)
-      // See: https://github.com/transloadit/uppy/issues/4209
       try {
         const dash = dashboardPluginRef.current as any;
-        // Nudge visibility after layout settles
         requestAnimationFrame(() => {
           dash?.setPluginState?.({ areInsidesReadyToBeVisible: true, isHidden: false });
         });
-        // Also re‑nudge after a short delay in case of StrictMode re‑mounts
         setTimeout(() => {
           dash?.setPluginState?.({ areInsidesReadyToBeVisible: true, isHidden: false });
         }, 300);
-        // Final guard after 1000ms (Dashboard's own fallback window)
         setTimeout(() => {
           dash?.setPluginState?.({ areInsidesReadyToBeVisible: true, isHidden: false });
         }, 1100);
       } catch {}
+    }
+
+    function inferS3KeyFromUploadURL(url?: string | null): string | undefined {
+      if (!url) return undefined;
+      try {
+        const u = new URL(url);
+        return decodeURIComponent(u.pathname.replace(/^\//, ''));
+      } catch {
+        return undefined;
+      }
     }
 
     function probeDimensions(file: any): Promise<{ width?: number; height?: number }> {
@@ -147,8 +142,8 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
       setBusy(true);
       setError(null);
     };
+
     const onUploadSuccess = async (file: any) => {
-      // Prefer explicit key from our presign flow; otherwise infer from uploadURL (Companion flow)
       const s3Key =
         s3KeyById.current.get(file.id) ||
         inferS3KeyFromUploadURL(file?.response?.uploadURL) ||
@@ -167,85 +162,82 @@ export default function UploadModal({ onClose, brandId, onUploaded }: UploadModa
           height: dims.height,
         });
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to finalize asset');
+        const message = e instanceof Error ? e.message : 'Failed to finalize asset';
+        setError(message);
       }
     };
-    const onComplete = (result: any) => {
+
+    const onComplete = async (result: any) => {
       setBusy(false);
       if (result?.successful?.length > 0) {
-        onUploaded?.();
-        onClose();
+        toast.success('Assets uploaded');
+        await queryClient.invalidateQueries({ queryKey: ['assets'] });
+        close();
       }
     };
 
     uppy.on('upload', onUpload);
     uppy.on('upload-success', onUploadSuccess);
-    (uppy as any).on('complete', (r: any) => onComplete(r));
+    uppy.on('complete', onComplete);
+
     return () => {
       uppy.off('upload', onUpload);
       uppy.off('upload-success', onUploadSuccess);
       uppy.off('complete', onComplete);
-      // Uninstall Dashboard plugin before destroying uppy
       try {
         if (dashboardPluginRef.current) {
           (uppy as any).removePlugin(dashboardPluginRef.current);
           dashboardPluginRef.current = null;
         }
       } catch {}
-      // Properly tear down the Uppy instance
       try {
         uppy.cancelAll();
         uppy.destroy();
-      } catch {
-        // no-op
-      }
+      } catch {}
     };
-  }, [uppy, brandId, onUploaded, onClose]);
+  }, [uppy, brandId, close, queryClient]);
 
-  return (
-    <div className="pl-assets fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background w-full max-w-xl rounded-lg border p-6 shadow-lg">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Upload Assets</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="ring-offset-background focus-visible:ring-ring hover:bg-accent hover:text-accent-foreground inline-flex h-8 w-8 items-center justify-center rounded-md border text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-          >
+  if (!brandId) {
+    return (
+      <div className="flex h-full flex-col">
+        <header className="border-border flex items-center justify-between border-b px-4 py-3">
+          <h2 className="text-lg font-semibold">Upload Assets</h2>
+          <Button variant="ghost" size="icon" onClick={close} aria-label="Close sidebar">
             <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div
-          ref={dashboardContainerRef}
-          className="uppy-host relative"
-          style={{ minHeight: 440 }}
-        />
-
-        {busy && <div className="text-foreground mt-4 text-sm">Uploading…</div>}
-        {error && (
-          <div className="border-destructive/50 bg-destructive/10 text-destructive mt-4 rounded-md border p-3 text-sm">
-            {error}
-          </div>
-        )}
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={busy}
-            className="border-input hover:bg-accent rounded-md border px-4 py-2 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => uppy.upload()}
-            disabled={busy}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 disabled:opacity-50"
-          >
-            Start Upload
-          </button>
+          </Button>
+        </header>
+        <div className="text-muted-foreground flex flex-1 items-center justify-center px-4 text-sm">
+          Select a brand to upload assets.
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <header className="border-border flex items-center justify-between border-b px-4 py-3">
+        <div>
+          <h2 className="text-lg font-semibold">Upload Assets</h2>
+        </div>
+        <Button variant="ghost" size="icon" onClick={close} aria-label="Close sidebar">
+          <X className="h-4 w-4" />
+        </Button>
+      </header>
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        {error ? (
+          <div className="border-destructive/50 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm">
+            {error}
+          </div>
+        ) : null}
+        <div className="rounded-lg border border-dashed p-3">
+          <div ref={dashboardContainerRef} />
+        </div>
+      </div>
+      <footer className="border-border text-muted-foreground border-t px-4 py-3 text-xs">
+        {busy ? 'Uploading files…' : 'Files upload directly to your brand asset library.'}
+      </footer>
     </div>
   );
 }
+
+export default AssetUploadSidebar;

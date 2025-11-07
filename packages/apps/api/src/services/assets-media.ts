@@ -16,6 +16,9 @@ export interface AssetUploadMetadata {
   source?: string;
   originalPrompt?: string;
   generatedAt?: Date;
+  tags?: string[];
+  hideFromLibrary?: boolean;
+  folderId?: string | null;
 }
 
 export interface AttachAssetParams {
@@ -56,6 +59,54 @@ export async function importImageBuffer(
 ): Promise<AssetRecord> {
   const optimized = await optimizeImage(buffer);
   return uploadBufferToAssets(optimized, metadata, `${metadata.contentId}.jpg`);
+}
+
+export const HIDDEN_ASSET_TAG = '__hidden';
+export const ANALYSIS_CACHE_TAG = '__analysis_cache';
+export const AI_GENERATED_TAG = 'ai_generated';
+export const INSTAGRAM_IMPORT_TAG = 'instagram_import';
+export const ANALYSIS_FOLDER_NAME = 'Analysis Cache';
+
+function deriveAssetTags(metadata: AssetUploadMetadata): string[] | undefined {
+  const collected = new Set<string>();
+  const normalizedSource = metadata.source?.toLowerCase();
+
+  if (metadata.tags?.length) {
+    metadata.tags.forEach((tag) => {
+      if (tag) collected.add(tag);
+    });
+  }
+
+  if (metadata.campaignId) {
+    collected.add(`campaign:${metadata.campaignId}`);
+  }
+
+  if (normalizedSource) {
+    collected.add(`source:${normalizedSource}`);
+    if (normalizedSource.includes('analysis')) {
+      collected.add(ANALYSIS_CACHE_TAG);
+      collected.add(HIDDEN_ASSET_TAG);
+    }
+    if (
+      normalizedSource.includes('midjourney') ||
+      normalizedSource.includes('dalle') ||
+      normalizedSource.includes('ai')
+    ) {
+      collected.add(AI_GENERATED_TAG);
+    }
+    if (normalizedSource.includes('instagram')) {
+      collected.add(INSTAGRAM_IMPORT_TAG);
+    }
+  }
+
+  if (metadata.hideFromLibrary) {
+    collected.add(HIDDEN_ASSET_TAG);
+  }
+
+  if (collected.size === 0) {
+    return undefined;
+  }
+  return Array.from(collected);
 }
 
 export async function verifyAssetOwnership(assetId: string, brandId: string): Promise<AssetRecord> {
@@ -113,6 +164,7 @@ async function uploadBufferToAssets(
 ): Promise<AssetRecord> {
   const client = getAssetsClient();
   const payloadBase64 = buffer.toString('base64');
+  const tags = deriveAssetTags(metadata);
 
   return client.importFromBase64({
     brandId: metadata.brandId,
@@ -122,7 +174,8 @@ async function uploadBufferToAssets(
     mimeType: 'image/jpeg',
     fileType: 'image',
     title: metadata.originalPrompt,
-    tags: metadata.campaignId ? [metadata.campaignId] : undefined,
+    tags,
+    folderId: metadata.folderId || undefined,
   });
 }
 

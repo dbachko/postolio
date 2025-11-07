@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { prismaAssets } from '@postolio/database-assets';
+import { prismaAssets, Prisma } from '@postolio/database-assets';
 import sharp from 'sharp';
 import { customAlphabet } from 'nanoid';
 import { generateUploadUrl, getAssetUrl, assetsBucketName, s3Client } from '../utils/s3.js';
@@ -158,10 +158,12 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       brandId?: string;
       type?: 'image' | 'video';
       tags?: string | string[];
+      excludeTags?: string | string[];
       search?: string;
       page?: string;
       limit?: string;
       folderId?: string;
+      includeHidden?: string;
     };
 
     try {
@@ -170,7 +172,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       const skip = (page - 1) * limit;
 
       // Build where clause
-      const where: Record<string, unknown> = {};
+      const where: Prisma.AssetWhereInput = {};
 
       if (query.brandId) {
         where.brandId = query.brandId;
@@ -183,6 +185,28 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       if (query.tags) {
         const tagArray = Array.isArray(query.tags) ? query.tags : [query.tags];
         where.tags = { hasSome: tagArray };
+      }
+
+      const includesHidden = query.includeHidden === 'true' || query.includeHidden === '1';
+      const excludeTags = new Set<string>();
+      if (!includesHidden) {
+        excludeTags.add('__hidden');
+      }
+      if (query.excludeTags) {
+        const userExclude = Array.isArray(query.excludeTags)
+          ? query.excludeTags
+          : [query.excludeTags];
+        userExclude.forEach((tag) => excludeTags.add(tag));
+      }
+      if (excludeTags.size > 0) {
+        where.AND = where.AND || [];
+        where.AND.push({
+          NOT: {
+            tags: {
+              hasSome: Array.from(excludeTags),
+            },
+          },
+        });
       }
 
       if (query.folderId) {
@@ -344,6 +368,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         title?: string;
         altText?: string;
         tags?: string[];
+        folderId?: string;
       };
 
       if (!body.brandId) {
@@ -418,6 +443,18 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           height = metadata.height ?? undefined;
         }
 
+        let resolvedFolderId: string | undefined;
+        if (body.folderId) {
+          const folder = await prismaAssets.assetFolder.findUnique({
+            where: { id: body.folderId },
+            select: { id: true, brandId: true },
+          });
+          if (!folder || folder.brandId !== body.brandId) {
+            return reply.code(400).send({ error: 'Invalid folder selection for brand' });
+          }
+          resolvedFolderId = folder.id;
+        }
+
         const asset = await prismaAssets.asset.create({
           data: {
             brandId: body.brandId,
@@ -434,6 +471,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             altText: body.altText,
             tags: body.tags || [],
             processingStatus: 'pending',
+            folderId: resolvedFolderId,
           },
         });
 

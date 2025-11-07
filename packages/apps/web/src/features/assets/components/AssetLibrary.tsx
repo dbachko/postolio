@@ -1,7 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState, useCallback } from 'react';
 import { assetsApi, type AssetType } from '@/features/assets/api/client';
-import UploadModal from '@/features/assets/components/UploadModal';
+import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 
 export interface AssetLibraryProps {
   brandId?: string;
@@ -20,8 +20,14 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput, 300);
-  const [showUpload, setShowUpload] = useState(false);
-  const qc = useQueryClient();
+  const { openSidebar } = useRightSidebarRouter();
+
+  const handleAssetOpen = useCallback(
+    (assetId: string) => {
+      openSidebar('asset', { id: assetId });
+    },
+    [openSidebar]
+  );
 
   // Reset pagination when search changes
   useEffect(() => {
@@ -74,7 +80,7 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
           className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         />
         <button
-          onClick={() => setShowUpload(true)}
+          onClick={() => openSidebar('asset-upload', { id: brandId })}
           className="ring-offset-background focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
         >
           Upload
@@ -96,7 +102,16 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
             {assets.map((asset: AssetType) => (
               <div
                 key={asset.id}
-                className="bg-muted hover:ring-primary group relative aspect-square cursor-pointer overflow-hidden rounded-lg border transition-all hover:ring-2"
+                onClick={() => handleAssetOpen(asset.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    handleAssetOpen(asset.id);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                className="bg-muted hover:ring-primary focus-visible:ring-primary group relative aspect-square cursor-pointer overflow-hidden rounded-lg border transition-all hover:ring-2 focus-visible:outline-none focus-visible:ring-2"
               >
                 <img
                   src={asset.thumbnailUrl || asset.url}
@@ -135,16 +150,6 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
             </div>
           )}
         </>
-      )}
-      {showUpload && brandId && (
-        <UploadModal
-          brandId={brandId}
-          onClose={() => setShowUpload(false)}
-          onUploaded={() => {
-            // Invalidate and refetch the assets list
-            qc.invalidateQueries({ queryKey: ['assets'] });
-          }}
-        />
       )}
     </div>
   );

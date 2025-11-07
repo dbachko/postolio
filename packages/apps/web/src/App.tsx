@@ -11,6 +11,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Brands } from './pages/Brands';
 import { Assets } from './pages/Assets';
+import AssetDetail from './pages/AssetDetail';
 // import Analytics from './pages/Analytics';
 import Campaigns from './pages/Campaigns';
 import { Content } from './pages/Content';
@@ -121,6 +122,19 @@ const router = createBrowserRouter([
         <Layout>
           <ErrorBoundary>
             <Assets />
+          </ErrorBoundary>
+        </Layout>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/assets/:assetId',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ErrorBoundary>
+            <AssetDetail />
           </ErrorBoundary>
         </Layout>
       </ProtectedRoute>

@@ -1,6 +1,13 @@
 import type { ComponentType } from 'react';
 
-export type SidebarType = 'notifications' | 'post' | (string & {});
+export type SidebarType =
+  | 'notifications'
+  | 'post'
+  | 'post-create'
+  | 'brand-profile'
+  | 'asset'
+  | 'asset-upload'
+  | (string & {});
 
 export interface SidebarRegistration {
   title: string;

@@ -5,6 +5,7 @@ import { DynamoDBDocumentClient, QueryCommand, QueryCommandInput } from '@aws-sd
 import { getDatabaseClient } from '../config/database.js';
 import { instagramService } from '../services/instagram.js';
 import { importImageFromExternalUrl } from '../services/assets-media.js';
+import { buildAnalysisAssetMetadata } from '../services/brand-analysis-assets.js';
 
 const eventBridge = new EventBridge({});
 const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || 'default';
@@ -84,13 +85,12 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
             p.media_url
           ) {
             try {
-              const asset = await importImageFromExternalUrl(p.media_url, {
-                source: 'analysis_import',
+              const metadata = await buildAnalysisAssetMetadata({
                 brandId: brand.id,
                 contentId: p.id,
-                generatedAt: new Date(),
-                originalPrompt: 'brand-analysis cache',
+                generatedAt: p.timestamp ? new Date(p.timestamp) : new Date(),
               });
+              const asset = await importImageFromExternalUrl(p.media_url, metadata);
               mediaUrl = asset.url;
             } catch (e) {
               request.log.warn(

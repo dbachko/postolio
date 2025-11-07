@@ -9,8 +9,8 @@ const brand = await prisma.brand.findFirst({
     name: true,
     instagramAccountId: true,
     instagramPageId: true,
-    instagramProfileData: true
-  }
+    instagramProfileData: true,
+  },
 });
 
 console.log('Brand data:');

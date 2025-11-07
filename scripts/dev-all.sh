@@ -63,24 +63,72 @@ start_service() {
   NAMES+=("$name")
 }
 
+wait_for_http_endpoint() {
+  local url="$1"
+  local max_attempts="${2:-30}"
+  local sleep_seconds="${3:-2}"
+
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "curl is not installed; skipping readiness check for ${url}"
+    return 0
+  fi
+
+  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+    if curl -fsS -o /dev/null "$url"; then
+      return 0
+    fi
+    echo "Waiting for ${url} (attempt ${attempt}/${max_attempts})..."
+    sleep "${sleep_seconds}"
+  done
+
+  echo "Timed out waiting for ${url}"
+  return 1
+}
+
+derive_origin_from_url() {
+  local input="$1"
+  if [[ "$input" =~ ^https?://[^/]+ ]]; then
+    printf '%s' "${BASH_REMATCH[0]}"
+    return 0
+  fi
+  return 1
+}
+
+ASSETS_API_HEALTHCHECK_URL="${ASSETS_API_HEALTHCHECK_URL:-}"
+if [[ -z "${ASSETS_API_HEALTHCHECK_URL}" && -n "${ASSETS_API_BASE_URL:-}" ]]; then
+  if origin="$(derive_origin_from_url "${ASSETS_API_BASE_URL}")" && [[ -n "${origin}" ]]; then
+    ASSETS_API_HEALTHCHECK_URL="${origin}/health"
+  fi
+fi
+
+ASSETS_API_STARTED=0
+
+start_assets_api_service() {
+  if [[ "${ASSETS_API_STARTED}" -eq 1 ]]; then
+    return
+  fi
+
+  if [[ -z "${ASSETS_DATABASE_URL:-}" ]]; then
+    echo "ASSETS_DATABASE_URL is unset; cannot start Assets API."
+    return 1
+  fi
+
+  start_service "Assets API" env ASSETS_API_PORT="${ASSETS_API_PORT}" PORT="${ASSETS_API_PORT}" pnpm --filter @postolio/assets-api dev
+  ASSETS_API_STARTED=1
+
+  if [[ -n "${ASSETS_API_HEALTHCHECK_URL:-}" ]]; then
+    echo "Waiting for Assets API readiness at ${ASSETS_API_HEALTHCHECK_URL}..."
+    wait_for_http_endpoint "${ASSETS_API_HEALTHCHECK_URL}" 30 2
+  else
+    echo "Assets API healthcheck URL not detected; continuing without readiness verification."
+    sleep 2
+  fi
+}
+
 "$ROOT_DIR/scripts/kill-dev-processes.sh" || true
 
 echo "Restarting local infrastructure (COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME})..."
 "$ROOT_DIR/scripts/restart-dev-stack.sh"
-
-if [[ "${SKIP_DB_RESET:-0}" != "1" ]]; then
-  if [[ -n "${DATABASE_URL:-}" ]]; then
-    echo "Resetting primary Postgres database via Prisma..."
-    pnpm --filter @postolio/database exec -- prisma migrate reset --force --skip-seed --skip-generate
-
-    echo "Seeding deterministic dev data (${DEV_SEED_EMAIL})..."
-    pnpm --filter api seed:dev -- --email="${DEV_SEED_EMAIL}" --password="${DEV_SEED_PASSWORD}" --name="${DEV_SEED_NAME}" --brand="${DEV_SEED_BRAND}" --posts="${DEV_SEED_POSTS}"
-  else
-    echo "DATABASE_URL is not set; skipping DB reset."
-  fi
-else
-  echo "Skipping database reset because SKIP_DB_RESET=1"
-fi
 
 if [[ "${SKIP_ASSETS_DB_RESET:-0}" != "1" ]]; then
   if [[ -n "${ASSETS_DATABASE_URL:-}" ]]; then
@@ -98,6 +146,27 @@ if [[ -n "${ASSETS_DATABASE_URL:-}" ]]; then
   pnpm --filter @postolio/database-assets exec -- prisma migrate deploy
 else
   echo "ASSETS_DATABASE_URL not set; skipping assets migration deploy."
+fi
+
+if [[ -n "${ASSETS_DATABASE_URL:-}" ]]; then
+  echo "Bootstrapping local Assets API before running content seeds..."
+  start_assets_api_service
+else
+  echo "ASSETS_DATABASE_URL is unset; skipping Assets API startup (asset imports may fail)."
+fi
+
+if [[ "${SKIP_DB_RESET:-0}" != "1" ]]; then
+  if [[ -n "${DATABASE_URL:-}" ]]; then
+    echo "Resetting primary Postgres database via Prisma..."
+    pnpm --filter @postolio/database exec -- prisma migrate reset --force --skip-seed --skip-generate
+
+    echo "Seeding deterministic dev data (${DEV_SEED_EMAIL})..."
+    pnpm --filter api seed:dev -- --email="${DEV_SEED_EMAIL}" --password="${DEV_SEED_PASSWORD}" --name="${DEV_SEED_NAME}" --brand="${DEV_SEED_BRAND}" --posts="${DEV_SEED_POSTS}"
+  else
+    echo "DATABASE_URL is not set; skipping DB reset."
+  fi
+else
+  echo "Skipping database reset because SKIP_DB_RESET=1"
 fi
 
 if [[ "${SKIP_ASSETS_SEED:-0}" != "1" ]]; then
@@ -143,7 +212,13 @@ else
 fi
 
 start_service "Fastify API" pnpm --filter api dev
-start_service "Assets API" env ASSETS_API_PORT="${ASSETS_API_PORT}" PORT="${ASSETS_API_PORT}" pnpm --filter @postolio/assets-api dev
+if [[ "${ASSETS_API_STARTED}" -ne 1 ]]; then
+  if [[ -n "${ASSETS_DATABASE_URL:-}" ]]; then
+    start_assets_api_service
+  else
+    echo "ASSETS_DATABASE_URL is unset; Assets API will not start."
+  fi
+fi
 start_service "Web UI" pnpm --filter @postolio/web dev
 
 echo -e "\nAll dev services are running. Press Ctrl+C to stop everything."
