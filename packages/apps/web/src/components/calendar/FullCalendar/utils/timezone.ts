@@ -17,20 +17,16 @@ export function formatGmtOffset(hours: number): string {
 
 export function toWallTimeDate(iso: string | null | undefined, timezone?: string): Date | null {
   if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  if (!timezone) return date;
-  const zoned = toZonedTime(date, timezone);
-  // Create a wall-time Date in the user's locale that matches the brand-local clock time
-  return new Date(
-    zoned.getFullYear(),
-    zoned.getMonth(),
-    zoned.getDate(),
-    zoned.getHours(),
-    zoned.getMinutes(),
-    zoned.getSeconds(),
-    zoned.getMilliseconds()
-  );
+  const utcDate = new Date(iso);
+  if (Number.isNaN(utcDate.getTime())) return null;
+  if (!timezone) return utcDate;
+
+  // Convert UTC to brand timezone
+  const zonedDate = toZonedTime(utcDate, timezone);
+
+  // CRITICAL: Return the zoned date directly - it already represents the correct moment in time
+  // The calendar library will display this Date's time components, which are already in the brand TZ
+  return zonedDate;
 }
 
 export function getEventBounds(

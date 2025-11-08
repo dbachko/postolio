@@ -47,12 +47,6 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   const [brandTimezone, setBrandTimezone] = useState<string>(userTz);
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  // no-op
-  const userTimezoneLabel = useMemo(() => {
-    const abbr = getTimezoneAbbr(userTz);
-    const offset = formatGmtOffset(getTimezoneOffset(userTz));
-    return `${abbr} · ${offset}`;
-  }, [userTz]);
   const brandTimezoneLabel = useMemo(() => {
     const abbr = getTimezoneAbbr(brandTimezone);
     const offset = formatGmtOffset(getTimezoneOffset(brandTimezone));
@@ -368,10 +362,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
         </div>
         <div className="text-muted-foreground mt-1 flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:text-sm">
           <span>
-            Times shown in {userTimezoneLabel} ({userTz}).
-          </span>
-          <span>
-            Brand posting timezone: {brandTimezoneLabel} ({brandTimezone}).
+            All times shown in brand timezone: {brandTimezoneLabel} ({brandTimezone})
           </span>
         </div>
       </div>
