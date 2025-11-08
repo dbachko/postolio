@@ -17,6 +17,7 @@ export interface Brand {
   description: string | null;
   createdAt: string;
   countryCode?: string | null;
+  postingTimezone?: string | null; // Brand-specific posting timezone (null = use user's timezone)
 }
 
 export interface Content {

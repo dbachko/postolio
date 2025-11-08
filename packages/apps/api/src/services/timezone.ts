@@ -74,32 +74,65 @@ export class TimezoneService {
   }
 
   /**
+   * Normalize a date to midnight (00:00:00.000) for date-only comparisons
+   * Operates on the date's local components (does not convert timezones)
+   *
+   * @param date - Date to normalize
+   * @returns New Date object at midnight with same year/month/day
+   *
+   * @example
+   * const date = new Date(2025, 0, 15, 14, 30, 0); // Jan 15, 2025 2:30 PM
+   * const midnight = TimezoneService.normalizeDateToMidnight(date);
+   * // Returns: Jan 15, 2025 00:00:00.000
+   */
+  static normalizeDateToMidnight(date: Date): Date {
+    return new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      0,
+      0,
+      0,
+      0
+    );
+  }
+
+  /**
    * Get timezone for a specific brand (with fallback to user/default)
+   *
+   * Includes error handling for database failures and invalid timezones
+   * to ensure timezone operations never crash the application
    */
   static async getBrandTimezone(brandId: string): Promise<string> {
-    const brand = await prisma.brand.findUnique({
-      where: { id: brandId },
-      select: {
-        postingTimezone: true,
-        user: {
-          select: {
-            timezone: true,
-            timezoneAutoDetected: true,
+    try {
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: {
+          postingTimezone: true,
+          user: {
+            select: {
+              timezone: true,
+              timezoneAutoDetected: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    // Priority: Brand timezone > User timezone > Default
-    if (brand?.postingTimezone) {
-      return brand.postingTimezone;
+      // Priority: Brand timezone > User timezone > Default
+      if (brand?.postingTimezone && this.isValidTimezone(brand.postingTimezone)) {
+        return brand.postingTimezone;
+      }
+
+      if (brand?.user.timezone && this.isValidTimezone(brand.user.timezone)) {
+        return brand.user.timezone;
+      }
+
+      return BRAND_TIMEZONE_FALLBACK;
+    } catch (error) {
+      // Log error but don't crash - timezone operations should always complete
+      console.error(`Failed to fetch brand timezone for ${brandId}:`, error);
+      return BRAND_TIMEZONE_FALLBACK;
     }
-
-    if (brand?.user.timezone && this.isValidTimezone(brand.user.timezone)) {
-      return brand.user.timezone;
-    }
-
-    return BRAND_TIMEZONE_FALLBACK;
   }
 
   /**
@@ -144,16 +177,45 @@ export class TimezoneService {
    * @param timeString - Time in HH:mm format
    * @param timezone - Target timezone
    * @returns UTC Date object
+   * @throws Error if inputs are invalid
    */
   static createDateInBrandTimezone(dateString: string, timeString: string, timezone: string): Date {
-    // Create a date-time string in the format that date-fns-tz expects
-    // This represents the date and time in the brand's timezone
-    const dateTimeString = `${dateString}T${timeString}:00`;
+    // Validate timezone
+    if (!this.isValidTimezone(timezone)) {
+      throw new Error(`Invalid timezone: ${timezone}`);
+    }
 
-    // Parse this as a date in the brand's timezone and convert to UTC
-    // fromZonedTime interprets the dateTimeString as being in the specified timezone
-    // and returns the equivalent UTC date
-    return fromZonedTime(dateTimeString, timezone);
+    // Validate date format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      throw new Error(`Invalid date format: ${dateString}. Expected YYYY-MM-DD`);
+    }
+
+    // Validate time format (HH:mm)
+    if (!/^\d{2}:\d{2}$/.test(timeString)) {
+      throw new Error(`Invalid time format: ${timeString}. Expected HH:mm`);
+    }
+
+    try {
+      // Create a date-time string in the format that date-fns-tz expects
+      // This represents the date and time in the brand's timezone
+      const dateTimeString = `${dateString}T${timeString}:00`;
+
+      // Parse this as a date in the brand's timezone and convert to UTC
+      // fromZonedTime interprets the dateTimeString as being in the specified timezone
+      // and returns the equivalent UTC date
+      const result = fromZonedTime(dateTimeString, timezone);
+
+      // Validate the result is a valid date
+      if (isNaN(result.getTime())) {
+        throw new Error(`Invalid date created from ${dateString} ${timeString} in ${timezone}`);
+      }
+
+      return result;
+    } catch (error) {
+      throw new Error(
+        `Failed to create date in timezone ${timezone} from ${dateString} ${timeString}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   /**

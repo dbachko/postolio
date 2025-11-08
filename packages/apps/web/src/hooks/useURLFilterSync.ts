@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCalendarFilterStore } from '../stores/calendarFilterStore';
 import { encodeFiltersToURL, decodeFiltersFromURL, areFiltersEqual } from '../utils/filterUrlUtils';
+import { formatLocalDate } from '../lib/timezone';
 
 const haveSameMembers = <T extends string>(a: readonly T[], b: readonly T[]): boolean => {
   if (a.length !== b.length) return false;
@@ -131,10 +132,10 @@ export function useNavigateWithFilters() {
       params.set('types', filters.contentTypes.join(','));
     }
     if (filters.dateRange?.start) {
-      params.set('dateStart', filters.dateRange.start.toISOString().split('T')[0]);
+      params.set('dateStart', formatLocalDate(filters.dateRange.start));
     }
     if (filters.dateRange?.end) {
-      params.set('dateEnd', filters.dateRange.end.toISOString().split('T')[0]);
+      params.set('dateEnd', formatLocalDate(filters.dateRange.end));
     }
     if (filters.searchQuery) {
       params.set('search', filters.searchQuery);

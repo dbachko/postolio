@@ -168,13 +168,18 @@ class CampaignService {
       const brandTimezone =
         overrideTimezone || (await TimezoneService.getBrandTimezone(config.brandId));
 
+      // CRITICAL: Compare dates only (not times) in the brand's timezone
+      // Normalize both dates to midnight for date-only comparison
       const nowUTC = new Date();
       const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-      const startDateInBrandTz = TimezoneService.toLocal(config.duration.start, brandTimezone);
-      const toleranceMinutes = 5;
-      const earliestAllowedStart = new Date(nowInBrandTz.getTime() - toleranceMinutes * 60 * 1000);
+      const todayMidnight = TimezoneService.normalizeDateToMidnight(nowInBrandTz);
 
-      if (startDateInBrandTz < earliestAllowedStart) {
+      const startDateInBrandTz = TimezoneService.toLocal(config.duration.start, brandTimezone);
+      const startDateMidnight = TimezoneService.normalizeDateToMidnight(startDateInBrandTz);
+
+      // Compare dates without time components
+      // Allow start date to be today or in the future
+      if (startDateMidnight < todayMidnight) {
         throw new Error('Campaign start date cannot be in the past');
       }
 
@@ -933,17 +938,33 @@ class CampaignService {
         // Get brand's timezone for proper date comparison
         const brandTimezone = await TimezoneService.getBrandTimezone(campaign.brandId);
 
-        // Get today's date in the brand's timezone (start of day)
+        // CRITICAL: Compare dates only (not times) in the brand's timezone
+        // Normalize both dates to midnight for date-only comparison
         const nowUTC = new Date();
-        const todayInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-        todayInBrandTz.setHours(0, 0, 0, 0);
+        const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
+        const todayMidnight = new Date(
+          nowInBrandTz.getFullYear(),
+          nowInBrandTz.getMonth(),
+          nowInBrandTz.getDate(),
+          0,
+          0,
+          0,
+          0
+        );
 
-        // Convert the start date to the brand's timezone for comparison
         const startDateInBrandTz = TimezoneService.toLocal(startDate, brandTimezone);
-        startDateInBrandTz.setHours(0, 0, 0, 0);
+        const startDateMidnight = new Date(
+          startDateInBrandTz.getFullYear(),
+          startDateInBrandTz.getMonth(),
+          startDateInBrandTz.getDate(),
+          0,
+          0,
+          0,
+          0
+        );
 
         // Only validate if campaign is not active (active campaigns can keep their past dates)
-        if ((campaign.status as string) !== 'active' && startDateInBrandTz < todayInBrandTz) {
+        if ((campaign.status as string) !== 'active' && startDateMidnight < todayMidnight) {
           throw new Error('Start date cannot be in the past');
         }
 

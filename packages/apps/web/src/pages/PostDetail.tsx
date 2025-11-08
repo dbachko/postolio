@@ -23,8 +23,9 @@ import {
   X,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { fromZonedTime } from 'date-fns-tz';
 import { useTimezone } from '../contexts/TimezoneContext';
-import { formatInUserTimezone, convertLocalToUTC } from '../lib/timezone';
+import { formatInUserTimezone } from '../lib/timezone';
 import { toast } from 'sonner';
 import { getContentDisplayStatus } from '../utils/content-status';
 import { Loader2 } from 'lucide-react';
@@ -464,8 +465,10 @@ export default function PostDetail() {
       return;
     }
 
+    // CRITICAL: Interpret datetime-local input as being in brand timezone
+    // datetime-local gives us "2025-01-15T09:00" which we interpret AS IF it's in brand timezone
     const scheduledAtPayload = formData.scheduledAt
-      ? convertLocalToUTC(new Date(formData.scheduledAt), brandTimezone).toISOString()
+      ? fromZonedTime(formData.scheduledAt + ':00', brandTimezone).toISOString()
       : undefined;
 
     mutateContent({
@@ -510,9 +513,10 @@ export default function PostDetail() {
     mutationFn: async (scheduledAt: string) => {
       let payload = scheduledAt;
       if (scheduledAt && !scheduledAt.endsWith('Z')) {
-        const local = new Date(scheduledAt);
-        const utc = convertLocalToUTC(local, brandTimezone);
-        payload = utc.toISOString();
+        // CRITICAL: Interpret datetime string as being in brand timezone
+        // Append seconds if not present for proper ISO format
+        const dateTimeStr = scheduledAt.includes(':00:00') ? scheduledAt : scheduledAt + ':00';
+        payload = fromZonedTime(dateTimeStr, brandTimezone).toISOString();
       }
       return contentApi.schedulePost(postId!, payload);
     },

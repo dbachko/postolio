@@ -240,6 +240,24 @@ export const isDST = (): boolean => {
 };
 
 /**
+ * Format a Date object as YYYY-MM-DD string in local timezone
+ * CRITICAL: Use this instead of toISOString().split('T')[0] which extracts UTC date
+ *
+ * @param date - Date object to format
+ * @returns Date string in YYYY-MM-DD format
+ *
+ * @example
+ * const date = new Date(2025, 0, 15); // Jan 15, 2025 in local timezone
+ * formatLocalDate(date); // "2025-01-15"
+ */
+export const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
  * Get optimal posting times for a timezone (Instagram best practices)
  */
 export const getOptimalPostingTimes = (): string[] => {
@@ -264,12 +282,17 @@ export const createDateInTimezone = (
   timezone?: string
 ): Date => {
   const tz = timezone || getUserTimezone();
-  const [hours, minutes] = time.split(':').map(Number);
 
-  // Create date in the target timezone
-  const localDate = new Date(date);
-  localDate.setHours(hours, minutes, 0, 0);
+  // CRITICAL: Format date as YYYY-MM-DD and combine with time
+  // Do NOT use Date constructor with local date and setHours - it's ambiguous
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const dateString = `${year}-${month}-${day}`;
 
-  // Convert to UTC for storage
-  return fromZonedTime(localDate, tz);
+  // Create a date-time string in the format that date-fns-tz expects
+  const dateTimeString = `${dateString}T${time}:00`;
+
+  // Parse this as a date in the specified timezone and convert to UTC
+  return fromZonedTime(dateTimeString, tz);
 };

@@ -389,8 +389,22 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send({ error: 'Invalid month format. Use YYYY-MM' });
         }
 
-        const monthStart = new Date(year, monthNum - 1, 1);
-        const monthEnd = new Date(year, monthNum, 0, 23, 59, 59);
+        // CRITICAL: Create month boundaries in the brand's timezone, not server's timezone
+        const { TimezoneService } = await import('../services/timezone.js');
+        const brandTimezone = await TimezoneService.getBrandTimezone(brandId);
+
+        // Create month start (first day of month at 00:00:00 in brand's timezone)
+        const monthStartStr = `${year}-${String(monthNum).padStart(2, '0')}-01`;
+        const monthStart = TimezoneService.createDateInBrandTimezone(
+          monthStartStr,
+          '00:00',
+          brandTimezone
+        );
+
+        // Create month end (last day of month at 23:59:59 in brand's timezone)
+        const lastDay = new Date(year, monthNum, 0).getDate(); // Get last day of month
+        const monthEndStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        const monthEnd = TimezoneService.createDateInBrandTimezone(monthEndStr, '23:59', brandTimezone);
 
         // Get existing content for the month with campaign info for color coding
         const content = await prisma.content.findMany({

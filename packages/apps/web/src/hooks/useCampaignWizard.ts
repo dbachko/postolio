@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useEffect } from 'react';
 import { useBrandStore } from '../stores/brandStore';
+import { formatLocalDate } from '../lib/timezone';
 import type {
   CampaignWizardState,
   CampaignType,
@@ -57,14 +58,16 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()((
   loadDefaultsFromType: (cfg) => {
     const { timeline } = get();
     const now = new Date();
-    const startISO = now.toISOString().split('T')[0]!;
     const end = new Date(now);
     end.setDate(end.getDate() + cfg.defaultDuration.days);
-    const endISO = end.toISOString().split('T')[0]!;
+
     set({
       campaignType: cfg.id,
       frequency: cfg.defaultFrequency,
-      timeline: timeline || { startDate: startISO, endDate: endISO },
+      timeline: timeline || {
+        startDate: formatLocalDate(now),
+        endDate: formatLocalDate(end)
+      },
       // Do not preload static themes; we will fetch suggestions from API
       themes: [],
     });

@@ -1,4 +1,5 @@
 import type { ContentStatus, ContentType } from '../stores/calendarFilterStore';
+import { formatLocalDate } from '../lib/timezone';
 
 export interface URLFilterParams {
   campaigns?: string[];
@@ -36,12 +37,12 @@ export function encodeFiltersToURL(filters: {
     params.set('types', filters.contentTypes.join(','));
   }
 
-  // Date range
+  // Date range - format in local timezone (YYYY-MM-DD)
   if (filters.dateRange.start) {
-    params.set('dateStart', filters.dateRange.start.toISOString().split('T')[0]);
+    params.set('dateStart', formatLocalDate(filters.dateRange.start));
   }
   if (filters.dateRange.end) {
-    params.set('dateEnd', filters.dateRange.end.toISOString().split('T')[0]);
+    params.set('dateEnd', formatLocalDate(filters.dateRange.end));
   }
 
   // Search query
@@ -50,6 +51,41 @@ export function encodeFiltersToURL(filters: {
   }
 
   return params;
+}
+
+/**
+ * Parse a date string (YYYY-MM-DD) in local timezone context
+ * CRITICAL: new Date('2025-01-15') creates UTC date, causing timezone shifts
+ */
+function parseLocalDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
+
+  // Only support YYYY-MM-DD format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    console.warn(`Invalid date format in URL: ${dateStr}. Expected YYYY-MM-DD`);
+    return null;
+  }
+
+  const [yearStr, monthStr, dayStr] = dateStr.split('-');
+  const year = parseInt(yearStr!, 10);
+  const month = parseInt(monthStr!, 10) - 1; // Month is 0-indexed
+  const day = parseInt(dayStr!, 10);
+
+  if (isNaN(year) || isNaN(month) || isNaN(day)) {
+    console.warn(`Invalid date components in URL: ${dateStr}`);
+    return null;
+  }
+
+  // Create date at midnight in local timezone
+  const date = new Date(year, month, day, 0, 0, 0, 0);
+
+  // Validate the date is valid (catches invalid dates like Feb 30)
+  if (isNaN(date.getTime())) {
+    console.warn(`Invalid date in URL: ${dateStr}`);
+    return null;
+  }
+
+  return date;
 }
 
 /**
@@ -82,12 +118,12 @@ export function decodeFiltersFromURL(searchParams: URLSearchParams): {
     ? (typesParam.split(',').filter((t) => validTypes.includes(t as ContentType)) as ContentType[])
     : (['post', 'placeholder'] as ContentType[]); // Default to showing all types
 
-  // Date range
+  // Date range - parse in local timezone context
   const dateStartParam = searchParams.get('dateStart');
   const dateEndParam = searchParams.get('dateEnd');
   const dateRange = {
-    start: dateStartParam ? new Date(dateStartParam) : null,
-    end: dateEndParam ? new Date(dateEndParam) : null,
+    start: parseLocalDate(dateStartParam || ''),
+    end: parseLocalDate(dateEndParam || ''),
   };
 
   // Search query
