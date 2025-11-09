@@ -11,7 +11,7 @@ interface ExportContent {
   postedAt?: string | null;
   campaignId?: string;
   campaignName?: string;
-  instagramPermalink?: string | null;
+  permalink?: string | null;
 }
 
 // Helper function to download a file
@@ -58,7 +58,7 @@ export async function exportToCSV(
       Scheduled: formatDate(item.scheduledAt),
       Published: formatDate(item.postedAt),
       Campaign: item.campaignName || item.campaignId || '',
-      'Instagram URL': item.instagramPermalink || '',
+      'Instagram URL': item.permalink || '',
     };
 
     // Filter fields if specified

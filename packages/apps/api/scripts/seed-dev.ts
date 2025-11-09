@@ -389,16 +389,7 @@ async function main() {
       status,
       scheduledAt,
       postedAt,
-      instagramPermalink:
-        status === 'published'
-          ? `https://instagram.com/p/${Math.random().toString(36).slice(2, 10)}`
-          : null,
-      instagramPostId:
-        status === 'published' ? `IG_${Math.random().toString(36).slice(2, 12)}` : null,
-      analytics:
-        status === 'published'
-          ? { likes: rng(10, 500), comments: rng(0, 50), shares: rng(0, 20), reach: rng(500, 5000) }
-          : null,
+      // publications will be created by normal app flows; legacy instagram fields removed
       schedulingError: err,
       ...assetData,
     });
@@ -582,8 +573,7 @@ async function main() {
         if (newStatus === 'published') {
           const postTs = new Date(it.scheduledAt).getTime() + hours(1);
           it.postedAt = new Date(postTs);
-          it.instagramPermalink = `https://instagram.com/p/${Math.random().toString(36).slice(2, 10)}`;
-          it.instagramPostId = `IG_${Math.random().toString(36).slice(2, 12)}`;
+          // Publications and metrics are created by ingestion or publishing flows.
         } else if (newStatus === 'failed') {
           it.schedulingError = it.schedulingError || 'Auto-adjusted: failed to post in time';
           it.postedAt = null;
@@ -616,8 +606,7 @@ async function main() {
     campaignId?: string | null;
     postedAt?: Date | null;
     schedulingError?: string | null;
-    instagramPermalink?: string | null;
-    instagramPostId?: string | null;
+    // legacy fields removed
   }> = [];
 
   const scheduledCount = Math.min(3, posts);
@@ -647,8 +636,7 @@ async function main() {
       status: 'published',
       scheduledAt: new Date(Date.now() - days(3)),
       postedAt: new Date(Date.now() - days(2)),
-      instagramPermalink: `https://instagram.com/p/${Math.random().toString(36).slice(2, 10)}`,
-      instagramPostId: `IG_${Math.random().toString(36).slice(2, 12)}`,
+      // legacy fields removed
       primaryAssetId: null,
       primaryAssetCdnUrl: null,
       primaryAssetWidth: null,

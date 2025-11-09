@@ -4,6 +4,7 @@ import { BrandClient } from './brand-client';
 import { CampaignClient } from './campaign-client';
 import { ContentClient } from './content-client';
 import { NotificationsClient } from './notifications-client';
+import { AnalyticsV2Client } from './analytics-v2-client';
 
 const http = createHttp();
 const { get: httpGet, post: httpPost, put: httpPut, del: httpDelete } = createHttpMethods(http);
@@ -14,6 +15,7 @@ export const brand = new BrandClient(http);
 export const campaign = new CampaignClient(http);
 export const content = new ContentClient(http);
 export const notifications = new NotificationsClient(http);
+export const analyticsV2 = new AnalyticsV2Client(http);
 
 export { http, httpGet, httpPost, httpPut, httpDelete };
 

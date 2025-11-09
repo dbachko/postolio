@@ -129,10 +129,10 @@ export function ContentCard({ content, brandId, isOptimistic = false }: ContentC
 
           {/* Manual schedule/publish actions removed on cards */}
 
-          {content.status === 'published' && content.instagramPermalink && (
+          {content.status === 'published' && content.permalink && (
             <div className="flex space-x-2">
               <a
-                href={content.instagramPermalink}
+                href={content.permalink as string}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-muted hover:bg-accent flex items-center gap-1 rounded px-3 py-1 text-sm"

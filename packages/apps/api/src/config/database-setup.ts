@@ -18,7 +18,22 @@ export async function ensureDatabaseSchema(): Promise<void> {
       SELECT table_name 
       FROM information_schema.tables 
       WHERE table_schema = 'public' 
-      AND table_name IN ('users', 'brands', 'content', 'campaigns', 'brand_style_profile_projection', 'sessions')
+      AND table_name IN (
+        'users',
+        'brands',
+        'content',
+        'campaigns',
+        'brand_style_profile_projection',
+        'sessions',
+        -- analytics v2 tables (ensure these exist; triggers migration if missing)
+        'social_accounts',
+        'content_publications',
+        'publication_metrics_latest',
+        'metric_samples',
+        'publication_comments',
+        'account_metric_samples',
+        'account_metrics_latest'
+      )
     `;
 
     const tables: TableRow[] = Array.isArray(result)
@@ -31,6 +46,14 @@ export async function ensureDatabaseSchema(): Promise<void> {
       'campaigns',
       'brand_style_profile_projection',
       'sessions',
+      // analytics v2
+      'social_accounts',
+      'content_publications',
+      'publication_metrics_latest',
+      'metric_samples',
+      'publication_comments',
+      'account_metric_samples',
+      'account_metrics_latest',
     ];
     const existingTables = tables.map((row) => row.table_name);
     const missingTables = requiredTables.filter((table) => !existingTables.includes(table));

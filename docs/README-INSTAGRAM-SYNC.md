@@ -91,31 +91,35 @@ Go directly to **API Documentation**: [`api-instagram-sync.md`](./api-instagram-
 
 Review test scenarios in **Product Specification**: Section "Testing & QA"
 
-## Architecture Overview
+## Architecture Overview (Updated)
 
 ```
 ┌─────────────┐
-│   User UI   │
+│   Web UI    │
 │  (React)    │
 └──────┬──────┘
-       │ POST /api/instagram/sync-posts/:brandId
+       │ GET /api/analytics/brands/:brandId/summary
+       │ GET /api/analytics/brands/:brandId/account/series
+       │ GET /api/analytics/brands/:brandId/top-publications
        ↓
 ┌──────────────────┐
-│   API Server     │
+│   API Server     │  — persists reads/writes
 │   (Fastify)      │
 └──────┬───────────┘
        │
+       │ writes (refresh):
+       │  POST /api/analytics/publications/:id/refresh
+       │  POST /api/analytics/brands/:brandId/account/refresh
        ↓
 ┌──────────────────┐      ┌─────────────┐
-│ Instagram        │─────→│   Redis     │
-│ Service          │      │  (Cooldown) │
+│ Analytics        │◀────→│   Redis     │
+│ Ingestor (Worker)│      │ (Queues/RL) │
 └──────┬───────────┘      └─────────────┘
        │
-       ├─→ Instagram Graph API (fetch posts)
+       ├─→ Instagram Graph API (insights, fields)
        │
-       ├─→ S3 Service (upload images)
-       │
-       └─→ Prisma (save to DB)
+       └─→ Prisma (MetricSample, PublicationMetricsLatest,
+                   AccountMetricSample, AccountMetricsLatest)
              │
              ↓
         ┌──────────┐
@@ -125,11 +129,11 @@ Review test scenarios in **Product Specification**: Section "Testing & QA"
 
 ## Implementation Summary
 
-### Backend Files Modified
+### Backend Files (Key)
 
-- `packages/apps/api/src/services/instagram.ts` - Core sync logic
-- `packages/apps/api/src/routes/instagram.ts` - API endpoints
-- `packages/apps/api/src/routes/instagram-oauth.ts` - OAuth callback
+- `packages/apps/api/src/routes/analytics-v2.ts` - Analytics API (publications/brands)
+- `packages/apps/api/src/routes/publications.ts` - Publications listing by content
+- `packages/services/analytics-ingestor/src/index.ts` - Ingestion loop
 
 ### Frontend Files Created/Modified
 

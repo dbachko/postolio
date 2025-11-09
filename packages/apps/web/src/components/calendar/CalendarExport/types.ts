@@ -7,7 +7,7 @@ export interface CalendarExportContentItem {
   scheduledAt?: string;
   postedAt?: string;
   campaignId?: string;
-  instagramPermalink?: string;
+  permalink?: string;
 }
 
 export interface CalendarExportDateRange {

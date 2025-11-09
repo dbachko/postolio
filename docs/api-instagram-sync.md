@@ -170,7 +170,7 @@ brandId: string; // Brand ID to check status for
 4. **Fetch Posts**: Paginate through Instagram Graph API (max 100 per request)
 5. **Filter by Date**: Only process posts within last 30 days
 6. **Process Each Post**:
-   - Check for duplicates via `instagramPostId`
+   - Check for duplicates via `ContentPublication` (platform + `external_post_id`)
    - Download image from Instagram URL
    - Upload to S3 with metadata
    - Create Content record with `status='published'`
@@ -183,20 +183,13 @@ brandId: string; // Brand ID to check status for
 Images are downloaded from Instagram and uploaded to S3 for permanent storage:
 
 ```typescript
-// Image metadata structure
+// Image import helper uses a content-scoped ID; external post ID is stored on ContentPublication
 {
-  contentId: `import-${instagramPostId}`,
+  contentId: `import-${external_post_id}`,
   brandId: string,
   generatedAt: Date,
-  source: 'dalle3',
+  source: 'instagram',
   originalPrompt: string
-}
-
-// Stored in Content model
-{
-  s3ImageKey: string,       // S3 object key
-  imageRegion: string,      // AWS region
-  retentionExpiresAt: Date  // S3 lifecycle expiration
 }
 ```
 
@@ -204,28 +197,26 @@ Images are downloaded from Instagram and uploaded to S3 for permanent storage:
 
 ### Duplicate Prevention
 
-Posts are identified by `instagramPostId` (unique Instagram media ID):
+Posts are identified by a `ContentPublication` with `platform='instagram'` and the media's `external_post_id`:
 
 ```sql
-SELECT * FROM Content
-WHERE brandId = ?
-  AND instagramPostId = ?
+SELECT p.*
+FROM content_publications p
+JOIN content c ON c.id = p.content_id
+WHERE c.brand_id = ?
+  AND p.platform = 'instagram'
+  AND p.external_post_id = ?
 LIMIT 1
 ```
 
 If found, the post is skipped and counted in `results.skipped`.
 
-Additionally, when an imported Instagram post does not yet exist by `instagramPostId`,
-the sync attempts to detect and update an existing draft/scheduled post for the same
-brand to avoid duplicates. Matching uses:
+Additionally, when an imported Instagram post does not yet exist, the sync attempts to detect and update an existing draft/scheduled post for the same brand to avoid duplicates. Matching uses:
 
 - Scheduled time proximity (±2 hours compared to the Instagram `timestamp`), and
 - Caption similarity (normalized exact match or prefix match)
 
-When a match is found, the existing content is updated to `status='published'`, and
-`instagramPostId`, `instagramPermalink`, `postedAt`, and `analytics` are set. Existing
-image data is preserved if present; otherwise the imported image (if downloaded) is set.
-Import metadata is added to `generationParams` with `source='instagram_import'`.
+When a match is found, the existing content is updated to `status='published'` and a `ContentPublication` is upserted with `external_post_id`, `permalink`, and `publishedAt`. Existing image data is preserved if present; otherwise the imported image (if downloaded) is set. Import metadata is added to `generationParams` with `source='instagram_import'`.
 
 ### Rate Limiting
 
@@ -315,31 +306,34 @@ async syncInstagramPosts(
 }>
 ```
 
-## Database Schema
+## Database Schema (Updated)
 
-### Content Model Fields
+We no longer store Instagram identifiers or analytics on the `Content` entity. Instead, each post publication is persisted in `ContentPublication`, and analytics are stored as samples and latest rollups.
 
 ```prisma
 model Content {
-  id                   String    @id @default(cuid())
-  brandId              String
-  caption              String
-  hashtags             String[]
-  status               String    // 'published' for imported posts
-  instagramPostId      String?   // Unique Instagram media ID
-  instagramPermalink   String?   // Public Instagram URL
-  postedAt             DateTime? // Instagram publish timestamp
-  s3ImageKey           String?   // S3 object key
-  imageRegion          String?   // AWS region
-  retentionExpiresAt   DateTime? // S3 lifecycle expiration
-  generationParams     Json?     // Includes sync metadata
-  analytics            Json?     // Engagement metrics
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id            String   @id @default(cuid())
+  brandId       String
+  caption       String
+  hashtags      String[]
+  status        String
+  postedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  publications  ContentPublication[]
+}
 
-  brand                Brand     @relation(fields: [brandId], references: [id])
-
-  @@index([brandId, instagramPostId])
+model ContentPublication {
+  id               String   @id @default(cuid())
+  contentId        String
+  socialAccountId  String
+  platform         Platform
+  externalPostId   String
+  permalink        String?
+  publishedAt      DateTime?
+  status           String?
+  metricsLatest    PublicationMetricsLatest?
+  metricSamples    MetricSample[]
 }
 ```
 
@@ -356,14 +350,7 @@ model Content {
 }
 ```
 
-### Analytics Structure
-
-```json
-{
-  "like_count": 142,
-  "comments_count": 8
-}
-```
+Analytics are persisted as `MetricSample` (append-only) and `PublicationMetricsLatest` (fast reads). Use the new API under `/api/analytics/*` to fetch metrics and refresh as needed.
 
 ## Error Handling
 

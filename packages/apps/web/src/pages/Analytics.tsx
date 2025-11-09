@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { brand as brandApi, httpGet, httpPut, httpDelete } from '../lib/api';
+import { brand as brandApi, httpGet, httpPut, httpDelete, analyticsV2 } from '../lib/api';
 import { PageHeader } from '@/components/PageHeader';
-import AnalyticsChart from '../components/AnalyticsChart';
+import { toast } from 'sonner';
+// Deprecated legacy chart removed; using v2 charts below
 import SchedulingPanel from '../components/SchedulingPanel';
 import { useBrandStore } from '../stores/brandStore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -15,8 +17,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { MetricsCard } from '../components/analytics/MetricsCard';
-import { EngagementChart as IGEngagementChart } from '../components/analytics/EngagementChart';
 import { Eye, Heart, Users } from 'lucide-react';
+import { TimeSeriesChart } from '../components/analytics/TimeSeriesChart';
 
 interface AnalyticsReport {
   totalPosts: number;
@@ -67,29 +69,7 @@ interface ScheduledPost {
 }
 
 // Instagram analytics types
-interface IGAnalyticsOverview {
-  data: {
-    followers: number;
-    impressions: number;
-    reach: number;
-    profile_views?: number;
-    website_clicks?: number;
-  };
-  lastUpdated: string;
-  fromCache: boolean;
-}
-
-interface IGPostPerformance {
-  posts: Array<{
-    id: string;
-    caption: string;
-    impressions: number;
-    engagement: number;
-    media_url: string;
-    posted_at: string;
-  }>;
-  lastUpdated: string;
-}
+// legacy IG types removed; Instagram tab derives from v2 endpoints
 
 export default function Analytics() {
   const { selectedBrand } = useBrandStore();
@@ -109,9 +89,19 @@ export default function Analytics() {
   const [daysPeriod, setDaysPeriod] = useState(30);
 
   // Instagram analytics state
-  const [igConfigured, setIgConfigured] = useState<boolean | null>(null);
-  const [igOverview, setIgOverview] = useState<IGAnalyticsOverview | null>(null);
-  const [igPosts, setIgPosts] = useState<IGPostPerformance | null>(null);
+  // Instagram tab derived from v2 endpoints
+  const [igOverview, setIgOverview] = useState<{
+    followers?: number;
+    impressions?: number;
+    reach?: number;
+    profile_views?: number;
+  } | null>(null);
+  const [igPosts, setIgPosts] = useState<
+    Array<{ id: string; caption?: string; permalink?: string; publishedAt?: string; metrics?: any }>
+  >([]);
+  const [igSeries, setIgSeries] = useState<
+    Array<{ date: string; impressions: number; reach: number; profile_views: number }>
+  >([]);
   const [igLoading, setIgLoading] = useState(false);
 
   // Initial brands load on mount
@@ -163,12 +153,25 @@ export default function Analytics() {
     setError('');
 
     try {
-      const [reportResponse, statsResponse] = await Promise.all([
-        httpGet(`/api/analytics/report/${selectedBrand.id}?days=${daysPeriod}`),
+      const [statsResponse, v2Summary] = await Promise.all([
         httpGet(`/api/analytics/stats/${selectedBrand.id}`),
+        analyticsV2.getBrandSummary(selectedBrand.id).catch(() => null),
       ]);
 
-      setReport(reportResponse.report);
+      // Build minimal report from v2 for Overview cards
+      const v2 = v2Summary?.data;
+      const nextReport: AnalyticsReport = {
+        totalPosts: Number(v2?.totalPosts || 0),
+        totalImpressions: Number(v2?.totalImpressions || 0),
+        totalReach: Number(v2?.reach || 0),
+        totalEngagements: Number(v2?.totalEngagement || 0),
+        averageEngagementRate: Number(v2?.averageEngagementRate || 0),
+        optimalTimes: [],
+        topPerformingPosts: [],
+        engagementTrends: [],
+      };
+
+      setReport(nextReport);
       setSchedulingStats(statsResponse.stats);
     } catch {
       setError('Failed to load analytics data');
@@ -198,37 +201,45 @@ export default function Analytics() {
     if (!selectedBrand?.id) return;
     setIgLoading(true);
     try {
-      // 1) Check IG configuration status first
-      const status = await httpGet(`/api/instagram-analytics/status/${selectedBrand.id}`);
-      if (!status.configured) {
-        setIgConfigured(false);
-        setIgOverview(null);
-        setIgPosts(null);
-        return;
-      }
+      // Build "overview" from brand summary breakdown[instagram] and account latest series first point
+      const summaryRes = await analyticsV2.getBrandSummary(selectedBrand.id).catch(() => null);
+      const breakdown = (summaryRes?.data?.breakdown || {}) as Record<string, any>;
+      const ig = breakdown['instagram'] || null;
+      const seriesRes = await analyticsV2
+        .getBrandAccountSeries(selectedBrand.id, '30d')
+        .catch(() => null);
+      const series = seriesRes?.data?.series || [];
+      setIgSeries(series);
+      const last = series.length ? series[series.length - 1] : null;
+      setIgOverview(
+        ig || last
+          ? {
+              impressions: ig?.impressions || last?.impressions || 0,
+              reach: ig?.reach || last?.reach || 0,
+              // profile_views is best-effort (may be undefined)
+              profile_views: last?.profile_views,
+            }
+          : null
+      );
 
-      setIgConfigured(true);
-
-      // 2) Fetch analytics data. Failures here should NOT flip configured=false
-      try {
-        const [overview, posts] = await Promise.all([
-          httpGet(`/api/instagram-analytics/overview/${selectedBrand.id}?timeRange=30d`),
-          httpGet(`/api/instagram-analytics/posts/${selectedBrand.id}?limit=10`),
-        ]);
-        setIgOverview(overview);
-        setIgPosts(posts);
-      } catch (innerErr) {
-        console.error('Failed to load Instagram analytics data:', innerErr);
-        // Keep configured=true; just clear data so UI can show a graceful empty state
-        setIgOverview(null);
-        setIgPosts(null);
-      }
-    } catch (statusErr) {
-      // Only set not-configured if the status check itself fails decisively
-      console.error('Instagram analytics status check failed:', statusErr);
-      setIgConfigured(false);
+      // Posts: use top-publications filtered to instagram for now
+      const tops = await analyticsV2
+        .getBrandTopPublications(selectedBrand.id, 10)
+        .catch(() => null);
+      const igRows = (tops?.data || []).filter((r: any) => r.platform === 'instagram');
+      setIgPosts(
+        igRows.map((r: any) => ({
+          id: r.publicationId,
+          caption: undefined,
+          permalink: r.permalink,
+          publishedAt: r.publishedAt,
+          metrics: r.metrics,
+        }))
+      );
+    } catch (err) {
+      console.error('Failed to load Instagram (v2) data:', err);
       setIgOverview(null);
-      setIgPosts(null);
+      setIgPosts([]);
     } finally {
       setIgLoading(false);
     }
@@ -350,74 +361,40 @@ export default function Analytics() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-                  <AnalyticsChart
-                    title="Engagement Trends"
-                    data={report.engagementTrends || []}
-                    type="engagement"
-                  />
-                  <AnalyticsChart
-                    title="Optimal Posting Times"
-                    data={report.optimalTimes || []}
-                    type="optimal-times"
-                  />
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const res = await analyticsV2.refreshBrandAccounts(selectedBrand!.id);
+                        if (res?.success) {
+                          toast.success('Account analytics refresh enqueued');
+                        } else {
+                          toast.message('Refresh requested');
+                        }
+                      } catch (e: any) {
+                        const status = e?.status;
+                        const next = e?.data?.nextRefreshAllowed;
+                        if (status === 429) {
+                          toast.error(
+                            next
+                              ? `Refresh throttled. Try after ${new Date(next).toLocaleTimeString()}`
+                              : 'Refresh throttled. Try later.'
+                          );
+                        } else {
+                          toast.error('Failed to enqueue refresh');
+                        }
+                      }
+                    }}
+                  >
+                    Refresh Account Analytics
+                  </Button>
                 </div>
 
-                <div className="bg-card rounded-lg p-6 shadow-md">
-                  <h3 className="mb-4 text-lg font-semibold">Top Performing Posts</h3>
-                  {report.topPerformingPosts && report.topPerformingPosts.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="text-muted-foreground px-4 py-3 text-left font-medium">
-                              Post ID
-                            </th>
-                            <th className="text-muted-foreground px-4 py-3 text-left font-medium">
-                              Impressions
-                            </th>
-                            <th className="text-muted-foreground px-4 py-3 text-left font-medium">
-                              Reach
-                            </th>
-                            <th className="text-muted-foreground px-4 py-3 text-left font-medium">
-                              Engagement
-                            </th>
-                            <th className="text-muted-foreground px-4 py-3 text-left font-medium">
-                              Engagement Rate
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {report.topPerformingPosts.slice(0, 5).map((post, index) => (
-                            <tr key={index} className="border-b">
-                              <td className="text-foreground max-w-32 truncate px-4 py-3 text-sm">
-                                {post.postId}
-                              </td>
-                              <td className="text-foreground px-4 py-3 text-sm">
-                                {formatNumber(post.impressions)}
-                              </td>
-                              <td className="text-foreground px-4 py-3 text-sm">
-                                {formatNumber(post.reach)}
-                              </td>
-                              <td className="text-foreground px-4 py-3 text-sm">
-                                {formatNumber(
-                                  post.likes + post.comments + post.saves + post.shares
-                                )}
-                              </td>
-                              <td className="text-foreground px-4 py-3 text-sm font-medium">
-                                {post.engagementRate.toFixed(1)}%
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground py-8 text-center">
-                      No top performing posts available for this period
-                    </div>
-                  )}
-                </div>
+                <V2Charts brandId={selectedBrand!.id} />
+
+                <TopPublications brandId={selectedBrand!.id} />
               </>
             )}
 
@@ -452,84 +429,72 @@ export default function Analytics() {
                 <div className="border-foreground inline-block h-8 w-8 animate-spin rounded-full border-b-2"></div>
                 <p className="text-muted-foreground mt-2">Loading Instagram analytics...</p>
               </div>
-            ) : igConfigured === false ? (
-              <div className="rounded-lg border p-6 text-center shadow-sm">
-                <h3 className="mb-2 text-lg font-semibold">Instagram Not Connected</h3>
-                <p className="text-muted-foreground mb-4">
-                  Connect your Instagram account to view analytics data for {selectedBrand?.name}.
-                </p>
-                <a href="/brands" className="inline-flex items-center rounded-md px-4 py-2">
-                  Connect Instagram
-                </a>
-              </div>
-            ) : igOverview && igPosts ? (
+            ) : (
               <>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <MetricsCard
-                    title="Followers"
-                    value={igOverview.data.followers}
+                    title="Reach (30d)"
+                    value={igOverview?.reach || 0}
                     icon={<Users className="h-4 w-4" />}
                   />
                   <MetricsCard
-                    title="Impressions"
-                    value={igOverview.data.impressions}
+                    title="Impressions (30d)"
+                    value={igOverview?.impressions || 0}
                     icon={<Eye className="h-4 w-4" />}
-                  />
-                  <MetricsCard
-                    title="Reach"
-                    value={igOverview.data.reach}
-                    icon={<Heart className="h-4 w-4" />}
                   />
                   <MetricsCard
                     title="Profile Views"
-                    value={igOverview.data.profile_views || 0}
-                    icon={<Eye className="h-4 w-4" />}
+                    value={igOverview?.profile_views || 0}
+                    icon={<Heart className="h-4 w-4" />}
                   />
                 </div>
 
-                {igPosts.posts.length > 0 && (
-                  <div className="rounded-lg border p-6 shadow-sm">
-                    <h3 className="mb-1 text-lg font-semibold">Recent Posts Performance</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Engagement metrics for your last {igPosts.posts.length} posts
-                    </p>
-                    <IGEngagementChart data={igPosts.posts} />
+                {igSeries && igSeries.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+                    <TimeSeriesChart
+                      title="Reach (Daily)"
+                      series={igSeries.map((d) => ({ date: d.date, value: d.reach }))}
+                      label="Total reach per day"
+                    />
+                    <TimeSeriesChart
+                      title="Impressions (Daily)"
+                      series={igSeries.map((d) => ({ date: d.date, value: d.impressions }))}
+                      label="Total impressions per day"
+                    />
                   </div>
-                )}
+                ) : null}
 
                 <div className="rounded-lg border p-6 shadow-sm">
-                  <h3 className="mb-4 text-lg font-semibold">Top Performing Posts</h3>
-                  {igPosts.posts && igPosts.posts.length > 0 ? (
+                  <h3 className="mb-4 text-lg font-semibold">Top Instagram Posts</h3>
+                  {igPosts && igPosts.length > 0 ? (
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {(igPosts.posts as any[]).slice(0, 6).map((post: any) => (
+                      {igPosts.slice(0, 6).map((post: any) => (
                         <div key={post.id} className="overflow-hidden rounded-lg border">
-                          {post.media_url && (
-                            <div className="relative aspect-square">
-                              <img
-                                src={post.media_url}
-                                alt="Post"
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                          )}
                           <div className="p-4">
                             <p className="text-muted-foreground mb-2 line-clamp-2 text-sm">
-                              {post.caption}
+                              {post.caption || '—'}
                             </p>
                             <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-4">
                                 <span className="flex items-center gap-1">
                                   <Eye className="h-3 w-3" />
-                                  {post.impressions.toLocaleString()}
+                                  {Number(post.metrics?.impressions || 0).toLocaleString()}
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Heart className="h-3 w-3" />
-                                  {post.engagement.toLocaleString()}
+                                  {Number(post.metrics?.engagement || 0).toLocaleString()}
                                 </span>
                               </div>
-                              <span className="text-muted-foreground">
-                                {new Date(post.posted_at).toLocaleDateString()}
-                              </span>
+                              {post.permalink ? (
+                                <a
+                                  href={post.permalink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="hover:underline"
+                                >
+                                  View
+                                </a>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -542,7 +507,7 @@ export default function Analytics() {
                   )}
                 </div>
               </>
-            ) : null}
+            )}
           </TabsContent>
 
           <TabsContent value="scheduling" className="space-y-6">
@@ -574,6 +539,145 @@ export default function Analytics() {
           </TabsContent>
         </Tabs>
       </div>
+    </div>
+  );
+}
+
+function V2Charts({ brandId }: { brandId: string }) {
+  const [series, setSeries] = useState<
+    Array<{ date: string; impressions: number; reach: number; profile_views: number }>
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setErr(null);
+      try {
+        await analyticsV2.getBrandSummary(brandId).catch(() => null);
+        const seriesRes = await analyticsV2.getBrandAccountSeries(brandId, '30d').catch(() => null);
+        if (!cancelled && seriesRes?.data?.series) {
+          setSeries(seriesRes.data.series);
+        }
+      } catch {
+        if (!cancelled) setErr('Failed to load charts');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId]);
+
+  if (loading) return null;
+  if (err) return <div className="text-muted-foreground">{err}</div>;
+  const reachSeries = series.map((d) => ({ date: d.date, value: d.reach }));
+  const impressionsSeries = series.map((d) => ({ date: d.date, value: d.impressions }));
+  return (
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <TimeSeriesChart title="Reach (Daily)" series={reachSeries} label="Total reach per day" />
+      <TimeSeriesChart
+        title="Impressions (Daily)"
+        series={impressionsSeries}
+        label="Total impressions per day"
+      />
+    </div>
+  );
+}
+function TopPublications({ brandId }: { brandId: string }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setErr(null);
+      try {
+        const res = await analyticsV2.getBrandTopPublications(brandId, 5);
+        if (!cancelled) setRows(res.data || []);
+      } catch {
+        if (!cancelled) setErr('Failed to load top posts');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId]);
+
+  return (
+    <div className="bg-card rounded-lg p-6 shadow-md">
+      <h3 className="mb-4 text-lg font-semibold">Top Performing Posts</h3>
+      {loading ? (
+        <div className="text-muted-foreground py-8 text-center">Loading…</div>
+      ) : err ? (
+        <div className="text-muted-foreground py-8 text-center">{err}</div>
+      ) : rows.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b">
+                <th className="text-muted-foreground px-4 py-3 text-left font-medium">
+                  Publication
+                </th>
+                <th className="text-muted-foreground px-4 py-3 text-left font-medium">
+                  Impressions
+                </th>
+                <th className="text-muted-foreground px-4 py-3 text-left font-medium">Reach</th>
+                <th className="text-muted-foreground px-4 py-3 text-left font-medium">
+                  Engagement
+                </th>
+                <th className="text-muted-foreground px-4 py-3 text-left font-medium">Eng. Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.publicationId} className="border-b">
+                  <td className="text-foreground max-w-48 truncate px-4 py-3 text-sm">
+                    {row.permalink ? (
+                      <a
+                        href={row.permalink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="hover:underline"
+                      >
+                        {row.platform}:{row.publicationId}
+                      </a>
+                    ) : (
+                      <span>
+                        {row.platform}:{row.publicationId}
+                      </span>
+                    )}
+                  </td>
+                  <td className="text-foreground px-4 py-3 text-sm">
+                    {Number(row.metrics?.impressions || 0).toLocaleString()}
+                  </td>
+                  <td className="text-foreground px-4 py-3 text-sm">
+                    {Number(row.metrics?.reach || 0).toLocaleString()}
+                  </td>
+                  <td className="text-foreground px-4 py-3 text-sm">
+                    {Number(row.metrics?.engagement || 0).toLocaleString()}
+                  </td>
+                  <td className="text-foreground px-4 py-3 text-sm font-medium">
+                    {typeof row.metrics?.engagementRate === 'number'
+                      ? Number(row.metrics.engagementRate).toFixed(1)
+                      : '0.0'}
+                    %
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="text-muted-foreground py-8 text-center">
+          No top performing posts available
+        </div>
+      )}
     </div>
   );
 }

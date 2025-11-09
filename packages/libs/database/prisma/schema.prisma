@@ -85,6 +85,7 @@ model Brand {
   content              Content[]
   notifications        Notification[]
   notificationPreferences NotificationPreference[]
+  socialAccounts      SocialAccount[]
 
   @@index([userId])
   @@index([createdAt])
@@ -103,9 +104,6 @@ model Content {
   generationParams   Json?
   brandId            String
   campaignId         String?
-  instagramPermalink String?
-  instagramPostId    String?
-  analytics          Json?
   schedulingError    String?
   primaryAssetId     String?       // Asset service identifier
   primaryAssetCdnUrl String?       // Cached CDN URL for fast reads
@@ -114,13 +112,13 @@ model Content {
   brand              Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   campaign           Campaign?     @relation(fields: [campaignId], references: [id])
   mediaAssets        PostMediaAsset[]
+  publications       ContentPublication[]
 
   @@index([brandId, status])
   @@index([scheduledAt])
   @@index([brandId, status, scheduledAt])
   @@index([campaignId])
   // Ensure idempotent imports from Instagram per brand
-  @@unique([brandId, instagramPostId])
   @@map("content")
 }
 
@@ -194,6 +192,182 @@ enum ContentStatus {
   published  // Successfully posted to Instagram
   failed     // Publishing failed
   skipped    // Missed during campaign pause
+}
+
+// =========================
+// Analytics v2 — New Models
+// =========================
+
+enum Platform {
+  instagram
+  facebook
+  linkedin
+  x
+  youtube
+  tiktok
+}
+
+enum MetricName {
+  impressions
+  reach
+  likes
+  comments
+  saves
+  shares
+  video_views
+  engagement
+  profile_views
+  followers
+  link_clicks
+  website_clicks
+}
+
+enum MetricPeriod {
+  lifetime
+  day
+  hour
+}
+
+model SocialAccount {
+  id                String   @id @default(cuid())
+  brandId           String
+  platform          Platform
+  externalAccountId String
+  externalPageId    String?
+  username          String?
+  displayName       String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  publications      ContentPublication[]
+  accountMetricSamples AccountMetricSample[]
+  accountMetricsLatest AccountMetricsLatest?
+
+  @@unique([platform, externalAccountId])
+  @@index([brandId, platform])
+  @@map("social_accounts")
+}
+
+model ContentPublication {
+  id                 String    @id @default(cuid())
+  contentId          String
+  socialAccountId    String
+  platform           Platform
+  externalPostId     String
+  externalThreadRootId String?
+  externalAccountId  String?   // cache for faster joins
+  externalPageId     String?   // cache for faster joins (FB/IG)
+  permalink          String?
+  publishedAt        DateTime?
+  status             String?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  content            Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  socialAccount      SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  metricsLatest      PublicationMetricsLatest?
+  metricSamples      MetricSample[]
+  comments           PublicationComment[]
+
+  @@unique([socialAccountId, externalPostId])
+  @@index([contentId, platform])
+  @@map("content_publications")
+}
+
+model MetricSample {
+  id            String      @id @default(cuid())
+  publicationId String
+  platform      Platform
+  metricName    MetricName  @map("metric_name")
+  value         Decimal
+  period        MetricPeriod
+  windowStart   DateTime?   @map("window_start")
+  windowEnd     DateTime?   @map("window_end")
+  asOf          DateTime    @map("as_of")
+  raw           Json?
+
+  publication   ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@index([publicationId, metricName, asOf])
+  @@map("metric_samples")
+}
+
+model PublicationMetricsLatest {
+  publicationId String     @id @map("publication_id")
+  platform      Platform
+  // Store common metrics; extend as needed
+  impressions   Int        @default(0)
+  reach         Int        @default(0)
+  likes         Int        @default(0)
+  comments      Int        @default(0)
+  saves         Int        @default(0)
+  shares        Int        @default(0)
+  videoViews    Int        @default(0) @map("video_views")
+  engagement    Int        @default(0)
+  engagementRate Decimal   @default(0)
+  lastUpdated   DateTime   @default(now()) @map("last_updated")
+
+  publication   ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@map("publication_metrics_latest")
+}
+
+model PublicationComment {
+  id                  String   @id @default(cuid())
+  publicationId       String
+  platform            Platform
+  externalCommentId   String   @map("external_comment_id")
+  parentExternalCommentId String? @map("parent_external_comment_id")
+  authorUsername      String?
+  authorExternalUserId String?
+  text                String?
+  likeCount           Int?     @default(0) @map("like_count")
+  createdAt           DateTime @default(now())
+  fetchedAt           DateTime @default(now()) @map("fetched_at")
+  metadata            Json?
+
+  publication         ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@unique([publicationId, externalCommentId])
+  @@index([publicationId])
+  @@map("publication_comments")
+}
+
+// Account-level metrics (for brand/platform overviews and charts)
+model AccountMetricSample {
+  id              String       @id @default(cuid())
+  socialAccountId String       @map("social_account_id")
+  platform        Platform
+  metricName      MetricName   @map("metric_name")
+  value           Decimal
+  period          MetricPeriod
+  windowStart     DateTime?    @map("window_start")
+  windowEnd       DateTime?    @map("window_end")
+  asOf            DateTime     @map("as_of")
+  raw             Json?
+
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([socialAccountId, metricName, asOf])
+  @@map("account_metric_samples")
+}
+
+model AccountMetricsLatest {
+  socialAccountId String     @id @map("social_account_id")
+  platform        Platform
+  // Common account metrics
+  followers       Int        @default(0)
+  impressions     Int        @default(0)
+  reach           Int        @default(0)
+  profileViews    Int        @default(0) @map("profile_views")
+  lastUpdated     DateTime   @default(now()) @map("last_updated")
+
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@map("account_metrics_latest")
 }
 
 enum CampaignStatus {

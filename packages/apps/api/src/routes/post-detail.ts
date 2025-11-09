@@ -43,9 +43,6 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
           status: true,
           scheduledAt: true,
           postedAt: true,
-          instagramPostId: true,
-          instagramPermalink: true,
-          analytics: true,
           generationParams: true,
           createdAt: true,
           updatedAt: true,
@@ -65,6 +62,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
               status: true,
             },
           },
+          publications: { select: { platform: true, permalink: true, id: true } },
         },
       });
 
@@ -94,9 +92,13 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         brandId: post.brandId,
         scheduledAt: post.scheduledAt,
         postedAt: post.postedAt,
-        instagramPostId: post.instagramPostId,
-        instagramPermalink: post.instagramPermalink,
-        analytics: post.analytics,
+        // Deprecated fields removed; fallback permalink for UI convenience
+        instagramPostId: undefined,
+        instagramPermalink:
+          (post.publications || []).find((p) => p.platform === 'instagram')?.permalink ||
+          (post.publications || [])[0]?.permalink ||
+          undefined,
+        analytics: undefined,
         generationParams: post.generationParams,
         schedulingError: post.schedulingError,
         brand: post.brand,
@@ -113,7 +115,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  // Get Instagram insights for a post
+  // Get insights (v2-backed) for a post
   app.get<{ Params: PostDetailParams }>('/api/posts/:postId/insights', async (request, reply) => {
     // Validate params
     const paramsValidation = validateRequest(PostDetailParamsSchema, request.params);
@@ -155,49 +157,32 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         likes_count: 0,
       };
 
-      // If post is published and has Instagram ID, fetch real metrics
-      if (post.status === 'published' && post.instagramPostId && post.brand) {
+      // If post is published, return persisted v2 latest if available
+      if (post.status === 'published') {
         try {
-          const insightsResponse = (await instagramService.getMediaInsights(
-            post.brand,
-            post.instagramPostId
-          )) as unknown;
-
-          // Parse Instagram insights data
-          if (
-            insightsResponse &&
-            typeof insightsResponse === 'object' &&
-            'data' in (insightsResponse as Record<string, unknown>) &&
-            Array.isArray((insightsResponse as Record<string, unknown>).data as unknown[])
-          ) {
-            interface InstagramInsightValue {
-              value?: number;
-              end_time?: string;
+          const pub = await prisma.contentPublication.findFirst({
+            where: { contentId: postId },
+            orderBy: { publishedAt: 'desc' },
+            select: { id: true, platform: true },
+          });
+          if (pub) {
+            const latest = await prisma.publicationMetricsLatest.findUnique({
+              where: { publicationId: pub.id },
+            });
+            if (latest) {
+              metrics = {
+                impressions: latest.impressions || 0,
+                reach: latest.reach || 0,
+                engagement: latest.engagement || 0,
+                saves: latest.saves || 0,
+                shares: latest.shares || 0,
+                comments_count: latest.comments || 0,
+                likes_count: latest.likes || 0,
+              };
             }
-            interface InstagramInsight {
-              name?: string;
-              values?: InstagramInsightValue[];
-            }
-            const dataArr = (insightsResponse as Record<string, unknown>).data as unknown[];
-            const insights: InstagramInsight[] = dataArr
-              .filter((d): d is InstagramInsight => !!d && typeof d === 'object' && 'name' in d)
-              .map((d) => d as InstagramInsight);
-            const getMetric = (name: string): number => {
-              return insights.find((m) => m.name === name)?.values?.[0]?.value ?? 0;
-            };
-            metrics = {
-              impressions: getMetric('impressions'),
-              reach: getMetric('reach'),
-              engagement: getMetric('engagement'),
-              saves: getMetric('saves'),
-              shares: getMetric('shares'),
-              comments_count: getMetric('comments'),
-              likes_count: getMetric('likes'),
-            };
           }
-        } catch (error) {
-          console.error('Failed to fetch Instagram metrics:', error);
-          // Return default metrics on error
+        } catch (e) {
+          request.log.warn({ err: e }, 'Failed to load v2 metrics');
         }
       }
 
@@ -215,7 +200,7 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  // Get comments for a post
+  // Get comments for a post (Instagram via v2 publications)
   app.get<{ Params: PostDetailParams }>('/api/posts/:postId/comments', async (request, reply) => {
     // Validate params
     const paramsValidation = validateRequest(PostDetailParamsSchema, request.params);
@@ -269,16 +254,22 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       let comments: InstagramComment[] = [];
       let total = 0;
 
-      // If post is published and has Instagram ID, fetch real comments
-      if (post.status === 'published' && post.instagramPostId && post.brand) {
+      // If post is published and has an Instagram publication, fetch real comments
+      if (post.status === 'published' && post.brand) {
         try {
-          const commentsResponse = await instagramService.getPostComments(
-            post.brand,
-            post.instagramPostId,
-            Number(limit)
-          );
-          comments = commentsResponse.data;
-          total = commentsResponse.total;
+          const pub = await prisma.contentPublication.findFirst({
+            where: { contentId: postId, platform: 'instagram' },
+            select: { id: true, platform: true, socialAccountId: true, externalPostId: true },
+          });
+          if (pub && typeof pub.externalPostId === 'string') {
+            const res = await instagramService.getPostComments(
+              post.brand,
+              pub.externalPostId,
+              Number(limit)
+            );
+            comments = res.data;
+            total = res.total;
+          }
         } catch (error) {
           console.error('Failed to fetch Instagram comments:', error);
           // Return empty comments on error

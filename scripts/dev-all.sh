@@ -169,6 +169,14 @@ else
   echo "Skipping database reset because SKIP_DB_RESET=1"
 fi
 
+# Always attempt to apply any pending primary DB migrations (covers SKIP_DB_RESET case)
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  echo "Applying primary database migrations..."
+  pnpm --filter @postolio/database exec -- prisma migrate deploy
+else
+  echo "DATABASE_URL not set; skipping primary migration deploy."
+fi
+
 if [[ "${SKIP_ASSETS_SEED:-0}" != "1" ]]; then
   if [[ -n "${ASSETS_DATABASE_URL:-}" ]]; then
     echo "Resolving brand ID for assets seed (email=${ASSETS_SEED_BRAND_EMAIL}, brand=${ASSETS_SEED_BRAND_NAME})..."

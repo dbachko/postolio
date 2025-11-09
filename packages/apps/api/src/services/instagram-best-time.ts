@@ -202,17 +202,16 @@ export class InstagramBestTimeService {
   ): Promise<BestTimePayload | null> {
     const since = new Date();
     since.setDate(since.getDate() - 90);
-    const rows = await prisma.content.findMany({
+    const rows = await prisma.contentPublication.findMany({
       where: {
-        brandId,
-        status: 'published',
-        postedAt: { not: null, gte: since },
+        content: { brandId },
+        publishedAt: { not: null, gte: since },
       },
       select: {
-        postedAt: true,
-        analytics: true,
+        publishedAt: true,
+        metricsLatest: { select: { likes: true, comments: true, reach: true } },
       },
-      orderBy: { postedAt: 'desc' },
+      orderBy: { publishedAt: 'desc' },
       take: 500,
     });
     if (!rows.length) return null;
@@ -220,22 +219,15 @@ export class InstagramBestTimeService {
     const hm = emptyHeatmap();
     const counts = emptyHeatmap();
 
-    type AnalyticsShape = {
-      likes?: number;
-      like_count?: number;
-      comments?: number;
-      comments_count?: number;
-      reach?: number;
-    };
     for (const r of rows) {
-      if (!r.postedAt) continue;
-      const local = TimezoneService.toLocal(r.postedAt, timezone);
+      if (!r.publishedAt) continue;
+      const local = TimezoneService.toLocal(r.publishedAt, timezone);
       const day = local.getDay(); // 0=Sun..6=Sat
       const hour = local.getHours();
-      const a = (r.analytics || {}) as AnalyticsShape;
-      const likes = Number(a.likes || a.like_count || 0);
-      const comments = Number(a.comments || a.comments_count || 0);
-      const reach = Number(a.reach || 0);
+      const m = r.metricsLatest || { likes: 0, comments: 0, reach: 0 };
+      const likes = Number(m.likes || 0);
+      const comments = Number(m.comments || 0);
+      const reach = Number(m.reach || 0);
       // Engagement score formula:
       // - Comments are weighted 2x compared to likes because they indicate deeper interaction.
       // - Reach uses sqrt to dampen outliers so viral posts do not dominate the signal.

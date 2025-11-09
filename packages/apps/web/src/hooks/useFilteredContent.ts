@@ -15,7 +15,6 @@ interface ContentItem {
   postedAt?: string | null;
   brandId: string;
   imageUrl?: string;
-  instagramPermalink?: string | null;
 }
 
 export function useFilteredContent(items: ContentItem[]) {

@@ -340,7 +340,7 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
                 scheduledAt: item.scheduledAt || undefined,
                 postedAt: item.postedAt || undefined,
                 campaignId: item.campaignId || undefined,
-                instagramPermalink: item.instagramPermalink || undefined,
+                permalink: item.permalink || undefined,
               }))}
               brandName={brandName || 'Brand'}
               dateRange={dateRange}

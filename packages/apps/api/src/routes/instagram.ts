@@ -276,10 +276,50 @@ const instagram: FastifyPluginAsync = async function (fastify) {
           data: {
             status: 'published',
             postedAt: new Date(),
-            instagramPostId: publishResult.id,
-            instagramPermalink: publishResult.permalink,
           },
         });
+
+        // Create ContentPublication for analytics v2 (best-effort)
+        try {
+          const platform = 'instagram' as const;
+          const socialAccount = await prisma.socialAccount.upsert({
+            where: {
+              platform_externalAccountId: {
+                platform,
+                externalAccountId: content.brand.instagramAccountId || 'unknown',
+              },
+            },
+            update: {
+              brandId: content.brand.id,
+              externalPageId: content.brand.instagramPageId || undefined,
+              displayName: content.brand.name,
+            },
+            create: {
+              brandId: content.brand.id,
+              platform,
+              externalAccountId: content.brand.instagramAccountId || 'unknown',
+              externalPageId: content.brand.instagramPageId || undefined,
+              displayName: content.brand.name,
+            },
+          });
+
+          await prisma.contentPublication.create({
+            data: {
+              contentId: contentId,
+              socialAccountId: socialAccount.id,
+              platform,
+              externalPostId: publishResult.id,
+              externalThreadRootId: null,
+              externalAccountId: content.brand.instagramAccountId || undefined,
+              externalPageId: content.brand.instagramPageId || undefined,
+              permalink: publishResult.permalink || undefined,
+              publishedAt: new Date(),
+              status: 'published',
+            },
+          });
+        } catch (e) {
+          request.log.warn({ err: e }, 'Failed to record ContentPublication');
+        }
 
         reply.send({
           success: true,

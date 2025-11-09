@@ -26,10 +26,11 @@ import instagramOAuthRoutes from './routes/instagram-oauth.js';
 import brandsRoutes from './routes/brands.js';
 import contentRoutes from './routes/content/index.js';
 import analyticsRoutes from './routes/analytics.js';
-import instagramAnalyticsRoutes from './routes/instagram-analytics.js';
 import autopilotRoutes from './routes/autopilot.js';
 import campaignRoutes from './routes/campaign.js';
 import campaignAnalyticsRoutes from './routes/campaign-analytics.js';
+import publicationsRoutes from './routes/publications.js';
+import analyticsRoutesV2 from './routes/analytics-v2.js';
 import brandStyleRoutes from './routes/brand-style.js';
 import rollingContentRoutes from './routes/rolling-content.js';
 import legalRoutes from './routes/legal.js';
@@ -210,9 +211,6 @@ export function buildFastify(): FastifyInstance {
   app.register(brandsRoutes, { prefix: '/api/brands' });
   app.register(contentRoutes, { prefix: '/api/content' });
   app.register(analyticsRoutes, { prefix: '/api/analytics' });
-  app.register(instagramAnalyticsRoutes, {
-    prefix: '/api/instagram-analytics',
-  });
   app.register(autopilotRoutes, { prefix: '/api/autopilot' });
   // Mount campaigns at plural REST path
   app.register(campaignRoutes, { prefix: '/api/campaigns' });
@@ -231,6 +229,10 @@ export function buildFastify(): FastifyInstance {
   app.register(brandAnalysisNested, { prefix: '/api/brands' });
   app.register(brandStyleRoutes, { prefix: '/api/brands' });
   app.register(notificationsRoutes, { prefix: '/api/notifications' });
+
+  // Analytics/Publications endpoints (canonical under /api)
+  app.register(publicationsRoutes, { prefix: '/api' });
+  app.register(analyticsRoutesV2, { prefix: '/api' });
 
   // Add brand-nested Instagram wrappers under /api/brands
   app.register(brandsInstagram, { prefix: '/api/brands' });

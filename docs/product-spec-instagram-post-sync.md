@@ -300,8 +300,7 @@ model Content {
   postedAt           DateTime?      // Instagram post timestamp
 
   // Instagram metadata
-  instagramPostId    String?        // Unique Instagram post ID
-  instagramPermalink String?        // Instagram post URL
+  // Removed in v2: instagramPostId / instagramPermalink on Content
 
   // Image storage
   s3ImageKey         String?        // S3 object key
@@ -309,7 +308,7 @@ model Content {
   retentionExpiresAt DateTime?      // Retention policy
 
   // Analytics
-  analytics          Json?          // {like_count, comments_count}
+  // Removed in v2: analytics JSON on Content; persisted as MetricSample + PublicationMetricsLatest
 
   // Source tracking
   generationParams   Json?          // {source: 'instagram_import'}

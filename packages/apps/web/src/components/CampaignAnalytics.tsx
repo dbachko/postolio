@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
-import { campaign as campaignApi } from '../lib/api';
+import { campaign as campaignApi, analyticsV2 } from '../lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,10 +35,17 @@ export function CampaignAnalytics({
   const [selectedTab, setSelectedTab] = useState('overview');
   const timezone = tzOverride;
 
-  // Fetch campaign metrics
+  // Fetch campaign metrics (v1)
   const metricsQuery = useQuery({
     queryKey: ['campaign-metrics', campaignId],
     queryFn: () => campaignApi.getCampaignMetrics(campaignId),
+    enabled: !!campaignId,
+  });
+
+  // Fetch campaign aggregates (v2)
+  const v2MetricsQuery = useQuery({
+    queryKey: ['campaign-metrics-v2', campaignId],
+    queryFn: () => analyticsV2.getCampaignAggregates(campaignId),
     enabled: !!campaignId,
   });
 
@@ -80,7 +87,39 @@ export function CampaignAnalytics({
     );
   }
 
-  const metrics = metricsQuery.data?.data;
+  const metricsV1 = metricsQuery.data?.data;
+  const metricsV2 = v2MetricsQuery.data?.data;
+
+  // Merge: prefer v2 totals when available, preserve v1 fields for progress UI
+  const metrics = metricsV1
+    ? {
+        ...metricsV1,
+        ...(metricsV2?.data
+          ? {
+              totalPosts: metricsV2.data.totalPosts,
+              totalImpressions: metricsV2.data.totalImpressions,
+              totalEngagement: metricsV2.data.totalEngagement,
+              reach: metricsV2.data.reach,
+              averageEngagementRate: metricsV2.data.averageEngagementRate,
+            }
+          : {}),
+      }
+    : metricsV2?.data
+      ? {
+          totalPosts: metricsV2.data.totalPosts,
+          totalImpressions: metricsV2.data.totalImpressions,
+          totalEngagement: metricsV2.data.totalEngagement,
+          reach: metricsV2.data.reach,
+          averageEngagementRate: metricsV2.data.averageEngagementRate,
+          postsScheduled: 0,
+          postsPosted: 0,
+          postsDraft: 0,
+          campaignDuration: 0,
+          postingFrequency: 0,
+          topHashtags: [],
+          performanceByDate: [],
+        }
+      : undefined;
   const recommendations = recommendationsQuery.data?.data || [];
   const roi = roiQuery.data?.data;
 

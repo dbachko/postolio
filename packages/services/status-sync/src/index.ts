@@ -5,7 +5,7 @@
  */
 
 import type { PrismaClient as LambdaPrismaClient, Prisma } from '@postolio/database/lambda';
-import { createLambdaPrismaClient, ContentStatus } from '@postolio/database/lambda';
+import { createLambdaPrismaClient, ContentStatus, Platform } from '@postolio/database/lambda';
 import type { Context, EventBridgeEvent } from 'aws-lambda';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
@@ -438,19 +438,93 @@ async function createPostFailureNotification(
 }
 
 async function handlePostPublished(detail: EventDetail) {
-  const { contentId, publishedAt, platformPostId, permalink } = detail;
+  const { contentId, brandId, publishedAt, platformPostId, permalink, platform } = detail;
   if (!contentId) return;
   const client = await getClient();
+
+  // Always mark content as published with postedAt timestamp
   await client.content.update({
     where: { id: contentId },
     data: {
       status: 'published' as ContentStatus,
       postedAt: publishedAt ? new Date(publishedAt) : new Date(),
-      instagramPostId: platformPostId ?? undefined,
-      instagramPermalink: permalink ?? undefined,
       schedulingError: null,
     },
   });
+
+  // Record publication using the v2 publication model (append-only)
+  try {
+    const plt = (platform || 'instagram') as Platform;
+
+    // Load brand to retrieve external account identifiers
+    const brand = brandId
+      ? await client.brand.findUnique({
+          where: { id: brandId },
+          select: { id: true, name: true, instagramAccountId: true, instagramPageId: true },
+        })
+      : null;
+
+    // Upsert SocialAccount for this brand/platform
+    const externalAccountId = brand?.instagramAccountId || 'unknown';
+    const socialAccount = await client.socialAccount.upsert({
+      where: {
+        platform_externalAccountId: {
+          platform: plt,
+          externalAccountId,
+        },
+      },
+      update: {
+        brandId: brandId || undefined,
+        externalPageId: brand?.instagramPageId || undefined,
+        username: undefined,
+        displayName: brand?.name || undefined,
+      },
+      create: {
+        brandId: brandId || (brand?.id as string),
+        platform: plt,
+        externalAccountId,
+        externalPageId: brand?.instagramPageId || undefined,
+        username: undefined,
+        displayName: brand?.name || undefined,
+      },
+      select: { id: true },
+    });
+
+    // Create publication if we have a platform post id
+    if (platformPostId) {
+      await client.contentPublication.upsert({
+        where: {
+          // ensure idempotency on repeated events
+          socialAccountId_externalPostId: {
+            socialAccountId: socialAccount.id,
+            externalPostId: platformPostId,
+          },
+        },
+        update: {
+          permalink: permalink || undefined,
+          publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
+          status: 'published',
+        },
+        create: {
+          contentId,
+          socialAccountId: socialAccount.id,
+          platform: plt,
+          externalPostId: platformPostId,
+          externalThreadRootId: null,
+          externalAccountId: brand?.instagramAccountId || undefined,
+          externalPageId: brand?.instagramPageId || undefined,
+          permalink: permalink || undefined,
+          publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
+          status: 'published',
+        },
+      });
+    }
+  } catch (e) {
+    console.warn('Failed to record publication in status-sync', {
+      contentId,
+      error: (e as Error)?.message,
+    });
+  }
 }
 
 async function handlePostFailed(detail: EventDetail) {

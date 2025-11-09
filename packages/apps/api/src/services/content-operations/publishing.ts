@@ -105,10 +105,53 @@ export async function publishContentToInstagram(
       data: {
         status: 'published',
         postedAt,
-        instagramPostId: publishResult.id,
-        instagramPermalink: publishResult.permalink,
       },
     });
+
+    // Create or connect SocialAccount and create ContentPublication for analytics v2
+    try {
+      const platform = 'instagram';
+      const socialAccount = await prisma.socialAccount.upsert({
+        where: {
+          platform_externalAccountId: {
+            platform,
+            externalAccountId: brand.instagramAccountId || 'unknown',
+          },
+        },
+        update: {
+          brandId: brand.id,
+          externalPageId: brand.instagramPageId || undefined,
+          username: undefined,
+          displayName: brand.name,
+        },
+        create: {
+          brandId: brand.id,
+          platform,
+          externalAccountId: brand.instagramAccountId || 'unknown',
+          externalPageId: brand.instagramPageId || undefined,
+          username: undefined,
+          displayName: brand.name,
+        },
+      });
+
+      await prisma.contentPublication.create({
+        data: {
+          contentId,
+          socialAccountId: socialAccount.id,
+          platform,
+          externalPostId: publishResult.id,
+          externalThreadRootId: null,
+          externalAccountId: brand.instagramAccountId || undefined,
+          externalPageId: brand.instagramPageId || undefined,
+          permalink: publishResult.permalink || undefined,
+          publishedAt: postedAt,
+          status: 'published',
+        },
+      });
+    } catch (e) {
+      // Do not fail publishing flow on analytics side-effects
+      console.warn('Failed to record ContentPublication', (e as Error)?.message);
+    }
 
     return {
       success: true,

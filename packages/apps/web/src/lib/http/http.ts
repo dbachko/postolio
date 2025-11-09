@@ -104,7 +104,13 @@ export function createHttp(): HttpRequest {
 
       if (response.status === 413)
         throw new Error('Image too large. Please optimize your image to be under 10MB.');
-      if (errorData) throw new Error(errorData.error || errorData.message || 'Request failed');
+      if (errorData) {
+        const err = new Error(errorData.error || errorData.message || 'Request failed');
+        // Attach status and data for richer client error handling (e.g., 429 throttling)
+        (err as any).status = response.status;
+        (err as any).data = errorData;
+        throw err;
+      }
       if (response.status === 404) throw new Error('Resource not found');
       if (response.status === 500) throw new Error('Server error. Please try again later.');
       if (errorText) throw new Error(errorText);

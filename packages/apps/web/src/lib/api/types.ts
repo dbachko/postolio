@@ -38,8 +38,7 @@ export interface Content {
   campaignId?: string | null;
   campaignName?: string | null;
   campaignColor?: string | null;
-  instagramPostId?: string | null;
-  instagramPermalink?: string | null;
+  permalink?: string | null;
   schedulingError?: string | null;
 }
 

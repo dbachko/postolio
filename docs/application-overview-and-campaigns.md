@@ -205,7 +205,7 @@ The platform separates scheduling from publishing via dedicated services and AWS
 ### 6.3 Instagram Platform Adapter
 
 - API service posting flow (Graph API): `packages/apps/api/src/services/platform-adapter.ts`
-  - Create media, publish media, fetch permalink, persist `instagramPostId`/`instagramPermalink`.
+  - Create media, publish media, fetch permalink, persist a `ContentPublication` with `platform`, `external_post_id`, and `permalink`.
   - Uses short‑lived credentials obtained securely (see `packages/apps/api/src/services/publisher-credentials.ts`).
 
 ### 6.4 Live Updates to UI (WebSockets)

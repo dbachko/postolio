@@ -411,48 +411,88 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         );
 
         // Get existing content for the month with campaign info for color coding
-        const content = await prisma.content.findMany({
-          where: {
-            brandId,
-            OR: [
-              { scheduledAt: { gte: monthStart, lte: monthEnd } },
-              { postedAt: { gte: monthStart, lte: monthEnd } },
-            ],
-          },
-          include: {
-            campaign: {
-              select: { id: true, name: true, color: true },
+        let content: Array<any> = [];
+        let hasPublications = true;
+        try {
+          content = await prisma.content.findMany({
+            where: {
+              brandId,
+              OR: [
+                { scheduledAt: { gte: monthStart, lte: monthEnd } },
+                { postedAt: { gte: monthStart, lte: monthEnd } },
+              ],
             },
-          },
-          orderBy: { scheduledAt: 'asc' },
-        });
+            include: {
+              campaign: { select: { id: true, name: true, color: true } },
+              publications: { select: { platform: true, permalink: true } },
+            },
+            orderBy: { scheduledAt: 'asc' },
+          });
+        } catch (e: any) {
+          // If publications table missing (pre-migration), retry without publications include
+          const code = e?.code || e?.meta?.code;
+          if (code === 'P2021' || /content_publications/.test(String(e?.message || ''))) {
+            hasPublications = false;
+            content = await prisma.content.findMany({
+              where: {
+                brandId,
+                OR: [
+                  { scheduledAt: { gte: monthStart, lte: monthEnd } },
+                  { postedAt: { gte: monthStart, lte: monthEnd } },
+                ],
+              },
+              include: {
+                campaign: { select: { id: true, name: true, color: true } },
+              },
+              orderBy: { scheduledAt: 'asc' },
+            });
+            request.log.warn(
+              { err: e },
+              'Publications table missing; calendar will omit permalinks until migrations are applied'
+            );
+          } else {
+            throw e;
+          }
+        }
 
         // Get active campaigns
         const campaigns = await prisma.campaign.findMany({
           where: { brandId, status: { in: ['active', 'preview'] } },
         });
 
-        // Compute placeholders (timezone-aware)
-        const placeholders = await computePlaceholders(campaigns, content, monthStart, monthEnd);
+        // Compute placeholders (timezone-aware). If it fails, degrade gracefully to empty.
+        let placeholders: any[] = [];
+        try {
+          placeholders = await computePlaceholders(campaigns, content, monthStart, monthEnd);
+        } catch (e) {
+          request.log.warn({ err: e }, 'Placeholder computation failed; returning content only');
+          placeholders = [];
+        }
 
         // Map to response format with CDN URLs and campaign colors
-        const contentWithUrls = content.map((item) => ({
-          id: item.id,
-          caption: item.caption,
-          hashtags: item.hashtags,
-          imageUrl: item.primaryAssetCdnUrl,
-          status: item.status,
-          scheduledAt: item.scheduledAt,
-          postedAt: item.postedAt,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
-          brandId: item.brandId,
-          campaignId: item.campaignId,
-          campaignName: item.campaign?.name,
-          campaignColor: item.campaign?.color,
-          instagramPostId: item.instagramPostId,
-          instagramPermalink: item.instagramPermalink,
-        }));
+        const contentWithUrls = content.map((item) => {
+          const pubs = hasPublications ? item.publications || [] : [];
+          const ig = hasPublications ? pubs.find((p: any) => p.platform === 'instagram') : null;
+          const primaryPermalink = hasPublications
+            ? ig?.permalink || pubs[0]?.permalink || null
+            : null;
+          return {
+            id: item.id,
+            caption: item.caption,
+            hashtags: item.hashtags,
+            imageUrl: item.primaryAssetCdnUrl,
+            status: item.status,
+            scheduledAt: item.scheduledAt,
+            postedAt: item.postedAt,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+            brandId: item.brandId,
+            campaignId: item.campaignId,
+            campaignName: item.campaign?.name,
+            campaignColor: item.campaign?.color,
+            permalink: primaryPermalink,
+          };
+        });
 
         return { success: true, data: { content: contentWithUrls, placeholders } };
       } catch (error) {
@@ -490,22 +530,29 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             postedAt: true,
             createdAt: true,
             updatedAt: true,
+            publications: { select: { platform: true, permalink: true } },
           },
           orderBy: { updatedAt: 'desc' },
           take: 50,
         });
 
-        const historyWithUrls = contentHistory.map((item) => ({
-          id: item.id,
-          caption: item.caption,
-          hashtags: item.hashtags,
-          imageUrl: item.primaryAssetCdnUrl,
-          status: item.status,
-          scheduledAt: item.scheduledAt,
-          postedAt: item.postedAt,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
-        }));
+        const historyWithUrls = contentHistory.map((item) => {
+          const pubs = (item as any).publications || [];
+          const ig = pubs.find((p: any) => p.platform === 'instagram');
+          const primaryPermalink = ig?.permalink || pubs[0]?.permalink || null;
+          return {
+            id: item.id,
+            caption: item.caption,
+            hashtags: item.hashtags,
+            imageUrl: item.primaryAssetCdnUrl,
+            status: item.status,
+            scheduledAt: item.scheduledAt,
+            postedAt: item.postedAt,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+            permalink: primaryPermalink,
+          };
+        });
 
         return { content: historyWithUrls };
       } catch (error) {

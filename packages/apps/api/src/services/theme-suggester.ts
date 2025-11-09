@@ -115,35 +115,29 @@ export async function suggestThemes(params: {
   // Compute recent theme performance deltas from brand content (Stage 3)
   const performanceByTheme = new Map<string, number>();
   try {
-    const recent = await prisma.content.findMany({
-      where: { brandId, status: 'published' },
-      select: { caption: true, hashtags: true, analytics: true },
-      orderBy: { postedAt: 'desc' },
-      take: 60,
+    const recent = await prisma.contentPublication.findMany({
+      where: { content: { brandId } },
+      select: {
+        metricsLatest: true,
+        content: { select: { caption: true, hashtags: true } },
+      },
+      orderBy: { publishedAt: 'desc' },
+      take: 100,
     });
-    type A = {
-      likes?: number;
-      comments?: number;
-      saves?: number;
-      reach?: number;
-      impressions?: number;
-    };
     const metrics: Array<{ value: number; themes: string[] }> = [];
-    for (const c of recent) {
-      const a = (c.analytics as A | null) || {};
-      const interactions = (a.likes ?? 0) + (a.comments ?? 0) + (a.saves ?? 0);
-      const base = a.reach ?? a.impressions ?? 0;
-      const engagement = base > 0 ? interactions / base : interactions; // prefer rate, fallback to count
+    for (const p of recent) {
+      const m = p.metricsLatest;
+      const interactions = (m?.likes || 0) + (m?.comments || 0) + (m?.saves || 0);
+      const base = m?.reach || 0 || m?.impressions || 0;
+      const engagement = base > 0 ? interactions / base : interactions;
       if (engagement <= 0) continue;
       const set = new Set<string>();
-      // from hashtags
-      for (const h of c.hashtags || []) {
+      for (const h of p.content?.hashtags || []) {
         const clean = String(h || '').replace(/^#/, '');
         for (const canon of canonicalizeTopic(clean)) set.add(canon);
       }
-      // from caption
-      if (c.caption) {
-        for (const canon of canonicalizeTopic(c.caption)) set.add(canon);
+      if (p.content?.caption) {
+        for (const canon of canonicalizeTopic(p.content.caption)) set.add(canon);
       }
       if (set.size > 0) metrics.push({ value: engagement, themes: Array.from(set) });
     }

@@ -1,9 +1,8 @@
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { logger as baseLogger } from '@postolio/logger';
 import { formatError } from '../utils/logging.js';
 import { redisService } from './redis.js';
 import * as crypto from 'crypto';
-import { analyticsCache } from './analytics-cache.js';
 import { PublisherCredentialsService } from './publisher-credentials.js';
 import { prisma } from '../config/database.js';
 import type { Prisma } from '@postolio/database';
@@ -49,38 +48,12 @@ export interface PublishMediaResult {
   published: boolean;
 }
 
-export interface AccountInsights {
-  followers: number;
-  impressions: number;
-  reach: number;
-  profile_views?: number;
-  website_clicks?: number;
-}
-
 export interface MediaInsights {
   impressions: number;
   reach: number;
   engagement: number;
   saves?: number;
   video_views?: number;
-}
-
-export interface AnalyticsOverview {
-  data: AccountInsights;
-  lastUpdated: string;
-  fromCache: boolean;
-}
-
-export interface PostPerformance {
-  posts: Array<{
-    id: string;
-    caption: string;
-    impressions: number;
-    engagement: number;
-    media_url: string;
-    posted_at: string;
-  }>;
-  lastUpdated: string;
 }
 
 // Webhook event type definitions (top-level to avoid class body syntax issues)
@@ -487,13 +460,11 @@ class InstagramService {
     }
   }
 
-  /**
-   * Get account insights with caching
-   */
-  async getAccountInsights(
+  // legacy instagram-analytics methods removed
+  /*async getAccountInsights(
     brand: BrandData,
     timeRange: '7d' | '30d' | '90d' = '7d'
-  ): Promise<AnalyticsOverview> {
+  ): Promise<any> {
     if (!this.isConfigured(brand)) {
       throw new Error('Instagram not configured for this brand');
     }
@@ -605,12 +576,12 @@ class InstagramService {
         `Failed to fetch account insights: ${msg || 'Unknown error'} (code: ${code ?? 'n/a'})`
       );
     }
-  }
+  }*/
 
   /**
    * Get recent posts with performance data
    */
-  async getRecentPostsPerformance(brand: BrandData, limit: number = 10): Promise<PostPerformance> {
+  /*async getRecentPostsPerformance(brand: BrandData, limit: number = 10): Promise<any> {
     if (!this.isConfigured(brand)) {
       throw new Error('Instagram not configured for this brand');
     }
@@ -718,12 +689,12 @@ class InstagramService {
         `Failed to fetch recent posts performance: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
-  }
+  }*/
 
   /**
    * Force refresh analytics data (bypass cache)
    */
-  async refreshAnalyticsData(brand: BrandData): Promise<{
+  /*async refreshAnalyticsData(brand: BrandData): Promise<{
     success: boolean;
     message: string;
     nextRefreshAllowed: string;
@@ -766,12 +737,12 @@ class InstagramService {
         nextRefreshAllowed: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       };
     }
-  }
+  }*/
 
   /**
    * Get analytics cache status
    */
-  async getAnalyticsCacheStatus(brand: BrandData): Promise<{
+  /*async getAnalyticsCacheStatus(brand: BrandData): Promise<{
     lastUpdated: string | null;
     cacheAge: number;
     rateLimitRemaining: number;
@@ -788,31 +759,9 @@ class InstagramService {
       cacheAge: status.accountDataAge,
       rateLimitRemaining: Math.max(0, 200 - rateLimitCount),
     };
-  }
+  }*/
 
-  /**
-   * Helper method to aggregate insight values across time periods
-   */
-  private aggregateInsightValues(
-    insights: Array<{ name?: string; values?: Array<{ value?: number }> }>,
-    metricName: string
-  ): number {
-    const metric = insights.find((insight) => insight.name === metricName);
-    if (!metric || !Array.isArray(metric.values)) return 0;
-    return metric.values.reduce((sum, v) => sum + (typeof v.value === 'number' ? v.value : 0), 0);
-  }
-
-  /**
-   * Helper method to get single insight value
-   */
-  private getInsightValue(
-    insights: Array<{ name?: string; values?: Array<{ value?: number }> }>,
-    metricName: string
-  ): number {
-    const metric = insights.find((insight) => insight.name === metricName);
-    const first = metric?.values?.[0];
-    return typeof first?.value === 'number' ? first.value : 0;
-  }
+  // Legacy insight helper methods removed
 
   /**
    * Handle webhook event
@@ -1092,34 +1041,15 @@ class InstagramService {
     // Check if this Instagram post was already imported (by instagramPostId)
     // If found, treat as duplicate and skip (maintains current metrics behavior)
     if (skipExisting) {
-      const existing = await prisma.content.findFirst({
+      const duplicatePub = await prisma.contentPublication.findFirst({
         where: {
-          brandId: brand.id,
-          instagramPostId: post.id,
+          platform: 'instagram',
+          externalPostId: post.id,
+          content: { brandId: brand.id! },
         },
+        select: { id: true },
       });
-
-      if (existing) {
-        // Optional enhancement: update analytics for freshness
-        try {
-          await prisma.content.update({
-            where: { id: existing.id },
-            data: {
-              analytics: {
-                like_count: post.like_count || 0,
-                comments_count: post.comments_count || 0,
-              },
-              // Keep postedAt/permalink if missing
-              postedAt:
-                existing.postedAt ?? (post.timestamp ? new Date(post.timestamp) : undefined),
-              instagramPermalink: existing.instagramPermalink ?? post.permalink ?? undefined,
-            },
-          });
-        } catch {
-          // Best effort; ignore analytics update failures
-        }
-        throw new Error('Post already exists');
-      }
+      if (duplicatePub) throw new Error('Post already exists');
     }
 
     // Helper: attempt to find an existing draft/scheduled item that likely represents this IG post
@@ -1144,7 +1074,6 @@ class InstagramService {
       const candidates = await prisma.content.findMany({
         where: {
           brandId: brand.id!,
-          instagramPostId: null,
           status: { in: ['draft', 'scheduled', 'failed', 'skipped'] },
           ...(orFilters.length ? { OR: orFilters } : {}),
         },
@@ -1247,8 +1176,6 @@ class InstagramService {
       caption: post.caption,
       hashtags: post.hashtags || [],
       status: 'published' as const,
-      instagramPostId: post.id,
-      instagramPermalink: post.permalink,
       postedAt,
       scheduledAt: postedAt,
       generationParams: {
@@ -1258,10 +1185,6 @@ class InstagramService {
         mediaType: post.media_type,
         hasImage: !!importedAsset,
         imageDownloadFailed,
-      },
-      analytics: {
-        like_count: post.like_count || 0,
-        comments_count: post.comments_count || 0,
       },
     };
 
@@ -1288,12 +1211,9 @@ class InstagramService {
           status: 'published',
           postedAt: contentData.postedAt,
           scheduledAt: current?.scheduledAt ?? contentData.postedAt,
-          instagramPostId: contentData.instagramPostId,
-          instagramPermalink: contentData.instagramPermalink,
           schedulingError: null,
 
           campaignId: current?.campaignId || null,
-          analytics: contentData.analytics,
           generationParams: {
             ...existingParams,
             // Preserve existing, add import details
@@ -1317,6 +1237,55 @@ class InstagramService {
       if (importedAsset && !current?.primaryAssetCdnUrl) {
         await attachAssetToContent({ contentId: matchingDraft.id, asset: importedAsset });
       }
+      // Ensure ContentPublication exists
+      try {
+        const sa = await prisma.socialAccount.upsert({
+          where: {
+            platform_externalAccountId: {
+              platform: 'instagram',
+              externalAccountId: brand.instagramAccountId || 'unknown',
+            },
+          },
+          update: { brandId: brand.id!, externalPageId: brand.instagramPageId || undefined },
+          create: {
+            brandId: brand.id!,
+            platform: 'instagram',
+            externalAccountId: brand.instagramAccountId || 'unknown',
+            externalPageId: brand.instagramPageId || undefined,
+            displayName: '',
+          },
+        });
+        await prisma.contentPublication.upsert({
+          where: {
+            socialAccountId_externalPostId: {
+              socialAccountId: sa.id,
+              externalPostId: post.id,
+            },
+          },
+          update: {
+            contentId: matchingDraft.id,
+            platform: 'instagram',
+            permalink: post.permalink || undefined,
+            publishedAt: postedAt,
+          },
+          create: {
+            contentId: matchingDraft.id,
+            socialAccountId: sa.id,
+            platform: 'instagram',
+            externalPostId: post.id,
+            externalThreadRootId: null,
+            externalAccountId: brand.instagramAccountId || undefined,
+            externalPageId: brand.instagramPageId || undefined,
+            permalink: post.permalink || undefined,
+            publishedAt: postedAt,
+            status: 'published',
+          },
+        });
+      } catch (e) {
+        instagramLogger.warn('Failed to upsert publication for matching draft', {
+          error: (e as Error).message,
+        });
+      }
       return;
     }
 
@@ -1325,6 +1294,42 @@ class InstagramService {
       const created = await prisma.content.create({ data: contentData });
       if (importedAsset) {
         await attachAssetToContent({ contentId: created.id, asset: importedAsset });
+      }
+      try {
+        const sa = await prisma.socialAccount.upsert({
+          where: {
+            platform_externalAccountId: {
+              platform: 'instagram',
+              externalAccountId: brand.instagramAccountId || 'unknown',
+            },
+          },
+          update: { brandId: brand.id!, externalPageId: brand.instagramPageId || undefined },
+          create: {
+            brandId: brand.id!,
+            platform: 'instagram',
+            externalAccountId: brand.instagramAccountId || 'unknown',
+            externalPageId: brand.instagramPageId || undefined,
+            displayName: '',
+          },
+        });
+        await prisma.contentPublication.create({
+          data: {
+            contentId: created.id,
+            socialAccountId: sa.id,
+            platform: 'instagram',
+            externalPostId: post.id,
+            externalThreadRootId: null,
+            externalAccountId: brand.instagramAccountId || undefined,
+            externalPageId: brand.instagramPageId || undefined,
+            permalink: post.permalink || undefined,
+            publishedAt: postedAt,
+            status: 'published',
+          },
+        });
+      } catch (e) {
+        instagramLogger.warn('Failed to create publication for imported post', {
+          error: (e as Error).message,
+        });
       }
     } catch (e) {
       // Handle race conditions via DB uniqueness

@@ -148,30 +148,28 @@ async function getBrandHistoricalMetrics(brandId: string): Promise<{
   medianReach: number;
   samples: { engagement: number; reach: number };
 }> {
-  // Pull recent content analytics if available
-  const recent = await prisma.content.findMany({
-    where: { brandId },
-    select: { analytics: true },
-    orderBy: { createdAt: 'desc' },
+  // Pull latest publication metrics for recent content for this brand
+  const pubs = await prisma.contentPublication.findMany({
+    where: { content: { brandId } },
+    select: {
+      metricsLatest: {
+        select: { impressions: true, reach: true, likes: true, comments: true, saves: true },
+      },
+      publishedAt: true,
+    },
+    orderBy: { publishedAt: 'desc' },
     take: 50,
   });
 
   const rates: number[] = [];
   const reaches: number[] = [];
-  for (const c of recent) {
-    const a = c.analytics as {
-      likes?: number;
-      comments?: number;
-      saves?: number;
-      reach?: number;
-      impressions?: number;
-    } | null;
-    if (a && (a.likes || a.comments || a.saves || a.reach || a.impressions)) {
-      const interactions = (a.likes ?? 0) + (a.comments ?? 0) + (a.saves ?? 0);
-      const base = a.reach ?? a.impressions ?? 0;
-      if (base > 0) rates.push(interactions / base);
-      if (a.reach) reaches.push(a.reach);
-    }
+  for (const p of pubs) {
+    const m = p.metricsLatest;
+    if (!m) continue;
+    const interactions = (m.likes ?? 0) + (m.comments ?? 0) + (m.saves ?? 0);
+    const base = (m.reach ?? 0) || (m.impressions ?? 0);
+    if (base > 0) rates.push(interactions / base);
+    if (m.reach) reaches.push(m.reach);
   }
 
   const avgEngagementRate = rates.length ? rates.reduce((s, r) => s + r, 0) / rates.length : 0.025; // 2.5% default

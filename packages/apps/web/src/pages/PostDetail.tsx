@@ -1,7 +1,7 @@
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, memo, useEffect, useRef } from 'react';
-import { content as contentApi } from '../lib/api';
+import { content as contentApi, analyticsV2 } from '../lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -55,8 +55,6 @@ interface PostDetailData {
   // Normalize nullable backend fields: represent absence as undefined
   scheduledAt?: string;
   postedAt?: string;
-  instagramPostId?: string;
-  instagramPermalink?: string;
   analytics?: {
     impressions?: number;
     reach?: number;
@@ -211,8 +209,6 @@ export default function PostDetail() {
         brand: raw.brand || { id: '', name: '' },
         scheduledAt: raw.scheduledAt || undefined,
         postedAt: raw.postedAt || undefined,
-        instagramPostId: raw.instagramPostId || undefined,
-        instagramPermalink: raw.instagramPermalink || undefined,
         imageUrl: raw.imageUrl || undefined,
         generationParams: raw.generationParams ? { ...raw.generationParams } : undefined,
         schedulingError: raw.schedulingError || undefined,
@@ -242,17 +238,48 @@ export default function PostDetail() {
     };
   }, [post?.brand?.id, getBrandTimezone, timezone]);
 
-  // Fetch post insights
-  const { data: insights, isFetching: insightsFetching } = useQuery<PostInsights>({
-    queryKey: ['post-insights', postId],
-    queryFn: async () => {
-      const response = await contentApi.getPostInsights(postId!);
-      return response.data;
-    },
+  // Fetch v2 publications then latest metrics
+  const publicationsQuery = useQuery<{ success: boolean; data: Array<any> }>({
+    queryKey: ['v2-publications', postId],
+    queryFn: async () => analyticsV2.getPublicationsByContent(postId!),
     enabled: !!postId && post?.status === 'published',
+    staleTime: 30000,
+  });
+
+  const selectedPublicationId = (() => {
+    const pubs = publicationsQuery.data?.data || [];
+    if (!pubs.length) return undefined;
+    const ig = pubs.find((p: any) => p.platform === 'instagram');
+    return (ig || pubs[0])?.id as string | undefined;
+  })();
+
+  const latestQuery = useQuery<{ success: boolean; data: any } | undefined>({
+    queryKey: ['v2-latest', selectedPublicationId],
+    queryFn: async () =>
+      selectedPublicationId
+        ? await analyticsV2.getPublicationLatest(selectedPublicationId)
+        : undefined,
+    enabled: !!selectedPublicationId,
     refetchInterval: 60000,
     staleTime: 30000,
   });
+
+  const insights: PostInsights | undefined = (() => {
+    const latest = latestQuery.data?.data;
+    if (!latest) return undefined;
+    return {
+      metrics: {
+        impressions: Number(latest.impressions || 0),
+        reach: Number(latest.reach || 0),
+        engagement: Number(latest.engagement || 0),
+        saves: Number(latest.saves || 0),
+        shares: Number(latest.shares || 0),
+        comments_count: Number(latest.comments || 0),
+        likes_count: Number(latest.likes || 0),
+      },
+      lastUpdated: latest.lastUpdated || new Date().toISOString(),
+    };
+  })();
 
   // Default to editing mode when the post loads, unless it's published (then keep disabled)
   useEffect(() => {
@@ -615,7 +642,7 @@ export default function PostDetail() {
                   <span>{post.campaign.name}</span>
                 </Link>
               )}
-              {(postFetching || insightsFetching) && (
+              {(postFetching || publicationsQuery.isFetching || latestQuery.isFetching) && (
                 <span className="flex items-center gap-1">
                   <RefreshCw className="h-3 w-3 animate-spin" />
                   Updating...
@@ -640,17 +667,23 @@ export default function PostDetail() {
                 </Badge>
               );
             })()}
-            {post.instagramPermalink && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(post.instagramPermalink, '_blank')}
-                className="text-xs sm:text-sm"
-              >
-                <Instagram className="mr-1 h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">View on</span> Instagram
-              </Button>
-            )}
+            {(() => {
+              const pubs = publicationsQuery.data?.data || [];
+              const igPub = pubs.find((p: any) => p.platform === 'instagram');
+              const permalink = igPub?.permalink;
+              if (!permalink) return null;
+              return (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(permalink, '_blank')}
+                  className="text-xs sm:text-sm"
+                >
+                  <Instagram className="mr-1 h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">View on</span> Instagram
+                </Button>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -769,6 +802,39 @@ export default function PostDetail() {
                 </TabsList>
 
                 <TabsContent value="metrics" className="mt-6">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="text-muted-foreground text-xs">
+                      {insights
+                        ? `Last updated: ${new Date(insights.lastUpdated).toLocaleString()}`
+                        : 'No metrics yet'}
+                    </div>
+                    {selectedPublicationId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await analyticsV2.refreshPublication(selectedPublicationId);
+                            toast.success('Refresh enqueued');
+                          } catch (e: any) {
+                            const status = e?.status;
+                            const next = e?.data?.nextRefreshAllowed;
+                            if (status === 429) {
+                              toast.error(
+                                next
+                                  ? `Refresh throttled. Try after ${new Date(next).toLocaleTimeString()}`
+                                  : 'Refresh throttled. Try later.'
+                              );
+                            } else {
+                              toast.error('Refresh throttled or failed');
+                            }
+                          }
+                        }}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" /> Refresh
+                      </Button>
+                    )}
+                  </div>
                   {insights ? (
                     <MetricsGrid insights={insights} />
                   ) : (
