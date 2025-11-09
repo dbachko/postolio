@@ -24,11 +24,14 @@ export interface Localizer {
   addMonths(date: Date, amount: number): Date;
 }
 
-export function createLuxonLocalizer(opts?: { weekStartsOn?: 0 | 1 }): Localizer {
+export function createLuxonLocalizer(opts?: { weekStartsOn?: 0 | 1; timezone?: string }): Localizer {
   const weekStartsOn = opts?.weekStartsOn ?? 1; // Monday default
+  const timezone = opts?.timezone; // Optional timezone for formatting
   return {
     format(d: Date, token: FormatToken) {
-      return DateTime.fromJSDate(d).toFormat(token);
+      const dt = DateTime.fromJSDate(d);
+      // If timezone is specified, convert to that timezone for formatting
+      return timezone ? dt.setZone(timezone).toFormat(token) : dt.toFormat(token);
     },
     startOfWeek(d: Date, w?: 0 | 1) {
       const dt = DateTime.fromJSDate(d);

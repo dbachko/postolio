@@ -1,4 +1,4 @@
-import { memo, useState, useCallback } from 'react';
+import { memo, useState, useCallback, useMemo } from 'react';
 import '@postolio/calendar/styles.css';
 import { Calendar as PostolioCalendar, luxon } from '@postolio/calendar';
 import { TouchBackend } from 'react-dnd-touch-backend';
@@ -27,8 +27,6 @@ export interface FullCalendarProps {
   theme?: 'default' | 'monarch';
 }
 
-const localizer = luxon.create();
-
 function FullCalendarImpl({
   brandId,
   brandTimezone,
@@ -43,6 +41,12 @@ function FullCalendarImpl({
   const [reschedule, setReschedule] = useState<RescheduleState>({ open: false, item: null });
 
   const { tzRef, weekStartsOn } = useTimezoneMeta(brandTimezone);
+
+  // Create localizer with brand timezone for correct time formatting
+  const localizer = useMemo(() => {
+    return luxon.create({ weekStartsOn, timezone: brandTimezone });
+  }, [weekStartsOn, brandTimezone]);
+
   const items = useCalendarItems(content, placeholders);
   const filters = useCalendarFilters();
   const events = useFilteredEvents(items, filters, tzRef.current);

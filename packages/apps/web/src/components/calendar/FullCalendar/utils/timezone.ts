@@ -1,6 +1,5 @@
 import type { CalendarDataItem } from '../types';
 import { DEFAULT_EVENT_DURATION_MS } from '../constants';
-import { toZonedTime } from 'date-fns-tz';
 
 export function formatGmtOffset(hours: number): string {
   const sign = hours >= 0 ? '+' : '-';
@@ -15,18 +14,15 @@ export function formatGmtOffset(hours: number): string {
   return `GMT${sign}${whole}`;
 }
 
-export function toWallTimeDate(iso: string | null | undefined, timezone?: string): Date | null {
+export function toWallTimeDate(iso: string | null | undefined, _timezone?: string): Date | null {
   if (!iso) return null;
   const utcDate = new Date(iso);
   if (Number.isNaN(utcDate.getTime())) return null;
-  if (!timezone) return utcDate;
 
-  // Convert UTC to brand timezone
-  const zonedDate = toZonedTime(utcDate, timezone);
-
-  // CRITICAL: Return the zoned date directly - it already represents the correct moment in time
-  // The calendar library will display this Date's time components, which are already in the brand TZ
-  return zonedDate;
+  // Return UTC date directly - the calendar localizer handles timezone conversion
+  // The luxon localizer will format this UTC date in the brand timezone
+  // Note: _timezone parameter kept for API compatibility but not used
+  return utcDate;
 }
 
 export function getEventBounds(
