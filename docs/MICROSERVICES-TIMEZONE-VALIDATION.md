@@ -14,6 +14,7 @@ After comprehensive analysis of the scheduling and publishing microservices, **o
 ### 1. Frontend → API → Database (✅ COMPATIBLE)
 
 **Frontend (PostDetail.tsx - Fixed)**
+
 ```typescript
 // Line 470-471: Our fix
 const scheduledAtPayload = formData.scheduledAt
@@ -24,19 +25,23 @@ const scheduledAtPayload = formData.scheduledAt
 **Output Format:** `"2025-01-15T14:00:00.000Z"` (ISO 8601 UTC with Z suffix)
 
 **API Receives (management.ts:111 & updates.ts:101)**
+
 ```typescript
-scheduledAt: scheduledAt ? new Date(scheduledAt) : null
+scheduledAt: scheduledAt ? new Date(scheduledAt) : null;
 ```
 
 **Parsing Behavior:**
+
 - Input: `"2025-01-15T14:00:00.000Z"`
 - JavaScript `new Date()` correctly parses as UTC timestamp
 - Result: Date object representing `2025-01-15 14:00:00 UTC`
 
 **Database Storage (PostgreSQL)**
+
 ```prisma
 scheduledAt DateTime?  // TIMESTAMPTZ type
 ```
+
 - Stored as: `2025-01-15 14:00:00+00:00` (UTC with timezone info)
 - Index: `@@index([scheduledAt])` for efficient querying
 
@@ -47,6 +52,7 @@ scheduledAt DateTime?  // TIMESTAMPTZ type
 ### 2. Database → Scheduler-Adapter → Schedule-Management (✅ COMPATIBLE)
 
 **Scheduler-Adapter Reads from DB (scheduler-adapter.ts:319-321)**
+
 ```typescript
 if (content.scheduledAt) {
   // Assume it's already in UTC (correct assumption)
@@ -55,28 +61,31 @@ if (content.scheduledAt) {
 ```
 
 **Scheduler-Adapter Sends to Lambda (scheduler-adapter.ts:405)**
+
 ```typescript
 const schedulePayload: CreateScheduleInput = {
-  scheduledAt: scheduledTimeUTC.toISOString(),  // "2025-01-15T14:00:00.000Z"
+  scheduledAt: scheduledTimeUTC.toISOString(), // "2025-01-15T14:00:00.000Z"
   metadata: {
-    timezone: brandTimezone,           // "America/New_York" (for reference)
-    localTime: customTime?.toISOString()  // Optional original time
-  }
+    timezone: brandTimezone, // "America/New_York" (for reference)
+    localTime: customTime?.toISOString(), // Optional original time
+  },
 };
 ```
 
 **Schedule-Management Receives (schedule-service.ts:60-72)**
+
 ```typescript
 export interface ScheduleRequest {
-  scheduledAt: string;  // Expects ISO 8601 UTC: "2025-01-15T14:00:00.000Z"
+  scheduledAt: string; // Expects ISO 8601 UTC: "2025-01-15T14:00:00.000Z"
 }
 ```
 
 **DynamoDB Storage**
+
 ```typescript
 const schedule: Schedule = {
-  scheduledAt: request.scheduledAt,  // String: "2025-01-15T14:00:00.000Z"
-  gsi1sk: request.scheduledAt,       // Sort key (same format)
+  scheduledAt: request.scheduledAt, // String: "2025-01-15T14:00:00.000Z"
+  gsi1sk: request.scheduledAt, // Sort key (same format)
 };
 ```
 
@@ -87,25 +96,28 @@ const schedule: Schedule = {
 ### 3. Schedule-Management → EventBridge → Publisher (✅ COMPATIBLE)
 
 **EventBridge Format Conversion (config.ts:36-45)**
+
 ```typescript
 export const formatEventBridgeScheduleTime = (date: string | Date): string => {
-  const d = new Date(date);  // Parses "2025-01-15T14:00:00.000Z"
-  const year = d.getUTCFullYear();       // 2025
-  const month = (d.getUTCMonth() + 1).toString().padStart(2, '0');  // 01
-  const day = d.getUTCDate().toString().padStart(2, '0');           // 15
-  const hour = d.getUTCHours().toString().padStart(2, '0');         // 14
-  const minute = d.getUTCMinutes().toString().padStart(2, '0');     // 00
-  const second = d.getUTCSeconds().toString().padStart(2, '0');     // 00
+  const d = new Date(date); // Parses "2025-01-15T14:00:00.000Z"
+  const year = d.getUTCFullYear(); // 2025
+  const month = (d.getUTCMonth() + 1).toString().padStart(2, '0'); // 01
+  const day = d.getUTCDate().toString().padStart(2, '0'); // 15
+  const hour = d.getUTCHours().toString().padStart(2, '0'); // 14
+  const minute = d.getUTCMinutes().toString().padStart(2, '0'); // 00
+  const second = d.getUTCSeconds().toString().padStart(2, '0'); // 00
   return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
 };
 ```
 
 **EventBridge Schedule Expression**
+
 ```typescript
-ScheduleExpression: `at(2025-01-15T14:00:00)`  // UTC implicit
+ScheduleExpression: `at(2025-01-15T14:00:00)`; // UTC implicit
 ```
 
 **Publisher Lambda Triggered**
+
 - EventBridge triggers at `2025-01-15T14:00:00 UTC`
 - Publisher uses `new Date().toISOString()` for actual publish time
 - Status-sync updates `postedAt` with publisher's timestamp
@@ -119,17 +131,20 @@ ScheduleExpression: `at(2025-01-15T14:00:00)`  // UTC implicit
 ### ✅ Validation 1: ISO 8601 Format Consistency
 
 **Our Output:**
+
 ```javascript
-fromZonedTime("2025-01-15T09:00:00", "America/New_York").toISOString()
+fromZonedTime('2025-01-15T09:00:00', 'America/New_York').toISOString();
 // → "2025-01-15T14:00:00.000Z"
 ```
 
 **Expected by Microservices:**
+
 - `new Date("2025-01-15T14:00:00.000Z")` ✓ Valid
 - EventBridge parsing ✓ Valid
 - DynamoDB storage ✓ Valid
 
 **Format Components:**
+
 - ✅ `YYYY-MM-DD` date
 - ✅ `T` separator
 - ✅ `HH:mm:ss` time
@@ -149,10 +164,12 @@ Brand Timezone: America/New_York (EST, UTC-5)
 ```
 
 **Before Fix (BROKEN):**
+
 ```typescript
 // OLD CODE
-convertLocalToUTC(new Date("2025-01-15T09:00"), "America/New_York")
+convertLocalToUTC(new Date('2025-01-15T09:00'), 'America/New_York');
 ```
+
 1. `new Date("2025-01-15T09:00")` → Browser interprets as **9:00 AM PST**
 2. Converts **9:00 AM PST** → **9:00 AM EST** (treats PST time as EST)
 3. Result: **2025-01-15T14:00:00Z** (9 AM EST = 2pm UTC) ✓
@@ -160,10 +177,12 @@ convertLocalToUTC(new Date("2025-01-15T09:00"), "America/New_York")
 5. **Actual publish time: 12:00 PM EST** ❌ WRONG (3 hours early!)
 
 **After Fix (CORRECT):**
+
 ```typescript
 // NEW CODE
-fromZonedTime("2025-01-15T09:00:00", "America/New_York").toISOString()
+fromZonedTime('2025-01-15T09:00:00', 'America/New_York').toISOString();
 ```
+
 1. Interprets `"2025-01-15T09:00:00"` AS IF it's in `"America/New_York"`
 2. Treats as **9:00 AM EST** directly
 3. Converts **9:00 AM EST** → **2:00 PM UTC**
@@ -171,6 +190,7 @@ fromZonedTime("2025-01-15T09:00:00", "America/New_York").toISOString()
 5. **Actual publish time: 9:00 AM EST** ✅ CORRECT!
 
 **Microservices Receive:**
+
 - `"2025-01-15T14:00:00.000Z"` (2pm UTC)
 - EventBridge triggers at `2025-01-15T14:00:00` UTC
 - Publisher publishes at correct time
@@ -183,6 +203,7 @@ fromZonedTime("2025-01-15T09:00:00", "America/New_York").toISOString()
 **Critical Check: Scheduler-Adapter Logic**
 
 Line 319-328 in scheduler-adapter.ts:
+
 ```typescript
 if (customTime) {
   // If customTime provided, convert from brand timezone to UTC
@@ -197,6 +218,7 @@ if (customTime) {
 ```
 
 **Our Flow Path:** `content.scheduledAt` exists
+
 1. Frontend already converted to UTC via `fromZonedTime()`
 2. API stored UTC in database
 3. Scheduler-adapter reads UTC from database
@@ -214,10 +236,11 @@ if (customTime) {
 **Scenario:** Schedule post for 2:30 AM on DST "spring forward" day (clock jumps 2am → 3am)
 
 ```typescript
-fromZonedTime("2025-03-09T02:30:00", "America/New_York").toISOString()
+fromZonedTime('2025-03-09T02:30:00', 'America/New_York').toISOString();
 ```
 
 **Behavior:**
+
 - `date-fns-tz` correctly handles DST transitions
 - If 2:30 AM doesn't exist (skipped hour), it adjusts automatically
 - Converts to correct UTC equivalent
@@ -229,7 +252,7 @@ fromZonedTime("2025-03-09T02:30:00", "America/New_York").toISOString()
 **Scenario:** Pacific timezone scheduling for next day
 
 ```typescript
-fromZonedTime("2025-01-16T01:00:00", "Pacific/Auckland").toISOString()
+fromZonedTime('2025-01-16T01:00:00', 'Pacific/Auckland').toISOString();
 // New Zealand is UTC+13, so Jan 16 1am NZ = Jan 15 12pm UTC
 // → "2025-01-15T12:00:00.000Z"
 ```
@@ -243,6 +266,7 @@ fromZonedTime("2025-01-16T01:00:00", "Pacific/Auckland").toISOString()
 #### Edge Case 3: Leap Seconds
 
 **Behavior:**
+
 - JavaScript Date doesn't support leap seconds
 - ISO 8601 allows `:60` second value
 - All our components use JavaScript Date, so consistent handling
@@ -258,6 +282,7 @@ fromZonedTime("2025-01-16T01:00:00", "Pacific/Auckland").toISOString()
 **Location:** `packages/services/schedule-management/src/validators/schedule-validator.ts:50-63`
 
 **Current Code:**
+
 ```typescript
 export const validateScheduleRequest = (data: unknown): ScheduleRequest => {
   if (typeof data.scheduledAt !== 'string' || data.scheduledAt.length === 0) {
@@ -270,11 +295,13 @@ export const validateScheduleRequest = (data: unknown): ScheduleRequest => {
 **Risk Level:** 🟡 MEDIUM
 
 **Why It's Safe for Us:**
+
 - Our code always sends `"2025-01-15T14:00:00.000Z"` (with Z)
 - API layer always uses `.toISOString()` which includes Z
 - Circuit breaker in place if scheduler fails
 
 **Recommendation:** Add regex validation:
+
 ```typescript
 if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})$/.test(data.scheduledAt)) {
   throw new ValidationError('scheduledAt must be ISO 8601 UTC format with timezone');
@@ -286,18 +313,21 @@ if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})$/.test(d
 **Location:** `packages/apps/api/src/routes/content/management.ts:111`
 
 **Current Code:**
+
 ```typescript
-scheduledAt: scheduledAt ? new Date(scheduledAt) : null
+scheduledAt: scheduledAt ? new Date(scheduledAt) : null;
 ```
 
 **Risk Level:** 🟡 MEDIUM
 
 **Why It's Safe for Us:**
+
 - `new Date()` successfully parses our ISO 8601 UTC format
 - If invalid, `new Date()` returns `Invalid Date`
 - Prisma will reject invalid dates
 
 **Recommendation:** Add explicit validation:
+
 ```typescript
 if (scheduledAt) {
   const parsed = new Date(scheduledAt);
@@ -317,12 +347,14 @@ if (scheduledAt) {
 ### Manual Test Case 1: Schedule Post from PostDetail
 
 **Steps:**
+
 1. Open PostDetail for content
 2. Set scheduled time to "2025-01-15T09:00" (datetime-local input)
 3. Brand timezone: America/New_York (EST, UTC-5)
 4. Save changes
 
 **Expected Result:**
+
 ```
 Frontend sends:     "2025-01-15T14:00:00.000Z"
 API stores:         2025-01-15 14:00:00+00:00
@@ -336,11 +368,13 @@ Publishes at:       9:00 AM EST ✓
 ### Manual Test Case 2: Create Scheduled Content
 
 **Steps:**
+
 1. POST /api/content/ with scheduledAt
 2. Brand timezone: America/Los_Angeles (PST, UTC-8)
 3. Request: `{ scheduledAt: "2025-01-15T17:00:00.000Z" }`
 
 **Expected Result:**
+
 ```
 API parses:         new Date("2025-01-15T17:00:00.000Z")
 Database stores:    2025-01-15 17:00:00+00:00
@@ -354,10 +388,12 @@ Publishes at:       9:00 AM PST ✓
 ### Manual Test Case 3: DST Transition
 
 **Steps:**
+
 1. Schedule for 2025-03-09T02:30:00 in America/New_York
 2. This is during DST "spring forward" (2am → 3am)
 
 **Expected Result:**
+
 ```
 fromZonedTime():    Handles DST, returns valid UTC
 Database:           Stores UTC equivalent
@@ -371,17 +407,17 @@ Result:             Posts at intended local time ✓
 
 ## Compatibility Matrix
 
-| Component | Expects Format | Our Output | Compatible? |
-|-----------|----------------|------------|-------------|
-| API (management.ts) | ISO 8601 string | `"2025-01-15T14:00:00.000Z"` | ✅ YES |
-| API (updates.ts) | ISO 8601 string | `"2025-01-15T14:00:00.000Z"` | ✅ YES |
-| PostgreSQL | TIMESTAMPTZ | Parsed by Prisma | ✅ YES |
-| Scheduler-Adapter | Date object (UTC) | Reads from DB | ✅ YES |
-| Schedule-Management | ISO 8601 string | `.toISOString()` output | ✅ YES |
-| DynamoDB | String | `"2025-01-15T14:00:00.000Z"` | ✅ YES |
-| EventBridge | `YYYY-MM-DDTHH:mm:ss` | Formatted by config.ts | ✅ YES |
-| Publisher Lambda | Triggered by EB | No time parsing | ✅ YES |
-| Status-Sync | ISO 8601 string | From EventBridge | ✅ YES |
+| Component           | Expects Format        | Our Output                   | Compatible? |
+| ------------------- | --------------------- | ---------------------------- | ----------- |
+| API (management.ts) | ISO 8601 string       | `"2025-01-15T14:00:00.000Z"` | ✅ YES      |
+| API (updates.ts)    | ISO 8601 string       | `"2025-01-15T14:00:00.000Z"` | ✅ YES      |
+| PostgreSQL          | TIMESTAMPTZ           | Parsed by Prisma             | ✅ YES      |
+| Scheduler-Adapter   | Date object (UTC)     | Reads from DB                | ✅ YES      |
+| Schedule-Management | ISO 8601 string       | `.toISOString()` output      | ✅ YES      |
+| DynamoDB            | String                | `"2025-01-15T14:00:00.000Z"` | ✅ YES      |
+| EventBridge         | `YYYY-MM-DDTHH:mm:ss` | Formatted by config.ts       | ✅ YES      |
+| Publisher Lambda    | Triggered by EB       | No time parsing              | ✅ YES      |
+| Status-Sync         | ISO 8601 string       | From EventBridge             | ✅ YES      |
 
 **Overall Compatibility:** ✅ **100% COMPATIBLE**
 
@@ -394,6 +430,7 @@ Result:             Posts at intended local time ✓
 **Answer:** ✅ **NO - All existing scheduled posts remain valid**
 
 **Reason:**
+
 1. Existing posts in database: Already stored as UTC TIMESTAMPTZ
 2. Existing DynamoDB schedules: Already in ISO 8601 UTC format
 3. Our changes only affect NEW/UPDATED posts from PostDetail.tsx
@@ -405,6 +442,7 @@ Result:             Posts at intended local time ✓
 **Answer:** ✅ **NO - They will publish at correct time**
 
 **Reason:**
+
 1. Old posts stored with previous frontend logic (may have had double conversion bug)
 2. But once stored in DB as UTC, scheduler reads UTC correctly
 3. EventBridge triggers based on DB value
@@ -416,6 +454,7 @@ Result:             Posts at intended local time ✓
 **Answer:** ✅ **NO - Microservices unchanged**
 
 **Reason:**
+
 1. All changes in frontend (PostDetail.tsx) and docs
 2. Backend TimezoneService unchanged (already correct)
 3. Microservices already handle ISO 8601 UTC correctly
@@ -440,12 +479,14 @@ Result:             Posts at intended local time ✓
 ### Post-Deployment Monitoring
 
 **Metrics to Watch:**
+
 1. Content scheduling success rate (should remain stable)
 2. EventBridge trigger accuracy (should remain stable)
 3. Publishing success rate (should remain stable)
 4. User reports of wrong publish times (should decrease)
 
 **Logs to Monitor:**
+
 ```bash
 # API Layer
 grep "Updating content with data" api-logs.json
@@ -461,6 +502,7 @@ grep "Published successfully" publisher-logs.json
 ```
 
 **Alerts to Set:**
+
 - Spike in scheduling errors
 - Spike in publishing failures
 - Spike in user reports about timing

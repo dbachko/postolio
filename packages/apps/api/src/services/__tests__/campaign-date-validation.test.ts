@@ -28,7 +28,10 @@ describe('Campaign Date Validation', () => {
         nowInBrandTz.getFullYear(),
         nowInBrandTz.getMonth(),
         nowInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
@@ -36,7 +39,10 @@ describe('Campaign Date Validation', () => {
         startDateInBrandTz.getFullYear(),
         startDateInBrandTz.getMonth(),
         startDateInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       // Should NOT throw error - start date equals today
@@ -56,7 +62,10 @@ describe('Campaign Date Validation', () => {
         nowInBrandTz.getFullYear(),
         nowInBrandTz.getMonth(),
         nowInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
@@ -64,7 +73,10 @@ describe('Campaign Date Validation', () => {
         startDateInBrandTz.getFullYear(),
         startDateInBrandTz.getMonth(),
         startDateInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       // Should be in the past
@@ -83,7 +95,10 @@ describe('Campaign Date Validation', () => {
         nowInBrandTz.getFullYear(),
         nowInBrandTz.getMonth(),
         nowInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
@@ -91,7 +106,10 @@ describe('Campaign Date Validation', () => {
         startDateInBrandTz.getFullYear(),
         startDateInBrandTz.getMonth(),
         startDateInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       // Should be in the future
@@ -113,7 +131,10 @@ describe('Campaign Date Validation', () => {
         nowInBrandTz.getFullYear(),
         nowInBrandTz.getMonth(),
         nowInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
@@ -121,7 +142,10 @@ describe('Campaign Date Validation', () => {
         startDateInBrandTz.getFullYear(),
         startDateInBrandTz.getMonth(),
         startDateInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       // Should be valid - same day in Tokyo
@@ -141,7 +165,10 @@ describe('Campaign Date Validation', () => {
         nowInBrandTz.getFullYear(),
         nowInBrandTz.getMonth(),
         nowInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
@@ -149,7 +176,10 @@ describe('Campaign Date Validation', () => {
         startDateInBrandTz.getFullYear(),
         startDateInBrandTz.getMonth(),
         startDateInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       // Validation should work correctly even during DST
@@ -171,7 +201,10 @@ describe('Campaign Date Validation', () => {
         nowInNZ.getFullYear(),
         nowInNZ.getMonth(),
         nowInNZ.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       const startInNZ = TimezoneService.toLocal(campaignStartDate, nzTimezone);
@@ -179,7 +212,10 @@ describe('Campaign Date Validation', () => {
         startInNZ.getFullYear(),
         startInNZ.getMonth(),
         startInNZ.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       expect(startNZMidnight >= todayNZ).toBe(true);
@@ -191,7 +227,10 @@ describe('Campaign Date Validation', () => {
         nowInHI.getFullYear(),
         nowInHI.getMonth(),
         nowInHI.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       const startInHI = TimezoneService.toLocal(campaignStartDate, hiTimezone);
@@ -199,7 +238,10 @@ describe('Campaign Date Validation', () => {
         startInHI.getFullYear(),
         startInHI.getMonth(),
         startInHI.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       expect(startHIMidnight > todayHI).toBe(true);
@@ -214,7 +256,7 @@ describe('Campaign Date Validation', () => {
       // Test with different times on the same day
       const times = ['00:00:00', '06:00:00', '12:00:00', '18:00:00', '23:59:59'];
 
-      times.forEach(time => {
+      times.forEach((time) => {
         const campaignStartDate = new Date(`2025-01-16T${time}Z`);
 
         const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
@@ -222,7 +264,10 @@ describe('Campaign Date Validation', () => {
           nowInBrandTz.getFullYear(),
           nowInBrandTz.getMonth(),
           nowInBrandTz.getDate(),
-          0, 0, 0, 0
+          0,
+          0,
+          0,
+          0
         );
 
         const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
@@ -230,7 +275,10 @@ describe('Campaign Date Validation', () => {
           startDateInBrandTz.getFullYear(),
           startDateInBrandTz.getMonth(),
           startDateInBrandTz.getDate(),
-          0, 0, 0, 0
+          0,
+          0,
+          0,
+          0
         );
 
         // All should normalize to the same date
@@ -254,7 +302,10 @@ describe('Campaign Date Validation', () => {
         nowInBrandTz.getFullYear(),
         nowInBrandTz.getMonth(),
         nowInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
@@ -262,7 +313,10 @@ describe('Campaign Date Validation', () => {
         startDateInBrandTz.getFullYear(),
         startDateInBrandTz.getMonth(),
         startDateInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       // Should be valid (same day)
@@ -282,7 +336,10 @@ describe('Campaign Date Validation', () => {
         nowInBrandTz.getFullYear(),
         nowInBrandTz.getMonth(),
         nowInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
@@ -290,7 +347,10 @@ describe('Campaign Date Validation', () => {
         startDateInBrandTz.getFullYear(),
         startDateInBrandTz.getMonth(),
         startDateInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       // Should be valid
@@ -310,7 +370,10 @@ describe('Campaign Date Validation', () => {
         nowInBrandTz.getFullYear(),
         nowInBrandTz.getMonth(),
         nowInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
@@ -318,7 +381,10 @@ describe('Campaign Date Validation', () => {
         startDateInBrandTz.getFullYear(),
         startDateInBrandTz.getMonth(),
         startDateInBrandTz.getDate(),
-        0, 0, 0, 0
+        0,
+        0,
+        0,
+        0
       );
 
       // Should be valid (same day)

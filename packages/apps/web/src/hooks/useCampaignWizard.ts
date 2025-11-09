@@ -66,7 +66,7 @@ export const useCampaignWizard = create<CampaignWizardState & WizardActions>()((
       frequency: cfg.defaultFrequency,
       timeline: timeline || {
         startDate: formatLocalDate(now),
-        endDate: formatLocalDate(end)
+        endDate: formatLocalDate(end),
       },
       // Do not preload static themes; we will fetch suggestions from API
       themes: [],

@@ -59,9 +59,9 @@ describe('Calendar Timezone Integration', () => {
       const localizer = luxon.create({ timezone: brandTimezone });
 
       const events = [
-        { scheduledAt: '2025-01-16T14:00:00Z', expectedTime: '9:00 AM' },  // 9 AM EST
+        { scheduledAt: '2025-01-16T14:00:00Z', expectedTime: '9:00 AM' }, // 9 AM EST
         { scheduledAt: '2025-01-16T17:00:00Z', expectedTime: '12:00 PM' }, // Noon EST
-        { scheduledAt: '2025-01-16T22:00:00Z', expectedTime: '5:00 PM' },  // 5 PM EST
+        { scheduledAt: '2025-01-16T22:00:00Z', expectedTime: '5:00 PM' }, // 5 PM EST
         { scheduledAt: '2025-01-17T04:31:00Z', expectedTime: '11:31 PM' }, // 11:31 PM EST
       ];
 

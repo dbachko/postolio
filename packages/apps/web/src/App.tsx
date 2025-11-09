@@ -25,6 +25,7 @@ import { MagicLinkVerify } from './pages/MagicLinkVerify';
 import NotFound from './pages/NotFound';
 import { EmailVerify } from './pages/EmailVerify';
 import { PasswordReset } from './pages/PasswordReset';
+import TzRenderTest from './pages/TzRenderTest';
 import { useEffect, lazy, Suspense, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -72,6 +73,8 @@ const router = createBrowserRouter([
   { path: '/privacy-policy', element: <PrivacyPolicy />, errorElement: <RouteError /> },
   { path: '/terms-of-service', element: <TermsOfService />, errorElement: <RouteError /> },
   { path: '/legal/data-deletion', element: <DataDeletion />, errorElement: <RouteError /> },
+  // Dev/test-only: render a minimal PostPreviewCard for timezone validation
+  { path: '/__tz', element: <TzRenderTest />, errorElement: <RouteError /> },
   {
     path: '/notifications',
     element: (
@@ -306,6 +309,9 @@ function App() {
   const { checkAuth } = useAuthStore();
 
   useEffect(() => {
+    // Skip auth check in minimal timezone render route to avoid API dependency in E2E
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    if (path.startsWith('/__tz')) return;
     checkAuth();
   }, [checkAuth]);
 

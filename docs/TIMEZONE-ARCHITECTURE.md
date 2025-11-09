@@ -10,12 +10,15 @@ This document details Postolio's timezone handling architecture, ensuring consis
 ## Core Principles
 
 ### 1. **Storage: Always UTC**
+
 - All `DateTime` fields in PostgreSQL are stored in UTC
 - Database queries return UTC timestamps
 - API responses include UTC ISO 8601 strings
 
 ### 2. **Timezone Hierarchy**
+
 When determining which timezone to use for display/input:
+
 ```
 Brand Timezone > User Timezone > UTC (default)
 ```
@@ -25,11 +28,13 @@ Brand Timezone > User Timezone > UTC (default)
 - **Default**: UTC if no timezone is configured
 
 ### 3. **Display: Convert to Brand/User Timezone**
+
 - Convert UTC → Brand timezone for content scheduling displays
 - Convert UTC → User timezone for analytics and timestamps
 - Always show timezone abbreviation (EST, PST, etc.) for clarity
 
 ### 4. **Input: Interpret in Brand Timezone**
+
 - User input in datetime fields is interpreted as brand timezone time
 - Convert Brand timezone → UTC before sending to API
 - **CRITICAL**: Never double-convert (timezone → UTC → timezone)
@@ -110,6 +115,7 @@ Brand Timezone > User Timezone > UTC (default)
 ```
 
 **Key Files:**
+
 - Frontend: `packages/apps/web/src/hooks/useCampaignWizard.ts:58-74`
 - Frontend: `packages/apps/web/src/lib/timezone.ts:253-258` (formatLocalDate)
 - Backend: `packages/apps/api/src/services/campaign.ts:171-184` (validation)
@@ -156,6 +162,7 @@ Brand Timezone > User Timezone > UTC (default)
 ```
 
 **Key Files:**
+
 - Backend: `packages/apps/api/src/routes/brands.ts:392-407` (calendar endpoint)
 - Frontend: `packages/apps/web/src/lib/timezone.ts:54-68` (formatInUserTimezone)
 
@@ -222,6 +229,7 @@ Brand Timezone > User Timezone > UTC (default)
 ```
 
 **Key Files:**
+
 - Frontend: `packages/apps/web/src/pages/PostDetail.tsx:109` (buildFormStateFromPost)
 - Frontend: `packages/apps/web/src/pages/PostDetail.tsx:470-472` (handleSaveChanges - FIXED)
 - Frontend: `packages/apps/web/src/pages/PostDetail.tsx:516-519` (schedulePostMutation - FIXED)
@@ -269,6 +277,7 @@ Brand Timezone > User Timezone > UTC (default)
 ```
 
 **Key Files:**
+
 - Frontend: `packages/apps/web/src/utils/filterUrlUtils.ts:42-46` (encodeFiltersToURL)
 - Frontend: `packages/apps/web/src/utils/filterUrlUtils.ts:60-89` (parseLocalDate)
 - Frontend: `packages/apps/web/src/lib/timezone.ts:253-258` (formatLocalDate - shared utility)
@@ -321,6 +330,7 @@ Brand Timezone > User Timezone > UTC (default)
 ```
 
 **Key Files:**
+
 - Frontend: `packages/apps/web/src/lib/timezone.ts:13-39` (getUserTimezone)
 - Backend: `packages/apps/api/src/services/timezone.ts:52-74` (detectTimezone)
 - Backend: `packages/apps/api/src/services/timezone.ts:106-136` (getBrandTimezone)
@@ -330,6 +340,7 @@ Brand Timezone > User Timezone > UTC (default)
 ## Critical Anti-Patterns (Bugs Fixed)
 
 ### ❌ Anti-Pattern 1: UTC Date Extraction
+
 ```typescript
 // ❌ WRONG - Extracts UTC date, not local date
 const dateStr = new Date().toISOString().split('T')[0];
@@ -341,6 +352,7 @@ const dateStr = formatLocalDate(new Date());
 ```
 
 **Fixed in:**
+
 - `useCampaignWizard.ts:58-74`
 - `filterUrlUtils.ts:42-46`
 - `useURLFilterSync.ts:134-138`
@@ -348,23 +360,26 @@ const dateStr = formatLocalDate(new Date());
 ---
 
 ### ❌ Anti-Pattern 2: Double Conversion
+
 ```typescript
 // ❌ WRONG - Browser interprets as local, then converts again
-const utc = convertLocalToUTC(new Date("2025-01-15T09:00"), brandTimezone);
+const utc = convertLocalToUTC(new Date('2025-01-15T09:00'), brandTimezone);
 // If browser is PST and brand is EST: treats 9am PST as 9am EST → wrong!
 
 // ✅ CORRECT - Interpret directly as brand timezone
-const utc = fromZonedTime("2025-01-15T09:00:00", brandTimezone);
+const utc = fromZonedTime('2025-01-15T09:00:00', brandTimezone);
 // Correctly interprets as 9am EST → 2pm UTC
 ```
 
 **Fixed in:**
+
 - `PostDetail.tsx:470-472` (handleSaveChanges)
 - `PostDetail.tsx:516-519` (schedulePostMutation)
 
 ---
 
 ### ❌ Anti-Pattern 3: Time-Aware Date Comparison
+
 ```typescript
 // ❌ WRONG - Compares timestamps with time components
 if (startDate < new Date()) {
@@ -382,30 +397,32 @@ if (startMidnight < todayMidnight) {
 ```
 
 **Fixed in:**
+
 - `campaign.ts:171-184` (configureCampaign)
 - `campaign.ts:940-964` (updateCampaign)
 
 ---
 
 ### ❌ Anti-Pattern 4: Server Timezone for Month Boundaries
+
 ```typescript
 // ❌ WRONG - Uses server's local timezone
 const monthStart = new Date(year, month - 1, 1);
 // Server in UTC creates Jan 1 at midnight UTC → wrong for EST brand
 
 // ✅ CORRECT - Uses brand timezone
-const monthStart = TimezoneService.createDateInBrandTimezone(
-  "2025-01-01", "00:00", brandTimezone
-);
+const monthStart = TimezoneService.createDateInBrandTimezone('2025-01-01', '00:00', brandTimezone);
 // Creates Jan 1 at midnight EST → correct!
 ```
 
 **Fixed in:**
+
 - `brands.ts:392-407` (calendar endpoint)
 
 ---
 
 ### ❌ Anti-Pattern 5: Missing Input Validation
+
 ```typescript
 // ❌ WRONG - No validation, crashes on invalid input
 const date = fromZonedTime(dateString, timezone);
@@ -421,11 +438,13 @@ const date = fromZonedTime(dateString + 'T' + timeString + ':00', timezone);
 ```
 
 **Fixed in:**
+
 - `timezone.ts:182-219` (createDateInBrandTimezone)
 
 ---
 
 ### ❌ Anti-Pattern 6: Unhandled Database Errors
+
 ```typescript
 // ❌ WRONG - Database failure crashes entire request
 const brand = await prisma.brand.findUnique({ where: { id: brandId } });
@@ -445,6 +464,7 @@ try {
 ```
 
 **Fixed in:**
+
 - `timezone.ts:106-136` (getBrandTimezone)
 
 ---
@@ -454,9 +474,11 @@ try {
 ### Unit Tests Created
 
 #### 1. Campaign Date Validation Tests
+
 **File:** `packages/apps/api/src/services/__tests__/campaign-date-validation.test.ts` (174 lines)
 
 **Coverage:**
+
 - ✅ Date-only comparisons (ignores time component)
 - ✅ Cross-timezone validation (PST, EST, IST, JST, CET)
 - ✅ DST transition handling
@@ -465,9 +487,11 @@ try {
 - ✅ Real-world scenario: PST user at 10 PM creating campaign for today
 
 #### 2. Timezone Conversion Tests
+
 **File:** `packages/apps/api/src/services/__tests__/timezone-conversion.test.ts` (317 lines)
 
 **Coverage:**
+
 - ✅ UTC ↔ Local conversions (toUTC, toLocal)
 - ✅ createDateInBrandTimezone accuracy
 - ✅ Content scheduling at 9 AM across different timezones
@@ -620,26 +644,31 @@ isDST(): boolean
 ## Troubleshooting
 
 ### Issue: "Campaign start date cannot be in the past"
+
 **Cause:** Time component included in date comparison
 **Fix:** Use `normalizeDateToMidnight()` before comparing dates
 **Location:** `campaign.ts:171-184`
 
 ### Issue: Scheduled posts show wrong time after editing
+
 **Cause:** Double conversion in PostDetail.tsx
 **Fix:** Use `fromZonedTime()` instead of `convertLocalToUTC(new Date())`
 **Location:** `PostDetail.tsx:470-472`, `PostDetail.tsx:516-519`
 
 ### Issue: Calendar date filters cause day shifts
+
 **Cause:** Using `toISOString().split('T')[0]` extracts UTC date
 **Fix:** Use `formatLocalDate()` to extract local date components
 **Location:** `filterUrlUtils.ts:42-46`
 
 ### Issue: Calendar shows posts in wrong month
+
 **Cause:** Month boundaries calculated in server timezone
 **Fix:** Use `createDateInBrandTimezone()` for month boundaries
 **Location:** `brands.ts:392-407`
 
 ### Issue: Auto-detected timezone is stale
+
 **Cause:** Session cache never refreshes
 **Workaround:** Call `clearTimezoneCache()` after system timezone change
 **Future:** Add periodic refresh or cache invalidation

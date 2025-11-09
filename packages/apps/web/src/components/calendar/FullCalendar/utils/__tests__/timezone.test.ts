@@ -183,8 +183,12 @@ describe('Calendar Timezone Utilities', () => {
       const beforeDST = '2025-03-09T06:59:00Z'; // 1:59 AM EST
       const afterDST = '2025-03-09T07:01:00Z'; // 3:01 AM EDT
 
-      expect(toWallTimeDate(beforeDST, 'America/New_York')?.toISOString()).toBe('2025-03-09T06:59:00.000Z');
-      expect(toWallTimeDate(afterDST, 'America/New_York')?.toISOString()).toBe('2025-03-09T07:01:00.000Z');
+      expect(toWallTimeDate(beforeDST, 'America/New_York')?.toISOString()).toBe(
+        '2025-03-09T06:59:00.000Z'
+      );
+      expect(toWallTimeDate(afterDST, 'America/New_York')?.toISOString()).toBe(
+        '2025-03-09T07:01:00.000Z'
+      );
     });
 
     it('should handle fall back DST transition (EDT → EST)', () => {
@@ -192,8 +196,12 @@ describe('Calendar Timezone Utilities', () => {
       const beforeFallback = '2025-11-02T05:59:00Z'; // 1:59 AM EDT
       const afterFallback = '2025-11-02T06:01:00Z'; // 1:01 AM EST
 
-      expect(toWallTimeDate(beforeFallback, 'America/New_York')?.toISOString()).toBe('2025-11-02T05:59:00.000Z');
-      expect(toWallTimeDate(afterFallback, 'America/New_York')?.toISOString()).toBe('2025-11-02T06:01:00.000Z');
+      expect(toWallTimeDate(beforeFallback, 'America/New_York')?.toISOString()).toBe(
+        '2025-11-02T05:59:00.000Z'
+      );
+      expect(toWallTimeDate(afterFallback, 'America/New_York')?.toISOString()).toBe(
+        '2025-11-02T06:01:00.000Z'
+      );
     });
   });
 

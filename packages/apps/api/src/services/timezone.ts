@@ -86,15 +86,7 @@ export class TimezoneService {
    * // Returns: Jan 15, 2025 00:00:00.000
    */
   static normalizeDateToMidnight(date: Date): Date {
-    return new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-      0,
-      0,
-      0,
-      0
-    );
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
   }
 
   /**

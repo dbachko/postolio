@@ -2,7 +2,7 @@ import { type ReactNode, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
 import type { CalendarItem } from '../types/calendar';
-import { formatCompact } from '../lib/timezone';
+import { luxon } from '@postolio/calendar';
 import {
   MoreHorizontal,
   CheckCircle2,
@@ -52,8 +52,11 @@ export function PostPreviewCard({ item, timezone, onReschedule }: PostPreviewCar
       null;
     let displayTime = '';
     if (ts) {
-      // Format in brand timezone, compact without trailing tz
-      displayTime = formatCompact(ts, 'h:mm a', timezone);
+      // Format with the same Luxon localizer used by the calendar
+      // Ensures exact match with grid positioning and DST handling
+      const localizer = luxon.create({ timezone });
+      const date = new Date(ts);
+      displayTime = localizer.format(date, 'h:mm a');
     }
 
     const directColor = (item as any)?.campaignColor || null;

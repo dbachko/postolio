@@ -24,7 +24,9 @@ describe('TimezoneService', () => {
 
       // PST is UTC-8, so 2:00 PM PST = 10:00 PM UTC
       expect(formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm')).toBe('2025-01-15 22:00');
-      expect(formatInTimeZone(date, 'America/Los_Angeles', 'yyyy-MM-dd HH:mm')).toBe('2025-01-15 14:00');
+      expect(formatInTimeZone(date, 'America/Los_Angeles', 'yyyy-MM-dd HH:mm')).toBe(
+        '2025-01-15 14:00'
+      );
     });
 
     it('should handle timezone with different DST offset', () => {
@@ -51,11 +53,7 @@ describe('TimezoneService', () => {
 
     it('should handle non-integer timezone offset (India)', () => {
       // IST is UTC+5:30
-      const date = TimezoneService.createDateInBrandTimezone(
-        '2025-01-15',
-        '14:30',
-        'Asia/Kolkata'
-      );
+      const date = TimezoneService.createDateInBrandTimezone('2025-01-15', '14:30', 'Asia/Kolkata');
 
       // 2:30 PM IST = 9:00 AM UTC
       expect(formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm')).toBe('2025-01-15 09:00');
@@ -74,11 +72,7 @@ describe('TimezoneService', () => {
       expect(formatInTimeZone(pstMidnight, 'UTC', 'yyyy-MM-dd HH:mm')).toBe('2025-01-15 08:00');
 
       // Midnight UTC
-      const utcMidnight = TimezoneService.createDateInBrandTimezone(
-        '2025-01-15',
-        '00:00',
-        'UTC'
-      );
+      const utcMidnight = TimezoneService.createDateInBrandTimezone('2025-01-15', '00:00', 'UTC');
 
       expect(formatInTimeZone(utcMidnight, 'UTC', 'yyyy-MM-dd HH:mm')).toBe('2025-01-15 00:00');
     });
@@ -101,13 +95,19 @@ describe('TimezoneService', () => {
       const utcDate = new Date('2025-01-15T22:00:00Z');
 
       const pstDate = TimezoneService.toLocal(utcDate, 'America/Los_Angeles');
-      expect(formatInTimeZone(pstDate, 'America/Los_Angeles', 'yyyy-MM-dd HH:mm')).toBe('2025-01-15 14:00');
+      expect(formatInTimeZone(pstDate, 'America/Los_Angeles', 'yyyy-MM-dd HH:mm')).toBe(
+        '2025-01-15 14:00'
+      );
 
       const estDate = TimezoneService.toLocal(utcDate, 'America/New_York');
-      expect(formatInTimeZone(estDate, 'America/New_York', 'yyyy-MM-dd HH:mm')).toBe('2025-01-15 17:00');
+      expect(formatInTimeZone(estDate, 'America/New_York', 'yyyy-MM-dd HH:mm')).toBe(
+        '2025-01-15 17:00'
+      );
 
       const istDate = TimezoneService.toLocal(utcDate, 'Asia/Kolkata');
-      expect(formatInTimeZone(istDate, 'Asia/Kolkata', 'yyyy-MM-dd HH:mm')).toBe('2025-01-16 03:30');
+      expect(formatInTimeZone(istDate, 'Asia/Kolkata', 'yyyy-MM-dd HH:mm')).toBe(
+        '2025-01-16 03:30'
+      );
     });
 
     it('should round-trip UTC -> Local -> UTC correctly', () => {
@@ -142,11 +142,7 @@ describe('TimezoneService', () => {
       );
 
       // UTC brand
-      const utcSchedule = TimezoneService.createDateInBrandTimezone(
-        postDate,
-        postingTime,
-        'UTC'
-      );
+      const utcSchedule = TimezoneService.createDateInBrandTimezone(postDate, postingTime, 'UTC');
 
       // All should be stored as different UTC times
       const pstUTC = formatInTimeZone(pstSchedule, 'UTC', 'HH:mm');
@@ -253,7 +249,9 @@ describe('TimezoneService', () => {
         'America/Los_Angeles'
       );
 
-      expect(formatInTimeZone(newYearEve, 'America/Los_Angeles', 'yyyy-MM-dd HH:mm')).toBe('2024-12-31 23:00');
+      expect(formatInTimeZone(newYearEve, 'America/Los_Angeles', 'yyyy-MM-dd HH:mm')).toBe(
+        '2024-12-31 23:00'
+      );
       expect(formatInTimeZone(newYearEve, 'UTC', 'yyyy-MM-dd HH:mm')).toBe('2025-01-01 07:00');
     });
 
@@ -291,7 +289,8 @@ describe('TimezoneService', () => {
       };
 
       // Simulate the fallback logic
-      const timezone = brandWithNoTZ.postingTimezone ||
+      const timezone =
+        brandWithNoTZ.postingTimezone ||
         (brandWithNoTZ.user.timezone && TimezoneService.isValidTimezone(brandWithNoTZ.user.timezone)
           ? brandWithNoTZ.user.timezone
           : 'UTC');
@@ -310,7 +309,8 @@ describe('TimezoneService', () => {
       };
 
       // Simulate the fallback logic
-      const timezone = brandWithNoTZ.postingTimezone ||
+      const timezone =
+        brandWithNoTZ.postingTimezone ||
         (brandWithNoTZ.user.timezone && TimezoneService.isValidTimezone(brandWithNoTZ.user.timezone)
           ? brandWithNoTZ.user.timezone
           : 'UTC');
@@ -329,7 +329,8 @@ describe('TimezoneService', () => {
       };
 
       // Simulate the priority logic
-      const timezone = brandWithTZ.postingTimezone ||
+      const timezone =
+        brandWithTZ.postingTimezone ||
         (brandWithTZ.user.timezone && TimezoneService.isValidTimezone(brandWithTZ.user.timezone)
           ? brandWithTZ.user.timezone
           : 'UTC');

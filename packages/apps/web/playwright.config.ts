@@ -12,7 +12,7 @@ export default defineConfig({
   reporter: 'html',
 
   use: {
-    baseURL: process.env.CI ? 'http://localhost:5173' : 'https://localhost:5173',
+    baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -61,19 +61,16 @@ export default defineConfig({
           NODE_ENV: 'dev',
         },
       }
-    : [
-        // Local development - run services separately
-        {
-          command: 'cd .. && npm run dev',
-          port: 3000,
-          reuseExistingServer: true,
-          timeout: 120 * 1000,
+    : {
+        // Local: build then serve static dist via http-server for stability
+        command: 'npm run build && npx --yes http-server ./dist -p 5173 -a 127.0.0.1 -c-1',
+        port: 5173,
+        reuseExistingServer: true,
+        timeout: 180 * 1000,
+        env: {
+          ...process.env,
+          E2E: '1',
+          CI: 'true',
         },
-        {
-          command: 'npm run dev',
-          port: 5173,
-          reuseExistingServer: true,
-          timeout: 120 * 1000,
-        },
-      ],
+      },
 });

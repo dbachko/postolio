@@ -24,14 +24,19 @@ export interface Localizer {
   addMonths(date: Date, amount: number): Date;
 }
 
-export function createLuxonLocalizer(opts?: { weekStartsOn?: 0 | 1; timezone?: string }): Localizer {
+export function createLuxonLocalizer(opts?: {
+  weekStartsOn?: 0 | 1;
+  timezone?: string;
+}): Localizer {
   const weekStartsOn = opts?.weekStartsOn ?? 1; // Monday default
   const timezone = opts?.timezone; // Optional timezone for formatting
   return {
     format(d: Date, token: FormatToken) {
-      const dt = DateTime.fromJSDate(d);
-      // If timezone is specified, convert to that timezone for formatting
-      return timezone ? dt.setZone(timezone).toFormat(token) : dt.toFormat(token);
+      // Normalize base to UTC to avoid environment-dependent interpretations
+      // Then shift to the requested IANA zone for display.
+      const dtUtc = DateTime.fromMillis(d.getTime(), { zone: 'utc' });
+      const dt = timezone ? dtUtc.setZone(timezone) : dtUtc;
+      return dt.toFormat(token);
     },
     startOfWeek(d: Date, w?: 0 | 1) {
       const dt = DateTime.fromJSDate(d);

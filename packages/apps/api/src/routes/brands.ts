@@ -404,7 +404,11 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         // Create month end (last day of month at 23:59:59 in brand's timezone)
         const lastDay = new Date(year, monthNum, 0).getDate(); // Get last day of month
         const monthEndStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-        const monthEnd = TimezoneService.createDateInBrandTimezone(monthEndStr, '23:59', brandTimezone);
+        const monthEnd = TimezoneService.createDateInBrandTimezone(
+          monthEndStr,
+          '23:59',
+          brandTimezone
+        );
 
         // Get existing content for the month with campaign info for color coding
         const content = await prisma.content.findMany({
