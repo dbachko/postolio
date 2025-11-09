@@ -12,6 +12,10 @@ import { AuditLogger, AuditEventType } from '../services/audit-logger.js';
 
 const prisma = getDatabaseClient();
 
+// Centralize Facebook Graph API version for OAuth flows
+const FB_GRAPH_API_VERSION = process.env.FB_GRAPH_API_VERSION || 'v24.0';
+const fbGraph = (path: string) => `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${path}`;
+
 // Facebook App configuration
 const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || '';
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || '';
@@ -56,7 +60,7 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Exchange code for access token
-      const tokenResponse = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
+      const tokenResponse = await axios.get(fbGraph('oauth/access_token'), {
         params: {
           client_id: FACEBOOK_APP_ID,
           client_secret: FACEBOOK_APP_SECRET,
@@ -72,7 +76,7 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Get user information from Facebook
-      const userResponse = await axios.get('https://graph.facebook.com/v18.0/me', {
+      const userResponse = await axios.get(fbGraph('me'), {
         params: {
           fields: 'id,email,name,picture',
           access_token,
@@ -231,22 +235,19 @@ const facebookOAuthRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = request.user.id;
 
         // Exchange code for access token
-        const tokenResponse = await axios.get(
-          'https://graph.facebook.com/v18.0/oauth/access_token',
-          {
-            params: {
-              client_id: FACEBOOK_APP_ID,
-              client_secret: FACEBOOK_APP_SECRET,
-              redirect_uri: redirectUri,
-              code,
-            },
-          }
-        );
+        const tokenResponse = await axios.get(fbGraph('oauth/access_token'), {
+          params: {
+            client_id: FACEBOOK_APP_ID,
+            client_secret: FACEBOOK_APP_SECRET,
+            redirect_uri: redirectUri,
+            code,
+          },
+        });
 
         const { access_token } = tokenResponse.data;
 
         // Get user information
-        const userResponse = await axios.get('https://graph.facebook.com/v18.0/me', {
+        const userResponse = await axios.get(fbGraph('me'), {
           params: {
             fields: 'id,picture',
             access_token,

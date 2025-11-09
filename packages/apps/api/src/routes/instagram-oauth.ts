@@ -269,8 +269,12 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         return reply.status(400).send({ error: 'OAuth state has expired' });
       }
 
+      // Centralize Facebook Graph API version for OAuth
+      const FB_GRAPH_API_VERSION = process.env.FB_GRAPH_API_VERSION || 'v24.0';
+      const fbGraph = (path: string) =>
+        `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${path}`;
       // Exchange authorization code for access token
-      const tokenExchangeUrl = 'https://graph.facebook.com/v23.0/oauth/access_token';
+      const tokenExchangeUrl = fbGraph('oauth/access_token');
       const tokenParams = new URLSearchParams({
         client_id: FACEBOOK_APP_ID,
         client_secret: FACEBOOK_APP_SECRET,
@@ -298,7 +302,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       const accessToken = tokenData.access_token;
 
       // Get user's Facebook pages (required for Instagram Business accounts)
-      const pagesUrl = `https://graph.facebook.com/v23.0/me/accounts?access_token=${accessToken}&fields=id,name,access_token,instagram_business_account`;
+      const pagesUrl = fbGraph(
+        `me/accounts?access_token=${accessToken}&fields=id,name,access_token,instagram_business_account`
+      );
       const pagesResponse = await fetch(pagesUrl);
 
       if (!pagesResponse.ok) {
@@ -333,7 +339,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       }
 
       // Get Instagram account information
-      const instagramUrl = `https://graph.facebook.com/v23.0/${instagramAccountId}?fields=id,username,name,biography,followers_count,media_count,profile_picture_url&access_token=${pageAccessToken}`;
+      const instagramUrl = fbGraph(
+        `${instagramAccountId}?fields=id,username,name,biography,followers_count,media_count,profile_picture_url&access_token=${pageAccessToken}`
+      );
       const instagramResponse = await fetch(instagramUrl);
 
       if (!instagramResponse.ok) {

@@ -4,6 +4,9 @@
  */
 
 import { FastifyInstance } from 'fastify';
+// Centralize Facebook Graph API version to ease upgrades across adapters
+const FB_GRAPH_API_VERSION = process.env.FB_GRAPH_API_VERSION || 'v24.0';
+const fbGraph = (path: string) => `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${path}`;
 
 export interface PlatformContent {
   caption: string;
@@ -158,20 +161,17 @@ export class InstagramAdapter implements PlatformAdapter {
       }
 
       // Step 1: Upload media to Instagram
-      const mediaUploadResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${instagramBusinessAccountId}/media`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            image_url: content.imageUrl || content.mediaUrl,
-            caption: content.caption,
-            access_token: credentials.accessToken,
-          }),
-        }
-      );
+      const mediaUploadResponse = await fetch(fbGraph(`${instagramBusinessAccountId}/media`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image_url: content.imageUrl || content.mediaUrl,
+          caption: content.caption,
+          access_token: credentials.accessToken,
+        }),
+      });
 
       if (!mediaUploadResponse.ok) {
         const errorJson: unknown = await mediaUploadResponse.json();
@@ -186,19 +186,16 @@ export class InstagramAdapter implements PlatformAdapter {
       const creationId = mediaData.id;
 
       // Step 2: Publish the media
-      const publishResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${instagramBusinessAccountId}/media_publish`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            creation_id: creationId,
-            access_token: credentials.accessToken,
-          }),
-        }
-      );
+      const publishResponse = await fetch(fbGraph(`${instagramBusinessAccountId}/media_publish`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          creation_id: creationId,
+          access_token: credentials.accessToken,
+        }),
+      });
 
       if (!publishResponse.ok) {
         const errorJson: unknown = await publishResponse.json();
@@ -213,7 +210,7 @@ export class InstagramAdapter implements PlatformAdapter {
 
       // Step 3: Get the permalink
       const permalinkResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${publishData.id}?fields=permalink&access_token=${credentials.accessToken}`
+        fbGraph(`${publishData.id}?fields=permalink&access_token=${credentials.accessToken}`)
       );
 
       const permalinkData = (await permalinkResponse.json()) as {
@@ -452,7 +449,7 @@ export class FacebookAdapter implements PlatformAdapter {
         postData.url = content.imageUrl || content.mediaUrl;
 
         // Post photo to Facebook Page
-        const response = await fetch(`https://graph.facebook.com/v18.0/${pageId}/photos`, {
+        const response = await fetch(fbGraph(`${pageId}/photos`), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -479,7 +476,7 @@ export class FacebookAdapter implements PlatformAdapter {
 
         // Get the permalink
         const permalinkResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${postId}?fields=permalink_url&access_token=${credentials.accessToken}`
+          fbGraph(`${postId}?fields=permalink_url&access_token=${credentials.accessToken}`)
         );
 
         const permalinkData = (await permalinkResponse.json()) as {
@@ -498,7 +495,7 @@ export class FacebookAdapter implements PlatformAdapter {
         };
       } else {
         // Text-only post
-        const response = await fetch(`https://graph.facebook.com/v18.0/${pageId}/feed`, {
+        const response = await fetch(fbGraph(`${pageId}/feed`), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -520,7 +517,7 @@ export class FacebookAdapter implements PlatformAdapter {
 
         // Get the permalink
         const permalinkResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${postId}?fields=permalink_url&access_token=${credentials.accessToken}`
+          fbGraph(`${postId}?fields=permalink_url&access_token=${credentials.accessToken}`)
         );
 
         const permalinkData = (await permalinkResponse.json()) as {

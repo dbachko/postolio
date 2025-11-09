@@ -13,6 +13,7 @@
   "dependencies": {
     "@postolio/connectors": "workspace:*",
     "@postolio/database": "workspace:*",
+    "@postolio/aws": "workspace:*",
     "ioredis": "^5.4.1",
     "node-fetch": "^3.3.2"
   },

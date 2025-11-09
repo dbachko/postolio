@@ -9,6 +9,10 @@ import type { Prisma } from '@postolio/database';
 import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
 import type { AssetRecord } from '@postolio/assets-client';
 
+// Centralize Facebook Graph API version to ease upgrades
+const FB_GRAPH_API_VERSION = process.env.FB_GRAPH_API_VERSION || 'v24.0';
+const fbGraph = (path: string) => `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${path}`;
+
 export interface InstagramPost {
   id: string;
   caption: string;
@@ -180,7 +184,9 @@ class InstagramService {
     currentToken: string
   ): Promise<{ accessToken: string; expiresAt: string } | null> {
     try {
-      const url = `https://graph.facebook.com/v23.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.FACEBOOK_APP_ID}&client_secret=${process.env.FACEBOOK_APP_SECRET}&fb_exchange_token=${currentToken}`;
+      const url = fbGraph(
+        `oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.FACEBOOK_APP_ID}&client_secret=${process.env.FACEBOOK_APP_SECRET}&fb_exchange_token=${currentToken}`
+      );
 
       const response = await axios.get(url);
       const data = response.data;
@@ -238,7 +244,9 @@ class InstagramService {
 
       const fields =
         'id,username,name,biography,followers_count,media_count,profile_picture_url,website';
-      const url = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}?fields=${fields}&access_token=${credentials.accessToken}`;
+      const url = fbGraph(
+        `${credentials.accountId || brand.instagramAccountId}?fields=${fields}&access_token=${credentials.accessToken}`
+      );
 
       const response = await axios.get(url);
       const profile = response.data;
@@ -282,7 +290,9 @@ class InstagramService {
 
       const fields =
         'id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count';
-      const url = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media?fields=${fields}&limit=${limit}&access_token=${credentials.accessToken}`;
+      const url = fbGraph(
+        `${credentials.accountId || brand.instagramAccountId}/media?fields=${fields}&limit=${limit}&access_token=${credentials.accessToken}`
+      );
 
       const response = await axios.get(url);
       const mediaData = response.data.data || [];
@@ -342,7 +352,7 @@ class InstagramService {
 
       // Step 1: Create media container
       const caption = `${request.caption}\n\n${request.hashtags.map((tag) => `#${tag}`).join(' ')}`;
-      const containerUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media`;
+      const containerUrl = fbGraph(`${credentials.accountId || brand.instagramAccountId}/media`);
 
       const containerData = {
         image_url: request.cdnImageUrl,
@@ -354,7 +364,9 @@ class InstagramService {
       const containerId = containerResponse.data.id;
 
       // Step 2: Publish the media container
-      const publishUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media_publish`;
+      const publishUrl = fbGraph(
+        `${credentials.accountId || brand.instagramAccountId}/media_publish`
+      );
       const publishData = {
         creation_id: containerId,
         access_token: credentials.accessToken,
@@ -364,7 +376,9 @@ class InstagramService {
       const mediaId = publishResponse.data.id;
 
       // Step 3: Get the permalink
-      const permalinkUrl = `https://graph.facebook.com/v23.0/${mediaId}?fields=permalink&access_token=${credentials.accessToken}`;
+      const permalinkUrl = fbGraph(
+        `${mediaId}?fields=permalink&access_token=${credentials.accessToken}`
+      );
       const permalinkResponse = await axios.get(permalinkUrl);
 
       return {
@@ -398,7 +412,9 @@ class InstagramService {
       }
 
       const metrics = 'impressions,reach,engagement,likes,comments,saves,shares';
-      const url = `https://graph.facebook.com/v23.0/${mediaId}/insights?metric=${metrics}&access_token=${credentials.accessToken}`;
+      const url = fbGraph(
+        `${mediaId}/insights?metric=${metrics}&access_token=${credentials.accessToken}`
+      );
 
       const response = await axios.get(url);
       const data = response.data?.data;
@@ -433,12 +449,16 @@ class InstagramService {
       }
 
       // First, get the total count
-      const countUrl = `https://graph.facebook.com/v23.0/${mediaId}?fields=comments_count&access_token=${credentials.accessToken}`;
+      const countUrl = fbGraph(
+        `${mediaId}?fields=comments_count&access_token=${credentials.accessToken}`
+      );
       const countResponse = await axios.get(countUrl);
       const total = countResponse.data.comments_count || 0;
 
       // Then get the actual comments
-      const url = `https://graph.facebook.com/v23.0/${mediaId}/comments?fields=id,text,username,timestamp,like_count&limit=${limit}&access_token=${credentials.accessToken}`;
+      const url = fbGraph(
+        `${mediaId}/comments?fields=id,text,username,timestamp,like_count&limit=${limit}&access_token=${credentials.accessToken}`
+      );
       const response = await axios.get(url);
       const commentsRaw = Array.isArray(response.data?.data) ? response.data.data : [];
       const comments: InstagramComment[] = commentsRaw.map((c: unknown) => {
@@ -505,7 +525,9 @@ class InstagramService {
       }
 
       // Get follower count (lifetime metric)
-      const followerUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}?fields=followers_count&access_token=${credentials.accessToken}`;
+      const followerUrl = fbGraph(
+        `${credentials.accountId || brand.instagramAccountId}?fields=followers_count&access_token=${credentials.accessToken}`
+      );
       const followerResponse = await axios.get(followerUrl);
 
       // Get insights for the time range
@@ -513,22 +535,24 @@ class InstagramService {
       const since = startDate.toISOString().split('T')[0];
       const until = endDate.toISOString().split('T')[0];
       const buildMetricsUrl = (metrics: string) =>
-        `https://graph.facebook.com/v23.0/${baseId}/insights?metric=${metrics}&period=day&since=${since}&until=${until}&access_token=${credentials.accessToken}`;
+        fbGraph(
+          `${baseId}/insights?metric=${metrics}&period=day&since=${since}&until=${until}&access_token=${credentials.accessToken}`
+        );
 
-      let metrics = 'impressions,reach,profile_views';
+      // v24 IG user insights: use account-allowed metrics only (no 'impressions')
+      let metrics = 'reach,profile_views';
       let insightsResponse;
       try {
         insightsResponse = await axios.get(buildMetricsUrl(metrics));
       } catch (err) {
-        // If profile_views is not allowed for this account or permissions are missing,
-        // retry with a reduced metric set to salvage usable data.
+        // If a metric is not allowed or permissions are missing, retry with a reduced set.
         const axErr = err as AxiosError<{ error?: { code?: number; message?: string } }>;
         const code = axErr.response?.data?.error?.code;
         const message: string = axErr.response?.data?.error?.message || '';
         const isMetricError =
           code === 100 || /Invalid metric|Unsupported get request/i.test(message);
         if (isMetricError) {
-          metrics = 'impressions,reach';
+          metrics = 'reach';
           insightsResponse = await axios.get(buildMetricsUrl(metrics));
         } else {
           throw err;
@@ -539,7 +563,8 @@ class InstagramService {
       const insights = insightsResponse.data.data;
       const processedData: AccountInsights = {
         followers: followerResponse.data.followers_count || 0,
-        impressions: this.aggregateInsightValues(insights, 'impressions'),
+        // 'impressions' not available at account level in v24 – keep 0 to preserve shape
+        impressions: 0,
         reach: this.aggregateInsightValues(insights, 'reach'),
         profile_views: this.aggregateInsightValues(insights, 'profile_views'),
       };
@@ -643,7 +668,9 @@ class InstagramService {
       }
 
       // Get recent media
-      const mediaUrl = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media?fields=id,caption,media_type,media_url,permalink,timestamp&limit=${limit}&access_token=${credentials.accessToken}`;
+      const mediaUrl = fbGraph(
+        `${credentials.accountId || brand.instagramAccountId}/media?fields=id,caption,media_type,media_url,permalink,timestamp&limit=${limit}&access_token=${credentials.accessToken}`
+      );
       const mediaResponse = await axios.get(mediaUrl);
 
       const posts = [];
@@ -651,7 +678,9 @@ class InstagramService {
       // Get insights for each media item
       for (const media of mediaResponse.data.data) {
         try {
-          const insightsUrl = `https://graph.facebook.com/v23.0/${media.id}/insights?metric=impressions,reach,engagement&access_token=${credentials.accessToken}`;
+          const insightsUrl = fbGraph(
+            `${media.id}/insights?metric=impressions,reach,saved,likes,comments,video_views&access_token=${credentials.accessToken}`
+          );
           const insightsResponse = await axios.get(insightsUrl);
 
           const insights = insightsResponse.data.data;
@@ -979,7 +1008,9 @@ class InstagramService {
     }
 
     const fields = 'id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count';
-    let url = `https://graph.facebook.com/v23.0/${credentials.accountId || brand.instagramAccountId}/media?fields=${fields}&limit=${limit}&access_token=${credentials.accessToken}`;
+    let url = fbGraph(
+      `${credentials.accountId || brand.instagramAccountId}/media?fields=${fields}&limit=${limit}&access_token=${credentials.accessToken}`
+    );
 
     if (cursor) {
       url += `&after=${cursor}`;
@@ -1289,60 +1320,114 @@ class InstagramService {
       return;
     }
 
-    // No matching draft found; create a new content record
-    try {
-      const created = await prisma.content.create({ data: contentData });
+    // No matching draft found; ensure we don't duplicate existing publications
+    // 1) Check for an existing publication for this externalPostId under the brand's IG account
+    const sa = await prisma.socialAccount.upsert({
+      where: {
+        platform_externalAccountId: {
+          platform: 'instagram',
+          externalAccountId: brand.instagramAccountId || 'unknown',
+        },
+      },
+      update: { brandId: brand.id!, externalPageId: brand.instagramPageId || undefined },
+      create: {
+        brandId: brand.id!,
+        platform: 'instagram',
+        externalAccountId: brand.instagramAccountId || 'unknown',
+        externalPageId: brand.instagramPageId || undefined,
+        displayName: '',
+      },
+    });
+
+    const existingPub = await prisma.contentPublication.findUnique({
+      where: {
+        socialAccountId_externalPostId: {
+          socialAccountId: sa.id,
+          externalPostId: post.id,
+        },
+      },
+      select: { id: true, contentId: true },
+    });
+
+    if (existingPub?.contentId) {
+      // Already imported: optionally enrich existing content (attach asset/permalink) and return
       if (importedAsset) {
-        await attachAssetToContent({ contentId: created.id, asset: importedAsset });
+        try {
+          await attachAssetToContent({ contentId: existingPub.contentId, asset: importedAsset });
+        } catch {}
       }
-      try {
-        const sa = await prisma.socialAccount.upsert({
-          where: {
-            platform_externalAccountId: {
-              platform: 'instagram',
-              externalAccountId: brand.instagramAccountId || 'unknown',
-            },
+      await prisma.content.update({
+        where: { id: existingPub.contentId },
+        data: {
+          status: 'published',
+          postedAt,
+          schedulingError: null,
+          generationParams: {
+            ...(contentData.generationParams as any),
+            // preserve any existing fields on the target content
           },
-          update: { brandId: brand.id!, externalPageId: brand.instagramPageId || undefined },
-          create: {
-            brandId: brand.id!,
-            platform: 'instagram',
-            externalAccountId: brand.instagramAccountId || 'unknown',
-            externalPageId: brand.instagramPageId || undefined,
-            displayName: '',
-          },
-        });
-        await prisma.contentPublication.create({
-          data: {
-            contentId: created.id,
-            socialAccountId: sa.id,
-            platform: 'instagram',
-            externalPostId: post.id,
-            externalThreadRootId: null,
-            externalAccountId: brand.instagramAccountId || undefined,
-            externalPageId: brand.instagramPageId || undefined,
-            permalink: post.permalink || undefined,
-            publishedAt: postedAt,
-            status: 'published',
-          },
-        });
-      } catch (e) {
-        instagramLogger.warn('Failed to create publication for imported post', {
-          error: (e as Error).message,
-        });
-      }
-    } catch (e) {
-      // Handle race conditions via DB uniqueness
-      const code = (e as any)?.code;
-      if (code === 'P2002') {
-        // Unique constraint violation -> treat as already imported
-        instagramLogger.info('[Instagram Sync] Skipped duplicate by unique constraint', {
+        },
+      });
+      await prisma.contentPublication.update({
+        where: { id: existingPub.id },
+        data: {
+          permalink: post.permalink || undefined,
+          publishedAt: postedAt,
+          status: 'published',
+        },
+      });
+      instagramLogger.info(
+        '[Instagram Sync] Publication already exists; merged into existing content',
+        {
           postId: post.id,
           brandId: brand.id,
-        });
+          publicationId: existingPub.id,
+        }
+      );
+      return;
+    }
+
+    // 2) Create a new content record and the publication together; if publication fails, clean up content
+    const created = await prisma.content.create({ data: contentData });
+    if (importedAsset) {
+      await attachAssetToContent({ contentId: created.id, asset: importedAsset });
+    }
+    try {
+      await prisma.contentPublication.create({
+        data: {
+          contentId: created.id,
+          socialAccountId: sa.id,
+          platform: 'instagram',
+          externalPostId: post.id,
+          externalThreadRootId: null,
+          externalAccountId: brand.instagramAccountId || undefined,
+          externalPageId: brand.instagramPageId || undefined,
+          permalink: post.permalink || undefined,
+          publishedAt: postedAt,
+          status: 'published',
+        },
+      });
+    } catch (pubErr) {
+      const code = (pubErr as any)?.code;
+      if (code === 'P2002') {
+        // Publication exists (race) — remove the just-created content to avoid duplicates
+        try {
+          await prisma.content.delete({ where: { id: created.id } });
+        } catch {}
+        instagramLogger.info(
+          '[Instagram Sync] Skipped duplicate by unique constraint (cleaned content)',
+          {
+            postId: post.id,
+            brandId: brand.id,
+          }
+        );
         return;
       }
-      throw e;
+      // Unexpected error creating publication - best-effort cleanup and rethrow
+      try {
+        await prisma.content.delete({ where: { id: created.id } });
+      } catch {}
+      throw pubErr;
     }
 
     instagramLogger.info(`[Instagram Sync] ✨ Synced post ${post.id}`, {

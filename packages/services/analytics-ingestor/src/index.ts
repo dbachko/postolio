@@ -2,10 +2,39 @@ import { PrismaClient, Prisma } from '@postolio/database';
 import Redis from 'ioredis';
 import { InstagramConnector, type AccountIdentity, type Credentials } from '@postolio/connectors';
 import fetch from 'node-fetch';
+import { signRequest } from '@postolio/aws';
 
 // Minimal scaffolding for the ingestion loop; real selection logic will be added in Phase 3
 
+// Ensure DATABASE_URL is available (fallback to discrete DB_* vars when running in ECS)
+function ensureDatabaseUrl() {
+  if (process.env.DATABASE_URL) return;
+  const { DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD, DB_NAME } = process.env as Record<
+    string,
+    string | undefined
+  >;
+  if (DB_HOST && DB_PORT && DB_USERNAME && DB_PASSWORD && DB_NAME) {
+    const enc = encodeURIComponent;
+    process.env.DATABASE_URL = `postgresql://${enc(DB_USERNAME)}:${enc(DB_PASSWORD)}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public`;
+    console.log('[Ingestor] DATABASE_URL constructed from DB_* vars', {
+      dbHost: DB_HOST,
+      dbPort: DB_PORT,
+      dbName: DB_NAME,
+    });
+  }
+}
+
+ensureDatabaseUrl();
+
 const prisma = new PrismaClient();
+
+const LOG_LEVEL = (process.env.LOG_LEVEL || 'info').toLowerCase();
+const wantInfo = LOG_LEVEL === 'info' || LOG_LEVEL === 'debug' || LOG_LEVEL === 'trace';
+const wantDebug = LOG_LEVEL === 'debug' || LOG_LEVEL === 'trace';
+const ACCOUNT_METRICS_MIN_INTERVAL_MS = Number(
+  process.env.ACCOUNT_METRICS_MIN_INTERVAL_MS || 24 * 60 * 60 * 1000
+);
+const IDLE_BACKOFF_MS = Number(process.env.IDLE_BACKOFF_MS || 5 * 60 * 1000);
 
 const redis = new Redis(
   process.env.REDIS_URL || process.env.REDIS_URI || 'redis://localhost:6379',
@@ -38,7 +67,9 @@ async function getCredentialsForSocialAccount(
     if (!sa || !sa.brand) throw new Error('SocialAccount not found for credentials lookup');
 
     const path = `${tokenServiceUrl}/tokens/${sa.brand.userId}/${platform}/${sa.brand.id}`;
-    const res = await fetch(path, { method: 'GET' });
+    const url = new URL(path);
+    const signed = await signRequest({ method: 'GET', url, headers: {} });
+    const res = await fetch(path, { method: 'GET', headers: signed });
     if (res.status === 404) throw new Error('No token in Token Service');
     if (!res.ok) throw new Error(`Token Service error: ${res.status}`);
     const data = (await res.json()) as { accessToken: string; expiresAt?: string };
@@ -98,6 +129,19 @@ async function upsertPublicationLatest(
       lastUpdated: new Date(),
     },
   });
+  if (wantInfo) {
+    console.log('[Ingestor] Upserted metrics', {
+      publicationId: pub.id,
+      platform: pub.platform,
+      impressions,
+      reach,
+      likes,
+      comments,
+      saves,
+      shares,
+      videoViews,
+    });
+  }
 }
 
 async function recordMetricSamples(
@@ -141,6 +185,10 @@ function computeRefreshThresholdMs(publishedAt?: Date | null): number {
 }
 
 async function checkAndConsumeRate(platform: string, socialAccountId: string, limit = 200) {
+  const configured = Number(process.env.RATE_LIMIT_PER_HOUR || NaN);
+  if (!Number.isNaN(configured) && configured > 0) {
+    limit = configured;
+  }
   const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
   const key = `rate:${platform}:${socialAccountId}:${hourBucket}`;
   if (!redis) return true;
@@ -150,6 +198,7 @@ async function checkAndConsumeRate(platform: string, socialAccountId: string, li
 }
 
 async function ingestPublication(publicationId: string) {
+  if (wantInfo) console.log('[Ingestor] Ingesting publication', { publicationId });
   const pub = await prisma.contentPublication.findUnique({
     where: { id: publicationId },
     select: {
@@ -165,14 +214,20 @@ async function ingestPublication(publicationId: string) {
   });
   if (!pub) return;
   const allowed = await checkAndConsumeRate(pub.platform, pub.socialAccountId, 200);
-  if (!allowed) return;
+  if (!allowed) {
+    if (wantDebug) console.debug('Rate limit reached; skipping', pub.id);
+    return;
+  }
   const connector = getConnector(pub.platform);
+  if (wantDebug) console.log('[Ingestor] Connector resolved', { platform: pub.platform });
   const creds = await getCredentialsForSocialAccount(pub.socialAccountId, pub.platform);
   const account: AccountIdentity = {
     platform: pub.platform as any,
     externalAccountId: pub.externalAccountId || pub.socialAccount?.externalAccountId || '',
     externalPageId: pub.externalPageId || pub.socialAccount?.externalPageId || undefined,
   } as any;
+  if (wantDebug)
+    console.debug('[Ingestor] Fetching media insights', { mediaId: pub.externalPostId });
   const insights = await connector.getMediaInsights(creds, account, pub.externalPostId);
   const fields = connector.getMediaFields
     ? await connector.getMediaFields(creds, account, pub.externalPostId)
@@ -184,16 +239,68 @@ async function ingestPublication(publicationId: string) {
 
 async function drainQueue(max = 20) {
   const queueKey = 'ingest:queue:publications';
+  let drained = 0;
   for (let i = 0; i < max; i++) {
     const id = await redis.lpop(queueKey);
     if (!id) break;
     try {
-      await ingestPublication(id);
+      let effectiveId = String(id);
+      // Allow enqueuing by contentId using payload prefix 'content:'
+      if (effectiveId.startsWith('content:')) {
+        const contentId = effectiveId.substring('content:'.length);
+        const pub = await prisma.contentPublication.findFirst({
+          where: { contentId },
+          orderBy: { publishedAt: 'desc' },
+          select: { id: true },
+        });
+        if (!pub) {
+          console.warn('[Ingestor] No publication for content', { contentId });
+          continue;
+        }
+        effectiveId = pub.id;
+        if (wantInfo)
+          console.log('[Ingestor] Resolved content to publication', {
+            contentId,
+            publicationId: effectiveId,
+          });
+      }
+      // Allow enqueuing by external media id using payload prefix 'ig:'
+      else if (effectiveId.startsWith('ig:')) {
+        const mediaId = effectiveId.substring('ig:'.length);
+        const pub = await prisma.contentPublication.findFirst({
+          where: { externalPostId: mediaId },
+          orderBy: { publishedAt: 'desc' },
+          select: { id: true },
+        });
+        if (!pub) {
+          console.warn('[Ingestor] No publication for external media', { mediaId });
+          continue;
+        }
+        effectiveId = pub.id;
+        if (wantInfo)
+          console.log('[Ingestor] Resolved external media to publication', {
+            mediaId,
+            publicationId: effectiveId,
+          });
+      }
+      drained++;
+      await ingestPublication(effectiveId);
       await new Promise((r) => setTimeout(r, 100));
     } catch (e) {
-      console.error('Queue ingestion error for publication', id, e);
+      const status = (e as any)?.response?.status;
+      const ig = (e as any)?.response?.data?.error;
+      const message = ig?.message || (e as Error).message;
+      const code = ig?.code;
+      const subcode = ig?.error_subcode;
+      console.error(
+        `Queue ingestion error for publication ${String(id)}: ${message} (status: ${status ?? 'n/a'}, code: ${
+          code ?? 'n/a'
+        }${subcode ? `, subcode: ${subcode}` : ''})`
+      );
     }
   }
+  if (wantDebug && drained > 0) console.log('[Ingestor] Drained publications', { drained });
+  return drained;
 }
 
 async function ingestAccountMetrics(socialAccountId: string) {
@@ -202,8 +309,26 @@ async function ingestAccountMetrics(socialAccountId: string) {
     select: { id: true, platform: true, externalAccountId: true, externalPageId: true },
   });
   if (!sa) return;
+  // Gate by lastUpdated interval
+  const latest = await prisma.accountMetricsLatest.findUnique({
+    where: { socialAccountId: sa.id },
+    select: { lastUpdated: true },
+  });
+  if (latest?.lastUpdated) {
+    const age = Date.now() - new Date(latest.lastUpdated).getTime();
+    if (age < ACCOUNT_METRICS_MIN_INTERVAL_MS) {
+      if (wantDebug)
+        console.debug('Account metrics within min interval; skipping', {
+          socialAccountId: sa.id,
+        });
+      return;
+    }
+  }
   const allowed = await checkAndConsumeRate(sa.platform, sa.id, 200);
-  if (!allowed) return;
+  if (!allowed) {
+    if (wantDebug) console.debug('Rate limit reached; skipping account', sa.id);
+    return;
+  }
   const connector = getConnector(sa.platform);
   if (!connector.getAccountInsights) return;
   const creds = await getCredentialsForSocialAccount(sa.id, sa.platform);
@@ -255,22 +380,35 @@ async function ingestAccountMetrics(socialAccountId: string) {
 
 async function drainAccountQueue(max = 10) {
   const key = 'ingest:queue:accounts';
+  let drained = 0;
   for (let i = 0; i < max; i++) {
     const id = await redis.lpop(key);
     if (!id) break;
     try {
+      drained++;
       await ingestAccountMetrics(id);
       await new Promise((r) => setTimeout(r, 100));
     } catch (e) {
-      console.error('Queue ingestion error for account', id, e);
+      const status = (e as any)?.response?.status;
+      const ig = (e as any)?.response?.data?.error;
+      const message = ig?.message || (e as Error).message;
+      const code = ig?.code;
+      const subcode = ig?.error_subcode;
+      console.error(
+        `Queue ingestion error for account ${String(id)}: ${message} (status: ${status ?? 'n/a'}, code: ${
+          code ?? 'n/a'
+        }${subcode ? `, subcode: ${subcode}` : ''})`
+      );
     }
   }
+  if (wantDebug && drained > 0) console.log('[Ingestor] Drained accounts', { drained });
+  return drained;
 }
 
-async function runOnce() {
+async function runOnce(): Promise<{ hadWork: boolean }> {
   // First drain any queued refresh requests
-  await drainQueue(20);
-  await drainAccountQueue(10);
+  const drainedPubs = await drainQueue(20);
+  const drainedAccts = await drainAccountQueue(10);
 
   // Load recent publications with latest metrics for staleness calculation
   const candidates = await prisma.contentPublication.findMany({
@@ -302,14 +440,29 @@ async function runOnce() {
     try {
       const allowed = await checkAndConsumeRate(pub.platform, pub.socialAccountId, 200);
       if (!allowed) {
-        console.warn('Rate limit reached; skipping', pub.id);
+        if (wantDebug) console.debug('Rate limit reached; skipping', pub.id);
         continue;
       }
       await ingestPublication(pub.id);
       await new Promise((r) => setTimeout(r, 250));
     } catch (e) {
-      console.error('Ingestion error for publication', pub.id, e);
+      const status = (e as any)?.response?.status;
+      const ig = (e as any)?.response?.data?.error;
+      const message = ig?.message || (e as Error).message;
+      const code = ig?.code;
+      const subcode = ig?.error_subcode;
+      console.error(
+        `Ingestion error for publication ${pub.id}: ${message} (status: ${status ?? 'n/a'}, code: ${code ?? 'n/a'}${
+          subcode ? `, subcode: ${subcode}` : ''
+        })`
+      );
     }
+  }
+  if (wantDebug) {
+    console.log('[Ingestor] Run complete', {
+      candidates: candidates.length,
+      due: due.length,
+    });
   }
 
   // Also refresh account-level metrics for the social accounts involved
@@ -323,6 +476,7 @@ async function runOnce() {
     );
     // Limit to 10 accounts per pass
     const accountBatch = accountIds.slice(0, 10);
+    let accountUpdated = 0;
     for (const socialAccountId of accountBatch) {
       try {
         const sa = await prisma.socialAccount.findUnique({
@@ -330,8 +484,26 @@ async function runOnce() {
           select: { id: true, platform: true, externalAccountId: true, externalPageId: true },
         });
         if (!sa) continue;
+        // Gate by lastUpdated interval
+        const latest = await prisma.accountMetricsLatest.findUnique({
+          where: { socialAccountId: sa.id },
+          select: { lastUpdated: true },
+        });
+        if (latest?.lastUpdated) {
+          const age = Date.now() - new Date(latest.lastUpdated).getTime();
+          if (age < ACCOUNT_METRICS_MIN_INTERVAL_MS) {
+            if (wantDebug)
+              console.debug('Account metrics within min interval; skipping', {
+                socialAccountId: sa.id,
+              });
+            continue;
+          }
+        }
         const allowed = await checkAndConsumeRate(sa.platform, sa.id, 200);
-        if (!allowed) continue;
+        if (!allowed) {
+          if (wantDebug) console.debug('Rate limit reached; skipping account', sa.id);
+          continue;
+        }
 
         const connector = getConnector(sa.platform);
         const creds = await getCredentialsForSocialAccount(sa.id, sa.platform);
@@ -388,12 +560,35 @@ async function runOnce() {
             lastUpdated: asOf,
           },
         });
+        accountUpdated++;
       } catch (e) {
-        console.error('Account metrics ingestion error', e);
+        const status = (e as any)?.response?.status;
+        const ig = (e as any)?.response?.data?.error;
+        const message = ig?.message || (e as Error).message;
+        const code = ig?.code;
+        const subcode = ig?.error_subcode;
+        console.error(
+          `Account metrics ingestion error: ${message} (status: ${status ?? 'n/a'}, code: ${code ?? 'n/a'}${
+            subcode ? `, subcode: ${subcode}` : ''
+          }, sa: ${socialAccountId})`
+        );
       }
     }
+    const hadWork = drainedPubs > 0 || drainedAccts > 0 || due.length > 0 || accountUpdated > 0;
+    return { hadWork };
   } catch (e) {
-    console.error('Account metrics batch error', e);
+    const status = (e as any)?.response?.status;
+    const ig = (e as any)?.response?.data?.error;
+    const message = ig?.message || (e as Error).message;
+    const code = ig?.code;
+    const subcode = ig?.error_subcode;
+    console.error(
+      `Account metrics batch error: ${message} (status: ${status ?? 'n/a'}, code: ${code ?? 'n/a'}${
+        subcode ? `, subcode: ${subcode}` : ''
+      })`
+    );
+    const hadWork = drainedPubs > 0 || drainedAccts > 0 || due.length > 0;
+    return { hadWork };
   }
 }
 
@@ -404,11 +599,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // simple loop; do not exit
       while (true) {
         try {
-          await runOnce();
+          const { hadWork } = await runOnce();
+          const sleepMs = hadWork ? loopMs : IDLE_BACKOFF_MS;
+          await new Promise((r) => setTimeout(r, sleepMs));
         } catch (e) {
           console.error('Ingestor loop error', e);
+          await new Promise((r) => setTimeout(r, loopMs));
         }
-        await new Promise((r) => setTimeout(r, loopMs));
       }
     })();
   } else {

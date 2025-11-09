@@ -38,6 +38,7 @@ Stacks:
   brand-analysis  - Brand Analysis services (profiles/jobs + lambdas)
   publishing      - Publisher and retry handlers
   api             - Backend API (ECS Fargate)
+  analytics       - Analytics ingestion worker (ECS Fargate)
   asset-library   - Asset Library microservice (ECS + RDS + CDN)
   web             - Frontend (S3 + CloudFront)
   all             - Deploy all stacks in dependency order
@@ -105,7 +106,7 @@ while [[ $# -gt 0 ]]; do
             show_help
             exit 0
             ;;
-        foundation|auth|scheduling|brand-analysis|publishing|api|asset-library|web|all)
+        foundation|auth|scheduling|brand-analysis|publishing|api|analytics|asset-library|web|all)
             STACK_NAME="$1"
             shift
             ;;
@@ -182,6 +183,9 @@ deploy_stack() {
         api)
             cdk_stack_name="Postolio-API-$ENVIRONMENT"
             ;;
+        analytics)
+            cdk_stack_name="Postolio-Analytics-$ENVIRONMENT"
+            ;;
         asset-library)
             cdk_stack_name="Postolio-AssetLibrary-$ENVIRONMENT"
             ;;
@@ -199,6 +203,11 @@ deploy_stack() {
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
     # Build dependencies based on stack
+    # Adjust default image tag for analytics if not overridden
+    if [[ "$stack" == "analytics" && "$IMAGE_TAG" == "api-${ENVIRONMENT}-latest" ]]; then
+        IMAGE_TAG="analytics-${ENVIRONMENT}-latest"
+    fi
+
     case "$stack" in
         auth|scheduling|publishing|brand-analysis)
             echo -e "${BLUE}Building shared libraries...${NC}"
@@ -212,6 +221,13 @@ deploy_stack() {
             pnpm --filter=@postolio/errors build || true
             pnpm --filter=@postolio/csrf-client build || true
             pnpm --filter=api build
+            ;;
+        analytics)
+            echo -e "${BLUE}Building Analytics Ingestor and dependencies...${NC}"
+            pnpm --filter=@postolio/database build || true
+            pnpm --filter=@postolio/connectors build || true
+            pnpm --filter=@postolio/errors build || true
+            pnpm --filter=@postolio/analytics-ingestor build
             ;;
         asset-library)
             echo -e "${BLUE}Preparing Asset Library dependencies...${NC}"
@@ -257,6 +273,8 @@ deploy_stack() {
     [[ -n "$LINKEDIN_CLIENT_SECRET" ]] && context_params+=(--context "linkedinClientSecret=$LINKEDIN_CLIENT_SECRET")
     [[ -n "$TIKTOK_CLIENT_KEY" ]] && context_params+=(--context "tiktokClientKey=$TIKTOK_CLIENT_KEY")
     [[ -n "$TIKTOK_CLIENT_SECRET" ]] && context_params+=(--context "tiktokClientSecret=$TIKTOK_CLIENT_SECRET")
+    # Optional analytics bootstrap/context knobs
+    [[ -n "$RATE_LIMIT_PER_HOUR" ]] && context_params+=(--context "rateLimitPerHour=$RATE_LIMIT_PER_HOUR")
 
     # Check stack status before deployment
     local stack_status

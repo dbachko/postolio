@@ -992,6 +992,9 @@ importers:
 
   packages/services/analytics-ingestor:
     dependencies:
+      '@postolio/aws':
+        specifier: workspace:*
+        version: link:../../libs/aws
       '@postolio/connectors':
         specifier: workspace:*
         version: link:../../libs/connectors

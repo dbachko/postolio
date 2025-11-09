@@ -9,6 +9,7 @@ import { PublishingStack } from '../lib/stacks/publishing-stack';
 import { ApiStack } from '../lib/stacks/api-stack';
 import { BrandAnalysisStack } from '../lib/stacks/brand-analysis-stack';
 import { WebStack } from '../lib/stacks/web-stack';
+import { AnalyticsStack } from '../lib/stacks/analytics-stack';
 import { AssetLibraryStack } from '../lib/stacks/asset-library-stack';
 import { getOAuthConfig } from '../lib/utils/oauth-config';
 
@@ -327,6 +328,26 @@ if (brandAnalysisStack) {
   if (schedulingStackRef) {
     brandAnalysisStack.addDependency(schedulingStackRef);
   }
+}
+
+// 9. Analytics Stack - Background metrics ingestion (ECS worker)
+let analyticsStackRef: AnalyticsStack | undefined;
+if (!onlyStack || isSelected('analytics')) {
+  analyticsStackRef = new AnalyticsStack(app, `Postolio-Analytics-${environment}`, {
+    env: stackEnv,
+    environment: environment as 'dev' | 'staging' | 'prod',
+    imageTag,
+    description: `Postolio Analytics ingestion - ${environment} environment`,
+    tags: {
+      ...stackTags,
+      Service: 'Analytics',
+    },
+  });
+}
+
+if (analyticsStackRef) {
+  analyticsStackRef.addDependency(foundationStack);
+  if (authStackRef) analyticsStackRef.addDependency(authStackRef);
 }
 
 // API stack is intentionally decoupled from Brand Analysis; no dependency here.

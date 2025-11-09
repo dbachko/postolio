@@ -15,7 +15,6 @@ import {
   Share2,
   BarChart3,
   Edit,
-  ArrowLeft,
   Instagram,
   AlertCircle,
   CheckCircle,
@@ -77,6 +76,8 @@ interface PostDetailData {
     name: string;
     status: string;
   };
+  // Optional: backend-provided convenience field for external link
+  instagramPermalink?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -210,6 +211,7 @@ export default function PostDetail() {
         scheduledAt: raw.scheduledAt || undefined,
         postedAt: raw.postedAt || undefined,
         imageUrl: raw.imageUrl || undefined,
+        instagramPermalink: raw.instagramPermalink || undefined,
         generationParams: raw.generationParams ? { ...raw.generationParams } : undefined,
         schedulingError: raw.schedulingError || undefined,
         campaign: raw.campaign ? { ...raw.campaign } : undefined,
@@ -609,11 +611,6 @@ export default function PostDetail() {
     <div className="container mx-auto max-w-7xl px-4 py-4 md:py-8">
       {/* Header */}
       <div className="mb-4 md:mb-6">
-        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4" size="sm">
-          <ArrowLeft className="mr-1 h-4 w-4 md:mr-2" />
-          <span className="hidden sm:inline">Back</span>
-        </Button>
-
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1">
             <div className="mb-2 flex items-center gap-4">
@@ -670,7 +667,7 @@ export default function PostDetail() {
             {(() => {
               const pubs = publicationsQuery.data?.data || [];
               const igPub = pubs.find((p: any) => p.platform === 'instagram');
-              const permalink = igPub?.permalink;
+              const permalink = igPub?.permalink || post?.instagramPermalink;
               if (!permalink) return null;
               return (
                 <Button
@@ -839,7 +836,8 @@ export default function PostDetail() {
                     <MetricsGrid insights={insights} />
                   ) : (
                     <p className="text-muted-foreground py-8 text-center">
-                      Metrics will be available once the post is published
+                      No metrics yet. If this was just published or synced, metrics may take up to
+                      15 minutes to appear. Use Refresh to request an update.
                     </p>
                   )}
                 </TabsContent>
@@ -857,6 +855,28 @@ export default function PostDetail() {
                           </div>
                         )
                       )}
+                    </div>
+                  ) : insights && insights.metrics.comments_count > 0 && selectedPublicationId ? (
+                    <div className="text-muted-foreground flex flex-col items-center gap-3 py-8 text-center">
+                      <p>
+                        {insights.metrics.comments_count.toLocaleString()} comment
+                        {insights.metrics.comments_count === 1 ? '' : 's'} on Instagram. They may
+                        not be synced yet.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await analyticsV2.refreshPublication(selectedPublicationId);
+                            toast.success('Comments refresh enqueued');
+                          } catch {
+                            toast.error('Unable to enqueue refresh');
+                          }
+                        }}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" /> Refresh Comments
+                      </Button>
                     </div>
                   ) : (
                     <p className="text-muted-foreground py-8 text-center">No comments yet</p>

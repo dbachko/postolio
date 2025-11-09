@@ -211,6 +211,23 @@ The `deploy-stack.sh` script allows you to deploy individual CDK stacks locally 
 
 ````
 
+#### Deploy Analytics (ingestor) with higher rate limit
+
+```bash
+# Build and push the analytics image as linux/amd64 for ECS
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 000000000000.dkr.ecr.us-east-1.amazonaws.com
+docker buildx create --use --name postolio-builder || true
+docker buildx build --platform linux/amd64 \
+  -f packages/services/analytics-ingestor/Dockerfile \
+  -t 000000000000.dkr.ecr.us-east-1.amazonaws.com/postolio:analytics-dev-latest \
+  . --push
+
+# Deploy Analytics with increased rate limit for dev testing
+RATE_LIMIT_PER_HOUR=1000 \
+  ./scripts/deploy-stack.sh -e dev analytics
+```
+
+
 ### Environment Variables
 
 The script reads environment variables from your `.env` file. Here are the required variables:
