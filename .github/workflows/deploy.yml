@@ -59,6 +59,7 @@ jobs:
       publishing-changed: ${{ steps.changes.outputs.publishing }}
       api-changed: ${{ steps.changes.outputs.api }}
       asset-library-changed: ${{ steps.changes.outputs.asset-library }}
+      analytics-changed: ${{ steps.changes.outputs.analytics }}
       web-changed: ${{ steps.changes.outputs.web }}
       infra-changed: ${{ steps.changes.outputs.infra }}
       any-stack-changed: ${{ steps.changes.outputs.any-stack }}
@@ -167,6 +168,10 @@ jobs:
               - 'packages/libs/database-assets/**'
               - 'packages/infra/cdk/lib/stacks/asset-library-stack.ts'
               - 'packages/libs/**'
+            analytics:
+              - 'packages/services/analytics-ingestor/**'
+              - 'packages/infra/cdk/lib/stacks/analytics-stack.ts'
+              - 'packages/libs/**'
             web:
               - 'packages/apps/web/**'
               - 'packages/infra/cdk/lib/stacks/web-stack.ts'
@@ -184,7 +189,7 @@ jobs:
         id: matrix
         run: |
           STACKS=()
-          ALL_STACKS=("foundation" "auth" "scheduling" "brand-analysis" "publishing" "api" "asset-library" "web")
+          ALL_STACKS=("foundation" "auth" "scheduling" "brand-analysis" "publishing" "api" "asset-library" "analytics" "web")
 
           # Manual runs from the UI: deploy all stacks by default (or a specific list if provided)
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -206,6 +211,7 @@ jobs:
             [[ "${{ steps.changes.outputs.brand-analysis }}" == "true" ]] && STACKS+=("brand-analysis")
             [[ "${{ steps.changes.outputs.api }}" == "true" ]] && STACKS+=("api")
             [[ "${{ steps.changes.outputs.asset-library }}" == "true" ]] && STACKS+=("asset-library")
+            [[ "${{ steps.changes.outputs.analytics }}" == "true" ]] && STACKS+=("analytics")
             [[ "${{ steps.changes.outputs.web }}" == "true" ]] && STACKS+=("web")
 
             # If infra changed, deploy all stacks
@@ -245,6 +251,7 @@ jobs:
               add_unique "scheduling"
               add_unique "publishing"
               add_unique "api"
+              add_unique "analytics"
             fi
 
             # If scheduling changed -> publishing and api depend on it
@@ -281,6 +288,7 @@ jobs:
           echo "publishing=${{ steps.changes.outputs.publishing }}"
           echo "api=${{ steps.changes.outputs.api }}"
           echo "asset-library=${{ steps.changes.outputs.asset-library }}"
+          echo "analytics=${{ steps.changes.outputs.analytics }}"
           echo "web=${{ steps.changes.outputs.web }}"
           echo "infra=${{ steps.changes.outputs.infra }}"
           echo "any-stack=${{ steps.changes.outputs.any-stack }}"
@@ -300,6 +308,7 @@ jobs:
       github.event_name != 'pull_request' && (
         needs.detect-changes.outputs.api-changed == 'true' ||
         needs.detect-changes.outputs.asset-library-changed == 'true' ||
+        needs.detect-changes.outputs.analytics-changed == 'true' ||
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
       )
@@ -353,6 +362,23 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:assets-${{ needs.detect-changes.outputs.environment }}-latest
           cache-from: type=gha,scope=assets
           cache-to: type=gha,mode=max,scope=assets
+          build-args: |
+            NODE_ENV=${{ needs.detect-changes.outputs.environment }}
+
+      - name: Build and push Analytics Docker image
+        if: needs.detect-changes.outputs.analytics-changed == 'true' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
+        uses: docker/build-push-action@v5
+        env:
+          REPO_NAME: postolio
+        with:
+          context: .
+          file: packages/services/analytics-ingestor/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:analytics-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:analytics-${{ needs.detect-changes.outputs.environment }}-latest
+          cache-from: type=gha,scope=analytics
+          cache-to: type=gha,mode=max,scope=analytics
           build-args: |
             NODE_ENV=${{ needs.detect-changes.outputs.environment }}
 
@@ -428,6 +454,9 @@ jobs:
               ;;
             "asset-library")
               DEPS=("Postolio-Foundation-$ENV")
+              ;;
+            "analytics")
+              DEPS=("Postolio-Foundation-$ENV" "Postolio-Auth-$ENV")
               ;;
             "web")
               DEPS=("Postolio-API-$ENV")
@@ -555,6 +584,13 @@ jobs:
             ASSETS_IMAGE_TAG="assets-$ENV-latest"
           fi
 
+          # For Analytics stack
+          if [[ "${{ needs.build-images.result }}" == "success" && ("${{ needs.detect-changes.outputs.analytics-changed }}" == "true" || "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "push") ]]; then
+            ANALYTICS_IMAGE_TAG="analytics-$ENV-${{ github.sha }}"
+          else
+            ANALYTICS_IMAGE_TAG="analytics-$ENV-latest"
+          fi
+
           # Select appropriate image tag based on stack being deployed
           case $STACK in
             "api")
@@ -562,6 +598,9 @@ jobs:
               ;;
             "asset-library")
               IMAGE_TAG="$ASSETS_IMAGE_TAG"
+              ;;
+            "analytics")
+              IMAGE_TAG="$ANALYTICS_IMAGE_TAG"
               ;;
             *)
               # Other stacks don't use image tags, but set a default for consistency
@@ -597,6 +636,10 @@ jobs:
               ;;
             "asset-library")
               CDK_STACK="Postolio-AssetLibrary-$ENV"
+              CDK_APP="bin/app.ts"
+              ;;
+            "analytics")
+              CDK_STACK="Postolio-Analytics-$ENV"
               CDK_APP="bin/app.ts"
               ;;
             "web")
