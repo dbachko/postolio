@@ -130,4 +130,24 @@ export class BrandClient {
   getBrandAnalyticsSummary(brandId: string) {
     return this.request(`/api/brands/${brandId}/analytics/summary`);
   }
+
+  // Instagram: Preferred Posting Time (Best Time)
+  getInstagramBestTime(brandId: string, opts?: { force?: boolean }) {
+    const params = new URLSearchParams();
+    if (opts?.force) params.set('force', 'true');
+    const qs = params.toString();
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/instagram/best-time${qs ? `?${qs}` : ''}`
+    );
+  }
+
+  refreshInstagramBestTime(brandId: string) {
+    return this.request(`/api/brands/${encodeURIComponent(brandId)}/instagram/best-time/refresh`, {
+      method: 'POST',
+    });
+  }
+
+  getInstagramBestTimeStatus(brandId: string) {
+    return this.request(`/api/brands/${encodeURIComponent(brandId)}/instagram/best-time/status`);
+  }
 }

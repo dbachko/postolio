@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Pause, Play, Edit, Calendar } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CampaignAnalytics } from '@/components/CampaignAnalytics';
+import PreferredPostingTime from '@/components/PreferredPostingTime';
 import { CampaignEditDialog } from '@/components/CampaignEditDialog';
 import { ContentCard } from '@/components/ContentCard';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -180,6 +181,8 @@ export function CampaignDetails({
           />
         </CardContent>
       </Card>
+      {/* Preferred Posting Times for this brand */}
+      <PreferredPostingTime brandId={campaign.brandId} />
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
