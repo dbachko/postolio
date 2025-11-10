@@ -10,6 +10,7 @@ export class ContentClient {
     caption: string;
     hashtags: string[];
     imageFile?: File;
+    assetId?: string; // existing asset to attach instead of uploading a file
     campaignId?: string;
     scheduledAt?: string;
   }) {
@@ -20,6 +21,10 @@ export class ContentClient {
     };
     if (data.campaignId) body.campaignId = data.campaignId;
     if (data.scheduledAt) body.scheduledAt = data.scheduledAt;
+    if (data.assetId && !data.imageFile) {
+      // Prefer direct asset attach when provided (no upload)
+      body.assetId = data.assetId;
+    }
     if (data.imageFile) {
       const uploadInfo = await assetsApi.getUploadUrl({
         brandId: data.brandId,

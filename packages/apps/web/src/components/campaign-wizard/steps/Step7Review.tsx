@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { campaign as campaignApi, httpPost } from '../../../lib/api';
+import { goalEmoji } from '@/utils/goal-emojis';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -166,7 +167,12 @@ export function Step7Review() {
                       >
                         {i + 1}
                       </Badge>
-                      <span>{g}</span>
+                      <span>
+                        <span aria-hidden className="mr-1">
+                          {goalEmoji(g)}
+                        </span>
+                        {g}
+                      </span>
                     </li>
                   ))}
                 </ol>

@@ -116,8 +116,8 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
     if (toAdd.length) onChange([...themes, ...toAdd]);
   };
   const onClearAndRoll = () => {
+    // Clear only; do not refresh suggestions
     onChange([]);
-    setReloadNonce((n) => n + 1);
   };
 
   return (
@@ -152,7 +152,7 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
             onClick={onClearAndRoll}
             disabled={isLoading}
           >
-            Clear & Roll
+            Clear
           </Button>
           <div className="text-muted-foreground ml-auto flex items-center gap-1 text-xs">
             <TrendingUp className="h-3 w-3" />

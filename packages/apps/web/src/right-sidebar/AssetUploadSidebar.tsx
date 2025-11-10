@@ -214,7 +214,7 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="pl-assets flex h-full flex-col">
       <header className="border-border flex items-center justify-between border-b px-4 py-3">
         <div>
           <h2 className="text-lg font-semibold">Upload Assets</h2>
@@ -229,9 +229,7 @@ export function AssetUploadSidebar({ id: brandId }: AssetUploadSidebarProps) {
             {error}
           </div>
         ) : null}
-        <div className="rounded-lg border border-dashed p-3">
-          <div ref={dashboardContainerRef} />
-        </div>
+        <div ref={dashboardContainerRef} className="uppy-host" />
       </div>
       <footer className="border-border text-muted-foreground border-t px-4 py-3 text-xs">
         {busy ? 'Uploading files…' : 'Files upload directly to your brand asset library.'}

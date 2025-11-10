@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi, campaign as campaignApi } from '@/lib/api';
+import { assetsApi } from '@/features/assets/api/client';
 import { Button } from '@/components/ui/button';
 import {
   Breadcrumb,
@@ -131,6 +132,7 @@ export function PostSidebar({
   });
   const [hasChanges, setHasChanges] = useState(false);
   const formInitializedRef = useRef(false);
+  const [preselectedAssetId, setPreselectedAssetId] = useState<string | null>(null);
 
   // Initialize form from post
   useEffect(() => {
@@ -155,6 +157,30 @@ export function PostSidebar({
       }
     };
   }, []);
+
+  // If opened as create with an assetId param, preselect image from asset
+  useEffect(() => {
+    if (id) return; // only for create mode
+    const params = new URLSearchParams(location.search);
+    const assetId = params.get('assetId');
+    let active = true;
+    (async () => {
+      if (!assetId) return;
+      try {
+        const res = await assetsApi.getAsset(assetId);
+        if (!active) return;
+        const url = res.asset.thumbnailUrl || res.asset.url;
+        setImagePreview(url);
+        setImageFile(null);
+        setPreselectedAssetId(res.asset.id);
+      } catch (_e) {
+        // ignore if asset not found/unauthorized; user can still upload
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [id, location.search]);
 
   const disabled = post?.status === 'published';
   const canScheduleExisting = Boolean(!disabled && post && post.status !== 'scheduled');
@@ -229,6 +255,7 @@ export function PostSidebar({
         caption: formData.caption.trim(),
         hashtags: hashtagArray,
         imageFile: imageFile || undefined,
+        assetId: !imageFile && preselectedAssetId ? preselectedAssetId : undefined,
         campaignId: selectedCampaign || undefined,
         scheduledAt: mode === 'schedule' ? formData.scheduledAt : undefined,
       });
@@ -516,14 +543,17 @@ export function PostSidebar({
                           setImagePreview(reader.result as string);
                         };
                         reader.readAsDataURL(fileOrUrl);
+                        setPreselectedAssetId(null);
                       } else if (typeof fileOrUrl === 'string') {
                         // Handle URL case (though unlikely in creation mode)
                         setImagePreview(fileOrUrl);
                         setImageFile(null);
+                        setPreselectedAssetId(null);
                       } else {
                         // Clear case
                         setImagePreview(null);
                         setImageFile(null);
+                        setPreselectedAssetId(null);
                       }
                     }}
                     maxSizeInMB={10}

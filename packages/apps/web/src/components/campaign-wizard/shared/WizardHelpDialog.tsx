@@ -93,7 +93,7 @@ const stepHelpContent: Record<number, { title: string; content: ReactNode }> = {
               <strong>Accept Top:</strong> Quickly add the top 5 suggested themes
             </li>
             <li>
-              <strong>Clear & Roll:</strong> Clear selections and get fresh suggestions
+              <strong>Clear:</strong> Clear selected themes
             </li>
             <li>
               <strong>Custom Themes:</strong> Add your own specific topics below

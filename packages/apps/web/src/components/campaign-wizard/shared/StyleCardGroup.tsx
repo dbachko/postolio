@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { Label } from '../../ui/label';
 import { Card, CardContent } from '../../ui/card';
-import { RadioGroup, RadioGroupItem } from '../../ui/radio-group';
 import { cn } from '@/lib/utils';
 import { Input } from '../../ui/input';
+import { Checkbox } from '../../ui/checkbox';
 import { styleOptions, styleMeta } from '../../../constants/campaign';
 
 interface StyleCardGroupProps {
@@ -34,36 +34,66 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
     return [...brandStyleOptions, ...universalStyleOptions];
   }, [brandStyles]);
 
-  const builtinValues = useMemo(() => allStyles.map((o) => o.value), [allStyles]);
-  const selectedValue = builtinValues.includes(value) ? value : 'custom';
   const brandStyleOptions = allStyles.filter((s) => 'isBrandStyle' in s && s.isBrandStyle);
   const universalStyleOptions = allStyles.filter((s) => !('isBrandStyle' in s) || !s.isBrandStyle);
+
+  const splitTokens = (input: string | undefined | null): string[] => {
+    if (!input) return [];
+    return input
+      .split(/[;\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
+
+  const tokens = splitTokens(value);
+
+  const isOptSelected = (opt: any): boolean => {
+    const candidates = [opt.value, opt.label];
+    if ('fullDescription' in opt && typeof opt.fullDescription === 'string') {
+      candidates.push(opt.fullDescription);
+    }
+    const labels = candidates.filter(Boolean);
+    return tokens.some((t) => labels.includes(t));
+  };
+
+  const toggleOption = (opt: any) => {
+    const selected = isOptSelected(opt);
+    const next = tokens.slice();
+    // Remove any existing representations of this option
+    const toRemove = [opt.value, opt.label];
+    if ('fullDescription' in opt && typeof opt.fullDescription === 'string') {
+      toRemove.push(opt.fullDescription);
+    }
+    const filtered = next.filter((t) => !toRemove.includes(t));
+    if (!selected) {
+      // Prefer descriptive text for brand styles; stable value for universal
+      const toAdd =
+        opt.isBrandStyle && typeof opt.fullDescription === 'string'
+          ? opt.fullDescription
+          : opt.value;
+      filtered.push(toAdd);
+    }
+    onChange(filtered.join('; '));
+  };
+
+  const recognizedSet = new Set<string>();
+  for (const opt of allStyles) {
+    recognizedSet.add(opt.value);
+    recognizedSet.add(opt.label);
+    if ('fullDescription' in opt && typeof opt.fullDescription === 'string')
+      recognizedSet.add(opt.fullDescription);
+  }
+  const customText = tokens.filter((t) => !recognizedSet.has(t)).join('; ');
+  const onCustomChange = (text: string) => {
+    const recognized = tokens.filter((t) => recognizedSet.has(t));
+    const extras = splitTokens(text);
+    onChange([...recognized, ...extras].join('; '));
+  };
 
   return (
     <div className="space-y-4">
       <Label>Style</Label>
-      <RadioGroup
-        value={selectedValue}
-        onValueChange={(v) => {
-          // Allow selecting custom explicitly; set to empty string to enter custom text
-          if (v === 'custom') {
-            onChange('');
-          } else {
-            // For brand styles, save the full DALL-E-optimized description
-            const selectedStyle = allStyles.find((s) => s.value === v);
-            if (
-              selectedStyle &&
-              'fullDescription' in selectedStyle &&
-              typeof selectedStyle.fullDescription === 'string'
-            ) {
-              onChange(selectedStyle.fullDescription);
-            } else {
-              onChange(v);
-            }
-          }
-        }}
-        className="space-y-4"
-      >
+      <div className="space-y-4">
         {/* Brand-specific styles section */}
         {brandStyleOptions.length > 0 && (
           <div className="space-y-3">
@@ -78,10 +108,21 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
                   'fullDescription' in opt && typeof opt.fullDescription === 'string'
                     ? opt.fullDescription
                     : '';
-                const checked = selectedValue === opt.value;
-                const id = `style-${opt.value}`;
+                const checked = isOptSelected(opt);
                 return (
-                  <Label key={opt.value} htmlFor={id} className="block h-full cursor-pointer">
+                  <div
+                    key={opt.value}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => toggleOption(opt)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleOption(opt);
+                      }
+                    }}
+                    className="block h-full cursor-pointer"
+                  >
                     <Card
                       className={cn(
                         'border-primary/50 h-full transition-shadow',
@@ -89,7 +130,7 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
                       )}
                     >
                       <CardContent className="flex min-h-24 items-start gap-3 p-4">
-                        <RadioGroupItem id={id} value={opt.value} className="mt-1" />
+                        <Checkbox checked={checked} className="mt-1" aria-hidden />
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <span className="text-lg" aria-hidden>
@@ -103,7 +144,7 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
                         </div>
                       </CardContent>
                     </Card>
-                  </Label>
+                  </div>
                 );
               })}
             </div>
@@ -122,10 +163,21 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {universalStyleOptions.map((opt) => {
                 const meta = styleMeta[opt.value] || { icon: '🎯', blurb: '' };
-                const checked = selectedValue === opt.value;
-                const id = `style-${opt.value}`;
+                const checked = isOptSelected(opt);
                 return (
-                  <Label key={opt.value} htmlFor={id} className="block h-full cursor-pointer">
+                  <div
+                    key={opt.value}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => toggleOption(opt)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleOption(opt);
+                      }
+                    }}
+                    className="block h-full cursor-pointer"
+                  >
                     <Card
                       className={cn(
                         'h-full transition-shadow',
@@ -133,7 +185,7 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
                       )}
                     >
                       <CardContent className="flex min-h-24 items-start gap-3 p-4">
-                        <RadioGroupItem id={id} value={opt.value} className="mt-1" />
+                        <Checkbox checked={checked} className="mt-1" aria-hidden />
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <span className="text-lg" aria-hidden>
@@ -147,42 +199,30 @@ export function StyleCardGroup({ value, onChange, brandStyles = [] }: StyleCardG
                         </div>
                       </CardContent>
                     </Card>
-                  </Label>
+                  </div>
                 );
               })}
             </div>
           </div>
         )}
-        {/* Custom style card */}
-        <Label htmlFor="style-custom" className="col-span-full block h-full cursor-pointer">
-          <Card
-            className={cn(
-              'h-full transition-shadow',
-              selectedValue === 'custom' ? 'ring-ring shadow-md ring-2' : 'hover:shadow-sm'
-            )}
-          >
-            <CardContent className="flex min-h-24 items-start gap-3 p-4">
-              <RadioGroupItem id="style-custom" value="custom" className="mt-1" />
-              <div className="flex-1">
-                <div className="mb-1 font-medium">Custom style</div>
-                <Input
-                  type="text"
-                  placeholder="Describe your style…"
-                  value={selectedValue === 'custom' ? value : ''}
-                  onChange={(e) => onChange(e.target.value)}
-                  onFocus={() => {
-                    // Ensure radio shows as selected when focusing input
-                    if (selectedValue !== 'custom') onChange('');
-                  }}
-                />
-                <p className="text-muted-foreground mt-1 text-xs">
-                  e.g., Scandinavian minimal, playful pastel, editorial
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </Label>
-      </RadioGroup>
+        {/* Custom style input (appends to selected cards) */}
+        <Card className={cn('h-full transition-shadow hover:shadow-sm')}>
+          <CardContent className="flex min-h-24 items-start gap-3 p-4">
+            <div className="flex-1">
+              <div className="mb-1 font-medium">Additional custom style</div>
+              <Input
+                type="text"
+                placeholder="Describe extra style…"
+                value={customText}
+                onChange={(e) => onCustomChange(e.target.value)}
+              />
+              <p className="text-muted-foreground mt-1 text-xs">
+                You can combine multiple styles; we’ll use them together.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

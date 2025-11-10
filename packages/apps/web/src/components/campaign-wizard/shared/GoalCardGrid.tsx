@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { campaign } from '@/lib/api';
+import { goalEmoji } from '@/utils/goal-emojis';
 import type { CampaignType } from '@/types/campaign-wizard';
 
 interface GoalSuggestion {
@@ -240,7 +241,12 @@ export function GoalCardGrid({
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
-                      <p className="text-sm font-medium leading-snug">{suggestion.value}</p>
+                      <p className="text-sm font-medium leading-snug">
+                        <span aria-hidden className="mr-2">
+                          {goalEmoji(suggestion.value)}
+                        </span>
+                        {suggestion.value}
+                      </p>
                       {suggestion.badge && (
                         <Badge variant="secondary" className="mt-2 text-xs">
                           {suggestion.badge}
@@ -280,7 +286,12 @@ export function GoalCardGrid({
             {customGoals.map((goal) => (
               <Card key={goal} className="border-dashed">
                 <CardContent className="flex items-center justify-between gap-2 p-3">
-                  <p className="text-sm">{goal}</p>
+                  <p className="text-sm">
+                    <span aria-hidden className="mr-2">
+                      {goalEmoji(goal)}
+                    </span>
+                    {goal}
+                  </p>
                   <Button
                     type="button"
                     size="sm"

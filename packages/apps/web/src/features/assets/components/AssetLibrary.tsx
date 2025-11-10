@@ -119,9 +119,21 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
                   className="h-full w-full object-cover"
                   loading="lazy"
                 />
-                <div className="absolute inset-0 flex items-end bg-black/60 p-3 opacity-0 transition-opacity group-hover:opacity-100">
-                  <div className="w-full truncate text-sm text-white">
-                    {asset.title || asset.fileName}
+                {/* Hover overlay with actions */}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 p-3 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex w-full max-w-[80%] flex-col items-center gap-3 text-center">
+                    <div className="text-sm font-medium text-white">View Asset</div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openSidebar('post-create', { params: { assetId: asset.id } });
+                      }}
+                      className="ring-offset-background focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    >
+                      Create Post
+                    </button>
                   </div>
                 </div>
               </div>

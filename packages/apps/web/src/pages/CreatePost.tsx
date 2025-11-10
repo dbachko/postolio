@@ -18,7 +18,7 @@ export function CreatePost() {
   }
 
   return (
-    <div className="px-6 py-8">
+    <div>
       <h1 className="mb-6 text-3xl font-semibold">Create New Post</h1>
       <PostSidebar layout="page" showHeader={false} />
     </div>
