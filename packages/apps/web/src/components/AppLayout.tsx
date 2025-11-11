@@ -36,6 +36,7 @@ import {
   Shield,
   Plus,
   Images,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
@@ -60,6 +61,13 @@ interface NavigationItem {
 
 // Main navigation items (always visible on desktop)
 const mainNavItems: NavigationItem[] = [
+  {
+    label: 'Inbox',
+    path: '/inbox',
+    icon: MessageSquare,
+    description: 'Comments & DMs',
+    matchType: 'exact',
+  },
   {
     label: 'Campaigns',
     path: '/campaigns',

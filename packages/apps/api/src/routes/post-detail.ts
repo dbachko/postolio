@@ -269,6 +269,56 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
             );
             comments = res.data;
             total = res.total;
+
+            // Merge persisted workflow (resolved/snoozed/assignee)
+            try {
+              const ids = comments.map((c) => String(c.id || ''));
+              const rows = await prisma.publicationComment.findMany({
+                where: { publicationId: pub.id, externalCommentId: { in: ids } },
+                select: {
+                  externalCommentId: true,
+                  status: true,
+                  snoozedUntil: true,
+                  assigneeUserId: true,
+                },
+              });
+              const byId = new Map(rows.map((r) => [r.externalCommentId, r]));
+              comments = comments.map((c) => ({
+                ...c,
+                workflow: byId.get(String(c.id || '')) || null,
+              })) as any;
+            } catch (e) {
+              request.log.warn({ err: e }, 'Failed to merge comment workflows');
+            }
+
+            // Fallback: if Graph API returned no comments, surface locally-seeded comments
+            if ((!comments || comments.length === 0) && pub?.id) {
+              const localRows = await prisma.publicationComment.findMany({
+                where: { publicationId: pub.id },
+                orderBy: { createdAt: 'asc' },
+                select: {
+                  externalCommentId: true,
+                  text: true,
+                  authorUsername: true,
+                  createdAt: true,
+                  status: true,
+                  snoozedUntil: true,
+                  assigneeUserId: true,
+                },
+              });
+              comments = localRows.map((r) => ({
+                id: r.externalCommentId,
+                text: r.text || undefined,
+                username: r.authorUsername || undefined,
+                timestamp: r.createdAt?.toISOString(),
+                workflow: {
+                  status: r.status,
+                  snoozedUntil: r.snoozedUntil,
+                  assigneeUserId: r.assigneeUserId,
+                },
+              })) as any;
+              total = comments.length;
+            }
           }
         } catch (error) {
           console.error('Failed to fetch Instagram comments:', error);
@@ -283,6 +333,227 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(500).send(ErrorResponses.internalError('Failed to fetch post comments'));
     }
   });
+
+  // Reply to a specific comment
+  app.post<{ Params: PostDetailParams & { commentId: string }; Body: { message: string } }>(
+    '/api/posts/:postId/comments/:commentId/reply',
+    async (request, reply) => {
+      const paramsValidation = validateRequest(PostDetailParamsSchema, request.params);
+      if (!paramsValidation.success) {
+        return reply
+          .code(400)
+          .send(ErrorResponses.badRequest('Invalid request parameters', paramsValidation.errors));
+      }
+      const { postId } = paramsValidation.data;
+      const { commentId } = request.params as { postId: string; commentId: string };
+      const { message } = (request.body || {}) as { message?: string };
+      if (!message || !message.trim()) {
+        return reply.code(400).send(ErrorResponses.badRequest('Message must not be empty'));
+      }
+
+      try {
+        const userId = request.user!.id;
+        const post = await prisma.content.findUnique({
+          where: { id: postId },
+          include: { brand: true },
+        });
+        if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
+        if (post.brand.userId !== userId)
+          return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
+        if (post.status !== 'published')
+          return reply.code(400).send(ErrorResponses.badRequest('Post is not published'));
+
+        const pub = await prisma.contentPublication.findFirst({
+          where: { contentId: postId, platform: 'instagram' },
+          select: { externalPostId: true },
+        });
+        if (!pub?.externalPostId) {
+          return reply.code(400).send(ErrorResponses.badRequest('Instagram publication not found'));
+        }
+        const res = await instagramService.replyToComment(
+          post.brand,
+          String(pub.externalPostId),
+          commentId,
+          message
+        );
+        return reply.send(successResponse(res));
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return reply.code(500).send(ErrorResponses.internalError(`Failed to reply: ${message}`));
+      }
+    }
+  );
+
+  // Update comment workflow (resolve/snooze/assign)
+  app.post<{
+    Params: PostDetailParams & { commentId: string };
+    Body: {
+      status?: 'open' | 'resolved' | 'snoozed';
+      snoozedUntil?: string | null;
+      assigneeUserId?: string | null;
+    };
+  }>('/api/posts/:postId/comments/:commentId/workflow', async (request, reply) => {
+    const paramsValidation = validateRequest(PostDetailParamsSchema, request.params);
+    if (!paramsValidation.success) {
+      return reply
+        .code(400)
+        .send(ErrorResponses.badRequest('Invalid request parameters', paramsValidation.errors));
+    }
+    const { postId } = paramsValidation.data;
+    const { commentId } = request.params as { postId: string; commentId: string };
+    const userId = request.user!.id;
+    const { status, snoozedUntil, assigneeUserId } = (request.body || {}) as any;
+
+    try {
+      const post = await prisma.content.findUnique({
+        where: { id: postId },
+        include: { brand: true },
+      });
+      if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
+      if (post.brand.userId !== userId)
+        return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
+      const pub = await prisma.contentPublication.findFirst({
+        where: { contentId: postId, platform: 'instagram' },
+        select: { id: true },
+      });
+      if (!pub)
+        return reply.code(400).send(ErrorResponses.badRequest('Instagram publication not found'));
+
+      const data: any = {};
+      if (status) data.status = status;
+      if (snoozedUntil !== undefined)
+        data.snoozedUntil = snoozedUntil ? new Date(snoozedUntil) : null;
+      if (assigneeUserId !== undefined) data.assigneeUserId = assigneeUserId;
+
+      const row = await prisma.publicationComment.upsert({
+        where: {
+          publicationId_externalCommentId: { publicationId: pub.id, externalCommentId: commentId },
+        } as any,
+        update: data,
+        create: {
+          publicationId: pub.id,
+          platform: 'instagram',
+          externalCommentId: commentId,
+          text: null,
+          status: (status as any) || 'open',
+          snoozedUntil: data.snoozedUntil ?? null,
+          assigneeUserId: data.assigneeUserId ?? null,
+        },
+      });
+      return reply.send(
+        successResponse({
+          externalCommentId: row.externalCommentId,
+          status: row.status,
+          snoozedUntil: row.snoozedUntil,
+          assigneeUserId: row.assigneeUserId,
+        })
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return reply
+        .code(500)
+        .send(ErrorResponses.internalError(`Failed to update workflow: ${message}`));
+    }
+  });
+
+  // Hide/Unhide a comment
+  app.post<{ Params: PostDetailParams & { commentId: string }; Body: { hide: boolean } }>(
+    '/api/posts/:postId/comments/:commentId/hide',
+    async (request, reply) => {
+      const paramsValidation = validateRequest(PostDetailParamsSchema, request.params);
+      if (!paramsValidation.success) {
+        return reply
+          .code(400)
+          .send(ErrorResponses.badRequest('Invalid request parameters', paramsValidation.errors));
+      }
+      const { postId } = paramsValidation.data;
+      const { commentId } = request.params as { postId: string; commentId: string };
+      const { hide } = (request.body || {}) as { hide?: boolean };
+      if (typeof hide !== 'boolean') {
+        return reply.code(400).send(ErrorResponses.badRequest('`hide` must be boolean'));
+      }
+
+      try {
+        const userId = request.user!.id;
+        const post = await prisma.content.findUnique({
+          where: { id: postId },
+          include: { brand: true },
+        });
+        if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
+        if (post.brand.userId !== userId)
+          return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
+        const res = await instagramService.setCommentHidden(post.brand, commentId, hide);
+        return reply.send(successResponse(res));
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return reply
+          .code(500)
+          .send(ErrorResponses.internalError(`Failed to ${hide ? 'hide' : 'unhide'}: ${message}`));
+      }
+    }
+  );
+
+  // Delete a comment
+  app.delete<{ Params: PostDetailParams & { commentId: string } }>(
+    '/api/posts/:postId/comments/:commentId',
+    async (request, reply) => {
+      const paramsValidation = validateRequest(PostDetailParamsSchema, request.params);
+      if (!paramsValidation.success) {
+        return reply
+          .code(400)
+          .send(ErrorResponses.badRequest('Invalid request parameters', paramsValidation.errors));
+      }
+      const { postId } = paramsValidation.data;
+      const { commentId } = request.params as { postId: string; commentId: string };
+      try {
+        const userId = request.user!.id;
+        const post = await prisma.content.findUnique({
+          where: { id: postId },
+          include: { brand: true },
+        });
+        if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
+        if (post.brand.userId !== userId)
+          return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
+        const res = await instagramService.deleteComment(post.brand, commentId);
+        return reply.send(successResponse(res));
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return reply.code(500).send(ErrorResponses.internalError(`Failed to delete: ${message}`));
+      }
+    }
+  );
+
+  // Like a comment (best-effort; may not be supported by IG Graph for all accounts)
+  app.post<{ Params: PostDetailParams & { commentId: string } }>(
+    '/api/posts/:postId/comments/:commentId/like',
+    async (request, reply) => {
+      const paramsValidation = validateRequest(PostDetailParamsSchema, request.params);
+      if (!paramsValidation.success) {
+        return reply
+          .code(400)
+          .send(ErrorResponses.badRequest('Invalid request parameters', paramsValidation.errors));
+      }
+      const { postId } = paramsValidation.data;
+      const { commentId } = request.params as { postId: string; commentId: string };
+      try {
+        const userId = request.user!.id;
+        const post = await prisma.content.findUnique({
+          where: { id: postId },
+          include: { brand: true },
+        });
+        if (!post) return reply.code(404).send(ErrorResponses.notFound('Post'));
+        if (post.brand.userId !== userId)
+          return reply.code(403).send(ErrorResponses.forbidden('Access denied to this post'));
+        const res = await instagramService.likeComment(post.brand, commentId);
+        return reply.send(successResponse(res));
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        // Surface a 400 when API indicates unsupported to avoid implying a server fault
+        const status = /not support|unsupported|not allowed/i.test(message) ? 400 : 500;
+        return reply.code(status).send(ErrorResponses.badRequest(message));
+      }
+    }
+  );
 };
 
 export default postDetailRoutes;

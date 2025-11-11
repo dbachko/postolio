@@ -126,6 +126,266 @@ class InstagramService {
     return !!(brand.instagramAccountId && brand.instagramPageId);
   }
 
+  // ===============================
+  // Instagram DMs (Messaging) API
+  // ===============================
+  /**
+   * Try multiple Graph paths and return the first successful data[] response
+   */
+  private async tryGraphGet<T = any>(paths: string[]): Promise<T | null> {
+    for (const p of paths) {
+      try {
+        const res = await axios.get(fbGraph(p));
+        const data = (res.data as any)?.data ?? null;
+        if (Array.isArray(data)) return res.data as T;
+        if ((res.data as any)?.id || (res.data as any)?.messages) return res.data as T;
+      } catch {
+        // ignore and try next
+      }
+    }
+    return null;
+  }
+
+  async listDmThreads(
+    brand: BrandData,
+    opts: { limit?: number; after?: string } = {}
+  ): Promise<{
+    supported: boolean;
+    threads: Array<{ id: string; updated_time?: string; participants?: any[] }>;
+    paging?: any;
+  }> {
+    if (!this.isConfigured(brand)) throw new Error('Instagram not connected for this brand');
+    const limit = opts.limit ?? 25;
+    await this.checkRateLimit(brand.instagramAccountId!);
+    const credentials = await this.getCredentials(brand);
+    if (!credentials) throw new Error('Failed to get Instagram credentials');
+
+    const qs = [`limit=${limit}`, `access_token=${credentials.accessToken}`];
+    if (opts.after) qs.push(`after=${encodeURIComponent(opts.after)}`);
+
+    const paths = [
+      `${credentials.accountId}/conversations?${qs.join('&')}`,
+      `${credentials.pageId}/conversations?platform=instagram&${qs.join('&')}`,
+    ].filter(Boolean) as string[];
+
+    const res = await this.tryGraphGet<{ data: any[]; paging?: any }>(paths);
+    if (!res) return { supported: false, threads: [] };
+    const threads = (res.data || []).map((c: any) => ({
+      id: String(c.id || ''),
+      updated_time: c.updated_time,
+      participants: (c.participants && c.participants.data) || c.participants || [],
+    }));
+    return { supported: true, threads, paging: res.paging };
+  }
+
+  async getDmThreadMessages(
+    brand: BrandData,
+    threadId: string,
+    opts: { limit?: number; before?: string } = {}
+  ): Promise<{
+    supported: boolean;
+    messages: Array<{ id: string; message?: string; from?: any; created_time?: string }>;
+    paging?: any;
+  }> {
+    if (!this.isConfigured(brand)) throw new Error('Instagram not connected for this brand');
+    const limit = opts.limit ?? 50;
+    await this.checkRateLimit(brand.instagramAccountId!);
+    const credentials = await this.getCredentials(brand);
+    if (!credentials) throw new Error('Failed to get Instagram credentials');
+
+    const qs = [
+      `limit=${limit}`,
+      `access_token=${credentials.accessToken}`,
+      `fields=from,to,message,created_time,id`,
+    ];
+    if (opts.before) qs.push(`before=${encodeURIComponent(opts.before)}`);
+    const res = await this.tryGraphGet<{ data: any[]; paging?: any }>([
+      `${threadId}/messages?${qs.join('&')}`,
+      `${threadId}?fields=messages{from,to,message,created_time,id}&${qs
+        .filter((q) => !q.startsWith('fields='))
+        .join('&')}`,
+    ]);
+    if (!res) return { supported: false, messages: [] };
+    const rows = (res as any).data ? (res as any).data : (res as any).messages?.data || [];
+    const messages = rows.map((m: any) => ({
+      id: String(m.id || ''),
+      message: m.message,
+      from: m.from,
+      created_time: m.created_time,
+    }));
+    return { supported: true, messages, paging: (res as any).paging };
+  }
+
+  /** Determine if we can send within 24h of last inbound user message */
+  private isWithin24hWindow(
+    messages: Array<{ from?: any; created_time?: string }>,
+    selfIds: string[]
+  ): boolean {
+    const lastInbound = messages.find(
+      (m) => m.created_time && (!m.from || !selfIds.includes(String(m.from.id || '')))
+    );
+    if (!lastInbound?.created_time) return true; // If unknown, allow
+    const ts = new Date(lastInbound.created_time).getTime();
+    return Date.now() - ts <= 24 * 60 * 60 * 1000;
+  }
+
+  async sendDmMessage(
+    brand: BrandData,
+    threadId: string,
+    text: string
+  ): Promise<{ supported: boolean; success: boolean; errorCode?: string; message?: string }> {
+    if (!this.isConfigured(brand)) throw new Error('Instagram not connected for this brand');
+    if (!text || !text.trim()) throw new Error('Message must not be empty');
+    await this.checkRateLimit(brand.instagramAccountId!);
+    const credentials = await this.getCredentials(brand);
+    if (!credentials) throw new Error('Failed to get Instagram credentials');
+
+    // Enforce 24h window: fetch a few recent messages
+    const recent = await this.getDmThreadMessages(brand, threadId, { limit: 20 });
+    if (!recent.supported) return { supported: false, success: false };
+    const selfIds = [credentials.accountId, credentials.pageId].filter(Boolean).map(String);
+    const inWindow = this.isWithin24hWindow(recent.messages, selfIds as string[]);
+    if (!inWindow) {
+      return {
+        supported: true,
+        success: false,
+        errorCode: 'WINDOW_CLOSED',
+        message: '24-hour messaging window has expired',
+      };
+    }
+
+    // Attempt to send via conversation messages edge
+    try {
+      const res = await axios.post(fbGraph(`${threadId}/messages`), {
+        message: text,
+        access_token: credentials.accessToken,
+      });
+      const ok = Boolean((res.data as any)?.success || (res.data as any)?.id);
+      return { supported: true, success: ok };
+    } catch (error) {
+      const msg = (error as any)?.response?.data?.error?.message || (error as Error).message;
+      if (/Unsupported|not allowed|Unknown path|(#|code)\s?100/i.test(msg)) {
+        return { supported: false, success: false, message: msg };
+      }
+      throw new Error(`Failed to send DM: ${msg}`);
+    }
+  }
+
+  /**
+   * Reply to a specific comment on a media item
+   * Instagram Graph API accepts replies by posting a new comment to the media
+   * with the `reply_to_comment_id` parameter.
+   */
+  async replyToComment(
+    brand: BrandData,
+    mediaId: string,
+    commentId: string,
+    message: string
+  ): Promise<{ id: string }> {
+    if (!this.isConfigured(brand)) {
+      throw new Error('Instagram not connected for this brand');
+    }
+    if (!message || !message.trim()) throw new Error('Reply message must not be empty');
+
+    try {
+      await this.checkRateLimit(brand.instagramAccountId!);
+      const credentials = await this.getCredentials(brand);
+      if (!credentials) throw new Error('Failed to get Instagram credentials');
+
+      const url = fbGraph(`${mediaId}/comments`);
+      const payload = {
+        message,
+        reply_to_comment_id: commentId,
+        access_token: credentials.accessToken,
+      } as const;
+      const res = await axios.post(url, payload);
+      const id = String((res.data as any)?.id || '');
+      if (!id) throw new Error('Instagram did not return a comment id');
+      return { id };
+    } catch (error) {
+      instagramLogger.error('Failed to reply to comment', formatError(error));
+      throw new Error(
+        `Failed to reply to comment: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /** Hide/Unhide a comment */
+  async setCommentHidden(
+    brand: BrandData,
+    commentId: string,
+    hide: boolean
+  ): Promise<{ success: boolean }> {
+    if (!this.isConfigured(brand)) throw new Error('Instagram not connected for this brand');
+    try {
+      await this.checkRateLimit(brand.instagramAccountId!);
+      const credentials = await this.getCredentials(brand);
+      if (!credentials) throw new Error('Failed to get Instagram credentials');
+
+      // POST /{ig-comment-id}?hide=true|false
+      const url = fbGraph(
+        `${commentId}?hide=${hide ? 'true' : 'false'}&access_token=${credentials.accessToken}`
+      );
+      const res = await axios.post(url);
+      const ok = Boolean((res.data as any)?.success ?? true);
+      return { success: ok };
+    } catch (error) {
+      instagramLogger.error('Failed to set comment hidden', formatError(error));
+      throw new Error(
+        `Failed to ${hide ? 'hide' : 'unhide'} comment: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    }
+  }
+
+  /** Delete a comment */
+  async deleteComment(brand: BrandData, commentId: string): Promise<{ success: boolean }> {
+    if (!this.isConfigured(brand)) throw new Error('Instagram not connected for this brand');
+    try {
+      await this.checkRateLimit(brand.instagramAccountId!);
+      const credentials = await this.getCredentials(brand);
+      if (!credentials) throw new Error('Failed to get Instagram credentials');
+
+      const url = fbGraph(`${commentId}?access_token=${credentials.accessToken}`);
+      await axios.delete(url);
+      return { success: true };
+    } catch (error) {
+      instagramLogger.error('Failed to delete comment', formatError(error));
+      throw new Error(
+        `Failed to delete comment: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Like a comment (best-effort). The Instagram Graph API may not support
+   * liking comments programmatically for all accounts. We attempt the
+   * endpoint and surface an explicit error if unsupported.
+   */
+  async likeComment(brand: BrandData, commentId: string): Promise<{ success: boolean }> {
+    if (!this.isConfigured(brand)) throw new Error('Instagram not connected for this brand');
+    try {
+      await this.checkRateLimit(brand.instagramAccountId!);
+      const credentials = await this.getCredentials(brand);
+      if (!credentials) throw new Error('Failed to get Instagram credentials');
+
+      // Attempt: POST /{comment-id}/likes (if unsupported, API returns error 100/12)
+      const url = fbGraph(`${commentId}/likes`);
+      const res = await axios.post(url, { access_token: credentials.accessToken });
+      const ok = Boolean((res.data as any)?.success ?? true);
+      return { success: ok };
+    } catch (error: any) {
+      const message = (error?.response?.data?.error?.message as string) || (error as Error).message;
+      // Normalize common unsupported responses
+      if (/Unsupported|Invalid parameter|Unknown path|(#|code)\s?100|not allowed/i.test(message)) {
+        throw new Error('Instagram API does not support liking comments for this account');
+      }
+      instagramLogger.error('Failed to like comment', formatError(error));
+      throw new Error(`Failed to like comment: ${message || 'Unknown error'}`);
+    }
+  }
+
   /**
    * Get credentials from Token Service
    */

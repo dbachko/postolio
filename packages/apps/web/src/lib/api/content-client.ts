@@ -137,6 +137,43 @@ export class ContentClient {
     return this.request(`/api/posts/${postId}/comments?page=${page}&limit=${limit}`);
   }
 
+  replyToComment(postId: string, commentId: string, message: string) {
+    return this.request(`/api/posts/${postId}/comments/${commentId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+  }
+
+  setCommentHidden(postId: string, commentId: string, hide: boolean) {
+    return this.request(`/api/posts/${postId}/comments/${commentId}/hide`, {
+      method: 'POST',
+      body: JSON.stringify({ hide }),
+    });
+  }
+
+  deleteComment(postId: string, commentId: string) {
+    return this.request(`/api/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });
+  }
+
+  likeComment(postId: string, commentId: string) {
+    return this.request(`/api/posts/${postId}/comments/${commentId}/like`, { method: 'POST' });
+  }
+
+  setCommentWorkflow(
+    postId: string,
+    commentId: string,
+    data: {
+      status?: 'open' | 'resolved' | 'snoozed';
+      snoozedUntil?: string | null;
+      assigneeUserId?: string | null;
+    }
+  ) {
+    return this.request(`/api/posts/${postId}/comments/${commentId}/workflow`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   publishPost(postId: string) {
     return this.request(`/api/content/${postId}/publish`, { method: 'POST' });
   }

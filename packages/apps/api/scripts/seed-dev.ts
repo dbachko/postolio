@@ -676,6 +676,138 @@ async function main() {
     data: normalizeStatuses(contentPayload.concat(brandCoverage)),
   });
 
+  // Create an Instagram SocialAccount for the brand and attach publications + mock comments
+  console.log('==> Creating SocialAccount, publications, comments, and saved replies');
+  const social = await prisma.socialAccount.upsert({
+    where: {
+      platform_externalAccountId: {
+        platform: 'instagram',
+        externalAccountId: brand.instagramAccountId || 'mock_ig',
+      },
+    },
+    update: {
+      brandId: brand.id,
+      externalPageId: brand.instagramPageId || undefined,
+      username: (brand.instagramProfileData as any)?.username || undefined,
+      displayName: brand.name,
+    },
+    create: {
+      brandId: brand.id,
+      platform: 'instagram',
+      externalAccountId: brand.instagramAccountId || 'mock_ig',
+      externalPageId: brand.instagramPageId || undefined,
+      username: (brand.instagramProfileData as any)?.username || undefined,
+      displayName: brand.name,
+    },
+  });
+
+  // Pick a few published posts and create publications + comments
+  const published = await prisma.content.findMany({
+    where: { brandId: brand.id, status: 'published' },
+    orderBy: { postedAt: 'desc' },
+    take: 3,
+    select: { id: true, postedAt: true },
+  });
+  for (let i = 0; i < published.length; i++) {
+    const c = published[i];
+    const externalPostId = `IGPOST_${randomSuffix()}_${i + 1}`;
+    const pub = await prisma.contentPublication.upsert({
+      where: {
+        socialAccountId_externalPostId: {
+          socialAccountId: social.id,
+          externalPostId,
+        },
+      },
+      update: { contentId: c.id, permalink: `https://instagram.com/p/${externalPostId}` },
+      create: {
+        contentId: c.id,
+        socialAccountId: social.id,
+        platform: 'instagram',
+        externalPostId,
+        externalThreadRootId: null,
+        externalAccountId: social.externalAccountId,
+        externalPageId: social.externalPageId || undefined,
+        permalink: `https://instagram.com/p/${externalPostId}`,
+        publishedAt: c.postedAt || new Date(),
+        status: 'published',
+      },
+    });
+
+    // Seed a few comments with varied workflow states
+    await prisma.publicationComment.createMany({
+      data: [
+        {
+          publicationId: pub.id,
+          platform: 'instagram',
+          externalCommentId: `${externalPostId}_c1`,
+          authorUsername: 'eco.clean.marine',
+          text: 'Style meets purpose 💚🌍',
+          likeCount: 3,
+          status: 'open',
+          createdAt: new Date(Date.now() - 60 * 60 * 1000),
+        },
+        {
+          publicationId: pub.id,
+          platform: 'instagram',
+          externalCommentId: `${externalPostId}_c2`,
+          authorUsername: 'sustainably_yours',
+          text: 'Eco chic vibes! ✨',
+          likeCount: 1,
+          status: 'resolved',
+          createdAt: new Date(Date.now() - 45 * 60 * 1000),
+        },
+        {
+          publicationId: pub.id,
+          platform: 'instagram',
+          externalCommentId: `${externalPostId}_c3`,
+          authorUsername: 'green.consumer',
+          text: 'How much is the set and do you ship to EU?',
+          likeCount: 0,
+          status: 'snoozed',
+          snoozedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          createdAt: new Date(Date.now() - 30 * 60 * 1000),
+        },
+      ],
+    });
+  }
+
+  // Saved replies
+  await prisma.savedReply.createMany({
+    data: [
+      {
+        brandId: brand.id,
+        userId: user.id,
+        title: 'Thanks!',
+        body: 'Thanks so much for the love! 🙌',
+      },
+      {
+        brandId: brand.id,
+        userId: user.id,
+        title: 'Shipping Info',
+        body: 'We ship worldwide. Standard delivery is 5–7 business days. 🌍',
+      },
+      {
+        brandId: brand.id,
+        userId: user.id,
+        title: 'Pricing',
+        body: 'Our sets start at $49. Tap the link in bio for details.',
+      },
+      {
+        brandId: brand.id,
+        userId: user.id,
+        title: 'Support',
+        body: 'Sorry about that! Can you DM us your order number so we can help?',
+      },
+      {
+        brandId: brand.id,
+        userId: user.id,
+        title: 'Collab',
+        body: 'Thanks for reaching out! Please email collabs@brand.com 💌',
+      },
+    ],
+    skipDuplicates: true,
+  });
+
   console.log('\n✅ Seed complete');
   console.log('--- Credentials ---');
   console.log(`Email:    ${email}`);

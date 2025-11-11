@@ -244,6 +244,81 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // Instagram DMs API
+  fastify.get<{ Params: { brandId: string }; Querystring: { limit?: number; after?: string } }>(
+    '/:brandId/instagram/dms/threads',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { brandId } = request.params;
+      const { limit, after } = request.query || {};
+      const userId = request.user!.id;
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      try {
+        const res = await instagramService.listDmThreads(brand, { limit, after });
+        if (!res.supported) return reply.code(501).send({ supported: false, threads: [] });
+        return reply.send(res);
+      } catch (e: any) {
+        return reply
+          .code(500)
+          .send({ error: 'Failed to fetch threads', message: e?.message || 'Unknown error' });
+      }
+    }
+  );
+
+  fastify.get<{
+    Params: { brandId: string; threadId: string };
+    Querystring: { limit?: number; before?: string };
+  }>(
+    '/:brandId/instagram/dms/threads/:threadId/messages',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { brandId, threadId } = request.params;
+      const { limit, before } = request.query || {};
+      const userId = request.user!.id;
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      try {
+        const res = await instagramService.getDmThreadMessages(brand, threadId, { limit, before });
+        if (!res.supported) return reply.code(501).send({ supported: false, messages: [] });
+        return reply.send(res);
+      } catch (e: any) {
+        return reply
+          .code(500)
+          .send({ error: 'Failed to fetch messages', message: e?.message || 'Unknown error' });
+      }
+    }
+  );
+
+  fastify.post<{ Params: { brandId: string; threadId: string }; Body: { text: string } }>(
+    '/:brandId/instagram/dms/threads/:threadId/messages',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { brandId, threadId } = request.params;
+      const userId = request.user!.id;
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      const { text } = (request.body || {}) as { text?: string };
+      if (!text || !text.trim())
+        return reply.code(400).send({ error: 'Message must not be empty' });
+      try {
+        const res = await instagramService.sendDmMessage(brand, threadId, text);
+        if (!res.supported)
+          return reply
+            .code(501)
+            .send({ supported: false, message: res.message || 'Not supported' });
+        if (!res.success && res.errorCode === 'WINDOW_CLOSED') {
+          return reply.code(403).send({ supported: true, success: false, error: 'WINDOW_CLOSED' });
+        }
+        return reply.send({ supported: true, success: true });
+      } catch (e: any) {
+        return reply
+          .code(500)
+          .send({ error: 'Failed to send message', message: e?.message || 'Unknown error' });
+      }
+    }
+  );
+
   // POST /api/brands/:brandId/instagram/best-time/refresh
   fastify.post(
     '/:brandId/instagram/best-time/refresh',

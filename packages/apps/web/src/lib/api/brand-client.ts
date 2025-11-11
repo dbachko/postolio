@@ -150,4 +150,61 @@ export class BrandClient {
   getInstagramBestTimeStatus(brandId: string) {
     return this.request(`/api/brands/${encodeURIComponent(brandId)}/instagram/best-time/status`);
   }
+
+  // Saved replies
+  getSavedReplies(brandId: string) {
+    return this.request(`/api/brands/${encodeURIComponent(brandId)}/replies`);
+  }
+
+  createSavedReply(brandId: string, data: { title: string; body: string; isDefault?: boolean }) {
+    return this.request(`/api/brands/${encodeURIComponent(brandId)}/replies`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  updateSavedReply(
+    brandId: string,
+    replyId: string,
+    data: { title?: string; body?: string; isDefault?: boolean }
+  ) {
+    return this.request(`/api/brands/${encodeURIComponent(brandId)}/replies/${replyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  deleteSavedReply(brandId: string, replyId: string) {
+    return this.request(`/api/brands/${encodeURIComponent(brandId)}/replies/${replyId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Instagram DMs
+  getDmThreads(brandId: string, opts?: { limit?: number; after?: string }) {
+    const params = new URLSearchParams();
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.after) params.set('after', opts.after);
+    const qs = params.toString();
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/instagram/dms/threads${qs ? `?${qs}` : ''}`
+    );
+  }
+
+  getDmMessages(brandId: string, threadId: string, opts?: { limit?: number; before?: string }) {
+    const params = new URLSearchParams();
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.before) params.set('before', opts.before);
+    const qs = params.toString();
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/instagram/dms/threads/${encodeURIComponent(threadId)}/messages${qs ? `?${qs}` : ''}`
+    );
+  }
+
+  sendDmMessage(brandId: string, threadId: string, text: string) {
+    return this.request(
+      `/api/brands/${encodeURIComponent(brandId)}/instagram/dms/threads/${encodeURIComponent(threadId)}/messages`,
+      { method: 'POST', body: JSON.stringify({ text }) }
+    );
+  }
 }

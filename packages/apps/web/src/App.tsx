@@ -32,6 +32,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import NotificationsPage from './pages/Notifications';
 import { RouteError } from './components/RouteError';
 const PostDetail = lazy(() => import('./pages/PostDetail'));
+const Inbox = lazy(() => import('./pages/Inbox'));
 const CreatePost = lazy(() =>
   import('./pages/CreatePost').then((module) => ({
     default: module.CreatePost,
@@ -75,6 +76,21 @@ const router = createBrowserRouter([
   { path: '/legal/data-deletion', element: <DataDeletion />, errorElement: <RouteError /> },
   // Dev/test-only: render a minimal PostPreviewCard for timezone validation
   { path: '/__tz', element: <TzRenderTest />, errorElement: <RouteError /> },
+  {
+    path: '/inbox',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ErrorBoundary>
+            <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
+              <Inbox />
+            </Suspense>
+          </ErrorBoundary>
+        </Layout>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouteError />,
+  },
   {
     path: '/notifications',
     element: (

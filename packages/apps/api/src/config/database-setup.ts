@@ -54,12 +54,15 @@ export async function ensureDatabaseSchema(): Promise<void> {
       'publication_comments',
       'account_metric_samples',
       'account_metrics_latest',
+      // inbox/saved replies
+      'saved_replies',
     ];
     const existingTables = tables.map((row) => row.table_name);
     const missingTables = requiredTables.filter((table) => !existingTables.includes(table));
 
     // Also check for required columns that recent releases depend on
-    // Currently: users.themePreference, users.uiPreferences
+    // Currently: users.themePreference, users.uiPreferences,
+    // publication_comments.status/snoozedUntil/assigneeUserId
     type ColumnRow = { column_name: string };
     let missingColumns: string[] = [];
     try {
@@ -79,6 +82,23 @@ export async function ensureDatabaseSchema(): Promise<void> {
     } catch {
       // If this fails, proceed conservatively and attempt to sync schema below
       missingColumns = ['themePreference', 'uiPreferences'];
+    }
+
+    // publication_comments workflow columns
+    try {
+      const pubCols = await prisma.$queryRaw<ColumnRow[]>`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'publication_comments'
+          AND column_name IN ('status', 'snoozedUntil', 'assigneeUserId')
+      `;
+      const exist = (Array.isArray(pubCols) ? pubCols : []).map((r) => r.column_name);
+      for (const c of ['status', 'snoozedUntil', 'assigneeUserId']) {
+        if (!exist.includes(c)) missingColumns.push(`publication_comments.${c}`);
+      }
+    } catch {
+      missingColumns.push('publication_comments.status', 'publication_comments.snoozedUntil', 'publication_comments.assigneeUserId');
     }
 
     if (missingTables.length > 0 || missingColumns.length > 0) {
@@ -107,8 +127,11 @@ export async function ensureDatabaseSchema(): Promise<void> {
           );
         }
 
-        // Prefer globally-installed prisma CLI (baked into the container)
-        const baseCmd = 'prisma migrate deploy --skip-generate';
+        // Prefer migrate deploy in prod; use db push in dev to keep DX smooth
+        const useDbPush = process.env.NODE_ENV !== 'prod' && process.env.DB_SETUP_STRATEGY !== 'migrate';
+        const baseCmd = useDbPush
+          ? 'prisma db push --skip-generate'
+          : 'prisma migrate deploy --skip-generate';
         const migrateCommand = schemaPath ? `${baseCmd} --schema ${schemaPath}` : baseCmd;
 
         console.log(`🔧 Running: ${migrateCommand}`);
@@ -119,10 +142,8 @@ export async function ensureDatabaseSchema(): Promise<void> {
         console.log('✅ Database schema synchronized successfully');
       } catch (migrationError) {
         console.error('❌ Failed to run database migrations:', migrationError);
-        console.error(
-          'Migration command:',
-          process.env.NODE_ENV === 'prod' ? 'prisma migrate deploy' : 'prisma db push'
-        );
+        console.error('Attempted command failed. You can run manually:');
+        console.error(process.env.NODE_ENV === 'prod' ? '  prisma migrate deploy' : '  prisma db push');
         throw new Error(`Database setup failed: ${migrationError}`);
       }
     } else {

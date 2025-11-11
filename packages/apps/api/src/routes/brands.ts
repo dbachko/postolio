@@ -562,6 +562,71 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // ==========================
+  // Saved Replies (brand-level)
+  // ==========================
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/replies',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: brandId } = request.params;
+      const userId = request.user!.id;
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      const rows = await prisma.savedReply.findMany({
+        where: { brandId },
+        orderBy: { updatedAt: 'desc' },
+      });
+      return reply.send({ replies: rows });
+    }
+  );
+
+  fastify.post<{
+    Params: { id: string };
+    Body: { title: string; body: string; isDefault?: boolean };
+  }>('/:id/replies', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id: brandId } = request.params;
+    const userId = request.user!.id;
+    const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+    if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+    const { title, body, isDefault } = request.body || ({} as any);
+    if (!title?.trim() || !body?.trim())
+      return reply.code(400).send({ error: 'Title and body are required' });
+    const row = await prisma.savedReply.create({
+      data: { brandId, userId, title: title.trim(), body, isDefault: !!isDefault },
+    });
+    return reply.code(201).send({ reply: row });
+  });
+
+  fastify.put<{
+    Params: { id: string; replyId: string };
+    Body: { title?: string; body?: string; isDefault?: boolean };
+  }>('/:id/replies/:replyId', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id: brandId, replyId } = request.params;
+    const userId = request.user!.id;
+    const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+    if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+    const data: any = {};
+    if (request.body?.title !== undefined) data.title = request.body.title;
+    if (request.body?.body !== undefined) data.body = request.body.body;
+    if (request.body?.isDefault !== undefined) data.isDefault = request.body.isDefault;
+    const row = await prisma.savedReply.update({ where: { id: replyId }, data });
+    return reply.send({ reply: row });
+  });
+
+  fastify.delete<{ Params: { id: string; replyId: string } }>(
+    '/:id/replies/:replyId',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: brandId, replyId } = request.params;
+      const userId = request.user!.id;
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+      await prisma.savedReply.delete({ where: { id: replyId } });
+      return reply.send({ success: true });
+    }
+  );
+
   // Instagram authorize alias -> forwards to auth route
   fastify.get<{ Params: { id: string } }>(
     '/:id/instagram/authorize',

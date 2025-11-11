@@ -58,6 +58,9 @@ model User {
   notifications     Notification[]
   notificationPreferences NotificationPreference[]
   notificationState UserNotificationState?
+  // Inbox & Replies
+  assignedComments PublicationComment[]
+  savedReplies     SavedReply[]
 
   @@index([email])
   @@index([accountLockedUntil])
@@ -86,6 +89,8 @@ model Brand {
   notifications        Notification[]
   notificationPreferences NotificationPreference[]
   socialAccounts      SocialAccount[]
+  // Inbox & Replies
+  savedReplies        SavedReply[]
 
   @@index([userId])
   @@index([createdAt])
@@ -329,11 +334,43 @@ model PublicationComment {
   fetchedAt           DateTime @default(now()) @map("fetched_at")
   metadata            Json?
 
+  // Inbox workflow (persisted status/assignments)
+  status              CommentWorkflowStatus @default(open)
+  snoozedUntil        DateTime?
+  assigneeUserId      String?
+  assignee            User?    @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
+
   publication         ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
 
   @@unique([publicationId, externalCommentId])
   @@index([publicationId])
+  @@index([assigneeUserId])
   @@map("publication_comments")
+}
+
+enum CommentWorkflowStatus {
+  open
+  resolved
+  snoozed
+}
+
+model SavedReply {
+  id        String   @id @default(cuid())
+  brandId   String
+  userId    String
+  title     String
+  body      String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+  @@index([userId])
+  @@unique([brandId, title])
+  @@map("saved_replies")
 }
 
 // Account-level metrics (for brand/platform overviews and charts)
