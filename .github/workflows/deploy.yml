@@ -293,7 +293,8 @@ jobs:
             if [[ "$MATRIX" == "[]" ]]; then
               MATRIX='[{"name":"'"$name"'","dockerfile":"'"$dockerfile"'","scope":"'"$scope"'"}]'
             else
-              MATRIX=$(echo "$MATRIX" | jq --arg n "$name" --arg f "$dockerfile" --arg s "$scope" '. + [{name:$n,dockerfile:$f,scope:$s}]')
+              # Use compact JSON to avoid newlines in GitHub output file commands
+              MATRIX=$(echo "$MATRIX" | jq -c --arg n "$name" --arg f "$dockerfile" --arg s "$scope" '. + [{name:$n,dockerfile:$f,scope:$s}]')
             fi
           }
 
@@ -320,6 +321,8 @@ jobs:
             fi
           fi
 
+          # Ensure matrix is compact JSON (single line) before exporting as output
+          MATRIX=$(echo "$MATRIX" | jq -c '.')
           echo "image-matrix=$MATRIX" >> $GITHUB_OUTPUT
           echo "Images to build: $MATRIX"
 
