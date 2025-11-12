@@ -1,0 +1,26 @@
+{
+  "name": "@postolio/comments-ingestor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@postolio/database": "workspace:*",
+    "@postolio/aws": "workspace:*",
+    "ioredis": "^5.4.1",
+    "node-fetch": "^3.3.2",
+    "axios": "^1.7.7"
+  },
+  "devDependencies": {
+    "@postolio/tsconfig": "workspace:*",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
+

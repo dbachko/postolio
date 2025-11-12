@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Eye, Heart, Users, TrendingUp, TrendingDown } from 'lucide-react';
-import { formatNumber } from '@/utils/formatNumber';
+import { formatNumber, formatPercent } from '@/utils/formatNumber';
 
 interface CampaignMetrics {
   totalPosts: number;
@@ -137,7 +137,7 @@ export function OverviewTab({ metrics }: OverviewTabProps) {
               <div
                 className={`text-4xl font-bold ${getPerformanceColor(metrics.averageEngagementRate)}`}
               >
-                {Number(metrics.averageEngagementRate).toFixed(2)}%
+                {formatPercent(Number(metrics.averageEngagementRate), 2)}
               </div>
               <p className="text-muted-foreground mt-2 text-sm">
                 {getPerformanceLabel(metrics.averageEngagementRate)}

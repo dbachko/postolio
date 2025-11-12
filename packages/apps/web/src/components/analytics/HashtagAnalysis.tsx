@@ -142,7 +142,7 @@ export function HashtagAnalysis({ hashtags, loading }: HashtagAnalysisProps) {
                 <div className="col-span-2 flex items-center justify-end">
                   {tag.bestPost ? (
                     <a
-                      href={`/content/${tag.bestPost.contentId}`}
+                      href={`/posts/${tag.bestPost.contentId}`}
                       className="text-primary flex items-center gap-1 text-sm hover:underline"
                     >
                       {formatPercent(tag.bestPost.engagementRate)}

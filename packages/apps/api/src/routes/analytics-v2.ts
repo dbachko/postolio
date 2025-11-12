@@ -115,14 +115,21 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // Brand summary aggregates
+  // Brand summary aggregates (period-aware with account-series fallback)
   fastify.get('/analytics/brands/:brandId/summary', async (request, reply) => {
     try {
       const { brandId } = request.params as { brandId: string };
       const { period = '30d' } = request.query as { period?: '7d' | '30d' | '90d' };
 
+      // Determine current window start based on period
+      const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+      const now = new Date();
+      const currentStart = new Date();
+      currentStart.setDate(now.getDate() - days);
+
+      // Aggregate latest metrics from publications within the current window
       const pubs = await prisma.contentPublication.findMany({
-        where: { content: { brandId } },
+        where: { content: { brandId }, publishedAt: { gte: currentStart, lte: now } },
         select: { id: true, platform: true, metricsLatest: true, publishedAt: true },
       });
 
@@ -145,6 +152,28 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
         totalReach += m.reach || 0;
       }
 
+      // Fallback to account-level daily series when post metrics are missing
+      if (totalImpressions === 0 || totalReach === 0) {
+        const samples = await prisma.accountMetricSample.findMany({
+          where: {
+            socialAccount: { brandId },
+            asOf: { gte: currentStart, lte: now },
+            period: 'day',
+            metricName: { in: ['impressions', 'reach'] as any },
+          },
+          select: { metricName: true, value: true },
+        });
+        let seriesImpressions = 0;
+        let seriesReach = 0;
+        for (const s of samples) {
+          const val = Number(s.value || 0);
+          if ((s.metricName as any) === 'impressions') seriesImpressions += val;
+          if ((s.metricName as any) === 'reach') seriesReach += val;
+        }
+        if (totalImpressions === 0) totalImpressions = seriesImpressions;
+        if (totalReach === 0) totalReach = seriesReach;
+      }
+
       const averageEngagementRate =
         totalImpressions > 0 ? (totalEngagement / totalImpressions) * 100 : 0;
 
@@ -152,9 +181,6 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
       const healthScore = await calculateBrandHealthScore(brandId, period);
 
       // Get previous period for comparison
-      const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
-      const currentStart = new Date();
-      currentStart.setDate(currentStart.getDate() - days);
       const previousStart = new Date();
       previousStart.setDate(previousStart.getDate() - days * 2);
 

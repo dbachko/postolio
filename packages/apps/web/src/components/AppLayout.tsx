@@ -387,48 +387,58 @@ export function AppLayout({ children }: LayoutProps) {
                         {/* Mobile: Show main nav items */}
                         <div className="mb-4 md:hidden">
                           <div className="space-y-1">
-                            {mainNavItems.map((item) => (
-                              <Link
-                                key={item.path}
-                                to={item.path}
-                                onClick={() => setMenuOpen(false)}
-                                className={cn(
-                                  'flex items-center rounded-lg px-3 py-2 text-sm transition-colors',
-                                  isActiveRoute(item)
-                                    ? 'bg-accent text-primary'
-                                    : 'hover:bg-accent hover:text-accent-foreground'
-                                )}
-                              >
-                                <item.icon className="mr-3 h-5 w-5" aria-hidden="true" />
-                                <div>
-                                  <div className="font-medium">{item.label}</div>
-                                  <div className="text-muted-foreground text-xs">
-                                    {item.description}
+                            {mainNavItems
+                              // Move Campaigns and Assets into the Additional section on mobile
+                              .filter((item) => !['Campaigns', 'Assets'].includes(item.label))
+                              .map((item) => (
+                                <Link
+                                  key={item.path}
+                                  to={item.path}
+                                  onClick={() => setMenuOpen(false)}
+                                  className={cn(
+                                    'flex items-center rounded-lg px-3 py-2 text-sm transition-colors',
+                                    isActiveRoute(item)
+                                      ? 'bg-accent text-primary'
+                                      : 'hover:bg-accent hover:text-accent-foreground'
+                                  )}
+                                >
+                                  <item.icon className="mr-3 h-5 w-5" aria-hidden="true" />
+                                  <div>
+                                    <div className="font-medium">{item.label}</div>
+                                    <div className="text-muted-foreground text-xs">
+                                      {item.description}
+                                    </div>
                                   </div>
-                                </div>
-                              </Link>
-                            ))}
+                                </Link>
+                              ))}
                           </div>
                         </div>
 
-                        {/* Secondary Navigation Items */}
-                        <div className="grid grid-cols-2 gap-2">
-                          {secondaryNavItems.map((item) => (
-                            <Link
-                              key={item.path}
-                              to={item.path}
-                              onClick={() => setMenuOpen(false)}
-                              className={cn(
-                                'flex flex-col items-center rounded-lg p-3 text-center transition-colors',
-                                isActiveRoute(item)
-                                  ? 'bg-accent text-primary'
-                                  : 'hover:bg-accent hover:text-accent-foreground'
-                              )}
-                            >
-                              <item.icon className="mb-2 h-6 w-6" aria-hidden="true" />
-                              <span className="text-xs font-medium">{item.label}</span>
-                            </Link>
-                          ))}
+                        {/* Additional Navigation (More) */}
+                        <div className="md:hidden">
+                          <div className="text-muted-foreground mb-2 text-xs font-medium">
+                            Additional
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {mainNavItems
+                              .filter((item) => ['Campaigns', 'Assets'].includes(item.label))
+                              .map((item) => (
+                                <Link
+                                  key={item.path}
+                                  to={item.path}
+                                  onClick={() => setMenuOpen(false)}
+                                  className={cn(
+                                    'flex flex-col items-center rounded-lg p-3 text-center transition-colors',
+                                    isActiveRoute(item)
+                                      ? 'bg-accent text-primary'
+                                      : 'hover:bg-accent hover:text-accent-foreground'
+                                  )}
+                                >
+                                  <item.icon className="mb-2 h-6 w-6" aria-hidden="true" />
+                                  <span className="text-xs font-medium">{item.label}</span>
+                                </Link>
+                              ))}
+                          </div>
                         </div>
 
                         {/* Quick Actions */}

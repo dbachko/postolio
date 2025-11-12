@@ -50,13 +50,27 @@ export function formatNumber(
  * formatPercent(12.345, 2) // "12.35%"
  */
 export function formatPercent(value: number | string | unknown, decimals: number = 1): string {
-  const numValue = Number(value);
+  let numValue = Number(value);
 
-  if (isNaN(numValue) || !isFinite(numValue)) {
-    return '0%';
+  if (!isFinite(numValue) || isNaN(numValue)) return '0%';
+
+  // Treat small fractional values as ratios (e.g., 0.12 => 12%)
+  if (Math.abs(numValue) > 0 && Math.abs(numValue) < 1) {
+    numValue = numValue * 100;
   }
 
-  return `${numValue.toFixed(decimals)}%`;
+  // Clamp to a sane display range to avoid scientific notation
+  const cap = 10000; // 10k%
+  if (numValue > cap) numValue = cap;
+  if (numValue < -cap) numValue = -cap;
+
+  // Handle extremely tiny numbers that would round to 0 but are non-zero
+  const fixed =
+    Math.abs(numValue) > 0 && Math.abs(numValue) < Math.pow(10, -decimals)
+      ? numValue.toFixed(decimals + 1)
+      : numValue.toFixed(decimals);
+
+  return `${fixed}%`;
 }
 
 /**

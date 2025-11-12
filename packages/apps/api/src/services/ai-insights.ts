@@ -1,4 +1,5 @@
 import { getDatabaseClient } from '../config/database.js';
+import { safePercent, safeNumber } from '../utils/format.js';
 
 const prisma = getDatabaseClient();
 
@@ -132,7 +133,7 @@ export class AIInsightsService {
       olderPosts.reduce((sum, p) => sum + Number(p.metricsLatest.engagementRate || 0), 0) /
       olderPosts.length;
 
-    const change = ((recentAvg - olderAvg) / olderAvg) * 100;
+    const change = olderAvg === 0 ? 0 : ((recentAvg - olderAvg) / olderAvg) * 100;
 
     if (Math.abs(change) > 10) {
       insights.push({
@@ -142,11 +143,11 @@ export class AIInsightsService {
         title: change > 0 ? 'Strong Engagement Growth Detected' : 'Engagement Rate Declining',
         description:
           change > 0
-            ? `Your recent posts are performing ${Math.abs(change).toFixed(1)}% better than your earlier content. Keep up the momentum!`
-            : `Your engagement rate has dropped ${Math.abs(change).toFixed(1)}% recently. Consider refreshing your content strategy.`,
+            ? `Your recent posts are performing ${safePercent(Math.abs(change), 1)}% better than your earlier content. Keep up the momentum!`
+            : `Your engagement rate has dropped ${safePercent(Math.abs(change), 1)}% recently. Consider refreshing your content strategy.`,
         impact:
           change > 0
-            ? `Maintaining this trend could increase your reach by ${(Math.abs(change) * 2).toFixed(0)}% over the next month.`
+            ? `Maintaining this trend could increase your reach by ${safePercent(Math.abs(change) * 2, 0)}% over the next month.`
             : `Reversing this trend is critical to maintain audience growth and reach.`,
         actionable: true,
         action:
@@ -157,9 +158,14 @@ export class AIInsightsService {
               }
             : undefined,
         supportingData: [
-          { metric: 'Recent Avg Engagement Rate', value: `${recentAvg.toFixed(2)}%` },
-          { metric: 'Previous Avg Engagement Rate', value: `${olderAvg.toFixed(2)}%` },
-          { metric: 'Change', value: change.toFixed(1), change, trend: change > 0 ? 'up' : 'down' },
+          { metric: 'Recent Avg Engagement Rate', value: `${safePercent(recentAvg, 2)}%` },
+          { metric: 'Previous Avg Engagement Rate', value: `${safePercent(olderAvg, 2)}%` },
+          {
+            metric: 'Change',
+            value: Number(safeNumber(change, 1)),
+            change,
+            trend: change > 0 ? 'up' : 'down',
+          },
         ],
         timestamp: new Date(),
       });
@@ -235,7 +241,7 @@ export class AIInsightsService {
           type: 'timing',
           priority: 'high',
           title: 'Optimal Posting Time Identified',
-          description: `Posts published on ${dayName}s at ${timeStr} get ${((bestAvg / worstAvg - 1) * 100).toFixed(0)}% more engagement than your average.`,
+          description: `Posts published on ${dayName}s at ${timeStr} get ${safePercent((bestAvg / worstAvg - 1) * 100, 0)}% more engagement than your average.`,
           impact:
             'Scheduling more content during this window could significantly boost your overall engagement.',
           actionable: true,
@@ -246,7 +252,7 @@ export class AIInsightsService {
           },
           supportingData: [
             { metric: 'Best Time', value: `${dayName}, ${timeStr}` },
-            { metric: 'Avg Engagement', value: `${bestAvg.toFixed(2)}%` },
+            { metric: 'Avg Engagement', value: `${safePercent(bestAvg, 2)}%` },
             { metric: 'Posts Analyzed', value: validPubs.length },
           ],
           timestamp: new Date(),
@@ -294,7 +300,7 @@ export class AIInsightsService {
           type: 'content',
           priority: 'medium',
           title: `${better === 'shorter' ? 'Shorter' : 'Longer'} Captions Perform Better`,
-          description: `Your ${better} captions (${better === 'shorter' ? 'under 100' : 'over 200'} characters) get ${((betterAvg / worseAvg - 1) * 100).toFixed(0)}% more engagement.`,
+          description: `Your ${better} captions (${better === 'shorter' ? 'under 100' : 'over 200'} characters) get ${safePercent((betterAvg / worseAvg - 1) * 100, 0)}% more engagement.`,
           impact: 'Adjusting your caption strategy could improve overall engagement rates.',
           actionable: true,
           action: {
@@ -304,11 +310,11 @@ export class AIInsightsService {
           supportingData: [
             {
               metric: `${better === 'shorter' ? 'Short' : 'Long'} Caption Engagement`,
-              value: `${betterAvg.toFixed(2)}%`,
+              value: `${safePercent(betterAvg, 2)}%`,
             },
             {
               metric: `${better === 'shorter' ? 'Long' : 'Short'} Caption Engagement`,
-              value: `${worseAvg.toFixed(2)}%`,
+              value: `${safePercent(worseAvg, 2)}%`,
             },
           ],
           timestamp: new Date(),
@@ -333,7 +339,7 @@ export class AIInsightsService {
     const totalSaves = validPubs.reduce((sum, p) => sum + (p.metricsLatest.saves || 0), 0);
 
     if (totalLikes > 0) {
-      const saveRate = (totalSaves / totalLikes) * 100;
+      const saveRate = totalLikes === 0 ? 0 : (totalSaves / totalLikes) * 100;
 
       if (saveRate > 5) {
         insights.push({
@@ -341,13 +347,13 @@ export class AIInsightsService {
           type: 'audience',
           priority: 'medium',
           title: 'High-Value Content Resonating with Audience',
-          description: `Your content has a ${saveRate.toFixed(1)}% save rate, indicating your audience finds it valuable enough to revisit.`,
+          description: `Your content has a ${safePercent(saveRate, 1)}% save rate, indicating your audience finds it valuable enough to revisit.`,
           impact: "High save rates boost your content's reach in Instagram's algorithm.",
           actionable: false,
           supportingData: [
             { metric: 'Total Saves', value: totalSaves },
             { metric: 'Total Likes', value: totalLikes },
-            { metric: 'Save Rate', value: `${saveRate.toFixed(1)}%` },
+            { metric: 'Save Rate', value: `${safePercent(saveRate, 1)}%` },
           ],
           timestamp: new Date(),
         });
@@ -392,7 +398,7 @@ export class AIInsightsService {
         type: 'performance',
         priority: 'high',
         title: 'Viral Content Detected',
-        description: `One of your recent posts is performing exceptionally well—${((Number(bestOutlier.metricsLatest.engagementRate) / mean - 1) * 100).toFixed(0)}% above your average!`,
+        description: `One of your recent posts is performing exceptionally well—${safePercent((Number(bestOutlier.metricsLatest.engagementRate) / mean - 1) * 100, 0)}% above your average!`,
         impact: 'Analyzing what made this content successful can help replicate its performance.',
         actionable: true,
         action: {
@@ -403,12 +409,12 @@ export class AIInsightsService {
         supportingData: [
           {
             metric: 'Post Engagement Rate',
-            value: `${Number(bestOutlier.metricsLatest.engagementRate).toFixed(2)}%`,
+            value: `${safePercent(Number(bestOutlier.metricsLatest.engagementRate), 2)}%`,
           },
-          { metric: 'Average Engagement Rate', value: `${mean.toFixed(2)}%` },
+          { metric: 'Average Engagement Rate', value: `${safePercent(mean, 2)}%` },
           {
             metric: 'Performance vs Average',
-            value: `${((Number(bestOutlier.metricsLatest.engagementRate) / mean - 1) * 100).toFixed(0)}%`,
+            value: `${safePercent((Number(bestOutlier.metricsLatest.engagementRate) / mean - 1) * 100, 0)}%`,
             trend: 'up',
           },
         ],

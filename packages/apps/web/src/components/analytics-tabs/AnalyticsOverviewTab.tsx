@@ -10,7 +10,7 @@ import {
 import { formatNumber, formatPercent } from '@/utils/formatNumber';
 import { Eye, Heart, Users, FileText, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
-import { analyticsV2 } from '../../lib/api';
+import { analyticsV2, content as contentApi } from '../../lib/api';
 import { BrandHealthScore as BrandHealthScoreComponent } from '../analytics/BrandHealthScore';
 import { KPICard } from '../analytics/KPICard';
 import { TopPostsGrid } from '../analytics/TopPostsGrid';
@@ -91,6 +91,38 @@ export function AnalyticsOverviewTab({
   recommendationsLoading,
 }: AnalyticsOverviewTabProps) {
   const [showScheduleOptimizer, setShowScheduleOptimizer] = useState(false);
+  const [topPostThumbs, setTopPostThumbs] = useState<Record<string, string>>({});
+
+  // Best-effort: load thumbnails for top posts lacking a thumbnailUrl
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const posts = report?.topPosts || [];
+      const toFetch = posts
+        .filter((p: any) => !p.thumbnailUrl && !topPostThumbs[p.contentId])
+        .slice(0, 10);
+      if (toFetch.length === 0) return;
+      const results: Record<string, string> = {};
+      await Promise.all(
+        toFetch.map(async (p: any) => {
+          try {
+            const res = await contentApi.getPostDetail(p.contentId);
+            const url = res?.imageUrl || res?.content?.imageUrl;
+            if (url) results[p.contentId] = url;
+          } catch {
+            // ignore
+          }
+        })
+      );
+      if (!cancelled && Object.keys(results).length) {
+        setTopPostThumbs((prev) => ({ ...prev, ...results }));
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [report?.topPosts]);
 
   return (
     <div className="space-y-6">
@@ -296,10 +328,13 @@ export function AnalyticsOverviewTab({
 
           {/* Top Posts Grid */}
           <TopPostsGrid
-            posts={report.topPosts || []}
+            posts={(report.topPosts || []).map((p: any) => ({
+              ...p,
+              thumbnailUrl: p.thumbnailUrl || p.imageUrl || topPostThumbs[p.contentId],
+            }))}
             loading={loading}
             onPostClick={(postId) => {
-              window.location.href = `/content/${postId}`;
+              window.location.href = `/posts/${postId}`;
             }}
           />
 

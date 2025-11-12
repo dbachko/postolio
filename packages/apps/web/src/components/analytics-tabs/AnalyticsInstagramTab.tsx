@@ -118,7 +118,7 @@ export function AnalyticsInstagramTab({
             pagination={igPostsPagination}
             onPageChange={onPostsPageChange}
             onPostClick={(contentId) => {
-              window.location.href = `/content/${contentId}`;
+              window.location.href = `/posts/${contentId}`;
             }}
           />
         </>

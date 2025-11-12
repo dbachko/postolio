@@ -72,6 +72,29 @@ export function AudienceInsights({ audienceData, loading }: AudienceInsightsProp
     ? 'text-green-600 dark:text-green-400'
     : 'text-red-600 dark:text-red-400';
 
+  // Normalize follower growth timeline by collapsing duplicate dates and sorting asc
+  const normalizedTimeline = (() => {
+    try {
+      const byDay = new Map<string, { date: string; followers: number }>();
+      for (const p of followerGrowth.timeline || []) {
+        const d = new Date(p.date);
+        const dayKey = isNaN(d.getTime())
+          ? String(p.date).slice(0, 10)
+          : d.toISOString().slice(0, 10);
+        const existing = byDay.get(dayKey);
+        // Keep the max followers for the day (or last seen)
+        if (!existing || p.followers >= existing.followers) {
+          byDay.set(dayKey, { date: dayKey, followers: p.followers });
+        }
+      }
+      const arr = Array.from(byDay.values()).sort((a, b) => (a.date < b.date ? -1 : 1));
+      // Limit to last 30 data points to avoid overly long charts
+      return arr.slice(Math.max(0, arr.length - 30));
+    } catch {
+      return followerGrowth.timeline || [];
+    }
+  })();
+
   return (
     <Card>
       <CardHeader>
@@ -109,10 +132,10 @@ export function AudienceInsights({ audienceData, loading }: AudienceInsightsProp
         </div>
 
         {/* Follower Growth Timeline */}
-        {followerGrowth.timeline && followerGrowth.timeline.length > 0 && (
+        {normalizedTimeline && normalizedTimeline.length > 0 && (
           <TimeSeriesChart
             title="Follower Growth (Last 30 Days)"
-            series={followerGrowth.timeline.map((point) => ({
+            series={normalizedTimeline.map((point) => ({
               date: point.date,
               value: point.followers,
             }))}

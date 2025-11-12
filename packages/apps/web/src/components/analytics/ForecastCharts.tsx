@@ -52,14 +52,32 @@ interface ForecastChartsProps {
 
 type MetricType = 'engagement' | 'followerGrowth' | 'engagementRate' | 'reach';
 
-export function ForecastCharts({ forecasts, loading }: ForecastChartsProps) {
+export function ForecastCharts({ forecasts: forecastsProp, loading }: ForecastChartsProps) {
+  // Ensure a defined object for safer narrowing below
+  const forecasts = forecastsProp ?? ({} as NonNullable<ForecastChartsProps['forecasts']>);
   const [selectedMetric, setSelectedMetric] = useState<MetricType>('engagement');
+
+  // Keep header + selector visible even when loading or no data
+  const fc = forecasts && forecasts[selectedMetric];
+  const hasData = Boolean(fc && fc.predicted?.length);
 
   if (loading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Predictive Forecast</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CardTitle>Predictive Forecast</CardTitle>
+            </div>
+            <Select
+              value={selectedMetric}
+              onValueChange={(v) => setSelectedMetric(v as MetricType)}
+            >
+              <SelectTrigger className="w-[180px]" disabled>
+                <SelectValue />
+              </SelectTrigger>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           <Skeleton className="h-80 w-full" />
@@ -68,11 +86,30 @@ export function ForecastCharts({ forecasts, loading }: ForecastChartsProps) {
     );
   }
 
-  if (!forecasts || !forecasts[selectedMetric]?.predicted?.length) {
+  // If no data for selected metric, render an empty state but keep the selector visible
+  if (!hasData) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Predictive Forecast</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CardTitle>Predictive Forecast</CardTitle>
+            </div>
+            <Select
+              value={selectedMetric}
+              onValueChange={(v) => setSelectedMetric(v as MetricType)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="engagement">Engagement</SelectItem>
+                <SelectItem value="followerGrowth">Follower Growth</SelectItem>
+                <SelectItem value="engagementRate">Engagement Rate</SelectItem>
+                <SelectItem value="reach">Reach</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="text-muted-foreground py-12 text-center">
@@ -80,14 +117,14 @@ export function ForecastCharts({ forecasts, loading }: ForecastChartsProps) {
               <TrendingUp className="mx-auto h-12 w-12 opacity-50" />
             </div>
             <p className="text-sm">Insufficient data for forecasting</p>
-            <p className="text-xs">Publish at least 10 posts to unlock predictive analytics</p>
+            <p className="text-xs">Try another metric from the dropdown</p>
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  const currentForecast = forecasts[selectedMetric]!;
+  const currentForecast = fc!;
 
   // Prepare chart data
   const chartData = currentForecast.predicted.map((point) => ({

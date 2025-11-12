@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { formatPercent } from '@/utils/formatNumber';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCampaignWizard } from '../../../hooks/useCampaignWizard';
@@ -337,7 +338,9 @@ export function Step5StrategyReview() {
                           Reach range: {predictions.reach.low.toLocaleString()} –{' '}
                           {predictions.reach.high.toLocaleString()}
                         </div>
-                        <div>Engagement rate: {(predictions.engagementRate * 100).toFixed(2)}%</div>
+                        <div>
+                          Engagement rate: {formatPercent(predictions.engagementRate * 100, 2)}
+                        </div>
                         <div className="text-muted-foreground text-xs">
                           Based on your recent brand performance (samples:{' '}
                           {predictionsMeta.samples.reach} reach,{' '}

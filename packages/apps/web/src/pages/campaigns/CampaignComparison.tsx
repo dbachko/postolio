@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PageHeader } from '@/components/PageHeader';
 import { ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react';
+import { formatPercent } from '@/utils/formatNumber';
 
 const formatNumber = (num: number) => {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
@@ -135,7 +136,11 @@ export function CampaignComparison() {
   const metrics = [
     { key: 'totalImpressions', label: 'Impressions', format: formatNumber },
     { key: 'totalEngagement', label: 'Engagement', format: formatNumber },
-    { key: 'averageEngagementRate', label: 'Eng. Rate', format: (v: number) => `${v.toFixed(1)}%` },
+    {
+      key: 'averageEngagementRate',
+      label: 'Eng. Rate',
+      format: (v: number) => formatPercent(v, 1),
+    },
     { key: 'postsPosted', label: 'Posts Published', format: (v: number) => v.toString() },
     { key: 'reach', label: 'Reach', format: formatNumber },
   ];
@@ -167,7 +172,7 @@ export function CampaignComparison() {
           </div>
           <div className="bg-muted/50 rounded-lg p-4">
             <div className="text-muted-foreground mb-1 text-xs">Avg Eng. Rate</div>
-            <div className="text-xl font-bold">{summary.avgEngagementRate.toFixed(1)}%</div>
+            <div className="text-xl font-bold">{formatPercent(summary.avgEngagementRate, 1)}</div>
           </div>
           <div className="bg-muted/50 rounded-lg p-4">
             <div className="text-muted-foreground mb-1 text-xs">Avg Posts</div>
@@ -221,7 +226,7 @@ export function CampaignComparison() {
                               {getPerformanceIcon(relative)}
                               <span>
                                 {relative > 0 ? '+' : ''}
-                                {relative.toFixed(0)}%
+                                {formatPercent(relative, 0)}
                               </span>
                             </div>
                           )}
@@ -267,7 +272,7 @@ export function CampaignComparison() {
                           : 'text-orange-600'
                       }
                     >
-                      {campaign.metrics.performanceVsGoal.progress.toFixed(0)}%
+                      {formatPercent(campaign.metrics.performanceVsGoal.progress, 0)}
                     </span>
                   </div>
                   <div className="text-muted-foreground text-xs">

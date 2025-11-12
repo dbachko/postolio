@@ -4,6 +4,8 @@ import { importImageFromExternalUrl } from '../services/assets-media.js';
 import { buildAnalysisAssetMetadata } from '../services/brand-analysis-assets.js';
 import { computePlaceholders } from '../services/placeholderService.js';
 import { instagramService } from '../services/instagram.js';
+import { getRedisClient } from '../services/redis.js';
+import { ingestBrandComments } from '../services/inbox-comments-ingestor.js';
 
 import { getDatabaseClient } from '../config/database.js';
 
@@ -525,6 +527,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           take: 200,
           select: {
             id: true,
+            externalPostId: true,
             permalink: true,
             publishedAt: true,
             content: {
@@ -535,21 +538,51 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
 
         let items = await Promise.all(
           pubs.map(async (pub) => {
-            const unresolvedCount = await prisma.publicationComment.count({
-              where: { publicationId: pub.id, status: { not: 'resolved' } },
-            });
-            const resolvedCount = await prisma.publicationComment.count({
-              where: { publicationId: pub.id, status: 'resolved' },
-            });
+            // Local workflow counts
+            const [unresolvedCount, resolvedCount] = await Promise.all([
+              prisma.publicationComment.count({
+                where: { publicationId: pub.id, status: { not: 'resolved' } },
+              }),
+              prisma.publicationComment.count({
+                where: { publicationId: pub.id, status: 'resolved' },
+              }),
+            ]);
+
+            let totalComments = unresolvedCount + resolvedCount;
+            let newCount = unresolvedCount;
+
+            // If no local comment records, try a lightweight Graph lookup for counts
+            if (totalComments === 0 && pub.externalPostId) {
+              try {
+                const redis = getRedisClient();
+                const cacheKey = `ig:comments_count:${pub.externalPostId}`;
+                const cached = redis ? await redis.get(cacheKey) : null;
+                if (cached !== null) {
+                  totalComments = Number(cached) || 0;
+                } else {
+                  const res = await instagramService.getPostComments(
+                    brand as any,
+                    String(pub.externalPostId),
+                    1 // minimal page to fetch accurate comments_count
+                  );
+                  totalComments = Number(res.total || 0);
+                  if (redis) await redis.setex(cacheKey, 300, String(totalComments));
+                }
+                newCount = Math.max(0, totalComments - resolvedCount);
+              } catch (e) {
+                request.log.warn({ err: e, pubId: pub.id }, 'Graph comments count fallback failed');
+              }
+            }
+
             return {
               postId: pub.content?.id || '',
               caption: pub.content?.caption || null,
               imageUrl: pub.content?.primaryAssetCdnUrl || null,
               permalink: pub.permalink || null,
               postedAt: pub.content?.postedAt || pub.publishedAt || null,
-              totalComments: unresolvedCount + resolvedCount,
+              totalComments,
               resolvedCount,
-              newCount: unresolvedCount,
+              newCount,
             };
           })
         );
@@ -570,6 +603,52 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (error) {
         request.log.error({ err: error }, 'Inbox comments overview error');
         return reply.code(500).send({ error: 'Failed to retrieve inbox comments' });
+      }
+    }
+  );
+
+  // Enqueue/trigger background ingestion of comments for a brand
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/inbox/comments/ingest',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const userId = request.user!.id;
+        const { id: brandId } = request.params;
+        const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+        if (!brand) return reply.code(404).send({ error: 'Brand not found' });
+
+        // Throttle via Redis to avoid overloading the Graph API
+        const redis = getRedisClient();
+        const throttleKey = `ingest:brand:comments:${brandId}`;
+        let nextAllowed: string | null = null;
+        if (redis) {
+          const ttl = await redis.ttl(throttleKey);
+          if (ttl > 0) {
+            nextAllowed = new Date(Date.now() + ttl * 1000).toISOString();
+            return reply.code(429).send({
+              success: false,
+              error: 'Ingestion recently requested',
+              nextAllowed,
+            });
+          }
+          await redis.setex(throttleKey, 5 * 60, '1'); // 5 minutes
+        }
+
+        // Run ingestion in the background (non-blocking)
+        setImmediate(async () => {
+          try {
+            await ingestBrandComments(brandId, 50, 100);
+          } catch (e) {
+            request.log.warn({ err: e }, 'Background comments ingestion failed');
+          }
+        });
+
+        nextAllowed = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+        return reply.send({ success: true, enqueued: true, nextAllowed });
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to enqueue comments ingestion');
+        return reply.code(500).send({ error: 'Failed to enqueue comments ingestion' });
       }
     }
   );

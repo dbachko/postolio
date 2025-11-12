@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { brand as brandApi, httpGet, httpPut, httpDelete, analyticsV2 } from '../lib/api';
+import { brand as brandApi, httpGet, analyticsV2 } from '../lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -52,15 +52,6 @@ interface SchedulingStats {
   draft: number;
 }
 
-interface ScheduledPost {
-  id: string;
-  caption: string;
-  imageUrl: string;
-  hashtags?: string[];
-  scheduledTime: string;
-  status: string;
-}
-
 export default function Analytics() {
   const { selectedBrand } = useBrandStore();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -73,7 +64,6 @@ export default function Analytics() {
   );
   const [report, setReport] = useState<AnalyticsReport | null>(null);
   const [schedulingStats, setSchedulingStats] = useState<SchedulingStats | null>(null);
-  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [daysPeriod, setDaysPeriod] = useState(30);
@@ -142,7 +132,6 @@ export default function Analytics() {
       // Load data with cancellation support
       Promise.all([
         loadAnalytics(cancelled),
-        loadSchedulingData(cancelled),
         loadAIInsights(cancelled),
         loadForecasts(cancelled),
         loadRecommendations(cancelled),
@@ -182,20 +171,31 @@ export default function Analytics() {
     try {
       const period = daysPeriod === 7 ? '7d' : daysPeriod === 90 ? '90d' : '30d';
 
-      const [statsResponse, v2Summary, topPublications] = await Promise.all([
+      const window = daysPeriod === 7 ? '7d' : daysPeriod === 90 ? '90d' : '30d';
+      const [statsResponse, v2Summary, topPublications, accountSeries] = await Promise.all([
         httpGet(`/api/analytics/stats/${selectedBrand.id}`),
         analyticsV2.getBrandSummary(selectedBrand.id, period).catch(() => null),
         analyticsV2.getBrandTopPublications(selectedBrand.id, 10).catch(() => null),
+        analyticsV2.getBrandAccountSeries(selectedBrand.id, window as any).catch(() => null),
       ]);
 
       if (cancelled) return;
 
       // Build enhanced report from v2 API
       const v2 = v2Summary?.data;
+      const series = accountSeries?.data?.series || [];
+      const seriesImpressions = series.reduce(
+        (sum: number, p: any) => sum + Number(p.impressions || 0),
+        0
+      );
+      const seriesReach = series.reduce((sum: number, p: any) => sum + Number(p.reach || 0), 0);
       const nextReport: AnalyticsReport = {
         totalPosts: Number(v2?.totalPosts || 0),
-        totalImpressions: Number(v2?.totalImpressions || 0),
-        totalReach: Number(v2?.reach || 0),
+        // Fallback to account series sums when summary metrics are missing/zero
+        totalImpressions: Number(
+          (v2?.totalImpressions ?? 0) > 0 ? v2?.totalImpressions : seriesImpressions
+        ),
+        totalReach: Number((v2?.reach ?? 0) > 0 ? v2?.reach : seriesReach),
         totalEngagement: Number(v2?.totalEngagement || 0),
         averageEngagementRate: Number(v2?.averageEngagementRate || 0),
         healthScore: v2?.healthScore,
@@ -209,7 +209,28 @@ export default function Analytics() {
       };
 
       setReport(nextReport);
-      setSchedulingStats(statsResponse.stats);
+      // Normalize scheduling stats to support multiple API shapes
+      const rawStats =
+        (statsResponse && (statsResponse as any).stats) ||
+        (statsResponse && (statsResponse as any).data?.stats) ||
+        (statsResponse && (statsResponse as any).data) ||
+        statsResponse ||
+        null;
+      const normalizedStats = rawStats
+        ? {
+            scheduled: Number(
+              rawStats.scheduled ??
+                rawStats.scheduledCount ??
+                rawStats.scheduled_posts ??
+                rawStats.pending ??
+                0
+            ),
+            posted: Number(rawStats.posted ?? rawStats.published ?? rawStats.publishedCount ?? 0),
+            failed: Number(rawStats.failed ?? rawStats.failedCount ?? 0),
+            draft: Number(rawStats.draft ?? rawStats.drafts ?? rawStats.draftCount ?? 0),
+          }
+        : null;
+      setSchedulingStats(normalizedStats);
     } catch {
       if (!cancelled) {
         setError('Failed to load analytics data');
@@ -217,27 +238,6 @@ export default function Analytics() {
     } finally {
       if (!cancelled) {
         setLoading(false);
-      }
-    }
-  };
-
-  const loadSchedulingData = async (cancelled = false) => {
-    if (!selectedBrand?.id || cancelled) return;
-
-    try {
-      const response = await httpGet(`/api/analytics/scheduled/${selectedBrand.id}`);
-      if (cancelled) return;
-
-      // Ensure hashtags is always an array to avoid runtime errors
-      setScheduledPosts(
-        (response.scheduledPosts || []).map((post: any) => ({
-          ...post,
-          hashtags: Array.isArray(post.hashtags) ? post.hashtags : [],
-        }))
-      );
-    } catch (err) {
-      if (!cancelled) {
-        console.error('Failed to load scheduled posts:', err);
       }
     }
   };
@@ -399,34 +399,6 @@ export default function Analytics() {
     }
   };
 
-  const handleCancelPost = async (contentId: string) => {
-    try {
-      await httpDelete(`/api/analytics/scheduled/${contentId}`);
-
-      // Remove from local state
-      setScheduledPosts((prev) => prev.filter((post) => post.id !== contentId));
-
-      // Reload stats
-      loadAnalytics();
-    } catch {
-      setError('Failed to cancel scheduled post');
-    }
-  };
-
-  const handleReschedulePost = async (contentId: string, newTime: string) => {
-    try {
-      await httpPut('/api/analytics/reschedule', {
-        contentId,
-        newTime,
-      });
-
-      // Reload scheduling data
-      loadSchedulingData();
-    } catch {
-      setError('Failed to reschedule post');
-    }
-  };
-
   return (
     <div className="min-h-screen p-4 sm:p-8">
       <div className="mx-auto max-w-6xl">
@@ -526,12 +498,7 @@ export default function Analytics() {
           )}
 
           {activeTab === 'scheduling' && (
-            <AnalyticsSchedulingTab
-              schedulingStats={schedulingStats}
-              scheduledPosts={scheduledPosts}
-              onCancelPost={handleCancelPost}
-              onReschedulePost={handleReschedulePost}
-            />
+            <AnalyticsSchedulingTab schedulingStats={schedulingStats} />
           )}
         </div>
       </div>

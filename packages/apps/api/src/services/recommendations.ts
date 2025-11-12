@@ -1,4 +1,5 @@
 import { getDatabaseClient } from '../config/database.js';
+import { safePercent } from '../utils/format.js';
 
 const prisma = getDatabaseClient();
 
@@ -258,6 +259,9 @@ export class RecommendationEngine {
       : 0;
 
     const currentAvgLength = captionLengths.reduce((a, b) => a + b, 0) / captionLengths.length;
+    const overallAvgEngagement = engagementByLength.length
+      ? engagementByLength.reduce((s, e) => s + (e.engagement || 0), 0) / engagementByLength.length
+      : 0;
 
     let optimalRange = 'medium (100-300 characters)';
     let bestAvg = avgMedium;
@@ -274,15 +278,15 @@ export class RecommendationEngine {
       currentAvgLength < 100 ? 'short' : currentAvgLength < 300 ? 'medium' : 'long';
     const recommendedCategory = optimalRange.split(' ')[0];
 
-    if (currentCategory !== recommendedCategory && Math.abs(bestAvg - currentAvgLength) > 15) {
+    if (currentCategory !== recommendedCategory && Math.abs(bestAvg - overallAvgEngagement) > 15) {
       recommendations.push({
         type: 'caption-length',
         title: 'Optimize Caption Length',
-        description: `Posts with ${optimalRange} captions perform ${bestAvg.toFixed(1)}% better on average.`,
+        description: `Posts with ${optimalRange} captions perform ${safePercent(bestAvg, 1)}% better on average.`,
         currentValue: `${Math.round(currentAvgLength)} characters (${currentCategory})`,
         recommendedValue: optimalRange,
-        impact: bestAvg - currentAvgLength > 30 ? 'high' : 'medium',
-        evidence: `Analyzed ${publications.length} posts. ${optimalRange} captions show ${bestAvg.toFixed(1)}% avg engagement vs ${currentAvgLength.toFixed(1)}% current.`,
+        impact: bestAvg - overallAvgEngagement > 30 ? 'high' : 'medium',
+        evidence: `Analyzed ${publications.length} posts. ${optimalRange} captions show ${safePercent(bestAvg, 1)}% avg engagement vs ${safePercent(overallAvgEngagement, 1)}% current.`,
         actionItems: [
           `Target ${optimalRange} for your next posts`,
           'Test different caption styles to find what resonates',
@@ -322,6 +326,10 @@ export class RecommendationEngine {
       : 0;
 
     const currentAvgHashtags = hashtagCounts.reduce((a, b) => a + b, 0) / hashtagCounts.length;
+    const overallAvgEngagement2 = engagementByHashtagCount.length
+      ? engagementByHashtagCount.reduce((s, e) => s + (e.engagement || 0), 0) /
+        engagementByHashtagCount.length
+      : 0;
 
     let optimalHashtagRange = '5-15 hashtags';
     let bestHashtagAvg = avgMany;
@@ -336,14 +344,14 @@ export class RecommendationEngine {
       bestHashtagAvg = avgTooMany;
     }
 
-    if (Math.abs(bestHashtagAvg - currentAvgHashtags) > 10) {
+    if (Math.abs(bestHashtagAvg - overallAvgEngagement2) > 10) {
       recommendations.push({
         type: 'hashtag-count',
         title: 'Optimize Hashtag Count',
-        description: `Posts with ${optimalHashtagRange} perform ${bestHashtagAvg.toFixed(1)}% better on average.`,
+        description: `Posts with ${optimalHashtagRange} perform ${safePercent(bestHashtagAvg, 1)}% better on average.`,
         currentValue: `${Math.round(currentAvgHashtags)} hashtags`,
         recommendedValue: optimalHashtagRange,
-        impact: bestHashtagAvg - currentAvgHashtags > 20 ? 'high' : 'medium',
+        impact: bestHashtagAvg - overallAvgEngagement2 > 20 ? 'high' : 'medium',
         evidence: `Based on ${publications.length} posts analyzed.`,
         actionItems: [
           `Use ${optimalHashtagRange} in your next posts`,
@@ -434,7 +442,7 @@ export class RecommendationEngine {
           currentValue: `Mixed content (${typePerformance.map((t) => t.type).join(', ')})`,
           recommendedValue: `More ${typePerformance[0].type} content`,
           impact: 'medium',
-          evidence: `${typePerformance[0].type} posts get ${typePerformance[0].avgEngagement.toFixed(1)}% engagement vs ${typePerformance[1].avgEngagement.toFixed(1)}% for ${typePerformance[1].type}.`,
+          evidence: `${typePerformance[0].type} posts get ${safePercent(typePerformance[0].avgEngagement, 1)}% engagement vs ${safePercent(typePerformance[1].avgEngagement, 1)}% for ${typePerformance[1].type}.`,
           actionItems: [
             `Create more ${typePerformance[0].type} content`,
             'Analyze what makes these posts successful',
@@ -478,12 +486,12 @@ export class RecommendationEngine {
     usageCount: number
   ): string {
     if (engagementRate > 10)
-      return `Consistently delivers ${engagementRate.toFixed(1)}% engagement rate across ${usageCount} posts`;
+      return `Consistently delivers ${safePercent(engagementRate, 1)}% engagement rate across ${usageCount} posts`;
     if (engagementRate > 7)
-      return `Strong performer with ${engagementRate.toFixed(1)}% avg engagement rate`;
+      return `Strong performer with ${safePercent(engagementRate, 1)}% avg engagement rate`;
     if (usageCount >= 5)
-      return `Reliable choice used in ${usageCount} posts with ${engagementRate.toFixed(1)}% engagement`;
-    return `Shows promise with ${engagementRate.toFixed(1)}% engagement`;
+      return `Reliable choice used in ${usageCount} posts with ${safePercent(engagementRate, 1)}% engagement`;
+    return `Shows promise with ${safePercent(engagementRate, 1)}% engagement`;
   }
 
   /**
