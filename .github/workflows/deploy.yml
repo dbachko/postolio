@@ -64,6 +64,7 @@ jobs:
       infra-changed: ${{ steps.changes.outputs.infra }}
       any-stack-changed: ${{ steps.changes.outputs.any-stack }}
       stack-matrix: ${{ steps.matrix.outputs.stack-matrix }}
+      image-matrix: ${{ steps.images.outputs.image-matrix }}
 
     steps:
       - name: Checkout code
@@ -273,9 +274,54 @@ jobs:
             # Build valid JSON array (e.g., ["foundation","auth"]) without double-escaping
             JSON_ARRAY=$(printf '"%s",' "${STACKS[@]}")
             JSON_ARRAY="[${JSON_ARRAY%,}]"
-            echo "stack-matrix=$JSON_ARRAY" >> $GITHUB_OUTPUT
-            echo "Stacks to deploy: $JSON_ARRAY"
+          echo "stack-matrix=$JSON_ARRAY" >> $GITHUB_OUTPUT
+          echo "Stacks to deploy: $JSON_ARRAY"
           fi
+
+      - name: Generate images build matrix
+        id: images
+        shell: bash
+        run: |
+          # Default: no images selected
+          MATRIX="[]"
+
+          EVENT="${{ github.event_name }}"
+          FORCE_REBUILD="${{ github.event.inputs.forceRebuild || 'false' }}"
+
+          add_image() {
+            local name="$1"; local dockerfile="$2"; local scope="$3"
+            if [[ "$MATRIX" == "[]" ]]; then
+              MATRIX='[{"name":"'"$name"'","dockerfile":"'"$dockerfile"'","scope":"'"$scope"'"}]'
+            else
+              MATRIX=$(echo "$MATRIX" | jq --arg n "$name" --arg f "$dockerfile" --arg s "$scope" '. + [{name:$n,dockerfile:$f,scope:$s}]')
+            fi
+          }
+
+          # If manual run or forceRebuild, build all images (preserves current behavior)
+          if [[ "$EVENT" == "workflow_dispatch" || "$FORCE_REBUILD" == "true" ]]; then
+            add_image api packages/apps/api/Dockerfile api
+            add_image assets packages/apps/assets-api/Dockerfile assets
+            add_image analytics packages/services/analytics-ingestor/Dockerfile analytics
+          else
+            # Use change detection flags
+            if [[ "${{ steps.changes.outputs.api }}" == "true" ]]; then
+              add_image api packages/apps/api/Dockerfile api
+            fi
+            if [[ "${{ steps.changes.outputs.asset-library }}" == "true" ]]; then
+              add_image assets packages/apps/assets-api/Dockerfile assets
+            fi
+            if [[ "${{ steps.changes.outputs.analytics }}" == "true" ]]; then
+              add_image analytics packages/services/analytics-ingestor/Dockerfile analytics
+            fi
+
+            # On push to main/master, build all images (release behavior)
+            if [[ "$EVENT" == "push" && ( "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ) ]]; then
+              MATRIX='[{"name":"api","dockerfile":"packages/apps/api/Dockerfile","scope":"api"},{"name":"assets","dockerfile":"packages/apps/assets-api/Dockerfile","scope":"assets"},{"name":"analytics","dockerfile":"packages/services/analytics-ingestor/Dockerfile","scope":"analytics"}]'
+            fi
+          fi
+
+          echo "image-matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "Images to build: $MATRIX"
 
       - name: Debug change detection outputs
         if: always()
@@ -293,6 +339,7 @@ jobs:
           echo "infra=${{ steps.changes.outputs.infra }}"
           echo "any-stack=${{ steps.changes.outputs.any-stack }}"
           echo "stack-matrix=${{ steps.matrix.outputs.stack-matrix }}"
+          echo "image-matrix=${{ steps.images.outputs.image-matrix }}"
 
   # (PR tests are handled in .github/workflows/pr-checks.yml. Removed duplicate test job from deploy.)
 
@@ -304,15 +351,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30 # Add timeout for image builds
     needs: detect-changes
-    if: |
-      github.event_name != 'pull_request' && (
-        needs.detect-changes.outputs.api-changed == 'true' ||
-        needs.detect-changes.outputs.asset-library-changed == 'true' ||
-        needs.detect-changes.outputs.analytics-changed == 'true' ||
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
-      )
+    if: github.event_name != 'pull_request' && needs.detect-changes.outputs.image-matrix != '[]'
     environment: ${{ needs.detect-changes.outputs.environment }}
+    strategy:
+      matrix:
+        image: ${{ fromJson(needs.detect-changes.outputs.image-matrix) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -331,54 +374,19 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push API Docker image
-        if: needs.detect-changes.outputs.api-changed == 'true' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
+      - name: Build and push ${{ matrix.image.name }} Docker image
         uses: docker/build-push-action@v5
         env:
           REPO_NAME: postolio
         with:
           context: .
-          file: packages/apps/api/Dockerfile
+          file: ${{ matrix.image.dockerfile }}
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:api-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:api-${{ needs.detect-changes.outputs.environment }}-latest
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
-          build-args: |
-            NODE_ENV=${{ needs.detect-changes.outputs.environment }}
-
-      - name: Build and push Assets Docker image
-        if: needs.detect-changes.outputs.asset-library-changed == 'true' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
-        uses: docker/build-push-action@v5
-        env:
-          REPO_NAME: postolio
-        with:
-          context: .
-          file: packages/apps/assets-api/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:assets-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:assets-${{ needs.detect-changes.outputs.environment }}-latest
-          cache-from: type=gha,scope=assets
-          cache-to: type=gha,mode=max,scope=assets
-          build-args: |
-            NODE_ENV=${{ needs.detect-changes.outputs.environment }}
-
-      - name: Build and push Analytics Docker image
-        if: needs.detect-changes.outputs.analytics-changed == 'true' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
-        uses: docker/build-push-action@v5
-        env:
-          REPO_NAME: postolio
-        with:
-          context: .
-          file: packages/services/analytics-ingestor/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:analytics-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:analytics-${{ needs.detect-changes.outputs.environment }}-latest
-          cache-from: type=gha,scope=analytics
-          cache-to: type=gha,mode=max,scope=analytics
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ matrix.image.name }}-${{ needs.detect-changes.outputs.environment }}-${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.REPO_NAME }}:${{ matrix.image.name }}-${{ needs.detect-changes.outputs.environment }}-latest
+          cache-from: type=gha,scope=${{ matrix.image.scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.scope }}
           build-args: |
             NODE_ENV=${{ needs.detect-changes.outputs.environment }}
 
