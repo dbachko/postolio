@@ -165,7 +165,9 @@ export async function ensureDatabaseSchema(): Promise<void> {
         const { cmd, cwd } = resolvePrismaInvocation(schemaPath);
         const migrateCommand = `${cmd} ${args}${schemaArg}`;
 
-        console.log(`🔧 Running: ${migrateCommand}${cwd && cwd !== process.cwd() ? ` (cwd: ${cwd})` : ''}`);
+        console.log(
+          `🔧 Running: ${migrateCommand}${cwd && cwd !== process.cwd() ? ` (cwd: ${cwd})` : ''}`
+        );
         execSync(migrateCommand, {
           stdio: 'inherit',
           cwd: cwd ?? process.cwd(),
