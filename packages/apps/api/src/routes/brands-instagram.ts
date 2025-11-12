@@ -255,27 +255,17 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
       const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
       if (!brand) return reply.code(404).send({ error: 'Brand not found' });
       try {
-        // Dev-friendly seed: if not configured and not prod, return demo threads
         const configured = instagramService.isConfigured(brand);
-        if (!configured && process.env.NODE_ENV !== 'prod') {
-          const demo = seedDmThreads();
-          return reply.send({ supported: true, threads: demo });
+        if (!configured) {
+          return reply.code(501).send({ supported: false, threads: [] });
         }
 
         const res = await instagramService.listDmThreads(brand, { limit, after });
         if (!res.supported) {
-          if (process.env.NODE_ENV !== 'prod') {
-            const demo = seedDmThreads();
-            return reply.send({ supported: true, threads: demo });
-          }
           return reply.code(501).send({ supported: false, threads: [] });
         }
         return reply.send(res);
       } catch (e: any) {
-        if (process.env.NODE_ENV !== 'prod') {
-          const demo = seedDmThreads();
-          return reply.send({ supported: true, threads: demo });
-        }
         return reply
           .code(500)
           .send({ error: 'Failed to fetch threads', message: e?.message || 'Unknown error' });
@@ -296,24 +286,17 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
       const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
       if (!brand) return reply.code(404).send({ error: 'Brand not found' });
       try {
-        // Dev-friendly seed when not configured
         const configured = instagramService.isConfigured(brand);
-        if (!configured && process.env.NODE_ENV !== 'prod') {
-          return reply.send({ supported: true, messages: seedDmMessages(threadId) });
+        if (!configured) {
+          return reply.code(501).send({ supported: false, messages: [] });
         }
 
         const res = await instagramService.getDmThreadMessages(brand, threadId, { limit, before });
         if (!res.supported) {
-          if (process.env.NODE_ENV !== 'prod') {
-            return reply.send({ supported: true, messages: seedDmMessages(threadId) });
-          }
           return reply.code(501).send({ supported: false, messages: [] });
         }
         return reply.send(res);
       } catch (e: any) {
-        if (process.env.NODE_ENV !== 'prod') {
-          return reply.send({ supported: true, messages: seedDmMessages(threadId) });
-        }
         return reply
           .code(500)
           .send({ error: 'Failed to fetch messages', message: e?.message || 'Unknown error' });
@@ -333,10 +316,11 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
       if (!text || !text.trim())
         return reply.code(400).send({ error: 'Message must not be empty' });
       try {
-        // Dev-friendly echo seed when not configured
         const configured = instagramService.isConfigured(brand);
-        if (!configured && process.env.NODE_ENV !== 'prod') {
-          return reply.send({ supported: true, success: true });
+        if (!configured) {
+          return reply
+            .code(501)
+            .send({ supported: false, message: 'Instagram messaging not configured' });
         }
 
         const res = await instagramService.sendDmMessage(brand, threadId, text);
@@ -349,65 +333,12 @@ const brandsInstagramRoutes: FastifyPluginAsync = async (fastify) => {
         }
         return reply.send({ supported: true, success: true });
       } catch (e: any) {
-        if (process.env.NODE_ENV !== 'prod') {
-          return reply.send({ supported: true, success: true });
-        }
         return reply
           .code(500)
           .send({ error: 'Failed to send message', message: e?.message || 'Unknown error' });
       }
     }
   );
-
-  function seedDmThreads() {
-    return [
-      {
-        id: 'demo_thread_1',
-        updated_time: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-        participants: [
-          { id: '1001', name: 'Alex Martinez', username: 'alexmtz', profile_picture_url: null },
-        ],
-      },
-      {
-        id: 'demo_thread_2',
-        updated_time: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-        participants: [
-          { id: '1002', name: 'Jordan Lee', username: 'jordan.lee', profile_picture_url: null },
-        ],
-      },
-      {
-        id: 'demo_thread_3',
-        updated_time: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-        participants: [
-          { id: '1003', name: 'Sam Rivera', username: 'samrivera', profile_picture_url: null },
-        ],
-      },
-    ];
-  }
-
-  function seedDmMessages(threadId: string) {
-    const now = Date.now();
-    return [
-      {
-        id: `${threadId}_m1`,
-        message: 'Hey! Is this still available?',
-        from: { id: '1001', username: 'demo.user' },
-        created_time: new Date(now - 55 * 60 * 1000).toISOString(),
-      },
-      {
-        id: `${threadId}_m2`,
-        message: 'Yes! Happy to help with any details you need.',
-        from: { id: 'brand', username: 'brand' },
-        created_time: new Date(now - 50 * 60 * 1000).toISOString(),
-      },
-      {
-        id: `${threadId}_m3`,
-        message: 'Awesome. Do you ship internationally?',
-        from: { id: '1001', username: 'demo.user' },
-        created_time: new Date(now - 48 * 60 * 1000).toISOString(),
-      },
-    ];
-  }
 
   // POST /api/brands/:brandId/instagram/best-time/refresh
   fastify.post(

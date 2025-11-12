@@ -557,26 +557,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         // Keep only those with new activity
         items = items.filter((r) => r.postId && r.newCount > 0);
 
-        // Dev fallback: if nothing is found, in non-prod return latest published posts with demo counts
-        if (items.length === 0 && process.env.NODE_ENV !== 'prod') {
-          const recent = await prisma.content.findMany({
-            where: { brandId, status: 'published' },
-            orderBy: [{ postedAt: 'desc' }, { updatedAt: 'desc' }],
-            take: 3,
-            select: { id: true, caption: true, primaryAssetCdnUrl: true, postedAt: true },
-          });
-          items = recent.map((p, idx) => ({
-            postId: p.id,
-            caption: p.caption,
-            imageUrl: p.primaryAssetCdnUrl,
-            permalink: null,
-            postedAt: p.postedAt,
-            totalComments: 1,
-            resolvedCount: 0,
-            newCount: 1 + (idx % 2),
-          }));
-        }
-
         // Sort and trim
         items = items
           .sort((a, b) => {
