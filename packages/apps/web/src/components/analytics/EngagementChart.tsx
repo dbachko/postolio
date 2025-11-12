@@ -10,6 +10,7 @@ import {
   Bar,
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
+import { formatPercent } from '@/utils/formatNumber';
 
 interface PostData {
   id: string;
@@ -63,7 +64,7 @@ export function EngagementChart({ data, type = 'bar' }: EngagementChartProps) {
           <p className="text-muted-foreground mb-2 text-sm">{data.caption}</p>
           <p className="text-foreground">Impressions: {payload[0].value.toLocaleString()}</p>
           <p className="text-foreground">Engagement: {payload[1].value.toLocaleString()}</p>
-          <p className="text-foreground">Rate: {data.engagementRate.toFixed(1)}%</p>
+          <p className="text-foreground">Rate: {formatPercent(data.engagementRate)}</p>
         </div>
       );
     }

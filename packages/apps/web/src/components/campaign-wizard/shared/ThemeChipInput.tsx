@@ -106,7 +106,7 @@ export function ThemeChipInput({ themes, onChange }: ThemeChipInputProps) {
     return () => {
       isCancelled = true;
     };
-  }, [brandId, campaignType, goals, reloadNonce]);
+  }, [brandId, campaignType, goals, reloadNonce, themes.length, onChange]);
 
   const chips = useMemo(() => suggested, [suggested]);
 

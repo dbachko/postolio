@@ -19,6 +19,54 @@ export interface CampaignMetrics {
     impressions: number;
     engagement: number;
   }>;
+  // Week 3 enhancements
+  postsTimeline: Array<{
+    contentId: string;
+    publishedAt: string | null;
+    engagement: number;
+    reach: number;
+    impressions: number;
+    engagementRate: number;
+    caption?: string;
+  }>;
+  contentTypeBreakdown: Record<
+    string,
+    {
+      count: number;
+      totalEngagement: number;
+      avgEngagementRate: number;
+    }
+  >;
+  performanceVsGoal?: {
+    goalType: string;
+    goalValue: number;
+    currentValue: number;
+    progress: number;
+    onTrack: boolean;
+  };
+  platformBreakdown: Record<
+    string,
+    {
+      posts: number;
+      impressions: number;
+      engagement: number;
+      reach: number;
+    }
+  >;
+  topPerformingPost?: {
+    contentId: string;
+    publishedAt: string | null;
+    engagement: number;
+    engagementRate: number;
+    caption?: string;
+  };
+  worstPerformingPost?: {
+    contentId: string;
+    publishedAt: string | null;
+    engagement: number;
+    engagementRate: number;
+    caption?: string;
+  };
 }
 
 export interface OptimizationRecommendation {
@@ -56,6 +104,14 @@ export class CampaignAnalyticsService {
       include: {
         content: {
           orderBy: { createdAt: 'asc' },
+          include: {
+            publications: {
+              include: {
+                metricsLatest: true,
+              },
+            },
+            mediaAssets: true,
+          },
         },
       },
     });
@@ -75,7 +131,7 @@ export class CampaignAnalyticsService {
     const postsScheduled = content.filter((c) => c.status === 'scheduled').length;
     const postsDraft = content.filter((c) => c.status === 'draft').length;
 
-    // Extract performance metrics from generationParams
+    // Extract performance metrics from analytics v2 (publications + metricsLatest)
     let totalImpressions = 0;
     let totalEngagement = 0;
     let totalReach = 0;
@@ -87,33 +143,177 @@ export class CampaignAnalyticsService {
     }> = [];
     const hashtagCounts: Record<string, { count: number; totalEngagement: number }> = {};
 
+    // Week 3: Enhanced tracking
+    const postsTimeline: Array<{
+      contentId: string;
+      publishedAt: string | null;
+      engagement: number;
+      reach: number;
+      impressions: number;
+      engagementRate: number;
+      caption?: string;
+    }> = [];
+
+    const contentTypeBreakdown: Record<
+      string,
+      {
+        count: number;
+        totalEngagement: number;
+        avgEngagementRate: number;
+        totalImpressions: number;
+      }
+    > = {};
+
+    const platformBreakdown: Record<
+      string,
+      {
+        posts: number;
+        impressions: number;
+        engagement: number;
+        reach: number;
+      }
+    > = {};
+
+    let topPost: {
+      contentId: string;
+      engagement: number;
+      engagementRate: number;
+      publishedAt: string | null;
+      caption?: string;
+    } | null = null;
+
+    let worstPost: {
+      contentId: string;
+      engagement: number;
+      engagementRate: number;
+      publishedAt: string | null;
+      caption?: string;
+    } | null = null;
+
     content.forEach((post) => {
-      const params = post.generationParams as Record<string, unknown> | null;
-      if (params) {
-        const impressions = typeof params.impressions === 'number' ? params.impressions : 0;
-        const engagement = typeof params.engagement === 'number' ? params.engagement : 0;
-        const reach = typeof params.reach === 'number' ? params.reach : 0;
+      // Get metrics from publications (analytics v2)
+      let impressions = 0;
+      let engagement = 0;
+      let reach = 0;
+      let platform = 'unknown';
 
-        totalImpressions += impressions;
-        totalEngagement += engagement;
-        totalReach += reach;
+      if (post.publications && post.publications.length > 0) {
+        // Use latest publication metrics
+        const pub = post.publications[0];
+        const metrics = pub.metricsLatest;
+        if (metrics) {
+          impressions = Number(metrics.impressions || 0);
+          engagement =
+            Number(metrics.likes || 0) +
+            Number(metrics.comments || 0) +
+            Number(metrics.saves || 0) +
+            Number(metrics.shares || 0);
+          reach = Number(metrics.reach || 0);
+          platform = pub.platform;
+        }
+      } else {
+        // Fallback to generationParams (legacy)
+        const params = post.generationParams as Record<string, unknown> | null;
+        if (params) {
+          impressions = typeof params.impressions === 'number' ? params.impressions : 0;
+          engagement = typeof params.engagement === 'number' ? params.engagement : 0;
+          reach = typeof params.reach === 'number' ? params.reach : 0;
+        }
+      }
 
-        // Track performance by date
-        if (post.postedAt) {
-          const iso = post.postedAt.toISOString();
-          const date: string = (iso && iso.split('T')[0]) || 'unknown-date';
-          performanceByDate.push({ date, impressions, engagement });
+      totalImpressions += impressions;
+      totalEngagement += engagement;
+      totalReach += reach;
+
+      const engagementRate = impressions > 0 ? (engagement / impressions) * 100 : 0;
+
+      // Track performance by date
+      if (post.postedAt) {
+        const iso = post.postedAt.toISOString();
+        const date: string = (iso && iso.split('T')[0]) || 'unknown-date';
+        performanceByDate.push({ date, impressions, engagement });
+      }
+
+      // Track hashtag performance
+      post.hashtags.forEach((tag) => {
+        if (!hashtagCounts[tag]) {
+          hashtagCounts[tag] = { count: 0, totalEngagement: 0 };
+        }
+        hashtagCounts[tag].count++;
+        hashtagCounts[tag].totalEngagement += engagement;
+      });
+
+      // Week 3: Posts timeline
+      if (post.status === 'published') {
+        postsTimeline.push({
+          contentId: post.id,
+          publishedAt: post.postedAt?.toISOString() || null,
+          engagement,
+          reach,
+          impressions,
+          engagementRate,
+          caption: post.caption.substring(0, 100),
+        });
+
+        // Track top/worst performing posts
+        if (!topPost || engagement > topPost.engagement) {
+          topPost = {
+            contentId: post.id,
+            engagement,
+            engagementRate,
+            publishedAt: post.postedAt?.toISOString() || null,
+            caption: post.caption.substring(0, 100),
+          };
         }
 
-        // Track hashtag performance
-        post.hashtags.forEach((tag) => {
-          if (!hashtagCounts[tag]) {
-            hashtagCounts[tag] = { count: 0, totalEngagement: 0 };
-          }
-          hashtagCounts[tag].count++;
-          hashtagCounts[tag].totalEngagement += engagement;
-        });
+        if (!worstPost || engagement < worstPost.engagement) {
+          worstPost = {
+            contentId: post.id,
+            engagement,
+            engagementRate,
+            publishedAt: post.postedAt?.toISOString() || null,
+            caption: post.caption.substring(0, 100),
+          };
+        }
       }
+
+      // Week 3: Content type breakdown
+      // ContentAsset doesn't have assetType, default to 'image' if media exists
+      const contentType = post.mediaAssets?.length > 0 ? 'image' : 'text';
+      if (!contentTypeBreakdown[contentType]) {
+        contentTypeBreakdown[contentType] = {
+          count: 0,
+          totalEngagement: 0,
+          avgEngagementRate: 0,
+          totalImpressions: 0,
+        };
+      }
+      contentTypeBreakdown[contentType].count++;
+      contentTypeBreakdown[contentType].totalEngagement += engagement;
+      contentTypeBreakdown[contentType].totalImpressions += impressions;
+
+      // Week 3: Platform breakdown
+      if (!platformBreakdown[platform]) {
+        platformBreakdown[platform] = {
+          posts: 0,
+          impressions: 0,
+          engagement: 0,
+          reach: 0,
+        };
+      }
+      platformBreakdown[platform].posts++;
+      platformBreakdown[platform].impressions += impressions;
+      platformBreakdown[platform].engagement += engagement;
+      platformBreakdown[platform].reach += reach;
+    });
+
+    // Calculate average engagement rates for content types
+    Object.keys(contentTypeBreakdown).forEach((type) => {
+      const breakdown = contentTypeBreakdown[type];
+      breakdown.avgEngagementRate =
+        breakdown.totalImpressions > 0
+          ? (breakdown.totalEngagement / breakdown.totalImpressions) * 100
+          : 0;
     });
 
     // Calculate derived metrics
@@ -147,6 +347,97 @@ export class CampaignAnalyticsService {
       .sort((a, b) => b.avgEngagement - a.avgEngagement)
       .slice(0, 10);
 
+    // Week 3: Performance vs Goal calculation
+    let performanceVsGoal: CampaignMetrics['performanceVsGoal'] = undefined;
+    if (config && config.goal) {
+      const goal = config.goal as Record<string, unknown>;
+      const goalType = (goal.type as string) || 'engagement';
+      const goalValue = (goal.value as number) || 0;
+
+      let currentValue = 0;
+      switch (goalType) {
+        case 'engagement':
+          currentValue = totalEngagement;
+          break;
+        case 'impressions':
+          currentValue = totalImpressions;
+          break;
+        case 'reach':
+          currentValue = totalReach;
+          break;
+        case 'posts':
+          currentValue = postsPosted;
+          break;
+        default:
+          currentValue = totalEngagement;
+      }
+
+      performanceVsGoal = {
+        goalType,
+        goalValue,
+        currentValue,
+        progress: goalValue > 0 ? (currentValue / goalValue) * 100 : 0,
+        onTrack: currentValue >= goalValue * 0.8, // 80% threshold
+      };
+    }
+
+    // Build top and worst performing post objects
+    let topPerformingPost:
+      | {
+          contentId: string;
+          publishedAt: string | null;
+          engagement: number;
+          engagementRate: number;
+          caption?: string;
+        }
+      | undefined;
+
+    let worstPerformingPost:
+      | {
+          contentId: string;
+          publishedAt: string | null;
+          engagement: number;
+          engagementRate: number;
+          caption?: string;
+        }
+      | undefined;
+
+    if (topPost !== null) {
+      // TypeScript can't narrow types assigned in forEach, so we use type assertion
+      const top = topPost as {
+        contentId: string;
+        engagement: number;
+        engagementRate: number;
+        publishedAt: string | null;
+        caption?: string;
+      };
+      topPerformingPost = {
+        contentId: top.contentId,
+        publishedAt: top.publishedAt,
+        engagement: top.engagement,
+        engagementRate: top.engagementRate,
+        caption: top.caption,
+      };
+    }
+
+    if (worstPost !== null) {
+      // TypeScript can't narrow types assigned in forEach, so we use type assertion
+      const worst = worstPost as {
+        contentId: string;
+        engagement: number;
+        engagementRate: number;
+        publishedAt: string | null;
+        caption?: string;
+      };
+      worstPerformingPost = {
+        contentId: worst.contentId,
+        publishedAt: worst.publishedAt,
+        engagement: worst.engagement,
+        engagementRate: worst.engagementRate,
+        caption: worst.caption,
+      };
+    }
+
     return {
       totalPosts,
       totalImpressions,
@@ -160,6 +451,17 @@ export class CampaignAnalyticsService {
       postingFrequency,
       topHashtags,
       performanceByDate,
+      // Week 3 enhancements
+      postsTimeline: postsTimeline.sort((a, b) => {
+        if (!a.publishedAt) return 1;
+        if (!b.publishedAt) return -1;
+        return new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime();
+      }),
+      contentTypeBreakdown,
+      performanceVsGoal,
+      platformBreakdown,
+      topPerformingPost,
+      worstPerformingPost,
     };
   }
 
@@ -289,6 +591,108 @@ export class CampaignAnalyticsService {
       },
       methodology:
         'Based on industry standard CPM and engagement values. Actual ROI may vary by industry and audience quality.',
+    };
+  }
+
+  /**
+   * Compare multiple campaigns (up to 3)
+   */
+  async compareCampaigns(
+    campaignIds: string[],
+    userId: string
+  ): Promise<{
+    campaigns: Array<{
+      id: string;
+      name: string;
+      metrics: CampaignMetrics;
+      relativePerformance: {
+        impressions: number; // % difference from average
+        engagement: number;
+        engagementRate: number;
+        postsCount: number;
+      };
+    }>;
+    summary: {
+      avgImpressions: number;
+      avgEngagement: number;
+      avgEngagementRate: number;
+      avgPostsCount: number;
+    };
+  }> {
+    if (campaignIds.length === 0 || campaignIds.length > 3) {
+      throw new Error('Please provide 1-3 campaign IDs for comparison');
+    }
+
+    // Fetch all campaigns with metrics
+    const campaignsWithMetrics = await Promise.all(
+      campaignIds.map(async (id) => {
+        const campaign = await prisma.campaign.findFirst({
+          where: {
+            id,
+            brand: { userId },
+          },
+          select: { id: true, name: true },
+        });
+
+        if (!campaign) {
+          throw new Error(`Campaign ${id} not found or access denied`);
+        }
+
+        const metrics = await this.getCampaignMetrics(id, userId);
+        return {
+          id: campaign.id,
+          name: campaign.name,
+          metrics,
+        };
+      })
+    );
+
+    // Calculate averages
+    const summary = {
+      avgImpressions:
+        campaignsWithMetrics.reduce((sum, c) => sum + c.metrics.totalImpressions, 0) /
+        campaignsWithMetrics.length,
+      avgEngagement:
+        campaignsWithMetrics.reduce((sum, c) => sum + c.metrics.totalEngagement, 0) /
+        campaignsWithMetrics.length,
+      avgEngagementRate:
+        campaignsWithMetrics.reduce((sum, c) => sum + c.metrics.averageEngagementRate, 0) /
+        campaignsWithMetrics.length,
+      avgPostsCount:
+        campaignsWithMetrics.reduce((sum, c) => sum + c.metrics.postsPosted, 0) /
+        campaignsWithMetrics.length,
+    };
+
+    // Calculate relative performance (% difference from average)
+    const campaigns = campaignsWithMetrics.map((c) => ({
+      id: c.id,
+      name: c.name,
+      metrics: c.metrics,
+      relativePerformance: {
+        impressions:
+          summary.avgImpressions > 0
+            ? ((c.metrics.totalImpressions - summary.avgImpressions) / summary.avgImpressions) * 100
+            : 0,
+        engagement:
+          summary.avgEngagement > 0
+            ? ((c.metrics.totalEngagement - summary.avgEngagement) / summary.avgEngagement) * 100
+            : 0,
+        engagementRate:
+          summary.avgEngagementRate > 0
+            ? ((c.metrics.averageEngagementRate - summary.avgEngagementRate) /
+                summary.avgEngagementRate) *
+              100
+            : 0,
+        postsCount:
+          summary.avgPostsCount > 0
+            ? ((c.metrics.postsPosted - summary.avgPostsCount) / summary.avgPostsCount) * 100
+            : 0,
+      },
+    }));
+
+    return {
+      campaigns,
+      summary,
     };
   }
 }

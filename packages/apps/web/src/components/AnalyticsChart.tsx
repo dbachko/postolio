@@ -1,3 +1,5 @@
+import { formatPercent } from '@/utils/formatNumber';
+
 interface EngagementTrend {
   date: string;
   engagementRate: number;
@@ -53,7 +55,7 @@ export default function AnalyticsChart({ title, data, type }: AnalyticsChartProp
                   }}
                 />
               </div>
-              <span className="w-12 text-sm font-medium">{item.engagementRate.toFixed(1)}%</span>
+              <span className="w-12 text-sm font-medium">{formatPercent(item.engagementRate)}</span>
             </div>
           ))}
         </div>
@@ -75,7 +77,7 @@ export default function AnalyticsChart({ title, data, type }: AnalyticsChartProp
             </div>
             <div className="text-right">
               <div className="text-foreground font-semibold">
-                {slot.engagementScore.toFixed(1)}%
+                {formatPercent(slot.engagementScore)}
               </div>
               <div className="text-muted-foreground text-xs">{slot.sampleSize} posts</div>
             </div>

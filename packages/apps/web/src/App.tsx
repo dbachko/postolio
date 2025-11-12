@@ -12,7 +12,7 @@ import { Register } from './pages/Register';
 import { Brands } from './pages/Brands';
 import { Assets } from './pages/Assets';
 import AssetDetail from './pages/AssetDetail';
-// import Analytics from './pages/Analytics';
+import Analytics from './pages/Analytics';
 import Campaigns from './pages/Campaigns';
 import { Content } from './pages/Content';
 import { Settings } from './pages/Settings';
@@ -192,16 +192,52 @@ const router = createBrowserRouter([
     ),
     errorElement: <RouteError />,
   },
-  // {
-  //   path: '/analytics',
-  //   element: (
-  //     <ProtectedRoute>
-  //       <Layout>
-  //         <Analytics />
-  //       </Layout>
-  //     </ProtectedRoute>
-  //   ),
-  // },
+  {
+    path: '/analytics',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ErrorBoundary
+            fallback={
+              <div className="border-border bg-card flex min-h-[400px] flex-col items-center justify-center gap-4 rounded-lg border p-8 text-center">
+                <div className="text-destructive">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-12 w-12"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold">Analytics Error</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Something went wrong loading the analytics page. Please refresh to try again.
+                  </p>
+                </div>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 text-sm font-medium"
+                >
+                  Refresh Page
+                </button>
+              </div>
+            }
+          >
+            <Analytics />
+          </ErrorBoundary>
+        </Layout>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouteError />,
+  },
   {
     path: '/drafts',
     element: (

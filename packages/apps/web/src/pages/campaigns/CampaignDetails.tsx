@@ -11,6 +11,10 @@ import type { Campaign } from '@/lib/api';
 import { useEffect, useState } from 'react';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { useNavigateWithFilters } from '@/hooks/useURLFilterSync';
+// Week 3: Enhanced campaign analytics components
+import { CampaignTimeline } from '@/components/analytics/CampaignTimeline';
+import { useQuery } from '@tanstack/react-query';
+import { campaign as campaignApi } from '@/lib/api';
 
 interface Props {
   campaign?: Campaign;
@@ -38,6 +42,13 @@ export function CampaignDetails({
   const goToContentWithFilters = useNavigateWithFilters();
   // Must be declared before any early returns to keep hooks order stable
   const [editOpen, setEditOpen] = useState(false);
+
+  // Week 3: Fetch enhanced campaign metrics
+  const metricsQuery = useQuery({
+    queryKey: ['campaign-metrics-enhanced', campaign?.id],
+    queryFn: () => campaignApi.getCampaignMetrics(campaign!.id),
+    enabled: !!campaign?.id,
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -181,6 +192,21 @@ export function CampaignDetails({
           />
         </CardContent>
       </Card>
+
+      {/* Week 3: Campaign Timeline */}
+      {metricsQuery.data?.data?.postsTimeline &&
+        metricsQuery.data.data.postsTimeline.length > 0 && (
+          <CampaignTimeline
+            posts={metricsQuery.data.data.postsTimeline}
+            startDate={campaign.createdAt}
+            endDate={undefined}
+            loading={metricsQuery.isLoading}
+            onPostClick={(contentId) => {
+              window.location.href = `/content/${contentId}`;
+            }}
+          />
+        )}
+
       {/* Preferred Posting Times for this brand */}
       <PreferredPostingTime brandId={campaign.brandId} />
       <Card>

@@ -131,6 +131,22 @@ async function main() {
     },
   });
 
+  // Create SocialAccount for Instagram
+  const instagramSocialAccount = await prisma.socialAccount.create({
+    data: {
+      brandId: brand.id,
+      platform: 'instagram',
+      externalAccountId: instagramAccountId,
+      externalPageId: instagramPageId,
+      username: instagramUsername,
+      displayName: brandName,
+      metadata: {
+        account_type: 'BUSINESS',
+        followers_count: (brand.instagramProfileData as any)?.followers_count,
+      },
+    },
+  });
+
   // Helper for date formatting to yyyy-MM-dd
   const pad = (n: number) => String(n).padStart(2, '0');
   const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -807,6 +823,186 @@ async function main() {
     ],
     skipDuplicates: true,
   });
+
+  // Generate additional historical published content for analytics (60-90 days)
+  console.log('==> Generating historical published content for analytics');
+  const historicalContent: typeof contentPayload = [];
+  const historicalDays = 90;
+  const postsPerWeek = 3; // Realistic posting frequency
+  const totalHistoricalPosts = Math.floor((historicalDays / 7) * postsPerWeek);
+
+  const themes = [
+    'lifestyle',
+    'product',
+    'tips',
+    'behind_the_scenes',
+    'testimonial',
+    'announcement',
+  ];
+  const captionTemplates = [
+    'Check out our latest update! 🚀',
+    'Here are some tips for getting the most out of your day 💡',
+    'Behind the scenes look at our process 👀',
+    'Customer success story: Amazing results! ⭐',
+    'New feature alert! This changes everything 🎉',
+    'Quick tutorial: How to maximize your productivity 📚',
+    'Weekend inspiration for content creators 🌟',
+    'Product spotlight: Features you need to know about 💎',
+    'Community highlight: Thank you for your support! 🙏',
+    'Industry insights and trends 📊',
+  ];
+
+  for (let i = 0; i < totalHistoricalPosts; i++) {
+    const daysAgo = Math.floor(Math.random() * historicalDays) + 1;
+    const publishedAt = new Date(now.getTime() - days(daysAgo));
+    const scheduledAt = new Date(publishedAt.getTime() - hours(rng(12, 48)));
+
+    const assetSeed = Math.random().toString(36).slice(2, 7);
+    const theme = pick(themes);
+    const caption = pick(captionTemplates);
+
+    historicalContent.push({
+      brandId: brand.id,
+      caption: `${caption} #${theme}`,
+      hashtags: ['#postolio', '#socialmedia', `#${theme}`, '#content', '#marketing'],
+      status: 'published',
+      scheduledAt,
+      postedAt: publishedAt,
+      primaryAssetId: `hist-${brand.id}-${assetSeed}`,
+      primaryAssetCdnUrl: `${POST_SEED_IMAGE_BASE}/1080/1080?random=hist-${i}`,
+      primaryAssetWidth: 1080,
+      primaryAssetHeight: 1080,
+      campaignId: null,
+    });
+  }
+
+  await prisma.content.createMany({ data: historicalContent });
+  console.log(
+    `✅ Generated ${totalHistoricalPosts} historical posts spanning ${historicalDays} days`
+  );
+
+  // Generate analytics data for published content
+  console.log('==> Generating analytics data for published content');
+  const publishedContent = await prisma.content.findMany({
+    where: {
+      brandId: brand.id,
+      status: 'published',
+      postedAt: { not: null },
+    },
+  });
+
+  console.log(`Found ${publishedContent.length} published posts to generate analytics for`);
+
+  // Helper to generate realistic engagement metrics with variety
+  const generateMetrics = (baseFollowers: number, daysAgo: number, postIndex: number) => {
+    // Engagement tends to be higher on more recent posts
+    const recencyBoost = Math.max(0.5, 1 - daysAgo / 90);
+
+    // Create some exceptional posts (viral) and some underperformers
+    let qualityFactor = 0.5 + Math.random() * 1.5;
+
+    // 5% chance of viral post (10-20x normal engagement)
+    if (Math.random() < 0.05) {
+      qualityFactor *= 10 + Math.random() * 10;
+    }
+    // 10% chance of underperforming post (0.2-0.5x normal engagement)
+    else if (Math.random() < 0.1) {
+      qualityFactor *= 0.2 + Math.random() * 0.3;
+    }
+
+    // Time-of-day factor (posts at certain times perform better)
+    const hour = postIndex % 24;
+    const timeBoost =
+      hour >= 8 && hour <= 10
+        ? 1.3 // Morning peak
+        : hour >= 18 && hour <= 20
+          ? 1.4 // Evening peak
+          : hour >= 12 && hour <= 14
+            ? 1.2 // Lunch time
+            : 0.8; // Off-peak
+
+    // Calculate engagement based on followers
+    const impressions = Math.floor(
+      baseFollowers * (1.5 + Math.random() * 2) * qualityFactor * timeBoost
+    );
+    const reach = Math.floor(impressions * (0.7 + Math.random() * 0.25));
+    const likes = Math.floor(reach * (0.03 + Math.random() * 0.07) * recencyBoost * qualityFactor);
+    const comments = Math.floor(likes * (0.05 + Math.random() * 0.15));
+    const saves = Math.floor(likes * (0.1 + Math.random() * 0.3));
+    const shares = Math.floor(likes * (0.02 + Math.random() * 0.08));
+    const engagement = likes + comments + saves + shares;
+    const engagementRate = reach > 0 ? (engagement / reach) * 100 : 0;
+
+    return {
+      impressions,
+      reach,
+      likes,
+      comments,
+      saves,
+      shares,
+      engagement,
+      engagementRate: parseFloat(engagementRate.toFixed(2)),
+      followers: baseFollowers,
+    };
+  };
+
+  // Generate publications and metrics for each published content
+  let baseFollowers = (brand.instagramProfileData as any)?.followers_count || 5000;
+  const followerGrowthPerDay = rng(10, 50); // Random daily growth
+
+  for (let idx = 0; idx < publishedContent.length; idx++) {
+    const content = publishedContent[idx];
+    if (!content.postedAt) continue;
+
+    const publishedAt = content.postedAt;
+    const daysAgo = Math.floor((now.getTime() - publishedAt.getTime()) / (24 * 60 * 60 * 1000));
+
+    // Followers were lower in the past
+    const followersAtTime = Math.max(1000, baseFollowers - daysAgo * followerGrowthPerDay);
+
+    // Generate metrics for this post (pass index for time-of-day variation)
+    const metrics = generateMetrics(followersAtTime, daysAgo, idx);
+
+    // Create publication record
+    const externalPostId = `IG_${Math.random().toString(36).slice(2, 15)}`;
+    const publication = await prisma.contentPublication.create({
+      data: {
+        content: {
+          connect: { id: content.id },
+        },
+        socialAccount: {
+          connect: { id: social.id },
+        },
+        platform: 'instagram',
+        externalPostId,
+        externalAccountId: social.externalAccountId,
+        externalPageId: social.externalPageId || undefined,
+        publishedAt,
+        permalink: `https://instagram.com/p/${Math.random().toString(36).slice(2, 11)}`,
+        status: 'published',
+      },
+    });
+
+    // Create latest metrics snapshot
+    await prisma.publicationMetricsLatest.create({
+      data: {
+        publicationId: publication.id,
+        platform: 'instagram',
+        impressions: metrics.impressions,
+        reach: metrics.reach,
+        likes: metrics.likes,
+        comments: metrics.comments,
+        saves: metrics.saves,
+        shares: metrics.shares,
+        videoViews: 0,
+        engagement: metrics.engagement,
+        engagementRate: metrics.engagementRate,
+        lastUpdated: publishedAt,
+      },
+    });
+  }
+
+  console.log(`✅ Generated analytics data for ${publishedContent.length} posts`);
 
   console.log('\n✅ Seed complete');
   console.log('--- Credentials ---');

@@ -29,6 +29,9 @@ import analyticsRoutes from './routes/analytics.js';
 import autopilotRoutes from './routes/autopilot.js';
 import campaignRoutes from './routes/campaign.js';
 import campaignAnalyticsRoutes from './routes/campaign-analytics.js';
+import aiInsightsRoutes from './routes/ai-insights.js';
+import forecastingRoutes from './routes/forecasting.js';
+import recommendationsRoutes from './routes/recommendations.js';
 import publicationsRoutes from './routes/publications.js';
 import analyticsRoutesV2 from './routes/analytics-v2.js';
 import brandStyleRoutes from './routes/brand-style.js';
@@ -217,6 +220,9 @@ export function buildFastify(): FastifyInstance {
   // Mount campaigns at plural REST path
   app.register(campaignRoutes, { prefix: '/api/campaigns' });
   app.register(campaignAnalyticsRoutes, { prefix: '/api' }); // API root level for campaign analytics
+  app.register(aiInsightsRoutes, { prefix: '/api/ai-insights' }); // AI-powered insights
+  app.register(forecastingRoutes, { prefix: '/api/forecasting' }); // Predictive analytics
+  app.register(recommendationsRoutes, { prefix: '/api/recommendations' }); // Smart recommendations
   app.register(rollingContentRoutes, { prefix: '/api/rolling-content' });
   app.register(legalRoutes, { prefix: '/api/legal' });
   app.register(dataDeletionRoutes, { prefix: '/api/legal' });

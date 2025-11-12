@@ -26,7 +26,7 @@ import {
   Check,
   Building2,
   Search,
-  // BarChart3,
+  BarChart3,
   Megaphone,
   Grid3X3,
   FileText,
@@ -105,13 +105,13 @@ const mainNavItems: NavigationItem[] = [
     description: 'Work-in-progress posts',
     matchType: 'exact',
   },
-  // {
-  //   label: 'Analytics',
-  //   path: '/analytics',
-  //   icon: BarChart3,
-  //   description: 'Performance metrics',
-  //   matchType: 'exact',
-  // },
+  {
+    label: 'Analytics',
+    path: '/analytics',
+    icon: BarChart3,
+    description: 'Performance metrics',
+    matchType: 'exact',
+  },
 ];
 
 // Secondary navigation items (in dropdown menu)

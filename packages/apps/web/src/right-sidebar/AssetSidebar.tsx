@@ -155,7 +155,7 @@ export function AssetSidebar({
     });
     setHasChanges(false);
     setPreviewUrl(null);
-  }, [asset?.id]);
+  }, [asset]);
 
   useEffect(
     () => () => {
@@ -275,7 +275,7 @@ export function AssetSidebar({
       updatedAt: formatDateTime(asset.updatedAt),
       extension: getFileExtension(asset.fileName),
     };
-  }, [asset?.id, asset?.fileSize, asset?.createdAt, asset?.updatedAt, asset?.fileName]);
+  }, [asset]);
 
   const handleClose = () => {
     if (layout === 'sidebar') {

@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { formatNumber, formatGrowth } from '@/utils/formatNumber';
 
 interface MetricsCardProps {
   title: string;
@@ -12,11 +13,7 @@ interface MetricsCardProps {
   formatValue?: (value: number) => string;
 }
 
-const defaultFormatValue = (value: number): string => {
-  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
-  return value.toLocaleString();
-};
+const defaultFormatValue = formatNumber;
 
 export function MetricsCard({
   title,
@@ -50,8 +47,7 @@ export function MetricsCard({
                 variant={isPositiveTrend ? 'default' : 'destructive'}
                 className={cn('text-xs')}
               >
-                {isPositiveTrend ? '+' : ''}
-                {trend.toFixed(1)}%
+                {formatGrowth(trend)}
               </Badge>
             </div>
           )}
