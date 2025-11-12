@@ -763,8 +763,8 @@ async function main() {
           authorUsername: 'green.consumer',
           text: 'How much is the set and do you ship to EU?',
           likeCount: 0,
-          status: 'snoozed',
-          snoozedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          // Snooze removed; seed as archived to simulate triaged activity
+          status: 'archived',
           createdAt: new Date(Date.now() - 30 * 60 * 1000),
         },
       ],

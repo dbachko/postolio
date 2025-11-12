@@ -144,16 +144,7 @@ export class ContentClient {
     });
   }
 
-  setCommentHidden(postId: string, commentId: string, hide: boolean) {
-    return this.request(`/api/posts/${postId}/comments/${commentId}/hide`, {
-      method: 'POST',
-      body: JSON.stringify({ hide }),
-    });
-  }
-
-  deleteComment(postId: string, commentId: string) {
-    return this.request(`/api/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });
-  }
+  // hide/delete removed
 
   likeComment(postId: string, commentId: string) {
     return this.request(`/api/posts/${postId}/comments/${commentId}/like`, { method: 'POST' });
@@ -162,15 +153,18 @@ export class ContentClient {
   setCommentWorkflow(
     postId: string,
     commentId: string,
-    data: {
-      status?: 'open' | 'resolved' | 'snoozed';
-      snoozedUntil?: string | null;
-      assigneeUserId?: string | null;
-    }
+    data: { status?: 'open' | 'resolved' | 'archived' }
   ) {
     return this.request(`/api/posts/${postId}/comments/${commentId}/workflow`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  markAllCommentsRead(postId: string, commentIds?: string[]) {
+    return this.request(`/api/posts/${postId}/comments/mark-all-read`, {
+      method: 'POST',
+      body: JSON.stringify({ commentIds }),
     });
   }
 

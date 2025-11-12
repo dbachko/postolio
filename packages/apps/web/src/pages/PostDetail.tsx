@@ -2,6 +2,7 @@ import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, memo, useEffect, useRef } from 'react';
 import { content as contentApi, analyticsV2 } from '../lib/api';
+import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -847,7 +848,13 @@ export default function PostDetail() {
                     <div className="max-h-[400px] space-y-4 overflow-y-auto">
                       {commentsData.comments.map(
                         (comment: { username: string; text: string }, index: number) => (
-                          <div key={index} className="bg-muted flex gap-3 rounded-lg p-3">
+                          <div
+                            key={index}
+                            className="bg-muted flex items-start gap-3 rounded-lg p-3"
+                          >
+                            <div className="mt-0.5">
+                              <Avatar name={comment.username} size="sm" />
+                            </div>
                             <div className="flex-1">
                               <p className="text-sm font-medium">{comment.username}</p>
                               <p className="text-foreground mt-1 text-sm">{comment.text}</p>

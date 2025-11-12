@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { brand as brandApi } from '../lib/api';
 import type { Brand } from '../lib/api';
 import { InstagramSyncButton } from './InstagramSyncButton';
+import { Avatar } from '@/components/ui/avatar';
 
 interface InstagramProfile {
   id: string;
@@ -170,17 +171,11 @@ export function InstagramConnect({ brand }: InstagramConnectProps) {
           <div className="bg-muted rounded-lg border p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-3">
-                <img
-                  src={
-                    profile.profile_picture_url ||
-                    'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150'
-                  }
+                <Avatar
+                  src={profile.profile_picture_url || null}
+                  name={profile.name || profile.username}
                   alt={`@${profile.username}`}
-                  className="bg-muted h-12 w-12 rounded-full"
-                  onError={(e) => {
-                    e.currentTarget.src =
-                      'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y&s=150';
-                  }}
+                  size="lg"
                 />
                 <div>
                   <h3 className="font-medium">{profile.name}</h3>

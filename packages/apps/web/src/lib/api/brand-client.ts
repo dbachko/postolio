@@ -8,6 +8,22 @@ export class BrandClient {
     return this.request(`/api/brands/${brandId}/timezone`);
   }
 
+  // Inbox: Comments overview
+  getCommentsInbox(brandId: string) {
+    return this.request(`/api/brands/${encodeURIComponent(brandId)}/inbox/comments`) as Promise<{
+      items: Array<{
+        postId: string;
+        caption: string | null;
+        imageUrl: string | null;
+        permalink: string | null;
+        postedAt: string | null;
+        totalComments: number;
+        resolvedCount: number;
+        newCount: number;
+      }>;
+    }>;
+  }
+
   updateBrandTimezone(brandId: string, timezone: string | null) {
     return this.request(`/api/brands/${brandId}/timezone`, {
       method: 'PATCH',

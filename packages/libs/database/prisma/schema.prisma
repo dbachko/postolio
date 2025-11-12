@@ -59,7 +59,6 @@ model User {
   notificationPreferences NotificationPreference[]
   notificationState UserNotificationState?
   // Inbox & Replies
-  assignedComments PublicationComment[]
   savedReplies     SavedReply[]
 
   @@index([email])
@@ -336,22 +335,20 @@ model PublicationComment {
 
   // Inbox workflow (persisted status/assignments)
   status              CommentWorkflowStatus @default(open)
-  snoozedUntil        DateTime?
-  assigneeUserId      String?
-  assignee            User?    @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  // snoozedUntil removed
+  // assignee removed
 
   publication         ContentPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
 
   @@unique([publicationId, externalCommentId])
   @@index([publicationId])
-  @@index([assigneeUserId])
   @@map("publication_comments")
 }
 
 enum CommentWorkflowStatus {
   open
   resolved
-  snoozed
+  archived
 }
 
 model SavedReply {

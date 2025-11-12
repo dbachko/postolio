@@ -32,7 +32,8 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import NotificationsPage from './pages/Notifications';
 import { RouteError } from './components/RouteError';
 const PostDetail = lazy(() => import('./pages/PostDetail'));
-const Inbox = lazy(() => import('./pages/Inbox'));
+const InboxComments = lazy(() => import('./pages/InboxComments'));
+const InboxDMs = lazy(() => import('./pages/InboxDMs'));
 const CreatePost = lazy(() =>
   import('./pages/CreatePost').then((module) => ({
     default: module.CreatePost,
@@ -78,12 +79,32 @@ const router = createBrowserRouter([
   { path: '/__tz', element: <TzRenderTest />, errorElement: <RouteError /> },
   {
     path: '/inbox',
+    element: <Navigate to="/inbox/comments" replace />,
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/inbox/comments',
     element: (
       <ProtectedRoute>
         <Layout>
           <ErrorBoundary>
             <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
-              <Inbox />
+              <InboxComments />
+            </Suspense>
+          </ErrorBoundary>
+        </Layout>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouteError />,
+  },
+  {
+    path: '/inbox/dms',
+    element: (
+      <ProtectedRoute>
+        <Layout>
+          <ErrorBoundary>
+            <Suspense fallback={<LazyLoadingFallback minHeight="400px" />}>
+              <InboxDMs />
             </Suspense>
           </ErrorBoundary>
         </Layout>

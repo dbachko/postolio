@@ -37,6 +37,7 @@ import {
   Plus,
   Images,
   MessageSquare,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardHelpDialog } from './campaign-wizard/shared/WizardHelpDialog';
@@ -46,6 +47,14 @@ import '@/right-sidebar/register';
 import { ScheduleLimitBanner } from './ScheduleLimitBanner';
 import { Bell } from '@/components/notifications/Bell';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
+import {
+  NavigationMenu,
+  NavigationMenuList,
+  NavigationMenuItem,
+  NavigationMenuTrigger,
+  NavigationMenuContent,
+  NavigationMenuLink,
+} from '@/components/ui/navigation-menu';
 
 interface LayoutProps {
   children: ReactNode;
@@ -66,7 +75,7 @@ const mainNavItems: NavigationItem[] = [
     path: '/inbox',
     icon: MessageSquare,
     description: 'Comments & DMs',
-    matchType: 'exact',
+    matchType: 'startsWith',
   },
   {
     label: 'Campaigns',
@@ -133,6 +142,7 @@ export function AppLayout({ children }: LayoutProps) {
   const [helpDrawerOpen, setHelpDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { openSidebar } = useRightSidebarRouter();
+  const [navValue, setNavValue] = useState<string | undefined>(undefined);
 
   const handleLogout = () => {
     logout();
@@ -233,22 +243,79 @@ export function AppLayout({ children }: LayoutProps) {
 
               {/* Main Navigation Items - Desktop Only */}
               <div className="hidden h-full items-center md:flex">
-                {mainNavItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={cn(
-                      'flex h-full items-center border-b-2 px-6 transition-colors',
-                      isActiveRoute(item)
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-accent/50 border-transparent'
-                    )}
-                    aria-current={isActiveRoute(item) ? 'page' : undefined}
-                  >
-                    <item.icon className="mr-2 h-5 w-5" aria-hidden="true" />
-                    <span className="text-sm font-medium">{item.label}</span>
-                  </Link>
-                ))}
+                <NavigationMenu value={navValue} onValueChange={setNavValue}>
+                  <NavigationMenuList>
+                    {/* Inbox as hover menu */}
+                    <NavigationMenuItem value="inbox">
+                      <NavigationMenuTrigger
+                        onMouseEnter={() => setNavValue('inbox')}
+                        className={cn(
+                          'inline-flex h-10 items-center rounded-none border-b-2 bg-transparent px-4 text-sm font-medium transition-colors',
+                          isRouteActive(
+                            {
+                              label: 'Inbox',
+                              path: '/inbox',
+                              icon: MessageSquare,
+                              matchType: 'startsWith',
+                            },
+                            location.pathname
+                          )
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground border-transparent'
+                        )}
+                      >
+                        <MessageSquare className="mr-2 h-5 w-5" />
+                        <span className="text-sm font-medium">Inbox</span>
+                      </NavigationMenuTrigger>
+                      <NavigationMenuContent onMouseLeave={() => setNavValue(undefined)}>
+                        <div className="grid gap-1 p-2 md:w-[240px]">
+                          <NavigationMenuLink asChild>
+                            <Link
+                              to="/inbox/comments"
+                              className="hover:bg-accent rounded px-2 py-2 text-sm"
+                            >
+                              <span className="flex items-center">
+                                <MessageSquare className="mr-2 h-4 w-4" /> Comments
+                              </span>
+                            </Link>
+                          </NavigationMenuLink>
+                          <NavigationMenuLink asChild>
+                            <Link
+                              to="/inbox/dms"
+                              className="hover:bg-accent rounded px-2 py-2 text-sm"
+                            >
+                              <span className="flex items-center">
+                                <Send className="mr-2 h-4 w-4" /> Direct Messages
+                              </span>
+                            </Link>
+                          </NavigationMenuLink>
+                        </div>
+                      </NavigationMenuContent>
+                    </NavigationMenuItem>
+
+                    {/* Other top-level links */}
+                    {mainNavItems
+                      .filter((i) => i.label !== 'Inbox')
+                      .map((item) => (
+                        <NavigationMenuItem key={item.path}>
+                          <NavigationMenuLink asChild>
+                            <Link
+                              to={item.path}
+                              className={cn(
+                                'inline-flex h-10 items-center border-b-2 px-4 text-sm font-medium transition-colors',
+                                isActiveRoute(item)
+                                  ? 'border-primary bg-primary/10 text-primary'
+                                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground border-transparent'
+                              )}
+                            >
+                              <item.icon className="mr-2 h-5 w-5" aria-hidden="true" />
+                              {item.label}
+                            </Link>
+                          </NavigationMenuLink>
+                        </NavigationMenuItem>
+                      ))}
+                  </NavigationMenuList>
+                </NavigationMenu>
               </div>
             </div>
 

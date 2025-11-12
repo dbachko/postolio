@@ -38,7 +38,9 @@ export default defineConfig({
     },
   },
   server: {
-    host: process.env.E2E === '1' ? 'localhost' : 'ai.localhost',
+    // Bind broadly so startup never depends on DNS resolution of ai.localhost.
+    // The browser can still access via https://ai.localhost:5173 when DNS/hosts is configured.
+    host: true,
     port: 5173,
     https: (() => {
       // Skip HTTPS in CI environment
@@ -72,13 +74,14 @@ export default defineConfig({
             // Proxy API routes to backend - keeps /api prefix as backend expects it
             // Frontend: /api/auth/login → Backend: /api/auth/login
             '/api': {
-              target: 'https://ai.localhost:3000',
+              // Internal hop can use localhost to avoid DNS dependency
+              target: `https://${process.env.API_HOST || 'localhost'}:3000`,
               changeOrigin: true,
               secure: false, // Allow self-signed certificates
               configure: (proxy) => {
                 proxy.on('proxyReq', (proxyReq, req) => {
                   console.log(
-                    `🔄 Proxying: ${req.method} ${req.url} → https://ai.localhost:3000${proxyReq.path}`
+                    `🔄 Proxying: ${req.method} ${req.url} → https://${process.env.API_HOST || 'localhost'}:3000${proxyReq.path}`
                   );
                 });
               },
@@ -100,20 +103,20 @@ export default defineConfig({
             },
             // Proxy legal routes to backend for privacy policy and terms
             '/legal': {
-              target: 'https://ai.localhost:3000',
+              target: `https://${process.env.API_HOST || 'localhost'}:3000`,
               changeOrigin: true,
               secure: false, // Allow self-signed certificates
               configure: (proxy) => {
                 proxy.on('proxyReq', (proxyReq, req) => {
                   console.log(
-                    `📜 Proxying legal: ${req.method} ${req.url} → https://ai.localhost:3000${proxyReq.path}`
+                    `📜 Proxying legal: ${req.method} ${req.url} → https://${process.env.API_HOST || 'localhost'}:3000${proxyReq.path}`
                   );
                 });
               },
             },
             // Proxy WebSocket connections
             '/ws': {
-              target: 'wss://ai.localhost:3000',
+              target: `wss://${process.env.API_HOST || 'localhost'}:3000`,
               ws: true,
               changeOrigin: true,
               secure: false,
@@ -124,5 +127,12 @@ export default defineConfig({
               },
             },
           },
+    // Public-facing host to prefer in HMR and asset URLs
+    origin: `https://${process.env.PUBLIC_HOST || 'ai.localhost'}:5173`,
+    hmr: {
+      host: process.env.PUBLIC_HOST || 'ai.localhost',
+      protocol: 'wss',
+      port: 5173,
+    },
   },
 });

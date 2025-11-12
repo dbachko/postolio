@@ -97,6 +97,8 @@ export function buildFastify(): FastifyInstance {
     'http://ai.localhost:5173',
     'https://ai.localhost:5173',
     'https://ai.localhost',
+    'https://localhost:5173',
+    'https://127.0.0.1:5173',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     // Production same-domain origin (postolio.example)

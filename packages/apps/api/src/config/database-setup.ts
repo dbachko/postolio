@@ -84,21 +84,21 @@ export async function ensureDatabaseSchema(): Promise<void> {
       missingColumns = ['themePreference', 'uiPreferences'];
     }
 
-    // publication_comments workflow columns
+    // publication_comments workflow columns (assignee/snooze removed)
     try {
       const pubCols = await prisma.$queryRaw<ColumnRow[]>`
         SELECT column_name
         FROM information_schema.columns
         WHERE table_schema = 'public'
           AND table_name = 'publication_comments'
-          AND column_name IN ('status', 'snoozedUntil', 'assigneeUserId')
+          AND column_name IN ('status')
       `;
       const exist = (Array.isArray(pubCols) ? pubCols : []).map((r) => r.column_name);
-      for (const c of ['status', 'snoozedUntil', 'assigneeUserId']) {
+      for (const c of ['status']) {
         if (!exist.includes(c)) missingColumns.push(`publication_comments.${c}`);
       }
     } catch {
-      missingColumns.push('publication_comments.status', 'publication_comments.snoozedUntil', 'publication_comments.assigneeUserId');
+      missingColumns.push('publication_comments.status');
     }
 
     if (missingTables.length > 0 || missingColumns.length > 0) {
@@ -128,7 +128,8 @@ export async function ensureDatabaseSchema(): Promise<void> {
         }
 
         // Prefer migrate deploy in prod; use db push in dev to keep DX smooth
-        const useDbPush = process.env.NODE_ENV !== 'prod' && process.env.DB_SETUP_STRATEGY !== 'migrate';
+        const useDbPush =
+          process.env.NODE_ENV !== 'prod' && process.env.DB_SETUP_STRATEGY !== 'migrate';
         const baseCmd = useDbPush
           ? 'prisma db push --skip-generate'
           : 'prisma migrate deploy --skip-generate';
@@ -143,7 +144,9 @@ export async function ensureDatabaseSchema(): Promise<void> {
       } catch (migrationError) {
         console.error('❌ Failed to run database migrations:', migrationError);
         console.error('Attempted command failed. You can run manually:');
-        console.error(process.env.NODE_ENV === 'prod' ? '  prisma migrate deploy' : '  prisma db push');
+        console.error(
+          process.env.NODE_ENV === 'prod' ? '  prisma migrate deploy' : '  prisma db push'
+        );
         throw new Error(`Database setup failed: ${migrationError}`);
       }
     } else {
