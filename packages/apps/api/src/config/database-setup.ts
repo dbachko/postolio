@@ -127,26 +127,58 @@ export async function ensureDatabaseSchema(): Promise<void> {
           );
         }
 
+        // Helper to resolve a reliable Prisma CLI invocation
+        const resolvePrismaInvocation = (schema?: string): { cmd: string; cwd?: string } => {
+          // Allow overriding via env var
+          const envBin = process.env.PRISMA_BIN || process.env.PRISMA_CLI;
+          if (envBin && fs.existsSync(envBin)) {
+            return { cmd: `"${envBin}"`, cwd: process.cwd() };
+          }
+
+          // If we have a schema, try the local binary in the database package
+          let dbPkgDir: string | undefined;
+          if (schema) {
+            // packages/libs/database/prisma/schema.prisma -> packages/libs/database
+            dbPkgDir = path.resolve(schema, '..', '..');
+            const binName = process.platform === 'win32' ? 'prisma.cmd' : 'prisma';
+            const localBin = path.join(dbPkgDir, 'node_modules', '.bin', binName);
+            if (fs.existsSync(localBin)) {
+              return { cmd: `"${localBin}"`, cwd: process.cwd() };
+            }
+          }
+
+          // Prefer pnpm exec from the database package directory so resolution finds the workspace dep
+          if (dbPkgDir && fs.existsSync(dbPkgDir)) {
+            return { cmd: 'pnpm exec prisma', cwd: dbPkgDir };
+          }
+
+          // Fallback to npx which will use local if available
+          return { cmd: 'npx prisma', cwd: process.cwd() };
+        };
+
         // Prefer migrate deploy in prod; use db push in dev to keep DX smooth
         const useDbPush =
           process.env.NODE_ENV !== 'prod' && process.env.DB_SETUP_STRATEGY !== 'migrate';
-        const baseCmd = useDbPush
-          ? 'prisma db push --skip-generate'
-          : 'prisma migrate deploy --skip-generate';
-        const migrateCommand = schemaPath ? `${baseCmd} --schema ${schemaPath}` : baseCmd;
+        const args = useDbPush ? 'db push --skip-generate' : 'migrate deploy --skip-generate';
+        const schemaArg = schemaPath ? ` --schema ${schemaPath}` : '';
 
-        console.log(`🔧 Running: ${migrateCommand}`);
+        const { cmd, cwd } = resolvePrismaInvocation(schemaPath);
+        const migrateCommand = `${cmd} ${args}${schemaArg}`;
+
+        console.log(`🔧 Running: ${migrateCommand}${cwd && cwd !== process.cwd() ? ` (cwd: ${cwd})` : ''}`);
         execSync(migrateCommand, {
           stdio: 'inherit',
-          cwd: process.cwd(),
+          cwd: cwd ?? process.cwd(),
         });
         console.log('✅ Database schema synchronized successfully');
       } catch (migrationError) {
         console.error('❌ Failed to run database migrations:', migrationError);
-        console.error('Attempted command failed. You can run manually:');
-        console.error(
-          process.env.NODE_ENV === 'prod' ? '  prisma migrate deploy' : '  prisma db push'
-        );
+        console.error('Attempted command failed. You can run manually, for example:');
+        const example =
+          process.env.NODE_ENV === 'prod'
+            ? 'pnpm --filter @postolio/database exec prisma migrate deploy'
+            : 'pnpm --filter @postolio/database exec prisma db push';
+        console.error(`  ${example}`);
         throw new Error(`Database setup failed: ${migrationError}`);
       }
     } else {
