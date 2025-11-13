@@ -7,6 +7,8 @@ import {
   validateRequest,
 } from '../schemas/api-validation.js';
 import { successResponse, ErrorResponses, paginatedResponse } from '../utils/api-response.js';
+import crypto from 'crypto';
+import { getRedisClient } from '../services/redis.js';
 
 const prisma = getDatabaseClient();
 
@@ -391,13 +393,37 @@ const postDetailRoutes: FastifyPluginAsync = async (app) => {
         if (!pub?.externalPostId) {
           return reply.code(400).send(ErrorResponses.badRequest('Instagram publication not found'));
         }
-        const res = await instagramService.replyToComment(
-          post.brand,
-          String(pub.externalPostId),
-          commentId,
-          message
-        );
-        return reply.send(successResponse(res));
+        // Idempotency: prevent duplicate replies within a short window
+        const redis = getRedisClient();
+        const msgHash = crypto.createHash('sha256').update(message.trim()).digest('hex');
+        const idemKey = `idem:comment-reply:${String(pub.externalPostId)}:${commentId}:${msgHash}`;
+        let locked = false;
+        if (redis) {
+          // Acquire a short-lived lock. If it already exists, treat as duplicate and return success.
+          const ok = await redis.set(idemKey, '1', 'EX', 30, 'NX');
+          if (!ok) {
+            return reply.send(successResponse({ deduped: true }));
+          }
+          locked = true;
+        }
+
+        try {
+          const res = await instagramService.replyToComment(
+            post.brand,
+            String(pub.externalPostId),
+            commentId,
+            message
+          );
+          return reply.send(successResponse(res));
+        } catch (innerErr) {
+          // On failure, release the lock to allow immediate retry
+          if (redis && locked) {
+            try {
+              await redis.del(idemKey);
+            } catch {}
+          }
+          throw innerErr;
+        }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         return reply.code(500).send(ErrorResponses.internalError(`Failed to reply: ${message}`));

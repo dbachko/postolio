@@ -199,13 +199,17 @@ export default function InboxComments() {
                     key={c.id}
                     data={c as any}
                     isReplying={activeReplyFor === c.id}
+                    isSending={replyMutation.isPending}
                     replyText={replyText}
                     setReplyText={setReplyText}
                     onStartReply={() => setActiveReplyFor(c.id || null)}
                     onCancelReply={() => setActiveReplyFor(null)}
-                    onSendReply={() =>
-                      c.id && replyMutation.mutate({ commentId: c.id, message: replyText })
-                    }
+                    onSendReply={() => {
+                      if (replyMutation.isPending) return;
+                      const msg = replyText.trim();
+                      if (!msg) return;
+                      if (c.id) replyMutation.mutate({ commentId: c.id, message: msg });
+                    }}
                     onLike={() => c.id && likeMutation.mutate({ commentId: c.id })}
                     onResolve={() =>
                       c.id && workflowMutation.mutate({ commentId: c.id, status: 'resolved' })

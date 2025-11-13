@@ -15,6 +15,7 @@ export type CommentRow = {
 export function CommentCard({
   data,
   isReplying,
+  isSending = false,
   replyText,
   setReplyText,
   onStartReply,
@@ -28,6 +29,7 @@ export function CommentCard({
 }: {
   data: CommentRow;
   isReplying: boolean;
+  isSending?: boolean;
   replyText: string;
   setReplyText: (v: string) => void;
   onStartReply: () => void;
@@ -98,7 +100,7 @@ export function CommentCard({
             placeholder={`Reply to ${data.username || 'user'}…`}
             className="min-h-[80px]"
             onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && replyText.trim()) {
+              if (!isSending && (e.metaKey || e.ctrlKey) && e.key === 'Enter' && replyText.trim()) {
                 e.preventDefault();
                 onSendReply();
               }
@@ -121,7 +123,7 @@ export function CommentCard({
           )}
           {/* Primary actions row aligned right */}
           <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-            <Button size="sm" onClick={onSendReply} disabled={!replyText.trim()}>
+            <Button size="sm" onClick={onSendReply} disabled={isSending || !replyText.trim()}>
               <Send className="mr-1 h-4 w-4" /> Send
             </Button>
             <Button variant="ghost" size="sm" onClick={onCancelReply}>
@@ -131,7 +133,7 @@ export function CommentCard({
               variant="ghost"
               size="sm"
               onClick={() => setReplyText('')}
-              disabled={!replyText.trim()}
+              disabled={isSending || !replyText.trim()}
               title="Clear input"
             >
               <Eraser className="mr-1 h-4 w-4" /> Clear
