@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { ensureDatabaseSchema } from '../src/config/database-setup.js';
-import { getDatabaseClient, disconnectDatabase } from '../src/config/database.js';
 import type { ContentStatus, Campaign, CampaignStatus } from '@postolio/database';
 
 type Args = {
@@ -72,8 +71,11 @@ async function main() {
     Number.isFinite(args.posts) && (args.posts as number) > 0 ? (args.posts as number) : 10;
 
   console.log('==> Ensuring database schema…');
-  await ensureDatabaseSchema();
+  await ensureDatabaseSchema({ generateClient: true });
 
+  // Generate Prisma client and sync DB before importing Prisma-dependent modules
+  // This avoids stale @prisma/client after migrations drop/add columns
+  const { getDatabaseClient, disconnectDatabase } = await import('../src/config/database.js');
   const prisma = getDatabaseClient();
 
   console.log(`==> Creating user ${email}`);
@@ -98,7 +100,7 @@ async function main() {
   console.log(`==> Creating brand "${brandName}" for user ${user.id}`);
 
   // Generate realistic Instagram profile data
-  const instagramUsername = brandName.toLowerCase().replace(/\s+/g, '_') + '_official';
+  const instagramHandle = brandName.toLowerCase().replace(/\s+/g, '_') + '_official';
   const instagramAccountId = `IG_${Math.random().toString(36).slice(2, 15)}`;
   const instagramPageId = `FB_${Math.random().toString(36).slice(2, 15)}`;
 
@@ -113,21 +115,6 @@ async function main() {
         hashtagStrategy: 'moderate',
       },
       postingTimezone: 'UTC',
-      // Instagram connection data
-      instagramPageId,
-      instagramAccountId,
-      instagramProfileData: {
-        id: instagramAccountId,
-        username: instagramUsername,
-        name: brandName,
-        account_type: 'BUSINESS',
-        media_count: Math.floor(Math.random() * 300) + 50,
-        followers_count: Math.floor(Math.random() * 10000) + 1000,
-        follows_count: Math.floor(Math.random() * 500) + 100,
-        biography: `Official account for ${brandName}. Sharing amazing content daily! 🚀`,
-        website: `https://${brandName.toLowerCase().replace(/\s+/g, '')}.com`,
-        profile_picture_url: `https://i.pravatar.cc/150?u=${instagramAccountId}`,
-      },
     },
   });
 
@@ -138,11 +125,14 @@ async function main() {
       platform: 'instagram',
       externalAccountId: instagramAccountId,
       externalPageId: instagramPageId,
-      username: instagramUsername,
+      username: instagramHandle,
       displayName: brandName,
       metadata: {
         account_type: 'BUSINESS',
-        followers_count: (brand.instagramProfileData as any)?.followers_count,
+        followers_count: Math.floor(Math.random() * 10000) + 1000,
+        biography: `Official account for ${brandName}. Sharing amazing content daily! 🚀`,
+        website: `https://${brandName.toLowerCase().replace(/\s+/g, '')}.com`,
+        profile_picture_url: `https://i.pravatar.cc/150?u=${instagramAccountId}`,
       },
     },
   });
@@ -405,7 +395,6 @@ async function main() {
       status,
       scheduledAt,
       postedAt,
-      // publications will be created by normal app flows; legacy instagram fields removed
       schedulingError: err,
       ...assetData,
     });
@@ -622,7 +611,6 @@ async function main() {
     campaignId?: string | null;
     postedAt?: Date | null;
     schedulingError?: string | null;
-    // legacy fields removed
   }> = [];
 
   const scheduledCount = Math.min(3, posts);
@@ -652,7 +640,6 @@ async function main() {
       status: 'published',
       scheduledAt: new Date(Date.now() - days(3)),
       postedAt: new Date(Date.now() - days(2)),
-      // legacy fields removed
       primaryAssetId: null,
       primaryAssetCdnUrl: null,
       primaryAssetWidth: null,
@@ -692,30 +679,9 @@ async function main() {
     data: normalizeStatuses(contentPayload.concat(brandCoverage)),
   });
 
-  // Create an Instagram SocialAccount for the brand and attach publications + mock comments
+  // Attach publications + mock comments using the created SocialAccount
   console.log('==> Creating SocialAccount, publications, comments, and saved replies');
-  const social = await prisma.socialAccount.upsert({
-    where: {
-      platform_externalAccountId: {
-        platform: 'instagram',
-        externalAccountId: brand.instagramAccountId || 'mock_ig',
-      },
-    },
-    update: {
-      brandId: brand.id,
-      externalPageId: brand.instagramPageId || undefined,
-      username: (brand.instagramProfileData as any)?.username || undefined,
-      displayName: brand.name,
-    },
-    create: {
-      brandId: brand.id,
-      platform: 'instagram',
-      externalAccountId: brand.instagramAccountId || 'mock_ig',
-      externalPageId: brand.instagramPageId || undefined,
-      username: (brand.instagramProfileData as any)?.username || undefined,
-      displayName: brand.name,
-    },
-  });
+  const social = instagramSocialAccount;
 
   // Pick a few published posts and create publications + comments
   const published = await prisma.content.findMany({
@@ -947,7 +913,7 @@ async function main() {
   };
 
   // Generate publications and metrics for each published content
-  let baseFollowers = (brand.instagramProfileData as any)?.followers_count || 5000;
+  let baseFollowers = ((social.metadata as any)?.followers_count as number) || 5000;
   const followerGrowthPerDay = rng(10, 50); // Random daily growth
 
   for (let idx = 0; idx < publishedContent.length; idx++) {
@@ -1023,5 +989,10 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await disconnectDatabase().catch(() => undefined);
+    try {
+      const { disconnectDatabase } = await import('../src/config/database.js');
+      await disconnectDatabase();
+    } catch {
+      // ignore
+    }
   });

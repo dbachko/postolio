@@ -216,12 +216,17 @@ const rollingContentRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user.id;
 
       // Get all user's brands with Instagram integration
-      const brands = await prisma.brand.findMany({
+      const brandsWithInstagram = await prisma.socialAccount.findMany({
         where: {
-          userId,
-          instagramPageId: { not: null },
+          platform: 'instagram',
+          brand: { userId },
+        },
+        include: {
+          brand: true,
         },
       });
+
+      const brands = brandsWithInstagram.map((sa) => sa.brand);
 
       const brandStatuses = await Promise.all(
         brands.map(async (brand) => {

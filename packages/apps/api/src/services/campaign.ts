@@ -171,11 +171,11 @@ class CampaignService {
       // CRITICAL: Compare dates only (not times) in the brand's timezone
       // Normalize both dates to midnight for date-only comparison
       const nowUTC = new Date();
-      const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-      const todayMidnight = TimezoneService.normalizeDateToMidnight(nowInBrandTz);
-
-      const startDateInBrandTz = TimezoneService.toLocal(config.duration.start, brandTimezone);
-      const startDateMidnight = TimezoneService.normalizeDateToMidnight(startDateInBrandTz);
+      const todayMidnight = TimezoneService.getMidnightInTimezone(nowUTC, brandTimezone);
+      const startDateMidnight = TimezoneService.getMidnightInTimezone(
+        config.duration.start,
+        brandTimezone
+      );
 
       // Compare dates without time components
       // Allow start date to be today or in the future

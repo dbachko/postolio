@@ -115,6 +115,9 @@ importers:
       '@postolio/aws':
         specifier: workspace:*
         version: link:../../libs/aws
+      '@postolio/connectors':
+        specifier: workspace:*
+        version: link:../../libs/connectors
       '@postolio/database':
         specifier: workspace:*
         version: link:../../libs/database
@@ -838,6 +841,9 @@ importers:
 
   packages/libs/connectors:
     dependencies:
+      '@postolio/errors':
+        specifier: workspace:*
+        version: link:../errors
       axios:
         specifier: ^1.7.7
         version: 1.12.2

@@ -74,11 +74,19 @@ export class InstagramBestTimeService {
       select: {
         id: true,
         userId: true,
-        instagramAccountId: true,
-        instagramPageId: true,
+        socialAccounts: {
+          where: { platform: 'instagram' },
+          select: {
+            externalAccountId: true,
+            externalPageId: true,
+          },
+          take: 1,
+        },
       },
     });
     if (!brand) throw new Error('Brand not found');
+    const instagramAccount = brand.socialAccounts?.[0];
+    if (!instagramAccount) throw new Error('Instagram account not connected');
 
     const timezone = await TimezoneService.getBrandTimezone(brandId);
     const cacheKey = this.key(brandId);

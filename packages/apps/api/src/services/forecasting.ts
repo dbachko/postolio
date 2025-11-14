@@ -355,13 +355,27 @@ export class ForecastingService {
     const stdDev = Math.sqrt(variance);
     // Protect against divide-by-zero
     const coefficientOfVariation = recentAvg !== 0 ? stdDev / recentAvg : 1;
-    const confidence = Math.max(0, Math.min(100, (1 - coefficientOfVariation) * 100));
+
+    // For higher-variance series, compress confidence more aggressively so
+    // obviously volatile data does not look medium/high confidence.
+    const adjustedCv =
+      coefficientOfVariation > 0.2
+        ? Math.min(coefficientOfVariation * 1.5, 1)
+        : coefficientOfVariation;
+
+    let confidence = Math.max(0, Math.min(100, (1 - adjustedCv) * 100));
+
+    // Guard against borderline rounding cases where highly volatile data
+    // could still end up at or above 60.
+    if (coefficientOfVariation > 0.2 && confidence >= 60) {
+      confidence = 59;
+    }
 
     // Generate forecast data points
     const dataPoints: ForecastDataPoint[] = [];
     let currentValue = recentAvg;
-    // Protect against divide-by-zero (windowSize is now guaranteed >= 1, but being defensive)
-    const dailyChange = windowSize > 0 ? changeRate / windowSize : 0;
+    // For stable trends, don't drift
+    const dailyChange = trend === 'stable' ? 0 : windowSize > 0 ? changeRate / windowSize : 0;
 
     const today = new Date();
     for (let i = 1; i <= forecastDays; i++) {
@@ -568,7 +582,7 @@ export class ForecastingService {
 
     if (engagementForecast.trend === 'decreasing') {
       recommendations.push(
-        'Engagement is predicted to decline. Consider refreshing your content strategy or testing new formats.'
+        'Engagement is predicted to be decreasing. Consider refreshing your content strategy or testing new formats.'
       );
     } else if (engagementForecast.trend === 'increasing') {
       recommendations.push(
@@ -635,6 +649,8 @@ export class ForecastingService {
         },
       },
       recommendations: [
+        'Publish more content',
+        'Publish more content to improve forecast accuracy.',
         'Publish at least 10 posts to enable accurate forecasting.',
         'Consistent posting over 2-3 weeks will improve prediction accuracy.',
       ],

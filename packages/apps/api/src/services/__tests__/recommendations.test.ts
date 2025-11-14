@@ -2,14 +2,19 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RecommendationEngine } from '../recommendations.js';
 import { getDatabaseClient } from '../../config/database.js';
 
-// Mock the database client
-vi.mock('../../config/database.js', () => ({
-  getDatabaseClient: vi.fn(() => ({
+// Mock the database client (singleton shared between test and service code)
+vi.mock('../../config/database.js', () => {
+  const mockClient = {
     contentPublication: {
       findMany: vi.fn(),
     },
-  })),
-}));
+  } as any;
+  return {
+    getDatabaseUrl: vi.fn(() => 'postgresql://test:test@localhost:5432/test?schema=public'),
+    getDatabaseClient: vi.fn(() => mockClient),
+    prisma: mockClient,
+  };
+});
 
 describe('RecommendationEngine', () => {
   let engine: RecommendationEngine;

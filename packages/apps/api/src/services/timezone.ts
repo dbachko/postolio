@@ -7,7 +7,8 @@ import {
   isValidTimezone,
 } from '../constants/timezone.js';
 
-const prisma = getDatabaseClient();
+// Avoid top-level DB initialization to make module importable in tests without env.
+// Always resolve the client at call sites instead.
 
 export class TimezoneService {
   /**
@@ -52,6 +53,7 @@ export class TimezoneService {
   static async detectTimezone(request: FastifyRequest, userId?: string): Promise<string> {
     // If userId provided, check user preference first
     if (userId) {
+      const prisma = getDatabaseClient();
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { timezone: true, timezoneAutoDetected: true },
@@ -90,6 +92,39 @@ export class TimezoneService {
   }
 
   /**
+   * Get the midnight instant for a given date in a specific timezone.
+   * Returns the UTC instant representing 00:00 at the target timezone’s wall clock.
+   */
+  static getMidnightInTimezone(date: Date | string, timezone: string): Date {
+    const d = typeof date === 'string' ? new Date(date) : date;
+
+    // Treat pure UTC-midnight values as date-only (calendar dates),
+    // so 2025-01-16T00:00:00Z is interpreted as "2025-01-16 in the brand timezone"
+    // regardless of the offset. This matches how frontend date-only inputs behave.
+    const isUtcMidnight =
+      d.getUTCHours() === 0 &&
+      d.getUTCMinutes() === 0 &&
+      d.getUTCSeconds() === 0 &&
+      d.getUTCMilliseconds() === 0;
+
+    let ymd: string;
+    if (isUtcMidnight) {
+      const year = d.getUTCFullYear();
+      const month = d.getUTCMonth() + 1;
+      const day = d.getUTCDate();
+      const mm = month.toString().padStart(2, '0');
+      const dd = day.toString().padStart(2, '0');
+      ymd = `${year}-${mm}-${dd}`;
+    } else {
+      // For true instants (now, timestamps with real times), compute the
+      // calendar date in the target timezone.
+      ymd = formatInTimeZone(d, timezone, 'yyyy-MM-dd');
+    }
+
+    return fromZonedTime(`${ymd}T00:00:00`, timezone);
+  }
+
+  /**
    * Get timezone for a specific brand (with fallback to user/default)
    *
    * Includes error handling for database failures and invalid timezones
@@ -97,6 +132,7 @@ export class TimezoneService {
    */
   static async getBrandTimezone(brandId: string): Promise<string> {
     try {
+      const prisma = getDatabaseClient();
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
         select: {
@@ -334,9 +370,9 @@ export class TimezoneService {
       throw new Error('Invalid date format');
     }
 
-    // Create a date object for midnight and convert to UTC
-    const localMidnight = new Date(year, month - 1, day, 0, 0, 0, 0);
-    return TimezoneService.toUTC(localMidnight, timezone);
+    // Interpret midnight in the specified timezone and convert to UTC
+    const isoLocal = `${yearStr}-${monthStr}-${dayStr}T00:00:00`;
+    return fromZonedTime(isoLocal, timezone);
   }
 
   /**

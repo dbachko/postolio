@@ -30,30 +30,62 @@ export async function computeUpcomingSlots(
     })
     .filter((v, i, a) => a.indexOf(v) === i);
 
-  const todayLocal = TimezoneService.toLocal(now, timezone);
-  const startLocal = TimezoneService.toLocal(start, timezone);
-  const endLocal = TimezoneService.toLocal(end, timezone);
+  // Compute day boundaries using timezone-aware formatting to avoid DST issues
+  const fmtYmd = (d: Date) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .format(d)
+      .replace(/\//g, '-');
+  const addDays = (ymd: string, days: number) => {
+    const dt = new Date(ymd + 'T00:00:00Z');
+    dt.setUTCDate(dt.getUTCDate() + days);
+    return dt.toISOString().slice(0, 10);
+  };
+
+  const todayStr = fmtYmd(now);
+  let cursorStr = fmtYmd(start);
+  const endStr = fmtYmd(end);
   const bufferedNow = new Date(now.getTime() + MIN_SLOT_BUFFER_MS);
 
-  const toStartOfDay = (date: Date) =>
-    new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const todayStart = toStartOfDay(todayLocal);
-  const cursor = toStartOfDay(startLocal);
+  const toUtcMidnight = (ymd: string) =>
+    TimezoneService.createDateInBrandTimezone(ymd, '00:00', timezone);
+  const todayStart = toUtcMidnight(todayStr);
+  let cursor = toUtcMidnight(cursorStr);
 
   // Determine day step
   const intervalDays =
     frequency === 'daily' ? 1 : frequency === 'every2days' ? 2 : frequency === '3weekly' ? 1 : 7;
   // Note: for '3weekly' we still generate daily slots; weekly quota enforced in caller
 
-  // Keep cursor aligned to the original campaign cadence even after the start date passes
-  while (cursor < todayStart) {
-    cursor.setDate(cursor.getDate() + intervalDays);
+  // First, include any remaining times today (even if cadence would skip today)
+  let addedToday = false;
+  for (const t of times) {
+    const scheduledUtc = TimezoneService.createDateInBrandTimezone(todayStr, t, timezone);
+    if (scheduledUtc > bufferedNow) {
+      slots.push(scheduledUtc);
+      addedToday = true;
+      if (slots.length >= maxSlots) return slots;
+    }
   }
 
-  while (cursor <= endLocal && slots.length < maxSlots) {
-    const dateStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(
-      cursor.getDate()
-    ).padStart(2, '0')}`;
+  // Keep cursor aligned to the original campaign cadence even after the start date passes
+  while (cursor < todayStart) {
+    cursorStr = addDays(cursorStr, intervalDays);
+    cursor = toUtcMidnight(cursorStr);
+  }
+
+  // If we already added today's slots, advance past today to avoid duplicates
+  if (addedToday && cursorStr === todayStr) {
+    cursorStr = addDays(cursorStr, intervalDays);
+    cursor = toUtcMidnight(cursorStr);
+  }
+
+  while (cursorStr <= endStr && slots.length < maxSlots) {
+    const dateStr = cursorStr;
 
     for (const t of times) {
       const scheduledUtc = TimezoneService.createDateInBrandTimezone(dateStr, t, timezone);
@@ -64,7 +96,8 @@ export async function computeUpcomingSlots(
     }
 
     // Advance cursor
-    cursor.setDate(cursor.getDate() + intervalDays);
+    cursorStr = addDays(cursorStr, intervalDays);
+    cursor = toUtcMidnight(cursorStr);
   }
 
   return slots;

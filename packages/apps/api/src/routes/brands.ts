@@ -215,8 +215,6 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             styleProfile: true,
             createdAt: true,
             updatedAt: true,
-            instagramAccountId: true,
-            instagramPageId: true,
             countryCode: true,
           },
         });
@@ -227,18 +225,20 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         const descChanged =
           typeof description === 'string' &&
           (existingBrand.description || '') !== (description?.trim() || '');
-        if ((nameChanged || descChanged) && instagramService.isConfigured(updatedBrand)) {
+
+        // Check if Instagram is connected via SocialAccount
+        const instagramAccount = await prisma.socialAccount.findFirst({
+          where: {
+            brandId: id,
+            platform: 'instagram',
+          },
+        });
+
+        if ((nameChanged || descChanged) && instagramAccount) {
           // Fire-and-forget background job to include a small recent-post sample (with CDN URLs)
           (async () => {
             try {
-              const postsRaw = await instagramService.getRecentPosts(
-                {
-                  id: updatedBrand.id,
-                  instagramAccountId: updatedBrand.instagramAccountId,
-                  instagramPageId: updatedBrand.instagramPageId,
-                },
-                20
-              );
+              const postsRaw = await instagramService.getRecentPosts({ id: updatedBrand.id }, 20);
               const posts = await Promise.all(
                 postsRaw.map(async (p) => {
                   let mediaUrl = p.media_url;
@@ -517,6 +517,14 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
         const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
         if (!brand) return reply.code(404).send({ error: 'Brand not found' });
 
+        // Get Instagram SocialAccount for API calls
+        const instagramAccount = await prisma.socialAccount.findFirst({
+          where: {
+            brandId,
+            platform: 'instagram',
+          },
+        });
+
         // Prefer unresolved comment counts per publication for "new" activity.
         const pubs = await prisma.contentPublication.findMany({
           where: {
@@ -552,7 +560,7 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
             let newCount = unresolvedCount;
 
             // If no local comment records, try a lightweight Graph lookup for counts
-            if (totalComments === 0 && pub.externalPostId) {
+            if (totalComments === 0 && pub.externalPostId && instagramAccount) {
               try {
                 const redis = getRedisClient();
                 const cacheKey = `ig:comments_count:${pub.externalPostId}`;
@@ -561,7 +569,11 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
                   totalComments = Number(cached) || 0;
                 } else {
                   const res = await instagramService.getPostComments(
-                    brand as any,
+                    {
+                      id: brandId,
+                      instagramAccountId: instagramAccount.externalAccountId,
+                      instagramPageId: instagramAccount.externalPageId,
+                    } as any,
                     String(pub.externalPostId),
                     1 // minimal page to fetch accurate comments_count
                   );

@@ -13,6 +13,8 @@ export interface ConnectorCapabilities {
   comments?: boolean;
   pagination?: boolean;
   ads?: boolean;
+  directMessages?: boolean; // Threads + messages support
+  bestTime?: boolean; // Can compute best time natively or via insights
 }
 
 export interface PublishRequest {

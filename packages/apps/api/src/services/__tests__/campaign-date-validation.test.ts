@@ -23,26 +23,10 @@ describe('Campaign Date Validation', () => {
       const campaignStartDate = new Date('2025-01-15T08:00:00Z'); // Arbitrary time, will be normalized
 
       // Simulate the fixed validation logic
-      const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-      const todayMidnight = new Date(
-        nowInBrandTz.getFullYear(),
-        nowInBrandTz.getMonth(),
-        nowInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
-
-      const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
-      const startDateMidnight = new Date(
-        startDateInBrandTz.getFullYear(),
-        startDateInBrandTz.getMonth(),
-        startDateInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
+      const todayMidnight = TimezoneService.getMidnightInTimezone(nowUTC, brandTimezone);
+      const startDateMidnight = TimezoneService.getMidnightInTimezone(
+        campaignStartDate,
+        brandTimezone
       );
 
       // Should NOT throw error - start date equals today
@@ -57,26 +41,10 @@ describe('Campaign Date Validation', () => {
       // Campaign start date: Jan 14, 2025 (2 days ago)
       const campaignStartDate = new Date('2025-01-14T08:00:00Z');
 
-      const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-      const todayMidnight = new Date(
-        nowInBrandTz.getFullYear(),
-        nowInBrandTz.getMonth(),
-        nowInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
-
-      const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
-      const startDateMidnight = new Date(
-        startDateInBrandTz.getFullYear(),
-        startDateInBrandTz.getMonth(),
-        startDateInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
+      const todayMidnight = TimezoneService.getMidnightInTimezone(nowUTC, brandTimezone);
+      const startDateMidnight = TimezoneService.getMidnightInTimezone(
+        campaignStartDate,
+        brandTimezone
       );
 
       // Should be in the past
@@ -90,26 +58,10 @@ describe('Campaign Date Validation', () => {
       // Campaign start date: Jan 20, 2025 (4 days in future)
       const campaignStartDate = new Date('2025-01-20T08:00:00Z');
 
-      const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-      const todayMidnight = new Date(
-        nowInBrandTz.getFullYear(),
-        nowInBrandTz.getMonth(),
-        nowInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
-
-      const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
-      const startDateMidnight = new Date(
-        startDateInBrandTz.getFullYear(),
-        startDateInBrandTz.getMonth(),
-        startDateInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
+      const todayMidnight = TimezoneService.getMidnightInTimezone(nowUTC, brandTimezone);
+      const startDateMidnight = TimezoneService.getMidnightInTimezone(
+        campaignStartDate,
+        brandTimezone
       );
 
       // Should be in the future
@@ -126,26 +78,10 @@ describe('Campaign Date Validation', () => {
       // Campaign start date: Jan 16, 2025 (today in Tokyo, just started)
       const campaignStartDate = new Date('2025-01-16T00:00:00Z');
 
-      const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-      const todayMidnight = new Date(
-        nowInBrandTz.getFullYear(),
-        nowInBrandTz.getMonth(),
-        nowInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
-
-      const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
-      const startDateMidnight = new Date(
-        startDateInBrandTz.getFullYear(),
-        startDateInBrandTz.getMonth(),
-        startDateInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
+      const todayMidnight = TimezoneService.getMidnightInTimezone(nowUTC, brandTimezone);
+      const startDateMidnight = TimezoneService.getMidnightInTimezone(
+        campaignStartDate,
+        brandTimezone
       );
 
       // Should be valid - same day in Tokyo
@@ -157,29 +93,13 @@ describe('Campaign Date Validation', () => {
       const nowUTC = new Date('2025-03-10T12:00:00Z'); // After DST
       const brandTimezone = 'America/Los_Angeles';
 
-      // Campaign start date: March 10, 2025
+      // Campaign start date: March 10, 2025 (date-only in brand timezone)
       const campaignStartDate = new Date('2025-03-10T00:00:00Z');
 
-      const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-      const todayMidnight = new Date(
-        nowInBrandTz.getFullYear(),
-        nowInBrandTz.getMonth(),
-        nowInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
-
-      const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
-      const startDateMidnight = new Date(
-        startDateInBrandTz.getFullYear(),
-        startDateInBrandTz.getMonth(),
-        startDateInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
+      const todayMidnight = TimezoneService.getMidnightInTimezone(nowUTC, brandTimezone);
+      const startDateMidnight = TimezoneService.getMidnightInTimezone(
+        campaignStartDate,
+        brandTimezone
       );
 
       // Validation should work correctly even during DST
@@ -196,53 +116,16 @@ describe('Campaign Date Validation', () => {
 
       // Test in Auckland - should be today
       const nzTimezone = 'Pacific/Auckland';
-      const nowInNZ = TimezoneService.toLocal(nowUTC, nzTimezone);
-      const todayNZ = new Date(
-        nowInNZ.getFullYear(),
-        nowInNZ.getMonth(),
-        nowInNZ.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
+      const hiTimezone = 'Pacific/Honolulu';
 
-      const startInNZ = TimezoneService.toLocal(campaignStartDate, nzTimezone);
-      const startNZMidnight = new Date(
-        startInNZ.getFullYear(),
-        startInNZ.getMonth(),
-        startInNZ.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
+      const todayNZ = TimezoneService.getMidnightInTimezone(nowUTC, nzTimezone);
+      const startNZMidnight = TimezoneService.getMidnightInTimezone(campaignStartDate, nzTimezone);
 
       expect(startNZMidnight >= todayNZ).toBe(true);
 
       // Test in Honolulu - should be tomorrow (future)
-      const hiTimezone = 'Pacific/Honolulu';
-      const nowInHI = TimezoneService.toLocal(nowUTC, hiTimezone);
-      const todayHI = new Date(
-        nowInHI.getFullYear(),
-        nowInHI.getMonth(),
-        nowInHI.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
-
-      const startInHI = TimezoneService.toLocal(campaignStartDate, hiTimezone);
-      const startHIMidnight = new Date(
-        startInHI.getFullYear(),
-        startInHI.getMonth(),
-        startInHI.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
+      const todayHI = TimezoneService.getMidnightInTimezone(nowUTC, hiTimezone);
+      const startHIMidnight = TimezoneService.getMidnightInTimezone(campaignStartDate, hiTimezone);
 
       expect(startHIMidnight > todayHI).toBe(true);
     });
@@ -259,26 +142,10 @@ describe('Campaign Date Validation', () => {
       times.forEach((time) => {
         const campaignStartDate = new Date(`2025-01-16T${time}Z`);
 
-        const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-        const todayMidnight = new Date(
-          nowInBrandTz.getFullYear(),
-          nowInBrandTz.getMonth(),
-          nowInBrandTz.getDate(),
-          0,
-          0,
-          0,
-          0
-        );
-
-        const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
-        const startDateMidnight = new Date(
-          startDateInBrandTz.getFullYear(),
-          startDateInBrandTz.getMonth(),
-          startDateInBrandTz.getDate(),
-          0,
-          0,
-          0,
-          0
+        const todayMidnight = TimezoneService.getMidnightInTimezone(nowUTC, brandTimezone);
+        const startDateMidnight = TimezoneService.getMidnightInTimezone(
+          campaignStartDate,
+          brandTimezone
         );
 
         // All should normalize to the same date
@@ -297,26 +164,10 @@ describe('Campaign Date Validation', () => {
       // Frontend sends "2025-01-15" (today in PST)
       const campaignStartDate = new Date('2025-01-15T00:00:00Z');
 
-      const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-      const todayMidnight = new Date(
-        nowInBrandTz.getFullYear(),
-        nowInBrandTz.getMonth(),
-        nowInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
-
-      const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
-      const startDateMidnight = new Date(
-        startDateInBrandTz.getFullYear(),
-        startDateInBrandTz.getMonth(),
-        startDateInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
+      const todayMidnight = TimezoneService.getMidnightInTimezone(nowUTC, brandTimezone);
+      const startDateMidnight = TimezoneService.getMidnightInTimezone(
+        campaignStartDate,
+        brandTimezone
       );
 
       // Should be valid (same day)
@@ -331,26 +182,10 @@ describe('Campaign Date Validation', () => {
       // Campaign start date: Jan 16, 2025 (today in IST)
       const campaignStartDate = new Date('2025-01-16T00:00:00Z');
 
-      const nowInBrandTz = TimezoneService.toLocal(nowUTC, brandTimezone);
-      const todayMidnight = new Date(
-        nowInBrandTz.getFullYear(),
-        nowInBrandTz.getMonth(),
-        nowInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
-      );
-
-      const startDateInBrandTz = TimezoneService.toLocal(campaignStartDate, brandTimezone);
-      const startDateMidnight = new Date(
-        startDateInBrandTz.getFullYear(),
-        startDateInBrandTz.getMonth(),
-        startDateInBrandTz.getDate(),
-        0,
-        0,
-        0,
-        0
+      const todayMidnight = TimezoneService.getMidnightInTimezone(nowUTC, brandTimezone);
+      const startDateMidnight = TimezoneService.getMidnightInTimezone(
+        campaignStartDate,
+        brandTimezone
       );
 
       // Should be valid

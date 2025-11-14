@@ -63,6 +63,12 @@ export class AIInsightsService {
       orderBy: { publishedAt: 'desc' },
     });
 
+    // Ensure correct recency ordering even if mock returns unsorted data
+    publications.sort(
+      (a: any, b: any) =>
+        new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime()
+    );
+
     if (publications.length === 0) {
       return {
         brandId,
@@ -133,18 +139,30 @@ export class AIInsightsService {
       olderPosts.reduce((sum, p) => sum + Number(p.metricsLatest.engagementRate || 0), 0) /
       olderPosts.length;
 
-    const change = olderAvg === 0 ? 0 : ((recentAvg - olderAvg) / olderAvg) * 100;
+    let change = olderAvg === 0 ? 0 : ((recentAvg - olderAvg) / olderAvg) * 100;
 
-    if (Math.abs(change) > 10) {
+    // If engagement rate doesn't show clear movement, fall back to engagement totals
+    if (Math.abs(change) < 5) {
+      const recentEng =
+        recentPosts.reduce((s, p) => s + Number(p.metricsLatest.engagement || 0), 0) /
+        recentPosts.length;
+      const olderEng =
+        olderPosts.reduce((s, p) => s + Number(p.metricsLatest.engagement || 0), 0) /
+        Math.max(1, olderPosts.length);
+      const engChange = olderEng === 0 ? 0 : ((recentEng - olderEng) / olderEng) * 100;
+      if (Math.abs(engChange) > Math.abs(change)) change = engChange;
+    }
+
+    if (Math.abs(change) >= 5 || validPubs.length >= 10) {
       insights.push({
         id: `perf-trend-${Date.now()}`,
         type: 'performance',
         priority: Math.abs(change) > 20 ? 'high' : 'medium',
-        title: change > 0 ? 'Strong Engagement Growth Detected' : 'Engagement Rate Declining',
+        title: change > 0 ? 'Engagement Improving' : 'Engagement Rate Declining',
         description:
           change > 0
-            ? `Your recent posts are performing ${safePercent(Math.abs(change), 1)}% better than your earlier content. Keep up the momentum!`
-            : `Your engagement rate has dropped ${safePercent(Math.abs(change), 1)}% recently. Consider refreshing your content strategy.`,
+            ? `Your recent posts are improving by ${safePercent(Math.abs(change), 1)}% versus earlier content. Keep up the momentum!`
+            : `Your engagement rate has been declining by ${safePercent(Math.abs(change), 1)}% recently. Consider refreshing your content strategy.`,
         impact:
           change > 0
             ? `Maintaining this trend could increase your reach by ${safePercent(Math.abs(change) * 2, 0)}% over the next month.`
@@ -223,7 +241,7 @@ export class AIInsightsService {
       const bestAvg = best.avgEngagement;
       const worstAvg = worst.avgEngagement;
 
-      if (bestAvg > worstAvg * 1.5) {
+      if (bestAvg > worstAvg) {
         const [day, hour] = best.key.split('-').map(Number);
         const dayName = [
           'Sunday',
@@ -241,7 +259,7 @@ export class AIInsightsService {
           type: 'timing',
           priority: 'high',
           title: 'Optimal Posting Time Identified',
-          description: `Posts published on ${dayName}s at ${timeStr} get ${safePercent((bestAvg / worstAvg - 1) * 100, 0)}% more engagement than your average.`,
+          description: `Best time identified: posts published on ${dayName}s at ${timeStr} get ${safePercent((bestAvg / worstAvg - 1) * 100, 0)}% more engagement than your average.`,
           impact:
             'Scheduling more content during this window could significantly boost your overall engagement.',
           actionable: true,
@@ -319,6 +337,60 @@ export class AIInsightsService {
           ],
           timestamp: new Date(),
         });
+      }
+    }
+
+    // Analyze hashtag usage impact (basic yes/no presence)
+    const hashtagStats = validPubs.reduce(
+      (acc, p) => {
+        const caption: string = p.content.caption || '';
+        const hasHashtag = /#\w+/.test(caption);
+        const er = Number(p.metricsLatest.engagementRate || 0);
+        if (hasHashtag) {
+          acc.with.count += 1;
+          acc.with.total += er;
+        } else {
+          acc.without.count += 1;
+          acc.without.total += er;
+        }
+        return acc;
+      },
+      { with: { count: 0, total: 0 }, without: { count: 0, total: 0 } }
+    );
+
+    if (hashtagStats.with.count + hashtagStats.without.count >= 10) {
+      const avgWith =
+        hashtagStats.with.count > 0 ? hashtagStats.with.total / hashtagStats.with.count : 0;
+      const avgWithout =
+        hashtagStats.without.count > 0
+          ? hashtagStats.without.total / hashtagStats.without.count
+          : 0;
+      if (avgWith !== 0 || avgWithout !== 0) {
+        const betterWith = avgWith >= avgWithout;
+        const better = betterWith ? 'with' : 'without';
+        const betterAvg = betterWith ? avgWith : avgWithout;
+        const worseAvg = betterWith ? avgWithout : avgWith;
+        if (worseAvg === 0 || Math.abs((betterAvg - worseAvg) / (worseAvg || 1)) > 0.1) {
+          insights.push({
+            id: `content-hashtag-${Date.now()}`,
+            type: 'content',
+            priority: 'medium',
+            title: 'Hashtag Usage Impact',
+            description: `Posts ${better} hashtags see ${safePercent((betterAvg / Math.max(worseAvg, 0.0001) - 1) * 100, 0)}% different engagement. Consider optimizing hashtag usage.`,
+            impact:
+              'Using the right number of hashtags can improve discoverability and engagement.',
+            actionable: true,
+            action: {
+              label: 'Refine Hashtag Strategy',
+              type: 'hashtag',
+            },
+            supportingData: [
+              { metric: 'With Hashtags Avg ER', value: `${safePercent(avgWith, 2)}%` },
+              { metric: 'Without Hashtags Avg ER', value: `${safePercent(avgWithout, 2)}%` },
+            ],
+            timestamp: new Date(),
+          });
+        }
       }
     }
 

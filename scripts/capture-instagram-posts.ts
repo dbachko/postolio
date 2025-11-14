@@ -30,15 +30,14 @@ async function main() {
   try {
     const brand = await prisma.brand.findUnique({ where: { id: brandId } });
     if (!brand) throw new Error(`Brand not found: ${brandId}`);
-    const brandForIg = {
-      id: brand.id,
-      instagramAccountId: brand.instagramAccountId,
-      instagramPageId: brand.instagramPageId,
-    };
-    if (!instagramService.isConfigured(brandForIg)) {
-      throw new Error('Instagram not connected for this brand (missing accountId/pageId)');
+    // Ensure Instagram is connected via SocialAccount + Token Service
+    const instagramConnected = await instagramService.isConfigured({ id: brand.id });
+    if (!instagramConnected) {
+      throw new Error('Instagram not connected for this brand');
     }
-    const posts = await instagramService.getRecentPosts(brandForIg, Math.min(limit, 25));
+
+    // Fetch recent posts using the connector-aware instagramService implementation
+    const posts = await instagramService.getRecentPosts({ id: brand.id }, Math.min(limit, 25));
     const when = new Date();
     const stamp = `${when.getFullYear()}${String(when.getMonth() + 1).padStart(2, '0')}${String(
       when.getDate()

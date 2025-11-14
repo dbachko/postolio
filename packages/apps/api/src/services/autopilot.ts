@@ -153,7 +153,11 @@ class AutopilotService {
       // Get all brands that have Instagram integration
       const brands = await prisma.brand.findMany({
         where: {
-          instagramPageId: { not: null },
+          socialAccounts: {
+            some: {
+              platform: 'instagram',
+            },
+          },
         },
         include: {
           content: {
@@ -470,7 +474,11 @@ class AutopilotService {
     try {
       const brands = await prisma.brand.findMany({
         where: {
-          instagramPageId: { not: null },
+          socialAccounts: {
+            some: {
+              platform: 'instagram',
+            },
+          },
         },
         include: {
           content: {
@@ -484,7 +492,16 @@ class AutopilotService {
 
       const brandStatuses = await Promise.all(
         brands.map(async (brand) => {
-          const gap = await this.analyzeContentGap(brand, SCHEDULER_LIMITS.TARGET_DAYS_AHEAD);
+          const gap = await this.analyzeContentGap(
+            {
+              id: brand.id,
+              name: brand.name,
+              preferences: brand.preferences,
+              styleProfile: brand.styleProfile,
+              content: brand.content,
+            },
+            SCHEDULER_LIMITS.TARGET_DAYS_AHEAD
+          );
           const nextPost = brand.content[0]?.scheduledAt ?? null;
 
           return {

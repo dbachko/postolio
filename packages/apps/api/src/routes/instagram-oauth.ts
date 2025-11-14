@@ -377,20 +377,43 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       });
 
       // Update brand with UI metadata only (no sensitive token)
-      // Capture the updated brand so we pass fresh IDs to the initial sync
       const updatedBrand = await prisma.brand.update({
         where: { id: brand.id },
         data: {
-          // Remove instagramAccessToken - now stored in Token Service
-          instagramPageId: pageWithInstagram.id,
-          instagramAccountId: instagramAccountId,
-          instagramProfileData: JSON.parse(JSON.stringify(instagramProfile)),
+          // Remove brand-level Instagram fields; all connection details now live
+          // in SocialAccount records and the external Token Service.
           preferences: {
             ...preferences,
             oauthState: null,
             oauthStateExpires: null,
             tokenExpiresAt: tokenExpiresAt.toISOString(),
           },
+        },
+      });
+
+      // Create or update SocialAccount record for Instagram
+      await prisma.socialAccount.upsert({
+        where: {
+          platform_externalAccountId: {
+            platform: 'instagram',
+            externalAccountId: instagramAccountId,
+          },
+        },
+        create: {
+          brandId: brand.id,
+          platform: 'instagram',
+          externalAccountId: instagramAccountId,
+          externalPageId: pageWithInstagram.id,
+          username: instagramProfile.username || null,
+          displayName: instagramProfile.name || null,
+          metadata: JSON.parse(JSON.stringify(instagramProfile)),
+        },
+        update: {
+          externalPageId: pageWithInstagram.id,
+          username: instagramProfile.username || null,
+          displayName: instagramProfile.name || null,
+          metadata: JSON.parse(JSON.stringify(instagramProfile)),
+          updatedAt: new Date(),
         },
       });
 
@@ -405,11 +428,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       } catch {}
       instagramService
         .syncPublishedPosts(
-          {
-            id: updatedBrand.id,
-            instagramAccountId: updatedBrand.instagramAccountId,
-            instagramPageId: updatedBrand.instagramPageId,
-          },
+          { id: updatedBrand.id },
           {
             maxPosts: 100,
             maxDays: 30,
@@ -426,14 +445,7 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       // Includes a small sample of recent posts with pre-warmed CDN URLs for image analysis
       (async () => {
         try {
-          const postsRaw = await instagramService.getRecentPosts(
-            {
-              id: updatedBrand.id,
-              instagramAccountId: updatedBrand.instagramAccountId,
-              instagramPageId: updatedBrand.instagramPageId,
-            },
-            20
-          );
+          const postsRaw = await instagramService.getRecentPosts({ id: updatedBrand.id }, 20);
           const posts = await Promise.all(
             postsRaw.map(async (p) => {
               let mediaUrl = p.media_url;

@@ -268,8 +268,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
             ? `${DELETION_REASONS[reason]}${feedback ? `: ${feedback}` : ''}`
             : null,
           scheduledDeletion,
-          // Clear sensitive tokens but keep password for recovery
-          instagramToken: null,
+          // Note: Social platform tokens are stored in Token Service and will be cleaned up via TTL
           // Password is kept intact to allow account recovery
         },
       });
@@ -393,28 +392,44 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
       // Decode payload
       const data = JSON.parse(Buffer.from(payload, 'base64').toString());
 
-      // Find user by Instagram ID
+      // Find user by Instagram account ID via SocialAccount
       if (data.user_id) {
-        const user = await prisma.user.findFirst({
-          where: { instagramId: data.user_id },
+        // Find the social account for this Instagram ID
+        const socialAccount = await prisma.socialAccount.findFirst({
+          where: {
+            platform: 'instagram',
+            externalAccountId: data.user_id,
+          },
+          include: {
+            brand: {
+              select: {
+                userId: true,
+              },
+            },
+          },
         });
 
-        if (user) {
-          // Mark for deletion
+        if (socialAccount?.brand?.userId) {
+          const userId = socialAccount.brand.userId;
+
+          // Mark user for deletion
           const deletedAt = new Date();
           const scheduledDeletion = new Date();
           scheduledDeletion.setDate(scheduledDeletion.getDate() + 30);
 
           await prisma.user.update({
-            where: { id: user.id },
+            where: { id: userId },
             data: {
               deletedAt,
               deletionReason: 'Instagram data deletion request',
               scheduledDeletion,
-              instagramToken: null,
-              instagramId: null,
-              instagramUsername: null,
+              // Note: Social platform tokens are stored in Token Service and will be cleaned up via TTL
             },
+          });
+
+          // Also mark the social account for deletion or disconnect it
+          await prisma.socialAccount.delete({
+            where: { id: socialAccount.id },
           });
         }
       }

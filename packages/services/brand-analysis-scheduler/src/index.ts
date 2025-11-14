@@ -72,13 +72,16 @@ async function latestJobWithinWindow(brandId: string): Promise<boolean> {
 export async function handler(): Promise<void> {
   logger.info('Weekly scheduler invoked');
   const prisma = await getDbClient();
-  const brands = await prisma.brand.findMany({
-    select: { id: true, instagramAccountId: true, instagramPageId: true },
-    where: { instagramAccountId: { not: null }, instagramPageId: { not: null } },
+
+  // Query all brands with Instagram connection via SocialAccount
+  const socialAccounts = await prisma.socialAccount.findMany({
+    where: { platform: 'instagram' },
+    select: { brandId: true },
   });
+
   let enqueued = 0;
-  for (const b of brands) {
-    const brandId = b.id;
+  for (const sa of socialAccounts) {
+    const brandId = sa.brandId;
     try {
       const skip = await latestJobWithinWindow(brandId);
       if (skip) continue;
@@ -99,5 +102,5 @@ export async function handler(): Promise<void> {
       logger.warn('Failed to enqueue brand', { brandId, err });
     }
   }
-  logger.info('Scheduler completed', { enqueued, total: brands.length });
+  logger.info('Scheduler completed', { enqueued, total: socialAccounts.length });
 }

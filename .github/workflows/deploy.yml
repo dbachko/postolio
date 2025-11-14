@@ -533,6 +533,8 @@ jobs:
               # Build API and its dependencies
               pnpm --filter=@postolio/database build || true
               pnpm --filter=@postolio/errors build || true
+              # Ensure social connectors lib is compiled before API build
+              pnpm --filter=@postolio/connectors build || true
               pnpm --filter=@postolio/csrf-client build || true
               pnpm --filter=api build
               ;;

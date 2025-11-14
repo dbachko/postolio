@@ -49,22 +49,20 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
       });
       if (!brand) return reply.code(404).send({ error: 'Brand not found' });
 
-      // Ensure Instagram configured
-      type BrandInstagramFields = {
-        instagramAccountId?: string | null;
-        instagramPageId?: string | null;
-      };
-      const igBrand = {
-        id: brand.id,
-        instagramAccountId: (brand as unknown as BrandInstagramFields).instagramAccountId ?? null,
-        instagramPageId: (brand as unknown as BrandInstagramFields).instagramPageId ?? null,
-      };
-      if (!instagramService.isConfigured(igBrand)) {
+      // Ensure Instagram configured via SocialAccount
+      const instagramAccount = await prisma.socialAccount.findFirst({
+        where: { brandId, platform: 'instagram' },
+        select: { id: true },
+      });
+      if (!instagramAccount) {
         return reply.code(400).send({ error: 'Instagram not connected for this brand' });
       }
 
       // Fetch recent posts and minimize payload to fit EventBridge limits
-      const postsRaw = await instagramService.getRecentPosts(igBrand, Math.min(maxPosts, 25));
+      const postsRaw = await instagramService.getRecentPosts(
+        { id: brand.id },
+        Math.min(maxPosts, 25)
+      );
       // Fetch brand market/preferences for analysis context
       const brandInfo = await prisma.brand.findFirst({
         where: { id: brandId, userId: request.user!.id },

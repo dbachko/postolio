@@ -1,43 +1,51 @@
 /**
  * Publishing Operations Service
- * Handles content publishing to social media platforms (currently Instagram)
+ * Handles content publishing to social media platforms
  */
 
-import { instagramService } from '../instagram.js';
 import { getDatabaseClient } from '../../config/database.js';
-import type { Brand } from '@postolio/database';
+import { ConnectorFactory } from '../connectors/index.js';
+import type { PlatformName } from '@postolio/connectors';
+import { logger as baseLogger } from '@postolio/logger';
+import { fetchTokensFromService } from '../../utils/token-service-client.js';
 
 const prisma = getDatabaseClient();
+const logger = baseLogger.child({ module: 'publishing' });
 
 export interface PublishingResult {
   success: boolean;
   error?: string;
   retryable?: boolean;
   data?: {
-    instagramPostId: string;
-    instagramPermalink: string;
+    platform: string;
+    externalPostId: string;
+    permalink: string;
     postedAt: Date;
   };
 }
 
 /**
- * Publish content to Instagram
+ * Publish content to a social platform
+ *
+ * Generic publishing function that works with any supported platform.
+ * It uses the Connector pattern to route to the appropriate platform and
+ * is responsible for updating Content / ContentPublication records.
+ *
+ * @param contentId - The content to publish
+ * @param platform - The platform to publish to (instagram, facebook, etc.)
+ * @returns Publishing result with success status and post details
  */
-export async function publishContentToInstagram(
+export async function publishContent(
   contentId: string,
-  brand: Brand
+  platform: PlatformName
 ): Promise<PublishingResult> {
   try {
-    // Get content
+    logger.info('Publishing content', { contentId, platform });
+
+    // Get content with brand
     const content = await prisma.content.findUnique({
       where: { id: contentId },
-      select: {
-        id: true,
-        primaryAssetCdnUrl: true,
-        caption: true,
-        hashtags: true,
-        status: true,
-      },
+      include: { brand: true },
     });
 
     if (!content) {
@@ -48,55 +56,83 @@ export async function publishContentToInstagram(
       };
     }
 
-    // Validate content
-    if (content.status !== 'scheduled' && content.status !== 'draft') {
-      return {
-        success: false,
-        error: 'Content must be scheduled or in draft status before publishing',
-        retryable: false,
-      };
-    }
-
-    if (!content.primaryAssetCdnUrl) {
-      return {
-        success: false,
-        error: 'Image is required for Instagram posting',
-        retryable: false,
-      };
-    }
-
-    if (!content.caption || content.caption.trim().length === 0) {
-      return {
-        success: false,
-        error: 'Caption is required for Instagram posting',
-        retryable: false,
-      };
-    }
-
-    if (!content.hashtags || content.hashtags.length === 0) {
-      return {
-        success: false,
-        error: 'At least one hashtag is required for Instagram posting',
-        retryable: false,
-      };
-    }
-
-    // Check Instagram connection
-    if (!instagramService.isConfigured(brand)) {
-      return {
-        success: false,
-        error: 'Instagram account not connected to this brand',
-        retryable: false,
-      };
-    }
-
-    // Get CDN URL
-    // Publish to Instagram
-    const publishResult = await instagramService.publishMedia(brand, {
-      cdnImageUrl: content.primaryAssetCdnUrl,
-      caption: content.caption,
-      hashtags: content.hashtags,
+    // Get social account for this platform
+    const socialAccount = await prisma.socialAccount.findFirst({
+      where: {
+        brandId: content.brandId,
+        platform,
+      },
     });
+
+    if (!socialAccount) {
+      return {
+        success: false,
+        error: `${platform} account not connected to this brand`,
+        retryable: false,
+      };
+    }
+
+    // Check if connector exists for platform
+    if (!ConnectorFactory.supports(platform)) {
+      return {
+        success: false,
+        error: `Platform ${platform} is not yet supported`,
+        retryable: false,
+      };
+    }
+
+    // Get connector
+    const connector = ConnectorFactory.get(platform as PlatformName);
+
+    // Get credentials from token service
+    const tokens = await fetchTokensFromService(
+      content.brand.userId,
+      content.brandId,
+      platform as string
+    );
+
+    if (!tokens) {
+      return {
+        success: false,
+        error: `No valid credentials found for ${platform}`,
+        retryable: false,
+      };
+    }
+
+    // Publish using connector
+    if (!connector.publish) {
+      // Connector exists but does not implement publishing for this platform
+      return {
+        success: false,
+        error: `Publishing is not supported for platform ${platform}`,
+        retryable: false,
+      };
+    }
+    logger.info('Publishing via connector', {
+      contentId,
+      platform,
+      brandId: content.brandId,
+    });
+
+    const publishResult = await connector.publish(
+      {
+        caption: content.caption || '',
+        hashtags: content.hashtags || [],
+        imageUrl: content.primaryAssetCdnUrl || undefined,
+        mediaUrl: content.primaryAssetCdnUrl || undefined, // Could be video
+        mediaType: content.primaryAssetCdnUrl?.includes('.mp4') ? 'video' : 'image',
+      },
+      {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken || undefined,
+      },
+      {
+        platform,
+        externalAccountId: socialAccount.externalAccountId,
+        externalPageId: socialAccount.externalPageId,
+        username: socialAccount.username,
+      }
+    );
 
     // Update content status
     const postedAt = new Date();
@@ -108,62 +144,49 @@ export async function publishContentToInstagram(
       },
     });
 
-    // Create or connect SocialAccount and create ContentPublication for analytics v2
-    try {
-      const platform = 'instagram';
-      const socialAccount = await prisma.socialAccount.upsert({
-        where: {
-          platform_externalAccountId: {
-            platform,
-            externalAccountId: brand.instagramAccountId || 'unknown',
-          },
-        },
-        update: {
-          brandId: brand.id,
-          externalPageId: brand.instagramPageId || undefined,
-          username: undefined,
-          displayName: brand.name,
-        },
-        create: {
-          brandId: brand.id,
-          platform,
-          externalAccountId: brand.instagramAccountId || 'unknown',
-          externalPageId: brand.instagramPageId || undefined,
-          username: undefined,
-          displayName: brand.name,
-        },
-      });
+    // Create ContentPublication record
+    await prisma.contentPublication.create({
+      data: {
+        contentId,
+        socialAccountId: socialAccount.id,
+        platform,
+        externalPostId: publishResult.externalPostId,
+        externalAccountId: socialAccount.externalAccountId,
+        externalPageId: socialAccount.externalPageId,
+        permalink: publishResult.permalink,
+        publishedAt: postedAt,
+        status: 'published',
+      },
+    });
 
-      await prisma.contentPublication.create({
-        data: {
-          contentId,
-          socialAccountId: socialAccount.id,
-          platform,
-          externalPostId: publishResult.id,
-          externalThreadRootId: null,
-          externalAccountId: brand.instagramAccountId || undefined,
-          externalPageId: brand.instagramPageId || undefined,
-          permalink: publishResult.permalink || undefined,
-          publishedAt: postedAt,
-          status: 'published',
-        },
-      });
-    } catch (e) {
-      // Do not fail publishing flow on analytics side-effects
-      console.warn('Failed to record ContentPublication', (e as Error)?.message);
-    }
+    logger.info('Content published successfully', {
+      contentId,
+      platform,
+      externalPostId: publishResult.externalPostId,
+    });
 
     return {
       success: true,
       data: {
-        instagramPostId: publishResult.id,
-        instagramPermalink: publishResult.permalink,
+        platform,
+        externalPostId: publishResult.externalPostId,
+        permalink: publishResult.permalink || '',
         postedAt,
       },
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Failed to publish to Instagram';
-    const isRetryable = !/permission|invalid token|not found/i.test(errorMessage);
+    const errorMessage =
+      error instanceof Error ? error.message : `Failed to publish to ${platform}`;
+
+    // Determine if error is retryable
+    const isRetryable = !/permission|invalid token|not found|authentication/i.test(errorMessage);
+
+    logger.error('Publishing failed', {
+      contentId,
+      platform,
+      error: errorMessage,
+      retryable: isRetryable,
+    });
 
     return {
       success: false,
@@ -171,4 +194,17 @@ export async function publishContentToInstagram(
       retryable: isRetryable,
     };
   }
+}
+
+/**
+ * Publish content to Instagram
+ *
+ * @deprecated Use publishContent(contentId, 'instagram') instead.
+ * This wrapper exists for backward compatibility with existing routes.
+ */
+export async function publishContentToInstagram(
+  contentId: string,
+  _brand: any // Brand parameter no longer used
+): Promise<PublishingResult> {
+  return publishContent(contentId, 'instagram');
 }

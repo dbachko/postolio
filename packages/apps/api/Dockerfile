@@ -40,7 +40,13 @@ COPY --from=installer /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner /app/out/full/ ./
 
 # Create .turbo directories with proper permissions before building
-RUN mkdir -p packages/libs/database/.turbo packages/libs/errors/.turbo packages/libs/logger/.turbo packages/libs/service-parameters/.turbo packages/apps/api/.turbo
+RUN mkdir -p \
+  packages/libs/database/.turbo \
+  packages/libs/errors/.turbo \
+  packages/libs/logger/.turbo \
+  packages/libs/service-parameters/.turbo \
+  packages/libs/connectors/.turbo \
+  packages/apps/api/.turbo
 
 # Build the API (and any required deps per turbo pipeline)
 RUN pnpm turbo run build --filter=api

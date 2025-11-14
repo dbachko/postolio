@@ -23,6 +23,7 @@ import passwordResetRoutes from './routes/password-reset.js';
 import twoFactorRoutes from './routes/two-factor.js';
 import monitoringRoutes from './routes/monitoring.js';
 import instagramOAuthRoutes from './routes/instagram-oauth.js';
+import { socialPlatformRoutes } from './routes/social-platform.js';
 import brandsRoutes from './routes/brands.js';
 import contentRoutes from './routes/content/index.js';
 import analyticsRoutes from './routes/analytics.js';
@@ -213,6 +214,8 @@ export function buildFastify(): FastifyInstance {
   app.register(twoFactorRoutes, { prefix: '/api/auth' });
   app.register(userRoutes); // User routes include their own /api prefix
   app.register(instagramOAuthRoutes, { prefix: '/api/auth/instagram' });
+  // Generic social platform routes (platform-agnostic)
+  app.register(socialPlatformRoutes);
   app.register(brandsRoutes, { prefix: '/api/brands' });
   app.register(contentRoutes, { prefix: '/api/content' });
   app.register(analyticsRoutes, { prefix: '/api/analytics' });
@@ -331,7 +334,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // Ensure database schema is ready before starting background services
     try {
       app.log.info('🚀 Initializing database schema...');
-      await ensureDatabaseSchema();
+      await ensureDatabaseSchema({ generateClient: false });
 
       // Background services now managed by EventBridge
       // Services are triggered by AWS Lambda/EventBridge, not started here

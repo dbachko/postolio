@@ -6,11 +6,6 @@ import { enhancedRateLimiters } from '../services/enhanced-rate-limiter.js';
 import { isProductionEnv } from '../utils/env-mode.js';
 
 const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
-  // Temporary auth check - will be replaced when auth plugin loads properly
-  const tempAuth = async () => {
-    return; // intentionally no-op until auth plugin loads
-  };
-
   // Narrowed request types used in handlers
   interface SessionData {
     pendingUserId?: string;
@@ -42,7 +37,7 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: TwoFactorSetupBody }>(
     '/2fa/setup',
     {
-      preHandler: [fastify.authenticate || tempAuth, validateAndSanitize(twoFactorSetupSchema)],
+      preHandler: [fastify.authenticate, validateAndSanitize(twoFactorSetupSchema)],
     },
     async (request, reply) => {
       if (!ensureAuth(request, reply)) return;
@@ -75,7 +70,7 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: TwoFactorVerifyBody }>(
     '/2fa/verify-setup',
     {
-      preHandler: [fastify.authenticate || tempAuth, validateAndSanitize(twoFactorVerifySchema)],
+      preHandler: [fastify.authenticate, validateAndSanitize(twoFactorVerifySchema)],
     },
     async (request, reply) => {
       if (!ensureAuth(request, reply)) return;
@@ -147,7 +142,7 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/2fa/send-code',
     {
-      preHandler: [fastify.authenticate || tempAuth, enhancedRateLimiters.emailVerification()],
+      preHandler: [fastify.authenticate, enhancedRateLimiters.emailVerification()],
     },
     async (request, reply) => {
       if (!ensureAuth(request, reply)) return;
@@ -173,7 +168,7 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: PasswordBody }>(
     '/2fa/disable',
     {
-      preHandler: fastify.authenticate || tempAuth,
+      preHandler: fastify.authenticate,
     },
     async (request, reply) => {
       if (!ensureAuth(request, reply)) return;
@@ -202,7 +197,7 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: PasswordBody }>(
     '/2fa/regenerate-backup-codes',
     {
-      preHandler: fastify.authenticate || tempAuth,
+      preHandler: fastify.authenticate,
     },
     async (request, reply) => {
       if (!ensureAuth(request, reply)) return;
@@ -231,7 +226,7 @@ const twoFactorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
     '/2fa/status',
     {
-      preHandler: fastify.authenticate || tempAuth,
+      preHandler: fastify.authenticate,
     },
     async (request, reply) => {
       if (!ensureAuth(request, reply)) return;

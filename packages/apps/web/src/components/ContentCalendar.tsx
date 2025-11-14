@@ -18,6 +18,7 @@ import { getStableColorFromId } from '@/utils/campaign-colors';
 import { useTimezone } from '../contexts/TimezoneContext';
 import type { CalendarItem, Placeholder } from '../types/calendar';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CACHE_TIMES, GC_TIMES } from '@/lib/cache-config';
 import {
   Select,
   SelectContent,
@@ -108,8 +109,8 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
   const calendarQuery = useQuery({
     queryKey: ['calendar', brandId, format(currentDate, 'yyyy-MM')],
     queryFn: () => contentApi.getCalendarContent(brandId, format(currentDate, 'yyyy-MM')),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    staleTime: CACHE_TIMES.MEDIUM,
+    gcTime: GC_TIMES.STANDARD,
   });
 
   // Prefetch adjacent months for smooth navigation (kept for export and misc)
@@ -123,14 +124,14 @@ export function ContentCalendar({ brandId, brandName }: ContentCalendarProps) {
     queryClient.prefetchQuery({
       queryKey: ['calendar', brandId, prevMonth],
       queryFn: () => contentApi.getCalendarContent(brandId, prevMonth),
-      staleTime: 5 * 60 * 1000,
+      staleTime: CACHE_TIMES.MEDIUM,
     });
 
     // Prefetch next month
     queryClient.prefetchQuery({
       queryKey: ['calendar', brandId, nextMonth],
       queryFn: () => contentApi.getCalendarContent(brandId, nextMonth),
-      staleTime: 5 * 60 * 1000,
+      staleTime: CACHE_TIMES.MEDIUM,
     });
   }, [currentDate, brandId, queryClient]);
 

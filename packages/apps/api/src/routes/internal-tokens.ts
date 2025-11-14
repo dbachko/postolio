@@ -95,10 +95,25 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
 
         switch (platform) {
           case 'instagram': {
+            // Get accountId and pageId from SocialAccount if not in token metadata
+            let accountId = token.metadata?.accountId;
+            let pageId = token.metadata?.pageId;
+
+            if (!accountId || !pageId) {
+              const socialAccount = await prisma.socialAccount.findFirst({
+                where: {
+                  brandId,
+                  platform: 'instagram',
+                },
+              });
+              accountId = accountId || socialAccount?.externalAccountId || undefined;
+              pageId = pageId || socialAccount?.externalPageId || undefined;
+            }
+
             tokenData = {
               accessToken: token.accessToken,
-              accountId: token.metadata?.accountId || brand.instagramAccountId,
-              pageId: token.metadata?.pageId || brand.instagramPageId,
+              accountId,
+              pageId,
             };
 
             // Token Service handles refresh automatically

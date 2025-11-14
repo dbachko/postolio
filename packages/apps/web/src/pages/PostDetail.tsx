@@ -21,7 +21,9 @@ import {
   CheckCircle,
   RefreshCw,
   X,
+  ExternalLink,
 } from 'lucide-react';
+import { getPlatformConfig, type Platform } from '@/lib/platform-config';
 import { format } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import { useTimezone } from '../contexts/TimezoneContext';
@@ -252,8 +254,9 @@ export default function PostDetail() {
   const selectedPublicationId = (() => {
     const pubs = publicationsQuery.data?.data || [];
     if (!pubs.length) return undefined;
-    const ig = pubs.find((p: any) => p.platform === 'instagram');
-    return (ig || pubs[0])?.id as string | undefined;
+    // Prefer Instagram for backward compatibility, but any platform works
+    const preferred = pubs.find((p: any) => p.platform === 'instagram');
+    return (preferred || pubs[0])?.id as string | undefined;
   })();
 
   const latestQuery = useQuery<{ success: boolean; data: any } | undefined>({
@@ -667,20 +670,30 @@ export default function PostDetail() {
             })()}
             {(() => {
               const pubs = publicationsQuery.data?.data || [];
-              const igPub = pubs.find((p: any) => p.platform === 'instagram');
-              const permalink = igPub?.permalink || post?.instagramPermalink;
-              if (!permalink) return null;
-              return (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(permalink, '_blank')}
-                  className="text-xs sm:text-sm"
-                >
-                  <Instagram className="mr-1 h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">View on</span> Instagram
-                </Button>
-              );
+              if (!pubs.length) return null;
+
+              // Show button for each published platform
+              return pubs.map((pub: any) => {
+                if (!pub.permalink) return null;
+                const platformConfig = getPlatformConfig(pub.platform as Platform);
+
+                return (
+                  <Button
+                    key={pub.id}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(pub.permalink, '_blank')}
+                    className="text-xs sm:text-sm"
+                  >
+                    {pub.platform === 'instagram' ? (
+                      <Instagram className="mr-1 h-4 w-4 sm:mr-2" />
+                    ) : (
+                      <ExternalLink className="mr-1 h-4 w-4 sm:mr-2" />
+                    )}
+                    <span className="hidden sm:inline">View on</span> {platformConfig.displayName}
+                  </Button>
+                );
+              });
             })()}
           </div>
         </div>

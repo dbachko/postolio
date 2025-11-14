@@ -58,13 +58,26 @@ export class PublisherCredentialsService {
           id: true,
           name: true,
           userId: true,
-          instagramAccountId: true,
-          instagramPageId: true,
+          socialAccounts: {
+            where: { platform: 'instagram' },
+            select: {
+              externalAccountId: true,
+              externalPageId: true,
+            },
+            take: 1,
+          },
         },
       });
 
       if (!brand) {
         credentialsLogger.error(`Brand not found: ${brandId}`);
+        return null;
+      }
+
+      // Get Instagram account info from SocialAccount
+      const instagramAccount = brand.socialAccounts?.[0];
+      if (!instagramAccount) {
+        credentialsLogger.error(`No Instagram account connected for brand: ${brandId}`);
         return null;
       }
 
@@ -85,8 +98,8 @@ export class PublisherCredentialsService {
 
       const credentials = {
         accessToken: tokenData.accessToken,
-        accountId: tokenData.metadata?.accountId || brand.instagramAccountId,
-        pageId: tokenData.metadata?.pageId || brand.instagramPageId,
+        accountId: tokenData.metadata?.accountId || instagramAccount.externalAccountId,
+        pageId: tokenData.metadata?.pageId || instagramAccount.externalPageId,
         brandName: brand.name,
         platform: 'instagram',
       };

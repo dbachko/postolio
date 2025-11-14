@@ -51,34 +51,139 @@ export class BrandClient {
     return this.request(`/api/brands/${brandId}`, { method: 'PUT', body: JSON.stringify(data) });
   }
 
-  // Instagram OAuth / status
-  initializeInstagramOAuth(brandId: string) {
-    return this.request(`/api/brands/${brandId}/instagram/authorize`);
+  // =================================================================
+  // Generic Social Platform Methods (Platform-Agnostic)
+  // =================================================================
+
+  /**
+   * Initialize OAuth flow for any social platform
+   * @param brandId - Brand ID
+   * @param platform - Platform name (instagram, facebook, linkedin, etc.)
+   */
+  initializeSocialOAuth(brandId: string, platform: string) {
+    // Use platform-specific route (Instagram has special handling in brands.ts)
+    if (platform === 'instagram') {
+      return this.request(`/api/brands/${brandId}/instagram/authorize`);
+    }
+    throw new Error(`OAuth not yet implemented for platform: ${platform}`);
   }
 
-  getInstagramConnectionStatus(brandId: string, refresh = false) {
+  /**
+   * Get connection status for any social platform
+   * @param brandId - Brand ID
+   * @param platform - Platform name
+   * @param refresh - Force refresh from platform API
+   */
+  getSocialConnectionStatus(brandId: string, platform: string, refresh = false) {
     const query = refresh ? '?refresh=true' : '';
-    return this.request(`/api/brands/${brandId}/instagram/status${query}`);
+    // Backend route: GET /api/social/:platform/status/:brandId
+    return this.request(`/api/social/${platform}/status/${brandId}${query}`);
   }
 
-  disconnectInstagram(brandId: string) {
-    return this.request(`/api/brands/${brandId}/instagram/disconnect`, { method: 'POST' });
+  /**
+   * Disconnect a social platform
+   * @param brandId - Brand ID
+   * @param platform - Platform name
+   */
+  disconnectSocial(brandId: string, platform: string) {
+    // Backend route: POST /api/social/:platform/disconnect/:brandId
+    return this.request(`/api/social/${platform}/disconnect/${brandId}`, { method: 'POST' });
   }
 
-  refreshInstagramToken(brandId: string) {
-    return this.request(`/api/brands/${brandId}/instagram/refresh-token`, { method: 'POST' });
+  /**
+   * Refresh OAuth token for a social platform
+   * @param brandId - Brand ID
+   * @param platform - Platform name
+   */
+  refreshSocialToken(_brandId: string, platform: string) {
+    // TODO: Backend endpoint not yet implemented
+    throw new Error(`Token refresh not yet implemented for platform: ${platform}`);
   }
 
-  // Instagram sync
-  syncInstagramPosts(brandId: string, options: { maxPosts?: number; maxDays?: number }) {
-    return this.request(`/api/brands/${brandId}/instagram/sync`, {
+  /**
+   * Sync posts from any social platform
+   * @param brandId - Brand ID
+   * @param platform - Platform name
+   * @param options - Sync options
+   */
+  syncSocialPosts(
+    brandId: string,
+    platform: string,
+    options: { maxPosts?: number; maxDays?: number }
+  ) {
+    // Backend route: POST /api/social/:platform/sync/:brandId
+    return this.request(`/api/social/${platform}/sync/${brandId}`, {
       method: 'POST',
       body: JSON.stringify(options),
     });
   }
 
+  /**
+   * Get sync status for a social platform
+   * @param brandId - Brand ID
+   * @param platform - Platform name
+   */
+  getSocialSyncStatus(brandId: string, platform: string) {
+    // Use Instagram-specific route for Instagram (in brands-instagram.ts)
+    if (platform === 'instagram') {
+      return this.request(`/api/brands/${brandId}/instagram/sync-status`);
+    }
+    throw new Error(`Sync status not yet implemented for platform: ${platform}`);
+  }
+
+  /**
+   * Get all connected social accounts for a brand
+   * @param _brandId - Brand ID
+   */
+  getConnectedAccounts(_brandId: string) {
+    // TODO: Backend endpoint not yet implemented
+    throw new Error('getConnectedAccounts not yet implemented');
+  }
+
+  // =================================================================
+  // Instagram-Specific Methods (Backward Compatibility)
+  // =================================================================
+
+  /**
+   * @deprecated Use initializeSocialOAuth(brandId, 'instagram') instead
+   */
+  initializeInstagramOAuth(brandId: string) {
+    return this.initializeSocialOAuth(brandId, 'instagram');
+  }
+
+  /**
+   * @deprecated Use getSocialConnectionStatus(brandId, 'instagram', refresh) instead
+   */
+  getInstagramConnectionStatus(brandId: string, refresh = false) {
+    return this.getSocialConnectionStatus(brandId, 'instagram', refresh);
+  }
+
+  /**
+   * @deprecated Use disconnectSocial(brandId, 'instagram') instead
+   */
+  disconnectInstagram(brandId: string) {
+    return this.disconnectSocial(brandId, 'instagram');
+  }
+
+  /**
+   * @deprecated Use refreshSocialToken(brandId, 'instagram') instead
+   */
+  refreshInstagramToken(brandId: string) {
+    return this.refreshSocialToken(brandId, 'instagram');
+  }
+
+  /**
+   * @deprecated Use syncSocialPosts(brandId, 'instagram', options) instead
+   */
+  syncInstagramPosts(brandId: string, options: { maxPosts?: number; maxDays?: number }) {
+    return this.syncSocialPosts(brandId, 'instagram', options);
+  }
+
+  /**
+   * @deprecated Use getSocialSyncStatus(brandId, 'instagram') instead
+   */
   getInstagramSyncStatus(brandId: string) {
-    return this.request(`/api/brands/${brandId}/instagram/sync-status`);
+    return this.getSocialSyncStatus(brandId, 'instagram');
   }
 
   // Brand analysis

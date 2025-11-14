@@ -63,10 +63,20 @@ async function fetchPostComments(accessToken: string, mediaId: string, limit: nu
 async function ingestForBrand(brandId: string, maxPosts = 50, perPostLimit = 100) {
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
-    select: { id: true, userId: true, instagramAccountId: true, instagramPageId: true },
+    select: { id: true, userId: true },
   });
-  if (!brand?.instagramAccountId || !brand.instagramPageId)
+  if (!brand) throw new Error('Brand not found');
+
+  // Check Instagram connection via SocialAccount
+  // Note: schema has unique(platform, externalAccountId) and index(brandId, platform),
+  // so we must use findFirst for brandId+platform lookups (not findUnique).
+  const instagramAccount = await prisma.socialAccount.findFirst({
+    where: { brandId, platform: 'instagram' },
+    select: { externalAccountId: true, externalPageId: true },
+  });
+  if (!instagramAccount?.externalAccountId || !instagramAccount.externalPageId) {
     throw new Error('Brand not connected to Instagram');
+  }
 
   const pubs = await prisma.contentPublication.findMany({
     where: { content: { brandId }, platform: 'instagram' },
@@ -122,23 +132,24 @@ async function ingestForBrand(brandId: string, maxPosts = 50, perPostLimit = 100
 }
 
 export async function runOnce() {
-  // Loop through IG-connected brands
-  const brands = await prisma.brand.findMany({
-    select: { id: true, userId: true, instagramAccountId: true, instagramPageId: true },
-    where: { instagramAccountId: { not: null }, instagramPageId: { not: null } },
+  // Loop through IG-connected brands via SocialAccount
+  const socialAccounts = await prisma.socialAccount.findMany({
+    where: { platform: 'instagram' },
+    select: { brandId: true },
     take: 200,
   });
+
   let total = 0;
-  for (const b of brands) {
+  for (const sa of socialAccounts) {
     try {
       const res = await ingestForBrand(
-        b.id,
+        sa.brandId,
         Number(process.env.COMMENTS_MAX_POSTS || 50),
         Number(process.env.COMMENTS_PER_POST_LIMIT || 100)
       );
       total += res.commentsUpserted;
     } catch (e: any) {
-      console.warn('[CommentsIngestor] Brand failed', b.id, e?.message || String(e));
+      console.warn('[CommentsIngestor] Brand failed', sa.brandId, e?.message || String(e));
     }
   }
   const hadWork = total > 0;

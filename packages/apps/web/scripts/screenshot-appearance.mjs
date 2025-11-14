@@ -18,7 +18,6 @@ async function run() {
           id: 'user_123',
           email: 'user@example.com',
           name: 'Test User',
-          instagramUsername: null,
           subscriptionTier: 'free',
           timezone: 'UTC',
           timezoneAutoDetected: true,

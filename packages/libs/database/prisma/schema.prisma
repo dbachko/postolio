@@ -20,9 +20,6 @@ model User {
   name              String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
-  instagramId       String?
-  instagramUsername String?
-  instagramToken    String?
   subscriptionTier  String             @default("free")
   deletedAt         DateTime?
   deletionReason    String?
@@ -77,9 +74,6 @@ model Brand {
   styleProfile         Json?
   preferences          Json?
   userId               String
-  instagramPageId      String?
-  instagramAccountId   String?
-  instagramProfileData Json?
   postingTimezone      String?            // Brand-specific posting timezone (null = use user's timezone)
   countryCode          String?            // ISO 3166-1 alpha-2 country code for seasonality/holidays
   user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -193,7 +187,7 @@ model PostMediaAsset {
 enum ContentStatus {
   draft      // New content or unscheduled content (replaces pending, approved without scheduledAt, rejected)
   scheduled  // Content scheduled for future posting (replaces approved with scheduledAt)
-  published  // Successfully posted to Instagram
+  published  // Successfully posted to social platform(s)
   failed     // Publishing failed
   skipped    // Missed during campaign pause
 }

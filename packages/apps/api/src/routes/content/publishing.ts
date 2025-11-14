@@ -57,8 +57,8 @@ const publishingRoutes: FastifyPluginAsync = async (fastify) => {
           success: true,
           content: updatedContent,
           instagram: {
-            id: publishResult.data!.instagramPostId,
-            permalink: publishResult.data!.instagramPermalink,
+            id: publishResult.data!.externalPostId,
+            permalink: publishResult.data!.permalink,
           },
         });
       } catch (error) {

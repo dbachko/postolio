@@ -122,7 +122,7 @@ export function AnalyticsOverviewTab({
     return () => {
       cancelled = true;
     };
-  }, [report?.topPosts]);
+  }, [report?.topPosts, topPostThumbs]);
 
   return (
     <div className="space-y-6">

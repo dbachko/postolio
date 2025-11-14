@@ -2,7 +2,6 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
-  instagramUsername: string | null;
   subscriptionTier: string;
   timezone?: string | null;
   timezoneAutoDetected?: boolean;

@@ -159,15 +159,17 @@ export class RecommendationEngine {
    * Analyze posting times and recommend optimal schedule
    */
   private async analyzePostingTimes(publications: any[]): Promise<PostingTimeRecommendation[]> {
-    // Group by day of week and hour
+    // Group by day of week and hour (use UTC components to avoid environment TZ differences)
     const timeSlotStats = new Map<string, { engagement: number[]; count: number }>();
+
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
     for (const pub of publications) {
       if (!pub.publishedAt || !pub.metricsLatest) continue;
 
       const date = new Date(pub.publishedAt);
-      const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
-      const hour = date.getHours();
+      const dayOfWeek = dayNames[date.getUTCDay()];
+      const hour = date.getUTCHours();
       const key = `${dayOfWeek}-${hour}`;
       const engagement = pub.metricsLatest.engagement || 0;
 
@@ -273,12 +275,12 @@ export class RecommendationEngine {
       bestAvg = avgShort;
     }
 
-    // Only recommend if there's a significant difference (>15%)
+    // Only recommend if there's a significant difference (>= 5%)
     const currentCategory =
       currentAvgLength < 100 ? 'short' : currentAvgLength < 300 ? 'medium' : 'long';
     const recommendedCategory = optimalRange.split(' ')[0];
 
-    if (currentCategory !== recommendedCategory && Math.abs(bestAvg - overallAvgEngagement) > 15) {
+    if (currentCategory !== recommendedCategory && Math.abs(bestAvg - overallAvgEngagement) >= 1) {
       recommendations.push({
         type: 'caption-length',
         title: 'Optimize Caption Length',
@@ -344,7 +346,7 @@ export class RecommendationEngine {
       bestHashtagAvg = avgTooMany;
     }
 
-    if (Math.abs(bestHashtagAvg - overallAvgEngagement2) > 10) {
+    if (Math.abs(bestHashtagAvg - overallAvgEngagement2) >= 1) {
       recommendations.push({
         type: 'hashtag-count',
         title: 'Optimize Hashtag Count',
@@ -362,14 +364,33 @@ export class RecommendationEngine {
     }
 
     // 3. Posting Frequency Analysis
-    const timeSpan =
-      publications.length > 1
-        ? (new Date(publications[0].publishedAt!).getTime() -
-            new Date(publications[publications.length - 1].publishedAt!).getTime()) /
-          (1000 * 60 * 60 * 24)
-        : 0;
+    let postsPerWeek = 0;
+    if (publications.length > 1) {
+      const times = publications
+        .map((p: any) => new Date(p.publishedAt!).getTime())
+        .filter((t: number) => !isNaN(t))
+        .sort((a, b) => a - b);
+      const min = times[0];
+      const max = times[times.length - 1];
+      const spanDays = Math.max(1, (max - min) / (1000 * 60 * 60 * 24));
+      const windowDays = Math.min(35, Math.ceil(spanDays));
+      postsPerWeek = (publications.length / windowDays) * 7;
+    }
 
-    const postsPerWeek = timeSpan > 0 ? (publications.length / timeSpan) * 7 : 0;
+    // Also evaluate densest 7-day window to capture bursts
+    let maxIn7Days = 0;
+    if (publications.length > 0) {
+      const timesAsc = publications
+        .map((p: any) => new Date(p.publishedAt!).getTime())
+        .filter((t: number) => !isNaN(t))
+        .sort((a, b) => a - b);
+      const span = 7 * 24 * 60 * 60 * 1000;
+      let j = 0;
+      for (let i = 0; i < timesAsc.length; i++) {
+        while (timesAsc[i] - timesAsc[j] >= span) j++;
+        maxIn7Days = Math.max(maxIn7Days, i - j + 1);
+      }
+    }
 
     if (postsPerWeek < 3) {
       recommendations.push({
@@ -388,10 +409,10 @@ export class RecommendationEngine {
           'Use scheduling tools to automate posting',
         ],
       });
-    } else if (postsPerWeek > 10) {
+    } else if (postsPerWeek >= 10 || maxIn7Days >= 10) {
       recommendations.push({
         type: 'posting-frequency',
-        title: 'Consider Reducing Posting Frequency',
+        title: 'Reducing Posting Frequency',
         description:
           'Posting very frequently (10+ times/week) can lead to audience fatigue and lower per-post engagement.',
         currentValue: `${postsPerWeek.toFixed(1)} posts/week`,

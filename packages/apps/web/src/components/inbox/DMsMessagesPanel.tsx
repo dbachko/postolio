@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Send } from 'lucide-react';
 
 export type DmMessage = { id: string; message?: string; from?: any; created_time?: string };
@@ -39,7 +40,14 @@ export function DMsMessagesPanel({
           </div>
           <div className="bg-muted/20 flex-1 space-y-3 overflow-auto rounded-md border p-3">
             {loading ? (
-              <div className="text-muted-foreground text-sm">Loading messages…</div>
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="rounded-md border p-2">
+                    <Skeleton className="mb-2 h-3 w-1/3" />
+                    <Skeleton className="h-4 w-5/6" />
+                  </div>
+                ))}
+              </div>
             ) : messages.length ? (
               messages.map((m) => (
                 <div key={m.id} className="bg-card rounded-md border p-2">

@@ -9,7 +9,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Eye, Heart, MessageCircle, Bookmark, Instagram } from 'lucide-react';
+import {
+  Eye,
+  Heart,
+  MessageCircle,
+  Bookmark,
+  Instagram,
+  Facebook,
+  Linkedin,
+  Youtube,
+  Music,
+  Twitter,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface PostMetrics {
@@ -95,8 +106,19 @@ export function TopPostsGrid({ posts, loading, onPostClick }: TopPostsGridProps)
     switch (platform.toLowerCase()) {
       case 'instagram':
         return <Instagram className="h-4 w-4" />;
+      case 'facebook':
+        return <Facebook className="h-4 w-4" />;
+      case 'linkedin':
+        return <Linkedin className="h-4 w-4" />;
+      case 'x':
+      case 'twitter':
+        return <Twitter className="h-4 w-4" />;
+      case 'youtube':
+        return <Youtube className="h-4 w-4" />;
+      case 'tiktok':
+        return <Music className="h-4 w-4" />;
       default:
-        return null;
+        return <Eye className="h-4 w-4" />;
     }
   };
 

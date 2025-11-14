@@ -456,39 +456,23 @@ async function handlePostPublished(detail: EventDetail) {
   try {
     const plt = (platform || 'instagram') as Platform;
 
-    // Load brand to retrieve external account identifiers
-    const brand = brandId
-      ? await client.brand.findUnique({
-          where: { id: brandId },
-          select: { id: true, name: true, instagramAccountId: true, instagramPageId: true },
+    // Query SocialAccount directly for this brand/platform
+    // If post was published, SocialAccount must exist
+    const socialAccount = brandId
+      ? await client.socialAccount.findFirst({
+          where: { brandId, platform: plt },
+          select: {
+            id: true,
+            externalAccountId: true,
+            externalPageId: true,
+          },
         })
       : null;
 
-    // Upsert SocialAccount for this brand/platform
-    const externalAccountId = brand?.instagramAccountId || 'unknown';
-    const socialAccount = await client.socialAccount.upsert({
-      where: {
-        platform_externalAccountId: {
-          platform: plt,
-          externalAccountId,
-        },
-      },
-      update: {
-        brandId: brandId || undefined,
-        externalPageId: brand?.instagramPageId || undefined,
-        username: undefined,
-        displayName: brand?.name || undefined,
-      },
-      create: {
-        brandId: brandId || (brand?.id as string),
-        platform: plt,
-        externalAccountId,
-        externalPageId: brand?.instagramPageId || undefined,
-        username: undefined,
-        displayName: brand?.name || undefined,
-      },
-      select: { id: true },
-    });
+    if (!socialAccount) {
+      console.warn('SocialAccount not found for published post', { brandId, platform: plt });
+      return;
+    }
 
     // Create publication if we have a platform post id
     if (platformPostId) {
@@ -511,8 +495,8 @@ async function handlePostPublished(detail: EventDetail) {
           platform: plt,
           externalPostId: platformPostId,
           externalThreadRootId: null,
-          externalAccountId: brand?.instagramAccountId || undefined,
-          externalPageId: brand?.instagramPageId || undefined,
+          externalAccountId: socialAccount.externalAccountId || undefined,
+          externalPageId: socialAccount.externalPageId || undefined,
           permalink: permalink || undefined,
           publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
           status: 'published',

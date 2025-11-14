@@ -7,6 +7,41 @@ import { createRequire } from 'module';
 
 // https://vite.dev/config/
 
+const httpsConfig = (() => {
+  // Skip HTTPS in CI environment
+  if (process.env.CI) {
+    return undefined as undefined | { cert: Buffer; key: Buffer };
+  }
+
+  try {
+    // Look for SSL certificates
+    const certPath =
+      process.env.SSL_CERT_PATH || path.resolve(__dirname, '../../../certs/ai.localhost.pem');
+    const keyPath =
+      process.env.SSL_KEY_PATH || path.resolve(__dirname, '../../../certs/ai.localhost-key.pem');
+
+    if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+      return {
+        cert: fs.readFileSync(certPath),
+        key: fs.readFileSync(keyPath),
+      };
+    }
+  } catch (error) {
+    console.log('No SSL certificates found, running on HTTP');
+  }
+  return undefined;
+})();
+
+// Determine API protocol: default to https when local HTTPS is configured for Vite
+const defaultApiProtocol = httpsConfig ? 'https' : 'http';
+const apiProtocol =
+  process.env.API_PROTOCOL ||
+  (process.env.API_HTTPS === '1'
+    ? 'https'
+    : process.env.API_HTTPS === '0'
+      ? 'http'
+      : defaultApiProtocol);
+
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
@@ -42,31 +77,7 @@ export default defineConfig({
     // The browser can still access via https://ai.localhost:5173 when DNS/hosts is configured.
     host: true,
     port: 5173,
-    https: (() => {
-      // Skip HTTPS in CI environment
-      if (process.env.CI) {
-        return undefined;
-      }
-
-      try {
-        // Look for SSL certificates
-        const certPath =
-          process.env.SSL_CERT_PATH || path.resolve(__dirname, '../../../certs/ai.localhost.pem');
-        const keyPath =
-          process.env.SSL_KEY_PATH ||
-          path.resolve(__dirname, '../../../certs/ai.localhost-key.pem');
-
-        if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-          return {
-            cert: fs.readFileSync(certPath),
-            key: fs.readFileSync(keyPath),
-          };
-        }
-      } catch (error) {
-        console.log('No SSL certificates found, running on HTTP');
-      }
-      return undefined;
-    })(),
+    https: httpsConfig,
     proxy:
       process.env.E2E === '1'
         ? undefined
@@ -75,13 +86,14 @@ export default defineConfig({
             // Frontend: /api/auth/login → Backend: /api/auth/login
             '/api': {
               // Internal hop can use localhost to avoid DNS dependency
-              target: `https://${process.env.API_HOST || 'localhost'}:3000`,
+              // Prefer HTTP locally unless explicitly opting into HTTPS
+              target: `${apiProtocol}://${process.env.API_HOST || 'localhost'}:3000`,
               changeOrigin: true,
               secure: false, // Allow self-signed certificates
               configure: (proxy) => {
                 proxy.on('proxyReq', (proxyReq, req) => {
                   console.log(
-                    `🔄 Proxying: ${req.method} ${req.url} → https://${process.env.API_HOST || 'localhost'}:3000${proxyReq.path}`
+                    `🔄 Proxying: ${req.method} ${req.url} → ${apiProtocol}://${process.env.API_HOST || 'localhost'}:${3000}${proxyReq.path}`
                   );
                 });
               },
@@ -103,20 +115,20 @@ export default defineConfig({
             },
             // Proxy legal routes to backend for privacy policy and terms
             '/legal': {
-              target: `https://${process.env.API_HOST || 'localhost'}:3000`,
+              target: `${apiProtocol}://${process.env.API_HOST || 'localhost'}:3000`,
               changeOrigin: true,
               secure: false, // Allow self-signed certificates
               configure: (proxy) => {
                 proxy.on('proxyReq', (proxyReq, req) => {
                   console.log(
-                    `📜 Proxying legal: ${req.method} ${req.url} → https://${process.env.API_HOST || 'localhost'}:3000${proxyReq.path}`
+                    `📜 Proxying legal: ${req.method} ${req.url} → ${apiProtocol}://${process.env.API_HOST || 'localhost'}:${3000}${proxyReq.path}`
                   );
                 });
               },
             },
             // Proxy WebSocket connections
             '/ws': {
-              target: `wss://${process.env.API_HOST || 'localhost'}:3000`,
+              target: `${apiProtocol === 'https' ? 'wss' : 'ws'}://${process.env.API_HOST || 'localhost'}:3000`,
               ws: true,
               changeOrigin: true,
               secure: false,
@@ -128,10 +140,10 @@ export default defineConfig({
             },
           },
     // Public-facing host to prefer in HMR and asset URLs
-    origin: `https://${process.env.PUBLIC_HOST || 'ai.localhost'}:5173`,
+    origin: `${httpsConfig ? 'https' : 'http'}://${process.env.PUBLIC_HOST || 'ai.localhost'}:5173`,
     hmr: {
       host: process.env.PUBLIC_HOST || 'ai.localhost',
-      protocol: 'wss',
+      protocol: httpsConfig ? 'wss' : 'ws',
       port: 5173,
     },
   },

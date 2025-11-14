@@ -2,17 +2,22 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ForecastingService } from '../forecasting.js';
 import { getDatabaseClient } from '../../config/database.js';
 
-// Mock the database client
-vi.mock('../../config/database.js', () => ({
-  getDatabaseClient: vi.fn(() => ({
+// Mock the database client (singleton shared between test and service code)
+vi.mock('../../config/database.js', () => {
+  const mockClient = {
     contentPublication: {
       findMany: vi.fn(),
     },
     campaign: {
       findUnique: vi.fn(),
     },
-  })),
-}));
+  } as any;
+  return {
+    getDatabaseUrl: vi.fn(() => 'postgresql://test:test@localhost:5432/test?schema=public'),
+    getDatabaseClient: vi.fn(() => mockClient),
+    prisma: mockClient,
+  };
+});
 
 describe('ForecastingService', () => {
   let engine: ForecastingService;
@@ -103,8 +108,16 @@ describe('ForecastingService', () => {
     });
 
     it('should detect stable trend correctly', async () => {
-      const mockPublications = createTimeSeriesData(30, 'stable');
-      vi.mocked(mockPrisma.contentPublication.findMany).mockResolvedValue(mockPublications);
+      // Use deterministic, perfectly flat engagement series so that trend
+      // classification is stable across runs and environments.
+      const mockPublications = createTimeSeriesData(30, 'stable').map((pub) => ({
+        ...pub,
+        metricsLatest: {
+          ...pub.metricsLatest,
+          engagement: 500,
+        },
+      }));
+      vi.mocked(mockPrisma.contentPublication.findMany).mockResolvedValue(mockPublications as any);
 
       const result = await engine.generateForecast(mockBrandId, 30, 90);
 

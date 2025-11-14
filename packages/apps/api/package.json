@@ -5,10 +5,13 @@
   "scripts": {
     "build:deps": "pnpm --filter \"api^...\" run build",
     "build": "pnpm run build:deps && tsc -p tsconfig.json",
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --exclude \"**/.prisma/**\" --exclude \"**/@prisma/client/**\" src/server.ts",
     "seed:dev": "tsx scripts/seed-dev.ts",
     "lint": "eslint src/**/*.ts",
-    "generate-secret": "node scripts/generate-jwt-secret.js"
+    "generate-secret": "node scripts/generate-jwt-secret.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",
@@ -30,6 +33,7 @@
     "@fastify/websocket": "^11.2.0",
     "@postolio/assets-client": "workspace:*",
     "@postolio/aws": "workspace:*",
+    "@postolio/connectors": "workspace:*",
     "@postolio/database-assets": "workspace:*",
     "@postolio/database": "workspace:*",
     "@postolio/errors": "workspace:*",

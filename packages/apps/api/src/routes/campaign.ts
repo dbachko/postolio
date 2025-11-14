@@ -19,7 +19,6 @@ import { suggestGoals, ensureGoals } from '../services/goal-suggester.js';
 import type { CampaignType } from '../services/goal-templates.js';
 
 import { getDatabaseClient } from '../config/database.js';
-import { instagramService } from '../services/instagram.js';
 import { campaignSlidingWindowService } from '../services/campaign-sliding-window.js';
 
 const prisma = getDatabaseClient();
@@ -147,15 +146,23 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
         const body = request.body;
 
         // Gate campaign creation until Instagram is connected
-        // 1) Verify brand ownership and read instagram connection fields
+        // 1) Verify brand ownership
         const brandForConnCheck = await prisma.brand.findFirst({
           where: { id: body.brandId, userId },
-          select: { id: true, instagramAccountId: true, instagramPageId: true },
+          select: { id: true },
         });
         if (!brandForConnCheck) {
           return reply.code(404).send({ error: 'Brand not found or access denied' });
         }
-        if (!instagramService.isConfigured(brandForConnCheck)) {
+
+        // 2) Check if Instagram is connected via SocialAccount
+        const instagramAccount = await prisma.socialAccount.findFirst({
+          where: {
+            brandId: body.brandId,
+            platform: 'instagram',
+          },
+        });
+        if (!instagramAccount) {
           return reply.code(400).send({
             error: 'Instagram not connected for this brand',
             code: 'INSTAGRAM_NOT_CONNECTED',

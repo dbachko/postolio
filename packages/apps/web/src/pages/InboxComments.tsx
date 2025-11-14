@@ -4,6 +4,7 @@ import { useBrandStore } from '@/stores/brandStore';
 import { content as contentApi, brand as brandApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { CommentsSidebar } from '@/components/inbox/CommentsSidebar';
 import { CommentCard } from '@/components/inbox/CommentCard';
 import { toast } from 'sonner';
@@ -31,13 +32,17 @@ export default function InboxComments() {
   const [replyText, setReplyText] = useState('');
 
   // Fetch posts with new comment activity
-  const { data: inboxData, refetch: refetchInbox } = useQuery<{ items: InboxItem[] }>({
+  const {
+    data: inboxData,
+    refetch: refetchInbox,
+    isLoading: inboxLoading,
+  } = useQuery<{ items: InboxItem[] }>({
     queryKey: ['inbox-comments', brandId],
     queryFn: async () => (await brandApi.getCommentsInbox(brandId!)) as any,
     enabled: !!brandId,
   });
 
-  const items = (inboxData?.items || []) as InboxItem[];
+  const items = useMemo(() => (inboxData?.items || []) as InboxItem[], [inboxData]);
 
   // Default select first item with new activity
   useEffect(() => {
@@ -148,20 +153,45 @@ export default function InboxComments() {
       <CardContent>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div className="md:col-span-1">
-            <CommentsSidebar
-              items={items.map((i) => ({
-                postId: i.postId,
-                caption: i.caption,
-                imageUrl: i.imageUrl,
-                postedAt: i.postedAt,
-                newCount: i.newCount,
-              }))}
-              selectedPostId={selectedPostId}
-              onSelect={(id) => setSelectedPostId(id)}
-            />
+            {brandId && inboxLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-md border p-2">
+                    <Skeleton className="h-12 w-12 rounded" />
+                    <div className="min-w-0 flex-1">
+                      <Skeleton className="mb-1 h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                    <Skeleton className="h-5 w-10 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <CommentsSidebar
+                items={items.map((i) => ({
+                  postId: i.postId,
+                  caption: i.caption,
+                  imageUrl: i.imageUrl,
+                  postedAt: i.postedAt,
+                  newCount: i.newCount,
+                }))}
+                selectedPostId={selectedPostId}
+                onSelect={(id) => setSelectedPostId(id)}
+              />
+            )}
           </div>
           <div className="md:col-span-2">
-            {!selectedPostId && <div className="text-muted-foreground">Select a post</div>}
+            {brandId && inboxLoading ? (
+              <div className="mb-4 flex items-center gap-3">
+                <Skeleton className="h-14 w-14 rounded" />
+                <div className="min-w-0 flex-1">
+                  <Skeleton className="mb-2 h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </div>
+            ) : (
+              !selectedPostId && <div className="text-muted-foreground">Select a post</div>
+            )}
             {selectedItem && (
               <div className="mb-4 flex items-center gap-3">
                 {selectedItem.imageUrl ? (
@@ -191,7 +221,14 @@ export default function InboxComments() {
               </div>
             )}
             {isFetching ? (
-              <div className="text-muted-foreground text-sm">Loading comments…</div>
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="rounded-md border p-2">
+                    <Skeleton className="mb-2 h-3 w-1/3" />
+                    <Skeleton className="h-4 w-5/6" />
+                  </div>
+                ))}
+              </div>
             ) : commentsData?.data?.length ? (
               <div className="space-y-4">
                 {commentsData.data.map((c) => (
@@ -222,9 +259,9 @@ export default function InboxComments() {
                   />
                 ))}
               </div>
-            ) : (
+            ) : selectedPostId ? (
               <div className="text-muted-foreground text-sm">No comments found.</div>
-            )}
+            ) : null}
           </div>
         </div>
       </CardContent>
