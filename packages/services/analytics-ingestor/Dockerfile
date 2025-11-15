@@ -42,6 +42,7 @@ RUN mkdir -p packages/libs/database/.turbo packages/libs/connectors/.turbo packa
 # Build required libs then the ingestor
 RUN pnpm --filter=@postolio/aws build \
   && pnpm --filter=@postolio/database build \
+  && pnpm --filter=@postolio/errors build \
   && pnpm --filter=@postolio/connectors build \
   && pnpm --filter=@postolio/analytics-ingestor build
 
