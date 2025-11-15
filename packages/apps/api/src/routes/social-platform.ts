@@ -217,10 +217,10 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           return reply.code(platformError.statusCode).send(platformError.body);
         }
 
-        // Get content
+        // Get content with brand and campaign
         const content = await prisma.content.findUnique({
           where: { id: contentId },
-          include: { brand: true },
+          include: { brand: true, campaign: true },
         });
 
         if (!content) {
@@ -259,6 +259,15 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           return reply.code(403).send({
             error: 'forbidden',
             message: 'You do not have permission to publish this content',
+          });
+        }
+
+        // Enforce campaign status: do not publish content from non-active campaigns
+        if (content.campaignId && content.campaign && content.campaign.status !== 'active') {
+          const status = String(content.campaign.status || '').toLowerCase() || 'unknown';
+          return reply.code(400).send({
+            error: 'campaign_not_active',
+            message: `Cannot publish content for a ${status} campaign`,
           });
         }
 
@@ -641,52 +650,112 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
 
         let syncedCount = 0;
         let skippedCount = 0;
+        let failedCount = 0;
+        const errors: string[] = [];
 
         // Create ContentPublication records for new posts
         for (const post of result.data) {
-          // Check if publication already exists
-          const existing = await prisma.contentPublication.findFirst({
+          const externalPostId = post.id;
+          if (!externalPostId) {
+            failedCount++;
+            errors.push('Post missing external ID; cannot sync');
+            continue;
+          }
+
+          // Primary deduplication: external post ID at brand+platform level
+          const existingByBrand = await prisma.contentPublication.findFirst({
             where: {
-              socialAccountId: socialAccount.id,
-              externalPostId: post.id,
+              platform: platform as any,
+              externalPostId,
+              content: {
+                brandId,
+              },
             },
           });
 
-          if (existing) {
+          if (existingByBrand) {
+            skippedCount++;
+            continue;
+          }
+
+          // Legacy/defensive check: same social account + externalPostId
+          const existingByAccount = await prisma.contentPublication.findFirst({
+            where: {
+              socialAccountId: socialAccount.id,
+              externalPostId,
+            },
+          });
+
+          if (existingByAccount) {
             skippedCount++;
             continue;
           }
 
           // Create content record (imported from platform)
-          const content = await prisma.content.create({
-            data: {
-              brandId,
-              caption: post.caption,
-              hashtags: post.hashtags || [],
-              primaryAssetCdnUrl: post.mediaUrl,
-              status: 'published',
-              createdAt: post.postedAt ? new Date(post.postedAt) : new Date(),
-              updatedAt: new Date(),
-            },
-          });
-
-          // Create publication record
-          await prisma.contentPublication.create({
-            data: {
-              contentId: content.id,
-              socialAccountId: socialAccount.id,
-              platform: platform as any,
-              externalPostId: post.id,
-              permalink: post.permalink,
-              publishedAt: post.postedAt ? new Date(post.postedAt) : new Date(),
-              metadata: {
-                imported: true,
-                syncedAt: new Date().toISOString(),
+          let content;
+          try {
+            content = await prisma.content.create({
+              data: {
+                brandId,
+                caption: post.caption,
+                hashtags: post.hashtags || [],
+                primaryAssetCdnUrl: post.mediaUrl,
+                status: 'published',
+                createdAt: post.postedAt ? new Date(post.postedAt) : new Date(),
+                updatedAt: new Date(),
               },
-            },
-          });
+            });
+          } catch (err: any) {
+            failedCount++;
+            errors.push(
+              `Post ${externalPostId}: failed to create content - ${err?.message || String(err)}`
+            );
+            continue;
+          }
 
-          syncedCount++;
+          try {
+            // Create publication record
+            await prisma.contentPublication.create({
+              data: {
+                contentId: content.id,
+                socialAccountId: socialAccount.id,
+                platform: platform as any,
+                externalPostId,
+                permalink: post.permalink,
+                publishedAt: post.postedAt ? new Date(post.postedAt) : new Date(),
+                metadata: {
+                  imported: true,
+                  syncedAt: new Date().toISOString(),
+                },
+              },
+            });
+            syncedCount++;
+          } catch (err: any) {
+            const code = err?.code;
+
+            if (code === 'P2002') {
+              // Unique constraint violation: another sync created the publication first.
+              // Clean up the just-created content to avoid duplicates and treat as skipped.
+              try {
+                await prisma.content.delete({ where: { id: content.id } });
+              } catch {
+                // Best-effort cleanup; ignore errors here.
+              }
+              skippedCount++;
+              continue;
+            }
+
+            failedCount++;
+            errors.push(
+              `Post ${externalPostId}: failed to create publication - ${err?.message || String(err)}`
+            );
+            // Best-effort cleanup of orphaned content
+            try {
+              await prisma.content.delete({ where: { id: content.id } });
+            } catch {
+              // Ignore cleanup errors
+            }
+          }
         }
 
         logger.info('Posts synced successfully', {
@@ -694,6 +763,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           brandId,
           syncedCount,
           skippedCount,
+          failedCount,
         });
 
         // Set cooldown to prevent abuse (not used in tests)
@@ -731,7 +801,14 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           platform,
           synced: syncedCount,
           skipped: skippedCount,
+          failed: failedCount,
           total: result.data.length,
+          results: {
+            synced: syncedCount,
+            skipped: skippedCount,
+            failed: failedCount,
+            errors,
+          },
         });
       } catch (error: any) {
         logger.error('Failed to sync posts', {

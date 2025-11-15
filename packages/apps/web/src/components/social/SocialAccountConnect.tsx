@@ -186,7 +186,23 @@ export function SocialAccountConnect({
   }
 
   const isConnected = connectionStatus?.connected ?? false;
-  const profile = connectionStatus?.profile as SocialProfile | null;
+  const rawProfile =
+    (connectionStatus as any)?.profile ?? (connectionStatus as any)?.account ?? null;
+
+  let profile: SocialProfile | null = null;
+  if (rawProfile && rawProfile.username) {
+    profile = {
+      id: rawProfile.id ?? rawProfile.externalAccountId ?? '',
+      username: rawProfile.username,
+      account_type: rawProfile.account_type,
+      name: rawProfile.name ?? rawProfile.displayName,
+      followers_count: rawProfile.followers_count,
+      media_count: rawProfile.media_count,
+      biography: rawProfile.biography,
+      profile_picture_url:
+        rawProfile.profile_picture_url ?? rawProfile.profilePictureUrl ?? undefined,
+    };
+  }
 
   return (
     <Card>

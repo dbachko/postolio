@@ -485,8 +485,13 @@ async function handlePostPublished(detail: EventDetail) {
           },
         },
         update: {
+          // Re-attach this publication to the latest content record
+          // in case it was previously associated with an imported post.
+          contentId,
           permalink: permalink || undefined,
           publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
+          externalAccountId: socialAccount.externalAccountId || undefined,
+          externalPageId: socialAccount.externalPageId || undefined,
           status: 'published',
         },
         create: {

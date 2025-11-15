@@ -27,6 +27,15 @@ const publishingRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: authResult.error });
         }
 
+        // Prevent publishing content that belongs to a non-active campaign
+        const campaignStatus = authResult.data?.campaignStatus;
+        if (campaignStatus && campaignStatus !== 'active') {
+          return reply.code(400).send({
+            error: 'campaign_not_active',
+            message: `Cannot publish content for a ${String(campaignStatus).toLowerCase()} campaign`,
+          });
+        }
+
         // Get brand for publishing (content already verified in authResult)
         const brand = await prisma.brand.findUnique({
           where: { id: authResult.data!.brandId },

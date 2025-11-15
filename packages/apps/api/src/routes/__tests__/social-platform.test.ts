@@ -227,10 +227,12 @@ describe('Social Platform Routes', () => {
         hashtags: ['test', 'instagram'],
         primaryAssetCdnUrl: 'https://cdn.example.com/image.jpg',
         status: 'scheduled',
+        campaignId: null,
         brand: {
           id: 'brand-123',
           userId: 'user-123',
         },
+        campaign: null,
       });
 
       const socialAccount = {
@@ -290,6 +292,8 @@ describe('Social Platform Routes', () => {
         id: 'content-123',
         brandId: 'brand-123',
         brand: { id: 'brand-123', userId: 'user-123' },
+        campaignId: null,
+        campaign: null,
       });
 
       mockPrisma.socialAccount.findUnique.mockResolvedValue(null);
@@ -316,6 +320,8 @@ describe('Social Platform Routes', () => {
         hashtags: ['test'],
         primaryAssetCdnUrl: 'https://cdn.example.com/image.jpg',
         brand: { id: 'brand-123', userId: 'user-123' },
+        campaignId: null,
+        campaign: null,
       });
 
       const socialAccount = {
@@ -341,6 +347,38 @@ describe('Social Platform Routes', () => {
       const payload = JSON.parse(response.payload);
       expect(payload.error).toContain('Rate limit exceeded');
     });
+
+    it('should block publishing when campaign is paused', async () => {
+      mockPrisma.content.findUnique.mockResolvedValue({
+        id: 'content-123',
+        brandId: 'brand-123',
+        caption: 'Test post',
+        hashtags: ['test', 'instagram'],
+        primaryAssetCdnUrl: 'https://cdn.example.com/image.jpg',
+        status: 'scheduled',
+        campaignId: 'campaign-123',
+        brand: {
+          id: 'brand-123',
+          userId: 'user-123',
+        },
+        campaign: {
+          id: 'campaign-123',
+          status: 'paused',
+        },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/social/instagram/publish/content-123',
+        headers: {
+          authorization: authHeader,
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const payload = JSON.parse(response.payload);
+      expect(payload.error).toContain('campaign_not_active');
+    });
   });
 
   describe('POST /api/social/:platform/sync/:brandId', () => {
@@ -362,7 +400,7 @@ describe('Social Platform Routes', () => {
       vi.mocked(mockConnector.listRecentPosts).mockResolvedValue({
         data: [
           {
-            externalPostId: 'post-1',
+            id: 'post-1',
             caption: 'Post 1',
             mediaUrl: 'https://instagram.com/photo.jpg',
             postedAt: '2025-01-10T12:00:00Z',
@@ -375,7 +413,7 @@ describe('Social Platform Routes', () => {
         id: 'content-synced-1',
       });
 
-      mockPrisma.contentPublication.findMany.mockResolvedValue([]);
+      mockPrisma.contentPublication.findFirst.mockResolvedValue(null);
       mockPrisma.contentPublication.create.mockResolvedValue({});
 
       const response = await app.inject({
@@ -393,6 +431,60 @@ describe('Social Platform Routes', () => {
       const payload = JSON.parse(response.payload);
       expect(payload.success).toBe(true);
       expect(payload.synced).toBeGreaterThanOrEqual(0);
+      expect(payload.results.synced).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should skip posts that already exist for the brand and platform', async () => {
+      mockPrisma.brand.findFirst.mockResolvedValue({
+        id: 'brand-123',
+        userId: 'user-123',
+      });
+
+      const socialAccount = {
+        id: 'social-account-123',
+        brandId: 'brand-123',
+        platform: 'instagram',
+        externalAccountId: 'ig-account-123',
+      };
+      mockPrisma.socialAccount.findUnique.mockResolvedValue(socialAccount);
+      mockPrisma.socialAccount.findFirst.mockResolvedValue(socialAccount);
+
+      vi.mocked(mockConnector.listRecentPosts).mockResolvedValue({
+        data: [
+          {
+            id: 'post-1',
+            caption: 'Existing post',
+            mediaUrl: 'https://instagram.com/photo.jpg',
+            postedAt: '2025-01-10T12:00:00Z',
+          },
+        ],
+      });
+
+      // Simulate an existing publication for this externalPostId at the brand+platform level
+      mockPrisma.contentPublication.findFirst.mockResolvedValue({
+        id: 'publication-1',
+        contentId: 'content-1',
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/social/instagram/sync/brand-123',
+        headers: {
+          authorization: authHeader,
+        },
+        payload: {
+          maxPosts: 10,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const payload = JSON.parse(response.payload);
+      expect(payload.success).toBe(true);
+      expect(payload.synced).toBe(0);
+      expect(payload.skipped).toBe(1);
+      // Ensure no new content or publication were created
+      expect(mockPrisma.content.create).not.toHaveBeenCalled();
+      expect(mockPrisma.contentPublication.create).not.toHaveBeenCalled();
     });
 
     it('should return 404 when brand not found', async () => {
