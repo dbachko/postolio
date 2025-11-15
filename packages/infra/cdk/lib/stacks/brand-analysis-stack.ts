@@ -35,7 +35,10 @@ export class BrandAnalysisStack extends cdk.Stack {
         this,
         `/postolio/${environment}/security-groups/lambda`
       );
-      if (vpcId && lambdaSgId) {
+
+      const isRealValue = (value?: string) => !!value && !value.startsWith('dummy-value-for-');
+
+      if (isRealValue(vpcId) && isRealValue(lambdaSgId)) {
         vpc = ec2.Vpc.fromLookup(this, 'FoundationVpc', { vpcId });
         lambdaSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
           this,
@@ -43,7 +46,9 @@ export class BrandAnalysisStack extends cdk.Stack {
           lambdaSgId
         );
       }
-    } catch {}
+    } catch {
+      // If lookup fails, continue without VPC; Lambdas will run without VPC networking.
+    }
 
     // Tables
     const profilesTable = new dynamodb.Table(this, 'ProfilesTable', {
@@ -520,6 +525,21 @@ export class BrandAnalysisStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM4',
           reason: 'AWSLambdaBasicExecutionRole acceptable for Lambda execution; logs only',
+        },
+      ],
+      true
+    );
+
+    // Suppress Lambda runtime \"latest version\" rule for Node.js functions.
+    // aws-cdk-lib currently exposes nodejs24.x in Runtime.ALL, but this stack
+    // pins Lambdas to nodejs22.x as the latest generally available runtime.
+    NagSuppressions.addResourceSuppressions(
+      this,
+      [
+        {
+          id: 'AwsSolutions-L1',
+          reason:
+            'Using latest generally available Node.js Lambda runtime (nodejs22.x); aws-cdk-lib also exposes nodejs24.x, which AwsSolutions-L1 treats as latest even though it is not yet widely available.',
         },
       ],
       true
