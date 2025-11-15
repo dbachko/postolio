@@ -23,7 +23,7 @@ export function Bell() {
       >
         <BellIcon className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="bg-primary text-primary-foreground absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full px-1 text-[10px] font-medium">
+          <span className="bg-primary text-primary-foreground absolute -top-1 -right-1 grid h-5 min-w-[20px] place-items-center rounded-full px-1 text-[10px] font-medium">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}

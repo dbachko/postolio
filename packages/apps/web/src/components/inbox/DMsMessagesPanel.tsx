@@ -55,7 +55,7 @@ export function DMsMessagesPanel({
                     {m.from?.name || m.from?.username || m.from?.id || 'User'} •{' '}
                     {m.created_time ? new Date(m.created_time).toLocaleString() : ''}
                   </div>
-                  <div className="whitespace-pre-wrap text-sm">{m.message}</div>
+                  <div className="text-sm whitespace-pre-wrap">{m.message}</div>
                 </div>
               ))
             ) : (

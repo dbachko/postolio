@@ -23,38 +23,6 @@ import { campaignSlidingWindowService } from '../services/campaign-sliding-windo
 
 const prisma = getDatabaseClient();
 
-interface ConfigureCampaignBody {
-  name?: string; // Optional: Auto-generated if not provided
-  brandId: string;
-  // NEW: Campaign type selection (Step 1 of wizard)
-  campaignType?: 'promotional' | 'educational' | 'seasonal' | 'thought_leadership' | 'custom';
-  duration: {
-    start: string; // ISO date string
-    end: string; // ISO date string
-  };
-  frequency: string;
-  themes: string[];
-  style?: string;
-  postingTime: string;
-  priority?: number;
-  goals?: string | string[];
-  seasonalityAssist?: boolean;
-  // NEW: Optional structured data from wizard
-  promotionDetails?: {
-    discountPercentage?: number;
-    promoCode?: string;
-    limitedQuantity?: boolean;
-  };
-  // NEW: Structured content pillars (manual in Phase 1; AI in Phase 2)
-  contentPillars?: {
-    pillars: Array<{
-      name: string;
-      percentage: number;
-      themes?: string[];
-    }>;
-  };
-}
-
 interface PreviewCampaignBody {
   configId: string;
   exampleCount?: number;
@@ -119,17 +87,19 @@ const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       .optional(),
   });
 
+  type ConfigureBody = z.infer<typeof ConfigureSchema>;
+
   // Configure campaign (RESTful: POST /)
-  fastify.post<{ Body: ConfigureCampaignBody }>(
+  fastify.post<{ Body: ConfigureBody }>(
     '/',
     {
       preHandler: [
         fastify.authenticate,
         async (request) => {
           // Sanitize goals without using `any` by mutating the same reference
-          const rawUnknown = request.body as unknown;
+          const rawUnknown = request.body as ConfigureBody;
           if (rawUnknown && typeof rawUnknown === 'object') {
-            const container = rawUnknown as Record<string, unknown> & { goals?: unknown };
+            const container = rawUnknown as ConfigureBody & { goals?: unknown };
             if (Object.prototype.hasOwnProperty.call(container, 'goals')) {
               const sanitized = sanitizeGoalsValue(container.goals);
               if (sanitized === undefined) delete container.goals;

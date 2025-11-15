@@ -261,7 +261,7 @@ export function Register() {
                       type="button"
                       variant="ghost"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="text-muted-foreground hover:text-foreground absolute right-2 top-1/2 min-h-[44px] min-w-[44px] -translate-y-1/2 p-2"
+                      className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 min-h-[44px] min-w-[44px] -translate-y-1/2 p-2"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}

@@ -29,17 +29,17 @@ export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) 
         />
         {/* Milestone markers */}
         <div
-          className="absolute left-[40%] top-0 h-full w-px"
+          className="absolute top-0 left-[40%] h-full w-px"
           style={{ backgroundColor: 'var(--border)' }}
           aria-hidden="true"
         />
         <div
-          className="absolute left-[60%] top-0 h-full w-px"
+          className="absolute top-0 left-[60%] h-full w-px"
           style={{ backgroundColor: 'var(--border)' }}
           aria-hidden="true"
         />
         <div
-          className="absolute left-[75%] top-0 h-full w-px"
+          className="absolute top-0 left-[75%] h-full w-px"
           style={{ backgroundColor: color }}
           aria-hidden="true"
         />

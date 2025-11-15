@@ -32,7 +32,7 @@ export default function AssetPicker({ onSelect, onClose, brandId }: AssetPickerP
             <h2 className="text-2xl font-bold">Choose Asset</h2>
             <button
               onClick={onClose}
-              className="ring-offset-background focus-visible:ring-ring hover:bg-accent hover:text-accent-foreground inline-flex h-8 items-center justify-center rounded-md border px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              className="ring-offset-background focus-visible:ring-ring hover:bg-accent hover:text-accent-foreground inline-flex h-8 items-center justify-center rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
             >
               Close
             </button>
@@ -44,7 +44,7 @@ export default function AssetPicker({ onSelect, onClose, brandId }: AssetPickerP
               placeholder="Search assets..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring mb-4 flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring mb-4 flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
             />
 
             {/* Assets Grid */}
@@ -92,14 +92,14 @@ export default function AssetPicker({ onSelect, onClose, brandId }: AssetPickerP
           <div className="flex items-center justify-end gap-2 border-t p-4">
             <button
               onClick={onClose}
-              className="ring-offset-background focus-visible:ring-ring border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              className="ring-offset-background focus-visible:ring-ring border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
             >
               Cancel
             </button>
             <button
               onClick={() => selectedAsset && onSelect(selectedAsset)}
               disabled={!selectedAsset}
-              className="ring-offset-background focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-10 items-center justify-center whitespace-nowrap rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50"
+              className="ring-offset-background focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-50"
             >
               Select
             </button>

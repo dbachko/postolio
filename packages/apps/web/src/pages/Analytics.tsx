@@ -405,7 +405,7 @@ export default function Analytics() {
         <PageHeader title="Analytics" description="Performance metrics and scheduling" />
 
         {error && (
-          <div className="mb-6 mt-6">
+          <div className="mt-6 mb-6">
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>

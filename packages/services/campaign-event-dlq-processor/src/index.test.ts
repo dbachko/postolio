@@ -3,36 +3,55 @@ import { handler, healthCheck } from './index';
 import type { SQSEvent } from 'aws-lambda';
 
 // Mock the dependencies
-vi.mock('@aws-lambda-powertools/logger', () => ({
-  Logger: vi.fn(() => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  })),
-}));
+vi.mock('@aws-lambda-powertools/logger', () => {
+  class MockLogger {
+    info = vi.fn();
+    warn = vi.fn();
+    error = vi.fn();
+    debug = vi.fn();
+  }
 
-vi.mock('@aws-lambda-powertools/tracer', () => ({
-  Tracer: vi.fn(() => ({
-    captureAWSv3Client: vi.fn((client) => client),
-  })),
-}));
+  return {
+    Logger: MockLogger,
+  };
+});
 
-vi.mock('@aws-lambda-powertools/metrics', () => ({
-  Metrics: vi.fn(() => ({
-    addMetric: vi.fn(),
-    publishStoredMetrics: vi.fn(),
-  })),
-  MetricUnit: {
-    Count: 'Count',
-  },
-}));
+vi.mock('@aws-lambda-powertools/tracer', () => {
+  class MockTracer {
+    captureAWSv3Client = vi.fn((client) => client);
+  }
 
-vi.mock('@aws-sdk/client-eventbridge', () => ({
-  EventBridge: vi.fn(() => ({
-    send: vi.fn().mockResolvedValue({}),
-  })),
-  PutEventsCommand: vi.fn(),
-}));
+  return {
+    Tracer: MockTracer,
+  };
+});
+
+vi.mock('@aws-lambda-powertools/metrics', () => {
+  class MockMetrics {
+    addMetric = vi.fn();
+    publishStoredMetrics = vi.fn();
+  }
+
+  return {
+    Metrics: MockMetrics,
+    MetricUnit: {
+      Count: 'Count',
+    },
+  };
+});
+
+vi.mock('@aws-sdk/client-eventbridge', () => {
+  class MockEventBridge {
+    send = vi.fn().mockResolvedValue({});
+  }
+
+  const PutEventsCommand = vi.fn();
+
+  return {
+    EventBridge: MockEventBridge,
+    PutEventsCommand,
+  };
+});
 
 vi.mock('@postolio/aws', () => ({
   campaignConsistency: {

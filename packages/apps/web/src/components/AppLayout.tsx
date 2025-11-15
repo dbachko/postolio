@@ -212,7 +212,7 @@ export function AppLayout({ children }: LayoutProps) {
       {/* Skip to main content for accessibility */}
       <a
         href="#main-content"
-        className="bg-primary text-primary-foreground sr-only z-50 rounded-md px-4 py-2 focus:not-sr-only focus:absolute focus:left-4 focus:top-4"
+        className="bg-primary text-primary-foreground sr-only z-50 rounded-md px-4 py-2 focus:not-sr-only focus:absolute focus:top-4 focus:left-4"
       >
         Skip to main content
       </a>
@@ -350,7 +350,7 @@ export function AppLayout({ children }: LayoutProps) {
               >
                 <Search className="h-4 w-4" aria-hidden="true" />
                 <span className="ml-2 hidden text-sm lg:inline">Search</span>
-                <kbd className="bg-muted pointer-events-none ml-2 hidden h-5 select-none items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-100 lg:inline-flex">
+                <kbd className="bg-muted pointer-events-none ml-2 hidden h-5 items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-100 select-none lg:inline-flex">
                   <span className="text-xs">⌘</span>K
                 </kbd>
               </Button>
@@ -493,7 +493,7 @@ export function AppLayout({ children }: LayoutProps) {
                   <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>
                       <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">Account</p>
+                        <p className="text-sm leading-none font-medium">Account</p>
                         <p className="text-muted-foreground text-xs leading-none">{user.email}</p>
                       </div>
                     </DropdownMenuLabel>

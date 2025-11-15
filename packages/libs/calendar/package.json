@@ -23,20 +23,19 @@
     "dev": "tsup --watch"
   },
   "peerDependencies": {
+    "luxon": "^3.0.0",
     "react": ">=18",
-    "react-dom": ">=18",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
-    "luxon": "^3.0.0"
+    "react-dom": ">=18"
   },
-  "dependencies": {},
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
     "@types/luxon": "^3.7.1",
-    "tsup": "^8.0.1",
-    "typescript": "^5.0.0"
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   },
   "files": [
     "dist",

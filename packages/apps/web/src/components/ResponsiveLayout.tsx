@@ -126,7 +126,7 @@ export function ResponsiveLayout({ children }: LayoutProps) {
       {/* Skip to main content for accessibility */}
       <a
         href="#main-content"
-        className="bg-primary text-primary-foreground sr-only z-50 rounded-md px-4 py-2 focus:not-sr-only focus:absolute focus:left-4 focus:top-4"
+        className="bg-primary text-primary-foreground sr-only z-50 rounded-md px-4 py-2 focus:not-sr-only focus:absolute focus:top-4 focus:left-4"
       >
         Skip to main content
       </a>
@@ -181,7 +181,7 @@ export function ResponsiveLayout({ children }: LayoutProps) {
               >
                 <Search className="mr-2 h-4 w-4" aria-hidden="true" />
                 <span className="hidden lg:inline">Search...</span>
-                <kbd className="bg-muted pointer-events-none absolute right-1.5 hidden h-5 select-none items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
+                <kbd className="bg-muted pointer-events-none absolute right-1.5 hidden h-5 items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-100 select-none sm:flex">
                   <span className="text-xs">⌘</span>K
                 </kbd>
               </Button>
@@ -206,7 +206,7 @@ export function ResponsiveLayout({ children }: LayoutProps) {
                   <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>
                       <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">Account</p>
+                        <p className="text-sm leading-none font-medium">Account</p>
                         <p className="text-muted-foreground text-xs leading-none">{user.email}</p>
                       </div>
                     </DropdownMenuLabel>
@@ -285,7 +285,7 @@ export function ResponsiveLayout({ children }: LayoutProps) {
                   </SheetHeader>
 
                   {/* Mobile Search - Fixed at top */}
-                  <div className="mb-4 mt-4 flex-shrink-0 px-6">
+                  <div className="mt-4 mb-4 flex-shrink-0 px-6">
                     <Button
                       variant="outline"
                       className="w-full justify-start"
@@ -334,7 +334,7 @@ export function ResponsiveLayout({ children }: LayoutProps) {
 
                   {/* Mobile Menu Footer with User Info - Fixed at bottom */}
                   {user && (
-                    <div className="flex-shrink-0 space-y-3 border-t px-6 pb-6 pt-4">
+                    <div className="flex-shrink-0 space-y-3 border-t px-6 pt-4 pb-6">
                       <div>
                         <p className="text-sm font-medium">{user.email}</p>
                         {selectedBrand && (

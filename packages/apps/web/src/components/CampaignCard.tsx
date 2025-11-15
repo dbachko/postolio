@@ -256,11 +256,11 @@ const CampaignCard = memo(
                   </Button>
                   {/* Show tooltip on hover for disabled state */}
                   {!canDeleteCampaign() && (
-                    <div className="bg-popover text-popover-foreground absolute bottom-full right-0 z-50 mb-2 hidden w-64 rounded-md p-2 text-xs shadow-lg group-hover/delete:block">
+                    <div className="bg-popover text-popover-foreground absolute right-0 bottom-full z-50 mb-2 hidden w-64 rounded-md p-2 text-xs shadow-lg group-hover/delete:block">
                       <div className="relative">
                         {getDeleteTooltip()}
                         <div
-                          className="absolute right-4 top-full h-0 w-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent"
+                          className="absolute top-full right-4 h-0 w-0 border-t-4 border-r-4 border-l-4 border-r-transparent border-l-transparent"
                           style={{ borderTopColor: 'var(--popover)' }}
                         ></div>
                       </div>

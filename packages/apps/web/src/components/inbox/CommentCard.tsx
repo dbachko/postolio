@@ -82,7 +82,7 @@ export function CommentCard({
           )}
         </div>
       </div>
-      <div className="whitespace-pre-wrap text-sm">{data.text}</div>
+      <div className="text-sm whitespace-pre-wrap">{data.text}</div>
       <div className="mt-2">
         <QuickLensChips text={data.text || ''} />
       </div>

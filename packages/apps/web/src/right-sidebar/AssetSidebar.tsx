@@ -551,7 +551,7 @@ export function AssetSidebar({
                   />
                 </button>
                 {detailsOpen ? (
-                  <div className="border-t px-4 pb-4 pt-2">
+                  <div className="border-t px-4 pt-2 pb-4">
                     <dl className="grid grid-cols-2 gap-4 text-sm">
                       <div className="space-y-1">
                         <dt className="text-muted-foreground">Type</dt>

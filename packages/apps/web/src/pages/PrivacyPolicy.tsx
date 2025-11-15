@@ -57,13 +57,13 @@ export function PrivacyPolicy() {
         );
       } else if (line.startsWith('## ')) {
         elements.push(
-          <h2 key={key++} className="text-foreground mb-3 mt-6 text-2xl font-semibold">
+          <h2 key={key++} className="text-foreground mt-6 mb-3 text-2xl font-semibold">
             {line.substring(3)}
           </h2>
         );
       } else if (line.startsWith('### ')) {
         elements.push(
-          <h3 key={key++} className="text-foreground mb-2 mt-4 text-xl font-medium">
+          <h3 key={key++} className="text-foreground mt-4 mb-2 text-xl font-medium">
             {line.substring(4)}
           </h3>
         );

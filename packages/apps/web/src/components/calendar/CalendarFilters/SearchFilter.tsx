@@ -14,20 +14,20 @@ export const SearchFilter = memo(({ compact = false }: SearchFilterProps) => {
 
   return (
     <div className="relative">
-      <Search className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform" />
+      <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform" />
       <Input
         type="text"
         placeholder="Search captions, hashtags, or campaigns..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className={`pl-10 pr-10 ${compact ? 'h-8 text-sm' : ''}`}
+        className={`pr-10 pl-10 ${compact ? 'h-8 text-sm' : ''}`}
       />
       {searchQuery && (
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setSearchQuery('')}
-          className="absolute right-3 top-1/2 h-6 w-6 -translate-y-1/2 transform p-0"
+          className="absolute top-1/2 right-3 h-6 w-6 -translate-y-1/2 transform p-0"
           aria-label="Clear search"
         >
           <X className="text-muted-foreground hover:text-foreground h-4 w-4" />

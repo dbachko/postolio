@@ -211,7 +211,7 @@ const internalTokenRoutes: FastifyPluginAsync = async (fastify) => {
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'Invalid request',
-            details: error.errors,
+            details: error.issues,
           });
         }
 

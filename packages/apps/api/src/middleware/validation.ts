@@ -24,7 +24,7 @@ export function validateBody<T extends z.ZodType>(schema: T) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         // Format Zod errors for client
-        const formattedErrors = error.errors.map((err) => ({
+        const formattedErrors = error.issues.map((err: z.ZodIssue) => ({
           field: err.path.join('.'),
           message: err.message,
           code: err.code,
@@ -53,7 +53,7 @@ export function validateQuery<T extends z.ZodType>(schema: T) {
       request.query = validatedData;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const formattedErrors = error.errors.map((err) => ({
+        const formattedErrors = error.issues.map((err: z.ZodIssue) => ({
           field: err.path.join('.'),
           message: err.message,
           code: err.code,
@@ -80,7 +80,7 @@ export function validateParams<T extends z.ZodType>(schema: T) {
       request.params = validatedData;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const formattedErrors = error.errors.map((err) => ({
+        const formattedErrors = error.issues.map((err: z.ZodIssue) => ({
           field: err.path.join('.'),
           message: err.message,
           code: err.code,
@@ -147,7 +147,7 @@ export function validateAndSanitize<T extends z.ZodType>(schema: T) {
       request.body = validatedData;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const formattedErrors = error.errors.map((err) => ({
+        const formattedErrors = error.issues.map((err: z.ZodIssue) => ({
           field: err.path.join('.'),
           message: err.message,
           code: err.code,
@@ -156,6 +156,7 @@ export function validateAndSanitize<T extends z.ZodType>(schema: T) {
         return reply.status(400).send({
           error: 'Validation failed',
           details: formattedErrors,
+          issues: error.issues,
         });
       }
 

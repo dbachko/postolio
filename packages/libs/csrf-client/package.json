@@ -39,10 +39,10 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
-    "eslint": "^9.35.0",
-    "tsup": "^8.0.0",
-    "typescript": "^5.5.0"
+    "@types/node": "^24.10.1",
+    "eslint": "^9.39.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "typescript": ">=5.0.0"

@@ -60,7 +60,7 @@ export function BrandHealthScore({ healthScore, loading }: BrandHealthScoreProps
   if (loading) {
     return (
       <Card className="relative overflow-hidden border-none bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-purple-950/50">
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-gradient-to-br from-blue-400/20 to-purple-400/20 blur-3xl" />
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-gradient-to-br from-blue-400/20 to-purple-400/20 blur-3xl" />
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <span>Brand Health Score</span>
@@ -160,7 +160,7 @@ export function BrandHealthScore({ healthScore, loading }: BrandHealthScoreProps
     >
       {/* Decorative background elements */}
       <div
-        className={`absolute -right-20 -top-20 h-60 w-60 rounded-full bg-gradient-to-br ${config.ringGradient} opacity-10 blur-3xl`}
+        className={`absolute -top-20 -right-20 h-60 w-60 rounded-full bg-gradient-to-br ${config.ringGradient} opacity-10 blur-3xl`}
       />
       <div
         className={`absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-gradient-to-br ${config.ringGradient} opacity-10 blur-3xl`}
@@ -299,7 +299,7 @@ export function BrandHealthScore({ healthScore, loading }: BrandHealthScoreProps
                 <div className={`rounded-lg bg-gradient-to-br ${config.ringGradient} p-1.5`}>
                   <Target className="h-4 w-4 text-white" />
                 </div>
-                <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+                <div className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                   Priority Focus
                 </div>
               </div>

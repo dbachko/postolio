@@ -103,7 +103,10 @@ const csrfAutoProtectPlugin: FastifyPluginAsync = async (fastify) => {
   // Add error handler for CSRF failures with logging
   fastify.setErrorHandler((error, request, reply) => {
     // Check if this is a CSRF error
-    if (error.message?.includes('csrf') || error.message?.includes('CSRF')) {
+    if (
+      error instanceof Error &&
+      (error.message.includes('csrf') || error.message.includes('CSRF'))
+    ) {
       // Log the failure for security monitoring
       fastify.log.warn(
         {
@@ -126,7 +129,7 @@ const csrfAutoProtectPlugin: FastifyPluginAsync = async (fastify) => {
     }
 
     // Pass through other errors
-    return reply.send(error);
+    return reply.send(error as any);
   });
 
   // Log protected routes on startup

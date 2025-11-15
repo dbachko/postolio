@@ -215,7 +215,7 @@ export function InsightsPanel({ insights, loading, onInsightClick }: InsightsPan
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
                         <div className="mb-1 flex items-center gap-2">
-                          <h4 className="font-semibold leading-tight">{insight.title}</h4>
+                          <h4 className="leading-tight font-semibold">{insight.title}</h4>
                           {getPriorityBadge(insight.priority)}
                         </div>
                         <p className="text-muted-foreground text-sm">{insight.description}</p>

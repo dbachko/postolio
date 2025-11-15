@@ -8,22 +8,22 @@
     "lint": "eslint src/**/*.ts"
   },
   "dependencies": {
-    "@aws-lambda-powertools/logger": "^2.25.1",
-    "@aws-lambda-powertools/metrics": "^2.25.1",
-    "@aws-lambda-powertools/tracer": "^2.25.1",
-    "@aws-sdk/client-cloudwatch": "^3.876.0",
-    "@aws-sdk/client-dynamodb": "^3.872.0",
-    "@aws-sdk/client-sns": "^3.873.0",
-    "@aws-sdk/client-sqs": "^3.864.0",
-    "@aws-sdk/lib-dynamodb": "^3.872.0",
-    "@aws-sdk/client-ssm": "^3.888.0",
+    "@aws-lambda-powertools/logger": "^2.28.1",
+    "@aws-lambda-powertools/metrics": "^2.28.1",
+    "@aws-lambda-powertools/tracer": "^2.28.1",
+    "@aws-sdk/client-cloudwatch": "^3.932.0",
+    "@aws-sdk/client-dynamodb": "^3.932.0",
+    "@aws-sdk/client-sns": "^3.932.0",
+    "@aws-sdk/client-sqs": "^3.932.0",
+    "@aws-sdk/client-ssm": "^3.932.0",
+    "@aws-sdk/lib-dynamodb": "^3.932.0",
     "@postolio/aws": "workspace:^",
     "@postolio/errors": "workspace:*"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
-    "@types/aws-lambda": "^8.10.152",
-    "tsup": "^8.5.0",
-    "typescript": "^5.7.3"
+    "@types/aws-lambda": "^8.10.158",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   }
 }

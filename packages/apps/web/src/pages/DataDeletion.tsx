@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { ReactElement } from 'react';
+import { useAuthStore } from '../stores/authStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -18,10 +19,17 @@ export function DataDeletion() {
   const [email, setEmail] = useState('');
   const [requestSent, setRequestSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { user } = useAuthStore();
 
   useEffect(() => {
     fetchDataDeletionInstructions();
   }, []);
+
+  useEffect(() => {
+    if (user?.email) {
+      setEmail(user.email);
+    }
+  }, [user]);
 
   const fetchDataDeletionInstructions = async () => {
     try {
@@ -121,13 +129,13 @@ export function DataDeletion() {
         );
       } else if (line.startsWith('## ')) {
         elements.push(
-          <h2 key={key++} className="text-foreground mb-3 mt-6 text-2xl font-semibold">
+          <h2 key={key++} className="text-foreground mt-6 mb-3 text-2xl font-semibold">
             {line.substring(3)}
           </h2>
         );
       } else if (line.startsWith('### ')) {
         elements.push(
-          <h3 key={key++} className="text-foreground mb-2 mt-4 text-xl font-medium">
+          <h3 key={key++} className="text-foreground mt-4 mb-2 text-xl font-medium">
             {line.substring(4)}
           </h3>
         );
@@ -298,11 +306,24 @@ export function DataDeletion() {
                 </Button>
 
                 <p className="text-muted-foreground text-center text-xs">
-                  If you have an account, please{' '}
-                  <Link to="/login" className="text-primary hover:underline">
-                    log in
-                  </Link>{' '}
-                  to delete your data from Settings.
+                  {user ? (
+                    <>
+                      You&apos;re currently signed in; you can also delete your account directly
+                      from{' '}
+                      <Link to="/settings" className="text-primary hover:underline">
+                        Settings
+                      </Link>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      If you have an account, please{' '}
+                      <Link to="/login" className="text-primary hover:underline">
+                        log in
+                      </Link>{' '}
+                      to delete your data from Settings.
+                    </>
+                  )}
                 </p>
               </form>
             )}

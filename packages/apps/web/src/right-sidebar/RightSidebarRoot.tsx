@@ -200,7 +200,7 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
               role="separator"
               aria-orientation="vertical"
               aria-label="Resize sidebar"
-              className="bg-border pointer-events-none absolute left-0 top-0 z-50 h-full w-px"
+              className="bg-border pointer-events-none absolute top-0 left-0 z-50 h-full w-px"
             />
 
             {/* Resize handle hotspot (transparent until hover) - keep thin */}
@@ -209,7 +209,7 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
               {...listeners}
               {...attributes}
               aria-hidden="true"
-              className="absolute -left-2 top-0 z-40 h-full w-4 cursor-col-resize bg-transparent"
+              className="absolute top-0 -left-2 z-40 h-full w-4 cursor-col-resize bg-transparent"
               style={{ touchAction: 'none' }}
               onMouseDown={(e) => {
                 // Native fallback to ensure resize always works

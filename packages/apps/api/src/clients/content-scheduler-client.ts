@@ -28,6 +28,8 @@ const ScheduleStatusSchema = z.enum([
 const ContentTypeSchema = z.enum(['image', 'video', 'carousel', 'reel', 'story']);
 
 // Schema that matches Lambda's expected format
+const MetadataSchema = z.record(z.string(), z.unknown());
+
 const CreateScheduleInputSchema = z.object({
   contentId: z.string(),
   brandId: z.string(),
@@ -40,7 +42,7 @@ const CreateScheduleInputSchema = z.object({
   caption: z.string().optional(),
   hashtags: z.array(z.string()).optional(),
   mediaKeys: z.array(z.string()).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: MetadataSchema.optional(),
 });
 
 const UpdateScheduleInputSchema = z
@@ -50,7 +52,7 @@ const UpdateScheduleInputSchema = z
     hashtags: z.array(z.string()).optional(),
     mediaKeys: z.array(z.string()).optional(),
     status: ScheduleStatusSchema.optional(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: MetadataSchema.optional(),
     // API Gateway validation fields (required when performing reschedule)
     brandId: z.string().optional(),
     contentId: z.string().optional(),
@@ -87,7 +89,7 @@ const ScheduleSchema = z.object({
   mediaKeys: z.array(z.string()).nullish(),
   status: ScheduleStatusSchema,
   retryCount: z.number().default(0),
-  metadata: z.record(z.unknown()).nullish(),
+  metadata: MetadataSchema.nullish(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime().nullish(),
   publishedAt: z.string().datetime().nullish(),
@@ -452,7 +454,8 @@ export class ContentSchedulerClient {
           size,
           body: size < 2048 ? scheduleData : undefined,
           error: parseError instanceof Error ? parseError.message : String(parseError),
-          zodErrors: parseError instanceof z.ZodError ? parseError.errors : undefined,
+          zodErrors:
+            parseError instanceof z.ZodError ? (parseError.issues as unknown[]) : undefined,
         });
 
         // If the response has scheduleId, try to return it anyway for backward compatibility
@@ -704,7 +707,7 @@ export class ContentSchedulerClient {
 
       if (error instanceof z.ZodError) {
         throw new ValidationError('Invalid data format', {
-          errors: error.errors,
+          errors: error.issues,
         });
       }
 

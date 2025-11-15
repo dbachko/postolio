@@ -17,12 +17,12 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
-    "pino": "^9.5.0",
-    "pino-pretty": "^10.2.3"
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.2"
   },
   "devDependencies": {
     "@postolio/tsconfig": "workspace:*",
-    "tsup": "^8.0.1",
-    "typescript": "^5.0.0"
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   }
 }

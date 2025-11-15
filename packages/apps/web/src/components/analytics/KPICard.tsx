@@ -73,7 +73,7 @@ export function KPICard({ title, value, change, trend, icon, loading, onClick }:
           <div className={`flex items-center gap-1 text-sm ${config.color}`}>
             <TrendIcon className="h-4 w-4" />
             <span className="font-medium">{formatGrowth(change)}</span>
-            <span className="text-muted-foreground whitespace-nowrap text-xs">vs prev</span>
+            <span className="text-muted-foreground text-xs whitespace-nowrap">vs prev</span>
           </div>
         )}
       </CardContent>

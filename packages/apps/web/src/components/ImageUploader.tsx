@@ -218,7 +218,7 @@ export function ImageUploader({
           <div className="bg-muted relative aspect-square overflow-hidden rounded-lg">
             {/* Loading state for preview */}
             {isUploading && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="bg-opacity-50 absolute inset-0 z-10 flex items-center justify-center bg-black">
                 <div className="text-center text-white">
                   <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-white" />
                   <p className="text-sm">Uploading...</p>

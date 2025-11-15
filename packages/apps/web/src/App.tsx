@@ -20,6 +20,7 @@ import { SecuritySettings } from './pages/SecuritySettings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { TermsOfService } from './pages/TermsOfService';
 import { DataDeletion } from './pages/DataDeletion';
+import { DataDeletionVerify } from './pages/DataDeletionVerify';
 import UiKitchenSink from './pages/UiKitchenSink';
 import { MagicLinkVerify } from './pages/MagicLinkVerify';
 import NotFound from './pages/NotFound';
@@ -75,6 +76,11 @@ const router = createBrowserRouter([
   { path: '/privacy-policy', element: <PrivacyPolicy />, errorElement: <RouteError /> },
   { path: '/terms-of-service', element: <TermsOfService />, errorElement: <RouteError /> },
   { path: '/legal/data-deletion', element: <DataDeletion />, errorElement: <RouteError /> },
+  {
+    path: '/legal/data-deletion-verify',
+    element: <DataDeletionVerify />,
+    errorElement: <RouteError />,
+  },
   // Dev/test-only: render a minimal PostPreviewCard for timezone validation
   { path: '/__tz', element: <TzRenderTest />, errorElement: <RouteError /> },
   {

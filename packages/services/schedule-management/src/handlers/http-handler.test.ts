@@ -2,30 +2,34 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HttpHandler } from './http-handler';
 import type { APIGatewayProxyEvent, APIGatewayProxyEventV2 } from 'aws-lambda';
 
-// Mock services
-vi.mock('../services/schedule-service', () => ({
-  ScheduleService: vi.fn(() => ({
-    createSchedule: vi.fn(),
-    getSchedule: vi.fn(),
-    listSchedules: vi.fn(),
-    updateSchedule: vi.fn(),
-    deleteSchedule: vi.fn(),
-    healthCheck: vi.fn(),
-  })),
-}));
+// Mock services as constructible classes
+vi.mock('../services/schedule-service', () => {
+  class MockScheduleService {
+    createSchedule = vi.fn();
+    getSchedule = vi.fn();
+    listSchedules = vi.fn();
+    updateSchedule = vi.fn();
+    deleteSchedule = vi.fn();
+    healthCheck = vi.fn();
+  }
 
-vi.mock('../services/campaign-service', () => ({
-  CampaignService: vi.fn(() => ({
-    createCampaign: vi.fn(),
-    createCampaignRecord: vi.fn(),
-    getCampaign: vi.fn(),
-    listCampaigns: vi.fn(),
-    updateCampaign: vi.fn(),
-    updateCampaignStatus: vi.fn(),
-    deleteCampaign: vi.fn(),
-    healthCheck: vi.fn(),
-  })),
-}));
+  return { ScheduleService: MockScheduleService };
+});
+
+vi.mock('../services/campaign-service', () => {
+  class MockCampaignService {
+    createCampaign = vi.fn();
+    createCampaignRecord = vi.fn();
+    getCampaign = vi.fn();
+    listCampaigns = vi.fn();
+    updateCampaign = vi.fn();
+    updateCampaignStatus = vi.fn();
+    deleteCampaign = vi.fn();
+    healthCheck = vi.fn();
+  }
+
+  return { CampaignService: MockCampaignService };
+});
 
 vi.mock('@postolio/aws', () => ({
   createServiceLogger: vi.fn(() => ({

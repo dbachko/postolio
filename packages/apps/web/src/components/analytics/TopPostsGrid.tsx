@@ -163,7 +163,7 @@ export function TopPostsGrid({ posts, loading, onPostClick }: TopPostsGridProps)
               )}
 
               {/* Engagement rate badge */}
-              <div className="absolute right-2 top-2">
+              <div className="absolute top-2 right-2">
                 <Badge
                   variant="secondary"
                   className="bg-background/90 text-foreground font-semibold shadow-lg backdrop-blur-sm"
@@ -173,7 +173,7 @@ export function TopPostsGrid({ posts, loading, onPostClick }: TopPostsGridProps)
               </div>
 
               {/* Platform icon */}
-              <div className="absolute left-2 top-2">
+              <div className="absolute top-2 left-2">
                 <div className="bg-background/90 flex h-8 w-8 items-center justify-center rounded-full shadow-lg backdrop-blur-sm">
                   {getPlatformIcon(post.platform)}
                 </div>

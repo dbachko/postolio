@@ -241,7 +241,7 @@ export function GoalCardGrid({
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
-                      <p className="text-sm font-medium leading-snug">
+                      <p className="text-sm leading-snug font-medium">
                         <span aria-hidden className="mr-2">
                           {goalEmoji(suggestion.value)}
                         </span>
