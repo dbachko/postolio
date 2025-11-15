@@ -497,6 +497,35 @@ If you didn't request this email, you can safely ignore it.
   }
 
   /**
+   * Send public data deletion verification email
+   */
+  static async sendDataDeletionVerificationEmail(
+    email: string,
+    token: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const verifyUrl = `${baseUrl}/legal/data-deletion-verify?token=${token}`;
+
+    const { html, text } = this.generateEmailTemplate({
+      title: 'Confirm Your Data Deletion Request',
+      greeting: 'Hi there,',
+      content:
+        'We received a request to delete your Postolio account and associated data. To confirm this request, please click the button below.',
+      buttonText: 'Confirm Data Deletion Request',
+      buttonUrl: verifyUrl,
+      warning:
+        '<strong>This deletion verification link expires in 24 hours.</strong><br>If you did not request data deletion, you can safely ignore this email and your account will remain active.',
+    });
+
+    return this.sendEmail({
+      to: email,
+      subject: 'Confirm your Postolio data deletion request',
+      html,
+      text,
+    });
+  }
+
+  /**
    * Send two-factor authentication code (async via queue)
    */
   static async sendTwoFactorCode(

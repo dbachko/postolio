@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { markdownToHtml } from '../utils/markdown.js';
 import { deletionQueueService } from '../services/deletion-queue.js';
 import { EmailService } from '../services/email.js';
+import { DataDeletionRequestService } from '../services/data-deletion-request.js';
 
 // Deletion reasons for survey
 const DELETION_REASONS = {
@@ -214,36 +215,47 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const user = await prisma.user.findUnique({
-        where: { email: body.email },
+      const result = await DataDeletionRequestService.sendVerification({
+        email: body.email,
+        source: body.source,
+        reason: body.reason,
       });
 
-      if (!user) {
-        return reply.code(404).send({
-          error: 'No account found with this email address',
-        });
+      if (!result.success) {
+        const statusCode = result.error === 'No account found with this email address' ? 404 : 500;
+        return reply.code(statusCode).send({ error: result.error });
       }
-
-      // Generate verification token
-      const verificationToken = crypto.randomBytes(32).toString('hex');
-      void verificationToken; // placeholder until persistence/email implemented
-
-      // TODO: Store verification token in Redis with 24-hour expiration
-      // Example: await redis.setex(`deletion-token:${user.id}`, 86400, _verificationToken)
-
-      // TODO: Implement email sending service
-      // Should send email with verification link containing the token
-      // Example: await emailService.sendDeletionVerification(user.email, _verificationToken)
 
       return reply.send({
         success: true,
-        message: 'Verification email sent. Please check your inbox.',
+        message: result.message ?? 'Verification email sent. Please check your inbox.',
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
       fastify.log.error({ message }, 'Data deletion request error:');
       reply.code(500).send({ error: 'Failed to process deletion request' });
     }
+  });
+
+  // Public deletion verification endpoint (token-based)
+  fastify.post('/data-deletion-verify', async (request, reply) => {
+    const { token } = request.body as { token?: string };
+
+    if (!token || typeof token !== 'string') {
+      return reply.code(400).send({ error: 'Verification token is required' });
+    }
+
+    const result = await DataDeletionRequestService.verifyToken(token);
+
+    if (!result.success) {
+      return reply.code(400).send({ error: result.error });
+    }
+
+    return reply.send({
+      success: true,
+      message: result.message,
+      recoveryDeadline: result.recoveryDeadline,
+    });
   });
 
   // Authenticated user account deletion

@@ -49,6 +49,7 @@ const CSRF_SKIP_PATHS = [
   '/api/legal/terms-of-service',
   '/api/legal/data-deletion',
   '/api/legal/data-deletion-request',
+  '/api/legal/data-deletion-verify',
   '/api/legal/account-recovery',
   '/api/legal/meta-deletion-callback',
 
