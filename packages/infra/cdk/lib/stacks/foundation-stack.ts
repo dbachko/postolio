@@ -274,6 +274,17 @@ export class FoundationStack extends cdk.Stack {
       },
     });
 
+    // cdk-nag: Lambda runtime is pinned to latest GA Node.js (22.x).
+    // aws-cdk-lib exposes newer runtimes (e.g., nodejs24.x) that are not yet available
+    // in all regions, which causes AwsSolutions-L1 to flag a false positive.
+    NagSuppressions.addResourceSuppressions(jwtSecretEnsurer, [
+      {
+        id: 'AwsSolutions-L1',
+        reason:
+          'Using latest generally available Node.js Lambda runtime (nodejs22.x); aws-cdk-lib also exposes nodejs24.x, which AwsSolutions-L1 treats as latest even though it is not yet widely available.',
+      },
+    ]);
+
     // cdk-nag: Allow wildcard for CreateSecret (cannot be resource-scoped)
     NagSuppressions.addResourceSuppressions(jwtSecretEnsurer.role!, [
       {
@@ -326,6 +337,11 @@ export class FoundationStack extends cdk.Stack {
           id: 'AwsSolutions-IAM5',
           reason:
             'Custom Resource provider framework uses lambda:InvokeFunction with version-qualified ARNs; wildcard suffix is required by AWS pattern and scoped to the target function only.',
+        },
+        {
+          id: 'AwsSolutions-L1',
+          reason:
+            'Custom Resource provider framework Lambda uses the latest generally available Node.js runtime; AwsSolutions-L1 compares against nodejs24.x from aws-cdk-lib, which may not yet be supported in all regions.',
         },
       ],
       true
