@@ -65,7 +65,7 @@ export function DataDeletionVerify() {
   const isVerifying = status === 'verifying' || status === 'idle';
 
   return (
-    <div className="mx-auto max-w-2xl p-6">
+    <div className="mx-auto flex min-h-screen max-w-2xl flex-col p-6">
       <div className="mb-6">
         <Link
           to="/"

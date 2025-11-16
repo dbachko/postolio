@@ -43,7 +43,20 @@ const apiProtocol =
       : defaultApiProtocol);
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'node22-http-upgrade-workaround',
+      configureServer(server) {
+        const httpServer = server.httpServer as any;
+        if (httpServer && typeof httpServer.shouldUpgradeCallback !== 'function') {
+          // Ensure Node 22's HTTP upgrade hook is a no-op function so it
+          // doesn't throw when called. Vite/ws still handle WebSocket upgrades.
+          httpServer.shouldUpgradeCallback = () => false;
+        }
+      },
+    },
+  ],
   optimizeDeps: {
     include: (() => {
       const req = createRequire(import.meta.url);
@@ -71,6 +84,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    dedupe: ['react', 'react-dom', '@postolio/calendar'],
   },
   server: {
     // Bind broadly so startup never depends on DNS resolution of ai.localhost.

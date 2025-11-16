@@ -8,7 +8,7 @@ export function getSignupMode(): SignupMode {
 
 function parseCsv(env?: string): string[] {
   return (env || '')
-    .split(',')
+    .split(/[,\s;:]+/)
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 }

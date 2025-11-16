@@ -161,9 +161,30 @@ export function useSchedulingWebSocket({
 
       handleConnectionChange('connecting');
 
-      // Always use /ws path through CloudFront on main domain
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      // Build WebSocket URL
+      // - Production: always use /ws on the main app host (behind CloudFront)
+      // - Development: connect directly to the API server to avoid bugs in some
+      //   dev proxies with Node 22's HTTP upgrade handling.
+      let wsUrl: string;
+      if (import.meta.env.DEV) {
+        const apiBase = (import.meta.env as any).VITE_API_BASE_URL as string | undefined;
+        if (apiBase) {
+          try {
+            const apiUrl = new URL(apiBase);
+            const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+            wsUrl = `${protocol}//${apiUrl.host}/ws`;
+          } catch {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            wsUrl = `${protocol}//${window.location.hostname}:3000/ws`;
+          }
+        } else {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          wsUrl = `${protocol}//${window.location.hostname}:3000/ws`;
+        }
+      } else {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${window.location.host}/ws`;
+      }
 
       console.log('Connecting to WebSocket at:', wsUrl);
       const ws = new WebSocket(wsUrl);
