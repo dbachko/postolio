@@ -1,5 +1,5 @@
 import { MetricsCard } from '../analytics/MetricsCard';
-import { TimeSeriesChart } from '../analytics/TimeSeriesChart';
+import { MultiMetricTimeSeriesChart } from '../analytics/MultiMetricTimeSeriesChart';
 import { HashtagAnalysis } from '../analytics/HashtagAnalysis';
 import { ActivityHeatmap } from '../analytics/ActivityHeatmap';
 import { AudienceInsights } from '../analytics/AudienceInsights';
@@ -92,18 +92,21 @@ export function AnalyticsInstagramTab({
 
           {/* Time Series Charts */}
           {igSeries && igSeries.length > 0 ? (
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-              <TimeSeriesChart
-                title="Reach (Daily)"
-                series={igSeries.map((d) => ({ date: d.date, value: d.reach }))}
-                label="Total reach per day"
-              />
-              <TimeSeriesChart
-                title="Impressions (Daily)"
-                series={igSeries.map((d) => ({ date: d.date, value: d.impressions }))}
-                label="Total impressions per day"
-              />
-            </div>
+            <MultiMetricTimeSeriesChart
+              title="Reach & Impressions (Daily)"
+              series={igSeries.map((d) => ({
+                date: d.date,
+                metrics: {
+                  reach: d.reach,
+                  impressions: d.impressions,
+                },
+              }))}
+              metrics={[
+                { key: 'reach', label: 'Reach' },
+                { key: 'impressions', label: 'Impressions' },
+              ]}
+              label="Daily reach and impressions"
+            />
           ) : null}
 
           {/* Hashtag Analysis */}

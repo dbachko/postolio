@@ -123,9 +123,17 @@ class InstagramService {
     const brandId = typeof brandOrId === 'string' ? brandOrId : brandOrId.id;
     const account = await prisma.socialAccount.findFirst({
       where: { brandId, platform: 'instagram' },
-      select: { id: true },
+      select: { id: true, metadata: true },
     });
-    return !!account;
+
+    if (!account) return false;
+
+    const metadata = (account.metadata || {}) as Record<string, unknown>;
+    if (metadata && typeof metadata === 'object' && (metadata as any).disconnected) {
+      return false;
+    }
+
+    return true;
   }
 
   private async getCredentialsOrThrow(brandOrId: BrandData | string) {

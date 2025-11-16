@@ -226,15 +226,19 @@ const brandsRoutes: FastifyPluginAsync = async (fastify) => {
           typeof description === 'string' &&
           (existingBrand.description || '') !== (description?.trim() || '');
 
-        // Check if Instagram is connected via SocialAccount
+        // Check if Instagram is connected via SocialAccount (and not soft-disconnected)
         const instagramAccount = await prisma.socialAccount.findFirst({
           where: {
             brandId: id,
             platform: 'instagram',
           },
+          select: { id: true, metadata: true },
         });
 
-        if ((nameChanged || descChanged) && instagramAccount) {
+        const isDisconnected =
+          instagramAccount && (instagramAccount.metadata as any)?.disconnected === true;
+
+        if ((nameChanged || descChanged) && instagramAccount && !isDisconnected) {
           // Fire-and-forget background job to include a small recent-post sample (with CDN URLs)
           (async () => {
             try {

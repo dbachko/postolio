@@ -84,10 +84,20 @@ export class BrandClient {
    * Disconnect a social platform
    * @param brandId - Brand ID
    * @param platform - Platform name
+   * @param options - Optional disconnect options (e.g., remove imported posts)
    */
-  disconnectSocial(brandId: string, platform: string) {
+  disconnectSocial(
+    brandId: string,
+    platform: string,
+    options?: {
+      removeImportedPosts?: boolean;
+    }
+  ) {
     // Backend route: POST /api/social/:platform/disconnect/:brandId
-    return this.request(`/api/social/${platform}/disconnect/${brandId}`, { method: 'POST' });
+    return this.request(`/api/social/${platform}/disconnect/${brandId}`, {
+      method: 'POST',
+      body: options ? JSON.stringify(options) : undefined,
+    });
   }
 
   /**

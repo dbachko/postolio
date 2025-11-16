@@ -324,6 +324,12 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
           permalink: true,
           publishedAt: true,
           metricsLatest: true,
+          content: {
+            select: {
+              caption: true,
+              primaryAssetCdnUrl: true,
+            },
+          },
         },
       });
 
@@ -336,6 +342,9 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
           permalink: p.permalink,
           publishedAt: p.publishedAt,
           metrics: p.metricsLatest,
+          caption: p.content?.caption || undefined,
+          thumbnailUrl: p.content?.primaryAssetCdnUrl || undefined,
+          imageUrl: p.content?.primaryAssetCdnUrl || undefined,
         }));
 
       return reply.send({ success: true, data });
@@ -673,16 +682,28 @@ const analyticsRoutesV2: FastifyPluginAsync = async (fastify) => {
         prisma.contentPublication.count({ where }),
       ]);
 
-      const data = posts.map((p) => ({
-        publicationId: p.id,
-        contentId: p.contentId,
-        platform: p.platform,
-        caption: p.content.caption,
-        thumbnailUrl: p.content.primaryAssetCdnUrl,
-        permalink: p.permalink,
-        publishedAt: p.publishedAt,
-        metrics: p.metricsLatest,
-      }));
+      const data = posts.map((p) => {
+        const m = p.metricsLatest || {
+          impressions: 0,
+          reach: 0,
+          likes: 0,
+          comments: 0,
+          saves: 0,
+          shares: 0,
+          engagement: 0,
+          engagementRate: 0,
+        };
+        return {
+          publicationId: p.id,
+          contentId: p.contentId,
+          platform: p.platform,
+          caption: p.content.caption,
+          thumbnailUrl: p.content.primaryAssetCdnUrl,
+          permalink: p.permalink,
+          publishedAt: p.publishedAt,
+          metrics: m,
+        };
+      });
 
       return reply.send({
         success: true,

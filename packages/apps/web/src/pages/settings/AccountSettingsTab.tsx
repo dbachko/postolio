@@ -108,7 +108,7 @@ export default function AccountSettingsTab() {
         </div>
 
         {/* Account deletion (danger zone) */}
-        <div className="mt-8 border-t pt-6">
+        <div id="delete-account" className="mt-8 border-t pt-6">
           <Card className="border-destructive/40 bg-destructive/5">
             <CardHeader>
               <div className="flex items-center gap-2">

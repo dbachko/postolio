@@ -9,6 +9,17 @@ import { brand as brandApi } from '@/lib/api';
 import type { Brand } from '@/lib/api';
 import { type Platform, getPlatformConfig } from '@/lib/platform-config';
 import { SocialSyncButton } from './SocialSyncButton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface SocialProfile {
   id: string;
@@ -40,6 +51,7 @@ export function SocialAccountConnect({
   onConnectionChange,
 }: SocialAccountConnectProps) {
   const [isConnecting, setIsConnecting] = useState(false);
+  const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const config = getPlatformConfig(platform);
 
@@ -132,8 +144,10 @@ export function SocialAccountConnect({
 
   // Disconnect
   const disconnectMutation = useMutation({
-    mutationFn: () => brandApi.disconnectSocial(brand.id, platform),
+    mutationFn: (options: { removeImportedPosts: boolean }) =>
+      brandApi.disconnectSocial(brand.id, platform, options),
     onSuccess: () => {
+      setDisconnectDialogOpen(false);
       queryClient.invalidateQueries({
         queryKey: ['social-status', brand.id, platform],
       });
@@ -159,14 +173,12 @@ export function SocialAccountConnect({
     connectMutation.mutate();
   };
 
-  const handleDisconnect = () => {
-    if (
-      window.confirm(
-        `Are you sure you want to disconnect your ${config.displayName} account? This will stop content publishing.`
-      )
-    ) {
-      disconnectMutation.mutate();
-    }
+  const handleDisconnectKeepPosts = () => {
+    disconnectMutation.mutate({ removeImportedPosts: false });
+  };
+
+  const handleDisconnectRemoveImported = () => {
+    disconnectMutation.mutate({ removeImportedPosts: true });
   };
 
   if (isLoading) {
@@ -325,14 +337,44 @@ export function SocialAccountConnect({
         <div className="flex flex-wrap justify-end gap-2">
           {isConnected ? (
             <>
-              <Button
-                variant="outline"
-                onClick={handleDisconnect}
-                disabled={disconnectMutation.isPending}
-                className="w-full sm:w-auto"
-              >
-                {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
-              </Button>
+              <AlertDialog open={disconnectDialogOpen} onOpenChange={setDisconnectDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    disabled={disconnectMutation.isPending}
+                    className="w-full sm:w-auto"
+                  >
+                    {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Disconnect {config.displayName} account?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will stop publishing and syncing for this {config.displayName} account.
+                      Choose whether to keep or remove posts that were imported from this account.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={disconnectMutation.isPending}>
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      disabled={disconnectMutation.isPending}
+                      onClick={handleDisconnectKeepPosts}
+                    >
+                      Keep imported posts
+                    </AlertDialogAction>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      disabled={disconnectMutation.isPending}
+                      onClick={handleDisconnectRemoveImported}
+                    >
+                      Remove imported posts
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               {shouldShowSync && config.features.publishing && (
                 <SocialSyncButton
                   platform={platform}

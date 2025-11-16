@@ -148,7 +148,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           });
         }
 
-        // Check if social account exists
+        // Check if social account exists (and is not soft-disconnected)
         const socialAccount = await prisma.socialAccount.findFirst({
           where: {
             brandId,
@@ -156,7 +156,10 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           },
         });
 
-        if (!socialAccount) {
+        const isDisconnected =
+          socialAccount && (socialAccount.metadata as any)?.disconnected === true;
+
+        if (!socialAccount || isDisconnected) {
           return reply.send({
             connected: false,
             platform,
@@ -271,7 +274,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           });
         }
 
-        // Get social account for this platform
+        // Get social account for this platform (must be connected)
         const socialAccount = await prisma.socialAccount.findFirst({
           where: {
             brandId: content.brandId,
@@ -279,7 +282,10 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           },
         });
 
-        if (!socialAccount) {
+        const isDisconnectedForPublish =
+          socialAccount && (socialAccount.metadata as any)?.disconnected === true;
+
+        if (!socialAccount || isDisconnectedForPublish) {
           return reply.code(400).send({
             error: 'Social account not connected',
             message: `Brand has not connected ${platform}`,
@@ -599,7 +605,7 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           }
         }
 
-        // Get social account
+        // Get social account (must be connected)
         const socialAccount = await prisma.socialAccount.findFirst({
           where: {
             brandId,
@@ -608,7 +614,10 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           include: { brand: true },
         });
 
-        if (!socialAccount) {
+        const isDisconnectedForSync =
+          socialAccount && (socialAccount.metadata as any)?.disconnected === true;
+
+        if (!socialAccount || isDisconnectedForSync) {
           return reply.code(400).send({
             error: 'platform_not_connected',
             message: `Brand has not connected ${platform}`,
@@ -843,6 +852,8 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
     async (req, reply) => {
       try {
         const { platform, brandId } = PlatformParamSchema.parse(req.params);
+        const body = (req.body || {}) as { removeImportedPosts?: boolean };
+        const removeImportedPosts = body?.removeImportedPosts === true;
         const userId = req.user!.id;
 
         const platformError = ensurePlatformSupported(platform);
@@ -904,10 +915,60 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
           });
         }
 
-        // Delete social account (cascade will handle relations)
-        await prisma.socialAccount.delete({
+        // Soft-disconnect: preserve SocialAccount and publications for historical data
+        const existingMetadata = (socialAccount.metadata || {}) as Record<string, unknown>;
+        await prisma.socialAccount.update({
           where: { id: socialAccount.id },
+          data: {
+            metadata: {
+              ...existingMetadata,
+              disconnected: true,
+              disconnectedAt: new Date().toISOString(),
+            },
+          },
         });
+
+        // Optional: remove posts imported from this social account
+        if (removeImportedPosts) {
+          try {
+            // For Instagram, imported posts are tagged with generationParams.source = 'instagram_import'
+            const importedContent = await prisma.content.findMany({
+              where: {
+                brandId,
+                generationParams: {
+                  path: ['source'],
+                  equals: platform === 'instagram' ? 'instagram_import' : `${platform}_import`,
+                },
+                publications: {
+                  some: {
+                    socialAccountId: socialAccount.id,
+                    platform: platform as any,
+                  },
+                },
+              },
+              select: { id: true },
+            });
+
+            const importedIds = importedContent.map((c) => c.id);
+            if (importedIds.length > 0) {
+              await prisma.content.deleteMany({
+                where: { id: { in: importedIds } },
+              });
+              logger.info('Removed imported posts for disconnected social account', {
+                platform,
+                brandId,
+                socialAccountId: socialAccount.id,
+                removedCount: importedIds.length,
+              });
+            }
+          } catch (cleanupErr: any) {
+            logger.warn('Failed to remove imported posts on social disconnect', {
+              error: cleanupErr?.message ?? String(cleanupErr),
+              platform,
+              brandId,
+            });
+          }
+        }
 
         // TODO: Delete tokens from token-service
         // await deleteTokensFromService(socialAccount.brand.userId, platform, brandId);

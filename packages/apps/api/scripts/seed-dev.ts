@@ -916,6 +916,9 @@ async function main() {
   let baseFollowers = ((social.metadata as any)?.followers_count as number) || 5000;
   const followerGrowthPerDay = rng(10, 50); // Random daily growth
 
+  // Aggregate account-level daily metrics for analytics v2 (Reach & Impressions Daily charts)
+  const accountDailyMetrics: Record<string, { impressions: number; reach: number }> = {};
+
   for (let idx = 0; idx < publishedContent.length; idx++) {
     const content = publishedContent[idx];
     if (!content.postedAt) continue;
@@ -966,9 +969,97 @@ async function main() {
         lastUpdated: publishedAt,
       },
     });
+
+    // Aggregate into account-level daily metrics map
+    const dateKey = publishedAt.toISOString().split('T')[0];
+    if (!accountDailyMetrics[dateKey]) {
+      accountDailyMetrics[dateKey] = { impressions: 0, reach: 0 };
+    }
+    accountDailyMetrics[dateKey].impressions += metrics.impressions;
+    accountDailyMetrics[dateKey].reach += metrics.reach;
   }
 
   console.log(`✅ Generated analytics data for ${publishedContent.length} posts`);
+
+  // Create account-level daily samples for impressions and reach (used by Reach & Impressions Daily charts)
+  if (Object.keys(accountDailyMetrics).length > 0) {
+    console.log('==> Generating account-level daily samples for impressions and reach');
+    const samplesData: Parameters<(typeof prisma.accountMetricSample)['createMany']>[0]['data'] =
+      [];
+
+    const dates = Object.keys(accountDailyMetrics).sort();
+    let lastDayImpressions = 0;
+    let lastDayReach = 0;
+
+    for (const dateKey of dates) {
+      const agg = accountDailyMetrics[dateKey];
+      const asOf = new Date(`${dateKey}T00:00:00.000Z`);
+
+      samplesData.push({
+        socialAccountId: social.id,
+        platform: 'instagram',
+        metricName: 'impressions',
+        value: agg.impressions,
+        period: 'day',
+        windowStart: asOf,
+        windowEnd: asOf,
+        asOf,
+        raw: {},
+      } as any);
+
+      samplesData.push({
+        socialAccountId: social.id,
+        platform: 'instagram',
+        metricName: 'reach',
+        value: agg.reach,
+        period: 'day',
+        windowStart: asOf,
+        windowEnd: asOf,
+        asOf,
+        raw: {},
+      } as any);
+
+      lastDayImpressions = agg.impressions;
+      lastDayReach = agg.reach;
+    }
+
+    if (samplesData.length > 0) {
+      await prisma.accountMetricSample.createMany({
+        data: samplesData,
+        skipDuplicates: true,
+      });
+      console.log(
+        `✅ Seeded ${samplesData.length} account_metric_samples records for impressions & reach`
+      );
+    }
+
+    // Best-effort: seed latest account metrics snapshot for follower/overview analytics
+    try {
+      await prisma.accountMetricsLatest.upsert({
+        where: { socialAccountId: social.id },
+        update: {
+          platform: 'instagram',
+          followers: baseFollowers,
+          impressions: lastDayImpressions,
+          reach: lastDayReach,
+          profileViews: Math.floor(lastDayReach * 0.2),
+          lastUpdated: new Date(),
+        },
+        create: {
+          socialAccountId: social.id,
+          platform: 'instagram',
+          followers: baseFollowers,
+          impressions: lastDayImpressions,
+          reach: lastDayReach,
+          profileViews: Math.floor(lastDayReach * 0.2),
+          lastUpdated: new Date(),
+        },
+      });
+      console.log('✅ Seeded account_metrics_latest snapshot for Instagram account');
+    } catch (err) {
+      console.warn('⚠️  Failed to seed account_metrics_latest (non-fatal):', err);
+    }
+  }
 
   console.log('\n✅ Seed complete');
   console.log('--- Credentials ---');

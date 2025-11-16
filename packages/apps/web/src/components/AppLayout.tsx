@@ -293,9 +293,11 @@ export function AppLayout({ children }: LayoutProps) {
                       </NavigationMenuContent>
                     </NavigationMenuItem>
 
-                    {/* Other top-level links */}
+                    {/* Other top-level links (desktop) - keep less crowded by moving Campaigns & Assets to Grid menu */}
                     {mainNavItems
-                      .filter((i) => i.label !== 'Inbox')
+                      .filter(
+                        (i) => i.label !== 'Inbox' && !['Campaigns', 'Assets'].includes(i.label)
+                      )
                       .map((item) => (
                         <NavigationMenuItem key={item.path}>
                           <NavigationMenuLink asChild>
@@ -358,8 +360,8 @@ export function AppLayout({ children }: LayoutProps) {
               {/* Notifications Bell */}
               <Bell />
 
-              {/* Grid Menu Dropdown (hidden on desktop when main nav is visible) */}
-              <div className="relative md:hidden" ref={menuRef}>
+              {/* Grid Menu Dropdown (mobile + desktop overflow navigation) */}
+              <div className="relative" ref={menuRef}>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -415,7 +417,7 @@ export function AppLayout({ children }: LayoutProps) {
                         </div>
 
                         {/* Additional Navigation (More) */}
-                        <div className="md:hidden">
+                        <div>
                           <div className="text-muted-foreground mb-2 text-xs font-medium">
                             Additional
                           </div>

@@ -352,12 +352,19 @@ export default function Analytics() {
 
       setIgHashtags(hashtagsRes?.data?.hashtags || []);
       setIgAudience(audienceRes?.data || null);
-      setIgPostsDetailed(postsRes?.data?.posts || []);
-      setIgPostsPagination({
-        total: postsRes?.data?.total || 0,
+      const postsData = postsRes?.data || [];
+      const pagination = postsRes?.pagination || {
+        total: postsData.length,
         limit: 20,
         offset: 0,
-        hasMore: postsRes?.data?.hasMore || false,
+        hasMore: false,
+      };
+      setIgPostsDetailed(postsData);
+      setIgPostsPagination({
+        total: pagination.total || postsData.length,
+        limit: pagination.limit || 20,
+        offset: pagination.offset || 0,
+        hasMore: Boolean(pagination.hasMore),
       });
     } catch (err) {
       if (!cancelled) {
@@ -385,12 +392,19 @@ export default function Analytics() {
         limit: 20,
         offset: newOffset,
       });
-      setIgPostsDetailed(postsRes?.data?.posts || []);
-      setIgPostsPagination({
-        total: postsRes?.data?.total || 0,
+      const postsData = postsRes?.data || [];
+      const pagination = postsRes?.pagination || {
+        total: postsData.length,
         limit: 20,
         offset: newOffset,
-        hasMore: postsRes?.data?.hasMore || false,
+        hasMore: false,
+      };
+      setIgPostsDetailed(postsData);
+      setIgPostsPagination({
+        total: pagination.total || postsData.length,
+        limit: pagination.limit || 20,
+        offset: newOffset,
+        hasMore: Boolean(pagination.hasMore),
       });
     } catch (err) {
       console.error('Failed to load posts page:', err);

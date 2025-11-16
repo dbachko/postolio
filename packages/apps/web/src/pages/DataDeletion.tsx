@@ -310,7 +310,10 @@ export function DataDeletion() {
                     <>
                       You&apos;re currently signed in; you can also delete your account directly
                       from{' '}
-                      <Link to="/settings" className="text-primary hover:underline">
+                      <Link
+                        to="/settings?tab=account#delete-account"
+                        className="text-primary hover:underline"
+                      >
                         Settings
                       </Link>
                       .

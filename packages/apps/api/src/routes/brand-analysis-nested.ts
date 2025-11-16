@@ -49,12 +49,14 @@ const brandAnalysisNested: FastifyPluginAsync = async (fastify) => {
       });
       if (!brand) return reply.code(404).send({ error: 'Brand not found' });
 
-      // Ensure Instagram configured via SocialAccount
+      // Ensure Instagram configured via SocialAccount (and not soft-disconnected)
       const instagramAccount = await prisma.socialAccount.findFirst({
         where: { brandId, platform: 'instagram' },
-        select: { id: true },
+        select: { id: true, metadata: true },
       });
-      if (!instagramAccount) {
+      const isDisconnected =
+        instagramAccount && (instagramAccount.metadata as any)?.disconnected === true;
+      if (!instagramAccount || isDisconnected) {
         return reply.code(400).send({ error: 'Instagram not connected for this brand' });
       }
 

@@ -19,7 +19,7 @@ import { ForecastCharts } from '../analytics/ForecastCharts';
 import { GrowthProjectionCard } from '../analytics/GrowthProjectionCard';
 import { RecommendationsPanel } from '../analytics/RecommendationsPanel';
 import { PostingScheduleOptimizer } from '../analytics/PostingScheduleOptimizer';
-import { TimeSeriesChart } from '../analytics/TimeSeriesChart';
+import { MultiMetricTimeSeriesChart } from '../analytics/MultiMetricTimeSeriesChart';
 import type {
   AIInsight,
   ApiForecastsData,
@@ -107,7 +107,8 @@ export function AnalyticsOverviewTab({
         toFetch.map(async (p: any) => {
           try {
             const res = await contentApi.getPostDetail(p.contentId);
-            const url = res?.imageUrl || res?.content?.imageUrl;
+            const raw = (res as any)?.data ?? res;
+            const url = raw?.imageUrl;
             if (url) results[p.contentId] = url;
           } catch {
             // ignore
@@ -435,16 +436,21 @@ function V2Charts({ brandId }: { brandId: string }) {
 
   if (loading) return null;
   if (err) return <div className="text-muted-foreground">{err}</div>;
-  const reachSeries = series.map((d) => ({ date: d.date, value: d.reach }));
-  const impressionsSeries = series.map((d) => ({ date: d.date, value: d.impressions }));
   return (
-    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-      <TimeSeriesChart title="Reach (Daily)" series={reachSeries} label="Total reach per day" />
-      <TimeSeriesChart
-        title="Impressions (Daily)"
-        series={impressionsSeries}
-        label="Total impressions per day"
-      />
-    </div>
+    <MultiMetricTimeSeriesChart
+      title="Reach & Impressions (Daily)"
+      series={series.map((d) => ({
+        date: d.date,
+        metrics: {
+          reach: d.reach,
+          impressions: d.impressions,
+        },
+      }))}
+      metrics={[
+        { key: 'reach', label: 'Reach' },
+        { key: 'impressions', label: 'Impressions' },
+      ]}
+      label="Daily reach and impressions"
+    />
   );
 }
