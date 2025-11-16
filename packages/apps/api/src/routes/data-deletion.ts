@@ -6,6 +6,7 @@ import { markdownToHtml } from '../utils/markdown.js';
 import { deletionQueueService } from '../services/deletion-queue.js';
 import { EmailService } from '../services/email.js';
 import { DataDeletionRequestService } from '../services/data-deletion-request.js';
+import { DELETION_RECOVERY_DELAY_MS } from '../services/deletion-config.js';
 
 // Deletion reasons for survey
 const DELETION_REASONS = {
@@ -266,10 +267,10 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
       // Get deletion survey from body
       const { reason, feedback } = request.body as DeletionSurvey;
 
-      // Calculate scheduled deletion date (30 days from now)
-      const deletedAt = new Date();
-      const scheduledDeletion = new Date();
-      scheduledDeletion.setDate(scheduledDeletion.getDate() + 30);
+      // Calculate scheduled deletion date using configurable recovery window
+      const now = Date.now();
+      const deletedAt = new Date(now);
+      const scheduledDeletion = new Date(now + DELETION_RECOVERY_DELAY_MS);
 
       // Soft delete the user account
       const user = await prisma.user.update({
@@ -292,7 +293,7 @@ export default async function dataDeletionRoutes(fastify: FastifyInstance) {
           scheduledDeletionDate: scheduledDeletion,
           email: user.email,
         },
-        scheduledDeletion.getTime() - Date.now()
+        Math.max(0, scheduledDeletion.getTime() - Date.now())
       ); // Delay until scheduled date
 
       // Send deletion confirmation email

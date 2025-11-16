@@ -4,6 +4,7 @@ import { prisma } from '../config/database.js';
 import { getRedisUrl } from '../utils/redis-url.js';
 import { EmailService } from './email.js';
 import { deletionQueueService } from './deletion-queue.js';
+import { DELETION_RECOVERY_DELAY_MS } from './deletion-config.js';
 
 type DeletionSource = 'user' | 'meta' | 'legal';
 
@@ -121,9 +122,9 @@ export class DataDeletionRequestService {
         };
       }
 
-      const deletedAt = new Date();
-      const scheduledDeletion = new Date();
-      scheduledDeletion.setDate(scheduledDeletion.getDate() + 30);
+      const now = Date.now();
+      const deletedAt = new Date(now);
+      const scheduledDeletion = new Date(now + DELETION_RECOVERY_DELAY_MS);
 
       const reasonDescription = data.reason
         ? `Public data deletion request (${data.source})`
@@ -144,7 +145,7 @@ export class DataDeletionRequestService {
           scheduledDeletionDate: scheduledDeletion,
           email: updatedUser.email,
         },
-        scheduledDeletion.getTime() - Date.now()
+        Math.max(0, scheduledDeletion.getTime() - Date.now())
       );
 
       await EmailService.sendDeletionConfirmationImmediate(updatedUser.email, scheduledDeletion);

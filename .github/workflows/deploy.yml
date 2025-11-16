@@ -42,6 +42,7 @@ env:
   PNPM_VERSION: '10.20.0'
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  DATA_DELETION_RECOVERY_MINUTES: ${{ vars.DATA_DELETION_RECOVERY_MINUTES }}
 
 jobs:
   # ============================================

@@ -10,7 +10,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Eye, Heart, MessageCircle, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Eye,
+  Heart,
+  MessageCircle,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+} from 'lucide-react';
 
 interface PostMetrics {
   impressions: number;
@@ -63,7 +71,10 @@ export function PostsPerformanceTable({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Posts Performance</CardTitle>
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4" aria-hidden="true" />
+            <CardTitle>Posts Performance</CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -80,7 +91,10 @@ export function PostsPerformanceTable({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Posts Performance</CardTitle>
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4" aria-hidden="true" />
+            <CardTitle>Posts Performance</CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="text-muted-foreground py-8 text-center">
@@ -126,7 +140,10 @@ export function PostsPerformanceTable({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Posts Performance</CardTitle>
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5" aria-hidden="true" />
+            <CardTitle>Posts Performance</CardTitle>
+          </div>
           <div className="flex items-center gap-2">
             <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
               <SelectTrigger className="w-40">

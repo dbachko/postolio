@@ -136,6 +136,33 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
     };
   }, [open, type, clamp, storageKey, applyWidth, persistedType]);
 
+  // Global hotkeys and click-outside to close sidebar (desktop)
+  useEffect(() => {
+    if (!open || isSmall) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        close();
+      }
+    };
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const asideEl = asideRef.current;
+      if (!asideEl) return;
+      if (!asideEl.contains(event.target as Node)) {
+        close();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleMouseDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [open, isSmall, close]);
+
   // Mobile: render as Sheet; Desktop: resizable panel
   if (isSmall) {
     return (

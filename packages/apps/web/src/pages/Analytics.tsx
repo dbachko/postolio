@@ -4,10 +4,9 @@ import { brand as brandApi, httpGet, analyticsV2 } from '../lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { useBrandStore } from '../stores/brandStore';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { BarChart3, Instagram, CalendarClock } from 'lucide-react';
+import { BarChart3, Instagram } from 'lucide-react';
 import { AnalyticsOverviewTab } from '../components/analytics-tabs/AnalyticsOverviewTab';
 import { AnalyticsInstagramTab } from '../components/analytics-tabs/AnalyticsInstagramTab';
-import { AnalyticsSchedulingTab } from '../components/analytics-tabs/AnalyticsSchedulingTab';
 
 interface AnalyticsReport {
   totalPosts: number;
@@ -45,25 +44,14 @@ interface AnalyticsReport {
   };
 }
 
-interface SchedulingStats {
-  scheduled: number;
-  posted: number;
-  failed: number;
-  draft: number;
-}
-
 export default function Analytics() {
   const { selectedBrand } = useBrandStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get('tab') || 'overview';
-  const [activeTab, setActiveTab] = useState<'overview' | 'instagram' | 'scheduling'>(
-    (['overview', 'instagram', 'scheduling'].includes(urlTab) ? urlTab : 'overview') as
-      | 'overview'
-      | 'instagram'
-      | 'scheduling'
+  const [activeTab, setActiveTab] = useState<'overview' | 'instagram'>(
+    (['overview', 'instagram'].includes(urlTab) ? urlTab : 'overview') as 'overview' | 'instagram'
   );
   const [report, setReport] = useState<AnalyticsReport | null>(null);
-  const [schedulingStats, setSchedulingStats] = useState<SchedulingStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [daysPeriod, setDaysPeriod] = useState(30);
@@ -113,10 +101,9 @@ export default function Analytics() {
     const current = searchParams.get('tab') || 'overview';
     if (current !== activeTab) {
       setActiveTab(
-        (['overview', 'instagram', 'scheduling'].includes(current) ? current : 'overview') as
+        (['overview', 'instagram'].includes(current) ? current : 'overview') as
           | 'overview'
           | 'instagram'
-          | 'scheduling'
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,8 +159,7 @@ export default function Analytics() {
       const period = daysPeriod === 7 ? '7d' : daysPeriod === 90 ? '90d' : '30d';
 
       const window = daysPeriod === 7 ? '7d' : daysPeriod === 90 ? '90d' : '30d';
-      const [statsResponse, v2Summary, topPublications, accountSeries] = await Promise.all([
-        httpGet(`/api/analytics/stats/${selectedBrand.id}`),
+      const [v2Summary, topPublications, accountSeries] = await Promise.all([
         analyticsV2.getBrandSummary(selectedBrand.id, period).catch(() => null),
         analyticsV2.getBrandTopPublications(selectedBrand.id, 10).catch(() => null),
         analyticsV2.getBrandAccountSeries(selectedBrand.id, window as any).catch(() => null),
@@ -209,28 +195,6 @@ export default function Analytics() {
       };
 
       setReport(nextReport);
-      // Normalize scheduling stats to support multiple API shapes
-      const rawStats =
-        (statsResponse && (statsResponse as any).stats) ||
-        (statsResponse && (statsResponse as any).data?.stats) ||
-        (statsResponse && (statsResponse as any).data) ||
-        statsResponse ||
-        null;
-      const normalizedStats = rawStats
-        ? {
-            scheduled: Number(
-              rawStats.scheduled ??
-                rawStats.scheduledCount ??
-                rawStats.scheduled_posts ??
-                rawStats.pending ??
-                0
-            ),
-            posted: Number(rawStats.posted ?? rawStats.published ?? rawStats.publishedCount ?? 0),
-            failed: Number(rawStats.failed ?? rawStats.failedCount ?? 0),
-            draft: Number(rawStats.draft ?? rawStats.drafts ?? rawStats.draftCount ?? 0),
-          }
-        : null;
-      setSchedulingStats(normalizedStats);
     } catch {
       if (!cancelled) {
         setError('Failed to load analytics data');
@@ -416,7 +380,7 @@ export default function Analytics() {
   return (
     <div className="min-h-screen p-4 sm:p-8">
       <div className="mx-auto max-w-6xl">
-        <PageHeader title="Analytics" description="Performance metrics and scheduling" />
+        <PageHeader title="Analytics" description="Performance metrics and insights" />
 
         {error && (
           <div className="mt-6 mb-6">
@@ -461,22 +425,6 @@ export default function Analytics() {
               <Instagram className="h-4 w-4" />
               <span>Instagram</span>
             </button>
-            <button
-              onClick={() => {
-                setActiveTab('scheduling');
-                const next = new URLSearchParams(searchParams);
-                next.set('tab', 'scheduling');
-                setSearchParams(next, { replace: true });
-              }}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'scheduling'
-                  ? 'border-primary text-primary'
-                  : 'text-muted-foreground hover:text-foreground border-transparent hover:border-gray-300'
-              }`}
-            >
-              <CalendarClock className="h-4 w-4" />
-              <span>Scheduling</span>
-            </button>
           </div>
         </div>
 
@@ -509,10 +457,6 @@ export default function Analytics() {
               igPostsPagination={igPostsPagination}
               onPostsPageChange={handlePostsPageChange}
             />
-          )}
-
-          {activeTab === 'scheduling' && (
-            <AnalyticsSchedulingTab schedulingStats={schedulingStats} />
           )}
         </div>
       </div>
