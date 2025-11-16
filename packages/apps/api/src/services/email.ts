@@ -447,7 +447,7 @@ If you didn't request this email, you can safely ignore it.
     token: string
   ): Promise<{ success: boolean; error?: string }> {
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const verificationUrl = `${baseUrl}/verify-email?token=${token}`;
+    const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`;
 
     const { html, text } = this.generateEmailTemplate({
       title: 'Verify Your Email',

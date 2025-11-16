@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { backgroundJobs, JobType } from '../services/background-jobs.js';
+import { deletionQueueService } from '../services/deletion-queue.js';
 
 const backgroundJobsRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -128,6 +129,30 @@ const backgroundJobsRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.log.error(error);
         return reply.code(500).send({
           error: 'Failed to schedule integrity check job',
+        });
+      }
+    }
+  );
+
+  /**
+   * Manually trigger sweep for pending account deletions
+   * (finds users past their scheduledDeletion date and enqueues deletion jobs).
+   */
+  fastify.post(
+    '/api/admin/jobs/deletion-sweep',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      try {
+        const result = await deletionQueueService.sweepScheduledDeletions();
+
+        return reply.send({
+          success: true,
+          ...result,
+        });
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({
+          error: 'Failed to run deletion sweep',
         });
       }
     }

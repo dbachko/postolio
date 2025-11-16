@@ -145,6 +145,40 @@ export class DeletionQueueService {
     return this.deletionQueue.add('permanent-deletion', data, jobOptions);
   }
 
+  /**
+   * Scan for users whose scheduled deletion date has passed
+   * and enqueue permanent deletion jobs for them.
+   */
+  async sweepScheduledDeletions(): Promise<{
+    scheduledCount: number;
+  }> {
+    this.logger.info('Checking for scheduled deletions');
+
+    const usersToDelete = await prisma.user.findMany({
+      where: {
+        deletedAt: { not: null },
+        scheduledDeletion: { lte: new Date() },
+      },
+    });
+
+    this.logger.info('Scheduled deletions discovered', {
+      count: usersToDelete.length,
+    });
+
+    let scheduledCount = 0;
+
+    for (const user of usersToDelete) {
+      await this.scheduleDeletion({
+        userId: user.id,
+        scheduledDeletionDate: user.scheduledDeletion!,
+        email: user.email,
+      });
+      scheduledCount += 1;
+    }
+
+    return { scheduledCount };
+  }
+
   private setupDailyCron(): void {
     // Run every day at 2 AM to check for scheduled deletions
     this.deletionQueue.add(
@@ -162,28 +196,7 @@ export class DeletionQueueService {
     );
 
     this.deletionQueue.process('check-scheduled-deletions', async () => {
-      this.logger.info('Checking for scheduled deletions');
-
-      // Find all users scheduled for deletion
-      const usersToDelete = await prisma.user.findMany({
-        where: {
-          deletedAt: { not: null },
-          scheduledDeletion: { lte: new Date() },
-        },
-      });
-
-      this.logger.info('Scheduled deletions discovered', {
-        count: usersToDelete.length,
-      });
-
-      // Schedule deletion jobs for each user
-      for (const user of usersToDelete) {
-        await this.scheduleDeletion({
-          userId: user.id,
-          scheduledDeletionDate: user.scheduledDeletion!,
-          email: user.email,
-        });
-      }
+      return this.sweepScheduledDeletions();
     });
   }
 

@@ -523,6 +523,9 @@ export class ApiStack extends cdk.Stack {
               AUTH_ALLOWLIST_EMAILS: process.env.AUTH_ALLOWLIST_EMAILS,
             }),
             ...(process.env.WAITLIST_URL && { WAITLIST_URL: process.env.WAITLIST_URL }),
+            ...(process.env.DATA_DELETION_RECOVERY_MINUTES && {
+              DATA_DELETION_RECOVERY_MINUTES: process.env.DATA_DELETION_RECOVERY_MINUTES,
+            }),
             // Database endpoint parts as plain env vars (avoid relying on secret JSON shape)
             ...(databaseEndpointValue
               ? {
