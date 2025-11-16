@@ -9,6 +9,9 @@ import { instagramService } from '../services/instagram.js';
 import { importImageFromExternalUrl } from '../services/assets-media.js';
 import { buildAnalysisAssetMetadata } from '../services/brand-analysis-assets.js';
 import { redisService } from '../services/redis.js';
+import { sendErrorPage } from '../utils/oauth-error-pages.js';
+import { sendSuccessPage } from '../utils/oauth-success-page.js';
+import { OAuthAuditService } from '../services/oauth-audit.js';
 
 const prisma = getDatabaseClient();
 const tokenServiceClient = new TokenServiceClient();
@@ -27,17 +30,15 @@ interface CallbackQuery {
   error_description?: string;
 }
 
-// Environment variables for Meta App
 const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || 'test_app_id';
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || 'test_app_secret';
 const REDIRECT_URI =
   process.env.INSTAGRAM_REDIRECT_URI || 'http://localhost:3000/api/auth/instagram/callback';
 
-// Auth guard leveraging fastify.authenticate decorator
 function ensureAuth(
   request: FastifyRequest,
   reply: FastifyReply
-): request is FastifyRequest & { user: { id: string } } {
+): request is FastifyRequest & { user: { id: string; email?: string } } {
   if (!request.user || !request.user.id) {
     reply.code(401).send({ error: 'Authentication required' });
     return false;
@@ -68,7 +69,6 @@ interface InstagramProfile extends Record<string, unknown> {
 }
 
 const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
-  // Initiate Instagram OAuth authorization
   fastify.get<{ Querystring: AuthorizeQuery }>(
     '/authorize',
     { preHandler: fastify.authenticate },
@@ -83,8 +83,8 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         }
 
         const userId = request.user.id;
+        const userEmail = (request.user as any).email as string | undefined;
 
-        // Verify brand belongs to user
         const brand = await prisma.brand.findFirst({
           where: {
             id: brandId,
@@ -96,10 +96,8 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           return reply.status(404).send({ error: 'Brand not found' });
         }
 
-        // Generate secure state parameter
         const state = crypto.randomBytes(32).toString('hex');
 
-        // Store state in database temporarily (expires in 10 minutes)
         await prisma.brand.update({
           where: { id: brandId },
           data: {
@@ -113,8 +111,6 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           },
         });
 
-        // Build Facebook OAuth URL for Instagram Graph API permissions
-        // Note: Instagram Graph API uses Pages API permissions
         const scopes = [
           'pages_show_list',
           'pages_read_engagement',
@@ -131,6 +127,20 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           `state=${state}&` +
           `response_type=code`;
 
+        await OAuthAuditService.trackEvent({
+          event: {
+            platform: 'instagram',
+            event: 'authorize_started',
+            userId,
+            email: userEmail,
+            brandId,
+            metadata: {
+              brandName: brand.name,
+            },
+          },
+          request,
+        });
+
         reply.send({
           authUrl,
           state,
@@ -146,105 +156,54 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
     }
   );
 
-  // Handle OAuth callback
   fastify.get<{ Querystring: CallbackQuery }>('/callback', async function (request, reply) {
     try {
-      // Handle OAuth errors first
-      if (request.query.error) {
-        // Escape HTML to prevent XSS
-        const escapeHtml = (str: string) => {
-          return str
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-        };
+      await OAuthAuditService.trackEvent({
+        event: {
+          platform: 'instagram',
+          event: 'callback_received',
+        },
+        request,
+      });
 
-        const errorMessage = escapeHtml(
-          request.query.error_description ||
-            request.query.error ||
-            'An error occurred during authorization'
+      if (request.query.error) {
+        fastify.log.warn(
+          {
+            error: request.query.error,
+            error_description: request.query.error_description,
+          },
+          'Instagram OAuth error'
         );
 
-        const errorHtml = `
-          <!DOCTYPE html>
-          <html lang="en">
-            <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Connection Failed</title>
-              <style>
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                  display: flex;
-                  justify-content: center;
-                  align-items: center;
-                  height: 100vh;
-                  margin: 0;
-                  background-color: #f5f5f5;
-                }
-                .container {
-                  text-align: center;
-                  padding: 2rem;
-                  background: white;
-                  border-radius: 8px;
-                  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                  max-width: 400px;
-                }
-                .error {
-                  color: #ef4444;
-                  font-size: 3rem;
-                  margin-bottom: 1rem;
-                  font-weight: bold;
-                }
-                .message {
-                  color: #6b7280;
-                  margin-top: 1rem;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="error">&#10005;</div>
-                <h2>Connection Failed</h2>
-                <p>${errorMessage}</p>
-                <p class="message">Please close this window and try again.</p>
-              </div>
-              <script>
-                // Notify parent window of failure
-                if (window.opener && !window.opener.closed) {
-                  try {
-                    window.opener.postMessage({ 
-                      type: 'INSTAGRAM_OAUTH_ERROR', 
-                      data: { 
-                        success: false, 
-                        error: ${JSON.stringify(request.query.error)},
-                        error_description: ${JSON.stringify(request.query.error_description || '')}
-                      }
-                    }, window.location.origin);
-                  } catch (e) {
-                    console.error('Failed to send message to parent window:', e);
-                  }
-                }
-                // Close after delay
-                setTimeout(function() {
-                  window.close();
-                }, 5000);
-              </script>
-            </body>
-          </html>
-        `;
-        return reply.type('text/html').send(errorHtml);
+        await OAuthAuditService.trackEvent({
+          event: {
+            platform: 'instagram',
+            event: 'connection_error',
+            error: request.query.error,
+            errorDescription: request.query.error_description,
+            metadata: {
+              source: 'oauth_callback',
+            },
+          },
+          request,
+        });
+
+        return sendErrorPage(reply, {
+          error: request.query.error,
+          errorDescription: request.query.error_description,
+        });
       }
 
       const { code, state } = request.query;
 
       if (!code || !state) {
-        return reply.status(400).send({ error: 'code and state are required' });
+        return sendErrorPage(reply, {
+          error: 'invalid_request',
+          errorDescription: 'Missing required parameters. Please try connecting again.',
+          technicalDetails: 'code and state parameters are required',
+        });
       }
 
-      // Find brand with matching OAuth state (no auth required - state provides security)
       const brand = await prisma.brand.findFirst({
         where: {
           preferences: {
@@ -255,7 +214,12 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       });
 
       if (!brand) {
-        return reply.status(400).send({ error: 'Invalid or expired OAuth state' });
+        fastify.log.warn({ state }, 'Invalid or expired OAuth state');
+        return sendErrorPage(reply, {
+          error: 'invalid_state',
+          errorDescription: 'Your authorization session has expired. Please try connecting again.',
+          technicalDetails: 'OAuth state not found or expired',
+        });
       }
 
       const preferences: Record<string, unknown> =
@@ -263,17 +227,20 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           ? (brand.preferences as Record<string, unknown>)
           : {};
 
-      // Check if state has expired
-      const expiresRaw = preferences?.oauthStateExpires;
+      const expiresRaw = (preferences as any)?.oauthStateExpires;
       if (typeof expiresRaw === 'string' && new Date(expiresRaw) < new Date()) {
-        return reply.status(400).send({ error: 'OAuth state has expired' });
+        fastify.log.warn({ state, expiresRaw }, 'OAuth state expired');
+        return sendErrorPage(reply, {
+          error: 'invalid_state',
+          errorDescription: 'Your authorization session has expired. Please try connecting again.',
+          technicalDetails: 'OAuth state has expired',
+        });
       }
 
-      // Centralize Facebook Graph API version for OAuth
       const FB_GRAPH_API_VERSION = process.env.FB_GRAPH_API_VERSION || 'v24.0';
       const fbGraph = (path: string) =>
         `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${path}`;
-      // Exchange authorization code for access token
+
       const tokenExchangeUrl = fbGraph('oauth/access_token');
       const tokenParams = new URLSearchParams({
         client_id: FACEBOOK_APP_ID,
@@ -287,11 +254,12 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       });
 
       if (!tokenResponse.ok) {
-        const error = await tokenResponse.text();
-        fastify.log.error({ err: error }, 'Token exchange failed:');
-        return reply.status(400).send({
-          error: 'Failed to exchange authorization code for token',
-          details: error,
+        const errorText = await tokenResponse.text();
+        fastify.log.error({ err: errorText }, 'Token exchange failed:');
+        return sendErrorPage(reply, {
+          error: 'token_exchange_failed',
+          errorDescription: 'Failed to complete the Instagram connection. Please try again.',
+          technicalDetails: errorText,
         });
       }
 
@@ -301,31 +269,35 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       };
       const accessToken = tokenData.access_token;
 
-      // Get user's Facebook pages (required for Instagram Business accounts)
       const pagesUrl = fbGraph(
         `me/accounts?access_token=${accessToken}&fields=id,name,access_token,instagram_business_account`
       );
       const pagesResponse = await fetch(pagesUrl);
 
       if (!pagesResponse.ok) {
-        const error = await pagesResponse.text();
-        fastify.log.error({ err: error }, 'Failed to get pages:');
-        return reply.status(400).send({
-          error: 'Failed to get Facebook pages',
-          details: error,
+        const errorText = await pagesResponse.text();
+        fastify.log.error({ err: errorText }, 'Failed to get Facebook pages:');
+        return sendErrorPage(reply, {
+          error: 'api_error',
+          errorDescription: 'Failed to retrieve your Facebook pages. Please try again.',
+          technicalDetails: errorText,
         });
       }
 
       const pagesData = (await pagesResponse.json()) as PagesResponse;
 
-      // Find a page with an Instagram Business account
       const pageWithInstagram = pagesData.data?.find((page) => page.instagram_business_account);
 
       if (!pageWithInstagram) {
-        return reply.status(400).send({
-          error: 'No Instagram Business account found',
-          message:
-            'Please connect an Instagram Business or Creator account to one of your Facebook pages',
+        fastify.log.warn(
+          { pagesCount: pagesData.data?.length || 0 },
+          'No Instagram Business account found'
+        );
+
+        return sendErrorPage(reply, {
+          error: 'no_business_account',
+          errorDescription: 'No Instagram Business account found connected to your Facebook pages.',
+          technicalDetails: `Found ${pagesData.data?.length || 0} Facebook pages but none have Instagram Business accounts connected`,
         });
       }
 
@@ -333,35 +305,50 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
       const pageAccessToken = pageWithInstagram.access_token;
 
       if (!instagramAccountId || !pageAccessToken) {
-        return reply.status(400).send({
-          error: 'Incomplete Instagram page data returned from Facebook API',
+        fastify.log.error(
+          {
+            hasAccountId: !!instagramAccountId,
+            hasToken: !!pageAccessToken,
+            pageId: pageWithInstagram.id,
+          },
+          'Incomplete Instagram data'
+        );
+
+        return sendErrorPage(reply, {
+          error: 'incomplete_data',
+          errorDescription: 'Instagram account data is incomplete. Please try reconnecting.',
+          technicalDetails: 'Missing Instagram account ID or page access token',
         });
       }
 
-      // Get Instagram account information
       const instagramUrl = fbGraph(
         `${instagramAccountId}?fields=id,username,name,biography,followers_count,media_count,profile_picture_url&access_token=${pageAccessToken}`
       );
       const instagramResponse = await fetch(instagramUrl);
 
       if (!instagramResponse.ok) {
-        const error = await instagramResponse.text();
-        fastify.log.error({ err: error }, 'Failed to get Instagram profile:');
-        return reply.status(400).send({
-          error: 'Failed to get Instagram profile',
-          details: error,
+        const errorText = await instagramResponse.text();
+        fastify.log.error(
+          {
+            err: errorText,
+            accountId: instagramAccountId,
+          },
+          'Failed to get Instagram profile:'
+        );
+
+        return sendErrorPage(reply, {
+          error: 'profile_error',
+          errorDescription: 'Failed to retrieve your Instagram profile information.',
+          technicalDetails: errorText,
         });
       }
 
       const instagramProfile = (await instagramResponse.json()) as InstagramProfile;
-
-      // Add account type since it's not returned by the API
       instagramProfile.account_type = 'BUSINESS';
 
-      // Store sensitive token in Token Service
       const tokenExpiresAt = tokenData.expires_in
         ? new Date(Date.now() + tokenData.expires_in * 1000)
-        : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // Default 60 days
+        : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
 
       await tokenServiceClient.storeToken({
         userId: brand.userId,
@@ -376,12 +363,9 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         },
       });
 
-      // Update brand with UI metadata only (no sensitive token)
       const updatedBrand = await prisma.brand.update({
         where: { id: brand.id },
         data: {
-          // Remove brand-level Instagram fields; all connection details now live
-          // in SocialAccount records and the external Token Service.
           preferences: {
             ...preferences,
             oauthState: null,
@@ -391,7 +375,6 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         },
       });
 
-      // Create or update SocialAccount record for Instagram
       await prisma.socialAccount.upsert({
         where: {
           platform_externalAccountId: {
@@ -417,15 +400,17 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         },
       });
 
-      // Invalidate cached credentials since user reconnected
       await PublisherCredentialsService.invalidateCredentialsCache(brand.id);
 
-      // Trigger initial sync in background (non-blocking)
-      console.log(`[Instagram OAuth] Triggering initial sync for brand ${brand.id}`);
-      try {
-        // Set user-facing cooldown so UI disables the button immediately
-        await redisService.set(`ig-sync-${brand.id}`, Date.now().toString(), 900);
-      } catch {}
+      fastify.log.info(
+        {
+          brandId: brand.id,
+          instagramAccountId,
+          username: instagramProfile.username,
+        },
+        'Instagram account connected successfully'
+      );
+
       instagramService
         .syncPublishedPosts(
           { id: updatedBrand.id },
@@ -435,14 +420,22 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
           }
         )
         .then((results) => {
-          console.log(`[Instagram OAuth] Initial sync completed for brand ${brand.id}:`, results);
+          fastify.log.info(
+            { brandId: brand.id, results },
+            '[Instagram OAuth] Initial sync completed for brand'
+          );
         })
         .catch((error) => {
-          console.error(`[Instagram OAuth] Initial sync failed for brand ${brand.id}:`, error);
+          fastify.log.error(
+            { brandId: brand.id, error },
+            '[Instagram OAuth] Initial sync failed for brand'
+          );
         });
 
-      // Fire-and-forget: trigger Brand Analysis now that Instagram is connected
-      // Includes a small sample of recent posts with pre-warmed CDN URLs for image analysis
+      try {
+        await redisService.set(`ig-sync-${brand.id}`, Date.now().toString(), 900);
+      } catch {}
+
       (async () => {
         try {
           const postsRaw = await instagramService.getRecentPosts({ id: updatedBrand.id }, 20);
@@ -507,85 +500,41 @@ const instagramOAuthRoutes: FastifyPluginAsync = async function (fastify) {
         }
       })();
 
-      // Return HTML that closes the popup and notifies the parent
-      const html = `
-        <!DOCTYPE html>
-        <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Instagram Connected</title>
-            <style>
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                margin: 0;
-                background-color: #f5f5f5;
-              }
-              .container {
-                text-align: center;
-                padding: 2rem;
-                background: white;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-              }
-              .success {
-                color: #10b981;
-                font-size: 3rem;
-                margin-bottom: 1rem;
-                font-weight: bold;
-              }
-              .message {
-                color: #6b7280;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="success">&#10003;</div>
-              <h2>Instagram Connected Successfully!</h2>
-              <p class="message">You can close this window.</p>
-            </div>
-            <script>
-              // Notify parent window of success
-              if (window.opener && !window.opener.closed) {
-                try {
-                  window.opener.postMessage({ 
-                    type: 'INSTAGRAM_OAUTH_SUCCESS', 
-                    data: { 
-                      success: true, 
-                      profile: ${JSON.stringify(instagramProfile)} 
-                    }
-                  }, window.location.origin);
-                  
-                  // Give time for the message to be received before closing
-                  setTimeout(function() {
-                    window.close();
-                  }, 1500);
-                } catch (e) {
-                  console.error('Failed to send message to parent window:', e);
-                  // Still try to close after a delay
-                  setTimeout(function() {
-                    window.close();
-                  }, 3000);
-                }
-              } else {
-                // No parent window, just show success message
-                setTimeout(function() {
-                  window.close();
-                }, 3000);
-              }
-            </script>
-          </body>
-        </html>
-      `;
-      return reply.type('text/html').send(html);
+      await OAuthAuditService.trackEvent({
+        event: {
+          platform: 'instagram',
+          event: 'connection_success',
+          userId: brand.userId,
+          brandId: brand.id,
+          metadata: {
+            instagramAccountId,
+            username: instagramProfile.username,
+          },
+        },
+        request,
+      });
+
+      return sendSuccessPage(reply, {
+        profile: instagramProfile,
+        brandName: brand.name,
+      });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred';
       fastify.log.error({ message }, 'OAuth callback error:');
+
+      await OAuthAuditService.trackEvent({
+        event: {
+          platform: 'instagram',
+          event: 'connection_error',
+          error: 'unexpected_error',
+          errorDescription: message,
+          metadata: {
+            source: 'unexpected_exception',
+          },
+        },
+        request,
+      });
+
       reply.status(500).send({
         error: 'Failed to process OAuth callback',
         message,
