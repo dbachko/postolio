@@ -151,7 +151,7 @@ async function deleteOldRevokedSessions(result: CleanupResult): Promise<number> 
 
     const deleteResult = await prisma.session.deleteMany({
       where: {
-        revokedAt: { lt: cutoffDate, not: null },
+        revokedAt: { lt: cutoffDate },
       },
     });
 

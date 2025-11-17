@@ -27,7 +27,7 @@ export function useCampaignsQueries({ selectedBrandId, urlCampaignId, currentVie
 
   const instagramStatusQuery = useQuery({
     queryKey: ['instagram-status', selectedBrandId],
-    queryFn: () => brandApi.getInstagramConnectionStatus(selectedBrandId!),
+    queryFn: () => brandApi.getSocialConnectionStatus(selectedBrandId!, 'instagram'),
     enabled: !!selectedBrandId,
     refetchOnWindowFocus: true,
   });

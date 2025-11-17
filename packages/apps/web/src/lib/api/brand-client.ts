@@ -150,52 +150,6 @@ export class BrandClient {
     throw new Error('getConnectedAccounts not yet implemented');
   }
 
-  // =================================================================
-  // Instagram-Specific Methods (Backward Compatibility)
-  // =================================================================
-
-  /**
-   * @deprecated Use initializeSocialOAuth(brandId, 'instagram') instead
-   */
-  initializeInstagramOAuth(brandId: string) {
-    return this.initializeSocialOAuth(brandId, 'instagram');
-  }
-
-  /**
-   * @deprecated Use getSocialConnectionStatus(brandId, 'instagram', refresh) instead
-   */
-  getInstagramConnectionStatus(brandId: string, refresh = false) {
-    return this.getSocialConnectionStatus(brandId, 'instagram', refresh);
-  }
-
-  /**
-   * @deprecated Use disconnectSocial(brandId, 'instagram') instead
-   */
-  disconnectInstagram(brandId: string) {
-    return this.disconnectSocial(brandId, 'instagram');
-  }
-
-  /**
-   * @deprecated Use refreshSocialToken(brandId, 'instagram') instead
-   */
-  refreshInstagramToken(brandId: string) {
-    return this.refreshSocialToken(brandId, 'instagram');
-  }
-
-  /**
-   * @deprecated Use syncSocialPosts(brandId, 'instagram', options) instead
-   */
-  syncInstagramPosts(brandId: string, options: { maxPosts?: number; maxDays?: number }) {
-    return this.syncSocialPosts(brandId, 'instagram', options);
-  }
-
-  /**
-   * @deprecated Use getSocialSyncStatus(brandId, 'instagram') instead
-   */
-  getInstagramSyncStatus(brandId: string) {
-    return this.getSocialSyncStatus(brandId, 'instagram');
-  }
-
   // Brand analysis
   hasBrandProfileProjection(brandId: string) {
     // Use centralized request to keep headers/credentials consistent

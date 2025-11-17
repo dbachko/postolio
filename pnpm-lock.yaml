@@ -1063,6 +1063,9 @@ importers:
       '@aws-lambda-powertools/tracer':
         specifier: ^2.28.1
         version: 2.28.1
+      '@aws-sdk/client-eventbridge':
+        specifier: ^3.932.0
+        version: 3.932.0
       '@aws-sdk/client-s3':
         specifier: ^3.932.0
         version: 3.932.0
@@ -1221,34 +1224,6 @@ importers:
         specifier: ^4.0.9
         version: 4.0.9(@types/node@24.10.1)(@vitest/ui@4.0.9)(jiti@2.6.1)(jsdom@27.2.0)(lightningcss@1.30.2)(sass@1.94.0)(tsx@4.20.6)
 
-  packages/services/comments-ingestor:
-    dependencies:
-      '@postolio/aws':
-        specifier: workspace:*
-        version: link:../../libs/aws
-      '@postolio/database':
-        specifier: workspace:*
-        version: link:../../libs/database
-      axios:
-        specifier: ^1.13.2
-        version: 1.13.2
-      ioredis:
-        specifier: ^5.8.2
-        version: 5.8.2
-      node-fetch:
-        specifier: ^3.3.2
-        version: 3.3.2
-    devDependencies:
-      '@postolio/tsconfig':
-        specifier: workspace:*
-        version: link:../../libs/tsconfig
-      tsx:
-        specifier: ^4.20.6
-        version: 4.20.6
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   packages/services/dlq-processor:
     dependencies:
       '@aws-lambda-powertools/logger':
@@ -1297,25 +1272,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-
-  packages/services/post-generation:
-    dependencies:
-      '@postolio/database':
-        specifier: workspace:*
-        version: link:../../libs/database
-    devDependencies:
-      '@postolio/tsconfig':
-        specifier: workspace:*
-        version: link:../../libs/tsconfig
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.9
-        version: 4.0.9(@types/node@24.10.1)(@vitest/ui@4.0.9)(jiti@2.6.1)(jsdom@27.2.0)(lightningcss@1.30.2)(sass@1.94.0)(tsx@4.20.6)
 
   packages/services/publisher:
     dependencies:

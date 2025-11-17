@@ -10,6 +10,7 @@
     "@aws-lambda-powertools/logger": "^2.28.1",
     "@aws-lambda-powertools/metrics": "^2.28.1",
     "@aws-lambda-powertools/tracer": "^2.28.1",
+    "@aws-sdk/client-eventbridge": "^3.932.0",
     "@aws-sdk/client-s3": "^3.932.0",
     "@postolio/database-assets": "workspace:*",
     "sharp": "^0.34.5"

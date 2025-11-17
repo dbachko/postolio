@@ -299,6 +299,19 @@ export class ScheduleService {
 
       metrics.addMetric('ScheduleCreateFailed', MetricUnit.Count, 1);
 
+      // Emit schedule.failed event for status-sync
+      await this.emitScheduleFailedEvent(
+        undefined,
+        error instanceof Error ? error.message : 'Unknown error',
+        'create',
+        {
+          contentId: request.contentId,
+          brandId: request.brandId,
+          campaignId: request.campaignId,
+          platform: request.platform,
+        }
+      );
+
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -667,6 +680,13 @@ export class ScheduleService {
 
       metrics.addMetric('ScheduleUpdateFailed', MetricUnit.Count, 1);
 
+      // Emit schedule.failed event for status-sync
+      await this.emitScheduleFailedEvent(
+        scheduleId,
+        error instanceof Error ? error.message : 'Unknown error',
+        'update'
+      );
+
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -732,6 +752,13 @@ export class ScheduleService {
 
       metrics.addMetric('ScheduleDeleteFailed', MetricUnit.Count, 1);
 
+      // Emit schedule.failed event for monitoring
+      await this.emitScheduleFailedEvent(
+        scheduleId,
+        error instanceof Error ? error.message : 'Unknown error',
+        'delete'
+      );
+
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -775,6 +802,57 @@ export class ScheduleService {
         error,
         eventType,
         scheduleId: schedule.scheduleId,
+      });
+      // Don't fail the operation if event emission fails
+    }
+  }
+
+  /**
+   * Emit schedule failure event with partial data
+   */
+  private async emitScheduleFailedEvent(
+    scheduleId: string | undefined,
+    errorMessage: string,
+    operation: 'create' | 'update' | 'delete',
+    partialData?: {
+      contentId?: string;
+      brandId?: string;
+      campaignId?: string;
+      platform?: string;
+    }
+  ): Promise<void> {
+    try {
+      await eventBridge.send(
+        new PutEventsCommand({
+          Entries: [
+            {
+              Source: 'postolio.scheduler',
+              DetailType: 'schedule.failed',
+              Detail: JSON.stringify({
+                scheduleId: scheduleId || 'unknown',
+                operation,
+                error: errorMessage,
+                contentId: partialData?.contentId,
+                brandId: partialData?.brandId,
+                campaignId: partialData?.campaignId,
+                platform: partialData?.platform,
+                timestamp: new Date().toISOString(),
+              }),
+              EventBusName: process.env.EVENT_BUS_NAME || 'default',
+            },
+          ],
+        })
+      );
+
+      logger.debug('Schedule failure event emitted', {
+        scheduleId,
+        operation,
+      });
+    } catch (error) {
+      logger.warn('Failed to emit schedule failure event', {
+        error,
+        scheduleId,
+        operation,
       });
       // Don't fail the operation if event emission fails
     }

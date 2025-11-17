@@ -461,7 +461,7 @@ export class AssetLibraryStack extends cdk.Stack {
         },
         bundling: {
           // Sharp requires special handling for native modules
-          externalModules: ['@prisma/client', 'prisma'],
+          externalModules: ['@prisma/client', 'prisma', '@aws-sdk/*'],
           nodeModules: ['sharp'],
           commandHooks: {
             beforeBundling: () => [],
@@ -537,7 +537,7 @@ export class AssetLibraryStack extends cdk.Stack {
       s3.EventType.OBJECT_CREATED,
       new s3n.LambdaDestination(thumbnailGeneratorFunction),
       {
-        prefix: 'assets/', // Only trigger for assets in the assets/ folder
+        prefix: 'brands/', // Trigger for assets uploaded to brands/{brandId}/uploads/
         suffix: '', // Trigger for all file types (images and videos)
       }
     );

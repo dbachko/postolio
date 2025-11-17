@@ -133,8 +133,3 @@ export async function runVisualExtractor(
     : [];
   return { items, palette: shapedPalette, motifs, composition };
 }
-
-export function consolidateVisualDescriptors(items: VisualItemDescriptor[]) {
-  void items;
-  return { palette: [], motifs: [], composition: [] };
-}

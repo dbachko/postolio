@@ -53,6 +53,10 @@ packages/apps/assets/server/**/*.js
 packages/apps/assets/server/**/*.js.map
 packages/apps/assets/server/**/*.d.ts
 packages/apps/assets/server/**/*.d.ts.map
+packages/apps/assets-api/src/**/*.js
+packages/apps/assets-api/src/**/*.js.map
+packages/apps/assets-api/src/**/*.d.ts
+packages/apps/assets-api/src/**/*.d.ts.map
 td.json
 new-td.json
 api-td.json

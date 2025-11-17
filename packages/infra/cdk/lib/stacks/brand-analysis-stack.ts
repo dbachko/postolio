@@ -74,6 +74,15 @@ export class BrandAnalysisStack extends cdk.Stack {
       sortKey: { name: 'requestedAt', type: dynamodb.AttributeType.STRING },
     });
 
+    const learningSignalsTable = new dynamodb.Table(this, 'LearningSignalsTable', {
+      tableName: `${prefix}-learning-signals`,
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
     // Event bus (reuse Scheduling bus)
     const schedulingEventBusNameParam = ssm.StringParameter.fromStringParameterName(
       this,
@@ -98,7 +107,12 @@ export class BrandAnalysisStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:Query'],
-        resources: [profilesTable.tableArn, jobsTable.tableArn, `${jobsTable.tableArn}/index/GSI1`],
+        resources: [
+          profilesTable.tableArn,
+          jobsTable.tableArn,
+          `${jobsTable.tableArn}/index/GSI1`,
+          learningSignalsTable.tableArn,
+        ],
       })
     );
     // Scope EventBridge PutEvents to specific bus
@@ -147,6 +161,7 @@ export class BrandAnalysisStack extends cdk.Stack {
         SERVICE_NAME: 'brand-analysis',
         BRAND_STYLE_PROFILES_TABLE: profilesTable.tableName,
         BRAND_ANALYSIS_JOBS_TABLE: jobsTable.tableName,
+        BRAND_LEARNING_SIGNALS_TABLE: learningSignalsTable.tableName,
         EVENT_BUS_NAME: schedulingEventBusNameParam.stringValue,
         ...(openaiApiKey ? { OPENAI_API_KEY: openaiApiKey } : {}),
         // Default models (override via env if needed)
@@ -418,6 +433,10 @@ export class BrandAnalysisStack extends cdk.Stack {
     new ssm.StringParameter(this, 'JobsTableParam', {
       parameterName: `/postolio/${environment}/brand-analysis/jobs-table`,
       stringValue: jobsTable.tableName,
+    });
+    new ssm.StringParameter(this, 'LearningSignalsTableParam', {
+      parameterName: `/postolio/${environment}/brand-analysis/learning-signals-table`,
+      stringValue: learningSignalsTable.tableName,
     });
 
     // ==================== Weekly Scheduler ====================
