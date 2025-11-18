@@ -106,7 +106,19 @@ async function upsertPublicationLatest(
         : 0;
   const impressions = Math.max(0, Math.floor(impressionsSource || 0));
   const reach = Math.max(0, Math.floor(reachSource || 0));
-  const videoViews = Math.max(0, Math.floor(metrics.video_views || 0));
+  // Instagram Graph API has deprecated the `video_views` metric in favor of `views`
+  // (and `plays`/`ig_reels_aggregated_all_plays_count` for reels). Our canonical
+  // column is still named `videoViews`, so prefer the new `views` metric when present,
+  // falling back to `video_views` (old API) and then `plays`.
+  const viewsSource =
+    typeof metrics.views === 'number'
+      ? metrics.views
+      : typeof metrics.video_views === 'number'
+        ? metrics.video_views
+        : typeof metrics.plays === 'number'
+          ? metrics.plays
+          : 0;
+  const videoViews = Math.max(0, Math.floor(viewsSource || 0));
   const engagement = likes + comments + saves + shares;
   const denom = reach > 0 ? reach : impressions > 0 ? impressions : 1;
   const engagementRate = new Prisma.Decimal(((engagement / denom) * 100).toFixed(4));

@@ -196,13 +196,16 @@ export function BrandHealthScore({ healthScore, loading }: BrandHealthScoreProps
         <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
           {/* Enhanced Circular Gauge */}
           <div className="flex justify-center lg:justify-start">
-            <div className="relative">
+            <div className="relative h-48 w-48">
               {/* Glow effect */}
               <div
                 className={`absolute inset-0 rounded-full bg-gradient-to-br ${config.ringGradient} opacity-20 blur-2xl`}
               />
 
-              <svg className="h-48 w-48 -rotate-90 transform drop-shadow-lg" viewBox="0 0 160 160">
+              <svg
+                className="h-full w-full -rotate-90 transform drop-shadow-lg"
+                viewBox="0 0 160 160"
+              >
                 {/* Outer decorative ring */}
                 <circle
                   cx="80"
@@ -272,12 +275,9 @@ export function BrandHealthScore({ healthScore, loading }: BrandHealthScoreProps
               </svg>
 
               {/* Score display */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <div className={`text-5xl font-bold ${config.textColor} drop-shadow-sm`}>
-                    {score}
-                  </div>
-                  <div className="text-muted-foreground text-sm font-medium">/ 100</div>
+              <div className="pointer-events-none absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center">
+                <div className={`text-5xl font-bold ${config.textColor} drop-shadow-sm`}>
+                  {score}
                 </div>
               </div>
             </div>
