@@ -9,6 +9,7 @@ export function CreatePost() {
     return (
       <div className="px-6 py-10">
         <AppEmptyState
+          variant="minimal"
           title="Choose a brand to create a post"
           description="Post drafts, approvals, and analytics are tied to a single brand."
           actions={[{ label: 'Select Brand', to: '/brands' }]}

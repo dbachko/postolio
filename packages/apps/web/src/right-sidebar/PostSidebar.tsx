@@ -515,6 +515,7 @@ export function PostSidebar({
           <div className="space-y-4">
             {!selectedBrand ? (
               <AppEmptyState
+                variant="minimal"
                 title="Select a brand to create this post"
                 description="Post drafts, scheduling rules, and insights are tied to the brand you choose."
                 actions={[{ label: 'Choose Brand', to: '/brands' }]}

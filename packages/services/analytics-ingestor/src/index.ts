@@ -92,8 +92,20 @@ async function upsertPublicationLatest(
   const comments = Math.max(0, Math.floor(metrics.comments || 0));
   const saves = Math.max(0, Math.floor(metrics.saves || 0));
   const shares = Math.max(0, Math.floor(metrics.shares || 0));
-  const impressions = Math.max(0, Math.floor(metrics.impressions || 0));
-  const reach = Math.max(0, Math.floor(metrics.reach || 0));
+  const impressionsSource =
+    typeof metrics.impressions === 'number'
+      ? metrics.impressions
+      : typeof metrics.reach === 'number'
+        ? metrics.reach
+        : 0;
+  const reachSource =
+    typeof metrics.reach === 'number'
+      ? metrics.reach
+      : typeof metrics.impressions === 'number'
+        ? metrics.impressions
+        : 0;
+  const impressions = Math.max(0, Math.floor(impressionsSource || 0));
+  const reach = Math.max(0, Math.floor(reachSource || 0));
   const videoViews = Math.max(0, Math.floor(metrics.video_views || 0));
   const engagement = likes + comments + saves + shares;
   const denom = reach > 0 ? reach : impressions > 0 ? impressions : 1;

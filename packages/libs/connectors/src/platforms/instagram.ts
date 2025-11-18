@@ -162,12 +162,6 @@ export class InstagramConnector implements Connector {
       );
       return axios.get(url);
     };
-    const fetchTotal = async (metricName: string) => {
-      const url = fbGraph(
-        `${account.externalAccountId}/insights?metric=${metricName}&metric_type=total_value&period=day&since=${sinceUnix}&until=${untilUnix}&access_token=${creds.accessToken}`
-      );
-      return axios.get(url);
-    };
     const aggregateSeries = (data: any[]) => {
       const totals: Record<string, number> = {};
       for (const item of data) {
@@ -182,12 +176,14 @@ export class InstagramConnector implements Connector {
       return totals;
     };
 
-    // reach (time series)
+    // impressions + reach (time series)
+    let impressionsTotal = 0;
     let reachTotal = 0;
     try {
-      const res = await fetchSeries('reach');
+      const res = await fetchSeries('impressions,reach');
       const arr = Array.isArray(res.data?.data) ? (res.data.data as any[]) : [];
       const totals = aggregateSeries(arr);
+      impressionsTotal = totals.impressions || 0;
       reachTotal = totals.reach || 0;
     } catch (err) {
       throw mapInstagramError(err);
@@ -196,22 +192,10 @@ export class InstagramConnector implements Connector {
     // profile_views (total_value)
     let profileViews = 0;
     try {
-      const res = await fetchTotal('profile_views');
+      const res = await fetchSeries('profile_views');
       const arr = Array.isArray(res.data?.data) ? (res.data.data as any[]) : [];
-      for (const item of arr) {
-        if (item?.name === 'profile_views') {
-          const tv = item?.total_value;
-          if (typeof tv === 'number') profileViews += tv;
-          else if (tv && typeof tv?.value === 'number') profileViews += tv.value;
-          else {
-            const values = Array.isArray(item?.values) ? item.values : [];
-            profileViews += values.reduce(
-              (s: number, v: any) => s + (typeof v?.value === 'number' ? v.value : 0),
-              0
-            );
-          }
-        }
-      }
+      const totals = aggregateSeries(arr);
+      profileViews = totals.profile_views || 0;
     } catch (err) {
       throw mapInstagramError(err);
     }
@@ -219,6 +203,7 @@ export class InstagramConnector implements Connector {
     return {
       metrics: {
         followers,
+        impressions: impressionsTotal,
         reach: reachTotal,
         profile_views: profileViews,
       },

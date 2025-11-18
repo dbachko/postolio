@@ -26,7 +26,7 @@ export function EmptyMedia({
     <div
       className={cn(
         'mx-auto flex items-center justify-center',
-        variant === 'icon' && 'bg-muted text-muted-foreground rounded-full p-3',
+        variant === 'icon' && 'bg-muted text-muted-foreground h-12 w-12 rounded-full p-3',
         className
       )}
       {...props}

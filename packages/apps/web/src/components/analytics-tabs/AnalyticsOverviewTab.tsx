@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { formatNumber, formatPercent } from '@/utils/formatNumber';
 import { Eye, Heart, Users, FileText, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
@@ -92,6 +93,9 @@ export function AnalyticsOverviewTab({
 }: AnalyticsOverviewTabProps) {
   const [showScheduleOptimizer, setShowScheduleOptimizer] = useState(false);
   const [topPostThumbs, setTopPostThumbs] = useState<Record<string, string>>({});
+  const hasPosts = (report?.totalPosts || 0) > 0;
+  const hasPostMetrics = Boolean(report?.topPosts && report.topPosts.length > 0);
+  const showIngestionNotice = hasPosts && !hasPostMetrics;
 
   // Best-effort: load thumbnails for top posts lacking a thumbnailUrl
   useEffect(() => {
@@ -165,6 +169,18 @@ export function AnalyticsOverviewTab({
 
       {report && !loading && (
         <>
+          {showIngestionNotice && (
+            <Alert variant="info">
+              <AlertTitle>Analytics are still syncing</AlertTitle>
+              <AlertDescription>
+                Your social accounts are connected and posts are imported, but detailed analytics
+                like impressions, reach, and engagement come from the platform insights APIs and are
+                fetched in the background. It can take up to about 15 minutes after connecting or
+                running a sync for these metrics to appear here.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Brand Health Score - Hero Section */}
           <BrandHealthScoreComponent healthScore={report.healthScore} loading={loading} />
 
@@ -178,7 +194,7 @@ export function AnalyticsOverviewTab({
               loading={loading}
             />
             <KPICard
-              title="Impressions"
+              title="Views"
               value={formatNumber(report.totalImpressions)}
               change={report.previousPeriodComparison?.impressions?.change}
               icon={<Eye className="h-5 w-5" />}
@@ -438,7 +454,7 @@ function V2Charts({ brandId }: { brandId: string }) {
   if (err) return <div className="text-muted-foreground">{err}</div>;
   return (
     <MultiMetricTimeSeriesChart
-      title="Reach & Impressions (Daily)"
+      title="Reach & Views (Daily)"
       series={series.map((d) => ({
         date: d.date,
         metrics: {
@@ -448,7 +464,7 @@ function V2Charts({ brandId }: { brandId: string }) {
       }))}
       metrics={[
         { key: 'reach', label: 'Reach' },
-        { key: 'impressions', label: 'Impressions' },
+        { key: 'impressions', label: 'Views' },
       ]}
       label="Daily reach and impressions"
     />

@@ -211,7 +211,7 @@ export function PostsPerformanceTable({
                 <tr className="text-muted-foreground text-left text-xs">
                   <th className="pb-2 font-medium">Post</th>
                   <th className="pb-2 text-center font-medium">Published</th>
-                  <th className="pb-2 text-right font-medium">Impressions</th>
+                  <th className="pb-2 text-right font-medium">Views</th>
                   <th className="pb-2 text-right font-medium">Reach</th>
                   <th className="pb-2 text-right font-medium">Likes</th>
                   <th className="pb-2 text-right font-medium">Comments</th>

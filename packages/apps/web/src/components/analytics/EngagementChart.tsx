@@ -62,7 +62,7 @@ export function EngagementChart({ data, type = 'bar' }: EngagementChartProps) {
         <div className="bg-background rounded-lg border p-3 shadow-lg">
           <p className="font-medium">{`${label} (${data.date})`}</p>
           <p className="text-muted-foreground mb-2 text-sm">{data.caption}</p>
-          <p className="text-foreground">Impressions: {payload[0].value.toLocaleString()}</p>
+          <p className="text-foreground">Views: {payload[0].value.toLocaleString()}</p>
           <p className="text-foreground">Engagement: {payload[1].value.toLocaleString()}</p>
           <p className="text-foreground">Rate: {formatPercent(data.engagementRate)}</p>
         </div>
@@ -92,7 +92,7 @@ export function EngagementChart({ data, type = 'bar' }: EngagementChartProps) {
               stroke="var(--chart-1)"
               strokeWidth={2}
               dot={{ r: 4 }}
-              name="Impressions"
+              name="Views"
             />
             <Line
               type="monotone"
@@ -116,12 +116,7 @@ export function EngagementChart({ data, type = 'bar' }: EngagementChartProps) {
           <XAxis dataKey="name" tick={{ fontSize: 12 }} angle={-45} textAnchor="end" height={60} />
           <YAxis tick={{ fontSize: 12 }} />
           <Tooltip content={<CustomTooltip />} />
-          <Bar
-            dataKey="impressions"
-            fill="var(--chart-1)"
-            name="Impressions"
-            radius={[2, 2, 0, 0]}
-          />
+          <Bar dataKey="impressions" fill="var(--chart-1)" name="Views" radius={[2, 2, 0, 0]} />
           <Bar dataKey="engagement" fill="var(--chart-2)" name="Engagement" radius={[2, 2, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>

@@ -135,7 +135,7 @@ export function TopPostsGrid({ posts, loading, onPostClick }: TopPostsGridProps)
               <SelectItem value="engagementRate">Engagement Rate</SelectItem>
               <SelectItem value="engagement">Total Engagement</SelectItem>
               <SelectItem value="reach">Reach</SelectItem>
-              <SelectItem value="impressions">Impressions</SelectItem>
+              <SelectItem value="impressions">Views</SelectItem>
             </SelectContent>
           </Select>
         </div>

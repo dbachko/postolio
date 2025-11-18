@@ -125,6 +125,7 @@ export function CampaignWizard() {
   if (!brand) {
     return (
       <AppEmptyState
+        variant="minimal"
         title="Pick a brand to launch a campaign"
         description="Campaign briefs, automations, and results stay aligned to the brand you choose."
         actions={[{ label: 'Select Brand', to: '/brands' }]}

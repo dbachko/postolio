@@ -90,6 +90,7 @@ export default function CampaignsContainer() {
   if (!selectedBrand) {
     return (
       <AppEmptyState
+        variant="minimal"
         title="Set up a brand to run campaigns"
         description="Audience targeting, messaging, and AI automation all depend on a selected brand."
         actions={[{ label: 'Choose Brand', to: '/brands' }]}

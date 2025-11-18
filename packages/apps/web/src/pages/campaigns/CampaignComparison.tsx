@@ -134,7 +134,7 @@ export function CampaignComparison() {
   };
 
   const metrics = [
-    { key: 'totalImpressions', label: 'Impressions', format: formatNumber },
+    { key: 'totalImpressions', label: 'Views', format: formatNumber },
     { key: 'totalEngagement', label: 'Engagement', format: formatNumber },
     {
       key: 'averageEngagementRate',
@@ -163,7 +163,7 @@ export function CampaignComparison() {
         <h3 className="mb-4 text-lg font-semibold">Average Performance</h3>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
           <div className="bg-muted/50 rounded-lg p-4">
-            <div className="text-muted-foreground mb-1 text-xs">Avg Impressions</div>
+            <div className="text-muted-foreground mb-1 text-xs">Avg Views</div>
             <div className="text-xl font-bold">{formatNumber(summary.avgImpressions)}</div>
           </div>
           <div className="bg-muted/50 rounded-lg p-4">

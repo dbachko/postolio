@@ -14,6 +14,7 @@ export function Assets() {
       <div className="container mx-auto p-6">
         <PageHeader title="Asset Library" description="Manage your images and videos" />
         <AppEmptyState
+          variant="minimal"
           title="Choose a brand to view assets"
           description="Assets are organized per brand. Pick one to browse, upload, or reuse creative."
           actions={[{ label: 'Go to Brands', to: '/brands' }]}

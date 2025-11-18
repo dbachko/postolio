@@ -5,6 +5,7 @@ import { ActivityHeatmap } from '../analytics/ActivityHeatmap';
 import { AudienceInsights } from '../analytics/AudienceInsights';
 import { PostsPerformanceTable } from '../analytics/PostsPerformanceTable';
 import { Eye, Heart, Users } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type {
   InstagramHashtag,
   InstagramAudienceInsights,
@@ -42,6 +43,23 @@ export function AnalyticsInstagramTab({
   igPostsPagination,
   onPostsPageChange,
 }: AnalyticsInstagramTabProps) {
+  const hasPosts = igPostsDetailed.length > 0;
+  const allOverviewZero =
+    (igOverview?.reach ?? 0) === 0 &&
+    (igOverview?.impressions ?? 0) === 0 &&
+    (igOverview?.profile_views ?? 0) === 0;
+  const allPostMetricsZero =
+    hasPosts &&
+    igPostsDetailed.every(
+      (p) =>
+        (p.metrics?.impressions || 0) === 0 &&
+        (p.metrics?.reach || 0) === 0 &&
+        (p.metrics?.engagement || 0) === 0
+    );
+  const hasSeries = igSeries && igSeries.length > 0;
+  const showIngestionNotice =
+    !igLoading && hasPosts && allOverviewZero && allPostMetricsZero && !hasSeries;
+
   return (
     <div className="space-y-6">
       {igLoading ? (
@@ -59,7 +77,7 @@ export function AnalyticsInstagramTab({
               icon={<Users className="h-4 w-4" />}
             />
             <MetricsCard
-              title="Impressions (30d)"
+              title="Views (30d)"
               value={igOverview?.impressions || 0}
               icon={<Eye className="h-4 w-4" />}
             />
@@ -69,6 +87,18 @@ export function AnalyticsInstagramTab({
               icon={<Heart className="h-4 w-4" />}
             />
           </div>
+
+          {showIngestionNotice && (
+            <Alert variant="info">
+              <AlertTitle>Instagram insights are still syncing</AlertTitle>
+              <AlertDescription>
+                Your Instagram account is connected and posts are imported, but performance data
+                like impressions, reach, and profile views are fetched from Instagram in the
+                background. It can take up to about 15 minutes after connecting or syncing posts for
+                these metrics to appear.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Audience Insights */}
           {igAudience?.followerGrowth && (
@@ -93,7 +123,7 @@ export function AnalyticsInstagramTab({
           {/* Time Series Charts */}
           {igSeries && igSeries.length > 0 ? (
             <MultiMetricTimeSeriesChart
-              title="Reach & Impressions (Daily)"
+              title="Reach & Views (Daily)"
               series={igSeries.map((d) => ({
                 date: d.date,
                 metrics: {
@@ -103,7 +133,7 @@ export function AnalyticsInstagramTab({
               }))}
               metrics={[
                 { key: 'reach', label: 'Reach' },
-                { key: 'impressions', label: 'Impressions' },
+                { key: 'impressions', label: 'Views' },
               ]}
               label="Daily reach and impressions"
             />

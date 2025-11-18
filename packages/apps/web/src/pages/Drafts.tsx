@@ -56,6 +56,7 @@ export default function Drafts() {
   if (!selectedBrand) {
     return (
       <AppEmptyState
+        variant="minimal"
         title="Drafts live inside each brand"
         description="Pick a brand to review drafts, schedule posts, or start something new."
         actions={[{ label: 'Choose Brand', to: '/brands' }]}

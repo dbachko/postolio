@@ -10,6 +10,7 @@ export function CampaignCreate({ brandId }: Props) {
   if (!brandId) {
     return (
       <AppEmptyState
+        variant="minimal"
         title="Choose a brand to create a campaign"
         description="Campaign objectives, creative direction, and schedules are personalized per brand."
         actions={[{ label: 'Go to Brands', to: '/brands' }]}

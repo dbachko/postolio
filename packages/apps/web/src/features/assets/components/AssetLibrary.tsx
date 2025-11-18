@@ -47,6 +47,7 @@ export default function AssetLibrary({ brandId }: AssetLibraryProps) {
   if (!brandId) {
     return (
       <AppEmptyState
+        variant="minimal"
         title="Select a brand to browse assets"
         description="Asset searches, uploads, and folders are scoped to an individual brand."
         actions={[{ label: 'Choose Brand', to: '/brands' }]}

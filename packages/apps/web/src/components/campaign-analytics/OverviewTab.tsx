@@ -58,7 +58,7 @@ export function OverviewTab({ metrics }: OverviewTabProps) {
               <Eye className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-muted-foreground text-sm">Impressions</p>
+              <p className="text-muted-foreground text-sm">Views</p>
               <p className="text-2xl font-bold">{formatNumber(metrics.totalImpressions)}</p>
             </div>
           </CardContent>
