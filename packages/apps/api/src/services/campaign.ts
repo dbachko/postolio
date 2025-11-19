@@ -27,6 +27,10 @@ const prisma = getDatabaseClient();
 // In-memory store for edit sessions (in production, this would be Redis or database)
 const editSessions = new Map<string, { userId: string; startedAt: Date }>();
 
+// If a campaign stays in "creating" longer than this, treat it as stuck
+// and attempt to recover preview generation when the campaign is fetched.
+const CAMPAIGN_PREVIEW_STUCK_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
+
 export interface CampaignConfig {
   name?: string; // Optional: Auto-generated if not provided
   brandId: string;
@@ -700,6 +704,29 @@ class CampaignService {
 
       if (!campaign) {
         throw new Error('Campaign not found or access denied');
+      }
+
+      // Detect campaigns that are stuck in "creating" due to a previous process exit
+      try {
+        if (
+          (campaign as { status?: string; previewGenerated?: boolean; createdAt?: Date }).status ===
+            'creating' &&
+          !(campaign as { status?: string; previewGenerated?: boolean; createdAt?: Date })
+            .previewGenerated &&
+          campaign.createdAt instanceof Date &&
+          Date.now() - campaign.createdAt.getTime() > CAMPAIGN_PREVIEW_STUCK_THRESHOLD_MS
+        ) {
+          console.warn(
+            `Campaign ${campaignId} appears stuck in 'creating' for more than ${CAMPAIGN_PREVIEW_STUCK_THRESHOLD_MS / 60000} minutes. Re-queuing preview generation.`
+          );
+          // Best-effort requeue; internal guard prevents duplicate jobs
+          await campaignJobService.startCampaignPreviewGeneration(campaignId, userId);
+        }
+      } catch (requeueError) {
+        console.error(
+          `Failed to re-queue campaign preview generation for ${campaignId}:`,
+          requeueError
+        );
       }
 
       // Build CDN URLs for all content and map to public response format

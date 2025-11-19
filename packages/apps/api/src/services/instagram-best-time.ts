@@ -143,6 +143,7 @@ export class InstagramBestTimeService {
     const params = new URLSearchParams({
       metric: 'online_followers',
       metric_type: 'time_series',
+      period: 'lifetime',
       access_token: credentials.accessToken,
     });
 
