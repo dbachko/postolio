@@ -22,26 +22,32 @@ class CampaignJobService {
    * Start async campaign preview generation
    */
   async startCampaignPreviewGeneration(campaignId: string, userId: string): Promise<void> {
-    if (this.runningJobs.has(campaignId)) {
-      console.log(`Campaign preview generation already running for ${campaignId}`);
-      return;
-    }
+    try {
+      if (this.runningJobs.has(campaignId)) {
+        console.log(`Campaign preview generation already running for ${campaignId}`);
+        return;
+      }
 
-    this.runningJobs.add(campaignId);
+      this.runningJobs.add(campaignId);
 
-    logMemoryUsage('campaign-jobs:startCampaignPreviewGeneration', {
-      campaignId,
-      runningJobs: this.runningJobs.size,
-    });
-
-    // Start the background job
-    this.generateCampaignPreviewAsync(campaignId, userId)
-      .catch((error) => {
-        console.error(`Campaign preview generation failed for ${campaignId}:`, error);
-      })
-      .finally(() => {
-        this.runningJobs.delete(campaignId);
+      logMemoryUsage('campaign-jobs:startCampaignPreviewGeneration', {
+        campaignId,
+        runningJobs: this.runningJobs.size,
       });
+
+      // Start the background job
+      this.generateCampaignPreviewAsync(campaignId, userId)
+        .catch((error) => {
+          console.error(`Campaign preview generation failed for ${campaignId}:`, error);
+        })
+        .finally(() => {
+          this.runningJobs.delete(campaignId);
+        });
+    } catch (error) {
+      console.error(`Error initiating campaign preview generation for ${campaignId}:`, error);
+      this.runningJobs.delete(campaignId);
+      throw error;
+    }
   }
 
   /**

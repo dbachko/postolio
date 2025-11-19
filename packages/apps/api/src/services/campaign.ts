@@ -314,8 +314,20 @@ class CampaignService {
         },
       });
 
-      // Start async preview generation
-      campaignJobService.startCampaignPreviewGeneration(campaign.id, userId);
+      // Start async preview generation with error handling and logging
+      console.log(`[CampaignService] Triggering preview generation for campaign ${campaign.id}`);
+      try {
+        // Await the start (which is non-blocking for the actual work) to ensure it kicks off successfully
+        await campaignJobService.startCampaignPreviewGeneration(campaign.id, userId);
+      } catch (jobError) {
+        console.error(
+          `[CampaignService] Failed to start preview generation for ${campaign.id}:`,
+          jobError
+        );
+        // We don't block the response, but we log the error to ensure visibility
+        // In a critical system we might want to revert the campaign creation, but here we let it persist
+        // so the user sees the 'creating' (or failed) state.
+      }
 
       return campaign;
     } catch (error) {
