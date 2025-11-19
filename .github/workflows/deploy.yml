@@ -315,11 +315,6 @@ jobs:
             if [[ "${{ steps.changes.outputs.analytics }}" == "true" ]]; then
               add_image analytics packages/services/analytics-ingestor/Dockerfile analytics
             fi
-
-            # On push to main/master, build all images (release behavior)
-            if [[ "$EVENT" == "push" && ( "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ) ]]; then
-              MATRIX='[{"name":"api","dockerfile":"packages/apps/api/Dockerfile","scope":"api"},{"name":"assets","dockerfile":"packages/apps/assets-api/Dockerfile","scope":"assets"},{"name":"analytics","dockerfile":"packages/services/analytics-ingestor/Dockerfile","scope":"analytics"}]'
-            fi
           fi
 
           # Ensure matrix is compact JSON (single line) before exporting as output

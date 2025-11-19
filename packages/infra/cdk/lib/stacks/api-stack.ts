@@ -483,6 +483,10 @@ export class ApiStack extends cdk.Stack {
           taskRole: taskRole,
           executionRole: executionRole,
           environment: {
+            // Bound Node heap to avoid container-level OOM; if there is a leak,
+            // the process will fail fast instead of exhausting Fargate memory.
+            NODE_OPTIONS:
+              environment === 'prod' ? '--max_old_space_size=1024' : '--max_old_space_size=512',
             NODE_ENV: environment,
             PORT: '3000',
             LOG_LEVEL: environment === 'prod' ? 'info' : 'debug',
@@ -512,6 +516,9 @@ export class ApiStack extends cdk.Stack {
             BRAND_ANALYSIS_JOBS_TABLE: brandJobsTableName,
             ...(redisEndpointParam && { REDIS_HOST: redisEndpointParam.stringValue }),
             ...(redisPortParam && { REDIS_PORT: redisPortParam.stringValue }),
+            // DB bootstrap: migrations are handled by docker-entrypoint.sh in ECS;
+            // API process only verifies connectivity.
+            DB_SETUP_STRATEGY: 'skip',
             // OpenAI API Key from GitHub secrets (passed via CI/CD)
             ...(openaiApiKey && { OPENAI_API_KEY: openaiApiKey }),
             ...oauthEnvVars,

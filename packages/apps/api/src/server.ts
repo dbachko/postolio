@@ -315,12 +315,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     });
   });
 
-  app.listen({ port: 3000, host: '0.0.0.0' }, async (err, address) => {
-    if (err) {
+  const start = async (): Promise<void> => {
+    try {
+      const address = await app.listen({ port: 3000, host: '0.0.0.0' });
+      app.log.info(`Server listening at ${address}`);
+    } catch (err) {
       app.log.error(err);
       process.exit(1);
     }
-    app.log.info(`Server listening at ${address}`);
 
     // Validate environment configuration at startup
     try {
@@ -386,5 +388,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       app.log.error({ message }, '❌ Failed to initialize database:');
       app.log.info('⚠️  Server running but background services disabled until database is ready');
     }
-  });
+  };
+
+  // Start the server using promise-based API to avoid mixed callback/async patterns
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  start();
 }

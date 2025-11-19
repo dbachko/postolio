@@ -50,28 +50,58 @@ export async function ensureDatabaseSchema(options?: { generateClient?: boolean 
   const { cmd, cwd, dbPkgDir } = resolvePrismaInvocation(schemaPath);
 
   try {
-    // Prefer migrate deploy in prod; use db push in dev to keep DX smooth
-    const useDbPush =
-      process.env.NODE_ENV !== 'prod' && process.env.DB_SETUP_STRATEGY !== 'migrate';
-    const args = useDbPush ? 'db push --skip-generate' : 'migrate deploy --skip-generate';
-    const schemaArg = schemaPath ? ` --schema ${schemaPath}` : '';
-    const migrateCommand = `${cmd} ${args}${schemaArg}`;
-
-    console.log(
-      `🔧 Running: ${migrateCommand}${cwd && cwd !== process.cwd() ? ` (cwd: ${cwd})` : ''}`
+    // Choose strategy based on environment:
+    // - In AWS/containerized envs, ALWAYS prefer migrate deploy (safe, migration-driven)
+    // - In local dev, default to db push for DX unless overridden
+    // - When DB_SETUP_STRATEGY=skip, skip schema sync and only run connectivity check
+    const runningInAws = !!(
+      process.env.AWS_EXECUTION_ENV ||
+      process.env.ECS_CONTAINER_METADATA_URI_V4 ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME
     );
-    execSync(migrateCommand, {
-      stdio: 'inherit',
-      cwd: cwd ?? process.cwd(),
-    });
-    console.log('✅ Database schema synchronized successfully');
+
+    const strategyEnv = (process.env.DB_SETUP_STRATEGY || '').toLowerCase();
+    let strategy: 'migrate' | 'db-push' | 'skip';
+
+    if (['skip', 'none', 'disabled'].includes(strategyEnv)) {
+      strategy = 'skip';
+    } else if (strategyEnv === 'migrate') {
+      strategy = 'migrate';
+    } else if (strategyEnv === 'db-push' || strategyEnv === 'dbpush') {
+      strategy = 'db-push';
+    } else {
+      strategy = runningInAws ? 'migrate' : 'db-push';
+    }
+
+    if (strategy === 'skip') {
+      console.log(
+        'ℹ️ DB_SETUP_STRATEGY=skip - skipping Prisma schema sync; relying on external migrations.'
+      );
+    } else {
+      const useDbPush = strategy === 'db-push';
+      const args = useDbPush ? 'db push --skip-generate' : 'migrate deploy --skip-generate';
+      const schemaArg = schemaPath ? ` --schema ${schemaPath}` : '';
+      const migrateCommand = `${cmd} ${args}${schemaArg}`;
+
+      console.log(
+        `🔧 Running (${strategy}): ${migrateCommand}${
+          cwd && cwd !== process.cwd() ? ` (cwd: ${cwd})` : ''
+        }`
+      );
+      execSync(migrateCommand, {
+        stdio: 'inherit',
+        cwd: cwd ?? process.cwd(),
+      });
+      console.log('✅ Database schema synchronized successfully');
+    }
   } catch (migrationError) {
     console.error('❌ Failed to run database migrations:', migrationError);
     console.error('Attempted command failed. You can run manually, for example:');
+    const strategyEnv = (process.env.DB_SETUP_STRATEGY || '').toLowerCase();
     const example =
-      process.env.NODE_ENV === 'prod'
-        ? 'pnpm --filter @postolio/database exec prisma migrate deploy'
-        : 'pnpm --filter @postolio/database exec prisma db push';
+      strategyEnv === 'db-push' || strategyEnv === 'dbpush'
+        ? 'pnpm --filter @postolio/database exec prisma db push'
+        : 'pnpm --filter @postolio/database exec prisma migrate deploy';
     console.error(`  ${example}`);
     throw new Error(`Database setup failed: ${migrationError}`);
   }

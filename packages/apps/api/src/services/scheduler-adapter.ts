@@ -145,14 +145,9 @@ export class SchedulerAdapter {
 
   /**
    * Get singleton instance (deprecated - use create() for proper async initialization)
-   * @deprecated Use SchedulerAdapter.create() instead
    */
   static getInstance(config?: Partial<ContentSchedulerConfig>): SchedulerAdapter {
     if (!SchedulerAdapter.instance) {
-      // This is problematic but kept for backward compatibility
-      logger.warn(
-        'Using deprecated getInstance(). Migrate to SchedulerAdapter.create() for proper async initialization.'
-      );
       SchedulerAdapter.instance = new SchedulerAdapter(config);
     }
     return SchedulerAdapter.instance;
@@ -1319,5 +1314,7 @@ export class SchedulerAdapter {
   }
 }
 
-// Export singleton instance
+// Export singleton instance. We intentionally avoid logging deprecation warnings here
+// because this synchronous accessor is safe: the underlying client is lazily
+// initialized via the async `client` getter when first used.
 export const schedulerAdapter = SchedulerAdapter.getInstance();
