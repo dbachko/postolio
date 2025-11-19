@@ -450,6 +450,10 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
       throw new Error('Invalid response structure: missing posts array');
     }
 
+    if (structuredResponse.posts.length === 0) {
+      throw new Error('Invalid response structure: posts array is empty');
+    }
+
     if (structuredResponse.posts.length !== count) {
       contentLogger.warn('OpenAI returned a different number of posts than requested', {
         received: structuredResponse.posts.length,

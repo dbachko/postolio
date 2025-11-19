@@ -386,15 +386,33 @@ class CampaignService {
         examplePosts.push(...content);
       }
 
-      // If we have fewer posts than requested, generate more with the first theme
-      while (examplePosts.length < exampleCount && (config.themes?.length || 0) > 0) {
+      // If we have fewer posts than requested, generate more with the first theme.
+      // Include a safety guard so we don't loop forever if generation keeps returning 0 posts.
+      let extraAttempts = 0;
+      const maxExtraAttempts = 5;
+      while (
+        examplePosts.length < exampleCount &&
+        (config.themes?.length || 0) > 0 &&
+        extraAttempts < maxExtraAttempts
+      ) {
         const additionalContent = await generateInstagramContent(campaign.brand.name, {
           brandId: campaign.brandId,
           count: 1,
           theme: (config.themes || [])[0],
           style: config.style,
         });
+
+        if (!additionalContent.length) {
+          extraAttempts++;
+          continue;
+        }
+
         examplePosts.push(...additionalContent);
+        extraAttempts++;
+      }
+
+      if (!examplePosts.length) {
+        throw new Error('Failed to generate any preview content for campaign');
       }
 
       // Trim to exact count requested
