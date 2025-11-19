@@ -9,6 +9,7 @@ import { getBrandProfileContext, type BrandProfileContext } from './brand-profil
 import { Prisma, type ContentStatus } from '@postolio/database';
 import { SeasonalityService } from './seasonality.js';
 import { getDatabaseClient } from '../config/database.js';
+import { logMemoryUsage } from '../utils/memory-debug.js';
 
 const prisma = getDatabaseClient();
 const contentLogger = baseLogger.child({ module: 'content-generator' });
@@ -363,9 +364,12 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
       style,
     });
 
-    // Create a timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('OpenAI API call timeout')), 30000); // 30 second timeout
+    logMemoryUsage('content-generator:before-openai', {
+      brandId: request.brandId,
+      count,
+      theme,
+      style,
+      hasCampaignId: !!request.campaignId,
     });
 
     // LLM sampling/diversity tuning (env-overridable)
@@ -384,41 +388,56 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
       ? parseFloat(process.env.LLM_TOP_P as string)
       : 0.9;
 
-    const completionPromise = openai.chat.completions.create({
-      model: getDefaultOpenAIModel(),
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt,
-        },
-        {
-          role: 'user',
-          content: `Generate ${count} Instagram posts for ${brandName}. ${
-            theme ? `Theme: ${theme}.` : ''
-          } ${style ? `Style: ${style}.` : ''}`.trim(),
-        },
-      ],
-      temperature: captionTemperature,
-      top_p: topP,
-      presence_penalty: presencePenalty,
-      frequency_penalty: frequencyPenalty,
-      max_tokens: 1500,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'instagram_posts',
-          strict: true,
-          schema: responseSchema,
+    const timeoutMs = 30000;
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
+
+    const completionPromise = openai.chat.completions.create(
+      {
+        model: getDefaultOpenAIModel(),
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt,
+          },
+          {
+            role: 'user',
+            content: `Generate ${count} Instagram posts for ${brandName}. ${
+              theme ? `Theme: ${theme}.` : ''
+            } ${style ? `Style: ${style}.` : ''}`.trim(),
+          },
+        ],
+        temperature: captionTemperature,
+        top_p: topP,
+        presence_penalty: presencePenalty,
+        frequency_penalty: frequencyPenalty,
+        max_tokens: 1500,
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'instagram_posts',
+            strict: true,
+            schema: responseSchema,
+          },
         },
       },
-    });
+      {
+        signal: abortController.signal,
+        timeout: timeoutMs,
+      }
+    );
 
     type OpenAIChatChoice = { message?: { content?: string } };
     type OpenAIChatCompletion = { choices: OpenAIChatChoice[] };
-    const completion = (await Promise.race([
-      completionPromise,
-      timeoutPromise,
-    ])) as OpenAIChatCompletion;
+    const completion = (await completionPromise) as OpenAIChatCompletion;
+    clearTimeout(timeoutId);
+
+    logMemoryUsage('content-generator:after-openai', {
+      brandId: request.brandId,
+      count,
+      theme,
+      style,
+    });
     contentLogger.info('OpenAI API call completed successfully', {
       brandId: request.brandId,
       count,
@@ -584,6 +603,10 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
     contentLogger.error('Content generation error', {
       brandId: request.brandId,
       error: { name: err.name, message: err.message, stack: err.stack },
+    });
+
+    logMemoryUsage('content-generator:error', {
+      brandId: request.brandId,
     });
 
     // Check for specific OpenAI errors that should fail hard

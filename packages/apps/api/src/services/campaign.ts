@@ -21,6 +21,7 @@ import {
 import { attachAssetToContent } from './assets-media.js';
 import { eventEmitter } from './event-emitter.js';
 import { getDatabaseClient } from '../config/database.js';
+import { logMemoryUsage } from '../utils/memory-debug.js';
 
 const prisma = getDatabaseClient();
 
@@ -724,6 +725,13 @@ class CampaignService {
         throw new Error('Campaign not found or access denied');
       }
 
+      logMemoryUsage('campaign-service:getCampaign', {
+        campaignId,
+        status: (campaign as { status?: string }).status ?? null,
+        previewGenerated: (campaign as { previewGenerated?: boolean }).previewGenerated ?? null,
+        contentCount: (campaign as { _count?: { content?: number } })._count?.content ?? null,
+      });
+
       // Detect campaigns that are stuck in "creating" due to a previous process exit
       try {
         if (
@@ -735,16 +743,32 @@ class CampaignService {
           Date.now() - campaign.createdAt.getTime() > CAMPAIGN_PREVIEW_STUCK_THRESHOLD_MS
         ) {
           console.warn(
-            `Campaign ${campaignId} appears stuck in 'creating' for more than ${CAMPAIGN_PREVIEW_STUCK_THRESHOLD_MS / 60000} minutes. Re-queuing preview generation.`
+            `Campaign ${campaignId} appears stuck in 'creating' for more than ${CAMPAIGN_PREVIEW_STUCK_THRESHOLD_MS / 60000} minutes. Marking as failed to prevent infinite retry loops.`
           );
-          // Best-effort requeue; internal guard prevents duplicate jobs
-          await campaignJobService.startCampaignPreviewGeneration(campaignId, userId);
+
+          // Update status to failed instead of blindly retrying, which causes OOM loops
+          await prisma.campaign.update({
+            where: { id: campaignId },
+            data: {
+              status: 'failed',
+              errorMessage: 'Preview generation timed out. Please try again.',
+            },
+          });
+
+          // Notify listeners
+          eventEmitter.emitCampaignStatusChanged(
+            campaignId,
+            campaign.brand.id,
+            'creating',
+            'failed',
+            {
+              userId,
+              operation: 'campaign.stuck.recovery',
+            }
+          );
         }
       } catch (requeueError) {
-        console.error(
-          `Failed to re-queue campaign preview generation for ${campaignId}:`,
-          requeueError
-        );
+        console.error(`Failed to handle stuck campaign ${campaignId}:`, requeueError);
       }
 
       // Build CDN URLs for all content and map to public response format
