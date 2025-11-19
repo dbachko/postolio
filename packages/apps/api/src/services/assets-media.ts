@@ -4,8 +4,6 @@ import { AssetsServiceClient, type AssetRecord } from '@postolio/assets-client';
 import { config } from '../config/env-validation.js';
 import { getDatabaseClient } from '../config/database.js';
 import type { PrismaClient, Prisma } from '@postolio/database';
-import dns from 'node:dns/promises';
-import { isIP } from 'node:net';
 import { formatError } from '../utils/logging.js';
 
 export interface AssetUploadMetadata {
@@ -31,7 +29,6 @@ export interface AttachAssetParams {
 
 let cachedClient: AssetsServiceClient | null = null;
 
-const PRIVATE_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
 const assetsLogger = baseLogger.child({ module: 'assets-media' });
 
 function getAssetsClient(): AssetsServiceClient {
@@ -49,9 +46,21 @@ export async function importImageFromExternalUrl(
   imageUrl: string,
   metadata: AssetUploadMetadata
 ): Promise<AssetRecord> {
-  const buffer = await downloadImage(imageUrl);
-  const optimized = await optimizeImage(buffer);
-  return uploadBufferToAssets(optimized, metadata, deriveFileName(imageUrl, metadata.contentId));
+  // Offload download and storage to assets-api to avoid OOM in API service
+  // This skips local optimization (resize/reformat), but saves significant memory per request
+  const client = getAssetsClient();
+  return client.importFromUrl({
+    brandId: metadata.brandId,
+    uploadedBy: metadata.uploadedBy || 'system',
+    sourceUrl: imageUrl,
+    fileName: deriveFileName(imageUrl, metadata.contentId),
+    mimeType: 'image/jpeg', // Default hint; assets-api will detect actual
+    fileType: 'image',
+    title: metadata.originalPrompt,
+    tags: deriveAssetTags(metadata),
+    folderId: metadata.folderId || undefined,
+    publishedAt: metadata.publishedAt?.toISOString(),
+  });
 }
 
 export async function importImageBuffer(
@@ -179,110 +188,6 @@ async function uploadBufferToAssets(
     folderId: metadata.folderId || undefined,
     publishedAt: metadata.publishedAt?.toISOString(),
   });
-}
-
-const MAX_REMOTE_IMAGE_BYTES = 50 * 1024 * 1024; // 50MB ceiling matching legacy behavior
-
-async function ensurePublicHost(hostname: string): Promise<void> {
-  const lowerHost = hostname.toLowerCase();
-  if (PRIVATE_HOSTNAMES.has(lowerHost) || lowerHost.endsWith('.local')) {
-    throw new Error('Blocked host for remote fetch');
-  }
-
-  const directIp = isIP(hostname);
-  if (directIp) {
-    if (isPrivateIp(hostname)) {
-      throw new Error('Blocked private IP address');
-    }
-    return;
-  }
-
-  try {
-    const lookup = await dns.lookup(hostname, { all: true });
-    if (lookup.some((entry) => isPrivateIp(entry.address))) {
-      throw new Error('Blocked private DNS resolution');
-    }
-  } catch (error) {
-    // If DNS fails we err on the side of caution and block to avoid SSRF surprises
-    const reason = error instanceof Error ? error.message : 'unknown DNS failure';
-    throw new Error(`Unable to resolve remote host: ${reason}`);
-  }
-}
-
-function isPrivateIp(ip: string): boolean {
-  if (ip === '0.0.0.0') return true;
-  if (ip.startsWith('127.')) return true;
-  if (ip.startsWith('10.')) return true;
-  if (ip.startsWith('192.168.')) return true;
-  if (ip.startsWith('169.254.')) return true;
-
-  if (ip.startsWith('172.')) {
-    const secondOctet = Number(ip.split('.')[1]);
-    if (secondOctet >= 16 && secondOctet <= 31) {
-      return true;
-    }
-  }
-
-  if (ip === '::1' || ip === '::') return true;
-  if (ip.startsWith('fc') || ip.startsWith('fd')) return true; // unique local IPv6
-  return false;
-}
-
-async function downloadImage(url: string): Promise<Buffer> {
-  try {
-    const urlObj = new URL(url);
-    if (!['https:', 'http:'].includes(urlObj.protocol)) {
-      throw new Error(`Unsupported protocol: ${urlObj.protocol}`);
-    }
-
-    await ensurePublicHost(urlObj.hostname);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Postolio-AssetFetcher/1.0',
-        },
-      });
-
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-      }
-
-      const contentLengthHeader = response.headers.get('content-length');
-      if (
-        contentLengthHeader &&
-        Number.isFinite(Number(contentLengthHeader)) &&
-        Number(contentLengthHeader) > MAX_REMOTE_IMAGE_BYTES
-      ) {
-        throw new Error('Remote file too large');
-      }
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.startsWith('image/')) {
-        throw new Error('URL does not point to an image');
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      if (arrayBuffer.byteLength > MAX_REMOTE_IMAGE_BYTES) {
-        throw new Error('Downloaded image exceeds size limit');
-      }
-      return Buffer.from(arrayBuffer);
-    } catch (error) {
-      clearTimeout(timeout);
-      throw error;
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error('Unknown error downloading image');
-  }
 }
 
 async function optimizeImage(buffer: Buffer): Promise<Buffer> {

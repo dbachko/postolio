@@ -240,6 +240,11 @@ export class CampaignSlidingWindowService {
         ? selectedSlots.slice(0, maxGenerate as number)
         : selectedSlots;
 
+    console.log(
+      `[SlidingWindow] Generating content for ${effectiveSlots.length} slots (requested max: ${maxGenerate}, available: ${selectedSlots.length})`,
+      { campaignId, brandId: campaign.brandId }
+    );
+
     // Generate and schedule content for selected slots
     let generated = 0;
     for (let i = 0; i < effectiveSlots.length; i++) {

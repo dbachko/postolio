@@ -861,7 +861,12 @@ export async function generateBrandContentImage(
   brandContext: BrandProfileContext | null,
   brandName: string
 ): Promise<string> {
-  if (shouldUsePlaceholderImages()) {
+  const usePlaceholders = shouldUsePlaceholderImages();
+  if (usePlaceholders) {
+    contentLogger.info('Skipping AI image generation; using placeholder', {
+      brand: brandName,
+      reason: 'shouldUsePlaceholderImages() returned true',
+    });
     return generatePlaceholderImageUrl('1024x1024', `${brandName}-${Date.now()}`);
   }
 
