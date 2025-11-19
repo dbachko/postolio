@@ -575,26 +575,43 @@ jobs:
           ENV="${{ needs.detect-changes.outputs.environment }}"
           STACK="${{ matrix.stack }}"
 
-          # Determine image tag strategy based on whether build-images ran
-          # - If build ran (success): use per-commit tag
-          # - If build skipped: reuse environment latest tag
+          # Determine image tag strategy based on which images were actually
+          # built in this run. This keeps CDK/ECS from pointing at tags that
+          # were never pushed to ECR.
+          IMAGE_MATRIX='${{ needs.detect-changes.outputs.image-matrix }}'
 
-          # For API stack
-          if [[ "${{ needs.build-images.result }}" == "success" && ("${{ needs.detect-changes.outputs.api-changed }}" == "true" || "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "push") ]]; then
+          api_built=false
+          assets_built=false
+          analytics_built=false
+
+          if [[ -n "$IMAGE_MATRIX" && "$IMAGE_MATRIX" != "[]" && "$IMAGE_MATRIX" != "null" ]]; then
+            # Simple string matching is enough given the fixed JSON shape
+            if [[ "$IMAGE_MATRIX" == *'"name":"api"'* ]]; then
+              api_built=true
+            fi
+            if [[ "$IMAGE_MATRIX" == *'"name":"assets"'* ]]; then
+              assets_built=true
+            fi
+            if [[ "$IMAGE_MATRIX" == *'"name":"analytics"'* ]]; then
+              analytics_built=true
+            fi
+          fi
+
+          # If build-images ran and a given image was built, use the per-commit tag.
+          # Otherwise, reuse the existing environment "latest" tag.
+          if [[ "${{ needs.build-images.result }}" == "success" && "$api_built" == "true" ]]; then
             API_IMAGE_TAG="api-$ENV-${{ github.sha }}"
           else
             API_IMAGE_TAG="api-$ENV-latest"
           fi
 
-          # For Asset Library stack
-          if [[ "${{ needs.build-images.result }}" == "success" && ("${{ needs.detect-changes.outputs.asset-library-changed }}" == "true" || "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "push") ]]; then
+          if [[ "${{ needs.build-images.result }}" == "success" && "$assets_built" == "true" ]]; then
             ASSETS_IMAGE_TAG="assets-$ENV-${{ github.sha }}"
           else
             ASSETS_IMAGE_TAG="assets-$ENV-latest"
           fi
 
-          # For Analytics stack
-          if [[ "${{ needs.build-images.result }}" == "success" && ("${{ needs.detect-changes.outputs.analytics-changed }}" == "true" || "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "push") ]]; then
+          if [[ "${{ needs.build-images.result }}" == "success" && "$analytics_built" == "true" ]]; then
             ANALYTICS_IMAGE_TAG="analytics-$ENV-${{ github.sha }}"
           else
             ANALYTICS_IMAGE_TAG="analytics-$ENV-latest"
