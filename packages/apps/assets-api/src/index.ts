@@ -74,9 +74,13 @@ export function buildFastify() {
         return;
       }
 
-      if (allowedOrigins.some((allowed) => origin.startsWith(allowed))) {
+      // Use exact matching instead of startsWith to prevent subdomain attacks
+      // (e.g., https://postolio.example.evil.com would be rejected)
+      if (allowedOrigins.includes(origin)) {
         cb(null, true);
       } else {
+        // Log rejected origins for debugging
+        console.warn('[CORS] Rejected origin:', origin, 'Allowed:', allowedOrigins);
         cb(new Error('Not allowed by CORS'), false);
       }
     },

@@ -141,6 +141,7 @@ export class BrandAnalysisStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
       role: lambdaRole,
+      tracing: lambda.Tracing.ACTIVE,
       bundling: {
         externalModules: ['@aws-sdk/*'],
         nodeModules: [
@@ -269,6 +270,7 @@ export class BrandAnalysisStack extends cdk.Stack {
         timeout: cdk.Duration.minutes(2),
         memorySize: 512,
         role: projectionRole,
+        tracing: lambda.Tracing.ACTIVE,
         bundling: {
           nodeModules: ['pg', '@prisma/adapter-pg'],
           commandHooks: {
@@ -502,6 +504,7 @@ export class BrandAnalysisStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(2),
       memorySize: 512,
       role: schedulerRole,
+      tracing: lambda.Tracing.ACTIVE,
       bundling: {
         commandHooks: {
           beforeBundling(): string[] {

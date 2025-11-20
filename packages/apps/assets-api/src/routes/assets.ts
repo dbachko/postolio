@@ -38,11 +38,30 @@ async function fetchBufferFromUrl(
 }
 
 const assetsRoutes: FastifyPluginAsync = async (fastify) => {
+  // Helper function to verify brand ownership
+  async function verifyBrandOwnership(brandId: string, userId: string): Promise<boolean> {
+    // Check if brand exists and belongs to the user
+    const brand = await prismaAssets.brand.findFirst({
+      where: {
+        id: brandId,
+        userId: userId,
+      },
+      select: { id: true },
+    });
+    return !!brand;
+  }
+
   // Get presigned URL for upload
   fastify.post(
     '/assets/upload-url',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const authUser = request.user as { userId?: string; id?: string } | undefined;
+      const userId = authUser?.userId || authUser?.id;
+      if (!userId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+
       const body = request.body as {
         brandId: string;
         fileName: string;
@@ -60,6 +79,12 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         }
         if (typeof fileSize !== 'number' || Number.isNaN(fileSize) || fileSize <= 0) {
           return reply.code(400).send({ error: 'Invalid file size' });
+        }
+
+        // CRITICAL: Verify user owns the brand before allowing upload
+        const isAuthorized = await verifyBrandOwnership(brandId, userId);
+        if (!isAuthorized) {
+          return reply.code(403).send({ error: 'Forbidden: You do not have access to this brand' });
         }
 
         // Generate presigned URL
@@ -116,6 +141,12 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     };
 
     try {
+      // CRITICAL: Verify user owns the brand before creating asset
+      const isAuthorized = await verifyBrandOwnership(body.brandId, userId);
+      if (!isAuthorized) {
+        return reply.code(403).send({ error: 'Forbidden: You do not have access to this brand' });
+      }
+
       const asset = await prismaAssets.asset.create({
         data: {
           brandId: body.brandId,
@@ -154,6 +185,12 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // List assets
   fastify.get('/assets', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const authUser = request.user as { userId?: string; id?: string } | undefined;
+    const userId = authUser?.userId || authUser?.id;
+    if (!userId) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+
     const query = request.query as {
       brandId?: string;
       type?: 'image' | 'video';
@@ -167,6 +204,14 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     };
 
     try {
+      // CRITICAL: Verify user owns the brand if brandId specified
+      if (query.brandId) {
+        const isAuthorized = await verifyBrandOwnership(query.brandId, userId);
+        if (!isAuthorized) {
+          return reply.code(403).send({ error: 'Forbidden: You do not have access to this brand' });
+        }
+      }
+
       const page = parseInt(query.page || '1', 10);
       const limit = Math.min(parseInt(query.limit || '50', 10), 100);
       const skip = (page - 1) * limit;

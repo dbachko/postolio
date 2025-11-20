@@ -445,6 +445,7 @@ export class AssetLibraryStack extends cdk.Stack {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         securityGroups: [assetsLambdaSecurityGroup],
+        tracing: lambda.Tracing.ACTIVE,
         environment: {
           NODE_ENV: environment,
           SERVICE_NAME: 'asset-thumbnail-generator',
@@ -499,6 +500,7 @@ export class AssetLibraryStack extends cdk.Stack {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
       securityGroups: [assetsLambdaSecurityGroup],
+      tracing: lambda.Tracing.ACTIVE,
       environment: {
         NODE_ENV: environment,
         SERVICE_NAME: 'asset-ai-analyzer',

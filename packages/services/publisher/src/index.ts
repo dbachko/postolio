@@ -544,7 +544,7 @@ export const handler = async (
         await schedulerClient.send(
           new DeleteScheduleCommand({
             Name: event.scheduleId,
-            GroupName: process.env.SCHEDULE_GROUP_NAME || 'default',
+            GroupName: process.env.SCHEDULER_GROUP_NAME || 'default',
           })
         );
         logger.info('Deleted EventBridge schedule for inactive campaign', {
@@ -677,7 +677,7 @@ export const handler = async (
           await schedulerClient.send(
             new DeleteScheduleCommand({
               Name: event.scheduleId,
-              GroupName: process.env.SCHEDULE_GROUP_NAME || 'default',
+              GroupName: process.env.SCHEDULER_GROUP_NAME || 'default',
             })
           );
         } catch {
@@ -733,7 +733,7 @@ export const handler = async (
       await schedulerClient.send(
         new DeleteScheduleCommand({
           Name: event.scheduleId,
-          GroupName: process.env.SCHEDULE_GROUP_NAME || 'default',
+          GroupName: process.env.SCHEDULER_GROUP_NAME || 'default',
         })
       );
       logger.info('Deleted EventBridge schedule after successful publishing', {
@@ -820,7 +820,7 @@ export const handler = async (
       await schedulerClient.send(
         new DeleteScheduleCommand({
           Name: event.scheduleId,
-          GroupName: process.env.SCHEDULE_GROUP_NAME || 'default',
+          GroupName: process.env.SCHEDULER_GROUP_NAME || 'default',
         })
       );
       logger.info('Deleted EventBridge schedule to prevent re-triggering', {

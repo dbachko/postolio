@@ -150,6 +150,10 @@ export function PostSidebar({
   });
   const [hasChanges, setHasChanges] = useState(false);
   const formInitializedRef = useRef(false);
+  const isStoryContent = formData.contentType === 'story';
+  const captionRequired = !isStoryContent;
+  const hasCaption = Boolean(formData.caption?.trim());
+  const hasScheduleTime = Boolean(formData.scheduledAt);
 
   // Initialize form from post
   useEffect(() => {
@@ -216,11 +220,12 @@ export function PostSidebar({
         new Date(formData.scheduledAt),
         brandTimezone
       ).toISOString();
+      const isStory = formData.contentType === 'story';
 
       return contentApi.updateContent({
         contentId: id,
-        caption: formData.caption.trim(),
-        hashtags: normalizeHashtags(formData.hashtags),
+        caption: isStory ? '' : formData.caption.trim(),
+        hashtags: isStory ? [] : normalizeHashtags(formData.hashtags),
         imageUrl: formData.imageUrl || undefined,
         campaignId: selectedCampaign || null,
         scheduledAt: scheduledUtc,
@@ -730,7 +735,7 @@ export function PostSidebar({
                     <Button
                       variant="outline"
                       onClick={() => createPost('draft')}
-                      disabled={isCreatingPost || !formData.caption?.trim()}
+                      disabled={isCreatingPost || (captionRequired && !hasCaption)}
                     >
                       {isCreatingPost ? (
                         <>
@@ -747,7 +752,7 @@ export function PostSidebar({
                     <Button
                       onClick={() => createPost('schedule')}
                       disabled={
-                        isCreatingPost || !formData.caption?.trim() || !formData.scheduledAt
+                        isCreatingPost || (captionRequired && !hasCaption) || !hasScheduleTime
                       }
                     >
                       {isCreatingPost ? (
@@ -896,7 +901,9 @@ export function PostSidebar({
                   {canScheduleExisting && (
                     <Button
                       onClick={() => schedulePost()}
-                      disabled={isScheduling || !formData.caption?.trim() || !formData.scheduledAt}
+                      disabled={
+                        isScheduling || (captionRequired && !hasCaption) || !hasScheduleTime
+                      }
                     >
                       {isScheduling ? (
                         <>

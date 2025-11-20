@@ -119,9 +119,17 @@ export function buildFastify(): FastifyInstance {
     origin: corsOrigins,
     credentials: true,
   });
+  // Validate required secrets on startup
+  const cookieSecret = process.env.COOKIE_SECRET || process.env.JWT_SECRET;
+  if (!cookieSecret) {
+    throw new Error(
+      'COOKIE_SECRET or JWT_SECRET environment variable is required for secure cookie signing. ' +
+        'Please set one of these variables in your environment configuration.'
+    );
+  }
+
   app.register(cookie, {
-    secret:
-      process.env.COOKIE_SECRET || process.env.JWT_SECRET || 'default-secret-change-in-production',
+    secret: cookieSecret,
     parseOptions: {},
   });
   // Security headers with helmet
@@ -288,6 +296,39 @@ export function buildFastify(): FastifyInstance {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const app = buildFastify();
   let redis: Redis | null = null;
+
+  // OBSERVABILITY: Global error handlers for unhandled rejections and exceptions
+  process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+    app.log.error(
+      {
+        error: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+        promise: String(promise),
+      },
+      '🚨 Unhandled Promise Rejection detected'
+    );
+
+    // In production, attempt graceful shutdown on unhandled rejection
+    if (isProductionEnv()) {
+      app.log.fatal('Critical error in production - initiating graceful shutdown');
+      process.exit(1);
+    }
+  });
+
+  process.on('uncaughtException', (error: Error, origin: string) => {
+    app.log.error(
+      {
+        error: error.message,
+        stack: error.stack,
+        origin,
+      },
+      '🚨 Uncaught Exception detected'
+    );
+
+    // Always exit on uncaught exception - process is in undefined state
+    app.log.fatal('Uncaught exception - process must exit');
+    process.exit(1);
+  });
 
   // Graceful shutdown handling
   const signals = ['SIGTERM', 'SIGINT'];

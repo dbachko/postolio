@@ -296,6 +296,20 @@ export class PublishingStack extends cdk.Stack {
       alertTopic.addSubscription(new snsSubscriptions.EmailSubscription(alertEmail));
     }
 
+    // ==================== Retry Scheduler Target Role ====================
+    // Role assumed by EventBridge Scheduler (used by Retry Handler) to PutEvents to Scheduling bus
+    const retrySchedulerPutEventsRole = new iam.Role(this, 'RetrySchedulerPutEventsRole', {
+      assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
+      description: 'Role for EventBridge Scheduler (retries) to PutEvents to Scheduling bus',
+    });
+    retrySchedulerPutEventsRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['events:PutEvents'],
+        resources: [schedulingEventBusArn],
+      })
+    );
+
     // ==================== Lambda Function Shared Role ====================
     const publishingLambdaRole = new iam.Role(this, 'PublishingLambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -384,6 +398,21 @@ export class PublishingStack extends cdk.Stack {
               ],
             }),
             // Allow passing the Scheduler target role when creating schedules
+            // RELIABILITY: This permission is required for retry handler to invoke publisher
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['iam:PassRole'],
+              resources: [
+                retrySchedulerPutEventsRole.roleArn,
+                // Also allow passing role for Lambda invocations if needed
+                `arn:aws:iam::${this.account}:role/${prefix}-*`,
+              ],
+              conditions: {
+                StringEquals: {
+                  'iam:PassedToService': ['scheduler.amazonaws.com', 'lambda.amazonaws.com'],
+                },
+              },
+            }),
             // KMS permissions
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -502,19 +531,6 @@ export class PublishingStack extends cdk.Stack {
       },
     });
     scheduleDueRule.addTarget(new targets.LambdaFunction(publisherFunction));
-
-    // Role assumed by EventBridge Scheduler (used by Retry Handler) to PutEvents to Scheduling bus
-    const retrySchedulerPutEventsRole = new iam.Role(this, 'RetrySchedulerPutEventsRole', {
-      assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
-      description: 'Role for EventBridge Scheduler (retries) to PutEvents to Scheduling bus',
-    });
-    retrySchedulerPutEventsRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['events:PutEvents'],
-        resources: [schedulingEventBusArn],
-      })
-    );
 
     // 2. Retry Handler Function
     const retryHandlerFunction = new lambdaNodejs.NodejsFunction(this, 'RetryHandlerFunction', {
@@ -738,6 +754,84 @@ export class PublishingStack extends cdk.Stack {
     });
 
     queueDepthAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    // OBSERVABILITY: DLQ message age alarm - critical for detecting stuck failures
+    const dlqMessageAgeAlarm = new cloudwatch.Alarm(this, 'DLQMessageAgeAlarm', {
+      alarmName: `${prefix}-dlq-message-age`,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/SQS',
+        metricName: 'ApproximateAgeOfOldestMessage',
+        dimensionsMap: {
+          QueueName: this.deadLetterQueue.queueName,
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: cloudwatch.Stats.MAXIMUM,
+      }),
+      threshold: 300, // 5 minutes in seconds
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Messages stuck in DLQ for too long - requires investigation',
+    });
+
+    dlqMessageAgeAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    // OBSERVABILITY: DLQ message count alarm
+    const dlqDepthAlarm = new cloudwatch.Alarm(this, 'DLQDepthAlarm', {
+      alarmName: `${prefix}-dlq-depth`,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/SQS',
+        metricName: 'ApproximateNumberOfMessagesVisible',
+        dimensionsMap: {
+          QueueName: this.deadLetterQueue.queueName,
+        },
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 10,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'DLQ contains failed messages - requires investigation',
+    });
+
+    dlqDepthAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    // OBSERVABILITY: Lambda throttling alarms
+    functions.forEach(({ func, name }) => {
+      const throttleMetric = func.metricThrottles({
+        period: cdk.Duration.minutes(5),
+        statistic: cloudwatch.Stats.SUM,
+      });
+
+      const throttleAlarm = new cloudwatch.Alarm(this, `${name}ThrottleAlarm`, {
+        alarmName: `${prefix}-${name}-throttles`,
+        metric: throttleMetric,
+        threshold: 5,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: `${name} service experiencing throttling - may need concurrency increase`,
+      });
+
+      throttleAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+    });
+
+    // OBSERVABILITY: Retry queue age alarm - early warning
+    const retryQueueAgeAlarm = new cloudwatch.Alarm(this, 'RetryQueueAgeAlarm', {
+      alarmName: `${prefix}-retry-queue-age`,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/SQS',
+        metricName: 'ApproximateAgeOfOldestMessage',
+        dimensionsMap: {
+          QueueName: this.retryQueue.queueName,
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: cloudwatch.Stats.MAXIMUM,
+      }),
+      threshold: 600, // 10 minutes
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Retry queue processing delayed - may indicate system issues',
+    });
+
+    retryQueueAgeAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
 
     // ==================== SSM Parameters ====================
     new ssm.StringParameter(this, 'PublishingQueueUrlParameter', {

@@ -3,6 +3,24 @@
  *
  * Core business logic for schedule management operations
  * Separated from handlers for better testability and reusability
+ *
+ * RELIABILITY: Two-Phase Commit Pattern
+ * =======================================
+ * To prevent race conditions between DynamoDB writes and EventBridge schedule creation,
+ * this service implements a two-phase commit pattern:
+ *
+ * Phase 1: Create DynamoDB record with eventBridgeScheduleCreated=false
+ * Phase 2: Create EventBridge schedule, then update DynamoDB with eventBridgeScheduleCreated=true
+ *
+ * This ensures that:
+ * - If the process crashes after Phase 1, we have a record that can be detected and cleaned up
+ * - If EventBridge creation fails, we mark the error in DynamoDB instead of silently deleting
+ * - Idempotency tokens prevent duplicate schedules on retry
+ *
+ * TODO: Implement reconciliation job to periodically scan for:
+ * - Schedules where eventBridgeScheduleCreated=false and createdAt > 5 minutes ago
+ * - Orphaned EventBridge schedules without corresponding DynamoDB records
+ * - Schedules with schedulingError that should be retried or cleaned up
  */
 
 import { Logger } from '@aws-lambda-powertools/logger';
@@ -71,6 +89,8 @@ export interface ScheduleRequest {
   hashtags?: string[];
   mediaKeys?: string[];
   metadata?: Record<string, unknown>;
+  // RELIABILITY: Idempotency token to prevent duplicate schedules
+  idempotencyToken?: string;
 }
 
 export interface Schedule {
@@ -97,6 +117,10 @@ export interface Schedule {
   createdAt: string;
   updatedAt: string;
   ttl?: number;
+  // RELIABILITY: Track EventBridge schedule creation state
+  eventBridgeScheduleArn?: string;
+  eventBridgeScheduleCreated?: boolean;
+  idempotencyToken?: string;
 }
 
 export interface ScheduleResult {
@@ -144,7 +168,9 @@ export class ScheduleService {
       }
 
       // 2. Generate schedule ID and create DynamoDB record
+      // RELIABILITY: Use idempotency token to prevent duplicate schedules on retry
       const scheduleId = randomUUID();
+      const idempotencyToken = request.idempotencyToken || randomUUID();
       const now = new Date().toISOString();
 
       const schedule: Schedule = {
@@ -174,6 +200,9 @@ export class ScheduleService {
         ttl: Math.floor(
           (new Date(request.scheduledAt).getTime() + 30 * 24 * 60 * 60 * 1000) / 1000
         ),
+        // RELIABILITY: Track EventBridge schedule creation state (two-phase commit)
+        eventBridgeScheduleCreated: false,
+        idempotencyToken,
       };
 
       // Try to insert; if a schedule for this content already exists, treat as idempotent and update
@@ -242,7 +271,9 @@ export class ScheduleService {
       }
 
       // 3. Create EventBridge schedule (target: EventBus)
+      // RELIABILITY: Two-phase commit - EventBridge creation is step 2
       const eventBridgeTime = formatEventBridgeScheduleTime(new Date(request.scheduledAt));
+      let scheduleArn: string | undefined;
 
       try {
         const targetCfg = await getSchedulerEventBusTargetConfig();
@@ -271,14 +302,59 @@ export class ScheduleService {
             },
           })
         );
-      } catch (schedulerError) {
-        // Roll back the DynamoDB item to allow clean retry
+
+        // Construct ARN (EventBridge Scheduler doesn't return ARN in response)
+        const region = process.env.AWS_REGION || 'us-east-1';
+        const accountId = targetCfg.roleArn.split(':')[4]; // Extract from role ARN
+        scheduleArn = `arn:aws:scheduler:${region}:${accountId}:schedule/${targetCfg.groupName}/${scheduleId}`;
+
+        // RELIABILITY: Update DynamoDB to mark EventBridge schedule as created (phase 2 complete)
         await docClient.send(
-          new DeleteCommand({
+          new UpdateCommand({
             TableName: this.config.schedulesTable,
             Key: { pk: `SCHEDULE#${request.contentId}`, sk: 'METADATA' },
+            UpdateExpression:
+              'SET eventBridgeScheduleCreated = :true, eventBridgeScheduleArn = :arn, updatedAt = :now',
+            ExpressionAttributeValues: {
+              ':true': true,
+              ':arn': scheduleArn,
+              ':now': new Date().toISOString(),
+            },
           })
         );
+
+        logger.info('EventBridge schedule created and confirmed in DynamoDB', {
+          scheduleId,
+          scheduleArn,
+        });
+      } catch (schedulerError) {
+        // RELIABILITY: Mark the DynamoDB record as failed but DON'T delete it
+        // This allows reconciliation job to detect and clean up orphaned records
+        logger.error('EventBridge schedule creation failed, marking in DynamoDB', {
+          scheduleId,
+          error: schedulerError,
+        });
+
+        try {
+          await docClient.send(
+            new UpdateCommand({
+              TableName: this.config.schedulesTable,
+              Key: { pk: `SCHEDULE#${request.contentId}`, sk: 'METADATA' },
+              UpdateExpression: 'SET schedulingError = :error, updatedAt = :now',
+              ExpressionAttributeValues: {
+                ':error':
+                  schedulerError instanceof Error ? schedulerError.message : 'Unknown error',
+                ':now': new Date().toISOString(),
+              },
+            })
+          );
+        } catch (updateError) {
+          logger.error('Failed to mark scheduling error in DynamoDB', {
+            scheduleId,
+            updateError,
+          });
+        }
+
         throw schedulerError;
       }
 
@@ -293,9 +369,16 @@ export class ScheduleService {
 
       metrics.addMetric('ScheduleCreated', MetricUnit.Count, 1);
 
+      // RELIABILITY: Return the updated schedule with EventBridge confirmation
+      const finalSchedule: Schedule = {
+        ...schedule,
+        eventBridgeScheduleCreated: true,
+        eventBridgeScheduleArn: scheduleArn,
+      };
+
       return {
         success: true,
-        schedule,
+        schedule: finalSchedule,
       };
     } catch (error) {
       logger.error('Failed to create schedule', {

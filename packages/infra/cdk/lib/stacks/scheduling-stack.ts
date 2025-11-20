@@ -330,6 +330,15 @@ export class SchedulingStack extends cdk.Stack {
       this,
       `/postolio/${environment}/database/secret-arn`
     );
+    const jwtSecretArnParam = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/postolio/${environment}/jwt-secret-arn`
+    );
+    const jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(
+      this,
+      'SchedulingJwtSecret',
+      jwtSecretArnParam
+    );
 
     // ==================== Scheduler Role for EventBus Target ====================
     // Create a dedicated role that EventBridge Scheduler will assume at trigger time
@@ -458,6 +467,12 @@ export class SchedulingStack extends cdk.Stack {
                   }),
                 ]
               : []),
+            // Secrets Manager permission to read shared JWT secret
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['secretsmanager:GetSecretValue'],
+              resources: [jwtSecretArnParam],
+            }),
             // Allow IAM-auth connections to RDS Proxy (scope with proxy ARN)
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -509,6 +524,8 @@ export class SchedulingStack extends cdk.Stack {
           // Use default scheduler group unless overridden at runtime
           SCHEDULER_GROUP_NAME: 'default',
           SCHEDULER_EVENTS_ROLE_ARN: schedulerPutEventsRole.roleArn,
+          ...(databaseSecretArnParam ? { DB_SECRET_ARN: databaseSecretArnParam } : {}),
+          JWT_SECRET: jwtSecret.secretValueFromJson('secret').unsafeUnwrap(),
         },
         logGroup: logs.LogGroup.fromLogGroupName(
           this,

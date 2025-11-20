@@ -11,6 +11,14 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { Pool } from 'pg';
+import { Logger } from '@aws-lambda-powertools/logger';
+import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
+
+const logger = new Logger({ serviceName: 'status-sync' });
+const metrics = new Metrics({
+  namespace: 'Postolio/StatusSync',
+  serviceName: 'status-sync',
+});
 
 // EventBridge event detail structure matching what publisher/scheduler services emit
 interface EventDetail {
@@ -68,7 +76,7 @@ async function getDatabaseEndpoints(): Promise<{ endpoint?: string; proxy?: stri
     );
     if (ep.Parameter?.Value) result.endpoint = ep.Parameter.Value; // host:port
   } catch (e) {
-    console.warn('Could not read DB endpoint from SSM', e);
+    logger.warn('Could not read DB endpoint from SSM', { error: e, environment });
   }
   try {
     const px = await ssm.send(
@@ -76,7 +84,7 @@ async function getDatabaseEndpoints(): Promise<{ endpoint?: string; proxy?: stri
     );
     if (px.Parameter?.Value) result.proxy = px.Parameter.Value; // host:port
   } catch (e) {
-    console.warn('Could not read DB proxy endpoint from SSM', e);
+    logger.warn('Could not read DB proxy endpoint from SSM', { error: e, environment });
   }
   return result;
 }
@@ -98,7 +106,7 @@ async function getSecretArn(): Promise<string> {
     if (!value) throw new Error('Database secret ARN parameter is empty');
     return value;
   } catch (err) {
-    console.warn('Failed to resolve DB secret ARN from SSM:', err);
+    logger.warn('Failed to resolve DB secret ARN from SSM', { error: err, environment });
     throw new Error('DB secret ARN not available');
   }
 }
@@ -109,7 +117,7 @@ async function getDatabaseUrl(): Promise<string> {
   // For local development, use DATABASE_URL if provided
   if (process.env.DATABASE_URL) {
     cachedDbUrl = ensureProxyParams(process.env.DATABASE_URL);
-    console.log('Using DATABASE_URL for local development');
+    logger.info('Using DATABASE_URL for local development');
     return cachedDbUrl;
   }
 
@@ -171,7 +179,7 @@ async function getClient(): Promise<LambdaPrismaClient> {
     await passwordPool.query('SELECT 1');
     const { client } = createLambdaPrismaClient({ pool: passwordPool });
     prisma = client;
-    console.log('Connected to database via RDS Proxy with password auth', {
+    logger.info('Connected to database via RDS Proxy with password auth', {
       proxy: `${host}:${port}`,
       database: dbName,
     });
@@ -180,7 +188,7 @@ async function getClient(): Promise<LambdaPrismaClient> {
     const e = err as { message?: string; code?: string } | undefined;
     const msg = e?.message || 'unknown error';
     const code = e?.code || 'unknown';
-    console.error('Password authentication to RDS Proxy failed', {
+    logger.error('Password authentication to RDS Proxy failed', {
       userTried: username,
       errorCode: code,
       message: msg,
@@ -299,11 +307,12 @@ Review the post: ${link}
       })
     );
   } catch (error) {
-    console.error('Failed to send post failure email', {
+    logger.error('Failed to send post failure email', {
       userId,
       brandId,
       error: error instanceof Error ? error.message : error,
     });
+    metrics.addMetric('EmailSendFailure', MetricUnit.Count, 1);
   }
 }
 
@@ -339,7 +348,7 @@ async function createPostFailureNotification(
   });
 
   if (!content || !content.brand || !content.brand.user) {
-    console.warn('Skipping notification creation; content or brand missing', { contentId });
+    logger.warn('Skipping notification creation; content or brand missing', { contentId });
     return;
   }
 
@@ -358,7 +367,7 @@ async function createPostFailureNotification(
   });
 
   if (masterPreference && masterPreference.enabled === false) {
-    console.info('Notification suppressed by master preference', { contentId, userId });
+    logger.info('Notification suppressed by master preference', { contentId, userId });
     return;
   }
 
@@ -429,12 +438,13 @@ async function createPostFailureNotification(
     });
   }
 
-  console.info('Created post failure notification', {
+  logger.info('Created post failure notification', {
     contentId,
     userId,
     brandId,
     notificationId: createdNotificationId,
   });
+  metrics.addMetric('NotificationCreated', MetricUnit.Count, 1);
 }
 
 async function handlePostPublished(detail: EventDetail) {
@@ -470,7 +480,7 @@ async function handlePostPublished(detail: EventDetail) {
       : null;
 
     if (!socialAccount) {
-      console.warn('SocialAccount not found for published post', { brandId, platform: plt });
+      logger.warn('SocialAccount not found for published post', { brandId, platform: plt });
       return;
     }
 
@@ -509,7 +519,7 @@ async function handlePostPublished(detail: EventDetail) {
       });
     }
   } catch (e) {
-    console.warn('Failed to record publication in status-sync', {
+    logger.warn('Failed to record publication in status-sync', {
       contentId,
       error: (e as Error)?.message,
     });
@@ -533,10 +543,11 @@ async function handlePostFailed(detail: EventDetail) {
   try {
     await createPostFailureNotification(client, detail, errorMessage);
   } catch (notificationError) {
-    console.error('Failed to create failure notification', {
+    logger.error('Failed to create failure notification', {
       contentId,
       error: notificationError instanceof Error ? notificationError.message : notificationError,
     });
+    metrics.addMetric('NotificationFailure', MetricUnit.Count, 1);
   }
 }
 
@@ -675,23 +686,20 @@ async function handleScheduleCanceled(detail: EventDetail) {
 export async function handler(event: EventBridgeEvent<string, EventDetail>, context: Context) {
   context.callbackWaitsForEmptyEventLoop = false;
 
-  console.log(
-    'StatusSync received event',
-    JSON.stringify({
-      id: event.id,
-      source: event.source,
-      'detail-type': event['detail-type'],
-      time: event.time,
-      detail: event.detail,
-    })
-  );
+  logger.info('StatusSync received event', {
+    id: event.id,
+    source: event.source,
+    detailType: event['detail-type'],
+    time: event.time,
+  });
 
   // EventBridge delivers events with 'detail-type' at the top level
   const eventType = event['detail-type'];
   const detail = event.detail;
 
   if (!eventType || !detail) {
-    console.warn('Missing detail-type or detail in EventBridge event');
+    logger.warn('Missing detail-type or detail in EventBridge event');
+    metrics.addMetric('InvalidEvent', MetricUnit.Count, 1);
     return { statusCode: 400 };
   }
 
@@ -699,31 +707,47 @@ export async function handler(event: EventBridgeEvent<string, EventDetail>, cont
     switch (eventType) {
       case 'post.published':
         await handlePostPublished(detail);
+        metrics.addMetric('PostPublished', MetricUnit.Count, 1);
         break;
       case 'post.failed':
         await handlePostFailed(detail);
+        metrics.addMetric('PostFailed', MetricUnit.Count, 1);
         break;
       case 'post.skipped':
         await handlePostSkipped(detail);
+        metrics.addMetric('PostSkipped', MetricUnit.Count, 1);
         break;
       case 'schedule.created':
         await handleScheduleCreated(detail);
+        metrics.addMetric('ScheduleCreated', MetricUnit.Count, 1);
         break;
       case 'schedule.updated':
         await handleScheduleUpdated(detail);
+        metrics.addMetric('ScheduleUpdated', MetricUnit.Count, 1);
         break;
       case 'schedule.canceled':
         await handleScheduleCanceled(detail);
+        metrics.addMetric('ScheduleCanceled', MetricUnit.Count, 1);
         break;
       case 'schedule.failed':
         await handleScheduleFailed(detail);
+        metrics.addMetric('ScheduleFailed', MetricUnit.Count, 1);
         break;
       default:
-        console.log(`Unhandled event type: ${eventType}`);
+        logger.warn('Unhandled event type', { eventType });
+        metrics.addMetric('UnhandledEventType', MetricUnit.Count, 1);
     }
+
+    metrics.publishStoredMetrics();
     return { statusCode: 200 };
   } catch (error) {
-    console.error('StatusSync processing error', { error });
+    logger.error('StatusSync processing error', {
+      error: error instanceof Error ? error.message : error,
+      eventType,
+      detail,
+    });
+    metrics.addMetric('ProcessingError', MetricUnit.Count, 1);
+    metrics.publishStoredMetrics();
     // Let EventBridge retries/DLQ handle transient issues
     throw error;
   }

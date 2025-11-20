@@ -550,15 +550,53 @@ export const handler = async (
     eventVersion: isV2Event ? '2.0' : '1.0',
   });
 
-  // CORS headers for all responses
+  // Validate origin against whitelist for CORS
+  const origin = headers['Origin'] || headers['origin'] || '';
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean);
+
+  // Default allowed origins if not configured (development fallback)
+  const defaultAllowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://postolio.example',
+    'https://postolio.example',
+  ];
+
+  const originsToCheck = allowedOrigins.length > 0 ? allowedOrigins : defaultAllowedOrigins;
+  const isOriginAllowed = origin.length > 0 && originsToCheck.includes(origin);
+
+  // Base headers (always included)
   const responseHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Correlation-ID',
     'X-Request-ID': requestId,
     'X-Correlation-ID': correlationId,
   };
+
+  // Only add CORS headers if origin is present and allowed
+  if (isOriginAllowed) {
+    responseHeaders['Access-Control-Allow-Origin'] = origin;
+    responseHeaders['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS';
+    responseHeaders['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Correlation-ID';
+    responseHeaders['Access-Control-Allow-Credentials'] = 'true';
+  }
+
+  // Reject requests from disallowed origins (except health check and requests without Origin)
+  // Note: Requests without Origin header (non-browser clients) are allowed
+  if (origin.length > 0 && !isOriginAllowed && path !== '/health') {
+    logger.warn('Request from disallowed origin rejected', {
+      origin,
+      path,
+      allowedOrigins: originsToCheck,
+    });
+    return {
+      statusCode: 403,
+      headers: responseHeaders,
+      body: JSON.stringify({
+        error: 'Origin not allowed',
+        code: 'CORS_ORIGIN_NOT_ALLOWED',
+      }),
+    };
+  }
 
   try {
     const pathParams = parsePathParameters(path);

@@ -428,7 +428,9 @@ export function generateSuccessPage(options: SuccessPageOptions): string {
                   type: 'INSTAGRAM_OAUTH_SUCCESS',
                   data: {
                     success: true,
-                    profile: ${JSON.stringify(profile)}
+                    // SECURITY: Do not send user-controlled profile data via postMessage
+                    // Parent window should refetch data via authenticated API instead
+                    // This prevents XSS via malicious data in Instagram profile fields
                   }
                 }, window.location.origin);
               } catch (e) {

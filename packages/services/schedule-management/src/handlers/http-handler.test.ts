@@ -2,6 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HttpHandler } from './http-handler';
 import type { APIGatewayProxyEvent, APIGatewayProxyEventV2 } from 'aws-lambda';
 
+// Mock authentication module
+vi.mock('../utils/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils/auth')>();
+  return {
+    ...actual,
+    verifyToken: vi.fn().mockResolvedValue({ userId: 'user-012', email: 'test@example.com' }),
+    verifyBrandOwnership: vi.fn().mockResolvedValue(true),
+    authenticateRequest: vi.fn().mockReturnValue({ userId: 'user-012', email: 'test@example.com' }),
+  };
+});
+
 // Mock services as constructible classes
 vi.mock('../services/schedule-service', () => {
   class MockScheduleService {
@@ -82,7 +93,9 @@ describe('HttpHandler', () => {
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
           mediaKeys: ['images/2025-01-01/brand/content-123-abcd.jpg'], // Required for image content
         }),
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const mockSchedule = {
@@ -124,12 +137,16 @@ describe('HttpHandler', () => {
         httpMethod: 'GET',
         path: '/schedules/test-123',
         pathParameters: { id: 'test-123' },
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const mockSchedule = {
         scheduleId: 'test-123',
         contentId: 'content-123',
+        brandId: 'brand-789',
+        userId: 'user-012',
         status: 'pending',
         scheduledAt: new Date().toISOString(),
       };
@@ -157,7 +174,9 @@ describe('HttpHandler', () => {
           brandId: 'brand-789',
           limit: '10',
         },
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const mockSchedules = {
@@ -200,15 +219,25 @@ describe('HttpHandler', () => {
           caption: 'Updated caption',
           scheduledAt: new Date(Date.now() + 7200000).toISOString(),
         }),
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const mockUpdatedSchedule = {
         scheduleId: 'test-123',
+        brandId: 'brand-789',
+        userId: 'user-012',
         caption: 'Updated caption',
         scheduledAt: new Date(Date.now() + 7200000).toISOString(),
         status: 'pending',
       };
+
+      // Mock getSchedule for brand ownership verification
+      mockScheduleService.getSchedule.mockResolvedValue({
+        success: true,
+        schedule: mockUpdatedSchedule,
+      });
 
       mockScheduleService.updateSchedule.mockResolvedValue({
         success: true,
@@ -233,8 +262,21 @@ describe('HttpHandler', () => {
         httpMethod: 'DELETE',
         path: '/schedules/test-123',
         pathParameters: { id: 'test-123' },
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
+
+      // Mock getSchedule for brand ownership verification
+      mockScheduleService.getSchedule.mockResolvedValue({
+        success: true,
+        schedule: {
+          scheduleId: 'test-123',
+          brandId: 'brand-789',
+          userId: 'user-012',
+          status: 'pending',
+        },
+      });
 
       mockScheduleService.deleteSchedule.mockResolvedValue({
         success: true,
@@ -252,7 +294,9 @@ describe('HttpHandler', () => {
         httpMethod: 'GET',
         path: '/schedules/non-existent',
         pathParameters: { id: 'non-existent' },
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       mockScheduleService.getSchedule.mockResolvedValue({
@@ -274,7 +318,9 @@ describe('HttpHandler', () => {
         httpMethod: 'POST',
         path: '/schedules',
         body: 'invalid json',
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
@@ -290,7 +336,9 @@ describe('HttpHandler', () => {
       const event: Partial<APIGatewayProxyEvent> = {
         httpMethod: 'PATCH',
         path: '/schedules',
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
@@ -306,7 +354,9 @@ describe('HttpHandler', () => {
       const event: Partial<APIGatewayProxyEvent> = {
         httpMethod: 'GET',
         path: '/unknown-path',
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
@@ -323,7 +373,9 @@ describe('HttpHandler', () => {
         httpMethod: 'GET',
         path: '/schedules',
         queryStringParameters: null, // No brandId provided
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);
@@ -346,7 +398,9 @@ describe('HttpHandler', () => {
           platform: 'instagram',
           scheduledAt: new Date(Date.now() + 3600000).toISOString(),
         }),
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const serviceError = new Error('Campaign validation failed') as Error & {
@@ -375,7 +429,9 @@ describe('HttpHandler', () => {
         httpMethod: 'GET',
         path: '/schedules/test-123',
         pathParameters: { id: 'test-123' },
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       mockScheduleService.getSchedule.mockRejectedValue(new Error('Database connection failed'));
@@ -398,12 +454,16 @@ describe('HttpHandler', () => {
           },
         } as unknown as APIGatewayProxyEventV2['requestContext'],
         pathParameters: { id: 'test-123' },
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const mockSchedule = {
         scheduleId: 'test-123',
         contentId: 'content-123',
+        brandId: 'brand-789',
+        userId: 'user-012',
         status: 'pending',
       };
 
@@ -428,7 +488,9 @@ describe('HttpHandler', () => {
         httpMethod: 'GET',
         path: '/schedules/test-123',
         pathParameters: { id: 'test-123' },
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       mockScheduleService.getSchedule.mockResolvedValue({ scheduleId: 'test-123' });
@@ -447,7 +509,9 @@ describe('HttpHandler', () => {
       const event: Partial<APIGatewayProxyEvent> = {
         httpMethod: 'OPTIONS',
         path: '/schedules',
-        headers: {},
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+        },
       };
 
       const result = await httpHandler.handle(event as APIGatewayProxyEvent);

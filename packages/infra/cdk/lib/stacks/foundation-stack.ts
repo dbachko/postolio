@@ -268,6 +268,7 @@ export class FoundationStack extends cdk.Stack {
       depsLockFilePath: path.join(__dirname, '../../../../../pnpm-lock.yaml'),
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
+      tracing: lambda.Tracing.ACTIVE,
       description: 'Ensures the JWT secret exists; creates it if missing and returns its ARN.',
       environment: {
         SECRET_NAME: jwtSecretName,

@@ -79,7 +79,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       interface MutableContentUpdate {
         caption?: string;
         hashtags?: string[];
-        imageUrl?: string | null;
+        primaryAssetCdnUrl?: string | null;
         videoUrl?: string | null;
         mediaType?: string;
         contentType?: string;
@@ -107,7 +107,7 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         updateData.hashtags = normalizeHashtags(hashtags);
       }
       if (imageUrl !== undefined) {
-        updateData.imageUrl = imageUrl || null;
+        updateData.primaryAssetCdnUrl = imageUrl || null;
       }
       if (videoUrl !== undefined) {
         updateData.videoUrl = videoUrl || null;
