@@ -6,7 +6,6 @@ import {
 } from './content-generator.js';
 import { getStatusBroadcaster } from './broadcast-registry.js';
 import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
-import { logMemoryUsage, maybeWriteHeapSnapshot } from '../utils/memory-debug.js';
 
 const prisma = getDatabaseClient();
 
@@ -29,11 +28,6 @@ class CampaignJobService {
       }
 
       this.runningJobs.add(campaignId);
-
-      logMemoryUsage('campaign-jobs:startCampaignPreviewGeneration', {
-        campaignId,
-        runningJobs: this.runningJobs.size,
-      });
 
       // Start the background job
       this.generateCampaignPreviewAsync(campaignId, userId)
@@ -88,12 +82,6 @@ class CampaignJobService {
         configRaw && typeof configRaw === 'object'
           ? (configRaw as { themes: string[]; style?: string })
           : { themes: [] as string[], style: undefined };
-
-      logMemoryUsage('campaign-jobs:preview-start', {
-        campaignId,
-        themesCount: config.themes.length,
-        styleLength: config.style ? config.style.length : 0,
-      });
 
       // No numeric progress updates stored in DB
 
@@ -275,22 +263,9 @@ class CampaignJobService {
         console.warn('Failed to broadcast campaign preview-ready status; continuing', e);
       }
 
-      logMemoryUsage('campaign-jobs:preview-completed', {
-        campaignId,
-        examplePostCount: examplePosts.length,
-      });
-
       console.log(`Campaign preview generation completed for ${campaignId}`);
     } catch (error) {
       console.error(`Campaign preview generation failed for ${campaignId}:`, error);
-
-      logMemoryUsage('campaign-jobs:preview-error', {
-        campaignId,
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-
-      // Optional: capture a heap snapshot for this failure when enabled
-      void maybeWriteHeapSnapshot(`campaign-preview-error-${campaignId}`);
 
       const failed = await prisma.campaign.update({
         where: { id: campaignId },

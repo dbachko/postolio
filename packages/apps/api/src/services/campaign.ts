@@ -21,7 +21,6 @@ import {
 import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
 import { eventEmitter } from './event-emitter.js';
 import { getDatabaseClient } from '../config/database.js';
-import { logMemoryUsage } from '../utils/memory-debug.js';
 
 const prisma = getDatabaseClient();
 
@@ -762,13 +761,6 @@ class CampaignService {
       if (!campaign) {
         throw new Error('Campaign not found or access denied');
       }
-
-      logMemoryUsage('campaign-service:getCampaign', {
-        campaignId,
-        status: (campaign as { status?: string }).status ?? null,
-        previewGenerated: (campaign as { previewGenerated?: boolean }).previewGenerated ?? null,
-        contentCount: (campaign as { _count?: { content?: number } })._count?.content ?? null,
-      });
 
       // Detect campaigns that are stuck in "creating" due to a previous process exit
       try {
