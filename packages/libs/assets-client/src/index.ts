@@ -84,6 +84,81 @@ export interface VerifyAssetResponse {
   asset: AssetRecord | null;
 }
 
+export interface ListAssetsParams {
+  brandId: string;
+  type?: 'image' | 'video';
+  tags?: string[];
+  excludeTags?: string[];
+  search?: string;
+  page?: number;
+  limit?: number;
+  folderId?: string;
+}
+
+export interface ListAssetsResponse {
+  assets: AssetRecord[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface CreateAssetParams {
+  brandId: string;
+  fileName: string;
+  s3Key: string;
+  fileSize: number;
+  mimeType: string;
+  fileType: 'image' | 'video';
+  uploadedBy?: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  title?: string;
+  altText?: string;
+  tags?: string[];
+  folderId?: string;
+}
+
+export interface UpdateAssetParams {
+  title?: string;
+  altText?: string;
+  description?: string;
+  tags?: string[];
+  folderId?: string | null;
+  fileName?: string;
+  mimeType?: string;
+  fileType?: 'image' | 'video';
+  fileSize?: number;
+  s3Key?: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+}
+
+export interface DeleteAssetResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface UploadUrlParams {
+  brandId: string;
+  fileName: string;
+  contentType: string;
+  fileType: 'image' | 'video';
+  fileSize: number;
+}
+
+export interface UploadUrlResponse {
+  uploadId: string;
+  key: string;
+  presignedUrls: { partNumber: number; url: string }[];
+  partCount: number;
+  message?: string;
+}
+
 export class AssetsClientError extends Error {
   public readonly status?: number;
   public readonly responseBody?: string;
@@ -169,6 +244,43 @@ export class AssetsServiceClient {
   async getAsset(assetId: string): Promise<AssetRecord> {
     const result = await this.get<{ asset: AssetRecord }>(`/assets/${assetId}`);
     return result.asset;
+  }
+
+  async listAssets(params: ListAssetsParams): Promise<ListAssetsResponse> {
+    const query = new URLSearchParams();
+    query.set('brandId', params.brandId);
+    if (params.type) query.set('type', params.type);
+    if (params.search) query.set('search', params.search);
+    if (params.page) query.set('page', String(params.page));
+    if (params.limit) query.set('limit', String(params.limit));
+    if (params.folderId) query.set('folderId', params.folderId);
+    if (params.tags) params.tags.forEach((tag) => query.append('tags', tag));
+    if (params.excludeTags) params.excludeTags.forEach((tag) => query.append('excludeTags', tag));
+
+    return this.get<ListAssetsResponse>(`/assets?${query.toString()}`);
+  }
+
+  async createAsset(params: CreateAssetParams): Promise<{ asset: AssetRecord; message: string }> {
+    return this.post<{ asset: AssetRecord; message: string }>('/assets', params);
+  }
+
+  async updateAsset(
+    assetId: string,
+    params: UpdateAssetParams
+  ): Promise<{ asset: AssetRecord; message: string }> {
+    return this.request<{ asset: AssetRecord; message: string }>(`/assets/${assetId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+  }
+
+  async deleteAsset(assetId: string): Promise<DeleteAssetResponse> {
+    return this.request<DeleteAssetResponse>(`/assets/${assetId}`, { method: 'DELETE' });
+  }
+
+  async getUploadUrl(params: UploadUrlParams): Promise<UploadUrlResponse> {
+    return this.post<UploadUrlResponse>('/assets/upload-url', params);
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {

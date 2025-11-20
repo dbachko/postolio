@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { prismaAssets, Prisma } from '@postolio/database-assets';
+import { prismaAssets, Prisma as AssetsPrisma } from '@postolio/database-assets';
 import sharp from 'sharp';
 import { customAlphabet } from 'nanoid';
 import { generateUploadUrl, getAssetUrl, assetsBucketName, s3Client } from '../utils/s3.js';
@@ -38,30 +38,11 @@ async function fetchBufferFromUrl(
 }
 
 const assetsRoutes: FastifyPluginAsync = async (fastify) => {
-  // Helper function to verify brand ownership
-  async function verifyBrandOwnership(brandId: string, userId: string): Promise<boolean> {
-    // Check if brand exists and belongs to the user
-    const brand = await prismaAssets.brand.findFirst({
-      where: {
-        id: brandId,
-        userId: userId,
-      },
-      select: { id: true },
-    });
-    return !!brand;
-  }
-
   // Get presigned URL for upload
   fastify.post(
     '/assets/upload-url',
-    { preHandler: [fastify.authenticate] },
+    { preHandler: [fastify.authenticateService] },
     async (request, reply) => {
-      const authUser = request.user as { userId?: string; id?: string } | undefined;
-      const userId = authUser?.userId || authUser?.id;
-      if (!userId) {
-        return reply.code(401).send({ error: 'Unauthorized' });
-      }
-
       const body = request.body as {
         brandId: string;
         fileName: string;
@@ -79,12 +60,6 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         }
         if (typeof fileSize !== 'number' || Number.isNaN(fileSize) || fileSize <= 0) {
           return reply.code(400).send({ error: 'Invalid file size' });
-        }
-
-        // CRITICAL: Verify user owns the brand before allowing upload
-        const isAuthorized = await verifyBrandOwnership(brandId, userId);
-        if (!isAuthorized) {
-          return reply.code(403).send({ error: 'Forbidden: You do not have access to this brand' });
         }
 
         // Generate presigned URL
@@ -118,12 +93,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // Create asset metadata after upload
-  fastify.post('/assets', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const authUser = request.user as { userId?: string; id?: string } | undefined;
-    const userId = authUser?.userId || authUser?.id;
-    if (!userId) {
-      return reply.code(401).send({ error: 'Unauthorized' });
-    }
+  fastify.post('/assets', { preHandler: [fastify.authenticateService] }, async (request, reply) => {
     const body = request.body as {
       brandId: string;
       fileName: string;
@@ -131,6 +101,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       fileSize: number;
       mimeType: string;
       fileType: 'image' | 'video';
+      uploadedBy?: string;
       width?: number;
       height?: number;
       duration?: number;
@@ -141,16 +112,10 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     };
 
     try {
-      // CRITICAL: Verify user owns the brand before creating asset
-      const isAuthorized = await verifyBrandOwnership(body.brandId, userId);
-      if (!isAuthorized) {
-        return reply.code(403).send({ error: 'Forbidden: You do not have access to this brand' });
-      }
-
       const asset = await prismaAssets.asset.create({
         data: {
           brandId: body.brandId,
-          uploadedBy: userId,
+          uploadedBy: body.uploadedBy || 'system',
           fileName: body.fileName,
           s3Key: body.s3Key,
           s3Bucket: assetsBucketName,
@@ -184,13 +149,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // List assets
-  fastify.get('/assets', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const authUser = request.user as { userId?: string; id?: string } | undefined;
-    const userId = authUser?.userId || authUser?.id;
-    if (!userId) {
-      return reply.code(401).send({ error: 'Unauthorized' });
-    }
-
+  fastify.get('/assets', { preHandler: [fastify.authenticateService] }, async (request, reply) => {
     const query = request.query as {
       brandId?: string;
       type?: 'image' | 'video';
@@ -204,20 +163,12 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     };
 
     try {
-      // CRITICAL: Verify user owns the brand if brandId specified
-      if (query.brandId) {
-        const isAuthorized = await verifyBrandOwnership(query.brandId, userId);
-        if (!isAuthorized) {
-          return reply.code(403).send({ error: 'Forbidden: You do not have access to this brand' });
-        }
-      }
-
       const page = parseInt(query.page || '1', 10);
       const limit = Math.min(parseInt(query.limit || '50', 10), 100);
       const skip = (page - 1) * limit;
 
       // Build where clause
-      const where: Prisma.AssetWhereInput = {};
+      const where: AssetsPrisma.AssetWhereInput = {};
 
       if (query.brandId) {
         where.brandId = query.brandId;
@@ -244,7 +195,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         userExclude.forEach((tag) => excludeTags.add(tag));
       }
       if (excludeTags.size > 0) {
-        const andConditions: Prisma.AssetWhereInput[] = [];
+        const andConditions: AssetsPrisma.AssetWhereInput[] = [];
         if (where.AND) {
           if (Array.isArray(where.AND)) {
             andConditions.push(...where.AND);
@@ -313,98 +264,110 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Get single asset
-  fastify.get('/assets/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+  fastify.get(
+    '/assets/:id',
+    { preHandler: [fastify.authenticateService] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
 
-    try {
-      const asset = await prismaAssets.asset.findUnique({
-        where: { id },
-        include: {
-          folder: true,
-          campaignAssets: true,
-        },
-      });
+      try {
+        const asset = await prismaAssets.asset.findUnique({
+          where: { id },
+          include: {
+            folder: true,
+            campaignAssets: true,
+          },
+        });
 
-      if (!asset) {
-        return reply.code(404).send({ error: 'Asset not found' });
+        if (!asset) {
+          return reply.code(404).send({ error: 'Asset not found' });
+        }
+
+        return {
+          asset: {
+            ...asset,
+            url: getAssetUrl(asset.s3Key),
+            thumbnailUrl: asset.thumbnailKey ? getAssetUrl(asset.thumbnailKey) : null,
+          },
+        };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({
+          error: error instanceof Error ? error.message : 'Failed to fetch asset',
+        });
       }
-
-      return {
-        asset: {
-          ...asset,
-          url: getAssetUrl(asset.s3Key),
-          thumbnailUrl: asset.thumbnailKey ? getAssetUrl(asset.thumbnailKey) : null,
-        },
-      };
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.code(500).send({
-        error: error instanceof Error ? error.message : 'Failed to fetch asset',
-      });
     }
-  });
+  );
 
   // Update asset metadata
-  fastify.patch('/assets/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const body = request.body as {
-      title?: string;
-      altText?: string;
-      description?: string;
-      tags?: string[];
-      folderId?: string | null;
-    };
-
-    try {
-      const asset = await prismaAssets.asset.update({
-        where: { id },
-        data: {
-          title: body.title,
-          altText: body.altText,
-          description: body.description,
-          tags: body.tags,
-          folderId: body.folderId,
-        },
-      });
-
-      return {
-        asset: {
-          ...asset,
-          url: getAssetUrl(asset.s3Key),
-        },
-        message: 'Asset updated successfully',
+  fastify.patch(
+    '/assets/:id',
+    { preHandler: [fastify.authenticateService] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = request.body as {
+        title?: string;
+        altText?: string;
+        description?: string;
+        tags?: string[];
+        folderId?: string | null;
       };
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.code(500).send({
-        error: error instanceof Error ? error.message : 'Failed to update asset',
-      });
+
+      try {
+        const asset = await prismaAssets.asset.update({
+          where: { id },
+          data: {
+            title: body.title,
+            altText: body.altText,
+            description: body.description,
+            tags: body.tags,
+            folderId: body.folderId,
+          },
+        });
+
+        return {
+          asset: {
+            ...asset,
+            url: getAssetUrl(asset.s3Key),
+          },
+          message: 'Asset updated successfully',
+        };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({
+          error: error instanceof Error ? error.message : 'Failed to update asset',
+        });
+      }
     }
-  });
+  );
 
   // Delete asset (soft delete via archiving)
-  fastify.delete('/assets/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+  fastify.delete(
+    '/assets/:id',
+    { preHandler: [fastify.authenticateService] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
 
-    try {
-      await prismaAssets.asset.update({
-        where: { id },
-        data: {
-          archivedAt: new Date(),
-        },
-      });
+      try {
+        await prismaAssets.asset.update({
+          where: { id },
+          data: {
+            archivedAt: new Date(),
+          },
+        });
 
-      return {
-        success: true,
-        message: 'Asset archived successfully',
-      };
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.code(500).send({
-        error: error instanceof Error ? error.message : 'Failed to delete asset',
-      });
+        return {
+          success: true,
+          message: 'Asset archived successfully',
+        };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({
+          error: error instanceof Error ? error.message : 'Failed to delete asset',
+        });
+      }
     }
-  });
+  );
 
   fastify.post(
     '/assets/import',

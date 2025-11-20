@@ -1,6 +1,7 @@
-// Assets API client for the web app (no Module Federation)
-// Base path is relative so prod traffic goes through the app domain/CloudFront
-const API_BASE_URL = import.meta.env.VITE_ASSETS_API_URL || '/assets-api/v1';
+// Assets API client for the web app; routed through main API
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+  ? `${import.meta.env.VITE_API_BASE_URL}/api/assets`
+  : '/api/assets';
 
 export interface Asset {
   id: string;
@@ -50,7 +51,7 @@ export const assetsApi = {
     fileType: 'image' | 'video';
     fileSize: number;
   }): Promise<UploadUrlResponse> {
-    const response = await fetch(`${API_BASE_URL}/assets/upload-url`, {
+    const response = await fetch(`${API_BASE_URL}/upload-url`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -86,7 +87,7 @@ export const assetsApi = {
     tags?: string[];
     folderId?: string;
   }): Promise<{ asset: Asset; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/assets`, {
+    const response = await fetch(`${API_BASE_URL}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -115,7 +116,7 @@ export const assetsApi = {
     if (params.folderId) queryParams.set('folderId', params.folderId);
     if (params.tags) params.tags.forEach((t) => queryParams.append('tags', t));
 
-    const response = await fetch(`${API_BASE_URL}/assets?${queryParams}`, {
+    const response = await fetch(`${API_BASE_URL}?${queryParams}`, {
       credentials: 'include',
     });
     if (!response.ok) throw new Error('Failed to fetch assets');
@@ -124,7 +125,7 @@ export const assetsApi = {
 
   // Get single asset
   async getAsset(id: string): Promise<{ asset: Asset }> {
-    const response = await fetch(`${API_BASE_URL}/assets/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/${id}`, {
       credentials: 'include',
     });
     if (!response.ok) throw new Error('Failed to fetch asset');
@@ -150,7 +151,7 @@ export const assetsApi = {
       duration?: number;
     }
   ): Promise<{ asset: Asset; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/assets/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -162,7 +163,7 @@ export const assetsApi = {
 
   // Delete asset (soft delete)
   async deleteAsset(id: string): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/assets/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/${id}`, {
       method: 'DELETE',
       credentials: 'include',
     });

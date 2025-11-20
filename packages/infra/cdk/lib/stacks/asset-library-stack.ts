@@ -791,12 +791,38 @@ export class AssetLibraryStack extends cdk.Stack {
         taskSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
-        publicLoadBalancer: true,
+        publicLoadBalancer: false,
+        openListener: false,
         listenerPort: 80,
         protocol: elbv2.ApplicationProtocol.HTTP,
         platformVersion: ecs.FargatePlatformVersion.LATEST,
       }
     );
+
+    // Restrict ALB ingress to shared ECS security group (e.g., main API tasks)
+    const sharedEcsSecurityGroupParam = ssm.StringParameter.fromStringParameterAttributes(
+      this,
+      'SharedEcsSecurityGroupParam',
+      {
+        parameterName: `/postolio/${environment}/security-groups/ecs`,
+      }
+    );
+    const sharedEcsSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+      this,
+      'SharedEcsSecurityGroup',
+      sharedEcsSecurityGroupParam.stringValue,
+      { mutable: false }
+    );
+
+    // Explicit ingress rule to keep ALB internal-only and scoped to ECS services
+    new ec2.CfnSecurityGroupIngress(this, 'AssetsApiAlbIngressFromEcs', {
+      groupId: assetsApiService.loadBalancer.connections.securityGroups[0].securityGroupId,
+      ipProtocol: 'tcp',
+      fromPort: 80,
+      toPort: 80,
+      sourceSecurityGroupId: sharedEcsSecurityGroup.securityGroupId,
+      description: 'Allow internal ECS services to reach Assets API ALB',
+    });
 
     // Enable ALB access logs
     assetsApiService.loadBalancer.logAccessLogs(albLogsBucket, 'alb-logs');
@@ -913,7 +939,7 @@ export class AssetLibraryStack extends cdk.Stack {
       {
         id: 'AwsSolutions-EC23',
         reason:
-          'Public-facing ALB is required for assets API. Security group rules are properly configured.',
+          'Assets API ALB is internal-only; ingress restricted to shared ECS security group on port 80.',
       },
     ]);
 

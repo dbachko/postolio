@@ -59,6 +59,7 @@ import { schedulerAdapter } from './services/scheduler-adapter.js';
 import { applyRateLimiting } from './middleware/rate-limit.js';
 import { getRedisClient } from './services/redis.js';
 import { backgroundJobs } from './services/background-jobs.js';
+import assetsProxyRoutes from './routes/assets-proxy.js';
 
 export function buildFastify(): FastifyInstance {
   // HTTPS configuration for local development
@@ -241,6 +242,7 @@ export function buildFastify(): FastifyInstance {
   app.register(dataDeletionRoutes, { prefix: '/api/legal' });
   app.register(complianceRoutes);
   app.register(postDetailRoutes); // Post detail routes include /api in their own paths
+  app.register(assetsProxyRoutes, { prefix: '/api/assets' });
   // Account utility routes
   app.register(accountRoutes, { prefix: '/api/account' });
   app.register(configRoutes); // Config routes include their own /api prefix
