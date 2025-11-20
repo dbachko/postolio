@@ -57,6 +57,7 @@ export class BrandAnalysisStack extends cdk.Stack {
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: true,
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
@@ -66,6 +67,7 @@ export class BrandAnalysisStack extends cdk.Stack {
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: true,
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
     jobsTable.addGlobalSecondaryIndex({
@@ -80,6 +82,7 @@ export class BrandAnalysisStack extends cdk.Stack {
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: true,
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
@@ -401,6 +404,12 @@ export class BrandAnalysisStack extends cdk.Stack {
           reason:
             'AWSLambdaBasicExecutionRole acceptable for Lambda execution; no sensitive permissions',
         },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'AWS managed Lambda execution/VPC policies require wildcard resources for CloudWatch Logs and ENI lifecycle managed by the service.',
+          appliesTo: ['Resource::*'],
+        },
       ],
       true
     );
@@ -410,6 +419,12 @@ export class BrandAnalysisStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM4',
           reason: 'AWSLambdaBasicExecutionRole acceptable for Lambda execution; logs only',
+        },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'AWS managed Lambda execution/VPC policies require wildcard resources for CloudWatch Logs and ENI lifecycle managed by the service.',
+          appliesTo: ['Resource::*'],
         },
       ],
       true
@@ -547,6 +562,12 @@ export class BrandAnalysisStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM4',
           reason: 'AWSLambdaBasicExecutionRole acceptable for Lambda execution; logs only',
+        },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'AWS managed Lambda execution/VPC policies require wildcard resources for CloudWatch Logs and ENI lifecycle managed by the service.',
+          appliesTo: ['Resource::*'],
         },
       ],
       true
