@@ -10,7 +10,7 @@ import {
   type ContentGenerationRequest,
 } from '../../services/content-generator.js';
 import { buildSimpleContentListResponse } from '../../services/content-response-builder.js';
-import { attachAssetToContent } from '../../services/assets-media.js';
+import { importImageFromExternalUrl, attachAssetToContent } from '../../services/assets-media.js';
 import { verifyBrandOwnership } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
 
@@ -96,15 +96,39 @@ const generationRoutes: FastifyPluginAsync = async (fastify) => {
               },
             });
 
-            if (content.asset) {
-              await attachAssetToContent({ contentId: created.id, asset: content.asset });
+            // Deferred asset import (OOM optimization)
+            if (content.imageUrl && content.imageMetadata) {
+              const contentId = created.id;
+              const { imageUrl, imageMetadata } = content;
+
+              // Fire-and-forget asset import
+              importImageFromExternalUrl(imageUrl, {
+                contentId,
+                brandId,
+                source: imageMetadata.source,
+                originalPrompt: imageMetadata.originalPrompt,
+              })
+                .then(async (asset) => {
+                  await attachAssetToContent({ contentId, asset });
+                  console.log(`[ContentGen] Asset imported for content ${contentId}`, {
+                    brandId,
+                    assetId: asset.id,
+                  });
+                })
+                .catch((error) => {
+                  const err = error instanceof Error ? error : new Error(String(error));
+                  console.error(`[ContentGen] Failed to import asset for content ${contentId}:`, {
+                    brandId,
+                    error: { name: err.name, message: err.message },
+                  });
+                });
             }
 
             return {
               id: created.id,
               caption: created.caption,
               hashtags: created.hashtags,
-              primaryAssetCdnUrl: content.asset?.url ?? null,
+              primaryAssetCdnUrl: null, // Will be populated after async import
               status: created.status,
               createdAt: created.createdAt,
             };

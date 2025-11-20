@@ -1,6 +1,6 @@
 import { logger as baseLogger } from '@postolio/logger';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
-import { attachAssetToContent } from './assets-media.js';
+import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
 import { schedulerService } from './scheduler.js';
 import { getDatabaseClient } from '../config/database.js';
 import { formatError } from '../utils/logging.js';
@@ -262,8 +262,34 @@ class RollingContentService {
           },
         });
 
-        if (content.asset) {
-          await attachAssetToContent({ contentId: savedContent.id, asset: content.asset });
+        // Deferred asset import (OOM optimization)
+        if (content.imageUrl && content.imageMetadata) {
+          const contentId = savedContent.id;
+          const { imageUrl, imageMetadata } = content;
+
+          importImageFromExternalUrl(imageUrl, {
+            contentId,
+            brandId,
+            source: imageMetadata.source,
+            originalPrompt: imageMetadata.originalPrompt,
+          })
+            .then(async (asset) => {
+              await attachAssetToContent({ contentId, asset });
+              rollingLogger.info(`[RollingContent] Asset imported for content ${contentId}`, {
+                brandId,
+                assetId: asset.id,
+              });
+            })
+            .catch((error) => {
+              const err = error instanceof Error ? error : new Error(String(error));
+              rollingLogger.error(
+                `[RollingContent] Failed to import asset for content ${contentId}:`,
+                {
+                  brandId,
+                  error: { name: err.name, message: err.message },
+                }
+              );
+            });
         }
 
         // Schedule the content

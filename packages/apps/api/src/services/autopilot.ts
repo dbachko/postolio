@@ -5,7 +5,7 @@
 
 import { logger as baseLogger } from '@postolio/logger';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
-import { attachAssetToContent } from './assets-media.js';
+import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
 import { schedulerService } from './scheduler.js';
 import {
   SCHEDULER_TIME_INTERVALS,
@@ -346,9 +346,37 @@ class AutopilotService {
                 },
               },
             });
-            if (content.asset) {
-              await attachAssetToContent({ contentId: created.id, asset: content.asset });
+
+            // Deferred asset import (OOM optimization)
+            if (content.imageUrl && content.imageMetadata) {
+              const contentId = created.id;
+              const { imageUrl, imageMetadata } = content;
+
+              importImageFromExternalUrl(imageUrl, {
+                contentId,
+                brandId: gap.brandId,
+                source: imageMetadata.source,
+                originalPrompt: imageMetadata.originalPrompt,
+              })
+                .then(async (asset) => {
+                  await attachAssetToContent({ contentId, asset });
+                  autopilotLogger.info(`[Autopilot] Asset imported for content ${contentId}`, {
+                    brandId: gap.brandId,
+                    assetId: asset.id,
+                  });
+                })
+                .catch((error) => {
+                  const err = error instanceof Error ? error : new Error(String(error));
+                  autopilotLogger.error(
+                    `[Autopilot] Failed to import asset for content ${contentId}:`,
+                    {
+                      brandId: gap.brandId,
+                      error: { name: err.name, message: err.message },
+                    }
+                  );
+                });
             }
+
             totalGenerated++;
           }
         } catch (error) {

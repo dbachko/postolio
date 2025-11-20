@@ -3,8 +3,6 @@ import { logger as baseLogger } from '@postolio/logger';
 import { getOpenAIClient, getDefaultOpenAIModel } from './openai-client.js';
 import { shouldUsePlaceholderImages, generatePlaceholderImageUrl } from './image-placeholders.js';
 import { generateMidjourneyImage } from './midjourney.js';
-import { importImageFromExternalUrl } from './assets-media.js';
-import type { AssetRecord } from '@postolio/assets-client';
 import { getBrandProfileContext, type BrandProfileContext } from './brand-profile.js';
 import { Prisma, type ContentStatus } from '@postolio/database';
 import { SeasonalityService } from './seasonality.js';
@@ -27,7 +25,12 @@ export interface GeneratedContent {
   caption: string;
   hashtags: string[];
   imagePrompt?: string;
-  asset?: AssetRecord;
+  // Deferred asset import fields (OOM optimization)
+  imageUrl?: string;
+  imageMetadata?: {
+    source: string;
+    originalPrompt: string;
+  };
 }
 
 export interface ContentBatch {
@@ -51,9 +54,18 @@ export async function generateInstagramContent(
   brandName: string,
   request: ContentGenerationRequest
 ): Promise<GeneratedContent[]> {
+  const reqId = randomUUID();
+  contentLogger.info('Starting generateInstagramContent', {
+    reqId,
+    brandId: request.brandId,
+    count: request.count,
+    campaignId: request.campaignId,
+  });
+
   const openai = getOpenAIClient();
   if (!openai) {
     contentLogger.warn('OpenAI client is not configured. Returning fallback content batch.', {
+      reqId,
       brandId: request.brandId,
     });
     let ctx: BrandProfileContext | null = null;
@@ -62,6 +74,7 @@ export async function generateInstagramContent(
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       contentLogger.warn('Brand profile projection unavailable; using minimal context', {
+        reqId,
         brandId: request.brandId,
         error: { name: err.name, message: err.message, stack: err.stack },
       });
@@ -100,6 +113,7 @@ export async function generateInstagramContent(
   };
   let campaignCtx: CampaignCtx | null = null;
   if (request.campaignId) {
+    contentLogger.info('Loading campaign context', { reqId, campaignId: request.campaignId });
     try {
       const raw = await prisma.campaign.findUnique({
         where: { id: request.campaignId },
@@ -117,17 +131,21 @@ export async function generateInstagramContent(
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       contentLogger.warn('Failed to load campaign context for generation; proceeding without it', {
+        reqId,
         campaignId: request.campaignId,
         error: { name: err.name, message: err.message, stack: err.stack },
       });
     }
   }
+
+  contentLogger.info('Loading brand profile context', { reqId, brandId: request.brandId });
   let brandContext: BrandProfileContext | null = null;
   try {
     brandContext = await getBrandProfileContext(request.brandId);
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
     contentLogger.warn('Brand profile projection unavailable during generation', {
+      reqId,
       brandId: request.brandId,
       error: { name: err.name, message: err.message, stack: err.stack },
     });
@@ -142,6 +160,10 @@ export async function generateInstagramContent(
     : [];
 
   // Rolling window: fetch recent brand content to avoid repetition
+  contentLogger.info('Fetching recent content for rolling window', {
+    reqId,
+    brandId: request.brandId,
+  });
   const windowCount = Number.isFinite(parseInt(process.env.ROLLING_WINDOW_POST_COUNT || ''))
     ? Math.max(1, parseInt(process.env.ROLLING_WINDOW_POST_COUNT as string, 10))
     : 20;
@@ -167,9 +189,11 @@ export async function generateInstagramContent(
       orderBy: { createdAt: 'desc' },
       take: windowCount,
     });
+    contentLogger.info('Fetched recent content', { reqId, count: recent.length });
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
     contentLogger.warn('Failed to fetch recent content window; continuing without it', {
+      reqId,
       brandId: request.brandId,
       windowCount,
       windowDays,
@@ -556,31 +580,16 @@ Output JSON only with fields: caption, hashtags (array of strings with no #), im
           });
 
           if (imageUrl) {
-            try {
-              const asset = await importImageFromExternalUrl(imageUrl, {
-                contentId: `${Date.now()}_${index}`,
-                brandId: request.brandId,
-                campaignId: request.campaignId,
+            // ⚡️ OPTIMIZATION: Don't wait for asset import - return URL for deferred import
+            // This prevents OOM by not blocking on assets-service download/processing
+            return {
+              ...item,
+              imageUrl, // Pass URL instead of waiting for asset import
+              imageMetadata: {
                 source: imageUrl.includes('dalle') ? 'dalle3' : 'midjourney',
                 originalPrompt: finalPrompt,
-              });
-
-              return {
-                ...item,
-                asset,
-              };
-            } catch (assetError) {
-              const err = assetError instanceof Error ? assetError : new Error(String(assetError));
-              contentLogger.error('Failed to store generated image via assets service', {
-                brandId: request.brandId,
-                index,
-                error: { name: err.name, message: err.message, stack: err.stack },
-              });
-              throw new Error(
-                'Failed to store generated image: ' +
-                  (assetError instanceof Error ? assetError.message : 'Unknown error')
-              );
-            }
+              },
+            };
           }
 
           // No image was generated

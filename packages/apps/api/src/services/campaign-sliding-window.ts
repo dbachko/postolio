@@ -4,7 +4,7 @@ import { TimezoneService } from './timezone.js';
 import { generateInstagramContent } from './content-generator.js';
 import { schedulerService } from './scheduler.js';
 import { computeUpcomingSlots } from './slot-utils.js';
-import { attachAssetToContent } from './assets-media.js';
+import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
 
 const prisma = getDatabaseClient();
 
@@ -323,10 +323,6 @@ export class CampaignSlidingWindowService {
             },
             select: { id: true, generationParams: true },
           });
-
-          if (created && post.asset) {
-            await attachAssetToContent({ contentId: created.id, asset: post.asset, prisma: tx });
-          }
         },
         { isolationLevel: 'Serializable' }
       );
@@ -334,6 +330,38 @@ export class CampaignSlidingWindowService {
       if (!created) {
         // Skipped due to concurrent reservation of this day
         continue;
+      }
+
+      // 2.5) Deferred asset import (OOM optimization) - import image asynchronously
+      // This happens AFTER content creation to avoid blocking on asset download/processing
+      if (post.imageUrl && post.imageMetadata) {
+        const createdId = (created as { id: string }).id;
+        const { imageUrl, imageMetadata } = post;
+
+        // Fire-and-forget asset import to prevent OOM
+        // Errors are logged but don't block campaign generation
+        importImageFromExternalUrl(imageUrl, {
+          contentId: createdId,
+          brandId: campaign.brandId,
+          campaignId: campaign.id,
+          source: imageMetadata.source,
+          originalPrompt: imageMetadata.originalPrompt,
+        })
+          .then(async (asset) => {
+            await attachAssetToContent({ contentId: createdId, asset });
+            console.log(`[SlidingWindow] Asset imported and attached for content ${createdId}`, {
+              campaignId,
+              assetId: asset.id,
+            });
+          })
+          .catch((error) => {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error(`[SlidingWindow] Failed to import asset for content ${createdId}:`, {
+              campaignId,
+              error: { name: err.name, message: err.message },
+            });
+            // Content still exists, just without the image - user can regenerate later
+          });
       }
 
       // 3) Schedule via AWS (fire-and-forget; sync will update status)

@@ -18,7 +18,7 @@ import {
   StatusBroadcaster,
   type CampaignStatus as StatusBroadcasterCampaignStatus,
 } from './status-broadcaster.js';
-import { attachAssetToContent } from './assets-media.js';
+import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
 import { eventEmitter } from './event-emitter.js';
 import { getDatabaseClient } from '../config/database.js';
 import { logMemoryUsage } from '../utils/memory-debug.js';
@@ -480,9 +480,35 @@ class CampaignService {
           },
         });
 
-        if (post.asset) {
-          await attachAssetToContent({ contentId: savedPost.id, asset: post.asset });
+        // Deferred asset import (OOM optimization)
+        if (post.imageUrl && post.imageMetadata) {
+          const contentId = savedPost.id;
+          const { imageUrl, imageMetadata } = post;
+
+          // Fire-and-forget asset import
+          importImageFromExternalUrl(imageUrl, {
+            contentId,
+            brandId: campaign.brandId,
+            campaignId: campaign.id,
+            source: imageMetadata.source,
+            originalPrompt: imageMetadata.originalPrompt,
+          })
+            .then(async (asset) => {
+              await attachAssetToContent({ contentId, asset });
+              console.log(`[CampaignPreview] Asset imported for content ${contentId}`, {
+                campaignId: campaign.id,
+                assetId: asset.id,
+              });
+            })
+            .catch((error) => {
+              const err = error instanceof Error ? error : new Error(String(error));
+              console.error(`[CampaignPreview] Failed to import asset for content ${contentId}:`, {
+                campaignId: campaign.id,
+                error: { name: err.name, message: err.message },
+              });
+            });
         }
+
         savedPosts.push({
           ...post,
           id: savedPost.id,

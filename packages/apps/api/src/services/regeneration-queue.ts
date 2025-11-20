@@ -2,7 +2,7 @@ import { Queue, Worker, Job } from 'bullmq';
 import Redis from 'ioredis';
 import { prisma } from '../config/database.js';
 import { generateInstagramContent, type ContentGenerationRequest } from './content-generator.js';
-import { attachAssetToContent } from './assets-media.js';
+import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
 import { getRedisUrl } from '../utils/redis-url.js';
 
 // Fixed batch size as per product decision
@@ -130,8 +130,34 @@ const regenerationWorker = new Worker(
             },
           });
 
-          if (newContent.asset) {
-            await attachAssetToContent({ contentId, asset: newContent.asset });
+          // Deferred asset import (OOM optimization)
+          if (newContent.imageUrl && newContent.imageMetadata) {
+            const { imageUrl, imageMetadata } = newContent;
+
+            importImageFromExternalUrl(imageUrl, {
+              contentId,
+              brandId: existingContent.brandId,
+              campaignId: existingContent.campaignId || undefined,
+              source: imageMetadata.source,
+              originalPrompt: imageMetadata.originalPrompt,
+            })
+              .then(async (asset) => {
+                await attachAssetToContent({ contentId, asset });
+                console.log(`[RegenerationQueue] Asset imported for content ${contentId}`, {
+                  brandId: existingContent.brandId,
+                  assetId: asset.id,
+                });
+              })
+              .catch((error) => {
+                const err = error instanceof Error ? error : new Error(String(error));
+                console.error(
+                  `[RegenerationQueue] Failed to import asset for content ${contentId}:`,
+                  {
+                    brandId: existingContent.brandId,
+                    error: { name: err.name, message: err.message },
+                  }
+                );
+              });
           }
 
           results.completed++;

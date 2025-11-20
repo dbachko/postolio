@@ -5,7 +5,7 @@ import {
   type GeneratedContent,
 } from './content-generator.js';
 import { getStatusBroadcaster } from './broadcast-registry.js';
-import { attachAssetToContent } from './assets-media.js';
+import { importImageFromExternalUrl, attachAssetToContent } from './assets-media.js';
 import { logMemoryUsage, maybeWriteHeapSnapshot } from '../utils/memory-debug.js';
 
 const prisma = getDatabaseClient();
@@ -183,8 +183,7 @@ class CampaignJobService {
           JSON.stringify({
             caption: post.caption?.substring(0, 50) + '...',
             hashtags: post.hashtags?.length || 0,
-            assetId: post.asset?.id || 'NOT SET',
-            hasAsset: !!post.asset,
+            hasImageUrl: !!post.imageUrl,
           })
         );
 
@@ -207,8 +206,33 @@ class CampaignJobService {
           },
         });
 
-        if (post.asset) {
-          await attachAssetToContent({ contentId: created.id, asset: post.asset });
+        // Deferred asset import (OOM optimization)
+        if (post.imageUrl && post.imageMetadata) {
+          const contentId = created.id;
+          const { imageUrl, imageMetadata } = post;
+
+          // Fire-and-forget asset import
+          importImageFromExternalUrl(imageUrl, {
+            contentId,
+            brandId: campaign.brandId,
+            campaignId: campaign.id,
+            source: imageMetadata.source,
+            originalPrompt: imageMetadata.originalPrompt,
+          })
+            .then(async (asset) => {
+              await attachAssetToContent({ contentId, asset });
+              console.log(`[Preview] Asset imported for content ${contentId}`, {
+                campaignId: campaign.id,
+                assetId: asset.id,
+              });
+            })
+            .catch((error) => {
+              const err = error instanceof Error ? error : new Error(String(error));
+              console.error(`[Preview] Failed to import asset for content ${contentId}:`, {
+                campaignId: campaign.id,
+                error: { name: err.name, message: err.message },
+              });
+            });
         }
 
         // Broadcast content created as draft
