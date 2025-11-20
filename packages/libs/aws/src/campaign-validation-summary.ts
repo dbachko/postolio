@@ -39,7 +39,8 @@ export const CAMPAIGN_VALIDATION_SUMMARY: CampaignValidationSummary = {
   validationPoints: [
     {
       location: 'packages/apps/api/src/services/scheduler-adapter.ts:193-202',
-      description: 'Content must be associated with a campaign before scheduling',
+      description:
+        'When content is part of a campaign, enforce campaign validation before scheduling (standalone posts may be scheduled without a campaign)',
       type: 'blocking',
       criticality: 'critical',
     },

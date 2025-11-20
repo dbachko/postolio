@@ -141,7 +141,8 @@ export class ErrorFactory {
       message: `Content is not associated with a campaign: ${contentId}`,
       details: { contentId },
       retryable: false,
-      userMessage: 'All content must be associated with a campaign before scheduling.',
+      userMessage:
+        'This operation requires the content to be associated with a campaign before scheduling.',
     });
   }
 

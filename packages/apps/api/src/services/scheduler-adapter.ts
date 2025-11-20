@@ -204,61 +204,56 @@ export class SchedulerAdapter {
       }
       fetchedContent = { brandId: content.brandId, brand: { userId: content.brand.userId } };
 
-      // 🔥 CRITICAL: Validate campaign association to prevent validation bypass
-      if (!content.campaignId) {
-        logger.error('Scheduling blocked: content has no campaign', { contentId });
-        return {
-          success: false,
-          error: 'Content must be associated with a campaign before scheduling',
-        };
-      }
-
-      // Validate campaign exists and is in a valid state
-      if (!content.campaign) {
-        logger.error('Scheduling blocked: campaign not found for content', {
-          campaignId: content.campaignId,
-          contentId,
-        });
-        return {
-          success: false,
-          error: 'Associated campaign not found',
-        };
-      }
-
-      // Only allow scheduling for active campaigns, UNLESS this is a draft/skipped/failed post
-      // (draft indicates auto-recovery from a failed campaign start; skipped/failed are user overrides)
-      if (
-        content.campaign.status !== 'active' &&
-        !['draft', 'skipped', 'failed'].includes(content.status as ContentStatus)
-      ) {
-        logger.warn('Scheduling blocked: campaign not active', {
-          campaignId: content.campaignId,
-          status: content.campaign.status,
-        });
-        return {
-          success: false,
-          error: `Cannot schedule content for ${content.campaign.status.toLowerCase()} campaign`,
-        };
-      }
-
-      // Auto-activate campaign if scheduling a draft post from a non-active campaign
-      // This handles auto-recovery when a campaign failed to start properly
-      if (content.campaign.status !== 'active' && content.status === 'draft') {
-        logger.info('AUTO-RECOVERY: Activating campaign to allow scheduling of draft content', {
-          campaignId: content.campaignId,
-          contentId,
-        });
-        try {
-          await prisma.campaign.update({
-            where: { id: content.campaignId },
-            data: { status: 'active' },
+      // If content belongs to a campaign, enforce campaign validation rules.
+      // Standalone content (no campaign) is now allowed to be scheduled.
+      if (content.campaignId) {
+        // Validate campaign exists and is in a valid state
+        if (!content.campaign) {
+          logger.error('Scheduling blocked: campaign not found for content', {
+            campaignId: content.campaignId,
+            contentId,
           });
-          logger.info('Campaign activated for auto-recovery', { campaignId: content.campaignId });
-        } catch (campaignUpdateError) {
-          logger.error('Failed to activate campaign during auto-recovery', {
-            error: campaignUpdateError,
+          return {
+            success: false,
+            error: 'Associated campaign not found',
+          };
+        }
+
+        // Only allow scheduling for active campaigns, UNLESS this is a draft/skipped/failed post
+        // (draft indicates auto-recovery from a failed campaign start; skipped/failed are user overrides)
+        if (
+          content.campaign.status !== 'active' &&
+          !['draft', 'skipped', 'failed'].includes(content.status as ContentStatus)
+        ) {
+          logger.warn('Scheduling blocked: campaign not active', {
+            campaignId: content.campaignId,
+            status: content.campaign.status,
           });
-          // Don't fail the scheduling - continue with scheduling anyway
+          return {
+            success: false,
+            error: `Cannot schedule content for ${content.campaign.status.toLowerCase()} campaign`,
+          };
+        }
+
+        // Auto-activate campaign if scheduling a draft post from a non-active campaign
+        // This handles auto-recovery when a campaign failed to start properly
+        if (content.campaign.status !== 'active' && content.status === 'draft') {
+          logger.info('AUTO-RECOVERY: Activating campaign to allow scheduling of draft content', {
+            campaignId: content.campaignId,
+            contentId,
+          });
+          try {
+            await prisma.campaign.update({
+              where: { id: content.campaignId },
+              data: { status: 'active' },
+            });
+            logger.info('Campaign activated for auto-recovery', { campaignId: content.campaignId });
+          } catch (campaignUpdateError) {
+            logger.error('Failed to activate campaign during auto-recovery', {
+              error: campaignUpdateError,
+            });
+            // Don't fail the scheduling - continue with scheduling anyway
+          }
         }
       }
 
@@ -394,7 +389,6 @@ export class SchedulerAdapter {
           const schedulePayload: CreateScheduleInput = {
             contentId: content.id,
             brandId: content.brandId,
-            campaignId: content.campaignId!, // 🔥 CRITICAL: Always include campaignId for validation
             userId: userId || content.brand.userId,
             platform: 'instagram', // Default for now, could expand to other platforms
             scheduledAt: scheduledTimeUTC.toISOString(), // Lambda expects 'scheduledAt'
@@ -410,6 +404,7 @@ export class SchedulerAdapter {
               localTime: customTime ? customTime.toISOString() : undefined,
               campaignName: content.campaign?.name, // Include campaign context for debugging
             },
+            ...(content.campaignId ? { campaignId: content.campaignId } : {}),
           };
           const mediaKey = normalizeMediaKey(content.primaryAssetCdnUrl);
           if (mediaKey) {
@@ -540,7 +535,7 @@ export class SchedulerAdapter {
             success: true,
             scheduleId: scheduleId!,
             brandId: content.brandId,
-            campaignId: content.campaignId!, // Include campaignId in successful response
+            campaignId: content.campaignId ?? undefined,
           }
         : {
             success: false,
