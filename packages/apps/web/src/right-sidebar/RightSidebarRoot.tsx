@@ -149,9 +149,31 @@ export function RightSidebarRoot({ children }: { children: React.ReactNode }) {
     const handleMouseDown = (event: MouseEvent) => {
       const asideEl = asideRef.current;
       if (!asideEl) return;
-      if (!asideEl.contains(event.target as Node)) {
-        close();
+
+      const target = event.target as Node;
+
+      // Don't close if clicking inside the sidebar
+      if (asideEl.contains(target)) return;
+
+      // Don't close if clicking inside a dropdown/popover/dialog portal
+      // These are rendered outside the sidebar but are part of the UI interaction
+      const portalSelectors = [
+        '[role="dialog"]',
+        '[role="menu"]',
+        '[role="listbox"]',
+        '[data-radix-popper-content-wrapper]',
+        '[data-radix-portal]',
+        '.select-content',
+        '.dropdown-content',
+        '.popover-content',
+      ];
+
+      for (const selector of portalSelectors) {
+        const portal = (target as Element).closest?.(selector);
+        if (portal) return;
       }
+
+      close();
     };
 
     document.addEventListener('keydown', handleKeyDown);

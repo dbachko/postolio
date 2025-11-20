@@ -358,13 +358,23 @@ export async function socialPlatformRoutes(app: FastifyInstance) {
             throw new Error(`Connector for ${platform} does not support publishing yet`);
           }
 
+          // Convert lowercase mediaType to Instagram's uppercase format
+          const instagramMediaType =
+            content.mediaType === 'reel'
+              ? ('REELS' as const)
+              : content.mediaType === 'video'
+                ? ('VIDEO' as const)
+                : content.mediaType === 'carousel'
+                  ? ('CAROUSEL_ALBUM' as const)
+                  : ('IMAGE' as const);
+
           publishResult = await connector.publish(
             {
               caption: content.caption || '',
               hashtags: content.hashtags || [],
               imageUrl: content.primaryAssetCdnUrl || undefined,
-              mediaUrl: content.primaryAssetCdnUrl || undefined,
-              mediaType: 'image', // TODO: Determine actual media type from asset
+              mediaUrl: content.videoUrl || content.primaryAssetCdnUrl || undefined,
+              mediaType: instagramMediaType,
             },
             {
               accessToken: tokens.accessToken,

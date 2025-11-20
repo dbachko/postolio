@@ -25,7 +25,8 @@ const ScheduleStatusSchema = z.enum([
   'failed',
   'cancelled',
 ]);
-const ContentTypeSchema = z.enum(['image', 'video', 'carousel', 'reel', 'story']);
+const ContentTypeSchema = z.enum(['post', 'reel', 'story']); // User-facing content type
+const MediaTypeSchema = z.enum(['image', 'video', 'reel', 'carousel']); // Media format
 
 // Schema that matches Lambda's expected format
 const MetadataSchema = z.record(z.string(), z.unknown());
@@ -37,7 +38,8 @@ const CreateScheduleInputSchema = z.object({
   userId: z.string(), // Required for ownership validation and token retrieval
   platform: PlatformSchema,
   scheduledAt: z.string().datetime(), // Changed from scheduledTime to scheduledAt
-  contentType: ContentTypeSchema.optional(),
+  contentType: ContentTypeSchema.optional(), // User-facing type: post/reel/story
+  mediaType: MediaTypeSchema.optional(), // Media format: image/video/reel/carousel
   videoUrl: z.string().url().nullish(),
   caption: z.string().optional(),
   hashtags: z.array(z.string()).optional(),
@@ -82,7 +84,8 @@ const ScheduleSchema = z.object({
   userId: z.string(), // Required for security and authorization
   platform: PlatformSchema,
   scheduledAt: z.string().datetime(),
-  contentType: ContentTypeSchema,
+  contentType: ContentTypeSchema.optional(), // User-facing type: post/reel/story
+  mediaType: MediaTypeSchema.optional(), // Media format: image/video/reel/carousel
   videoUrl: z.string().url().nullish(),
   caption: z.string().nullish(),
   hashtags: z.array(z.string()).nullish(),

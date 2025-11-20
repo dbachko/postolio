@@ -129,13 +129,23 @@ export async function publishContent(
       brandId: content.brandId,
     });
 
+    // Convert lowercase mediaType to Instagram's uppercase format
+    const instagramMediaType =
+      content.mediaType === 'reel'
+        ? ('REELS' as const)
+        : content.mediaType === 'video'
+          ? ('VIDEO' as const)
+          : content.mediaType === 'carousel'
+            ? ('CAROUSEL_ALBUM' as const)
+            : ('IMAGE' as const);
+
     const publishResult = await connector.publish(
       {
         caption: content.caption || '',
         hashtags: content.hashtags || [],
         imageUrl: content.primaryAssetCdnUrl || undefined,
-        mediaUrl: content.primaryAssetCdnUrl || undefined, // Could be video
-        mediaType: content.primaryAssetCdnUrl?.includes('.mp4') ? 'video' : 'image',
+        mediaUrl: content.videoUrl || content.primaryAssetCdnUrl || undefined,
+        mediaType: instagramMediaType,
       },
       {
         accessToken: tokens.accessToken,

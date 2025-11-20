@@ -28,6 +28,9 @@ export interface ContentWithMetadata extends ContentBase {
   primaryAssetId?: string | null;
   primaryAssetWidth?: number | null;
   primaryAssetHeight?: number | null;
+  mediaType?: string | null;
+  contentType?: string | null;
+  videoUrl?: string | null;
 }
 
 /**
@@ -45,6 +48,9 @@ export interface ContentResponse {
   postedAt?: Date | null;
   brandId?: string;
   generationParams?: unknown;
+  mediaType?: string | null;
+  contentType?: string | null;
+  videoUrl?: string | null;
 }
 
 /**
@@ -82,6 +88,15 @@ export function buildContentResponse(content: ContentWithMetadata): ContentRespo
   }
   if (content.generationParams !== undefined) {
     response.generationParams = content.generationParams;
+  }
+  if (content.mediaType !== undefined) {
+    response.mediaType = content.mediaType;
+  }
+  if (content.contentType !== undefined) {
+    response.contentType = content.contentType;
+  }
+  if (content.videoUrl !== undefined) {
+    response.videoUrl = content.videoUrl;
   }
 
   return response;

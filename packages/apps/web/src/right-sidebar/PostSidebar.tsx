@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { content as contentApi, campaign as campaignApi } from '@/lib/api';
-import { assetsApi } from '@/features/assets/api/client';
 import { Button } from '@/components/ui/button';
 import {
   Breadcrumb,
@@ -12,19 +11,30 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { ImageUploader } from '@/components/ImageUploader';
+import { VideoUploader } from '@/components/VideoUploader';
+import { MultiImageUploader } from '@/components/MultiImageUploader';
 import { PostCaptionEditor } from '@/components/PostCaptionEditor';
 import { PostHashtagEditor } from '@/components/PostHashtagEditor';
 import { PostScheduler } from '@/components/PostScheduler';
 import { PostStatusCard, type PostStatus } from '@/components/PostStatusCard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { convertLocalToUTC } from '@/lib/timezone';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useRightSidebarRouter } from '@/hooks/useRightSidebarRouter';
-import { X, Clock, Save, Upload, Calendar } from 'lucide-react';
+import {
+  X,
+  Clock,
+  Save,
+  Upload,
+  Calendar,
+  Image as ImageIcon,
+  Video as VideoIcon,
+  Film,
+  Zap,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/brandStore';
-import { validateImageFile } from '@/lib/fileUtils';
 import {
   Select,
   SelectContent,
@@ -32,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { normalizeHashtags, stripHashtagPrefixes } from '@/utils/hashtags';
 import { cn } from '@/lib/utils';
 import { AppEmptyState } from '@/components/AppEmptyState';
@@ -41,6 +52,9 @@ interface PostDetailData {
   caption: string;
   hashtags: string[];
   imageUrl?: string;
+  videoUrl?: string;
+  mediaType?: string;
+  contentType?: string;
   status: string; // 'draft' | 'scheduled' | 'published' | ...
   scheduledAt?: string;
   brandId?: string;
@@ -128,11 +142,14 @@ export function PostSidebar({
     caption: '',
     hashtags: [] as string[],
     imageUrl: '',
+    videoUrl: '',
+    carouselImageUrls: [] as string[],
+    contentType: 'post' as 'post' | 'reel' | 'story',
+    mediaType: 'image' as 'image' | 'video' | 'carousel',
     scheduledAt: '',
   });
   const [hasChanges, setHasChanges] = useState(false);
   const formInitializedRef = useRef(false);
-  const [preselectedAssetId, setPreselectedAssetId] = useState<string | null>(null);
 
   // Initialize form from post
   useEffect(() => {
@@ -141,6 +158,10 @@ export function PostSidebar({
       caption: post.caption || '',
       hashtags: stripHashtagPrefixes(post.hashtags || []),
       imageUrl: post.imageUrl || '',
+      videoUrl: post.videoUrl || '',
+      carouselImageUrls: [], // TODO: Load from post.mediaAssets
+      contentType: (post.contentType as 'post' | 'reel' | 'story') || 'post',
+      mediaType: (post.mediaType as 'image' | 'video' | 'carousel') || 'image',
       scheduledAt: formatScheduledInput(post.scheduledAt),
     });
     setSelectedCampaign(post.campaign?.id || post.campaignId || null);
@@ -157,30 +178,6 @@ export function PostSidebar({
       }
     };
   }, []);
-
-  // If opened as create with an assetId param, preselect image from asset
-  useEffect(() => {
-    if (id) return; // only for create mode
-    const params = new URLSearchParams(location.search);
-    const assetId = params.get('assetId');
-    let active = true;
-    (async () => {
-      if (!assetId) return;
-      try {
-        const res = await assetsApi.getAsset(assetId);
-        if (!active) return;
-        const url = res.asset.thumbnailUrl || res.asset.url;
-        setImagePreview(url);
-        setImageFile(null);
-        setPreselectedAssetId(res.asset.id);
-      } catch (_e) {
-        // ignore if asset not found/unauthorized; user can still upload
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [id, location.search]);
 
   const disabled = post?.status === 'published';
   const canScheduleExisting = Boolean(!disabled && post && post.status !== 'scheduled');
@@ -250,12 +247,24 @@ export function PostSidebar({
 
       const hashtagArray = Array.from(new Set(normalizeHashtags(formData.hashtags)));
 
+      // Determine final mediaType based on contentType
+      let finalMediaType: 'image' | 'video' | 'reel' | 'carousel' = formData.mediaType;
+      if (formData.contentType === 'reel') {
+        finalMediaType = 'reel';
+      }
+
+      // Stories don't support captions or hashtags per Instagram API
+      const isStory = formData.contentType === 'story';
+
       return contentApi.createManualContent({
         brandId: selectedBrand.id,
-        caption: formData.caption.trim(),
-        hashtags: hashtagArray,
-        imageFile: imageFile || undefined,
-        assetId: !imageFile && preselectedAssetId ? preselectedAssetId : undefined,
+        caption: isStory ? '' : formData.caption.trim(),
+        hashtags: isStory ? [] : hashtagArray,
+        videoUrl: formData.videoUrl || undefined,
+        carouselImageUrls:
+          formData.carouselImageUrls.length > 0 ? formData.carouselImageUrls : undefined,
+        mediaType: finalMediaType,
+        contentType: formData.contentType,
         campaignId: selectedCampaign || undefined,
         scheduledAt: mode === 'schedule' ? formData.scheduledAt : undefined,
       });
@@ -321,27 +330,14 @@ export function PostSidebar({
     setHasChanges(changed);
   }, [formData, id, post]);
 
-  const handleImageChange = async (fileOrUrl?: File | string | null) => {
-    if (!id || !fileOrUrl || disabled) return;
-    if (typeof fileOrUrl === 'string') {
-      setFormData((s) => ({ ...s, imageUrl: fileOrUrl }));
-      return;
-    }
-    const brandId = post?.brandId || selectedBrand?.id;
-    if (!brandId) {
-      toast.error('Unable to upload image: missing brand');
-      return;
-    }
-    const res = await contentApi.uploadContentImage(id, brandId, fileOrUrl);
-    const url = res?.content?.imageUrl;
-    if (url) setFormData((s) => ({ ...s, imageUrl: url }));
-  };
-
   const handleSaveChanges = () => {
     if (!id || !hasChanges) return;
 
+    // Stories don't support captions or hashtags per Instagram API
+    const isStory = formData.contentType === 'story';
+
     const trimmedCaption = formData.caption?.trim() || '';
-    if (trimmedCaption.length === 0) {
+    if (!isStory && trimmedCaption.length === 0) {
       toast.error('Caption cannot be empty');
       return;
     }
@@ -352,8 +348,8 @@ export function PostSidebar({
 
     mutateContent({
       contentId: id,
-      caption: trimmedCaption,
-      hashtags: normalizeHashtags(formData.hashtags),
+      caption: isStory ? '' : trimmedCaption,
+      hashtags: isStory ? [] : normalizeHashtags(formData.hashtags),
       imageUrl: formData.imageUrl || undefined,
       campaignId: selectedCampaign || null,
       ...(scheduledAtPayload ? { scheduledAt: scheduledAtPayload } : {}),
@@ -364,8 +360,6 @@ export function PostSidebar({
   const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // Prefill from query params when creating
   const prefillAppliedRef = useRef(false);
@@ -523,61 +517,164 @@ export function PostSidebar({
               />
             ) : (
               <>
-                {/* Image Upload */}
+                {/* Post Type Selector */}
+                <div className="space-y-2">
+                  <Label className="text-sm">Content Type</Label>
+                  <RadioGroup
+                    value={formData.contentType}
+                    onValueChange={(value) =>
+                      setFormData((s) => ({
+                        ...s,
+                        contentType: value as 'post' | 'reel' | 'story',
+                        // Reset mediaType to video if reel is selected
+                        mediaType: value === 'reel' ? 'video' : s.mediaType,
+                      }))
+                    }
+                    className="flex gap-2"
+                  >
+                    <div className="flex-1">
+                      <RadioGroupItem value="post" id="type-post" className="peer sr-only" />
+                      <Label
+                        htmlFor="type-post"
+                        className="hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-all"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        <span>Post</span>
+                      </Label>
+                    </div>
+                    <div className="flex-1">
+                      <RadioGroupItem value="reel" id="type-reel" className="peer sr-only" />
+                      <Label
+                        htmlFor="type-reel"
+                        className="hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-all"
+                      >
+                        <Film className="h-3.5 w-3.5" />
+                        <span>Reel</span>
+                      </Label>
+                    </div>
+                    <div className="flex-1">
+                      <RadioGroupItem value="story" id="type-story" className="peer sr-only" />
+                      <Label
+                        htmlFor="type-story"
+                        className="hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent/50 border-input bg-background flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-all"
+                      >
+                        <Zap className="h-3.5 w-3.5" />
+                        <span>Story</span>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {/* Media Upload - Tabs for Image/Video or Video-only for Reels */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Upload className="h-4 w-4" />
-                    Post Image
+                    {formData.contentType === 'reel' ? 'Video' : 'Media'}
                   </Label>
-                  <ImageUploader
-                    value={imagePreview || undefined}
-                    onChange={(fileOrUrl) => {
-                      if (fileOrUrl instanceof File) {
-                        const error = validateImageFile(fileOrUrl, 10);
-                        if (error) {
-                          toast.error(error);
-                          return;
-                        }
-                        setImageFile(fileOrUrl);
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setImagePreview(reader.result as string);
-                        };
-                        reader.readAsDataURL(fileOrUrl);
-                        setPreselectedAssetId(null);
-                      } else if (typeof fileOrUrl === 'string') {
-                        // Handle URL case (though unlikely in creation mode)
-                        setImagePreview(fileOrUrl);
-                        setImageFile(null);
-                        setPreselectedAssetId(null);
-                      } else {
-                        // Clear case
-                        setImagePreview(null);
-                        setImageFile(null);
-                        setPreselectedAssetId(null);
+
+                  {/* Reels can only be video */}
+                  {formData.contentType === 'reel' ? (
+                    <div className="space-y-2">
+                      {selectedBrand?.id && (
+                        <>
+                          <VideoUploader
+                            value={formData.videoUrl}
+                            onChange={(url) => setFormData((s) => ({ ...s, videoUrl: url }))}
+                            brandId={selectedBrand.id}
+                            maxSizeInMB={300}
+                            acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
+                          />
+                          <p className="text-muted-foreground text-sm">
+                            Upload a vertical video for your reel (max 300MB, 9:16 aspect ratio
+                            recommended)
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    /* Posts and Stories can be image(s) or video */
+                    <Tabs
+                      value={formData.mediaType === 'carousel' ? 'image' : formData.mediaType}
+                      onValueChange={(value) =>
+                        setFormData((s) => ({
+                          ...s,
+                          mediaType: value as 'image' | 'video',
+                          // Clear carousel images when switching to video
+                          carouselImageUrls: value === 'video' ? [] : s.carouselImageUrls,
+                        }))
                       }
-                    }}
-                    maxSizeInMB={10}
-                    acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
-                  />
-                  <p className="text-muted-foreground text-sm">
-                    Upload an image for your post (optional, max 10MB)
-                  </p>
+                    >
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="image" className="flex items-center gap-2">
+                          <ImageIcon className="h-4 w-4" />
+                          Image
+                        </TabsTrigger>
+                        <TabsTrigger value="video" className="flex items-center gap-2">
+                          <VideoIcon className="h-4 w-4" />
+                          Video
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="image" className="mt-4">
+                        {selectedBrand?.id && (
+                          <>
+                            <MultiImageUploader
+                              value={formData.carouselImageUrls}
+                              onChange={(urls) => {
+                                // Auto-detect mediaType based on image count
+                                const mediaType = urls.length >= 2 ? 'carousel' : 'image';
+                                setFormData((s) => ({
+                                  ...s,
+                                  carouselImageUrls: urls,
+                                  mediaType,
+                                }));
+                              }}
+                              brandId={selectedBrand.id}
+                              maxImages={10}
+                              maxSizeInMB={10}
+                            />
+                          </>
+                        )}
+                      </TabsContent>
+
+                      <TabsContent value="video" className="mt-4">
+                        {selectedBrand?.id && (
+                          <>
+                            <VideoUploader
+                              value={formData.videoUrl}
+                              onChange={(url) => setFormData((s) => ({ ...s, videoUrl: url }))}
+                              brandId={selectedBrand.id}
+                              maxSizeInMB={300}
+                              acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
+                            />
+                            <p className="text-muted-foreground mt-2 text-sm">
+                              Upload a video for your {formData.contentType} (optional, max 300MB)
+                            </p>
+                          </>
+                        )}
+                      </TabsContent>
+                    </Tabs>
+                  )}
                 </div>
 
-                <PostCaptionEditor
-                  value={formData.caption}
-                  onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
-                  disabled={false}
-                  showIcon={true}
-                />
+                {/* Caption and Hashtags - Not supported for Stories */}
+                {formData.contentType !== 'story' && (
+                  <>
+                    <PostCaptionEditor
+                      value={formData.caption}
+                      onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
+                      disabled={false}
+                      showIcon={true}
+                    />
 
-                <PostHashtagEditor
-                  hashtags={formData.hashtags}
-                  onChange={(tags) => setFormData((s) => ({ ...s, hashtags: tags }))}
-                  disabled={false}
-                  showIcon={true}
-                />
+                    <PostHashtagEditor
+                      hashtags={formData.hashtags}
+                      onChange={(tags) => setFormData((s) => ({ ...s, hashtags: tags }))}
+                      disabled={false}
+                      showIcon={true}
+                    />
+                  </>
+                )}
 
                 <PostScheduler
                   value={formData.scheduledAt}
@@ -686,43 +783,45 @@ export function PostSidebar({
 
             <div className="space-y-2">
               <Label>Post Image</Label>
-              {disabled ? (
-                formData.imageUrl ? (
-                  <div className="bg-muted overflow-hidden rounded-lg">
-                    <img
-                      src={formData.imageUrl}
-                      alt="Post content"
-                      className="h-auto max-h-[250px] w-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground text-sm">No image</div>
-                )
+              {formData.imageUrl ? (
+                <div className="bg-muted overflow-hidden rounded-lg">
+                  <img
+                    src={formData.imageUrl}
+                    alt="Post content"
+                    className="h-auto max-h-[250px] w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
               ) : (
-                <ImageUploader
-                  value={formData.imageUrl || undefined}
-                  onChange={handleImageChange}
-                  maxSizeInMB={10}
-                  acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
-                />
+                <div className="text-muted-foreground text-sm">No image</div>
+              )}
+              {!disabled && (
+                <p className="text-muted-foreground text-xs">
+                  Note: Image editing for existing posts is not yet supported. Create a new post to
+                  change images.
+                </p>
               )}
             </div>
 
-            <PostCaptionEditor
-              value={formData.caption}
-              onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
-              disabled={disabled}
-              showIcon={true}
-            />
+            {/* Caption and Hashtags - Not supported for Stories */}
+            {formData.contentType !== 'story' && (
+              <>
+                <PostCaptionEditor
+                  value={formData.caption}
+                  onChange={(v) => setFormData((s) => ({ ...s, caption: v }))}
+                  disabled={disabled}
+                  showIcon={true}
+                />
 
-            <PostHashtagEditor
-              hashtags={formData.hashtags}
-              onChange={(tags) => setFormData((s) => ({ ...s, hashtags: tags }))}
-              disabled={disabled}
-              showIcon={true}
-            />
+                <PostHashtagEditor
+                  hashtags={formData.hashtags}
+                  onChange={(tags) => setFormData((s) => ({ ...s, hashtags: tags }))}
+                  disabled={disabled}
+                  showIcon={true}
+                />
+              </>
+            )}
 
             <PostScheduler
               value={formData.scheduledAt}

@@ -215,10 +215,11 @@ export class InstagramConnector implements Connector {
   /**
    * Publish content to Instagram using the Graph API.
    *
-   * This implementation mirrors the legacy instagramService.publishMedia flow:
+   * Supports images, videos, and reels with the 3-step container workflow:
    *   1. Create a media container on the IG business account
-   *   2. Publish the container
-   *   3. Fetch the permalink for the published media
+   *   2. Poll container status (required for videos - processing time)
+   *   3. Publish the container
+   *   4. Fetch the permalink for the published media
    *
    * It is intentionally side‑effect free: the caller is responsible for
    * persisting Content/ContentPublication records in their own datastore.
@@ -233,6 +234,10 @@ export class InstagramConnector implements Connector {
         throw new Error('cdnImageUrl/mediaUrl is required for Instagram publishing');
       }
 
+      // Determine media type from request
+      const isVideo = req.mediaType === 'VIDEO' || req.mediaType === 'REELS';
+      const isReel = req.mediaType === 'REELS';
+
       // Step 1: create media container
       const captionParts = [req.caption || ''];
       if (Array.isArray(req.hashtags) && req.hashtags.length > 0) {
@@ -243,11 +248,21 @@ export class InstagramConnector implements Connector {
 
       const containerUrl = fbGraph(`${account.externalAccountId}/media`);
       const containerData: Record<string, string> = {
-        // Legacy path only supported images; keep using image_url for now.
-        image_url: req.imageUrl || (req.mediaUrl as string),
         caption,
         access_token: creds.accessToken,
       };
+
+      // Add media URL based on type
+      if (isVideo) {
+        containerData.video_url = req.mediaUrl || req.imageUrl || '';
+        containerData.media_type = isReel ? 'REELS' : 'VIDEO';
+        // Optional: specify thumbnail offset (in milliseconds from start)
+        if (req.thumbOffset !== undefined) {
+          containerData.thumb_offset = String(req.thumbOffset);
+        }
+      } else {
+        containerData.image_url = req.imageUrl || req.mediaUrl || '';
+      }
 
       const containerResponse = await axios.post(containerUrl, containerData);
       const containerId = containerResponse.data?.id;
@@ -255,7 +270,12 @@ export class InstagramConnector implements Connector {
         throw new Error('Failed to create Instagram media container');
       }
 
-      // Step 2: publish the media container
+      // Step 2: Poll container status (required for videos)
+      if (isVideo) {
+        await this.pollContainerStatus(containerId, creds.accessToken);
+      }
+
+      // Step 3: publish the media container
       const publishUrl = fbGraph(`${account.externalAccountId}/media_publish`);
       const publishData = {
         creation_id: containerId,
@@ -267,7 +287,7 @@ export class InstagramConnector implements Connector {
         throw new Error('Failed to publish Instagram media');
       }
 
-      // Step 3: fetch permalink
+      // Step 4: fetch permalink
       const permalinkUrl = fbGraph(`${mediaId}?fields=permalink&access_token=${creds.accessToken}`);
       const permalinkResponse = await axios.get(permalinkUrl);
       const permalink =
@@ -286,6 +306,43 @@ export class InstagramConnector implements Connector {
     } catch (error) {
       throw mapInstagramError(error);
     }
+  }
+
+  /**
+   * Poll container status until it's ready for publishing.
+   * Required for video containers - Instagram needs time to process the video.
+   *
+   * @param containerId - The media container ID
+   * @param accessToken - Instagram access token
+   * @param maxAttempts - Maximum polling attempts (default: 30)
+   * @param intervalMs - Polling interval in milliseconds (default: 2000)
+   */
+  private async pollContainerStatus(
+    containerId: string,
+    accessToken: string,
+    maxAttempts: number = 30,
+    intervalMs: number = 2000
+  ): Promise<void> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const statusUrl = fbGraph(`${containerId}?fields=status_code&access_token=${accessToken}`);
+      const statusResponse = await axios.get(statusUrl);
+      const statusCode = statusResponse.data?.status_code;
+
+      if (statusCode === 'FINISHED') {
+        return; // Container is ready
+      }
+
+      if (statusCode === 'ERROR') {
+        throw new Error(
+          `Instagram container processing failed: ${JSON.stringify(statusResponse.data)}`
+        );
+      }
+
+      // Status is IN_PROGRESS or PUBLISHED, wait and retry
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    throw new Error(`Instagram container processing timeout after ${maxAttempts * intervalMs}ms`);
   }
 
   async getComments(

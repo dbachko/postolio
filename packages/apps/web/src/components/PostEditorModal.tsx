@@ -5,6 +5,7 @@ import { useTimezone } from '../contexts/TimezoneContext';
 import { convertLocalToUTC } from '../lib/timezone';
 import { content as contentApi, type Content } from '../lib/api';
 import { ImageUploader } from './ImageUploader';
+import { VideoUploader } from './VideoUploader';
 import { PostCaptionEditor } from './PostCaptionEditor';
 import { PostHashtagEditor } from './PostHashtagEditor';
 import { PostScheduler } from './PostScheduler';
@@ -19,9 +20,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Save } from 'lucide-react';
+import { Save, Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PostEditorModalProps {
@@ -34,6 +36,8 @@ interface FormData {
   caption: string;
   hashtags: string[];
   imageUrl: string;
+  videoUrl?: string;
+  mediaType: 'image' | 'video';
   scheduledAt: string;
 }
 
@@ -44,6 +48,8 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
     caption: '',
     hashtags: [],
     imageUrl: '',
+    videoUrl: '',
+    mediaType: 'image',
     scheduledAt: '',
   });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -79,10 +85,16 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
   // Initialize form data when content changes
   useEffect(() => {
     if (content && isOpen) {
-      const initialData = {
+      // Determine media type from content
+      const hasVideo = !!(content as any).videoUrl;
+      const mediaType: 'video' | 'image' = hasVideo ? 'video' : 'image';
+
+      const initialData: FormData = {
         caption: content.caption || '',
         hashtags: (content.hashtags || []).map((t: string) => (t.startsWith('#') ? t.slice(1) : t)),
         imageUrl: content.imageUrl || '',
+        videoUrl: (content as any).videoUrl || '',
+        mediaType,
         scheduledAt: content.scheduledAt
           ? format(new Date(content.scheduledAt), "yyyy-MM-dd'T'HH:mm")
           : '',
@@ -102,6 +114,8 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
         caption: '',
         hashtags: [],
         imageUrl: '',
+        videoUrl: '',
+        mediaType: 'image',
         scheduledAt: '',
       });
       setLearningFeedback({ isVisible: false, message: '' });
@@ -344,6 +358,19 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
     }
   };
 
+  const handleVideoChange = (url: string) => {
+    // VideoUploader handles the upload internally and returns the CDN URL
+    const newData = { ...formData, videoUrl: url };
+    setFormData(newData);
+    checkForChanges(newData);
+  };
+
+  const handleMediaTypeChange = (newMediaType: 'image' | 'video') => {
+    const newData = { ...formData, mediaType: newMediaType };
+    setFormData(newData);
+    checkForChanges(newData);
+  };
+
   const handleScheduledAtChange = (value: string) => {
     console.log('Scheduled time changed:', {
       from: formData.scheduledAt,
@@ -403,15 +430,45 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
 
           <PostHashtagEditor hashtags={formData.hashtags} onChange={handleHashtagsChange} />
 
-          {/* Image Upload */}
+          {/* Media Upload - Tabs for Image/Video */}
           <div className="space-y-2">
-            <Label>Post Image</Label>
-            <ImageUploader
-              value={formData.imageUrl || content.imageUrl || undefined}
-              onChange={handleImageChange}
-              maxSizeInMB={10}
-              acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
-            />
+            <Label>Post Media</Label>
+            <Tabs
+              value={formData.mediaType}
+              onValueChange={(value) => handleMediaTypeChange(value as 'image' | 'video')}
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="image" className="flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  Image
+                </TabsTrigger>
+                <TabsTrigger value="video" className="flex items-center gap-2">
+                  <VideoIcon className="h-4 w-4" />
+                  Video
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="image" className="mt-4">
+                <ImageUploader
+                  value={formData.imageUrl || content.imageUrl || undefined}
+                  onChange={handleImageChange}
+                  maxSizeInMB={10}
+                  acceptedFormats={['image/jpeg', 'image/jpg', 'image/png', 'image/webp']}
+                />
+              </TabsContent>
+
+              <TabsContent value="video" className="mt-4">
+                {content?.brandId && (
+                  <VideoUploader
+                    value={formData.videoUrl}
+                    onChange={handleVideoChange}
+                    brandId={content.brandId}
+                    maxSizeInMB={300}
+                    acceptedFormats={['video/mp4', 'video/quicktime', 'video/mpeg']}
+                  />
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
 
           <PostScheduler

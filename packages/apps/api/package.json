@@ -25,6 +25,7 @@
     "@aws-sdk/client-ses": "^3.932.0",
     "@aws-sdk/credential-provider-node": "^3.932.0",
     "@aws-sdk/lib-dynamodb": "^3.932.0",
+    "@aws-sdk/s3-request-presigner": "^3.932.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.1.0",
     "@fastify/csrf-protection": "^7.1.0",
@@ -40,6 +41,7 @@
     "@postolio/logger": "workspace:*",
     "@postolio/service-parameters": "workspace:*",
     "@postolio/taxonomy": "workspace:*",
+    "@smithy/signature-v4": "^5.3.5",
     "@types/nodemailer": "^7.0.3",
     "@types/qrcode": "^1.5.6",
     "@types/speakeasy": "^2.0.10",
@@ -64,8 +66,7 @@
     "sharp": "^0.34.5",
     "speakeasy": "^2.0.0",
     "ws": "^8.18.3",
-    "zod": "^4.1.12",
-    "@smithy/signature-v4": "^5.3.5"
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@jest/globals": "^30.2.0",

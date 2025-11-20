@@ -107,6 +107,12 @@ model Content {
   primaryAssetCdnUrl String?       // Cached CDN URL for fast reads
   primaryAssetWidth  Int?
   primaryAssetHeight Int?
+  mediaType          String        @default("image") // 'image' | 'video' | 'reel' | 'carousel'
+  contentType        String        @default("post") // 'post' | 'reel' | 'story'
+  videoUrl           String?       // CDN URL for video content
+  videoDuration      Int?          // Duration in seconds (for videos/reels)
+  videoThumbnail     String?       // S3 key for video thumbnail
+  aspectRatio        String?       // e.g., "9:16", "16:9", "1:1", "4:5"
   brand              Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   campaign           Campaign?     @relation(fields: [campaignId], references: [id])
   mediaAssets        PostMediaAsset[]

@@ -64,7 +64,9 @@ export interface ScheduleRequest {
   userId: string;
   platform: string;
   scheduledAt: string;
-  contentType: string;
+  contentType?: string; // User-facing type: post/reel/story
+  mediaType?: string; // Media format: image/video/reel/carousel
+  videoUrl?: string; // Video CDN URL for video content
   caption?: string;
   hashtags?: string[];
   mediaKeys?: string[];
@@ -85,7 +87,9 @@ export interface Schedule {
   gsi1pk?: string;
   gsi1sk?: string;
   platform: string;
-  contentType: string;
+  contentType?: string; // User-facing type: post/reel/story
+  mediaType?: string; // Media format: image/video/reel/carousel
+  videoUrl?: string; // Video CDN URL for video content
   caption?: string;
   hashtags?: string[];
   mediaKeys?: string[];
@@ -158,6 +162,8 @@ export class ScheduleService {
         gsi1sk: request.scheduledAt,
         platform: request.platform,
         contentType: request.contentType,
+        mediaType: request.mediaType,
+        videoUrl: request.videoUrl,
         caption: request.caption,
         hashtags: request.hashtags || [],
         mediaKeys: request.mediaKeys || [],

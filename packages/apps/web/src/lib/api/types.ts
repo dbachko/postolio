@@ -28,6 +28,9 @@ export interface Content {
   primaryAssetCdnUrl?: string | null;
   primaryAssetWidth?: number | null;
   primaryAssetHeight?: number | null;
+  mediaType?: string | null;
+  contentType?: string | null;
+  videoUrl?: string | null;
   status: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
   scheduledAt: string | null;
   postedAt: string | null;

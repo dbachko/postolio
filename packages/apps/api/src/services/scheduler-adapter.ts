@@ -398,11 +398,13 @@ export class SchedulerAdapter {
             userId: userId || content.brand.userId,
             platform: 'instagram', // Default for now, could expand to other platforms
             scheduledAt: scheduledTimeUTC.toISOString(), // Lambda expects 'scheduledAt'
-            contentType: 'image', // Default to image, could be video/carousel/reel/story
+            contentType: (content.contentType || 'post') as 'post' | 'reel' | 'story', // User-facing type: post/reel/story
+            mediaType: (content.mediaType || 'image') as 'image' | 'video' | 'reel' | 'carousel', // Media format: image/video/reel
             // Store content details in scheduler's DynamoDB
             // When content is edited, EventBridge events will update this
             caption: content.caption || '',
             hashtags: content.hashtags || [],
+            videoUrl: content.videoUrl || undefined, // Video CDN URL for video content
             metadata: {
               timezone: brandTimezone,
               localTime: customTime ? customTime.toISOString() : undefined,

@@ -11,6 +11,10 @@ export class ContentClient {
     hashtags: string[];
     imageFile?: File;
     assetId?: string; // existing asset to attach instead of uploading a file
+    videoUrl?: string; // CDN URL for uploaded video
+    carouselImageUrls?: string[]; // Array of CDN URLs for carousel images
+    mediaType?: 'image' | 'video' | 'reel' | 'carousel';
+    contentType?: 'post' | 'reel' | 'story';
     campaignId?: string;
     scheduledAt?: string;
   }) {
@@ -21,6 +25,10 @@ export class ContentClient {
     };
     if (data.campaignId) body.campaignId = data.campaignId;
     if (data.scheduledAt) body.scheduledAt = data.scheduledAt;
+    if (data.mediaType) body.mediaType = data.mediaType;
+    if (data.contentType) body.contentType = data.contentType;
+    if (data.videoUrl) body.videoUrl = data.videoUrl;
+    if (data.carouselImageUrls) body.carouselImageUrls = data.carouselImageUrls;
     if (data.assetId && !data.imageFile) {
       // Prefer direct asset attach when provided (no upload)
       body.assetId = data.assetId;

@@ -22,7 +22,8 @@ export interface PublishRequest {
   hashtags: string[];
   imageUrl?: string;
   mediaUrl?: string;
-  mediaType?: 'image' | 'video' | 'carousel';
+  mediaType?: 'IMAGE' | 'VIDEO' | 'REELS' | 'CAROUSEL_ALBUM';
+  thumbOffset?: number; // Thumbnail offset in milliseconds (for videos)
   metadata?: Record<string, unknown>;
 }
 

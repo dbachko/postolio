@@ -26,6 +26,7 @@ import instagramOAuthRoutes from './routes/instagram-oauth.js';
 import { socialPlatformRoutes } from './routes/social-platform.js';
 import brandsRoutes from './routes/brands.js';
 import contentRoutes from './routes/content/index.js';
+import videoRoutes from './routes/video.js';
 import analyticsRoutes from './routes/analytics.js';
 import autopilotRoutes from './routes/autopilot.js';
 import campaignRoutes from './routes/campaign.js';
@@ -218,6 +219,7 @@ export function buildFastify(): FastifyInstance {
   app.register(socialPlatformRoutes);
   app.register(brandsRoutes, { prefix: '/api/brands' });
   app.register(contentRoutes, { prefix: '/api/content' });
+  app.register(videoRoutes, { prefix: '/api/video' });
   app.register(analyticsRoutes, { prefix: '/api/analytics' });
   app.register(autopilotRoutes, { prefix: '/api/autopilot' });
   // Mount campaigns at plural REST path

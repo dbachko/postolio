@@ -78,7 +78,8 @@ interface Schedule {
   userId?: string;
   caption?: string;
   hashtags?: string[];
-  contentType?: 'video' | 'image' | 'text' | string;
+  contentType?: 'post' | 'reel' | 'story' | string; // User-facing type
+  mediaType?: 'image' | 'video' | 'reel' | 'carousel' | string; // Media format
   imageUrl?: string;
   mediaKeys?: string[];
   videoUrl?: string;
@@ -196,7 +197,10 @@ class InstagramAdapter implements PlatformAdapter {
       }
 
       const formattedCaption = this.formatCaption(schedule.caption, schedule.hashtags);
-      const isVideo = (schedule.contentType || '').toLowerCase() === 'video';
+      // Use mediaType to determine media format (fallback to contentType for backward compatibility)
+      const mediaFormat = (schedule.mediaType || schedule.contentType || '').toLowerCase();
+      const isVideo = mediaFormat === 'video' || mediaFormat === 'reel';
+      const isReel = mediaFormat === 'reel';
 
       // Step 1: Create media container
       const createMediaUrl = `${API_BASE_URLS.FACEBOOK_GRAPH}/${API_VERSIONS.FACEBOOK_GRAPH}/${credentials.accountId}/media`;
@@ -206,6 +210,10 @@ class InstagramAdapter implements PlatformAdapter {
       });
       if (isVideo) {
         createMediaParams.set('video_url', mediaUrl);
+        // Set media_type to REELS if specified
+        if (isReel) {
+          createMediaParams.set('media_type', 'REELS');
+        }
       } else {
         createMediaParams.set('image_url', mediaUrl);
       }
@@ -213,7 +221,8 @@ class InstagramAdapter implements PlatformAdapter {
       logger.info('Creating Instagram media container', {
         accountId: credentials.accountId,
         hasMediaUrl: !!mediaUrl,
-        mediaKind: isVideo ? 'video' : 'image',
+        mediaKind: isReel ? 'reel' : isVideo ? 'video' : 'image',
+        contentType: schedule.contentType,
       });
 
       const createResponse = await fetch(`${createMediaUrl}?${createMediaParams}`, {

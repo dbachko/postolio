@@ -19,6 +19,10 @@ interface UpdateContentBody {
   contentId: string;
   caption?: string;
   hashtags?: string[];
+  imageUrl?: string;
+  videoUrl?: string;
+  mediaType?: 'image' | 'video' | 'reel';
+  contentType?: 'post' | 'reel' | 'story';
   scheduledAt?: string;
 }
 
@@ -32,7 +36,8 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
 
       const contentId = request.params.contentId;
-      const { caption, hashtags, scheduledAt } = request.body as Partial<UpdateContentBody>;
+      const { caption, hashtags, imageUrl, videoUrl, mediaType, contentType, scheduledAt } =
+        request.body as Partial<UpdateContentBody>;
 
       // Verify user owns the content and it's editable (not published)
       const authResult = await verifyContentEditable(userId, contentId);
@@ -74,6 +79,10 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       interface MutableContentUpdate {
         caption?: string;
         hashtags?: string[];
+        imageUrl?: string | null;
+        videoUrl?: string | null;
+        mediaType?: string;
+        contentType?: string;
         scheduledAt?: Date | null;
         status?: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
       }
@@ -96,6 +105,18 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (hashtags !== undefined) {
         updateData.hashtags = normalizeHashtags(hashtags);
+      }
+      if (imageUrl !== undefined) {
+        updateData.imageUrl = imageUrl || null;
+      }
+      if (videoUrl !== undefined) {
+        updateData.videoUrl = videoUrl || null;
+      }
+      if (mediaType !== undefined) {
+        updateData.mediaType = mediaType;
+      }
+      if (contentType !== undefined) {
+        updateData.contentType = contentType;
       }
       if (scheduledAt !== undefined) {
         updateData.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
@@ -247,6 +268,9 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
           createdAt: true,
           updatedAt: true,
           brandId: true,
+          mediaType: true,
+          contentType: true,
+          videoUrl: true,
         },
       });
 

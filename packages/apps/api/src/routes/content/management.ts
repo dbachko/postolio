@@ -28,6 +28,10 @@ interface CreateManualContentBody {
   caption: string;
   hashtags: string[];
   assetId?: string;
+  mediaType?: 'image' | 'video' | 'reel' | 'carousel';
+  contentType?: 'post' | 'reel' | 'story';
+  videoUrl?: string;
+  carouselImageUrls?: string[];
   campaignId?: string;
   scheduledAt?: string;
 }
@@ -46,11 +50,49 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const userId = request.user!.id;
 
-        const { brandId, caption, hashtags, assetId, campaignId, scheduledAt } = request.body;
+        const {
+          brandId,
+          caption,
+          hashtags,
+          assetId,
+          mediaType,
+          contentType,
+          videoUrl,
+          carouselImageUrls,
+          campaignId,
+          scheduledAt,
+        } = request.body;
 
         // Validate input
         if (!caption || caption.trim().length === 0) {
           return reply.code(400).send({ error: 'Caption is required' });
+        }
+
+        // Validate video-specific fields
+        if ((mediaType === 'video' || mediaType === 'reel') && !videoUrl && !assetId) {
+          return reply.code(400).send({
+            error: 'Video URL or asset ID is required for video/reel content',
+          });
+        }
+
+        // Validate image and carousel fields
+        if (mediaType === 'image' && carouselImageUrls && carouselImageUrls.length > 1) {
+          return reply.code(400).send({
+            error: 'Single image posts can only have 1 image. Use carousel for multiple images.',
+          });
+        }
+
+        if (mediaType === 'carousel') {
+          if (!carouselImageUrls || carouselImageUrls.length < 2) {
+            return reply.code(400).send({
+              error: 'Carousel requires at least 2 images',
+            });
+          }
+          if (carouselImageUrls.length > 10) {
+            return reply.code(400).send({
+              error: 'Maximum 10 images allowed for carousel',
+            });
+          }
         }
 
         if (caption.length > 2200) {
@@ -109,6 +151,9 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
               brandId,
               campaignId: resolvedCampaignId,
               scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+              mediaType: mediaType || 'image', // Default to image if not specified
+              contentType: contentType || 'post', // Default to post if not specified
+              videoUrl: videoUrl || null,
               generationParams: Prisma.JsonNull, // null indicates manual creation
             },
             select: {
@@ -123,6 +168,9 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
               brandId: true,
               generationParams: true,
               createdAt: true,
+              mediaType: true,
+              contentType: true,
+              videoUrl: true,
             },
           });
 
@@ -134,6 +182,32 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
               primaryAssetCdnUrl: resolvedAsset.url,
               primaryAssetWidth: resolvedAsset.width ?? null,
               primaryAssetHeight: resolvedAsset.height ?? null,
+            };
+          }
+
+          // Handle single image or carousel images from carouselImageUrls
+          if (
+            (mediaType === 'image' || mediaType === 'carousel') &&
+            carouselImageUrls &&
+            carouselImageUrls.length > 0
+          ) {
+            // Create PostMediaAsset records for each image
+            for (let i = 0; i < carouselImageUrls.length; i++) {
+              await tx.postMediaAsset.create({
+                data: {
+                  contentId: created.id,
+                  assetId: `image_${created.id}_${i}`, // Placeholder ID since these are direct URLs
+                  cdnUrl: carouselImageUrls[i],
+                  displayOrder: i,
+                  usageContext: i === 0 ? 'primary' : `carousel_${i}`,
+                },
+              });
+            }
+
+            // Set first image as primary
+            return {
+              ...created,
+              primaryAssetCdnUrl: carouselImageUrls[0],
             };
           }
 
