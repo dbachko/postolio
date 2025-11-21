@@ -53,6 +53,10 @@ const CSRF_SKIP_PATHS = [
   '/api/legal/account-recovery',
   '/api/legal/meta-deletion-callback',
 
+  // Assets proxy (CSRF handled by auth + same-site cookies; unblock uploads)
+  '/api/assets',
+  '/api/assets/upload-url',
+
   // External webhooks
   '/api/webhook',
 ];
