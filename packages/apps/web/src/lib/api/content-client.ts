@@ -1,4 +1,5 @@
 import type { HttpRequest } from '../http/http';
+import type { InstagramContentType, InstagramMediaType } from '@postolio/content-validation';
 import { assetsApi } from '@/features/assets/api/client';
 
 export class ContentClient {
@@ -13,8 +14,8 @@ export class ContentClient {
     assetId?: string; // existing asset to attach instead of uploading a file
     videoUrl?: string; // CDN URL for uploaded video
     carouselImageUrls?: string[]; // Array of CDN URLs for carousel images
-    mediaType?: 'image' | 'video' | 'reel' | 'carousel';
-    contentType?: 'post' | 'reel' | 'story';
+    mediaType?: InstagramMediaType;
+    contentType?: InstagramContentType;
     campaignId?: string;
     scheduledAt?: string;
   }) {

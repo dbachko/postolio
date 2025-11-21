@@ -12,6 +12,11 @@ import { buildContentResponse } from '../../services/content-response-builder.js
 import { normalizeHashtags } from '../../utils/hashtag-normalizer.js';
 import { verifyContentEditable } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
+import {
+  validateContentPayload,
+  type ContentType as ValidationContentType,
+  type MediaType as ValidationMediaType,
+} from '@postolio/content-validation';
 
 const prisma = getDatabaseClient();
 
@@ -21,8 +26,8 @@ interface UpdateContentBody {
   hashtags?: string[];
   imageUrl?: string;
   videoUrl?: string;
-  mediaType?: 'image' | 'video' | 'reel';
-  contentType?: 'post' | 'reel' | 'story';
+  mediaType?: ValidationMediaType;
+  contentType?: ValidationContentType;
   scheduledAt?: string;
 }
 
@@ -81,27 +86,46 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
         hashtags?: string[];
         primaryAssetCdnUrl?: string | null;
         videoUrl?: string | null;
-        mediaType?: string;
-        contentType?: string;
+        mediaType?: ValidationMediaType;
+        contentType?: ValidationContentType;
         scheduledAt?: Date | null;
         status?: 'draft' | 'scheduled' | 'published' | 'failed' | 'skipped';
       }
       const updateData: MutableContentUpdate = {};
+
+      const effectiveContentType = (contentType ||
+        content.contentType ||
+        'post') as ValidationContentType;
+      const effectiveMediaType = (mediaType || content.mediaType || 'image') as ValidationMediaType;
+      const effectiveCaption =
+        caption !== undefined
+          ? caption
+          : (content.caption ?? (effectiveContentType === 'story' ? '' : ''));
+      const effectiveHashtags =
+        hashtags !== undefined ? hashtags : Array.isArray(content.hashtags) ? content.hashtags : [];
+      const effectiveImage = imageUrl !== undefined ? imageUrl : content.primaryAssetCdnUrl || '';
+      const effectiveVideo = videoUrl !== undefined ? videoUrl : content.videoUrl || undefined;
+      const mediaKeys = [effectiveImage].filter(Boolean);
+
+      const validation = validateContentPayload({
+        platform: 'instagram',
+        contentType: effectiveContentType,
+        mediaType: effectiveMediaType,
+        caption: effectiveCaption,
+        hashtags: effectiveHashtags,
+        mediaKeys,
+        videoUrl: effectiveVideo || undefined,
+      });
+
+      if (!validation.ok) {
+        return reply.code(400).send({
+          error: validation.errors[0]?.message || 'Invalid content payload',
+          details: validation.errors,
+        });
+      }
+
       if (caption !== undefined) {
-        // Strict validation: caption must be a non-empty string
-        if (!caption || typeof caption !== 'string' || caption.trim().length === 0) {
-          console.error(
-            'CRITICAL: Attempt to update content with invalid caption',
-            JSON.stringify({
-              contentId,
-              caption,
-              captionType: typeof caption,
-              captionLength: typeof caption === 'string' ? caption.length : 0,
-            })
-          );
-          return reply.code(400).send({ error: 'Caption cannot be empty or invalid' });
-        }
-        updateData.caption = caption.trim(); // Ensure we store trimmed caption
+        updateData.caption = effectiveCaption.trim();
       }
       if (hashtags !== undefined) {
         updateData.hashtags = normalizeHashtags(hashtags);

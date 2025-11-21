@@ -3,7 +3,18 @@
  * Handles chunked multipart uploads for large video files
  */
 
+import { CSRFTokenManager } from '@postolio/csrf-client';
+
 const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks (matches backend)
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '';
+
+const csrf = new CSRFTokenManager({
+  apiEndpoint: `${API_BASE_URL}/api/csrf-token`,
+  storage: 'session',
+  bufferMs: 60_000,
+  maxRetries: 3,
+  retryDelayMs: 1_000,
+});
 
 export interface VideoUploadUrlResponse {
   uploadId: string;
@@ -26,6 +37,51 @@ export interface UploadProgress {
   percentage: number;
 }
 
+async function csrfFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const headers: Record<string, string> = {
+    ...(init.headers as Record<string, string>),
+  };
+
+  const method = (init.method || 'GET').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const token = await csrf.ensureToken();
+    if (token) headers['csrf-token'] = token;
+  }
+
+  const exec = () =>
+    fetch(input, {
+      ...init,
+      headers,
+      credentials: 'include',
+    });
+
+  const response = await exec();
+
+  if (response.status === 403) {
+    let data: any = null;
+    try {
+      data = await response.clone().json();
+    } catch {
+      // ignore parse errors for retry logic
+    }
+    const code = data?.code;
+    if (
+      code === 'CSRF_TOKEN_MISSING' ||
+      code === 'CSRF_TOKEN_INVALID' ||
+      code === 'CSRF_VALIDATION_FAILED'
+    ) {
+      csrf.clearToken();
+      const newToken = await csrf.fetchToken();
+      if (newToken) {
+        headers['csrf-token'] = newToken;
+        return fetch(input, { ...init, headers, credentials: 'include' });
+      }
+    }
+  }
+
+  return response;
+}
+
 export class VideoUploadClient {
   /**
    * Initiate multipart upload
@@ -35,10 +91,9 @@ export class VideoUploadClient {
     brandId: string,
     apiBaseUrl = '/api'
   ): Promise<VideoUploadUrlResponse> {
-    const response = await fetch(`${apiBaseUrl}/video/upload-url`, {
+    const response = await csrfFetch(`${apiBaseUrl}/video/upload-url`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({
         fileName: file.name,
         fileSize: file.size,
@@ -115,10 +170,9 @@ export class VideoUploadClient {
     parts: Array<{ ETag: string; PartNumber: number }>,
     apiBaseUrl = '/api'
   ): Promise<VideoUploadCompleteResponse> {
-    const response = await fetch(`${apiBaseUrl}/video/upload-complete`, {
+    const response = await csrfFetch(`${apiBaseUrl}/video/upload-complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ uploadId, key, parts }),
     });
 
@@ -134,10 +188,9 @@ export class VideoUploadClient {
    * Abort multipart upload
    */
   static async abortUpload(uploadId: string, key: string, apiBaseUrl = '/api'): Promise<void> {
-    await fetch(`${apiBaseUrl}/video/upload-abort`, {
+    await csrfFetch(`${apiBaseUrl}/video/upload-abort`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ uploadId, key }),
     });
   }

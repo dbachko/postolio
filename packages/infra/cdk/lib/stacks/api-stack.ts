@@ -196,6 +196,8 @@ export class ApiStack extends cdk.Stack {
     }
 
     // Import security groups and database secret from Foundation stack (runtime values)
+    // NOTE: The shared ECS security group is used by internal services (incl. Assets API ALB)
+    // and must be attached to the API service tasks to allow east-west calls.
     let ecsSecurityGroup: ec2.ISecurityGroup | undefined;
     let databaseSecurityGroup: ec2.ISecurityGroup | undefined;
     let cacheSecurityGroup: ec2.ISecurityGroup | undefined;
@@ -204,7 +206,8 @@ export class ApiStack extends cdk.Stack {
     let redisEndpointParam: ssm.IStringParameter | undefined;
     let redisPortParam: ssm.IStringParameter | undefined;
 
-    if (hasFoundationVpc) {
+    // Always try to import the shared ECS security group; if it is missing we continue gracefully.
+    try {
       const ecsSecurityGroupId = ssm.StringParameter.valueForStringParameter(
         this,
         `/postolio/${environment}/security-groups/ecs`
@@ -213,9 +216,16 @@ export class ApiStack extends cdk.Stack {
       ecsSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
         this,
         'EcsSecurityGroup',
-        ecsSecurityGroupId
+        ecsSecurityGroupId,
+        { mutable: false }
       );
+    } catch (error) {
+      console.warn(
+        `Shared ECS security group parameter not found for environment ${environment}; continuing without attaching it to the API service.`
+      );
+    }
 
+    if (hasFoundationVpc) {
       const databaseSecurityGroupId = ssm.StringParameter.valueForStringParameter(
         this,
         `/postolio/${environment}/database/security-group-id`
@@ -609,6 +619,23 @@ export class ApiStack extends cdk.Stack {
     // Connect the ECS service to the Foundation security group if available
     if (ecsSecurityGroup) {
       this.apiService.service.connections.addSecurityGroup(ecsSecurityGroup);
+
+      // Ensure the shared ECS security group is explicitly attached at the CFN level
+      // so the task ENIs actually carry both the service SG and the shared ECS SG.
+      const serviceSecurityGroupIds = this.apiService.service.connections.securityGroups.map(
+        (sg) => sg.securityGroupId
+      );
+      const sharedGroupId = ecsSecurityGroup.securityGroupId;
+      const hasSharedSg = serviceSecurityGroupIds.some((id) => id === sharedGroupId);
+      if (!hasSharedSg) {
+        serviceSecurityGroupIds.push(sharedGroupId);
+      }
+
+      const cfnService = this.apiService.service.node.defaultChild as ecs.CfnService;
+      cfnService.addPropertyOverride(
+        'NetworkConfiguration.AwsvpcConfiguration.SecurityGroups',
+        serviceSecurityGroupIds
+      );
     }
 
     // Grant the API service security group access to the database

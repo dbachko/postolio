@@ -1,9 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useTimezone } from '../contexts/TimezoneContext';
 import { convertLocalToUTC } from '../lib/timezone';
 import { content as contentApi, type Content } from '../lib/api';
+import {
+  validateContentPayload,
+  type InstagramContentType,
+  type InstagramMediaType,
+} from '@postolio/content-validation';
 import { ImageUploader } from './ImageUploader';
 import { VideoUploader } from './VideoUploader';
 import { PostCaptionEditor } from './PostCaptionEditor';
@@ -37,7 +42,7 @@ interface FormData {
   hashtags: string[];
   imageUrl: string;
   videoUrl?: string;
-  mediaType: 'image' | 'video';
+  mediaType: InstagramMediaType;
   scheduledAt: string;
 }
 
@@ -87,7 +92,7 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
     if (content && isOpen) {
       // Determine media type from content
       const hasVideo = !!(content as any).videoUrl;
-      const mediaType: 'video' | 'image' = hasVideo ? 'video' : 'image';
+      const mediaType: InstagramMediaType = hasVideo ? 'video' : 'image';
 
       const initialData: FormData = {
         caption: content.caption || '',
@@ -245,9 +250,8 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
   const saveChanges = async () => {
     if (!content || !hasChanges) return;
 
-    // Safety check: Never save with empty caption
-    if (!formData.caption || formData.caption.trim().length === 0) {
-      console.error('Cannot save with empty caption');
+    if (!validation.ok) {
+      toast.error(validationError || 'Please fix validation errors before saving');
       return;
     }
 
@@ -357,6 +361,30 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
       }
     }
   };
+
+  const validation = useMemo(() => {
+    if (!content) return { ok: true, errors: [] as any[] };
+    const mediaKeys: string[] = [];
+    if (formData.imageUrl) mediaKeys.push(formData.imageUrl);
+    return validateContentPayload({
+      platform: 'instagram',
+      contentType: (content.contentType as InstagramContentType) || 'post',
+      mediaType: formData.mediaType,
+      caption: formData.caption,
+      hashtags: formData.hashtags,
+      mediaKeys,
+      videoUrl: formData.videoUrl || undefined,
+    });
+  }, [
+    content,
+    formData.caption,
+    formData.hashtags,
+    formData.imageUrl,
+    formData.mediaType,
+    formData.videoUrl,
+  ]);
+
+  const validationError = validation.ok ? null : validation.errors[0]?.message;
 
   const handleVideoChange = (url: string) => {
     // VideoUploader handles the upload internally and returns the CDN URL
@@ -484,10 +512,15 @@ export function PostEditorModal({ content, isOpen, onClose }: PostEditorModalPro
           />
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          {!validation.ok && (
+            <p className="text-destructive text-sm">
+              {validationError || 'Please fix validation errors before saving.'}
+            </p>
+          )}
           <Button
             onClick={saveChanges}
-            disabled={!hasChanges || updateContentMutation.isPending}
+            disabled={!hasChanges || updateContentMutation.isPending || !validation.ok}
             className="flex items-center gap-2"
           >
             <Save className="h-4 w-4" />

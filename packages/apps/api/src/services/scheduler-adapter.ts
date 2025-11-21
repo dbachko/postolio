@@ -19,6 +19,11 @@ import type { GenerationParams } from '../types/scheduler.js';
 import { eventEmitter } from './event-emitter.js';
 import { logger } from '@postolio/logger';
 import { getMaxScheduledAheadForTier } from '../constants/subscription.js';
+import {
+  validateContentPayload,
+  type InstagramContentType,
+  type InstagramMediaType,
+} from '@postolio/content-validation';
 // We now pass S3 object keys directly to Scheduler; CDN URLs no longer required
 
 const prisma = getDatabaseClient();
@@ -376,24 +381,47 @@ export class SchedulerAdapter {
         });
       } else {
         try {
-          // Enforce presence of media key for image content
+          const normalizedMediaType = (content.mediaType || 'image') as InstagramMediaType;
+          const normalizedContentType = (content.contentType || 'post') as InstagramContentType;
+          // Enforce presence of media key for image/carousel content
+          const requiresImageAsset =
+            normalizedMediaType === 'image' || normalizedMediaType === 'carousel';
           if (
-            (!content.primaryAssetCdnUrl || content.primaryAssetCdnUrl.length === 0) &&
-            'image' === 'image'
+            requiresImageAsset &&
+            (!content.primaryAssetCdnUrl || content.primaryAssetCdnUrl.length === 0)
           ) {
             return {
               success: false,
               error: 'Missing asset for scheduling. Please re-upload or regenerate the image.',
             };
           }
+
+          const mediaKey = normalizeMediaKey(content.primaryAssetCdnUrl);
+          const validation = validateContentPayload({
+            platform: 'instagram',
+            contentType: normalizedContentType,
+            mediaType: normalizedMediaType,
+            caption: normalizedContentType === 'story' ? '' : content.caption,
+            hashtags: normalizedContentType === 'story' ? [] : content.hashtags,
+            mediaKeys: mediaKey ? [mediaKey] : [],
+            videoUrl: content.videoUrl || undefined,
+          });
+
+          if (!validation.ok) {
+            return {
+              success: false,
+              error: validation.errors[0]?.message || 'Invalid content payload for scheduling',
+            };
+          }
+
           const schedulePayload: CreateScheduleInput = {
             contentId: content.id,
             brandId: content.brandId,
             userId: userId || content.brand.userId,
             platform: 'instagram', // Default for now, could expand to other platforms
             scheduledAt: scheduledTimeUTC.toISOString(), // Lambda expects 'scheduledAt'
-            contentType: (content.contentType || 'post') as 'post' | 'reel' | 'story', // User-facing type: post/reel/story
-            mediaType: (content.mediaType || 'image') as 'image' | 'video' | 'reel' | 'carousel', // Media format: image/video/reel
+            contentType: normalizedContentType, // User-facing type: post/reel/story
+            mediaType: normalizedMediaType, // Media format: image/video/reel
             // Store content details in scheduler's DynamoDB
             // When content is edited, EventBridge events will update this
             caption: content.caption || '',
@@ -406,7 +434,6 @@ export class SchedulerAdapter {
             },
             ...(content.campaignId ? { campaignId: content.campaignId } : {}),
           };
-          const mediaKey = normalizeMediaKey(content.primaryAssetCdnUrl);
           if (mediaKey) {
             schedulePayload.mediaKeys = [mediaKey];
           }

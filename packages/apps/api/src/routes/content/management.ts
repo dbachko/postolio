@@ -20,6 +20,11 @@ import {
   verifyCampaignAccess,
 } from '../../services/content-operations/authorization.js';
 import { getDatabaseClient } from '../../config/database.js';
+import {
+  validateContentPayload,
+  type ContentType as ValidationContentType,
+  type MediaType as ValidationMediaType,
+} from '@postolio/content-validation';
 
 const prisma = getDatabaseClient();
 
@@ -28,8 +33,8 @@ interface CreateManualContentBody {
   caption: string;
   hashtags: string[];
   assetId?: string;
-  mediaType?: 'image' | 'video' | 'reel' | 'carousel';
-  contentType?: 'post' | 'reel' | 'story';
+  mediaType?: ValidationMediaType;
+  contentType?: ValidationContentType;
   videoUrl?: string;
   carouselImageUrls?: string[];
   campaignId?: string;
@@ -63,50 +68,29 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           scheduledAt,
         } = request.body;
 
-        // Validate input
-        if (!caption || caption.trim().length === 0) {
-          return reply.code(400).send({ error: 'Caption is required' });
-        }
+        const normalizedContentType: ValidationContentType = contentType ?? 'post';
+        const normalizedMediaType: ValidationMediaType = mediaType ?? 'image';
 
-        // Validate video-specific fields
-        if ((mediaType === 'video' || mediaType === 'reel') && !videoUrl && !assetId) {
+        // Unified platform validation (Instagram defaults)
+        const validation = validateContentPayload({
+          platform: 'instagram',
+          contentType: normalizedContentType,
+          mediaType: normalizedMediaType,
+          caption,
+          hashtags,
+          videoUrl,
+          mediaKeys: [...(carouselImageUrls || []), ...(assetId ? [assetId] : [])],
+        });
+
+        if (!validation.ok) {
           return reply.code(400).send({
-            error: 'Video URL or asset ID is required for video/reel content',
-          });
-        }
-
-        // Validate image and carousel fields
-        if (mediaType === 'image' && carouselImageUrls && carouselImageUrls.length > 1) {
-          return reply.code(400).send({
-            error: 'Single image posts can only have 1 image. Use carousel for multiple images.',
-          });
-        }
-
-        if (mediaType === 'carousel') {
-          if (!carouselImageUrls || carouselImageUrls.length < 2) {
-            return reply.code(400).send({
-              error: 'Carousel requires at least 2 images',
-            });
-          }
-          if (carouselImageUrls.length > 10) {
-            return reply.code(400).send({
-              error: 'Maximum 10 images allowed for carousel',
-            });
-          }
-        }
-
-        if (caption.length > 2200) {
-          return reply.code(400).send({
-            error: 'Caption exceeds Instagram limit of 2200 characters',
+            error: validation.errors[0]?.message || 'Invalid content',
+            details: validation.errors,
           });
         }
 
         if (!Array.isArray(hashtags)) {
           return reply.code(400).send({ error: 'Hashtags must be an array' });
-        }
-
-        if (hashtags.length > 30) {
-          return reply.code(400).send({ error: 'Maximum 30 hashtags allowed' });
         }
 
         // Normalize hashtags (strip # symbols for consistency)

@@ -43,6 +43,7 @@ COPY --from=pruner /app/out/full/ ./
 RUN mkdir -p \
   packages/libs/database/.turbo \
   packages/libs/errors/.turbo \
+  packages/libs/content-validation/.turbo \
   packages/libs/logger/.turbo \
   packages/libs/service-parameters/.turbo \
   packages/libs/connectors/.turbo \

@@ -46,6 +46,11 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { normalizeHashtags, stripHashtagPrefixes } from '@/utils/hashtags';
 import { cn } from '@/lib/utils';
 import { AppEmptyState } from '@/components/AppEmptyState';
+import {
+  validateContentPayload,
+  type InstagramContentType,
+  type InstagramMediaType,
+} from '@postolio/content-validation';
 
 interface PostDetailData {
   id: string;
@@ -144,16 +149,45 @@ export function PostSidebar({
     imageUrl: '',
     videoUrl: '',
     carouselImageUrls: [] as string[],
-    contentType: 'post' as 'post' | 'reel' | 'story',
-    mediaType: 'image' as 'image' | 'video' | 'carousel',
+    contentType: 'post' as InstagramContentType,
+    mediaType: 'image' as InstagramMediaType,
     scheduledAt: '',
   });
   const [hasChanges, setHasChanges] = useState(false);
   const formInitializedRef = useRef(false);
-  const isStoryContent = formData.contentType === 'story';
-  const captionRequired = !isStoryContent;
-  const hasCaption = Boolean(formData.caption?.trim());
   const hasScheduleTime = Boolean(formData.scheduledAt);
+
+  const finalMediaType = useMemo<InstagramMediaType>(() => {
+    if (formData.contentType === 'reel') return 'reel';
+    return formData.mediaType;
+  }, [formData.contentType, formData.mediaType]);
+
+  const validation = useMemo(() => {
+    const isStory = formData.contentType === 'story';
+    const mediaKeys: string[] = [];
+    if (formData.carouselImageUrls?.length) mediaKeys.push(...formData.carouselImageUrls);
+    if (formData.imageUrl) mediaKeys.push(formData.imageUrl);
+
+    return validateContentPayload({
+      platform: 'instagram',
+      contentType: formData.contentType,
+      mediaType: finalMediaType,
+      caption: isStory ? '' : formData.caption,
+      hashtags: isStory ? [] : formData.hashtags,
+      mediaKeys,
+      videoUrl: formData.videoUrl || undefined,
+    });
+  }, [
+    finalMediaType,
+    formData.caption,
+    formData.carouselImageUrls,
+    formData.contentType,
+    formData.hashtags,
+    formData.imageUrl,
+    formData.videoUrl,
+  ]);
+
+  const validationError = validation.ok ? null : validation.errors[0]?.message;
 
   // Initialize form from post
   useEffect(() => {
@@ -164,8 +198,8 @@ export function PostSidebar({
       imageUrl: post.imageUrl || '',
       videoUrl: post.videoUrl || '',
       carouselImageUrls: [], // TODO: Load from post.mediaAssets
-      contentType: (post.contentType as 'post' | 'reel' | 'story') || 'post',
-      mediaType: (post.mediaType as 'image' | 'video' | 'carousel') || 'image',
+      contentType: (post.contentType as InstagramContentType) || 'post',
+      mediaType: (post.mediaType as InstagramMediaType) || 'image',
       scheduledAt: formatScheduledInput(post.scheduledAt),
     });
     setSelectedCampaign(post.campaign?.id || post.campaignId || null);
@@ -253,11 +287,6 @@ export function PostSidebar({
       const hashtagArray = Array.from(new Set(normalizeHashtags(formData.hashtags)));
 
       // Determine final mediaType based on contentType
-      let finalMediaType: 'image' | 'video' | 'reel' | 'carousel' = formData.mediaType;
-      if (formData.contentType === 'reel') {
-        finalMediaType = 'reel';
-      }
-
       // Stories don't support captions or hashtags per Instagram API
       const isStory = formData.contentType === 'story';
 
@@ -338,12 +367,8 @@ export function PostSidebar({
   const handleSaveChanges = () => {
     if (!id || !hasChanges) return;
 
-    // Stories don't support captions or hashtags per Instagram API
-    const isStory = formData.contentType === 'story';
-
-    const trimmedCaption = formData.caption?.trim() || '';
-    if (!isStory && trimmedCaption.length === 0) {
-      toast.error('Caption cannot be empty');
+    if (!validation.ok) {
+      toast.error(validationError || 'Please fix validation errors before saving');
       return;
     }
 
@@ -353,8 +378,11 @@ export function PostSidebar({
 
     mutateContent({
       contentId: id,
-      caption: isStory ? '' : trimmedCaption,
-      hashtags: isStory ? [] : normalizeHashtags(formData.hashtags),
+      caption: formData.contentType === 'story' ? '' : (formData.caption || '').trim(),
+      hashtags:
+        formData.contentType === 'story'
+          ? []
+          : normalizeHashtags(Array.from(new Set(formData.hashtags))),
       imageUrl: formData.imageUrl || undefined,
       campaignId: selectedCampaign || null,
       ...(scheduledAtPayload ? { scheduledAt: scheduledAtPayload } : {}),
@@ -530,7 +558,7 @@ export function PostSidebar({
                     onValueChange={(value) =>
                       setFormData((s) => ({
                         ...s,
-                        contentType: value as 'post' | 'reel' | 'story',
+                        contentType: value as InstagramContentType,
                         // Reset mediaType to video if reel is selected
                         mediaType: value === 'reel' ? 'video' : s.mediaType,
                       }))
@@ -731,11 +759,16 @@ export function PostSidebar({
                 {/* Action Buttons */}
                 <div className="space-y-3 pt-4">
                   <Separator />
+                  {!validation.ok && (
+                    <p className="text-destructive text-sm">
+                      {validationError || 'Please fix validation errors before continuing.'}
+                    </p>
+                  )}
                   <div className="flex justify-end gap-2">
                     <Button
                       variant="outline"
                       onClick={() => createPost('draft')}
-                      disabled={isCreatingPost || (captionRequired && !hasCaption)}
+                      disabled={isCreatingPost || !validation.ok}
                     >
                       {isCreatingPost ? (
                         <>
@@ -751,9 +784,7 @@ export function PostSidebar({
                     </Button>
                     <Button
                       onClick={() => createPost('schedule')}
-                      disabled={
-                        isCreatingPost || (captionRequired && !hasCaption) || !hasScheduleTime
-                      }
+                      disabled={isCreatingPost || !validation.ok || !hasScheduleTime}
                     >
                       {isCreatingPost ? (
                         <>
@@ -885,7 +916,15 @@ export function PostSidebar({
               <div className="space-y-3 pt-4">
                 <Separator />
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-                  <Button onClick={handleSaveChanges} disabled={!hasChanges || isSaving}>
+                  {!validation.ok && (
+                    <p className="text-destructive text-sm">
+                      {validationError || 'Please fix validation errors before continuing.'}
+                    </p>
+                  )}
+                  <Button
+                    onClick={handleSaveChanges}
+                    disabled={!hasChanges || isSaving || !validation.ok}
+                  >
                     {isSaving ? (
                       <>
                         <Save className="mr-2 h-4 w-4 animate-pulse" />
@@ -901,9 +940,7 @@ export function PostSidebar({
                   {canScheduleExisting && (
                     <Button
                       onClick={() => schedulePost()}
-                      disabled={
-                        isScheduling || (captionRequired && !hasCaption) || !hasScheduleTime
-                      }
+                      disabled={isScheduling || !validation.ok || !hasScheduleTime}
                     >
                       {isScheduling ? (
                         <>
