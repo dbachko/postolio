@@ -1,7 +1,11 @@
+import { createHttp, createHttpMethods } from '@/lib/http/http';
+
 // Assets API client for the web app; routed through main API
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
-  ? `${import.meta.env.VITE_API_BASE_URL}/api/assets`
-  : '/api/assets';
+const API_BASE_URL = '/api/assets';
+
+// Reuse the shared HTTP client so CSRF/timezone/auth interceptors run consistently
+const http = createHttp();
+const { get: httpGet, post: httpPost, del: httpDelete } = createHttpMethods(http);
 
 export interface Asset {
   id: string;
@@ -51,14 +55,7 @@ export const assetsApi = {
     fileType: 'image' | 'video';
     fileSize: number;
   }): Promise<UploadUrlResponse> {
-    const response = await fetch(`${API_BASE_URL}/upload-url`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error('Failed to get upload URL');
-    return response.json();
+    return httpPost(`${API_BASE_URL}/upload-url`, data);
   },
 
   // Upload file to S3
@@ -87,14 +84,7 @@ export const assetsApi = {
     tags?: string[];
     folderId?: string;
   }): Promise<{ asset: Asset; message: string }> {
-    const response = await fetch(`${API_BASE_URL}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error('Failed to create asset');
-    return response.json();
+    return httpPost(`${API_BASE_URL}`, data);
   },
 
   // List assets
@@ -116,20 +106,12 @@ export const assetsApi = {
     if (params.folderId) queryParams.set('folderId', params.folderId);
     if (params.tags) params.tags.forEach((t) => queryParams.append('tags', t));
 
-    const response = await fetch(`${API_BASE_URL}?${queryParams}`, {
-      credentials: 'include',
-    });
-    if (!response.ok) throw new Error('Failed to fetch assets');
-    return response.json();
+    return httpGet(`${API_BASE_URL}?${queryParams.toString()}`);
   },
 
   // Get single asset
   async getAsset(id: string): Promise<{ asset: Asset }> {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
-      credentials: 'include',
-    });
-    if (!response.ok) throw new Error('Failed to fetch asset');
-    return response.json();
+    return httpGet(`${API_BASE_URL}/${id}`);
   },
 
   // Update asset
@@ -151,24 +133,15 @@ export const assetsApi = {
       duration?: number;
     }
   ): Promise<{ asset: Asset; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
+    return http(`${API_BASE_URL}/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to update asset');
-    return response.json();
   },
 
   // Delete asset (soft delete)
   async deleteAsset(id: string): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    if (!response.ok) throw new Error('Failed to delete asset');
-    return response.json();
+    return httpDelete(`${API_BASE_URL}/${id}`);
   },
 };
 
