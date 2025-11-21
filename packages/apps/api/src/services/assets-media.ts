@@ -31,7 +31,7 @@ let cachedClient: AssetsServiceClient | null = null;
 
 const assetsLogger = baseLogger.child({ module: 'assets-media' });
 
-function getAssetsClient(): AssetsServiceClient {
+export function getAssetsClient(): AssetsServiceClient {
   if (!cachedClient) {
     cachedClient = new AssetsServiceClient({
       baseUrl: config.ASSETS_API_BASE_URL,

@@ -246,6 +246,13 @@ export class AssetsServiceClient {
     return result.asset;
   }
 
+  async getBatchAssets(assetIds: string[]): Promise<(AssetRecord | null)[]> {
+    const result = await this.post<{ assets: (AssetRecord | null)[] }>('/assets/batch', {
+      assetIds,
+    });
+    return result.assets;
+  }
+
   async listAssets(params: ListAssetsParams): Promise<ListAssetsResponse> {
     const query = new URLSearchParams();
     query.set('brandId', params.brandId);

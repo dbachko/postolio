@@ -12,7 +12,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { VideoUploader } from '@/components/VideoUploader';
-import { MultiImageUploader } from '@/components/MultiImageUploader';
+import { MultiImageUploader, type AssetReference } from '@/components/MultiImageUploader';
 import { PostCaptionEditor } from '@/components/PostCaptionEditor';
 import { PostHashtagEditor } from '@/components/PostHashtagEditor';
 import { PostScheduler } from '@/components/PostScheduler';
@@ -148,7 +148,7 @@ export function PostSidebar({
     hashtags: [] as string[],
     imageUrl: '',
     videoUrl: '',
-    carouselImageUrls: [] as string[],
+    carouselAssets: [] as AssetReference[],
     contentType: 'post' as InstagramContentType,
     mediaType: 'image' as InstagramMediaType,
     scheduledAt: '',
@@ -165,7 +165,8 @@ export function PostSidebar({
   const validation = useMemo(() => {
     const isStory = formData.contentType === 'story';
     const mediaKeys: string[] = [];
-    if (formData.carouselImageUrls?.length) mediaKeys.push(...formData.carouselImageUrls);
+    if (formData.carouselAssets?.length)
+      mediaKeys.push(...formData.carouselAssets.map((a) => a.url));
     if (formData.imageUrl) mediaKeys.push(formData.imageUrl);
 
     return validateContentPayload({
@@ -180,7 +181,7 @@ export function PostSidebar({
   }, [
     finalMediaType,
     formData.caption,
-    formData.carouselImageUrls,
+    formData.carouselAssets,
     formData.contentType,
     formData.hashtags,
     formData.imageUrl,
@@ -197,7 +198,7 @@ export function PostSidebar({
       hashtags: stripHashtagPrefixes(post.hashtags || []),
       imageUrl: post.imageUrl || '',
       videoUrl: post.videoUrl || '',
-      carouselImageUrls: [], // TODO: Load from post.mediaAssets
+      carouselAssets: [], // TODO: Load from post.mediaAssets
       contentType: (post.contentType as InstagramContentType) || 'post',
       mediaType: (post.mediaType as InstagramMediaType) || 'image',
       scheduledAt: formatScheduledInput(post.scheduledAt),
@@ -295,8 +296,8 @@ export function PostSidebar({
         caption: isStory ? '' : formData.caption.trim(),
         hashtags: isStory ? [] : hashtagArray,
         videoUrl: formData.videoUrl || undefined,
-        carouselImageUrls:
-          formData.carouselImageUrls.length > 0 ? formData.carouselImageUrls : undefined,
+        carouselAssetIds:
+          formData.carouselAssets.length > 0 ? formData.carouselAssets.map((a) => a.id) : undefined,
         mediaType: finalMediaType,
         contentType: formData.contentType,
         campaignId: selectedCampaign || undefined,
@@ -632,8 +633,8 @@ export function PostSidebar({
                         setFormData((s) => ({
                           ...s,
                           mediaType: value as 'image' | 'video',
-                          // Clear carousel images when switching to video
-                          carouselImageUrls: value === 'video' ? [] : s.carouselImageUrls,
+                          // Clear carousel assets when switching to video
+                          carouselAssets: value === 'video' ? [] : s.carouselAssets,
                         }))
                       }
                     >
@@ -652,13 +653,13 @@ export function PostSidebar({
                         {selectedBrand?.id && (
                           <>
                             <MultiImageUploader
-                              value={formData.carouselImageUrls}
-                              onChange={(urls) => {
+                              value={formData.carouselAssets}
+                              onChange={(assets) => {
                                 // Auto-detect mediaType based on image count
-                                const mediaType = urls.length >= 2 ? 'carousel' : 'image';
+                                const mediaType = assets.length >= 2 ? 'carousel' : 'image';
                                 setFormData((s) => ({
                                   ...s,
-                                  carouselImageUrls: urls,
+                                  carouselAssets: assets,
                                   mediaType,
                                 }));
                               }}

@@ -4,9 +4,14 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { assetsApi } from '@/features/assets/api/client';
 
+export interface AssetReference {
+  id: string; // Asset ID from Assets database
+  url: string; // CDN URL
+}
+
 interface MultiImageUploaderProps {
-  value: string[]; // Array of CDN URLs
-  onChange: (urls: string[]) => void;
+  value: AssetReference[]; // Array of asset references
+  onChange: (assets: AssetReference[]) => void;
   brandId: string;
   className?: string;
   maxImages?: number;
@@ -14,6 +19,7 @@ interface MultiImageUploaderProps {
 }
 
 interface ImageItem {
+  id?: string; // Asset ID (only set after successful upload)
   url: string;
   file?: File;
   uploading?: boolean;
@@ -27,7 +33,9 @@ export function MultiImageUploader({
   maxImages = 10,
   maxSizeInMB = 10,
 }: MultiImageUploaderProps) {
-  const [images, setImages] = useState<ImageItem[]>(value.map((url) => ({ url })));
+  const [images, setImages] = useState<ImageItem[]>(
+    value.map((asset) => ({ id: asset.id, url: asset.url }))
+  );
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -87,19 +95,20 @@ export function MultiImageUploader({
           fileType: 'image',
         });
 
+        const assetId = asset.asset.id;
         const cdnUrl = asset.asset.url;
 
-        // Update the image with the CDN URL
+        // Update the image with the asset ID and CDN URL
         setImages((prev) => {
           const updated = [...prev];
           const imageIndex = images.length + index;
           if (updated[imageIndex]) {
-            updated[imageIndex] = { url: cdnUrl, uploading: false };
+            updated[imageIndex] = { id: assetId, url: cdnUrl, uploading: false };
           }
           return updated;
         });
 
-        return cdnUrl;
+        return { id: assetId, url: cdnUrl };
       } catch (error) {
         console.error('Failed to upload image:', error);
         // Remove failed upload
@@ -108,21 +117,29 @@ export function MultiImageUploader({
       }
     });
 
-    const uploadedUrls = await Promise.all(uploadPromises);
-    const successfulUrls = uploadedUrls.filter((url): url is string => url !== null);
+    const uploadedAssets = await Promise.all(uploadPromises);
+    const successfulAssets = uploadedAssets.filter(
+      (asset): asset is AssetReference => asset !== null
+    );
 
-    // Update parent with all CDN URLs (existing + new)
-    const allUrls = [
-      ...images.filter((img) => !img.uploading).map((img) => img.url),
-      ...successfulUrls,
+    // Update parent with all asset references (existing + new)
+    const allAssets = [
+      ...images
+        .filter((img) => !img.uploading && img.id)
+        .map((img) => ({ id: img.id!, url: img.url })),
+      ...successfulAssets,
     ];
-    onChange(allUrls);
+    onChange(allAssets);
   };
 
   const handleRemove = (index: number) => {
     const newImages = images.filter((_, i) => i !== index);
     setImages(newImages);
-    onChange(newImages.filter((img) => !img.uploading).map((img) => img.url));
+    onChange(
+      newImages
+        .filter((img) => !img.uploading && img.id)
+        .map((img) => ({ id: img.id!, url: img.url }))
+    );
   };
 
   const handleDragStart = (index: number) => {
@@ -144,7 +161,9 @@ export function MultiImageUploader({
 
   const handleDragEnd = () => {
     setDraggedIndex(null);
-    onChange(images.filter((img) => !img.uploading).map((img) => img.url));
+    onChange(
+      images.filter((img) => !img.uploading && img.id).map((img) => ({ id: img.id!, url: img.url }))
+    );
   };
 
   return (

@@ -11,7 +11,11 @@ import {
   buildContentResponse,
   buildContentListResponse,
 } from '../../services/content-response-builder.js';
-import { attachAssetToContent, verifyAssetOwnership } from '../../services/assets-media.js';
+import {
+  attachAssetToContent,
+  verifyAssetOwnership,
+  getAssetsClient,
+} from '../../services/assets-media.js';
 import { normalizeHashtags } from '../../utils/hashtag-normalizer.js';
 import {
   verifyBrandOwnership,
@@ -36,7 +40,8 @@ interface CreateManualContentBody {
   mediaType?: ValidationMediaType;
   contentType?: ValidationContentType;
   videoUrl?: string;
-  carouselImageUrls?: string[];
+  carouselImageUrls?: string[]; // DEPRECATED: Use carouselAssetIds
+  carouselAssetIds?: string[]; // Asset IDs from Assets database
   campaignId?: string;
   scheduledAt?: string;
 }
@@ -64,6 +69,7 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
           contentType,
           videoUrl,
           carouselImageUrls,
+          carouselAssetIds,
           campaignId,
           scheduledAt,
         } = request.body;
@@ -125,7 +131,70 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
 
         const resolvedCampaignId = campaignId || null;
 
-        // Create content record
+        // Fetch and verify carousel assets BEFORE starting transaction
+        let resolvedCarouselAssets: Array<{
+          id: string;
+          url: string;
+          brandId: string;
+          width: number | null;
+          height: number | null;
+        }> | null = null;
+
+        if (
+          (mediaType === 'image' || mediaType === 'carousel') &&
+          carouselAssetIds &&
+          carouselAssetIds.length > 0
+        ) {
+          const assetsClient = getAssetsClient();
+
+          try {
+            // Fetch all assets in a single batch request
+            const assets = await assetsClient.getBatchAssets(carouselAssetIds);
+
+            // Verify all assets exist
+            const missingAssets = assets
+              .map((asset, idx) => (!asset ? carouselAssetIds[idx] : null))
+              .filter(Boolean);
+
+            if (missingAssets.length > 0) {
+              return reply
+                .code(404)
+                .send({ error: `Assets not found: ${missingAssets.join(', ')}` });
+            }
+
+            // At this point, all assets are guaranteed to be non-null (verified above)
+            const validAssets = assets as NonNullable<(typeof assets)[number]>[];
+
+            // Verify all assets belong to the same brand as the content
+            const firstAsset = validAssets[0];
+            await verifyAssetOwnership(firstAsset.id, brandId);
+
+            // Verify all other assets belong to the same brand
+            const invalidAssets = validAssets.filter(
+              (asset) => asset.brandId !== firstAsset.brandId
+            );
+            if (invalidAssets.length > 0) {
+              return reply
+                .code(400)
+                .send({ error: 'All carousel assets must belong to the same brand' });
+            }
+
+            resolvedCarouselAssets = validAssets.map((asset) => ({
+              id: asset.id,
+              url: asset.url,
+              brandId: asset.brandId,
+              width: asset.width ?? null,
+              height: asset.height ?? null,
+            }));
+          } catch (error) {
+            request.log.error(error);
+            return reply
+              .code(400)
+              .send({ error: 'Failed to fetch carousel assets. Please try again.' });
+          }
+        }
+
+        // Create content record (now transaction only contains DB operations)
         const content = await prisma.$transaction(async (tx) => {
           const created = await tx.content.create({
             data: {
@@ -169,7 +238,46 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
             };
           }
 
-          // Handle single image or carousel images from carouselImageUrls
+          // Handle carousel images (using pre-fetched assets)
+          if (resolvedCarouselAssets && resolvedCarouselAssets.length > 0) {
+            const firstAsset = resolvedCarouselAssets[0];
+
+            // Create PostMediaAsset records for each asset
+            for (let i = 0; i < resolvedCarouselAssets.length; i++) {
+              const asset = resolvedCarouselAssets[i];
+              await tx.postMediaAsset.create({
+                data: {
+                  contentId: created.id,
+                  assetId: asset.id,
+                  cdnUrl: asset.url,
+                  displayOrder: i,
+                  usageContext: i === 0 ? 'primary' : `carousel_${i}`,
+                },
+              });
+            }
+
+            // Update Content record with primary asset reference
+            await tx.content.update({
+              where: { id: created.id },
+              data: {
+                primaryAssetId: firstAsset.id,
+                primaryAssetCdnUrl: firstAsset.url,
+                primaryAssetWidth: firstAsset.width,
+                primaryAssetHeight: firstAsset.height,
+              },
+            });
+
+            // Return with primary asset info
+            return {
+              ...created,
+              primaryAssetId: firstAsset.id,
+              primaryAssetCdnUrl: firstAsset.url,
+              primaryAssetWidth: firstAsset.width,
+              primaryAssetHeight: firstAsset.height,
+            };
+          }
+
+          // Fallback: Handle legacy carouselImageUrls (deprecated)
           if (
             (mediaType === 'image' || mediaType === 'carousel') &&
             carouselImageUrls &&
@@ -180,13 +288,21 @@ const managementRoutes: FastifyPluginAsync = async (fastify) => {
               await tx.postMediaAsset.create({
                 data: {
                   contentId: created.id,
-                  assetId: `image_${created.id}_${i}`, // Placeholder ID since these are direct URLs
+                  assetId: `legacy_${created.id}_${i}`, // Placeholder ID since these are direct URLs
                   cdnUrl: carouselImageUrls[i],
                   displayOrder: i,
                   usageContext: i === 0 ? 'primary' : `carousel_${i}`,
                 },
               });
             }
+
+            // Update the Content record to set the primary image URL in the database
+            await tx.content.update({
+              where: { id: created.id },
+              data: {
+                primaryAssetCdnUrl: carouselImageUrls[0],
+              },
+            });
 
             // Set first image as primary
             return {

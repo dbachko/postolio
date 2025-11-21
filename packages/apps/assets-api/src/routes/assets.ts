@@ -299,6 +299,65 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // Get multiple assets by IDs (batch)
+  fastify.post(
+    '/assets/batch',
+    { preHandler: [fastify.authenticateService] },
+    async (request, reply) => {
+      const body = request.body as { assetIds: string[] };
+
+      try {
+        // Validate input
+        if (!body.assetIds || !Array.isArray(body.assetIds)) {
+          return reply.code(400).send({ error: 'assetIds must be an array' });
+        }
+
+        if (body.assetIds.length === 0) {
+          return { assets: [] };
+        }
+
+        // Limit batch size to prevent abuse
+        if (body.assetIds.length > 50) {
+          return reply.code(400).send({ error: 'Maximum 50 assets per batch request' });
+        }
+
+        // Fetch all assets in a single query
+        const assets = await prismaAssets.asset.findMany({
+          where: {
+            id: { in: body.assetIds },
+            deletedAt: null,
+          },
+          include: {
+            folder: true,
+            campaignAssets: true,
+          },
+        });
+
+        // Map to include CDN URLs and maintain order
+        const assetMap = new Map(
+          assets.map((asset) => [
+            asset.id,
+            {
+              ...asset,
+              url: getAssetUrl(asset.s3Key),
+              thumbnailUrl: asset.thumbnailKey ? getAssetUrl(asset.thumbnailKey) : null,
+            },
+          ])
+        );
+
+        // Return assets in the same order as requested, with null for missing
+        const orderedAssets = body.assetIds.map((id) => assetMap.get(id) || null);
+
+        return { assets: orderedAssets };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({
+          error: error instanceof Error ? error.message : 'Failed to fetch assets',
+        });
+      }
+    }
+  );
+
   // Update asset metadata
   fastify.patch(
     '/assets/:id',
