@@ -1,11 +1,10 @@
 /**
  * Video Upload Client
- * Handles chunked multipart uploads for large video files
+ * Proxies uploads through the API, which delegates to the assets service
  */
 
 import { CSRFTokenManager } from '@postolio/csrf-client';
 
-const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks (matches backend)
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '';
 
 const csrf = new CSRFTokenManager({
@@ -17,16 +16,18 @@ const csrf = new CSRFTokenManager({
 });
 
 export interface VideoUploadUrlResponse {
-  uploadId: string;
-  key: string;
-  presignedUrls: Array<{ partNumber: number; url: string }>;
-  partCount: number;
+  uploadUrl: string;
+  s3Key: string;
+  expiresIn?: number;
+  message?: string;
 }
 
 export interface VideoUploadCompleteResponse {
   success: boolean;
   cdnUrl: string;
   key: string;
+  assetId?: string;
+  message?: string;
 }
 
 export interface UploadProgress {
@@ -84,7 +85,7 @@ async function csrfFetch(input: RequestInfo | URL, init: RequestInit = {}) {
 
 export class VideoUploadClient {
   /**
-   * Initiate multipart upload
+   * Initiate upload (via assets service)
    */
   static async initiateUpload(
     file: File,
@@ -97,130 +98,146 @@ export class VideoUploadClient {
       body: JSON.stringify({
         fileName: file.name,
         fileSize: file.size,
-        contentType: file.type,
+        contentType: file.type || 'video/mp4',
         brandId,
       }),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to initiate upload');
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.error || 'Failed to initiate upload');
     }
 
     return response.json();
   }
 
   /**
-   * Upload file in chunks using presigned URLs
+   * Upload file to presigned URL with progress updates
    */
-  static async uploadChunks(
+  static async uploadFile(
     file: File,
     uploadInfo: VideoUploadUrlResponse,
     onProgress?: (progress: UploadProgress) => void
-  ): Promise<Array<{ ETag: string; PartNumber: number }>> {
-    const parts: Array<{ ETag: string; PartNumber: number }> = [];
-    let uploadedBytes = 0;
+  ): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadInfo.uploadUrl);
+      xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
 
-    for (const { partNumber, url } of uploadInfo.presignedUrls) {
-      const start = (partNumber - 1) * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      const chunk = file.slice(start, end);
-
-      const response = await fetch(url, {
-        method: 'PUT',
-        body: chunk,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to upload part ${partNumber}`);
-      }
-
-      const etag = response.headers.get('ETag');
-      if (!etag) {
-        throw new Error(`No ETag returned for part ${partNumber}`);
-      }
-
-      parts.push({
-        ETag: etag.replace(/"/g, ''), // Remove quotes from ETag
-        PartNumber: partNumber,
-      });
-
-      uploadedBytes += chunk.size;
-
-      if (onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (!onProgress || !event.lengthComputable) return;
+        const uploadedBytes = event.loaded;
+        const totalBytes = event.total || file.size;
         onProgress({
           uploadedBytes,
-          totalBytes: file.size,
-          uploadedParts: partNumber,
-          totalParts: uploadInfo.partCount,
-          percentage: Math.round((uploadedBytes / file.size) * 100),
+          totalBytes,
+          uploadedParts: 1,
+          totalParts: 1,
+          percentage: Math.round((uploadedBytes / totalBytes) * 100),
         });
-      }
-    }
+      };
 
-    return parts;
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          if (onProgress) {
+            onProgress({
+              uploadedBytes: file.size,
+              totalBytes: file.size,
+              uploadedParts: 1,
+              totalParts: 1,
+              percentage: 100,
+            });
+          }
+          resolve();
+        } else {
+          reject(new Error(`Upload failed with status ${xhr.status}`));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Network error while uploading video'));
+      xhr.send(file);
+    });
   }
 
   /**
-   * Complete multipart upload
+   * Complete upload by creating the asset record
    */
   static async completeUpload(
-    uploadId: string,
-    key: string,
-    parts: Array<{ ETag: string; PartNumber: number }>,
+    params: {
+      brandId: string;
+      fileName: string;
+      fileSize: number;
+      mimeType: string;
+      s3Key: string;
+      durationSeconds?: number | null;
+    },
     apiBaseUrl = '/api'
   ): Promise<VideoUploadCompleteResponse> {
     const response = await csrfFetch(`${apiBaseUrl}/video/upload-complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uploadId, key, parts }),
+      body: JSON.stringify({
+        brandId: params.brandId,
+        fileName: params.fileName,
+        fileSize: params.fileSize,
+        mimeType: params.mimeType || 'video/mp4',
+        s3Key: params.s3Key,
+        duration: params.durationSeconds ?? undefined,
+      }),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to complete upload');
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.error || 'Failed to complete upload');
     }
 
     return response.json();
   }
 
   /**
-   * Abort multipart upload
+   * Abort upload (best-effort; single PUT uploads cannot be cancelled server-side)
    */
-  static async abortUpload(uploadId: string, key: string, apiBaseUrl = '/api'): Promise<void> {
+  static async abortUpload(_uploadId: string, _key: string, apiBaseUrl = '/api'): Promise<void> {
     await csrfFetch(`${apiBaseUrl}/video/upload-abort`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uploadId, key }),
+      body: JSON.stringify({}),
     });
   }
 
   /**
    * Upload video file with progress tracking
-   * Complete upload flow: initiate → upload chunks → complete
+   * Complete upload flow: initiate → upload file → complete
    */
   static async uploadVideo(
     file: File,
     brandId: string,
-    onProgress?: (progress: UploadProgress) => void
-  ): Promise<{ cdnUrl: string; key: string }> {
+    onProgress?: (progress: UploadProgress) => void,
+    options?: { durationSeconds?: number | null }
+  ): Promise<{ cdnUrl: string; key: string; assetId?: string }> {
     let uploadInfo: VideoUploadUrlResponse | null = null;
 
     try {
-      // Initiate multipart upload
       uploadInfo = await this.initiateUpload(file, brandId);
 
-      // Upload all chunks
-      const parts = await this.uploadChunks(file, uploadInfo, onProgress);
+      await this.uploadFile(file, uploadInfo, onProgress);
 
-      // Complete the upload
-      const result = await this.completeUpload(uploadInfo.uploadId, uploadInfo.key, parts);
+      const result = await this.completeUpload(
+        {
+          brandId,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type || 'video/mp4',
+          s3Key: uploadInfo.s3Key,
+          durationSeconds: options?.durationSeconds,
+        },
+        '/api'
+      );
 
-      return { cdnUrl: result.cdnUrl, key: result.key };
+      return { cdnUrl: result.cdnUrl, key: result.key, assetId: result.assetId };
     } catch (error) {
-      // Abort upload on error
       if (uploadInfo) {
-        await this.abortUpload(uploadInfo.uploadId, uploadInfo.key).catch(console.error);
+        await this.abortUpload('', uploadInfo.s3Key).catch(() => undefined);
       }
       throw error;
     }

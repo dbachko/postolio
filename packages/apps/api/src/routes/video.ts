@@ -1,35 +1,26 @@
 /**
  * Video Upload Routes
- * Handles multipart video uploads to S3
+ * Proxies uploads through the assets service (no direct S3 from the API)
  */
 
 import { FastifyPluginAsync } from 'fastify';
-import {
-  S3Client,
-  CreateMultipartUploadCommand,
-  CompleteMultipartUploadCommand,
-  AbortMultipartUploadCommand,
-  UploadPartCommand,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { randomUUID, randomBytes } from 'crypto';
+import { AssetsServiceClient } from '@postolio/assets-client';
 import { getDatabaseClient } from '../config/database.js';
+import { config } from '../config/env-validation.js';
+import { formatError } from '../utils/logging.js';
 
 const prisma = getDatabaseClient();
 
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
+const assetsClient = new AssetsServiceClient({
+  baseUrl: config.ASSETS_API_BASE_URL,
+  serviceToken: config.ASSETS_API_SERVICE_TOKEN,
 });
 
-const ASSETS_BUCKET = process.env.ASSETS_BUCKET || 'postolio-assets-dev';
-const ASSETS_CDN_DOMAIN = process.env.ASSETS_CDN_DOMAIN;
 const MAX_VIDEO_SIZE = 300 * 1024 * 1024; // 300MB (Instagram limit)
-const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
 
 const videoRoutes: FastifyPluginAsync = async (fastify) => {
   /**
-   * Initiate multipart upload
-   * Returns uploadId and presigned URLs for each part
+   * Initiate upload via the assets service
    */
   fastify.post<{
     Body: {
@@ -43,78 +34,45 @@ const videoRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id;
       const { fileName, fileSize, contentType, brandId } = request.body;
 
-      // Validate file size
-      if (fileSize > MAX_VIDEO_SIZE) {
-        return reply.code(400).send({
-          error: `File too large. Maximum size is ${MAX_VIDEO_SIZE / (1024 * 1024)}MB`,
-        });
+      if (!fileName || !brandId || fileSize == null || !contentType) {
+        return reply.code(400).send({ error: 'Missing required fields' });
       }
 
-      // Validate content type
       if (!contentType.startsWith('video/')) {
         return reply.code(400).send({
           error: 'Invalid content type. Must be a video file.',
         });
       }
 
-      // Verify user owns the brand
-      const brand = await prisma.brand.findFirst({
+      if (fileSize > MAX_VIDEO_SIZE) {
+        return reply.code(400).send({
+          error: `File too large. Maximum size is ${MAX_VIDEO_SIZE / (1024 * 1024)}MB`,
+        });
+      }
+
+      const ownsBrand = await prisma.brand.findFirst({
         where: { id: brandId, userId },
+        select: { id: true },
       });
 
-      if (!brand) {
+      if (!ownsBrand) {
         return reply.code(404).send({ error: 'Brand not found' });
       }
 
-      // Generate unique key for video
-      const contentId = randomUUID();
-      const hash = randomBytes(4).toString('hex');
-      const ext = fileName.split('.').pop() || 'mp4';
-      const key = `videos/${brandId}/${contentId}-${hash}.${ext}`;
-
-      // Calculate number of parts
-      const partCount = Math.ceil(fileSize / CHUNK_SIZE);
-
-      // Create multipart upload
-      const createCommand = new CreateMultipartUploadCommand({
-        Bucket: ASSETS_BUCKET,
-        Key: key,
-        ContentType: contentType,
+      const uploadData = await assetsClient.getUploadUrl({
+        brandId,
+        fileName,
+        contentType,
+        fileType: 'video',
+        fileSize,
       });
-
-      const { UploadId } = await s3Client.send(createCommand);
-
-      if (!UploadId) {
-        return reply.code(500).send({ error: 'Failed to initiate upload' });
-      }
-
-      // Generate presigned URLs for each part
-      const presignedUrls = await Promise.all(
-        Array.from({ length: partCount }, async (_, i) => {
-          const partNumber = i + 1;
-          const command = new UploadPartCommand({
-            Bucket: ASSETS_BUCKET,
-            Key: key,
-            UploadId,
-            PartNumber: partNumber,
-          });
-
-          const url = await getSignedUrl(s3Client, command, {
-            expiresIn: 3600, // 1 hour
-          });
-
-          return { partNumber, url };
-        })
-      );
 
       return reply.send({
-        uploadId: UploadId,
-        key,
-        presignedUrls,
-        partCount,
+        ...uploadData,
+        strategy: 'assets-service',
       });
     } catch (error) {
-      fastify.log.error({ error }, 'Video upload initiation error');
+      request.log.error(formatError(error), 'Video upload initiation error');
       return reply.code(500).send({
         error: 'Failed to initiate video upload',
       });
@@ -122,52 +80,56 @@ const videoRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   /**
-   * Complete multipart upload
-   * Finalizes the upload and returns CDN URL
+   * Complete upload by creating asset metadata in the assets service
    */
   fastify.post<{
     Body: {
-      uploadId: string;
-      key: string;
-      parts: Array<{ ETag: string; PartNumber: number }>;
+      brandId: string;
+      fileName: string;
+      fileSize: number;
+      mimeType: string;
+      s3Key: string;
+      duration?: number;
     };
   }>('/upload-complete', { preHandler: fastify.authenticate }, async (request, reply) => {
     try {
-      const { uploadId, key, parts } = request.body;
+      const userId = request.user!.id;
+      const { brandId, fileName, fileSize, mimeType, s3Key, duration } = request.body;
 
-      if (!uploadId || !key || !parts || parts.length === 0) {
+      if (!brandId || !fileName || !mimeType || !s3Key || fileSize == null) {
         return reply.code(400).send({ error: 'Missing required fields' });
       }
 
-      // Complete the multipart upload
-      const completeCommand = new CompleteMultipartUploadCommand({
-        Bucket: ASSETS_BUCKET,
-        Key: key,
-        UploadId: uploadId,
-        MultipartUpload: {
-          Parts: parts
-            .sort((a, b) => a.PartNumber - b.PartNumber)
-            .map((part) => ({
-              ETag: part.ETag,
-              PartNumber: part.PartNumber,
-            })),
-        },
+      const ownsBrand = await prisma.brand.findFirst({
+        where: { id: brandId, userId },
+        select: { id: true },
       });
 
-      await s3Client.send(completeCommand);
+      if (!ownsBrand) {
+        return reply.code(404).send({ error: 'Brand not found' });
+      }
 
-      // Generate CDN URL
-      const cdnUrl = ASSETS_CDN_DOMAIN
-        ? `https://${ASSETS_CDN_DOMAIN}/${key}`
-        : `https://${ASSETS_BUCKET}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${key}`;
+      const result = await assetsClient.createAsset({
+        brandId,
+        fileName,
+        s3Key,
+        fileSize,
+        mimeType,
+        fileType: 'video',
+        uploadedBy: userId,
+        duration,
+      });
 
       return reply.send({
         success: true,
-        cdnUrl,
-        key,
+        cdnUrl: result.asset.url,
+        key: result.asset.s3Key,
+        assetId: result.asset.id,
+        message: result.message,
+        strategy: 'assets-service',
       });
     } catch (error) {
-      fastify.log.error({ error }, 'Video upload completion error');
+      request.log.error(formatError(error), 'Video upload completion error');
       return reply.code(500).send({
         error: 'Failed to complete video upload',
       });
@@ -175,37 +137,18 @@ const videoRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   /**
-   * Abort multipart upload
-   * Cleans up partial upload
+   * Abort upload — no-op for single PUT uploads handled by the assets service
    */
   fastify.post<{
     Body: {
-      uploadId: string;
-      key: string;
+      uploadId?: string;
+      key?: string;
     };
-  }>('/upload-abort', { preHandler: fastify.authenticate }, async (request, reply) => {
-    try {
-      const { uploadId, key } = request.body;
-
-      if (!uploadId || !key) {
-        return reply.code(400).send({ error: 'Missing required fields' });
-      }
-
-      const abortCommand = new AbortMultipartUploadCommand({
-        Bucket: ASSETS_BUCKET,
-        Key: key,
-        UploadId: uploadId,
-      });
-
-      await s3Client.send(abortCommand);
-
-      return reply.send({ success: true });
-    } catch (error) {
-      fastify.log.error({ error }, 'Video upload abort error');
-      return reply.code(500).send({
-        error: 'Failed to abort video upload',
-      });
-    }
+  }>('/upload-abort', { preHandler: fastify.authenticate }, async (_request, reply) => {
+    return reply.send({
+      success: true,
+      message: 'Uploads are handled by the assets service; no multipart session to abort.',
+    });
   });
 };
 
