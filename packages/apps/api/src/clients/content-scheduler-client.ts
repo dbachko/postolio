@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { aws4Interceptor } from 'aws4-axios';
 import * as https from 'https';
 import CircuitBreaker from 'opossum';
@@ -883,6 +883,9 @@ export class ContentSchedulerClient {
     // Request interceptor for adding custom headers and distributed tracing
     this.client.interceptors.request.use(
       (config) => {
+        config.headers = config.headers || {};
+        const headers = config.headers as Record<string, unknown>;
+
         // Reuse meta id if created earlier; otherwise generate
         const meta = (config as RequestWithMeta).__meta || {
           id: this.generateRequestId(),
@@ -892,22 +895,23 @@ export class ContentSchedulerClient {
         const requestId = meta.id;
 
         // Add request ID for tracing
-        config.headers['X-Request-ID'] = requestId;
+        headers['X-Request-ID'] = requestId;
 
         // Add timestamp
-        config.headers['X-Request-Timestamp'] = new Date().toISOString();
+        headers['X-Request-Timestamp'] = new Date().toISOString();
 
         // Add distributed tracing headers (AWS X-Ray compatible)
-        config.headers['X-Amzn-Trace-Id'] =
+        headers['X-Amzn-Trace-Id'] =
           `Root=1-${Math.floor(Date.now() / 1000).toString(16)}-${requestId.replace(/-/g, '').substring(0, 24)}`;
 
         // Add caller context for better debugging
-        config.headers['X-Caller-Service'] = 'postolio-backend';
-        config.headers['X-Caller-Version'] = process.env.APP_VERSION || '1.0.0';
+        headers['X-Caller-Service'] = 'postolio-backend';
+        headers['X-Caller-Version'] = process.env.APP_VERSION || '1.0.0';
 
-        // Add user context if available
-        if (this.config.userId) {
-          config.headers['X-User-Context'] = this.config.userId;
+        // Add user context if available (required for IAM-authenticated scheduler)
+        const userContext = this.resolveUserContext(config);
+        if (userContext) {
+          headers['X-User-Context'] = userContext;
         }
 
         if (this.debug) {
@@ -917,7 +921,7 @@ export class ContentSchedulerClient {
           );
 
           // Log Authorization header to verify SigV4 signing
-          const hasAuth = !!(config.headers['Authorization'] || config.headers['authorization']);
+          const hasAuth = !!(headers['Authorization'] || headers['authorization']);
           if (!hasAuth && (config.method || 'get').toUpperCase() !== 'OPTIONS') {
             this.log('warn', 'scheduler.auth.no_authorization_header', {
               url: config.url,
@@ -1051,6 +1055,40 @@ export class ContentSchedulerClient {
         });
       }
     });
+  }
+
+  /**
+   * Resolve end-user context for IAM-authenticated scheduler calls.
+   * Falls back to payload/params when config.userId is not set.
+   */
+  private resolveUserContext(config: AxiosRequestConfig): string | undefined {
+    const headers = (config.headers || {}) as Record<string, unknown>;
+    const headerUser =
+      (headers['X-User-Context'] as string | undefined) ||
+      (headers['x-user-context'] as string | undefined) ||
+      (headers['X-User-Id'] as string | undefined) ||
+      (headers['x-user-id'] as string | undefined) ||
+      (headers['User-Id'] as string | undefined) ||
+      (headers['user-id'] as string | undefined);
+    if (headerUser && headerUser.trim()) {
+      return headerUser.trim();
+    }
+
+    const payload = config.data as Record<string, unknown> | undefined;
+    const payloadUser = payload?.userId;
+    if (typeof payloadUser === 'string' && payloadUser.trim()) {
+      return payloadUser.trim();
+    }
+
+    const paramsUser =
+      config.params && typeof (config.params as { userId?: unknown }).userId === 'string'
+        ? ((config.params as { userId?: string }).userId as string)
+        : undefined;
+    if (paramsUser && paramsUser.trim()) {
+      return paramsUser.trim();
+    }
+
+    return this.config.userId?.trim();
   }
 
   /**

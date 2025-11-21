@@ -183,6 +183,8 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
       // For new scheduling (wasn't scheduled, now is), perform AWS scheduling BEFORE DB update to avoid inconsistent state
       // Skip AWS operations if content belongs to a draft campaign
       let scheduledInAwsBeforeUpdate = false;
+      let newScheduleFailed = false;
+      let newScheduleError: string | undefined;
       let planLimitHit = false;
       let planLimitMessage: string | undefined;
       if (!isInDraftCampaign && !originalScheduledTime && newScheduledTime) {
@@ -205,15 +207,19 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
               planLimitHit = true;
               planLimitMessage = scheduleResult.error;
             }
-            // Degrade gracefully: continue with DB update so user sees scheduled time
-            // Adapter already records schedulingError in DB when possible
+            newScheduleFailed = true;
+            newScheduleError = scheduleResult.error || 'Scheduling failed';
           } else {
             scheduledInAwsBeforeUpdate = true;
             console.log(`AWS new schedule created for content ${contentId}`);
           }
         } catch (preScheduleError) {
           console.error('Error during AWS new schedule (pre-DB update):', preScheduleError);
-          // Degrade gracefully: continue with DB update
+          newScheduleFailed = true;
+          newScheduleError =
+            preScheduleError instanceof Error
+              ? preScheduleError.message
+              : 'Scheduling failed unexpectedly';
         }
       }
 
@@ -275,6 +281,34 @@ const updatesRoutes: FastifyPluginAsync = async (fastify) => {
             data: null,
           });
         }
+      }
+
+      if (newScheduleFailed) {
+        const message =
+          planLimitHit && planLimitMessage
+            ? planLimitMessage
+            : newScheduleError || 'Failed to schedule content';
+        const status = planLimitHit ? 402 : 500;
+
+        // Persist failure state so UI shows failed instead of scheduled/draft ambiguity
+        try {
+          await prisma.content.update({
+            where: { id: contentId },
+            data: {
+              status: 'failed',
+              scheduledAt: null,
+              schedulingError: message,
+            },
+          });
+        } catch (persistError) {
+          console.error('Failed to persist scheduling failure state', persistError);
+        }
+
+        return reply.code(status).send({
+          success: false,
+          error: message,
+          data: null,
+        });
       }
 
       // Only update local DB after AWS operations succeed (or if no AWS operation needed)
