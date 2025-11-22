@@ -77,7 +77,7 @@ export class CampaignEventHandler {
       // Re-throw to trigger DLQ processing
       throw error;
     } finally {
-      metrics.publishStoredMetrics();
+      this.flushMetrics();
     }
   }
 
@@ -269,6 +269,19 @@ export class CampaignEventHandler {
         healthy: false,
         details: `Health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
+    }
+  }
+
+  /**
+   * Publish metrics only when present to avoid Powertools warnings
+   */
+  private flushMetrics(): void {
+    if (metrics.hasStoredMetrics()) {
+      metrics.publishStoredMetrics();
+    } else {
+      metrics.clearMetrics();
+      metrics.clearDimensions();
+      metrics.clearMetadata();
     }
   }
 }

@@ -8,7 +8,6 @@ vi.mock('../utils/auth', async (importOriginal) => {
   return {
     ...actual,
     verifyToken: vi.fn().mockResolvedValue({ userId: 'user-012', email: 'test@example.com' }),
-    verifyBrandOwnership: vi.fn().mockResolvedValue(true),
     authenticateRequest: vi.fn().mockReturnValue({ userId: 'user-012', email: 'test@example.com' }),
   };
 });
@@ -181,8 +180,8 @@ describe('HttpHandler', () => {
 
       const mockSchedules = {
         schedules: [
-          { scheduleId: 'test-1', brandId: 'brand-789' },
-          { scheduleId: 'test-2', brandId: 'brand-789' },
+          { scheduleId: 'test-1', brandId: 'brand-789', userId: 'user-012' },
+          { scheduleId: 'test-2', brandId: 'brand-789', userId: 'user-012' },
         ],
         nextToken: undefined,
       };

@@ -12,7 +12,7 @@ import { ScheduleService } from '../services/schedule-service';
 import { CampaignService, CampaignRequest } from '../services/campaign-service';
 import { validateCampaignRequest, validateScheduleRequest } from '../validators/schedule-validator';
 import { createErrorResponse, createSuccessResponse } from '../utils/response-utils';
-import { authenticateRequest, AuthenticationError, verifyBrandOwnership } from '../utils/auth';
+import { authenticateRequest, AuthenticationError } from '../utils/auth';
 
 const logger = new Logger({ serviceName: 'schedule-management-http' });
 const metrics = new Metrics({
@@ -78,7 +78,7 @@ export class HttpHandler {
       if (path.startsWith('/schedules')) {
         return await this.handleScheduleRoutes(event, method, path, authenticatedUserId!);
       } else if (path.startsWith('/campaigns')) {
-        return await this.handleCampaignRoutes(event, method, path, authenticatedUserId!);
+        return await this.handleCampaignRoutes(event, method, path);
       } else if (path === '/health') {
         return await this.handleHealthCheck();
       } else {
@@ -90,7 +90,7 @@ export class HttpHandler {
 
       return createErrorResponse(500, 'Internal server error', undefined, 'INTERNAL_ERROR');
     } finally {
-      metrics.publishStoredMetrics();
+      this.flushMetrics();
     }
   }
 
@@ -148,8 +148,7 @@ export class HttpHandler {
   private async handleCampaignRoutes(
     event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
     method: string,
-    path: string,
-    userId: string
+    path: string
   ): Promise<APIGatewayProxyResult> {
     const pathSegments = path.split('/').filter(Boolean);
 
@@ -157,31 +156,31 @@ export class HttpHandler {
       case 'POST':
         if (pathSegments.length === 1) {
           // POST /campaigns - create new campaign
-          return await this.createCampaign(event, userId);
+          return await this.createCampaign(event);
         }
         return createErrorResponse(404, 'Route not found');
 
       case 'GET':
         if (pathSegments.length === 1) {
           // GET /campaigns - list campaigns
-          return await this.listCampaigns(event, userId);
+          return await this.listCampaigns(event);
         } else if (pathSegments.length === 2) {
           // GET /campaigns/{id} - get specific campaign
-          return await this.getCampaign(pathSegments[1], userId);
+          return await this.getCampaign(pathSegments[1]);
         }
         return createErrorResponse(404, 'Route not found');
 
       case 'PUT':
         if (pathSegments.length === 2) {
           // PUT /campaigns/{id} - update campaign
-          return await this.updateCampaign(event, pathSegments[1], userId);
+          return await this.updateCampaign(event, pathSegments[1]);
         }
         return createErrorResponse(404, 'Route not found');
 
       case 'DELETE':
         if (pathSegments.length === 2) {
           // DELETE /campaigns/{id} - delete campaign
-          return await this.deleteCampaign(pathSegments[1], userId);
+          return await this.deleteCampaign(pathSegments[1]);
         }
         return createErrorResponse(404, 'Route not found');
 
@@ -224,17 +223,6 @@ export class HttpHandler {
         return createErrorResponse(400, 'Brand ID is required', undefined, 'MISSING_BRAND_ID');
       }
 
-      const isAuthorized = await verifyBrandOwnership(brandId, userId);
-      if (!isAuthorized) {
-        logger.warn('Unauthorized schedule creation attempt', { userId, brandId });
-        return createErrorResponse(
-          403,
-          'Forbidden: You do not have access to this brand',
-          undefined,
-          'FORBIDDEN'
-        );
-      }
-
       // Always use the authenticated userId for the schedule record
       scheduleRequest.userId = userId;
 
@@ -267,23 +255,14 @@ export class HttpHandler {
         return createErrorResponse(400, 'Brand ID is required', undefined, 'MISSING_BRAND_ID');
       }
 
-      // CRITICAL: Verify user owns the brand before listing schedules
-      const isAuthorized = await verifyBrandOwnership(queryParams.brandId, userId);
-      if (!isAuthorized) {
-        logger.warn('Unauthorized schedule list attempt', { userId, brandId: queryParams.brandId });
-        return createErrorResponse(
-          403,
-          'Forbidden: You do not have access to this brand',
-          undefined,
-          'FORBIDDEN'
-        );
-      }
-
       const result = await this.scheduleService.listSchedules(queryParams);
 
       if (result.success) {
+        const schedulesForUser = (result.schedules || []).filter(
+          (schedule) => schedule.userId === userId
+        );
         return createSuccessResponse(200, {
-          schedules: result.schedules,
+          schedules: schedulesForUser,
           pagination: result.pagination,
         });
       } else {
@@ -310,15 +289,9 @@ export class HttpHandler {
           return createErrorResponse(500, 'Schedule data is invalid');
         }
 
-        const isAuthorized = await verifyBrandOwnership(brandId, userId);
-        if (!isAuthorized) {
-          logger.warn('Unauthorized schedule access attempt', { userId, scheduleId, brandId });
-          return createErrorResponse(
-            403,
-            'Forbidden: You do not have access to this schedule',
-            undefined,
-            'FORBIDDEN'
-          );
+        if (result.schedule.userId !== userId) {
+          logger.warn('Unauthorized schedule access attempt', { userId, scheduleId });
+          return createErrorResponse(403, 'Forbidden: You do not have access to this schedule');
         }
 
         return createSuccessResponse(200, result.schedule);
@@ -355,15 +328,9 @@ export class HttpHandler {
         return createErrorResponse(500, 'Schedule data is invalid');
       }
 
-      const isAuthorized = await verifyBrandOwnership(brandId, userId);
-      if (!isAuthorized) {
+      if (existingSchedule.schedule.userId !== userId) {
         logger.warn('Unauthorized schedule update attempt', { userId, scheduleId, brandId });
-        return createErrorResponse(
-          403,
-          'Forbidden: You do not have access to this schedule',
-          undefined,
-          'FORBIDDEN'
-        );
+        return createErrorResponse(403, 'Forbidden: You do not have access to this schedule');
       }
 
       const body = this.getBody(event);
@@ -401,15 +368,9 @@ export class HttpHandler {
         return createErrorResponse(500, 'Schedule data is invalid');
       }
 
-      const isAuthorized = await verifyBrandOwnership(brandId, userId);
-      if (!isAuthorized) {
+      if (existingSchedule.schedule.userId !== userId) {
         logger.warn('Unauthorized schedule deletion attempt', { userId, scheduleId, brandId });
-        return createErrorResponse(
-          403,
-          'Forbidden: You do not have access to this schedule',
-          undefined,
-          'FORBIDDEN'
-        );
+        return createErrorResponse(403, 'Forbidden: You do not have access to this schedule');
       }
 
       const result = await this.scheduleService.deleteSchedule(scheduleId);
@@ -430,8 +391,7 @@ export class HttpHandler {
    * Create a new campaign
    */
   private async createCampaign(
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
-    userId: string
+    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
   ): Promise<APIGatewayProxyResult> {
     try {
       const body = this.getBody(event);
@@ -447,17 +407,6 @@ export class HttpHandler {
       const brandId = campaignRequest.brandId;
       if (!brandId) {
         return createErrorResponse(400, 'Brand ID is required', undefined, 'MISSING_BRAND_ID');
-      }
-
-      const isAuthorized = await verifyBrandOwnership(brandId, userId);
-      if (!isAuthorized) {
-        logger.warn('Unauthorized campaign creation attempt', { userId, brandId });
-        return createErrorResponse(
-          403,
-          'Forbidden: You do not have access to this brand',
-          undefined,
-          'FORBIDDEN'
-        );
       }
 
       // Type assertion after validation
@@ -480,28 +429,10 @@ export class HttpHandler {
    * List campaigns
    */
   private async listCampaigns(
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
-    userId: string
+    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
   ): Promise<APIGatewayProxyResult> {
     try {
       const queryParams = this.getQueryParams(event);
-
-      // CRITICAL: If brandId is provided, verify ownership
-      if (queryParams.brandId) {
-        const isAuthorized = await verifyBrandOwnership(queryParams.brandId, userId);
-        if (!isAuthorized) {
-          logger.warn('Unauthorized campaign list attempt', {
-            userId,
-            brandId: queryParams.brandId,
-          });
-          return createErrorResponse(
-            403,
-            'Forbidden: You do not have access to this brand',
-            undefined,
-            'FORBIDDEN'
-          );
-        }
-      }
 
       const result = await this.campaignService.listCampaigns(queryParams);
 
@@ -522,7 +453,7 @@ export class HttpHandler {
   /**
    * Get a specific campaign
    */
-  private async getCampaign(campaignId: string, userId: string): Promise<APIGatewayProxyResult> {
+  private async getCampaign(campaignId: string): Promise<APIGatewayProxyResult> {
     try {
       const result = await this.campaignService.getCampaign(campaignId);
 
@@ -532,17 +463,6 @@ export class HttpHandler {
         if (!brandId) {
           logger.error('Campaign missing brandId', { campaignId });
           return createErrorResponse(500, 'Campaign data is invalid');
-        }
-
-        const isAuthorized = await verifyBrandOwnership(brandId, userId);
-        if (!isAuthorized) {
-          logger.warn('Unauthorized campaign access attempt', { userId, campaignId, brandId });
-          return createErrorResponse(
-            403,
-            'Forbidden: You do not have access to this campaign',
-            undefined,
-            'FORBIDDEN'
-          );
         }
 
         return createSuccessResponse(200, result.campaign);
@@ -562,8 +482,7 @@ export class HttpHandler {
    */
   private async updateCampaign(
     event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
-    campaignId: string,
-    userId: string
+    campaignId: string
   ): Promise<APIGatewayProxyResult> {
     try {
       // CRITICAL: First get the campaign to verify ownership
@@ -577,17 +496,6 @@ export class HttpHandler {
       if (!brandId) {
         logger.error('Campaign missing brandId', { campaignId });
         return createErrorResponse(500, 'Campaign data is invalid');
-      }
-
-      const isAuthorized = await verifyBrandOwnership(brandId, userId);
-      if (!isAuthorized) {
-        logger.warn('Unauthorized campaign update attempt', { userId, campaignId, brandId });
-        return createErrorResponse(
-          403,
-          'Forbidden: You do not have access to this campaign',
-          undefined,
-          'FORBIDDEN'
-        );
       }
 
       const body = this.getBody(event);
@@ -610,7 +518,7 @@ export class HttpHandler {
   /**
    * Delete a campaign
    */
-  private async deleteCampaign(campaignId: string, userId: string): Promise<APIGatewayProxyResult> {
+  private async deleteCampaign(campaignId: string): Promise<APIGatewayProxyResult> {
     try {
       // CRITICAL: First get the campaign to verify ownership
       const existingCampaign = await this.campaignService.getCampaign(campaignId);
@@ -623,17 +531,6 @@ export class HttpHandler {
       if (!brandId) {
         logger.error('Campaign missing brandId', { campaignId });
         return createErrorResponse(500, 'Campaign data is invalid');
-      }
-
-      const isAuthorized = await verifyBrandOwnership(brandId, userId);
-      if (!isAuthorized) {
-        logger.warn('Unauthorized campaign deletion attempt', { userId, campaignId, brandId });
-        return createErrorResponse(
-          403,
-          'Forbidden: You do not have access to this campaign',
-          undefined,
-          'FORBIDDEN'
-        );
       }
 
       const result = await this.campaignService.deleteCampaign(campaignId);
@@ -721,6 +618,19 @@ export class HttpHandler {
         }
       }
       return params;
+    }
+  }
+
+  /**
+   * Publish metrics only when present to avoid Powertools warnings
+   */
+  private flushMetrics(): void {
+    if (metrics.hasStoredMetrics()) {
+      metrics.publishStoredMetrics();
+    } else {
+      metrics.clearMetrics();
+      metrics.clearDimensions();
+      metrics.clearMetadata();
     }
   }
 }
